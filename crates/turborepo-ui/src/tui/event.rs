@@ -3,6 +3,8 @@ use serde::Serialize;
 use tokio::sync::oneshot;
 
 pub enum Event {
+    LogEvent(turborepo_log::LogEvent),
+    ToggleLogPanel,
     StartTask {
         task: String,
         output_logs: OutputLogs,
@@ -19,17 +21,21 @@ pub enum Event {
         task: String,
         status: String,
         result: CacheResult,
+        /// The task's configured output verbosity. Carried here (in
+        /// addition to `StartTask`) because cache hits finish without ever
+        /// starting, and log persistence must still respect the setting.
+        output_logs: OutputLogs,
     },
     PaneSizeQuery(oneshot::Sender<PaneSize>),
     Stop(oneshot::Sender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
+    Interrupt,
     Tick,
     Up,
     Down,
     ScrollUp,
     ScrollDown,
-    ScrollWithMomentum(Direction),
     PageUp,
     PageDown,
     JumpToLogsTop,
@@ -59,10 +65,17 @@ pub enum Event {
     ToggleSidebar,
     ToggleHelpPopup,
     TogglePinnedTask,
+    /// Toggle between the TUI and streamed logs. `scope` selects whether
+    /// all tasks or only the selected task are streamed. Pressing again
+    /// while streaming returns to the TUI.
+    ToggleStream {
+        scope: StreamScope,
+    },
     SearchEnter,
     SearchExit {
         restore_scroll: bool,
     },
+    SearchLock,
     SearchScroll {
         direction: Direction,
     },
@@ -74,6 +87,15 @@ pub enum Event {
 pub enum Direction {
     Up,
     Down,
+}
+
+/// Which task output to stream when leaving the TUI for streamed logs.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StreamScope {
+    /// Stream every task's output, interleaved with per-task prefixes.
+    All,
+    /// Stream only the task that was selected in the TUI.
+    SelectedTask,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
@@ -101,6 +123,18 @@ pub enum OutputLogs {
     NewOnly,
     // Output is only persisted if the task failed
     ErrorsOnly,
+}
+
+impl From<turborepo_types::OutputLogsMode> for OutputLogs {
+    fn from(value: turborepo_types::OutputLogsMode) -> Self {
+        match value {
+            turborepo_types::OutputLogsMode::Full => OutputLogs::Full,
+            turborepo_types::OutputLogsMode::None => OutputLogs::None,
+            turborepo_types::OutputLogsMode::HashOnly => OutputLogs::HashOnly,
+            turborepo_types::OutputLogsMode::NewOnly => OutputLogs::NewOnly,
+            turborepo_types::OutputLogsMode::ErrorsOnly => OutputLogs::ErrorsOnly,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

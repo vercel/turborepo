@@ -6,7 +6,10 @@ use turbopath::{
     PathError, UnknownPathType,
 };
 
-use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
+use crate::{
+    CacheError,
+    cache_archive::restore_directory::{CachedDirTree, realpath_existing_prefix},
+};
 
 pub fn restore_symlink(
     dir_cache: &mut CachedDirTree,
@@ -19,7 +22,7 @@ pub fn restore_symlink(
         .link_name()?
         .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
 
-    let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname)?;
+    let processed_linkname = validate_linkname(anchor, &processed_name, &linkname)?;
 
     if processed_linkname.symlink_metadata().is_err() {
         return Err(CacheError::LinkTargetDoesNotExist(
@@ -40,9 +43,81 @@ pub fn restore_symlink_allow_missing_target(
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
+    let linkname = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
+    validate_linkname(anchor, &processed_name, &linkname)?;
+
     actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
 
     Ok(processed_name)
+}
+
+fn validate_linkname(
+    anchor: &AbsoluteSystemPath,
+    processed_name: &AnchoredSystemPathBuf,
+    linkname: &std::path::Path,
+) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    let linkname_str = linkname.to_str().ok_or_else(|| {
+        CacheError::PathError(
+            PathError::InvalidUnicode(linkname.to_string_lossy().to_string()),
+            Backtrace::capture(),
+        )
+    })?;
+
+    if is_windows_absolute_path(linkname_str) {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let processed_linkname = canonicalize_linkname(anchor, processed_name, linkname)?;
+    if !processed_linkname.starts_with(anchor) {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let raw_linkname = raw_linkname_path(anchor, processed_name, linkname_str)?;
+    let real_anchor = anchor.to_realpath()?;
+    if let Some(real_target) = realpath_existing_prefix(&raw_linkname)?
+        && !real_target.starts_with(&real_anchor)
+    {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    Ok(processed_linkname)
+}
+
+fn raw_linkname_path(
+    anchor: &AbsoluteSystemPath,
+    processed_name: &AnchoredSystemPathBuf,
+    linkname: &str,
+) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    if Utf8Path::new(linkname).is_absolute() {
+        return Ok(AbsoluteSystemPathBuf::new(linkname.to_string())?);
+    }
+
+    let source = anchor.resolve(processed_name);
+    let Some(parent) = source.parent() else {
+        return Err(CacheError::InvalidFilePath(
+            source.to_string(),
+            Backtrace::capture(),
+        ));
+    };
+
+    Ok(parent.resolve(AnchoredSystemPath::new(linkname)?))
+}
+
+fn is_windows_absolute_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.first() == Some(&b'\\')
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
 }
 
 fn actually_restore_symlink<'a>(
@@ -57,7 +132,9 @@ fn actually_restore_symlink<'a>(
 
     _ = symlink_from.remove();
 
-    let link_name = entry.link_name()?.expect("have linkname");
+    let link_name = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
     let symlink_to = link_name.to_str().ok_or_else(|| {
         CacheError::PathError(
             PathError::InvalidUnicode(link_name.to_string_lossy().to_string()),
@@ -70,6 +147,8 @@ fn actually_restore_symlink<'a>(
     } else {
         symlink_from.symlink_to_file(symlink_to)?;
     }
+
+    dir_cache.record_symlink(processed_name.to_owned());
 
     #[cfg(target_os = "macos")]
     {
@@ -134,11 +213,13 @@ pub fn canonicalize_linkname(
         // a link target.
         UnknownPathType::Anchored(cleaned_linkname) => {
             let source = anchor.resolve(processed_name);
-            let canonicalized = source
-                .parent()
-                .expect("expected parent for file")
-                .resolve(&cleaned_linkname)
-                .clean()?;
+            let Some(parent) = source.parent() else {
+                return Err(CacheError::InvalidFilePath(
+                    source.to_string(),
+                    Backtrace::capture(),
+                ));
+            };
+            let canonicalized = parent.resolve(&cleaned_linkname).clean()?;
 
             Ok(canonicalized)
         }

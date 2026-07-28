@@ -2,7 +2,7 @@
 
 This Turborepo starter is maintained by the Turborepo core team.
 
-This example also shows how to use [Workspace Configurations](https://turborepo.com/docs/core-concepts/monorepos/configuring-workspaces).
+This example also shows how to use [Workspace Configurations](https://turborepo.dev/docs/core-concepts/monorepos/configuring-workspaces).
 
 ## Using this example
 

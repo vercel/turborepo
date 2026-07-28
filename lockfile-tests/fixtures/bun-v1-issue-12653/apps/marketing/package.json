@@ -1,0 +1,53 @@
+{
+  "name": "@eventmate/marketing",
+  "version": "1.0.48-beta",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev --turbo --port 3005",
+    "preview": "next build && next start",
+    "start": "next start",
+    "typecheck": "bunx tsgo --noEmit"
+  },
+  "dependencies": {
+    "@eventmate/ui": "workspace:*",
+    "@radix-ui/react-dialog": "catalog:",
+    "@radix-ui/react-dropdown-menu": "catalog:",
+    "@radix-ui/react-label": "catalog:",
+    "@radix-ui/react-select": "catalog:",
+    "@radix-ui/react-slot": "catalog:",
+    "@t3-oss/env-nextjs": "catalog:",
+    "better-auth": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "date-fns": "catalog:",
+    "lucide-react": "^0.540.0",
+    "next": "catalog:",
+    "next-intl": "catalog:",
+    "pino": "catalog:pino9",
+    "prom-client": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "server-only": "catalog:",
+    "sonner": "catalog:",
+    "tailwind-merge": "catalog:webStyle",
+    "web-vitals": "catalog:",
+    "zod": "catalog:zod3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "@typescript/native-preview": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:webStyle",
+    "tw-animate-css": "catalog:webStyle",
+    "typescript": "catalog:"
+  },
+  "ct3aMetadata": {
+    "initVersion": "7.39.3"
+  }
+}

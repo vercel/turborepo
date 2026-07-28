@@ -306,8 +306,7 @@ impl WalkProgram {
     fn from_glob(glob: &Glob<'_>) -> Self {
         WalkProgram {
             complete: glob.program.clone(),
-            components: WalkProgram::compile(glob.tree.as_ref().tokens())
-                .expect("failed to compile glob sub-expressions"),
+            components: WalkProgram::compile(glob.tree.as_ref().tokens()).unwrap_or_default(),
         }
     }
 }

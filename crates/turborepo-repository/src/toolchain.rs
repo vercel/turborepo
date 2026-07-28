@@ -1,0 +1,1443 @@
+//! Toolchains: the abstraction that makes Turborepo generic over language
+//! ecosystems.
+//!
+//! A [`Toolchain`] answers ecosystem-specific questions about packages —
+//! starting with "which packages exist?" — so that the package graph and the
+//! rest of the system never branch on a specific ecosystem. JavaScript is the
+//! first implementation ([`JavaScriptToolchain`]); additional toolchains
+//! (e.g. Cargo) register alongside it in the [`ToolchainRegistry`].
+//!
+//! The trait grows one concern at a time (discovery today; command
+//! resolution, derived task inputs/outputs, external-dependency hashing,
+//! watch triggers, and prune participation as they are needed), and every
+//! concern must ship with real implementations for every registered
+//! toolchain.
+//!
+//! # Design rules
+//!
+//! These rules keep the door open to an out-of-process plugin architecture
+//! (subprocess or WASM adapters implementing this same trait) without
+//! committing to one today:
+//!
+//! 1. Trait methods are coarse-grained and data-in/data-out: arguments and
+//!    return values are serializable-shaped (paths, strings, plain structs). No
+//!    internal graph types, no lifetime-carrying views, no callbacks.
+//! 2. [`ToolchainId`] is an open identifier, never a closed enum. A future
+//!    toolchain (or plugin) mints a new id without touching existing code.
+//! 3. All toolchain lookups go through the [`ToolchainRegistry`]. Scattered
+//!    per-toolchain branch points (`if id == "rust"`) are a design defect.
+//!
+//! # Known debt
+//!
+//! Some JavaScript machinery that predates this abstraction is still called
+//! directly, outside the trait, because the build phases that need it have
+//! no trait surface yet. The list below is a checklist to burn down: as the
+//! trait gains a surface for each concern, the corresponding direct access
+//! goes away. When the list is empty, JavaScript is fully behind the
+//! abstraction.
+//!
+//! - [`JavaScriptToolchain::package_manager`]: package-manager resolution feeds
+//!   dependency splitting and lockfile handling in the package graph builder.
+//!   Lockfile handling gains a trait surface with external dependency hashing;
+//!   dependency splitting remains JS-native for now.
+//! - The prune command's JavaScript machinery (lockfile subgraphing,
+//!   workspace-file rewriting, patches) is its native path rather than a
+//!   [`Toolchain::prune_plan`] implementation.
+
+use std::{borrow::Cow, ffi::OsString, fmt, future::Future, pin::Pin, sync::Arc};
+
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::Spanned;
+
+use crate::{
+    discovery::{self, PackageDiscovery},
+    package_json::PackageJson,
+    package_manager::PackageManager,
+};
+
+/// Identifies a toolchain: the language ecosystem a package belongs to.
+///
+/// Open by design (see the module's design rules): any string can be a
+/// toolchain id, so new toolchains — including, potentially, ones loaded as
+/// plugins — do not require changes to this type.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ToolchainId(Cow<'static, str>);
+
+impl ToolchainId {
+    /// The JavaScript toolchain: packages discovered from `package.json`
+    /// manifests, regardless of package manager or runtime.
+    pub const JAVASCRIPT: ToolchainId = ToolchainId(Cow::Borrowed("javascript"));
+
+    /// The Rust toolchain: crates discovered from a Cargo workspace (see
+    /// [`crate::cargo`]). Named for the language — the public axis users
+    /// think in — while the implementation is Cargo-specific.
+    /// Experimental, gated behind `futureFlags.experimentalCargoWorkspaces`.
+    pub const RUST: ToolchainId = ToolchainId(Cow::Borrowed("rust"));
+
+    pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Default for ToolchainId {
+    fn default() -> Self {
+        Self::JAVASCRIPT
+    }
+}
+
+impl fmt::Display for ToolchainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Compatibility output from native package discovery.
+///
+/// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].
+/// `descriptor` remains temporarily for relationship and task consumers:
+/// JavaScript packages retain their parsed manifest while other toolchains
+/// synthesize only the compatibility fields those consumers need.
+#[derive(Debug, Clone)]
+pub struct DiscoveredPackage {
+    /// Real user-facing identity, extracted by the native producer. `None`
+    /// preserves JavaScript's historical unnamed-package suppression.
+    name: Option<String>,
+    /// Whether this is a real package or an execution-only aggregate scope.
+    scope_kind: DiscoveredScopeKind,
+    /// Temporary relationship/task compatibility data; never identity or path
+    /// authority.
+    descriptor: PackageJson,
+    /// Absolute path to the package's native manifest (`package.json`,
+    /// `Cargo.toml`, ...).
+    manifest_path: AbsoluteSystemPathBuf,
+    /// External-dependency identities for this package, when the toolchain
+    /// resolves them at discovery time. They feed the package's
+    /// external-dependency hash: a task's hash changes exactly when an
+    /// identity in its package's set changes. Cargo computes these from
+    /// Cargo.lock (per-crate transitive closures) plus a compiler-version
+    /// stamp.
+    ///
+    /// `None` defers to the toolchain's own pipeline. Known debt (see
+    /// module docs): JavaScript's closures are computed by the graph
+    /// builder's lockfile phase — deliberately concurrent with run setup —
+    /// rather than through this field; folding that in requires a
+    /// deferred-aware trait surface.
+    external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscoveredScopeKind {
+    Package,
+    Aggregate,
+}
+
+pub(crate) struct DiscoveredPackageParts {
+    pub name: Option<String>,
+    pub scope_kind: DiscoveredScopeKind,
+    pub descriptor: PackageJson,
+    pub manifest_path: AbsoluteSystemPathBuf,
+    pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+}
+
+/// Parser-neutral observation of one contributed native workspace root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceRoot {
+    kind: String,
+    path: AbsoluteSystemPathBuf,
+}
+
+impl WorkspaceRoot {
+    pub fn new(kind: impl Into<String>, path: AbsoluteSystemPathBuf) -> Self {
+        Self {
+            kind: kind.into(),
+            path,
+        }
+    }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub fn path(&self) -> &AbsoluteSystemPath {
+        &self.path
+    }
+}
+
+/// One toolchain's package/scope and native workspace-root observations.
+#[derive(Debug, Default)]
+pub struct DiscoveredPackages {
+    packages: Vec<DiscoveredPackage>,
+    workspace_roots: Vec<WorkspaceRoot>,
+}
+
+impl DiscoveredPackages {
+    pub fn new(packages: Vec<DiscoveredPackage>, workspace_roots: Vec<WorkspaceRoot>) -> Self {
+        Self {
+            packages,
+            workspace_roots,
+        }
+    }
+
+    pub fn packages(&self) -> &[DiscoveredPackage] {
+        &self.packages
+    }
+
+    pub fn workspace_roots(&self) -> &[WorkspaceRoot] {
+        &self.workspace_roots
+    }
+
+    pub fn into_parts(self) -> (Vec<DiscoveredPackage>, Vec<WorkspaceRoot>) {
+        (self.packages, self.workspace_roots)
+    }
+}
+
+impl DiscoveredPackage {
+    /// Construct a real package observation. The compatibility descriptor's
+    /// name is normalized to the authoritative identity, making divergence
+    /// structurally impossible. `None` preserves unnamed JavaScript package
+    /// suppression.
+    pub fn package(
+        name: Option<String>,
+        mut descriptor: PackageJson,
+        manifest_path: AbsoluteSystemPathBuf,
+        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    ) -> Self {
+        descriptor.name = name.clone().map(Spanned::new);
+        Self {
+            name,
+            scope_kind: DiscoveredScopeKind::Package,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
+
+    /// Construct a named aggregate execution scope and normalize its temporary
+    /// compatibility descriptor to the same identity.
+    pub fn aggregate(
+        name: String,
+        mut descriptor: PackageJson,
+        manifest_path: AbsoluteSystemPathBuf,
+        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    ) -> Self {
+        descriptor.name = Some(Spanned::new(name.clone()));
+        Self {
+            name: Some(name),
+            scope_kind: DiscoveredScopeKind::Aggregate,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
+        let Self {
+            name,
+            scope_kind,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        } = self;
+        DiscoveredPackageParts {
+            name,
+            scope_kind,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Discovery(#[from] discovery::Error),
+    #[error(transparent)]
+    Descriptor(#[from] crate::package_json::Error),
+    /// A toolchain-specific failure. Boxed rather than enumerated so the
+    /// generic error surface does not accumulate a variant per toolchain.
+    #[error(transparent)]
+    Failed(Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// The future returned by [`Toolchain::discover_packages`]. Boxed so the
+/// trait stays object-safe; toolchains live behind `dyn Toolchain` in the
+/// [`ToolchainRegistry`].
+pub type DiscoverPackagesFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
+
+/// A command resolved by a toolchain for a task, as plain data. The executor
+/// turns it into a process, applying the task's environment, stdin policy,
+/// and any decorations that are not toolchain concerns (e.g.
+/// microfrontends proxy variables).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskCommand {
+    /// The program to execute. `OsString` rather than `String` only to
+    /// tolerate non-UTF-8 binary paths; the value is still plain data.
+    pub program: OsString,
+    pub args: Vec<OsString>,
+    /// Absolute directory to run in.
+    pub cwd: AbsoluteSystemPathBuf,
+    /// Mutually-exclusive execution group: the executor runs at most one
+    /// command per group at a time, process-wide. For tools that hold
+    /// global locks (e.g. Cargo's build directory), where concurrent
+    /// processes cannot make progress anyway.
+    pub serial_group: Option<String>,
+}
+
+/// Build a [`TaskCommand`] from a task's `command` override: element 0 is
+/// the program, the rest its arguments — nothing is prepended, by any
+/// toolchain. Pass-through args append verbatim (turbo cannot know an
+/// arbitrary command's separator convention). The working directory is the
+/// package's own, uniformly across toolchains; the caller supplies its
+/// toolchain-specific serial group.
+pub fn override_task_command(
+    context: &crate::package_graph::PackageTaskContext<'_>,
+    override_command: &[String],
+    pass_through_args: Option<&[String]>,
+    serial_group: Option<String>,
+) -> Option<TaskCommand> {
+    let (program, args) = override_command.split_first()?;
+    let mut args: Vec<OsString> = args.iter().map(OsString::from).collect();
+    if let Some(pass_through_args) = pass_through_args {
+        args.extend(pass_through_args.iter().map(OsString::from));
+    }
+    Some(TaskCommand {
+        program: OsString::from(program),
+        args,
+        cwd: context.repository_root().resolve(context.directory()),
+        serial_group,
+    })
+}
+
+/// A language ecosystem that contributes packages to the repository.
+///
+/// See the module docs for the design rules trait methods must follow.
+pub trait Toolchain: Send + Sync {
+    /// This toolchain's identifier.
+    fn id(&self) -> ToolchainId;
+
+    /// Discover this toolchain's packages/scopes and native workspace roots in
+    /// one observation envelope.
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
+
+    /// Resolve the command that implements `task` for `package`, or `None`
+    /// when the toolchain defines no command for it — the task is then a
+    /// no-op, like a missing package.json script.
+    ///
+    /// `pass_through_args` are user-supplied arguments (`turbo run task --
+    /// <args>`); the toolchain owns how they are attached, since separator
+    /// conventions differ per tool.
+    ///
+    /// `override_command`, when present, replaces the argv the toolchain
+    /// would have constructed — element 0 is the program, nothing is
+    /// prepended. The toolchain still owns the frame (working directory,
+    /// serial grouping); the shared placement lives in
+    /// [`override_task_command`]. Pass-through args append verbatim: turbo
+    /// cannot know an arbitrary command's separator convention.
+    fn task_command(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> Result<Option<TaskCommand>, Error>;
+
+    /// A one-line description of what `task` runs for `package`, for
+    /// dry-run output and run summaries. Derived from the same tables as
+    /// [`Toolchain::task_command`] so display cannot drift from execution.
+    fn task_display_command(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> Option<String>;
+
+    /// Whether the package itself *authors* a definition for `task` — a
+    /// package.json script, written by the package's owner. Distinct from
+    /// [`Toolchain::defines_task`]: toolchain-synthesized fallbacks (Cargo's
+    /// verb tables) define tasks without the package authoring anything.
+    ///
+    /// Authored definitions shadow unscoped `command` defaults from the
+    /// root turbo.json; synthesized ones sit below them.
+    fn authors_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        let _ = (context, task);
+        false
+    }
+
+    /// Task names this toolchain makes available without an explicit
+    /// turbo.json definition. These act as lowest-precedence empty task
+    /// definitions; normal task configuration still overrides them.
+    fn registered_tasks(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+    ) -> Vec<String> {
+        let _ = context;
+        Vec::new()
+    }
+
+    /// Whether [`Toolchain::registered_tasks`] contains `task`.
+    fn registers_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        self.registered_tasks(context)
+            .iter()
+            .any(|registered| registered == task)
+    }
+
+    /// Whether this toolchain defines an executable command for `task` in
+    /// `package`. Tasks without one are phantom/transit tasks (they exist
+    /// solely for dependency ordering via `dependsOn: ["^task"]`): they do
+    /// not execute, so hashing concerns like global input files must not
+    /// apply to them.
+    fn defines_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool;
+
+    /// Defaults this toolchain supplies for `task` when turbo.json does not
+    /// configure the corresponding field. Explicit user configuration always
+    /// wins.
+    fn task_defaults(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> TaskDefaults {
+        let _ = (context, task);
+        TaskDefaults::default()
+    }
+
+    /// Startup environment patterns this toolchain needs to derive task I/O.
+    /// The run retains only matching keys, and the engine automatically adds
+    /// every declared pattern to the task's hashed environment when derived I/O
+    /// applies.
+    fn task_io_env_vars(&self) -> &[&str] {
+        &[]
+    }
+
+    /// Hash wiring this toolchain derives for `task` in `package`, beyond
+    /// what turbo.json declares: extra input globs and env vars that
+    /// participate in the task hash, output globs to cache, and whether the
+    /// package's own default (git-index based) file hashing applies.
+    ///
+    /// `path_to_root` is the unix path from the package directory to the
+    /// repo root (empty for a package at the root); returned globs are
+    /// relative to the package directory. `dependencies` are the package's
+    /// transitive internal dependencies. `wants_automatic_inputs` reflects
+    /// the task's `inputs` configuration: `true` unless explicit inputs
+    /// omitted `$TURBO_DEFAULT$` — for toolchains that derive inputs,
+    /// `$TURBO_DEFAULT$` means "everything the toolchain derives", so users
+    /// can append inputs without forfeiting automatic invalidation.
+    ///
+    /// `None` means the toolchain derives nothing and turbo.json is the
+    /// whole story.
+    fn derived_task_io(
+        &self,
+        package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
+        wants_automatic_inputs: bool,
+        context: &TaskIOContext<'_>,
+    ) -> Option<DerivedTaskIO> {
+        let _ = (
+            package,
+            task,
+            path_to_root,
+            dependencies,
+            wants_automatic_inputs,
+            context,
+        );
+        None
+    }
+
+    /// Whether [`Toolchain::derived_task_io`] can return `Some` for this
+    /// package/task. Callers use this to skip assembling the (expensive)
+    /// dependency-closure argument when the answer is knowably `None` —
+    /// notably engine construction, which resolves a definition per task.
+    fn derives_task_io(
+        &self,
+        package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        let _ = (package, task);
+        false
+    }
+
+    /// Packages whose task inputs can depend on `package` beyond the ordinary
+    /// acyclic package graph. Change detection marks these packages affected
+    /// before applying the graph's normal dependent expansion.
+    fn additional_affected_packages(&self, package: &str) -> Vec<String> {
+        let _ = package;
+        Vec::new()
+    }
+
+    /// Select package entrypoints for an unqualified task from the packages in
+    /// scope. `None` leaves the normal package × task expansion unchanged.
+    fn select_task_entrypoints(
+        &self,
+        task: &str,
+        candidates: &[String],
+        prefer_workspace: bool,
+    ) -> Option<Vec<String>> {
+        let _ = (task, candidates, prefer_workspace);
+        None
+    }
+
+    /// How filesystem events relate to this toolchain in watch mode:
+    /// workspace-definition files whose change requires rediscovery, and
+    /// build-byproduct directories whose events must be ignored.
+    fn watch_spec(&self) -> WatchSpec;
+
+    /// What `turbo prune` must carry for this toolchain so the pruned
+    /// repository is self-contained, given the names of this toolchain's
+    /// packages already selected for the pruned output. `None` means the
+    /// toolchain contributes nothing beyond the packages themselves.
+    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error>;
+
+    /// Called after the pruned output is fully written, with its root
+    /// directory. Toolchains may polish their own files in place (e.g.
+    /// Cargo canonicalizes the pruned lockfile through `cargo metadata`) and
+    /// return their repo-relative paths so alternate output layers can be
+    /// synchronized without repeating finalization. Failures must be
+    /// non-fatal: log and continue.
+    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
+        let _ = pruned_root;
+        Vec::new()
+    }
+
+    /// Environment variables to inject into this toolchain's task processes
+    /// when Turborepo is serving a compile cache endpoint (a local proxy in
+    /// front of the remote cache that a compiler wrapper like sccache can
+    /// use as its storage backend).
+    ///
+    /// `task_env` is the environment the task process will receive; the
+    /// toolchain decides how its injection composes with it. Only the
+    /// toolchain knows which pre-existing variables signal a *competing*
+    /// configuration that must win (e.g. a user-supplied `RUSTC_WRAPPER`)
+    /// versus ones that are merely common ambient settings (e.g. CI images
+    /// exporting `CARGO_INCREMENTAL=0`, which is exactly what the compile
+    /// cache wants anyway). The executor injects the returned variables
+    /// verbatim; an empty result means inject nothing — either no
+    /// integration exists (the JavaScript default) or the toolchain chose
+    /// to stand down.
+    fn compile_cache_env(
+        &self,
+        endpoint: &CompileCacheEndpoint,
+        task_env: &std::collections::HashMap<String, String>,
+    ) -> Vec<(String, String)> {
+        let _ = (endpoint, task_env);
+        Vec::new()
+    }
+}
+
+/// A Turborepo-served compile cache endpoint, as plain data. See
+/// [`Toolchain::compile_cache_env`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileCacheEndpoint {
+    /// HTTP endpoint of the local compile-cache proxy.
+    pub url: String,
+    /// Bearer token the proxy requires.
+    pub token: String,
+    /// Absolute path to the compiler-wrapper executable — the running
+    /// `turbo` binary itself, which embeds sccache and dispatches wrapper
+    /// invocations to it (see [`COMPILE_CACHE_WRAPPER_ENV`]).
+    pub wrapper: String,
+    /// Port for the compile cache's background server, stable per
+    /// repository. Isolates turbo's server from any user- or image-managed
+    /// sccache server on the global default port, whose storage
+    /// configuration would otherwise capture turbo's wrapper traffic.
+    pub server_port: u16,
+}
+
+/// Environment variable marking task processes whose `RUSTC_WRAPPER` is the
+/// turbo binary itself. The turbo entrypoint dispatches invocations carrying
+/// this marker to the embedded sccache instead of the normal CLI.
+pub const COMPILE_CACHE_WRAPPER_ENV: &str = "TURBO_SCCACHE_WRAPPER";
+
+/// A toolchain's contribution to a pruned repository. See
+/// [`Toolchain::prune_plan`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrunePlan {
+    /// Packages that must additionally be kept and copied, beyond the ones
+    /// requested (e.g. crates reachable only through dev-dependency edges,
+    /// whose manifests are referenced by kept crates).
+    pub extra_packages: Vec<String>,
+    /// Files to write into the pruned repository: (repo-relative unix path,
+    /// contents). They define dependency resolution, so they go to the full
+    /// layer and, in docker mode, the json layer.
+    pub root_files: Vec<(String, String)>,
+    /// Repo-relative unix paths of toolchain configuration files to copy
+    /// verbatim when present (missing ones are skipped).
+    pub copy_paths: Vec<String>,
+}
+
+/// How filesystem events relate to a toolchain in watch mode. See
+/// [`Toolchain::watch_spec`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WatchSpec {
+    /// Manifest file names that define the toolchain's workspace membership
+    /// or edges wherever they appear in the repository (outside
+    /// [`WatchSpec::ignore_prefixes`]): a change means the package set may
+    /// have changed, requiring full rediscovery.
+    pub definition_file_names: Vec<String>,
+    /// Repo-root-relative unix paths that define the workspace, with the
+    /// same rediscovery consequence.
+    pub definition_paths: Vec<String>,
+    /// Repo-root-relative unix directory prefixes containing the
+    /// toolchain's own build byproducts. Events under them are dropped:
+    /// they are written by the very tasks a change would re-trigger, and
+    /// must not feed back into the watcher even when not gitignored.
+    pub ignore_prefixes: Vec<String>,
+}
+
+/// Default task behavior supplied by a toolchain. See
+/// [`Toolchain::task_defaults`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskDefaults {
+    /// Whether task logs and outputs are cacheable.
+    pub cache: Option<bool>,
+}
+
+impl WatchSpec {
+    /// Merge another spec into this one.
+    pub fn extend(&mut self, other: WatchSpec) {
+        self.definition_file_names
+            .extend(other.definition_file_names);
+        self.definition_paths.extend(other.definition_paths);
+        self.ignore_prefixes.extend(other.ignore_prefixes);
+    }
+}
+
+/// Platform-aware environment projection for one toolchain's I/O derivation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskIOEnvironment {
+    values: std::collections::HashMap<String, String>,
+    case_insensitive: bool,
+}
+
+impl TaskIOEnvironment {
+    pub fn new(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: cfg!(windows),
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        if self.case_insensitive {
+            self.values
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(name))
+                .map(|(_, value)| value.as_str())
+        } else {
+            self.values.get(name).map(String::as_str)
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.values
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+    }
+
+    #[cfg(test)]
+    fn case_insensitive(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: true,
+        }
+    }
+}
+
+impl Default for TaskIOEnvironment {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
+/// Run-scoped inputs that can affect toolchain-derived task I/O.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskIOContext<'a> {
+    pub task_args: Option<&'a [String]>,
+    pub environment: &'a TaskIOEnvironment,
+}
+
+/// Whether a toolchain can resolve a task's automatic outputs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DerivedOutputs {
+    /// Output paths relative to the package directory. An empty list means the
+    /// task has no toolchain-derived outputs.
+    Resolved(Vec<String>),
+    /// The task produces outputs, but their paths cannot be resolved safely.
+    Unavailable,
+}
+
+impl Default for DerivedOutputs {
+    fn default() -> Self {
+        Self::Resolved(Vec::new())
+    }
+}
+
+/// Whether all toolchain-derived inputs can participate in task hashing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DerivedInputSafety {
+    #[default]
+    Tracked,
+    /// The task can read inputs that Turborepo cannot hash automatically.
+    Untracked,
+}
+
+/// Hash wiring derived by a toolchain for one task. See
+/// [`Toolchain::derived_task_io`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DerivedTaskIO {
+    /// Extra input globs, relative to the package directory.
+    pub input_globs: Vec<String>,
+    /// When `Some`, overrides whether the package's own default (git-index
+    /// based) file hashing applies to this task.
+    pub package_default_inputs: Option<bool>,
+    /// Env vars that participate in the task hash.
+    pub env: Vec<String>,
+    pub input_safety: DerivedInputSafety,
+    pub outputs: DerivedOutputs,
+}
+
+/// The set of toolchains contributing packages to the repository.
+///
+/// All toolchain lookups go through the registry; it is the single place
+/// that knows which toolchains exist. Today entries are registered
+/// statically during package graph construction. A future plugin system
+/// would construct entries from a manifest instead — an additive change.
+#[derive(Default)]
+pub struct ToolchainRegistry {
+    toolchains: Vec<Arc<dyn Toolchain>>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("toolchain {id} was registered more than once")]
+pub struct DuplicateToolchainError {
+    pub id: ToolchainId,
+}
+
+impl ToolchainRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register a toolchain. Registration order is discovery order.
+    pub fn register(
+        &mut self,
+        toolchain: Arc<dyn Toolchain>,
+    ) -> Result<(), DuplicateToolchainError> {
+        let id = toolchain.id();
+        if self.get(&id).is_some() {
+            return Err(DuplicateToolchainError { id });
+        }
+        self.toolchains.push(toolchain);
+        Ok(())
+    }
+
+    pub fn get(&self, id: &ToolchainId) -> Option<&dyn Toolchain> {
+        self.toolchains
+            .iter()
+            .find(|toolchain| toolchain.id() == *id)
+            .map(AsRef::as_ref)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &dyn Toolchain> {
+        self.toolchains.iter().map(AsRef::as_ref)
+    }
+
+    /// The union of every registered toolchain's [`WatchSpec`].
+    pub fn watch_spec(&self) -> WatchSpec {
+        let mut merged = WatchSpec::default();
+        for toolchain in self.iter() {
+            merged.extend(toolchain.watch_spec());
+        }
+        merged
+    }
+}
+
+impl fmt::Debug for ToolchainRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.toolchains.iter().map(|toolchain| toolchain.id()))
+            .finish()
+    }
+}
+
+/// The JavaScript toolchain: packages discovered from `package.json`
+/// manifests.
+///
+/// Wraps a [`PackageDiscovery`] strategy (local filesystem walk,
+/// daemon-backed, or a composition) — the strategy decides *how* manifests
+/// are found, the toolchain owns *what a JavaScript package is*: it loads
+/// and parses each manifest into the package descriptor.
+pub struct JavaScriptToolchain<P> {
+    discovery: P,
+    repo_root: AbsoluteSystemPathBuf,
+    known_package_manager: Option<PackageManager>,
+    /// The package manager as resolved during graph construction, recorded
+    /// by the builder so synchronous concerns (command resolution) can use
+    /// it without re-running discovery.
+    resolved_package_manager: std::sync::OnceLock<PackageManager>,
+    /// The package manager binary, resolved lazily on first command.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum JavaScriptCommandError {
+    // Message kept identical to the pre-toolchain provider error for
+    // output compatibility.
+    #[error("Unable to find package manager binary: {0}")]
+    Which(#[from] which::Error),
+}
+
+impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
+    pub fn new(
+        discovery: P,
+        repo_root: AbsoluteSystemPathBuf,
+        known_package_manager: Option<PackageManager>,
+    ) -> Self {
+        Self {
+            discovery,
+            repo_root,
+            known_package_manager,
+            resolved_package_manager: std::sync::OnceLock::new(),
+            package_manager_binary: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// The repository's JavaScript package manager.
+    ///
+    /// Known debt (see module docs): dependency splitting and lockfile
+    /// handling in the package graph builder are not yet trait concerns, so
+    /// they reach into the JavaScript toolchain directly for this.
+    pub async fn package_manager(&self) -> Result<PackageManager, discovery::Error> {
+        match self.known_package_manager.as_ref() {
+            Some(package_manager) => Ok(package_manager.clone()),
+            None => Ok(self.discovery.discover_packages().await?.package_manager),
+        }
+    }
+
+    /// Record the package manager resolved during graph construction. Called
+    /// by the package graph builder; later calls are no-ops.
+    pub fn set_resolved_package_manager(&self, package_manager: PackageManager) {
+        let _ = self.resolved_package_manager.set(package_manager);
+    }
+
+    pub(crate) async fn workspace_root(&self) -> Result<WorkspaceRoot, Error> {
+        let package_manager = self.package_manager().await?;
+        Ok(WorkspaceRoot::new(
+            package_manager.command(),
+            self.repo_root.clone(),
+        ))
+    }
+}
+
+#[cfg(windows)]
+// Avoid npm.cmd so Windows Ctrl+C reaches npm/node without cmd.exe emitting
+// "Terminate batch job (Y/N)?" during graceful shutdown.
+fn npm_direct_command(
+    package_manager_binary: &std::path::Path,
+) -> Option<(std::path::PathBuf, OsString)> {
+    if package_manager_binary.file_name()?.to_str()? != "npm.cmd" {
+        return None;
+    }
+
+    let node_dir = package_manager_binary.parent()?;
+    let node = node_dir.join("node.exe");
+    let npm_cli = node_dir
+        .join("node_modules")
+        .join("npm")
+        .join("bin")
+        .join("npm-cli.js");
+
+    (node.is_file() && npm_cli.is_file()).then(|| (node, npm_cli.into_os_string()))
+}
+
+#[cfg(windows)]
+fn package_manager_command(
+    package_manager: &PackageManager,
+    package_manager_binary: &std::path::Path,
+) -> (OsString, Vec<OsString>) {
+    if package_manager == &PackageManager::Npm
+        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
+    {
+        return (node.into_os_string(), vec![npm_cli]);
+    }
+
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
+}
+
+#[cfg(not(windows))]
+fn package_manager_command(
+    _package_manager: &PackageManager,
+    package_manager_binary: &std::path::Path,
+) -> (OsString, Vec<OsString>) {
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
+}
+
+impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
+    fn id(&self) -> ToolchainId {
+        ToolchainId::JAVASCRIPT
+    }
+
+    fn task_command(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> Result<Option<TaskCommand>, Error> {
+        // An override replaces the whole package-manager indirection: the
+        // argv is executed directly from the package directory. Note this
+        // bypasses `<pm> run`, so `node_modules/.bin` is not added to PATH.
+        if let Some(override_command) = override_command {
+            return Ok(override_task_command(
+                context,
+                override_command,
+                pass_through_args,
+                None,
+            ));
+        }
+        // No script (or an empty one) means the task is a no-op.
+        let Some(package) = context.package_info() else {
+            return Ok(None);
+        };
+        if package
+            .package_json
+            .scripts
+            .get(task)
+            .is_none_or(|script| script.is_empty())
+        {
+            return Ok(None);
+        }
+        let Some(package_manager) = self.resolved_package_manager.get() else {
+            // The graph was not built through this toolchain instance;
+            // without a package manager there is no way to run a script.
+            return Ok(None);
+        };
+
+        let package_manager_binary = self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+            .as_deref()
+            .map_err(|err| Error::Failed(Box::new(JavaScriptCommandError::Which(*err))))?;
+        let (program, mut args) = package_manager_command(package_manager, package_manager_binary);
+        args.extend([OsString::from("run"), OsString::from(task)]);
+        if let Some(pass_through_args) = pass_through_args {
+            args.extend(
+                package_manager
+                    .arg_separator(pass_through_args)
+                    .map(OsString::from),
+            );
+            args.extend(pass_through_args.iter().map(OsString::from));
+        }
+
+        Ok(Some(TaskCommand {
+            program,
+            args,
+            cwd: context.repository_root().resolve(context.directory()),
+            serial_group: None,
+        }))
+    }
+
+    fn task_display_command(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> Option<String> {
+        // Summaries show the script text itself, matching historical
+        // behavior.
+        context
+            .package_info()?
+            .package_json
+            .scripts
+            .get(task)
+            .map(|script| script.as_inner().clone())
+    }
+
+    fn defines_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        context.package_info().is_some_and(|package| {
+            package
+                .package_json
+                .scripts
+                .get(task)
+                .is_some_and(|script| !script.is_empty())
+        })
+    }
+
+    /// package.json scripts are authored by the package: they shadow
+    /// unscoped `command` defaults.
+    fn authors_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        self.defines_task(context, task)
+    }
+
+    fn derived_task_io(
+        &self,
+        _package: &crate::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+        _path_to_root: &str,
+        _dependencies: &[crate::package_graph::PackageTaskContext<'_>],
+        _wants_automatic_inputs: bool,
+        _context: &TaskIOContext<'_>,
+    ) -> Option<DerivedTaskIO> {
+        // Deliberately nothing: for JavaScript, turbo.json is the whole
+        // story — inputs default to the package's files, outputs are
+        // whatever the user declares, and no tool-level files or env vars
+        // are implied. This is the real answer, not an unimplemented stub.
+        None
+    }
+
+    fn watch_spec(&self) -> WatchSpec {
+        // Deliberately nothing: JavaScript workspace redefinition (a new or
+        // removed package.json, a lockfile change) is caught by the change
+        // mapper's conservative fallback — unattributable files map to
+        // "all packages", which triggers rediscovery — and JS build outputs
+        // land inside package directories where gitignore filtering already
+        // applies. This is the real answer, not an unimplemented stub.
+        WatchSpec::default()
+    }
+
+    fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
+        // Known debt (see module docs): the prune command's JavaScript
+        // machinery — lockfile subgraphing, root package.json and
+        // pnpm-workspace rewriting, patch carrying — is its native code
+        // path, predating this abstraction. Folding it into this surface
+        // means restructuring a battle-tested command; until then, the JS
+        // contribution is deliberately empty here.
+        Ok(None)
+    }
+
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(async move {
+            use tracing::Instrument;
+            let response = self
+                .discovery
+                .discover_packages()
+                .instrument(tracing::info_span!("workspace_discovery"))
+                .await?;
+            let package_manager = match self.known_package_manager.as_ref() {
+                Some(known) if known.command() != response.package_manager.command() => {
+                    return Err(discovery::Error::InvalidResponse(format!(
+                        "package manager family `{}` does not match authoritative family `{}`",
+                        response.package_manager.command(),
+                        known.command()
+                    ))
+                    .into());
+                }
+                Some(known) => known,
+                None => &response.package_manager,
+            };
+            let workspace_root =
+                WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
+            // Parse manifests in parallel; manifest parsing dominates discovery
+            // time on large repositories.
+            let _span = tracing::info_span!("manifest_parse").entered();
+            let packages = turborepo_rayon_compat::block_in_place(|| {
+                use rayon::prelude::*;
+                response
+                    .workspaces
+                    .into_par_iter()
+                    .map(|workspace| {
+                        let descriptor = PackageJson::load(&workspace.package_json)?;
+                        let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
+                        Ok(DiscoveredPackage::package(
+                            name,
+                            descriptor,
+                            workspace.package_json,
+                            // JavaScript closures come from the builder's
+                            // (deliberately concurrent) lockfile phase; see
+                            // the field docs.
+                            None,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
+            })?;
+            Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toolchain_id_is_open() {
+        let js = ToolchainId::default();
+        assert_eq!(js, ToolchainId::JAVASCRIPT);
+        assert_eq!(js.as_str(), "javascript");
+
+        // Any string is a valid id; no closed set to extend.
+        let custom = ToolchainId::new("gleam");
+        assert_ne!(custom, js);
+        assert_eq!(custom.to_string(), "gleam");
+        let dynamic = ToolchainId::new(String::from("python-uv"));
+        assert_eq!(dynamic.as_str(), "python-uv");
+    }
+
+    #[test]
+    fn pure_native_root_override_uses_repository_context() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let directory = turbopath::AnchoredSystemPath::new("").unwrap();
+        let context = crate::package_graph::PackageTaskContext::new_for_test(
+            crate::package_graph::PackageName::Root,
+            &root,
+            directory,
+            None,
+            crate::package_graph::PackageTaskContextKind::Root,
+            None,
+        );
+        let argv = ["./scripts/release".to_string(), "check".to_string()];
+        let pass_through = ["--locked".to_string()];
+
+        let command = override_task_command(&context, &argv, Some(&pass_through), None)
+            .expect("non-empty root override resolves");
+
+        assert_eq!(command.program, OsString::from("./scripts/release"));
+        assert_eq!(
+            command.args,
+            vec![OsString::from("check"), OsString::from("--locked")]
+        );
+        assert_eq!(command.cwd, root);
+        assert_eq!(command.serial_group, None);
+    }
+
+    #[test]
+    fn discovered_package_constructor_enforces_one_identity() {
+        let path = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            r"C:\repo\package.json"
+        } else {
+            "/repo/package.json"
+        })
+        .unwrap();
+        let mismatched = PackageJson {
+            name: Some(Spanned::new("payload-name".to_string())),
+            ..Default::default()
+        };
+
+        let package = DiscoveredPackage::package(
+            Some("authoritative-name".to_string()),
+            mismatched.clone(),
+            path.clone(),
+            None,
+        )
+        .into_parts();
+        assert_eq!(package.name.as_deref(), Some("authoritative-name"));
+        assert_eq!(
+            package.descriptor.name.as_ref().map(|name| name.as_str()),
+            Some("authoritative-name")
+        );
+
+        let unnamed = DiscoveredPackage::package(None, mismatched, path.clone(), None).into_parts();
+        assert_eq!(unnamed.name, None);
+        assert_eq!(unnamed.descriptor.name, None);
+
+        let aggregate = DiscoveredPackage::aggregate(
+            "workspace".to_string(),
+            PackageJson::default(),
+            path,
+            None,
+        )
+        .into_parts();
+        assert_eq!(aggregate.name.as_deref(), Some("workspace"));
+        assert_eq!(aggregate.scope_kind, DiscoveredScopeKind::Aggregate);
+        assert_eq!(
+            aggregate.descriptor.name.as_ref().map(|name| name.as_str()),
+            Some("workspace")
+        );
+    }
+
+    #[tokio::test]
+    async fn javascript_discovery_reports_only_the_base_canonical_manager_root() {
+        #[derive(Clone)]
+        struct StubDiscovery(discovery::DiscoveryResponse);
+
+        impl PackageDiscovery for StubDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(self.0.clone())
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_root = repo_root.join_components(&["packages", "app"]);
+        std::fs::create_dir_all(package_root.as_std_path()).unwrap();
+        let package_json = package_root.join_component("package.json");
+        package_json
+            .create_with_contents(r#"{"name":"app"}"#)
+            .unwrap();
+        let toolchain = JavaScriptToolchain::new(
+            StubDiscovery(discovery::DiscoveryResponse {
+                workspaces: vec![discovery::WorkspaceData {
+                    package_json,
+                    turbo_json: None,
+                }],
+                package_manager: PackageManager::Pnpm6,
+            }),
+            repo_root.clone(),
+            None,
+        );
+
+        let discovered = toolchain.discover_packages().await.unwrap();
+        assert_eq!(discovered.packages().len(), 1);
+        assert_eq!(discovered.workspace_roots().len(), 1);
+        assert_eq!(discovered.workspace_roots()[0].kind(), "pnpm");
+        assert_eq!(discovered.workspace_roots()[0].path(), repo_root.as_ref());
+    }
+
+    #[test]
+    fn test_javascript_task_command() {
+        struct StubDiscovery;
+        impl PackageDiscovery for StubDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let repo_root_buf =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let repo_root = repo_root_buf.as_ref() as &AbsoluteSystemPath;
+
+        let toolchain = JavaScriptToolchain::new(
+            StubDiscovery,
+            repo_root_buf.clone(),
+            Some(PackageManager::Npm),
+        );
+        toolchain.set_resolved_package_manager(PackageManager::Npm);
+
+        let package = crate::package_graph::PackageInfo {
+            package_json: PackageJson::from_value(serde_json::json!({
+                "name": "stale-web",
+                "scripts": { "build": "next build", "empty": "" }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
+        let context = crate::package_graph::PackageTaskContext::new_for_test(
+            "web".into(),
+            repo_root,
+            package_directory,
+            Some(&package),
+            crate::package_graph::PackageTaskContextKind::Package,
+            Some(&ToolchainId::JAVASCRIPT),
+        );
+
+        let command = toolchain
+            .task_command(&context, "build", None, None)
+            .unwrap()
+            .expect("script exists, command resolves");
+        // The program is the resolved npm binary (or node.exe on Windows);
+        // the invocation shape is what matters.
+        assert!(
+            command
+                .args
+                .ends_with(&[OsString::from("run"), OsString::from("build")]),
+            "expected `run build` invocation, got {:?}",
+            command.args
+        );
+        assert_eq!(
+            command.cwd,
+            repo_root.join_components(&["apps", "web"]),
+            "command runs in the package directory"
+        );
+        assert_eq!(command.serial_group, None);
+
+        // Missing and empty scripts are no-ops.
+        assert!(
+            toolchain
+                .task_command(&context, "lint", None, None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            toolchain
+                .task_command(&context, "empty", None, None)
+                .unwrap()
+                .is_none()
+        );
+
+        // Display shows the script text itself.
+        assert_eq!(
+            toolchain.task_display_command(&context, "build").as_deref(),
+            Some("next build")
+        );
+        assert_eq!(toolchain.task_display_command(&context, "lint"), None);
+
+        // A `command` override replaces the whole package-manager
+        // indirection: argv[0] is the program, nothing is prepended, cwd is
+        // the package directory. It also defines tasks no script does, and
+        // pass-through args append verbatim.
+        let override_argv = vec!["vitest".to_string(), "run".to_string()];
+        let cmd = toolchain
+            .task_command(
+                &context,
+                "lint",
+                Some(&["--bail".to_string()]),
+                Some(&override_argv),
+            )
+            .unwrap()
+            .expect("override defines the task");
+        assert_eq!(cmd.program, OsString::from("vitest"));
+        assert_eq!(
+            cmd.args,
+            vec![OsString::from("run"), OsString::from("--bail")]
+        );
+        assert_eq!(cmd.cwd, repo_root.resolve(package_directory));
+        assert_eq!(cmd.serial_group, None);
+    }
+
+    #[test]
+    fn task_io_environment_supports_windows_casing() {
+        let environment = TaskIOEnvironment::case_insensitive(std::collections::HashMap::from([(
+            "Cargo_Build_Target".to_string(),
+            "x86_64-pc-windows-msvc".to_string(),
+        )]));
+        assert_eq!(
+            environment.get("CARGO_BUILD_TARGET"),
+            Some("x86_64-pc-windows-msvc")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_unwraps_to_node_and_npm_cli() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        let node = tempdir.path().join("node.exe");
+        let npm_cli = tempdir
+            .path()
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+
+        std::fs::write(&npm_cmd, "").unwrap();
+        std::fs::write(&node, "").unwrap();
+        std::fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        std::fs::write(&npm_cli, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![npm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_falls_back_when_npm_cli_missing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        std::fs::write(&npm_cmd, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, npm_cmd.into_os_string());
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn test_registry_lookup() {
+        struct Fake(ToolchainId);
+        impl Toolchain for Fake {
+            fn id(&self) -> ToolchainId {
+                self.0.clone()
+            }
+            fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+                Box::pin(async { Ok(DiscoveredPackages::default()) })
+            }
+
+            fn task_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+                _pass_through_args: Option<&[String]>,
+                _override_command: Option<&[String]>,
+            ) -> Result<Option<TaskCommand>, Error> {
+                Ok(None)
+            }
+
+            fn task_display_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> Option<String> {
+                None
+            }
+
+            fn defines_task(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> bool {
+                false
+            }
+
+            fn watch_spec(&self) -> WatchSpec {
+                WatchSpec::default()
+            }
+
+            fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
+                Ok(None)
+            }
+        }
+
+        let mut registry = ToolchainRegistry::new();
+        registry
+            .register(Arc::new(Fake(ToolchainId::JAVASCRIPT)))
+            .unwrap();
+        registry
+            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+            .unwrap();
+        let duplicate = registry
+            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+            .unwrap_err();
+        assert_eq!(duplicate.id, ToolchainId::new("gleam"));
+
+        assert!(registry.get(&ToolchainId::JAVASCRIPT).is_some());
+        assert!(registry.get(&ToolchainId::new("gleam")).is_some());
+        assert!(registry.get(&ToolchainId::new("zig")).is_none());
+        assert_eq!(registry.iter().count(), 2);
+    }
+}

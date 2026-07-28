@@ -1,16 +1,16 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { getTurboRoot } from "@turbo/utils";
 import type { DryRun } from "@turbo/types";
-import { getComparison } from "./getComparison";
-import { getTask } from "./getTask";
-import { getWorkspace } from "./getWorkspace";
-import { getTurboVersion } from "./getTurboVersion";
+import { getComparison } from "./get-comparison";
+import { getTask } from "./get-task";
+import { getWorkspace } from "./get-workspace";
+import { getTurboVersion } from "./get-turbo-version";
 import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
-import { checkCommit } from "./checkCommit";
+import { checkCommit } from "./check-commit";
 
 function trackOptions(opts: TurboIgnoreOptions) {
   opts.telemetry?.trackOptionTask(opts.task);
@@ -39,8 +39,24 @@ export function turboIgnore(
 
   const inputs = {
     workspace: workspaceArg,
-    ...opts,
+    ...opts
   };
+
+  if (process.env.VERCEL === "1") {
+    warn(
+      `\u001B[33m"turbo-ignore" is deprecated. Use Vercel's built-in project skipping instead.\u001B[39m`
+    );
+    warn(
+      `\u001B[33mLearn more: https://vercel.com/docs/monorepos#skipping-unaffected-projects\u001B[39m\n`
+    );
+  } else {
+    warn(
+      `\u001B[33m"turbo-ignore" is deprecated. Use "turbo query affected" instead.\u001B[39m`
+    );
+    warn(
+      `\u001B[33mLearn more: https://turborepo.dev/docs/reference/query#migrating-from-turbo-ignore\u001B[39m\n`
+    );
+  }
 
   info(
     `Using Turborepo to determine if this project is affected by the commit...\n`
@@ -109,19 +125,30 @@ export function turboIgnore(
 
   // If we can't find a turbo version in package.json, don't specify a version
   const turbo = turboVersion ? `turbo@${turboVersion}` : "turbo";
-  // Build, and execute the command
-  const command = `npx -y ${turbo} run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
+  // Build and execute the command
+  const filterArg = `${workspace}...[${comparison.ref}]`;
+  const args = [
+    "-y",
+    turbo,
+    "run",
+    task,
+    `--filter=${filterArg}`,
+    "--dry=json"
+  ];
+  // For logging, format task with quotes if it contains special characters (like #)
+  const displayTask = task.includes("#") ? `"${task}"` : task;
+  const command = `npx -y ${turbo} run ${displayTask} --filter="${filterArg}" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {
-    cwd: root,
+    cwd: root
   };
 
   if (opts.maxBuffer) {
     execOptions.maxBuffer = opts.maxBuffer;
   }
 
-  exec(command, execOptions, (err, stdout) => {
+  execFile("npx", args, execOptions, (err, stdout) => {
     if (err) {
       const { level, code, message } = shouldWarn({ err: err.message });
       if (level === "warn") {

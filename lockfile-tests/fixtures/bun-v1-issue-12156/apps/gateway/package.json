@@ -1,0 +1,26 @@
+{
+  "name": "@hebo/gateway",
+  "version": "0.1.1",
+  "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.72",
+    "@ai-sdk/google-vertex": "^4.0.47",
+    "@ai-sdk/groq": "^3.0.22",
+    "@ai-sdk/provider": "^3.0.8",
+    "@aws-sdk/client-bedrock": "^3.985.0",
+    "@aws-sdk/credential-providers": "^3.985.0",
+    "@elysiajs/cors": "catalog:",
+    "@elysiajs/openapi": "catalog:",
+    "@elysiajs/opentelemetry": "catalog:",
+    "@hebo-ai/gateway": "0.6.1",
+    "@hebo/api": "workspace:*",
+    "@hebo/shared-api": "workspace:*",
+    "@opentelemetry/api": "catalog:",
+    "elysia": "catalog:",
+    "lru-cache": "^11.2.5",
+    "voyage-ai-provider": "^3.0.0"
+  },
+  "devDependencies": {
+    "@hebo/typescript-config": "workspace:*",
+    "@types/bun": "catalog:"
+  }
+}

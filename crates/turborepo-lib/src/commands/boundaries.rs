@@ -18,12 +18,12 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run = RunBuilder::new(base)?
+    let (run, _analytics) = RunBuilder::new(base, None)?
         .do_not_validate_engine()
         .build(&handler, telemetry)
         .await?;
 
-    let result = run.check_boundaries(true).await?;
+    let result = run.check_boundaries(true)?;
 
     if let Some(ignore) = ignore {
         let mut patches: HashMap<&AbsoluteSystemPath, Vec<(SourceSpan, String)>> = HashMap::new();

@@ -1,9 +1,9 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { type PackageJson } from "@turbo/utils";
+import { type PackageJson, resolveTurboConfigPath } from "@turbo/utils";
 import type { Schema } from "@turbo/types";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
@@ -14,30 +14,38 @@ const INTRODUCED_IN = "1.1.0";
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info(`Migrating "package.json" "turbo" key to "turbo.json" file...`);
-  const turboConfigPath = path.join(root, "turbo.json");
+  const { configPath: existingConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  // If no config exists yet, default to creating turbo.json
+  const turboConfigPath = existingConfigPath ?? path.join(root, "turbo.json");
   const rootPackageJsonPath = path.join(root, "package.json");
   if (!fs.existsSync(rootPackageJsonPath)) {
     return runner.abortTransform({
-      reason: `No package.json found at ${root}. Is the path correct?`,
+      reason: `No package.json found at ${root}. Is the path correct?`
     });
   }
 
   // read files
   const rootPackageJson = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
   let rootTurboJson = null;
-  try {
-    rootTurboJson = fs.readJsonSync(turboConfigPath) as Schema;
-  } catch (err) {
-    rootTurboJson = null;
+  if (existingConfigPath) {
+    try {
+      rootTurboJson = fs.readJsonSync(turboConfigPath) as Schema;
+    } catch (err) {
+      rootTurboJson = null;
+    }
   }
 
   // modify files
@@ -51,11 +59,11 @@ export function transformer({
 
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: transformedTurboConfig,
+    after: transformedTurboConfig
   });
   runner.modifyFile({
     filePath: rootPackageJsonPath,
-    after: transformedPackageJson,
+    after: transformedPackageJson
   });
 
   return runner.finish();
@@ -65,7 +73,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

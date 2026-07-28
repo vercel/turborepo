@@ -1,0 +1,33 @@
+---
+title: devtools
+description: API reference for the `turbo devtools` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo devtools` command that visualizes your monorepo's package graph in the browser.
+---
+
+Visualize your monorepo's package graph in the browser.
+
+```bash title="Terminal"
+turbo devtools [options]
+```
+
+This command starts a local server and opens your browser to a visualization of your monorepo's package graph.
+
+## Options
+
+### `--port`
+
+The port to run the devtools server on. Defaults to `9876`.
+
+```bash title="Terminal"
+turbo devtools --port 3000
+```
+
+### `--no-open`
+
+Do not automatically open the browser when the server starts.
+
+```bash title="Terminal"
+turbo devtools --no-open
+```

@@ -1,0 +1,76 @@
+use std::{collections::HashMap, io};
+
+use itertools::Itertools;
+use petgraph::{Graph, visit::EdgeRef};
+use rand::{Rng, SeedableRng, distr::Distribution, rngs::SmallRng};
+
+use crate::{Built, Engine, TaskDefinitionInfo, TaskNode};
+
+struct CapitalLetters;
+
+impl Distribution<char> for CapitalLetters {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> char {
+        const GEN_ASCII_STR_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        char::from(GEN_ASCII_STR_CHARSET[rng.random_range(0..GEN_ASCII_STR_CHARSET.len())])
+    }
+}
+
+fn generate_id<R: Rng>(rng: &mut R) -> String {
+    CapitalLetters.sample_iter(rng).take(4).join("")
+}
+
+impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
+    pub fn mermaid_graph<W: io::Write>(&self, writer: W, is_single: bool) -> Result<(), io::Error> {
+        render_graph(writer, &self.task_graph, is_single)
+    }
+}
+
+fn render_graph<W: io::Write>(
+    mut writer: W,
+    graph: &Graph<TaskNode, ()>,
+    is_single: bool,
+) -> Result<(), io::Error> {
+    // Chosen randomly.
+    // Pick a constant seed so that the same graph generates the same nodes every
+    // time. This is not a security-sensitive operation, it's just aliases for
+    // the graph nodes.
+    let mut rng = SmallRng::seed_from_u64(4u64);
+
+    let display_node = match is_single {
+        true => |node: &TaskNode| match node {
+            TaskNode::Root => node.to_string(),
+            TaskNode::Task(task) => task.task().to_string(),
+        },
+        false => |node: &TaskNode| node.to_string(),
+    };
+    let get_node = |i| -> Result<String, io::Error> {
+        graph
+            .node_weight(i)
+            .map(display_node)
+            .ok_or_else(|| io::Error::other("node index should exist in graph"))
+    };
+
+    let mut edges = graph
+        .edge_references()
+        .map(|e| {
+            let source = get_node(e.source())?;
+            let target = get_node(e.target())?;
+            Ok((source, target))
+        })
+        .collect::<Result<Vec<_>, io::Error>>()?;
+    edges.sort();
+
+    writeln!(writer, "graph TD")?;
+    let mut name_cache = HashMap::<String, String>::new();
+    for (src, target) in edges {
+        let src_name = name_cache
+            .entry(src.clone())
+            .or_insert_with(|| generate_id(&mut rng));
+        write!(writer, "\t{src_name}(\"{src}\") --> ")?;
+        let target_name = name_cache
+            .entry(target.clone())
+            .or_insert_with(|| generate_id(&mut rng));
+        writeln!(writer, "{target_name}(\"{target}\")")?;
+    }
+    Ok(())
+}

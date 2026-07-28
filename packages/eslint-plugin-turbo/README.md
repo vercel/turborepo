@@ -34,12 +34,12 @@ import turbo from "eslint-plugin-turbo";
 export default [
   {
     plugins: {
-      turbo,
+      turbo
     },
     rules: {
-      "turbo/no-undeclared-env-vars": "error",
-    },
-  },
+      "turbo/no-undeclared-env-vars": "error"
+    }
+  }
 ];
 ```
 
@@ -51,17 +51,17 @@ import turbo from "eslint-plugin-turbo";
 export default [
   {
     plugins: {
-      turbo,
+      turbo
     },
     rules: {
       "turbo/no-undeclared-env-vars": [
         "error",
         {
-          allowList: ["^ENV_[A-Z]+$"],
-        },
-      ],
-    },
-  },
+          allowList: ["^ENV_[A-Z]+$"]
+        }
+      ]
+    }
+  }
 ];
 ```
 

@@ -1,4 +1,5 @@
-import type { Platform } from "./types";
+import { execFileSync } from "node:child_process";
+import type { NpmPackageArtifact, Platform } from "./types";
 import operations from "./operations";
 
 interface PackAndPublishOptions {
@@ -6,6 +7,11 @@ interface PackAndPublishOptions {
   version: string;
   skipPublish: boolean;
   npmTag: string;
+  packagePrefix?: string;
+  binaryName?: string;
+  srcDirPrefix?: string;
+  srcDir?: string;
+  description?: string;
 }
 
 export async function packAndPublish({
@@ -13,14 +19,27 @@ export async function packAndPublish({
   version,
   skipPublish,
   npmTag,
+  packagePrefix,
+  binaryName,
+  srcDirPrefix,
+  srcDir,
+  description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
-  const artifacts: Array<string> = [];
+  const artifacts: Array<NpmPackageArtifact> = [];
 
   for (const platform of platforms) {
     console.log(`Processing platform: ${platform.os}-${platform.arch}`);
     // eslint-disable-next-line no-await-in-loop -- We trade of slightly faster releases with more legible logging
-    const artifact = await operations.packPlatform({ platform, version });
+    const artifact = await operations.packPlatform({
+      platform,
+      version,
+      packagePrefix,
+      binaryName,
+      srcDirPrefix,
+      srcDir,
+      description
+    });
     artifacts.push(artifact);
   }
 
@@ -28,7 +47,11 @@ export async function packAndPublish({
 
   if (!skipPublish) {
     console.log("Publishing artifacts...");
-    operations.publishArtifacts(artifacts, npmTag);
+    const npmVersion = execFileSync("npm", ["--version"], {
+      encoding: "utf8"
+    }).trim();
+    console.log(`npm version: ${npmVersion}`);
+    await operations.publishArtifacts(artifacts, npmTag);
   } else {
     console.log("Skipping publish step.");
   }

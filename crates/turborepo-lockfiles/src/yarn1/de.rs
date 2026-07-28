@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use nom::{
     IResult,
     branch::alt,
@@ -9,14 +7,8 @@ use nom::{
     multi::{count, many0, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
-use regex::Regex;
+use regex::regex;
 use serde_json::Value;
-
-// regex for trimming spaces from start and end
-fn pseudostring_replace() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^ *| *$").unwrap())
-}
 
 pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
     match all_consuming(property_statements(0))(input) {
@@ -175,10 +167,7 @@ fn legacy_literal(i: &str) -> IResult<&str, Value> {
 
 fn pseudostring(i: &str) -> IResult<&str, String> {
     let (i, pseudo) = recognize(pseudostring_inner)(i)?;
-    Ok((
-        i,
-        pseudostring_replace().replace_all(pseudo, "").into_owned(),
-    ))
+    Ok((i, regex!(r"^ *| *$").replace_all(pseudo, "").into_owned()))
 }
 
 fn pseudostring_inner(i: &str) -> IResult<&str, ()> {
@@ -189,8 +178,8 @@ fn pseudostring_inner(i: &str) -> IResult<&str, ()> {
 
 fn pseudostring_legacy(i: &str) -> IResult<&str, String> {
     let (i, pseudo) = recognize(pseudostring_legacy_inner)(i)?;
-    let replaced = pseudostring_replace().replace_all(pseudo, "");
-    Ok((i, replaced.to_string()))
+    let replaced = regex!(r"^ *| *$").replace_all(pseudo, "").into_owned();
+    Ok((i, replaced))
 }
 
 fn pseudostring_legacy_inner(i: &str) -> IResult<&str, ()> {

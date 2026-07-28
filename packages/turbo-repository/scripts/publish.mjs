@@ -43,7 +43,7 @@ console.log("platform", platform);
         `npm`,
         [`pack`, `${path.join(nativePackagesDir, platform)}`],
         {
-          stdio: "inherit",
+          stdio: "inherit"
         }
       );
     } catch (err) {

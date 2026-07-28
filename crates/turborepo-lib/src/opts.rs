@@ -1,68 +1,73 @@
-use std::backtrace;
-
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
-use turborepo_task_id::{TaskId, TaskName};
+use turborepo_types::{
+    APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, RepoOpts,
+    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, TaskArgs, TuiOpts,
+    UIMode,
+};
 
 use crate::{
-    cli::{
-        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
-        OutputLogsMode, RunArgs,
-    },
-    config::{ConfigurationOptions, CONFIG_FILE},
-    turbo_json::{FutureFlags, UIMode},
+    cli::{Command, ExecutionArgs, QuerySubcommand, RunArgs},
+    config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
+    turbo_json::FutureFlags,
     Args,
 };
+
+/// Why remote caching was disabled by local configuration.
+/// Determined during opts resolution — no network call required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum RemoteCacheDisabledReason {
+    /// User never opted in: no token, no team.
+    NotLinked,
+    /// TURBO_TOKEN env var is set but no team is configured.
+    /// The token gets effectively ignored because `is_linked` returns false.
+    TokenWithoutTeam,
+    /// `remoteCache.enabled: false` in turbo.json.
+    InConfig,
+    /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
+    InEnvVar,
+    /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
+    /// disabled both remote read and write.
+    ByFlags,
+    /// The cache config (via `TURBO_CACHE` or `--cache`) explicitly requests
+    /// remote caching, but no credentials are configured.
+    RequestedWithoutCredentials,
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected `run` command.")]
-    ExpectedRun(#[backtrace] backtrace::Backtrace),
+    ExpectedRun,
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
         "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
-         cores, between 1% and 100%: {1}"
+         cores, between 1% and 100%: {0}"
     )]
-    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    InvalidConcurrencyPercentage(f64),
     #[error(
         "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
-         or equal to 1: {1}"
+         or equal to 1: {0}"
     )]
-    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    ConcurrencyOutOfBounds(String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
          `remoteCacheReadOnly`) at the same time."
     )]
     OverlappingCacheOptions,
+    #[error("Invalid cacheMaxAge: {0}")]
+    CacheMaxAge(String),
+    #[error("Invalid cacheMaxSize: {0}")]
+    CacheMaxSize(String),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Config(#[from] crate::config::Error),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct APIClientOpts {
-    pub api_url: String,
-    pub timeout: u64,
-    pub upload_timeout: u64,
-    pub token: Option<String>,
-    pub team_id: Option<String>,
-    pub team_slug: Option<String>,
-    pub login_url: String,
-    pub preflight: bool,
-    pub sso_login_callback_port: Option<u16>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoOpts {
-    pub root_turbo_json_path: AbsoluteSystemPathBuf,
-    pub allow_no_package_manager: bool,
-    pub allow_no_turbo_json: bool,
 }
 
 /// The fully resolved options for Turborepo. This is the combination of config,
@@ -78,6 +83,19 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
+    /// Pre-resolved git root from worktree detection, if available.
+    /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
+    pub git_root: Option<AbsoluteSystemPathBuf>,
+    /// If remote caching is disabled, this captures the reason.
+    /// `None` means remote caching is enabled (by local config).
+    pub remote_cache_disabled_reason: Option<RemoteCacheDisabledReason>,
+    /// Resolved log file path, if enabled via `--log-file`, `logFile` in
+    /// turbo.json, or `TURBO_LOG_FILE` env var.
+    #[serde(skip)]
+    pub log_file_path: Option<AbsoluteSystemPathBuf>,
+    /// Whether JSON output mode is enabled (`--json`).
+    pub json: bool,
 }
 
 impl Opts {
@@ -135,10 +153,14 @@ impl Opts {
 
         let api_auth = config.token().map(|token| APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
+            token: token.into(),
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
+        let default_execution_args = Box::new(ExecutionArgs {
+            single_package: args.single_package,
+            ..Default::default()
+        });
         let (execution_args, run_args) = match &args.command {
             Some(Command::Run {
                 run_args,
@@ -164,8 +186,28 @@ impl Opts {
 
                 (&Box::new(execution_args), &Box::default())
             }
-            _ => (&Box::default(), &Box::default()),
+            Some(Command::Query {
+                subcommand: Some(QuerySubcommand::Ls(ls_args)),
+                ..
+            }) => {
+                let execution_args = ExecutionArgs {
+                    filter: ls_args.filter.clone(),
+                    affected: ls_args.affected,
+                    ..Default::default()
+                };
+
+                (&Box::new(execution_args), &Box::default())
+            }
+            _ => (&default_execution_args, &Box::default()),
         };
+
+        // Resolve cache directory once to avoid duplicate git process spawning.
+        // This is used by both RunOpts and CacheOpts.
+        let cache_dir_result = config.resolve_cache_dir(repo_root);
+        debug!(
+            "Opts::new cache_dir_result: path={}, is_shared_worktree={}",
+            cache_dir_result.path, cache_dir_result.is_shared_worktree
+        );
 
         let inputs = OptsInputs {
             repo_root,
@@ -173,15 +215,63 @@ impl Opts {
             execution_args: execution_args.as_ref(),
             config: &config,
             api_auth: &api_auth,
+            cache_dir_result: &cache_dir_result,
         };
         let run_opts = RunOpts::try_from(inputs)?;
         let cache_opts = CacheOpts::try_from(inputs)?;
-        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let scope_opts = scope_opts_from_inputs(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
         let future_flags = config.future_flags();
+        let experimental_observability = config.experimental_observability().cloned();
+
+        let remote_cache_disabled_reason = if !cache_opts.cache.remote.should_use() {
+            let is_linked = turborepo_api_client::is_linked(&api_auth);
+            if !is_linked {
+                let has_token_env = std::env::var("TURBO_TOKEN")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .is_some();
+                let user_requested_remote = config
+                    .cache()
+                    .map(|c| c.remote.should_use())
+                    .unwrap_or(false);
+                if has_token_env {
+                    Some(RemoteCacheDisabledReason::TokenWithoutTeam)
+                } else if user_requested_remote {
+                    Some(RemoteCacheDisabledReason::RequestedWithoutCredentials)
+                } else {
+                    Some(RemoteCacheDisabledReason::NotLinked)
+                }
+            } else if config.enabled == Some(false) {
+                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
+                    .ok()
+                    .filter(|v| v == "0")
+                    .is_some();
+                if disabled_by_env {
+                    Some(RemoteCacheDisabledReason::InEnvVar)
+                } else {
+                    Some(RemoteCacheDisabledReason::InConfig)
+                }
+            } else {
+                // Linked and enabled in config, but remote cache is still disabled.
+                // This means CLI flags (--no-cache + --force, or --cache=local:rw)
+                // disabled both remote read and write.
+                Some(RemoteCacheDisabledReason::ByFlags)
+            }
+        } else {
+            None
+        };
+
+        let json = execution_args.json;
+
+        let log_file_path = resolve_log_file_path(
+            repo_root,
+            execution_args.log_file.as_ref(),
+            inputs.config.log_file(),
+        );
 
         Ok(Self {
             repo_opts,
@@ -192,8 +282,97 @@ impl Opts {
             api_client_opts,
             tui_opts,
             future_flags,
+            git_root: cache_dir_result.git_root,
+            experimental_observability,
+            remote_cache_disabled_reason,
+            log_file_path,
+            json,
         })
     }
+}
+
+/// Resolve the log file path from the config layers.
+///
+/// Priority: CLI flag (`--log-file`) > turbo.json/env (`logFile` /
+/// `TURBO_LOG_FILE`).
+fn resolve_log_file_path(
+    repo_root: &AbsoluteSystemPath,
+    cli_flag: Option<&Option<String>>,
+    config_value: Option<&crate::config::LogFileConfig>,
+) -> Option<AbsoluteSystemPathBuf> {
+    // CLI: --log-file (present with no value → default, with value → custom)
+    if let Some(maybe_path) = cli_flag {
+        return Some(match maybe_path {
+            Some(path) => resolve_path_relative_to_root(repo_root, path),
+            None => default_log_file_path(repo_root),
+        });
+    }
+
+    // turbo.json / env var (merged by the config layer)
+    match config_value {
+        Some(crate::config::LogFileConfig::Enabled) => Some(default_log_file_path(repo_root)),
+        Some(crate::config::LogFileConfig::Path(path)) => {
+            Some(resolve_path_relative_to_root(repo_root, path))
+        }
+        None => None,
+    }
+}
+
+fn resolve_path_relative_to_root(
+    repo_root: &AbsoluteSystemPath,
+    path: &str,
+) -> AbsoluteSystemPathBuf {
+    let joined = repo_root.as_std_path().join(path);
+
+    let resolved = match AbsoluteSystemPathBuf::new(joined.to_string_lossy().to_string()) {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::warn!(
+                "Invalid structured log path '{}', using default location",
+                path
+            );
+            return default_log_file_path(repo_root);
+        }
+    };
+
+    // Prevent path traversal outside the repo root. Canonicalization
+    // resolves `..` segments so we can compare prefixes reliably.
+    let repo_canonical = repo_root
+        .as_std_path()
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.as_std_path().to_path_buf());
+    let resolved_canonical = resolved
+        .as_std_path()
+        .canonicalize()
+        // If the file doesn't exist yet, canonicalize the parent.
+        .or_else(|_| {
+            resolved
+                .as_std_path()
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .ok_or(std::io::ErrorKind::NotFound)
+                .map(|parent| parent.join(resolved.as_std_path().file_name().unwrap_or_default()))
+        })
+        // Last resort: use the raw joined path for the prefix check.
+        .unwrap_or_else(|_| resolved.as_std_path().to_path_buf());
+
+    if !resolved_canonical.starts_with(&repo_canonical) {
+        tracing::warn!(
+            "Structured log path '{}' escapes the repository root, using default location",
+            path
+        );
+        return default_log_file_path(repo_root);
+    }
+
+    resolved
+}
+
+fn default_log_file_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    repo_root.join_components(&[".turbo", "logs", &format!("{millis}.json")])
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -203,17 +382,17 @@ struct OptsInputs<'a> {
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RunCacheOpts {
-    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
+    /// Pre-computed cache directory result to avoid duplicate git process
+    /// spawning. This is computed once in `Opts::new()` and shared by
+    /// `RunOpts` and `CacheOpts`.
+    cache_dir_result: &'a CacheDirResult,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
             task_output_logs_override: inputs.execution_args.output_logs,
+            errors_only_show_hash: inputs.config.future_flags().errors_only_show_hash,
         }
     }
 }
@@ -225,6 +404,8 @@ pub struct RunOpts {
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     pub(crate) cache_dir: Utf8PathBuf,
+    /// Whether using shared cache from main worktree (for user messaging).
+    pub(crate) is_shared_worktree_cache: bool,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
@@ -242,54 +423,10 @@ pub struct RunOpts {
     pub ui_mode: UIMode,
 }
 
-/// Projection of `RunOpts` that only includes information necessary to compute
-/// pass through args.
-#[derive(Debug)]
-pub struct TaskArgs<'a> {
-    pass_through_args: &'a [String],
-    tasks: &'a [String],
-}
-
 impl RunOpts {
     pub fn task_args(&self) -> TaskArgs<'_> {
-        TaskArgs {
-            pass_through_args: &self.pass_through_args,
-            tasks: &self.tasks,
-        }
+        TaskArgs::new(&self.pass_through_args, &self.tasks)
     }
-}
-
-impl<'a> TaskArgs<'a> {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
-        if !self.pass_through_args.is_empty()
-            && self
-                .tasks
-                .iter()
-                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
-        {
-            Some(self.pass_through_args)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub enum GraphOpts {
-    Stdout,
-    File(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub enum ResolvedLogOrder {
-    Stream,
-    Grouped,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub enum ResolvedLogPrefix {
-    Task,
-    None,
 }
 
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
@@ -351,6 +488,13 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             ),
         };
 
+        // --json forces stream order — no grouping.
+        let log_order = if inputs.execution_args.json {
+            ResolvedLogOrder::Stream
+        } else {
+            log_order
+        };
+
         Ok(Self {
             tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
@@ -368,9 +512,16 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             graph,
             dry_run: inputs.run_args.dry_run,
             env_mode: inputs.config.env_mode(),
-            cache_dir: inputs.config.cache_dir().into(),
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
+            is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
-            ui_mode: inputs.config.ui(),
+            // --json disables the TUI and forces stream mode.
+            ui_mode: if inputs.execution_args.json {
+                UIMode::Stream
+            } else {
+                inputs.config.ui()
+            },
         })
     }
 }
@@ -379,68 +530,47 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     if let Some(percent) = concurrency_raw.strip_suffix('%') {
         let percent = percent.parse::<f64>()?;
         return if percent > 0.0 && percent.is_finite() {
-            Ok((num_cpus::get() as f64 * percent / 100.0).max(1.0) as u32)
+            let num_cpus = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            Ok((num_cpus as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(Error::InvalidConcurrencyPercentage(
-                backtrace::Backtrace::capture(),
-                percent,
-            ))
+            Err(Error::InvalidConcurrencyPercentage(percent))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
-            backtrace::Backtrace::capture(),
-            concurrency_raw.to_string(),
-        )),
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(concurrency_raw.to_string())),
     }
 }
 
-impl From<LogPrefix> for ResolvedLogPrefix {
-    fn from(value: LogPrefix) -> Self {
-        match value {
-            // We default to task-prefixed logs
-            LogPrefix::Auto | LogPrefix::Task => ResolvedLogPrefix::Task,
-            LogPrefix::None => ResolvedLogPrefix::None,
-        }
-    }
-}
+/// Create ScopeOpts from OptsInputs.
+///
+/// This is a helper function since we can't implement `TryFrom` for a foreign
+/// type.
+fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
+    let pkg_inference_root = inputs
+        .execution_args
+        .pkg_inference_root
+        .as_ref()
+        .map(AnchoredSystemPathBuf::from_raw)
+        .transpose()?;
 
-#[derive(Clone, Debug, Serialize)]
-pub struct ScopeOpts {
-    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
-    pub global_deps: Vec<String>,
-    pub filter_patterns: Vec<String>,
-    pub affected_range: Option<(Option<String>, Option<String>)>,
-}
+    let affected_range = inputs.execution_args.affected.then(|| {
+        let scm_base = inputs.config.scm_base();
+        let scm_head = inputs.config.scm_head();
+        (
+            scm_base.map(|b| b.to_owned()),
+            scm_head.map(|h| h.to_string()),
+        )
+    });
 
-impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
-    type Error = self::Error;
-
-    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
-        let pkg_inference_root = inputs
-            .execution_args
-            .pkg_inference_root
-            .as_ref()
-            .map(AnchoredSystemPathBuf::from_raw)
-            .transpose()?;
-
-        let affected_range = inputs.execution_args.affected.then(|| {
-            let scm_base = inputs.config.scm_base();
-            let scm_head = inputs.config.scm_head();
-            (
-                scm_base.map(|b| b.to_owned()),
-                scm_head.map(|h| h.to_string()),
-            )
-        });
-
-        Ok(Self {
-            global_deps: inputs.execution_args.global_deps.clone(),
-            pkg_inference_root,
-            affected_range,
-            filter_patterns: inputs.execution_args.filter.clone(),
-        })
-    }
+    Ok(ScopeOpts {
+        global_deps: inputs.execution_args.global_deps.clone(),
+        pkg_inference_root,
+        affected_range,
+        filter_patterns: inputs.execution_args.filter.clone(),
+    })
 }
 
 impl<'a> From<OptsInputs<'a>> for APIClientOpts {
@@ -449,7 +579,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let timeout = inputs.config.timeout();
         let upload_timeout = inputs.config.upload_timeout();
         let preflight = inputs.config.preflight();
-        let token = inputs.config.token().map(|s| s.to_string());
+        let token = inputs.config.token().map(|s| s.into());
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();
@@ -457,12 +587,14 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
 
         APIClientOpts {
             api_url,
+            api_url_source: inputs.config.api_url_source(),
             timeout,
             upload_timeout,
             token,
             team_id,
             team_slug,
             login_url,
+            login_url_source: inputs.config.login_url_source(),
             preflight,
             sso_login_callback_port,
         }
@@ -520,17 +652,40 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let unused_remote_cache_opts_team_id =
             inputs.config.team_id().map(|team_id| team_id.to_string());
         let signature = inputs.config.signature();
+        let enforce_signature_key_length = inputs.config.future_flags().longer_signature_key;
         let remote_cache_opts = Some(RemoteCacheOpts::new(
             unused_remote_cache_opts_team_id,
             signature,
+            enforce_signature_key_length,
         ));
 
-        Ok(CacheOpts {
-            cache_dir: inputs.config.cache_dir().into(),
+        let cache_max_age = inputs
+            .config
+            .cache_max_age()
+            .map(turborepo_cache::duration::parse_human_duration)
+            .transpose()
+            .map_err(|e| Error::CacheMaxAge(e.to_string()))?
+            .filter(|d| !d.is_zero());
+
+        let cache_max_size = inputs
+            .config
+            .cache_max_size()
+            .map(turborepo_cache::size::parse_human_size)
+            .transpose()
+            .map_err(|e| Error::CacheMaxSize(e.to_string()))?
+            .filter(|&s| s > 0);
+
+        let cache_opts = CacheOpts {
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
             cache,
             workers: inputs.run_args.cache_workers,
             remote_cache_opts,
-        })
+            cache_max_age,
+            cache_max_size,
+        };
+        debug!("CacheOpts created with cache_dir={}", cache_opts.cache_dir);
+        Ok(cache_opts)
     }
 }
 
@@ -542,21 +697,55 @@ impl RunOpts {
     }
 }
 
-impl ScopeOpts {
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
+// Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
+impl RunOptsInfo for RunOpts {
+    fn dry_run(&self) -> Option<DryRunMode> {
+        self.dry_run
     }
-}
 
-#[derive(Clone, Debug, Serialize)]
-pub struct TuiOpts {
-    pub(crate) scrollback_length: u64,
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn summarize(&self) -> Option<&str> {
+        self.summarize.then_some("true")
+    }
+
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn pass_through_args(&self) -> &[String] {
+        &self.pass_through_args
+    }
+
+    fn tasks(&self) -> &[String] {
+        &self.tasks
+    }
 }
 
 impl<'a> From<OptsInputs<'a>> for TuiOpts {
     fn from(inputs: OptsInputs) -> Self {
         TuiOpts {
             scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
+// Convert RunOpts to ExecutorConfig for use with the generic task executor
+impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
+    fn from(opts: &RunOpts) -> Self {
+        Self {
+            env_mode: opts.env_mode,
+            log_order: opts.log_order,
+            log_prefix: opts.log_prefix,
+            single_package: opts.single_package,
+            is_github_actions: opts.is_github_actions,
+            concurrency: opts.concurrency,
+            ui_mode: opts.ui_mode,
+            continue_on_error: opts.continue_on_error,
+            redirect_stderr_to_stdout: opts.should_redirect_stderr_to_stdout(),
+            framework_inference: opts.framework_inference,
         }
     }
 }
@@ -571,15 +760,17 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
+    use turborepo_types::{
+        ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
+    };
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
+    use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
-        cli::{Command, ContinueMode, DryRunMode, RunArgs},
+        cli::{Command, RunArgs},
         commands::CommandBase,
         config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        turbo_json::UIMode,
         Args,
     };
 
@@ -593,6 +784,23 @@ mod test {
         continue_on_error: ContinueMode,
         dry_run: Option<DryRunMode>,
         affected: Option<(String, String)>,
+    }
+
+    #[test]
+    fn devtools_preserves_global_single_package_option() {
+        let tempdir = TempDir::new().expect("create temporary repository");
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).expect("absolute path");
+        let args = Args::parse(
+            ["turbo", "--single-package", "devtools", "--no-open"]
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        )
+        .expect("parse devtools arguments");
+        let opts = Opts::new(&repo_root, &args, ConfigurationOptions::default())
+            .expect("resolve devtools options");
+
+        assert!(opts.run_opts.single_package);
     }
 
     #[test_case(TestCaseOpts{
@@ -687,8 +895,9 @@ mod test {
             tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
-            env_mode: crate::cli::EnvMode::Loose,
+            env_mode: EnvMode::Loose,
             cache_dir: camino::Utf8PathBuf::new(),
+            is_shared_worktree_cache: false,
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
@@ -698,8 +907,8 @@ mod test {
             graph: None,
             ui_mode: UIMode::Stream,
             single_package: false,
-            log_prefix: crate::opts::ResolvedLogPrefix::Task,
-            log_order: crate::opts::ResolvedLogOrder::Stream,
+            log_prefix: ResolvedLogPrefix::Task,
+            log_order: ResolvedLogOrder::Stream,
             summarize: false,
             is_github_actions: false,
             daemon: None,
@@ -709,6 +918,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
         let runcache_opts = RunCacheOpts::default();
         let scope_opts = ScopeOpts {
@@ -736,12 +947,14 @@ mod test {
             },
             api_client_opts: APIClientOpts {
                 api_url: "".to_string(),
+                api_url_source: None,
                 timeout: 0,
                 upload_timeout: 0,
                 token: None,
                 team_id: None,
                 team_slug: None,
                 login_url: "".to_string(),
+                login_url_source: None,
                 preflight: false,
                 sso_login_callback_port: None,
             },
@@ -751,6 +964,11 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            experimental_observability: None,
+            git_root: None,
+            remote_cache_disabled_reason: None,
+            log_file_path: None,
+            json: false,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
@@ -809,70 +1027,101 @@ mod test {
             }, "remote-cache-read-only_remote_rw,local_r"
     )]
     fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
-        let mut args = Args::default();
-        args.command = Some(Command::Run {
-            execution_args: Box::default(),
-            run_args: Box::new(run_args),
-        });
-        // set token and team to simulate a logged in/linked user
-        args.token = Some("token".to_string());
-        args.team = Some("team".to_string());
+        with_clean_turbo_env(|| {
+            let mut args = Args::default();
+            args.command = Some(Command::Run {
+                execution_args: Box::default(),
+                run_args: Box::new(run_args),
+            });
+            // set token and team to simulate a logged in/linked user
+            args.token = Some("token".to_string());
+            args.team = Some("team".to_string());
 
-        let cache_config = CommandBase::new(
-            args,
-            AbsoluteSystemPathBuf::default(),
-            "1.0.0",
-            ColorConfig::new(true),
-        )
-        .map(|base| base.opts().cache_opts.cache);
+            let cache_config = CommandBase::new(
+                args,
+                AbsoluteSystemPathBuf::default(),
+                "1.0.0",
+                ColorConfig::new(true),
+            )
+            .map(|base| base.opts().cache_opts.cache);
 
-        insta::assert_debug_snapshot!(name, cache_config);
+            insta::assert_debug_snapshot!(name, cache_config);
 
-        Ok(())
+            Ok(())
+        })
+    }
+
+    /// Config resolution reads the real process environment, and the
+    /// environment running these tests legitimately carries turbo
+    /// configuration — TURBO_CACHE in CI, an OIDC-minted TURBO_TOKEN, a
+    /// developer's local settings. None of it may leak into tests that
+    /// assert against resolution defaults. temp-env serializes
+    /// env-mutating tests behind a mutex, so this is safe under both
+    /// `cargo test` (threads) and nextest (processes).
+    fn with_clean_turbo_env<R>(f: impl FnOnce() -> R) -> R {
+        const TURBO_ENV: &[&str] = &[
+            "TURBO_API",
+            "TURBO_CACHE",
+            "TURBO_DAEMON",
+            "TURBO_FORCE",
+            "TURBO_LOGIN",
+            "TURBO_PREFLIGHT",
+            "TURBO_REMOTE_CACHE_ENABLED",
+            "TURBO_REMOTE_CACHE_READ_ONLY",
+            "TURBO_REMOTE_ONLY",
+            "TURBO_TEAM",
+            "TURBO_TEAMID",
+            "TURBO_TOKEN",
+            "VERCEL_ARTIFACTS_OWNER",
+            "VERCEL_ARTIFACTS_TOKEN",
+        ];
+        temp_env::with_vars_unset(TURBO_ENV, f)
     }
 
     #[test]
     fn test_cache_config_force_remote_enable() -> Result<(), anyhow::Error> {
-        let tmpdir = TempDir::new()?;
-        let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+        with_clean_turbo_env(|| {
+            let tmpdir = TempDir::new()?;
+            let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
 
-        repo_root.join_component(CONFIG_FILE).create_with_contents(
-            serde_json::to_string_pretty(&serde_json::json!({
-                "remoteCache": { "enabled": true }
-            }))?,
-        )?;
+            repo_root.join_component(CONFIG_FILE).create_with_contents(
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "remoteCache": { "enabled": true }
+                }))?,
+            )?;
 
-        let mut args = Args::default();
-        args.command = Some(Command::Run {
-            execution_args: Box::default(),
-            run_args: Box::new(RunArgs {
-                force: Some(Some(true)),
-                ..Default::default()
-            }),
-        });
+            let mut args = Args::default();
+            args.command = Some(Command::Run {
+                execution_args: Box::default(),
+                run_args: Box::new(RunArgs {
+                    force: Some(Some(true)),
+                    ..Default::default()
+                }),
+            });
 
-        // set token and team to simulate a logged in/linked user
-        args.token = Some("token".to_string());
-        args.team = Some("team".to_string());
+            // set token and team to simulate a logged in/linked user
+            args.token = Some("token".to_string());
+            args.team = Some("team".to_string());
 
-        let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
-        let actual = base.opts().cache_opts.cache;
+            let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+            let actual = base.opts().cache_opts.cache;
 
-        assert_eq!(
-            actual,
-            CacheConfig {
-                remote: CacheActions {
-                    read: false,
-                    write: true
-                },
-                local: CacheActions {
-                    read: false,
-                    write: true
+            assert_eq!(
+                actual,
+                CacheConfig {
+                    remote: CacheActions {
+                        read: false,
+                        write: true
+                    },
+                    local: CacheActions {
+                        read: false,
+                        write: true
+                    }
                 }
-            }
-        );
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 
     #[test_case(
@@ -948,10 +1197,7 @@ mod test {
         expected_task: TaskId<'static>,
         expected_args: Option<Vec<String>>,
     ) -> Result<(), anyhow::Error> {
-        let task_opts = TaskArgs {
-            tasks: &tasks,
-            pass_through_args: &pass_through_args,
-        };
+        let task_opts = TaskArgs::new(&pass_through_args, &tasks);
 
         assert_eq!(
             task_opts.args_for_task(&expected_task),

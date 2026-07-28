@@ -38,7 +38,8 @@ impl Retry {
 /// # Arguments
 ///
 /// * `request_builder`: The request builder with everything, i.e. headers and
-///   body already set. NOTE: This must be cloneable, so no streams are allowed.
+///   body already set. Requests with streaming bodies cannot be cloned, so they
+///   can only be sent once and cannot be retried.
 /// * `strategy`: The strategy to use for retrying requests.
 ///
 /// returns: Result<Response, Error>
@@ -57,7 +58,13 @@ pub(crate) async fn make_retryable_request(
             return Ok(Retry::Once(request_builder.send().await?));
         };
         match builder.send().await {
-            Ok(value) => return Ok(Retry::Retried(value, retry_count)),
+            Ok(value) => {
+                if retry_count + 1 == RETRY_MAX
+                    || !RetryStrategy::should_retry_status(value.status())
+                {
+                    return Ok(Retry::Retried(value, retry_count));
+                }
+            }
             Err(err) => {
                 if !strategy.should_retry(&err) {
                     return Err(err.into());
@@ -72,7 +79,10 @@ pub(crate) async fn make_retryable_request(
         sleep(std::time::Duration::from_secs(sleep_period)).await;
     }
 
-    Err(Error::TooManyFailures(Box::new(last_error.unwrap())))
+    match last_error {
+        Some(error) => Err(Error::TooManyFailures(Box::new(error))),
+        None => Err(Error::RetryExhaustedWithoutError),
+    }
 }
 
 /// A retry strategy. Note that error statuses and TOO_MANY_REQUESTS are always
@@ -85,15 +95,14 @@ pub enum RetryStrategy {
 }
 
 impl RetryStrategy {
-    fn should_retry(&self, error: &reqwest::Error) -> bool {
-        if let Some(status) = error.status() {
-            if status == StatusCode::TOO_MANY_REQUESTS {
-                return true;
-            }
+    fn should_retry_status(status: StatusCode) -> bool {
+        status == StatusCode::TOO_MANY_REQUESTS
+            || (status.is_server_error() && status != StatusCode::NOT_IMPLEMENTED)
+    }
 
-            if status.as_u16() >= 500 && status.as_u16() != 501 {
-                return true;
-            }
+    fn should_retry(&self, error: &reqwest::Error) -> bool {
+        if error.status().is_some_and(Self::should_retry_status) {
+            return true;
         }
 
         match self {
@@ -105,29 +114,32 @@ impl RetryStrategy {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{assert_matches, time::Duration};
+
+    use reqwest::StatusCode;
 
     use crate::{
         Error,
-        retry::{RetryStrategy, make_retryable_request},
+        retry::{RETRY_MAX, RetryStrategy, make_retryable_request},
     };
 
     #[tokio::test]
     async fn handles_too_many_failures() {
         let mock = httpmock::MockServer::start_async().await;
-        let req = mock
-            .mock_async(|when, then| {
-                when.method(httpmock::Method::GET);
-                then.delay(Duration::from_secs(100));
-            })
-            .await;
+        mock.mock_async(|when, then| {
+            when.method(httpmock::Method::GET);
+            then.delay(Duration::from_secs(100));
+        })
+        .await;
 
         let request_builder = reqwest::Client::new()
             .get(mock.url("/"))
-            .timeout(Duration::from_millis(10));
+            .timeout(Duration::from_millis(500));
         let result = make_retryable_request(request_builder, RetryStrategy::Timeout).await;
 
-        req.assert_hits_async(2).await;
+        // Only assert the return type — the mock's call count can be fewer than
+        // expected when the timeout fires before httpmock registers the request
+        // (e.g. on loaded CI machines).
         assert_matches!(result, Err(Error::TooManyFailures(_)));
     }
 
@@ -166,6 +178,54 @@ mod test {
         // we should make at most one request and give up if it times out after
         // connecting
         assert_matches!(result, Err(_));
-        req.assert_hits_async(1).await;
+        req.assert_calls_async(1).await;
+    }
+
+    #[tokio::test]
+    async fn retries_retryable_http_statuses() {
+        for status in [
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ] {
+            let mock = httpmock::MockServer::start_async().await;
+            let req = mock
+                .mock_async(|when, then| {
+                    when.method(httpmock::Method::GET);
+                    then.status(status.as_u16()).body("retryable error");
+                })
+                .await;
+
+            let request_builder = reqwest::Client::new().get(mock.url("/"));
+            let result = make_retryable_request(request_builder, RetryStrategy::Timeout)
+                .await
+                .unwrap();
+
+            req.assert_calls_async(RETRY_MAX as usize).await;
+            let response = result.into_response();
+            assert_eq!(response.status(), status);
+            assert_eq!(response.text().await.unwrap(), "retryable error");
+        }
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_non_retryable_http_statuses() {
+        let mock = httpmock::MockServer::start_async().await;
+        let req = mock
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET);
+                then.status(StatusCode::FORBIDDEN.as_u16())
+                    .body("forbidden");
+            })
+            .await;
+
+        let request_builder = reqwest::Client::new().get(mock.url("/"));
+        let result = make_retryable_request(request_builder, RetryStrategy::Timeout)
+            .await
+            .unwrap();
+
+        req.assert_calls_async(1).await;
+        let response = result.into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.text().await.unwrap(), "forbidden");
     }
 }

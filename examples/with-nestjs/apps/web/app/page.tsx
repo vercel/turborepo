@@ -1,5 +1,7 @@
-import Image, { type ImageProps } from 'next/image';
+import type { Link } from '@repo/api';
 import { Button } from '@repo/ui/button';
+import Image, { type ImageProps } from 'next/image';
+
 import styles from './page.module.css';
 
 type Props = Omit<ImageProps, 'src'> & {
@@ -18,7 +20,26 @@ const ThemeImage = (props: Props) => {
   );
 };
 
-export default function Home() {
+async function getLinks(): Promise<Link[]> {
+  try {
+    const res = await fetch('http://localhost:3000/links', {
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch links');
+    }
+
+    return res.json();
+  } catch (error) {
+    console.error('Error fetching links:', error);
+    return [];
+  }
+}
+
+export default async function Home() {
+  const links = await getLinks();
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -55,7 +76,7 @@ export default function Home() {
             Deploy now
           </a>
           <a
-            href="https://turborepo.com/docs?utm_source"
+            href="https://turborepo.dev/docs?utm_source"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.secondary}
@@ -63,10 +84,34 @@ export default function Home() {
             Read our docs
           </a>
         </div>
+
         <Button appName="web" className={styles.secondary}>
           Open alert
         </Button>
+
+        {links.length > 0 ? (
+          <div className={styles.ctas}>
+            {links.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={link.description}
+                className={styles.secondary}
+              >
+                {link.title}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div style={{ color: '#666' }}>
+            No links available. Make sure the NestJS API is running on port
+            3000.
+          </div>
+        )}
       </main>
+
       <footer className={styles.footer}>
         <a
           href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
@@ -83,7 +128,7 @@ export default function Home() {
           Examples
         </a>
         <a
-          href="https://turborepo.com?utm_source=create-turbo"
+          href="https://turborepo.dev?utm_source=create-turbo"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -94,7 +139,7 @@ export default function Home() {
             width={16}
             height={16}
           />
-          Go to turborepo.com →
+          Go to turborepo.dev →
         </a>
       </footer>
     </div>

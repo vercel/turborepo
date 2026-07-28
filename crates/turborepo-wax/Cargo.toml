@@ -26,10 +26,10 @@ workspace = true
 
 [dependencies]
 const_format = "^0.2.0"
-itertools = "^0.11.0"
+itertools = { workspace = true }
 nom = "^7.0.0"
 pori = "=0.0.0"
-thiserror = "^1.0.0"
+thiserror = { workspace = true }
 
   [dependencies.miette]
   default-features = false
@@ -39,7 +39,7 @@ thiserror = "^1.0.0"
   [dependencies.regex]
   default-features = false
   features = ["perf", "std", "unicode-case"]
-  version = "^1.9.0"
+  version = "^1.13.0"
 
   [dependencies.tardar]
   optional = true

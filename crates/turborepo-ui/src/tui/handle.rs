@@ -47,6 +47,17 @@ impl TuiSender {
 }
 
 impl TuiSender {
+    /// Test-only constructor that wraps an existing channel sender
+    /// without spawning a tick task.
+    #[cfg(test)]
+    pub(crate) fn new_for_test(sender: mpsc::UnboundedSender<Event>) -> Self {
+        Self { primary: sender }
+    }
+
+    pub fn log_event(&self, event: turborepo_log::LogEvent) {
+        self.primary.send(Event::LogEvent(event)).ok();
+    }
+
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.primary
             .send(Event::StartTask { task, output_logs })
@@ -57,12 +68,19 @@ impl TuiSender {
         self.primary.send(Event::EndTask { task, result }).ok();
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(
+        &self,
+        task: String,
+        status: String,
+        result: CacheResult,
+        output_logs: OutputLogs,
+    ) {
         self.primary
             .send(Event::Status {
                 task,
                 status,
                 result,
+                output_logs,
             })
             .ok();
     }
@@ -124,6 +142,10 @@ impl TuiSender {
 }
 
 impl AppReceiver {
+    pub fn close(&mut self) {
+        self.primary.close();
+    }
+
     /// Receive an event, producing a tick event if no events are rec eived by
     /// the deadline.
     pub async fn recv(&mut self) -> Option<Event> {

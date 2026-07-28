@@ -1,22 +1,59 @@
+import fs from "node:fs";
 import os from "node:os";
-import { describe, test, expect, beforeEach, jest } from "@jest/globals";
+import path from "node:path";
+import {
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  jest
+} from "@jest/globals";
 import execa from "execa";
 import {
   getAvailablePackageManagers,
-  getPackageManagersBinPaths,
+  getPackageManagersBinPaths
 } from "../src/managers";
 
 // Mock dependencies
 jest.mock("execa");
 jest.mock("node:os");
 
-const mockExeca = execa as jest.MockedFunction<typeof execa>;
+const mockExeca = jest.mocked(execa);
 const mockOs = os as jest.Mocked<typeof os>;
+const realOs = jest.requireActual<typeof import("node:os")>("node:os");
+const MISSING_PROJECT_ROOT = path.join(
+  realOs.tmpdir(),
+  "turbo-managers-missing"
+);
+
+const tempDirs: Array<string> = [];
+
+function createProject(files: Record<string, string>) {
+  const projectRoot = fs.mkdtempSync(
+    path.join(realOs.tmpdir(), "turbo-managers-")
+  );
+  tempDirs.push(projectRoot);
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const absolutePath = path.join(projectRoot, filePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  }
+
+  return projectRoot;
+}
 
 describe("managers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOs.tmpdir.mockReturnValue("/tmp");
+  });
+
+  afterEach(() => {
+    for (const tempDir of tempDirs.splice(0)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   describe("getAvailablePackageManagers", () => {
@@ -25,16 +62,40 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn
         .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
-        .mockResolvedValueOnce({ stdout: "1.0.0" } as any); // bun
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
 
-      const result = await getAvailablePackageManagers();
+      const result = await getAvailablePackageManagers({
+        projectRoot: MISSING_PROJECT_ROOT
+      });
 
       expect(result).toEqual({
         yarn: "1.22.19",
         npm: "9.5.0",
         pnpm: "8.6.7",
         bun: "1.0.0",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
+    });
+
+    test("should parse package manager versions from verbose output", async () => {
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn
+        .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
+        .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({
+          stdout: "1.25.1 macos-arm64 (2026-06-30)"
+        } as any); // aube
+
+      const result = await getAvailablePackageManagers({
+        projectRoot: MISSING_PROJECT_ROOT
+      });
+
+      expect(result.aube).toBe("1.25.1");
     });
 
     test("should return undefined for unavailable package managers", async () => {
@@ -42,98 +103,259 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn
         .mockRejectedValueOnce(new Error("npm not found")) // npm
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
-        .mockRejectedValueOnce(new Error("bun not found")); // bun
+        .mockRejectedValueOnce(new Error("bun not found")) // bun
+        .mockRejectedValueOnce(new Error("nub not found")) // nub
+        .mockRejectedValueOnce(new Error("aube not found")); // aube
 
-      const result = await getAvailablePackageManagers();
+      const result = await getAvailablePackageManagers({
+        projectRoot: MISSING_PROJECT_ROOT
+      });
 
       expect(result).toEqual({
         yarn: "1.22.19",
         npm: undefined,
         pnpm: "8.6.7",
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     });
 
-    describe("getPackageManagersBinPaths", () => {
-      test("should return bin paths for all package managers", async () => {
-        mockExeca
-          .mockResolvedValueOnce({ stdout: "3.2.1" } as any) // yarn version (berry)
-          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
+    test("should infer project yarn version from packageManager", async () => {
+      const projectRoot = createProject({
+        "package.json": JSON.stringify({ packageManager: "yarn@4.5.1" })
+      });
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
+        .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
 
-        const result = await getPackageManagersBinPaths();
+      const result = await getAvailablePackageManagers({ projectRoot });
 
-        expect(result).toEqual({
-          yarn: ".yarn/releases/yarn-3.2.1.cjs",
-          npm: "/usr/local/bin",
-          pnpm: "/usr/local/pnpm",
-          bun: "/usr/local/bun",
-        });
+      expect(result).toEqual({
+        yarn: "4.5.1",
+        npm: "9.5.0",
+        pnpm: "8.6.7",
+        bun: "1.0.0",
+        nub: "0.1.0",
+        aube: "0.1.0"
+      });
+      expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
+        "npm",
+        "pnpm",
+        "bun",
+        "nub",
+        "aube"
+      ]);
+    });
+
+    test("should infer project yarn version from conventional yarnPath", async () => {
+      const projectRoot = createProject({
+        ".yarnrc.yml": "yarnPath: .yarn/releases/yarn-3.2.1.cjs\n"
+      });
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
+        .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+
+      const result = await getAvailablePackageManagers({ projectRoot });
+
+      expect(result.yarn).toBe("3.2.1");
+      expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
+        "npm",
+        "pnpm",
+        "bun",
+        "nub",
+        "aube"
+      ]);
+    });
+
+    test("should not execute or fall back when yarnPath is custom", async () => {
+      const projectRoot = createProject({
+        ".yarnrc.yml": "yarnPath: ./scripts/yarn.cjs\n"
+      });
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
+        .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+
+      const result = await getAvailablePackageManagers({ projectRoot });
+
+      expect(result.yarn).toBeUndefined();
+      expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
+        "npm",
+        "pnpm",
+        "bun",
+        "nub",
+        "aube"
+      ]);
+    });
+  });
+
+  describe("getPackageManagersBinPaths", () => {
+    test("should return bin paths for all package managers", async () => {
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "3.2.1" } as any) // yarn version (berry)
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
+        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/nub" } as any) // nub bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any); // aube bin
+
+      const result = await getPackageManagersBinPaths({
+        projectRoot: MISSING_PROJECT_ROOT
       });
 
-      test("should handle yarn v1 global bin path", async () => {
-        mockExeca
-          .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn version check
-          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
-          .mockResolvedValueOnce({ stdout: "/usr/local/yarn" } as any); // yarn global bin
+      expect(result).toEqual({
+        yarn: ".yarn/releases/yarn-3.2.1.cjs",
+        npm: "/usr/local/bin",
+        pnpm: "/usr/local/pnpm",
+        bun: "/usr/local/bun",
+        nub: "/usr/local/bin",
+        aube: "/usr/local/bin"
+      });
+    });
 
-        const result = await getPackageManagersBinPaths();
+    test("should handle yarn v1 global bin path", async () => {
+      mockExeca.mockImplementation(((
+        command: string,
+        args?: readonly string[]
+      ) => {
+        if (command === "yarnpkg") {
+          return Promise.resolve({ stdout: "1.22.19" } as any);
+        }
+        if (command === "yarn" && args?.[0] === "global") {
+          return Promise.resolve({ stdout: "/usr/local/yarn" } as any);
+        }
+        if (command === "npm") {
+          return Promise.resolve({ stdout: "/usr/local/bin" } as any);
+        }
+        if (command === "pnpm") {
+          return Promise.resolve({ stdout: "/usr/local/pnpm" } as any);
+        }
+        if (command === "bun") {
+          return Promise.resolve({ stdout: "/usr/local/bun" } as any);
+        }
+        if (command === "which" && args?.[0] === "nub") {
+          return Promise.resolve({ stdout: "/usr/local/bin/nub" } as any);
+        }
+        if (command === "which" && args?.[0] === "aube") {
+          return Promise.resolve({ stdout: "/usr/local/bin/aube" } as any);
+        }
+        return Promise.reject(new Error(`${command} not found`));
+      }) as typeof execa);
 
-        expect(result.yarn).toBe("/usr/local/yarn");
-        expect(result.npm).toBe("/usr/local/bin");
-        expect(result.pnpm).toBe("/usr/local/pnpm");
-        expect(result.bun).toBe("/usr/local/bun");
+      const result = await getPackageManagersBinPaths({
+        projectRoot: MISSING_PROJECT_ROOT
       });
 
-      test("should return undefined for failed package manager checks", async () => {
-        mockExeca
-          .mockRejectedValueOnce(new Error("yarn not found")) // yarn
-          .mockRejectedValueOnce(new Error("npm not found")) // npm
-          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm
-          .mockRejectedValueOnce(new Error("bun not found")); // bun
+      expect(result.yarn).toBe("/usr/local/yarn");
+      expect(result.npm).toBe("/usr/local/bin");
+      expect(result.pnpm).toBe("/usr/local/pnpm");
+      expect(result.bun).toBe("/usr/local/bun");
+      expect(result.nub).toBe("/usr/local/bin");
+      expect(result.aube).toBe("/usr/local/bin");
+    });
 
-        const result = await getPackageManagersBinPaths();
+    test("should return undefined for failed package manager checks", async () => {
+      mockExeca
+        .mockRejectedValueOnce(new Error("yarn not found")) // yarn
+        .mockRejectedValueOnce(new Error("npm not found")) // npm
+        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm
+        .mockRejectedValueOnce(new Error("bun not found")) // bun
+        .mockRejectedValueOnce(new Error("nub not found")) // nub
+        .mockRejectedValueOnce(new Error("aube not found")); // aube
 
-        expect(result).toEqual({
-          yarn: undefined,
-          npm: undefined,
-          pnpm: "/usr/local/pnpm",
-          bun: undefined,
-        });
+      const result = await getPackageManagersBinPaths({
+        projectRoot: MISSING_PROJECT_ROOT
       });
 
-      test("should call execa with correct commands for bin paths", async () => {
-        mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
+      expect(result).toEqual({
+        yarn: undefined,
+        npm: undefined,
+        pnpm: "/usr/local/pnpm",
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
+      });
+    });
 
-        await getPackageManagersBinPaths();
+    test("should call execa with correct commands for bin paths", async () => {
+      mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
 
-        // Verify yarn version check
-        expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
-          cwd: ".",
-          env: { COREPACK_ENABLE_STRICT: "0" },
-        });
+      await getPackageManagersBinPaths({ projectRoot: MISSING_PROJECT_ROOT });
 
-        // Verify other package manager bin path commands
-        expect(mockExeca).toHaveBeenCalledWith(
-          "npm",
-          ["config", "get", "prefix"],
-          {
-            cwd: "/tmp",
-            env: { COREPACK_ENABLE_STRICT: "0" },
-          }
-        );
-        expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
+      expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
+      });
+
+      expect(mockExeca).toHaveBeenCalledWith(
+        "npm",
+        ["config", "get", "prefix"],
+        {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
-        });
-        expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
-          cwd: "/tmp",
-          env: { COREPACK_ENABLE_STRICT: "0" },
-        });
+          timeout: 5000
+        }
+      );
+      expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
       });
+      expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
+      });
+      expect(mockExeca).toHaveBeenCalledWith("which", ["nub"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
+      });
+      expect(mockExeca).toHaveBeenCalledWith("which", ["aube"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
+      });
+    });
+
+    test("should infer yarn berry bin path without executing yarn", async () => {
+      const projectRoot = createProject({
+        "package.json": JSON.stringify({ packageManager: "yarn@4.5.1" })
+      });
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
+        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/nub" } as any) // nub bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any); // aube bin
+
+      const result = await getPackageManagersBinPaths({ projectRoot });
+
+      expect(result).toEqual({
+        yarn: ".yarn/releases/yarn-4.5.1.cjs",
+        npm: "/usr/local/bin",
+        pnpm: "/usr/local/pnpm",
+        bun: "/usr/local/bun",
+        nub: "/usr/local/bin",
+        aube: "/usr/local/bin"
+      });
+      expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
+        "npm",
+        "pnpm",
+        "bun",
+        "which",
+        "which"
+      ]);
     });
   });
 });

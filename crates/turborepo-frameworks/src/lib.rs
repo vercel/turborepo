@@ -72,37 +72,48 @@ impl Framework {
     }
 }
 
-static FRAMEWORKS: OnceLock<Vec<Framework>> = OnceLock::new();
+static FRAMEWORKS: OnceLock<Result<Vec<Framework>, serde_json::Error>> = OnceLock::new();
 
 const FRAMEWORKS_JSON: &str =
     include_str!("../../../packages/turbo-types/src/json/frameworks.json");
 
-fn get_frameworks() -> &'static Vec<Framework> {
-    FRAMEWORKS.get_or_init(|| {
-        serde_json::from_str(FRAMEWORKS_JSON).expect("Unable to parse embedded JSON")
-    })
+fn get_frameworks() -> Result<&'static [Framework], &'static serde_json::Error> {
+    FRAMEWORKS
+        .get_or_init(|| serde_json::from_str(FRAMEWORKS_JSON))
+        .as_ref()
+        .map(Vec::as_slice)
 }
 
 impl Matcher {
     pub fn test(&self, workspace: &PackageInfo, is_monorepo: bool) -> bool {
-        // In the case where we're not in a monorepo, i.e. single package mode
-        // `unresolved_external_dependencies` is not populated. In which
-        // case we should check `dependencies` instead.
-        let deps = if is_monorepo {
-            workspace.unresolved_external_dependencies.as_ref()
-        } else {
-            workspace.package_json.dependencies.as_ref()
+        // In the case where we're not in a monorepo, i.e. single package mode,
+        // `unresolved_external_dependencies` is not populated. In which case we
+        // check both `dependencies` and `devDependencies` so that frameworks
+        // installed as dev dependencies (e.g. Vite, Astro, SvelteKit) are
+        // correctly detected.
+        let has_dep = |dep: &str| -> bool {
+            if is_monorepo {
+                workspace
+                    .unresolved_external_dependencies
+                    .as_ref()
+                    .is_some_and(|deps| deps.contains_key(dep))
+            } else {
+                workspace
+                    .package_json
+                    .dependencies
+                    .as_ref()
+                    .is_some_and(|deps| deps.contains_key(dep))
+                    || workspace
+                        .package_json
+                        .dev_dependencies
+                        .as_ref()
+                        .is_some_and(|deps| deps.contains_key(dep))
+            }
         };
 
         match self.strategy {
-            Strategy::All => self
-                .dependencies
-                .iter()
-                .all(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
-            Strategy::Some => self
-                .dependencies
-                .iter()
-                .any(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
+            Strategy::All => self.dependencies.iter().all(|dep| has_dep(dep)),
+            Strategy::Some => self.dependencies.iter().any(|dep| has_dep(dep)),
         }
     }
 }
@@ -112,12 +123,11 @@ impl Slug {
         &self.0
     }
 
-    pub fn framework(&self) -> &Framework {
-        let frameworks = get_frameworks();
+    pub fn framework(&self) -> Option<&Framework> {
+        let frameworks = get_frameworks().ok()?;
         frameworks
             .iter()
             .find(|framework| framework.slug.as_str() == self.as_str())
-            .expect("slug is only constructed via deserialization")
     }
 }
 
@@ -128,7 +138,7 @@ impl std::fmt::Display for Slug {
 }
 
 pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
-    let frameworks = get_frameworks();
+    let frameworks = get_frameworks().ok()?;
 
     frameworks
         .iter()
@@ -136,8 +146,9 @@ pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Fr
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use test_case::test_case;
     use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
@@ -146,9 +157,19 @@ mod tests {
 
     fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
+            .expect("framework JSON failed to parse")
             .iter()
             .find(|framework| framework.slug.as_str() == slug)
             .expect("framework not found")
+    }
+
+    fn deps(pairs: &[(&str, &str)]) -> Option<BTreeMap<String, String>> {
+        Some(
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        )
     }
 
     #[test_case(PackageInfo::default(), None, true; "empty dependencies")]
@@ -249,6 +270,61 @@ mod tests {
         Some(get_framework_by_slug("nextjs")),
         false;
         "Finds next in non-monorepo"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+              dev_dependencies: Some(
+                vec![("vite", "*")]
+                    .into_iter()
+                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
+                    .collect()
+              ),
+              ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("vite")),
+        false;
+        "Finds vite in devDependencies in non-monorepo"
+    )]
+    #[test_case(PackageInfo::default(), None, false; "empty dependencies in non-monorepo")]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dev_dependencies: deps(&[("vite", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        None,
+        true;
+        "devDependencies in package_json ignored in monorepo mode"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dependencies: deps(&[("solid-js", "*")]),
+                dev_dependencies: deps(&[("solid-start", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("solidstart")),
+        false;
+        "Strategy::All matches deps split across dependencies and devDependencies"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dev_dependencies: deps(&[("react-scripts", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("create-react-app")),
+        false;
+        "Strategy::Some matches devDependency in non-monorepo"
     )]
     fn test_infer_framework(
         workspace_info: PackageInfo,
@@ -375,8 +451,8 @@ mod tests {
 
     #[test]
     fn test_framework_slug_roundtrip() {
-        for framework in get_frameworks() {
-            assert_eq!(framework, framework.slug().framework());
+        for framework in get_frameworks().expect("framework JSON failed to parse") {
+            assert_eq!(Some(framework), framework.slug().framework());
         }
     }
 }

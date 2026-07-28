@@ -19,7 +19,11 @@ impl Default for Debouncer {
 
 impl Debug for Debouncer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let serial = { self.serial.lock().expect("lock is valid") };
+        let serial = {
+            self.serial
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+        };
         f.debug_struct("Debouncer")
             .field("is_pending", &serial.is_some())
             .field("timeout", &self.timeout)
@@ -39,7 +43,10 @@ impl Debouncer {
     }
 
     pub(crate) fn bump(&self) -> bool {
-        let mut serial = self.serial.lock().expect("lock is valid");
+        let mut serial = self
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         match *serial {
             None => false,
             Some(previous) => {
@@ -52,10 +59,14 @@ impl Debouncer {
 
     pub(crate) async fn debounce(&self) {
         let mut serial = {
-            self.serial
+            let serial = self
+                .serial
                 .lock()
-                .expect("lock is valid")
-                .expect("only this thread sets the value to None")
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let Some(serial) = *serial else {
+                return;
+            };
+            serial
         };
         let mut deadline = Instant::now() + self.timeout;
         loop {
@@ -64,7 +75,16 @@ impl Debouncer {
                 _ = self.bump.notified() => {
                     trace!("debouncer notified");
                     // reset timeout
-                    let current_serial = self.serial.lock().expect("lock is valid").expect("only this thread sets the value to None");
+                    let current_serial = {
+                        let current_serial = self
+                            .serial
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let Some(current_serial) = *current_serial else {
+                            return;
+                        };
+                        current_serial
+                    };
                     if current_serial == serial {
                         // we timed out between the serial update and the notification.
                         // ignore this notification, we've already bumped the timer
@@ -77,8 +97,13 @@ impl Debouncer {
                 _ = timeout => {
                     // check if serial is still valid. It's possible a bump came in before the timeout,
                     // but we haven't been notified yet.
-                    let mut current_serial_opt = self.serial.lock().expect("lock is valid");
-                    let current_serial = current_serial_opt.expect("only this thread sets the value to None");
+                    let mut current_serial_opt = self
+                        .serial
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    let Some(current_serial) = *current_serial_opt else {
+                        return;
+                    };
                     if current_serial == serial {
                         // if the serial is what we last observed, and the timer expired, we timed out.
                         // we're done. Mark that we won't accept any more bumps and return

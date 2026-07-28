@@ -1,12 +1,17 @@
 packages:
-  - ".github/actions/*"
-  - "cli"
-  - "docs/*"
-  - "packages/*"
-  - "turborepo-tests/*"
-  # Intentionally exclude the `npm` `turbo` package from the workspaces.
+  - apps/*
+  - docs/*
+  - packages/*
   - "!packages/turbo"
-  - "crates/*/js"
   - examples
-  # Exclude the non-monorepo example as it should be treated as independent of this repo
   - "!examples/non-monorepo"
+  - lockfile-tests
+
+minimumReleaseAge: 2880
+
+onlyBuiltDependencies:
+  - "@swc/core"
+  - "@vercel/speed-insights"
+  - core-js-pure
+  - esbuild
+  - sharp

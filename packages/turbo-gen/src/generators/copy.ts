@@ -6,16 +6,16 @@ import {
   createProject,
   logger,
   type DependencyGroups,
-  type PackageJson,
+  type PackageJson
 } from "@turbo/utils";
-import { gatherAddRequirements } from "../utils/gatherAddRequirements";
+import { gatherAddRequirements } from "../utils/gather-add-requirements";
 import type { TurboGeneratorArguments } from "./types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, type, location, source, dependencies } =
     await gatherAddRequirements({
       project,
-      opts,
+      opts
     });
 
   const newPackageJsonPath = path.join(location.absolute, "package.json");
@@ -30,7 +30,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     await createProject({
       appPath: location.absolute,
       example: opts.copy.source,
-      examplePath: opts.examplePath,
+      examplePath: opts.examplePath
     });
 
     try {
@@ -65,14 +65,14 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     }
   } else if (source) {
     const filterFunc: CopyFilterAsync = async (src) =>
-      Promise.resolve(!src.includes("node_modules"));
+      !src.includes("node_modules");
 
     const loader = logger.turboLoader(
       `Creating "${name}" from "${source.name}"...`
     );
     loader.start();
     await fs.copy(source.paths.root, location.absolute, {
-      filter: filterFunc,
+      filter: filterFunc
     });
     loader.stop();
   }
@@ -82,12 +82,15 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   packageJson.name = name;
 
   // update dependencies
-  Object.keys(dependencies).forEach((group) => {
+  for (const group of Object.keys(dependencies)) {
     const deps = dependencies[group as keyof DependencyGroups];
     if (deps && Object.keys(deps).length > 0) {
-      packageJson[group as keyof DependencyGroups] = deps;
+      packageJson[group as keyof DependencyGroups] = {
+        ...packageJson[group as keyof DependencyGroups],
+        ...deps
+      };
     }
-  });
+  }
   await fs.writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
 
   logger.log();

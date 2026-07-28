@@ -1,4 +1,4 @@
-use std::{env, io, path::Path};
+use std::{env, io, path::Path, process};
 
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
@@ -20,10 +20,12 @@ fn is_wsl() -> bool {
 
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
-    let connector = DaemonConnector::new(false, false, &base.repo_root, None);
-    let daemon_status = match connector.connect().await {
-        Ok(_status) => "Running",
-        Err(DaemonConnectorError::NotRunning) => "Not running",
+    let daemon_status = match DaemonConnector::new(false, false, &base.repo_root, None) {
+        Ok(connector) => match connector.connect().await {
+            Ok(_status) => "Running",
+            Err(DaemonConnectorError::NotRunning) => "Not running",
+            Err(_e) => "Error getting status",
+        },
         Err(_e) => "Error getting status",
     };
     let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))
@@ -54,11 +56,34 @@ pub async fn run(base: CommandBase) {
         "   Available memory (MB): {}",
         system.available_memory() / 1024 / 1024
     );
-    println!("   Available CPU cores: {}", num_cpus::get());
+    println!(
+        "   Available CPU cores: {}",
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+    );
     println!();
+
+    let node_version = process::Command::new("node")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|output| {
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8(output.stdout).ok())
+                .flatten()
+                .map(|v| v.trim().to_owned())
+        })
+        .unwrap_or_else(|| "Not found".to_owned());
 
     println!("Environment:");
     println!("   CI: {:#?}", turborepo_ci::Vendor::get_name());
+    println!(
+        "   AI agent: {}",
+        turborepo_ai_agents::get_agent().unwrap_or("None")
+    );
     println!(
         "   Terminal (TERM): {}",
         env::var("TERM").unwrap_or_else(|_| "unknown".to_owned())
@@ -77,5 +102,6 @@ pub async fn run(base: CommandBase) {
         env::var("SHELL").unwrap_or_else(|_| "unknown".to_owned())
     );
     println!("   stdin: {}", turborepo_ci::is_ci());
+    println!("   Node.js version: {node_version}");
     println!();
 }

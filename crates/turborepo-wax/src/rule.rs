@@ -140,13 +140,10 @@ trait SliceExt<T> {
 
 impl<T> SliceExt<T> for [T] {
     fn terminals(&self) -> Option<Terminals<&T>> {
-        match self.len() {
-            0 => None,
-            1 => Some(Terminals::Only(self.first().unwrap())),
-            _ => Some(Terminals::StartEnd(
-                self.first().unwrap(),
-                self.last().unwrap(),
-            )),
+        match self {
+            [] => None,
+            [only] => Some(Terminals::Only(only)),
+            [first, .., last] => Some(Terminals::StartEnd(first, last)),
         }
     }
 }
@@ -374,7 +371,7 @@ pub fn check(tokenized: Tokenized) -> Result<Checked<Tokenized>, RuleError> {
 fn boundary<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     if let Some((left, right)) = tokenized
         .walk()
-        .group_by(|(position, _)| *position)
+        .chunk_by(|(position, _)| *position)
         .into_iter()
         .flat_map(|(_, group)| {
             group

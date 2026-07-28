@@ -1,0 +1,40 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "monorepo",
+      "dependencies": {
+        "turbo": "^1.5.6"
+      }
+    },
+    "apps/a": {
+      "name": "a",
+      "dependencies": {
+        "has-symbols": "^1.0.3"
+      }
+    },
+    "apps/b": {
+      "name": "b",
+      "dependencies": {
+        "function-bind": "^1.1.1"
+      }
+    }
+  },
+  "packages": {
+    "function-bind": [
+      "function-bind@1.1.1",
+      {},
+      "sha512-yIovAzMX49sF8Yl58fSCWJ5svSLuaibPxXQJFLmBObTuCr0Mf1KiPopGM9NiFjiYBCbfaa2Fh6breQ6ANVTI0A=="
+    ],
+    "has-symbols": [
+      "has-symbols@1.0.3",
+      {},
+      "sha512-l3LCuF6MgDNwTDKkdYGEihYjt5pRPbEg46rtlmnSPlUbgmB8LOIrKJbYYFBSbnPaJexMKtiPO8hmeRjRz2Td+A=="
+    ],
+    "turbo": [
+      "turbo@1.5.6",
+      {},
+      "sha512-xJO/fhiMo4lI62iGR9OgUfJTC9tnnuoMwNC52IfvvBDEPlA8RWGMS8SFpDVG9bNCXvVRrtUTNJXMe6pJWBiOTA=="
+    ]
+  }
+}

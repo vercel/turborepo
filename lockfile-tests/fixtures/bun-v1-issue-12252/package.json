@@ -1,0 +1,14 @@
+{
+  "name": "turbo-bun-hash-repro",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build"
+  },
+  "devDependencies": {
+    "turbo": "2.8.17-canary.13"
+  },
+  "packageManager": "bun@1.3.10"
+}

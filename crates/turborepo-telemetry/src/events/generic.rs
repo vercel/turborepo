@@ -188,6 +188,18 @@ impl GenericEventBuilder {
         self
     }
 
+    pub fn track_ai_agent(&self, agent: Option<&'static str>) -> &Self {
+        if let Some(agent) = agent {
+            self.track(Event {
+                key: "ai_agent".to_string(),
+                value: agent.to_string(),
+                is_sensitive: EventType::NonSensitive,
+                send_in_ci: true,
+            });
+        }
+        self
+    }
+
     pub fn track_run_type(&self, is_dry: bool) -> &Self {
         self.track(Event {
             key: "run_type".to_string(),

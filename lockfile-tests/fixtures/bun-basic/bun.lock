@@ -1,0 +1,61 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bun-basic",
+    },
+    "apps/docs": {
+      "name": "docs",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "*",
+        "is-even": "^1.0.0",
+      },
+    },
+    "apps/web": {
+      "name": "web",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "*",
+        "is-odd": "^3.0.1",
+      },
+    },
+    "packages/config": {
+      "name": "@repo/config",
+      "version": "0.1.0",
+    },
+    "packages/ui": {
+      "name": "@repo/ui",
+      "version": "0.1.0",
+      "dependencies": {
+        "@repo/config": "*",
+        "lodash": "^4.17.21",
+      },
+    },
+  },
+  "packages": {
+    "@repo/config": ["@repo/config@workspace:packages/config"],
+
+    "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+
+    "docs": ["docs@workspace:apps/docs"],
+
+    "is-buffer": ["is-buffer@1.1.6", "", {}, "sha512-NcdALwpXkTm5Zvvbk7owOUSvVvBKDgKP5/ewfXEznmQFfs4ZRmanOeKBTjRVjka3QFoN6XJ+9F3USqfHqTaU5w=="],
+
+    "is-even": ["is-even@1.0.0", "", { "dependencies": { "is-odd": "^0.1.2" } }, "sha512-LEhnkAdJqic4Dbqn58A0y52IXoHWlsueqQkKfMfdEnIYG8A1sm/GHidKkS6yvXlMoRrkM34csHnXQtOqcb+Jzg=="],
+
+    "is-number": ["is-number@6.0.0", "", {}, "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg=="],
+
+    "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA=="],
+
+    "kind-of": ["kind-of@3.2.2", "", { "dependencies": { "is-buffer": "^1.1.5" } }, "sha512-NOW9QQXMoZGg/oqnVNoNTTIFEIid1627WCffUBJEdMxYApq7mNE7CpzucIPc+ZQg25Phej7IJSmX3hO+oblOtQ=="],
+
+    "lodash": ["lodash@4.17.23", "", {}, "sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w=="],
+
+    "web": ["web@workspace:apps/web"],
+
+    "is-even/is-odd": ["is-odd@0.1.2", "", { "dependencies": { "is-number": "^3.0.0" } }, "sha512-Ri7C2K7o5IrUU9UEI8losXJCCD/UtsaIrkR5sxIcFg4xQ9cRJXlWA5DQvTE0yDc0krvSNLsRGXN11UPS6KyfBw=="],
+
+    "is-even/is-odd/is-number": ["is-number@3.0.0", "", { "dependencies": { "kind-of": "^3.0.2" } }, "sha512-4cboCqIpliH+mAvFNegjZQ4kgKc3ZUhQVr3HvWbSh5q3WH2v82ct+T2Y1hdU5Gdtorx/cLifQjqCbL7bpznLTg=="],
+  }
+}

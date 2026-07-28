@@ -30,7 +30,11 @@ impl<'t> From<BorrowedText<'t>> for OwnedText {
 
 impl<'m, 't> From<&'m BorrowedText<'t>> for OwnedText {
     fn from(captures: &'m BorrowedText<'t>) -> Self {
-        let matched = captures.get(0).unwrap().as_str().into();
+        let matched = captures
+            .get(0)
+            .map(|capture| capture.as_str())
+            .unwrap_or_default()
+            .into();
         let ranges = captures
             .iter()
             .skip(1)
@@ -149,7 +153,13 @@ impl<'t> MatchedText<'t> {
     /// [`get`]: crate::MatchedText::get
     /// [`Program`]: crate::Program
     pub fn complete(&self) -> &str {
-        self.get(0).expect("match has no complete text")
+        match &self.inner {
+            MaybeOwnedText::Borrowed(captures) => captures
+                .get(0)
+                .map(|capture| capture.as_str())
+                .unwrap_or_default(),
+            MaybeOwnedText::Owned(captures) => captures.matched.as_ref(),
+        }
     }
 
     /// Gets the matched text of a capture at the given index.

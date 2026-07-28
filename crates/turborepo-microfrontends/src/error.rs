@@ -21,6 +21,13 @@ pub enum Error {
         actual: String,
         path: String,
     },
+    #[error(
+        "Invalid custom config file name: {0}. Must be a .json or .jsonc file directly in the \
+         package root (no subdirectories or path traversal)."
+    )]
+    InvalidCustomConfigPath(String),
+    #[error("Invalid microfrontends configuration path: {0}")]
+    InvalidConfigPath(String),
 }
 
 impl Error {

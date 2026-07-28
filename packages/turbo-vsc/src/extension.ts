@@ -5,133 +5,133 @@ import {
   workspace,
   StatusBarAlignment,
   StatusBarItem,
-  TextEditor,
-  Range,
   Uri,
-  env,
+  env
 } from "vscode";
-import * as cp from "child_process";
-import * as path from "path";
-import * as fs from "fs";
+import * as cp from "node:child_process";
+import * as path from "node:path";
+import * as fs from "node:fs";
 
 import {
   LanguageClient,
   LanguageClientOptions,
-  ServerOptions,
+  ServerOptions
 } from "vscode-languageclient/node";
 
-import { visit } from "jsonc-parser";
+import { createTurboDaemonArgs } from "./turbo-daemon-command";
+import {
+  createTurboRunTerminalOptions,
+  sanitizeTurboRunTaskName
+} from "./turbo-run-terminal-options";
 
 let client: LanguageClient;
 
 let toolbar: StatusBarItem;
 
-// thunks passed to this function will executed
-// after no calls have been made for `waitMs` milliseconds
-const useDebounce = <T>(func: (args: T) => void, waitMs: number) => {
-  let timeout: any;
-  return (args: T) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      func(args);
-    }, waitMs);
-  };
-};
-
 const logs = window.createOutputChannel("Turborepo Extension");
 
-function rainbowRgb(i: number) {
-  const f = 0.5;
-  const r = Math.sin(f * i + (4.0 * Math.PI) / 3.0) * 127.0 + 128.0;
-  const g = 45;
-  const b = Math.sin(f * i) * 127.0 + 128.0;
-
-  return `#${Math.round(r).toString(16).padStart(2, "0")}${Math.round(g)
-    .toString(16)
-    .padStart(2, "0")}${Math.round(b).toString(16).padStart(2, "0")}`;
-}
-
-const pipelineColors = [...Array(10).keys()].map(rainbowRgb).map((color) =>
-  window.createTextEditorDecorationType({
-    color,
-  })
-);
-
-const refreshDecorations = useDebounce(updateJSONDecorations, 1000);
+type InternalLspProbeResult =
+  | { supported: true }
+  | { supported: false; reason: string };
 
 export function activate(context: ExtensionContext) {
-  const options: cp.ExecSyncOptionsWithStringEncoding = {
-    cwd: workspace.workspaceFolders?.[0].uri.path,
-    encoding: "utf8",
+  if (!workspace.isTrusted) {
+    window.showWarningMessage(
+      "The Turborepo extension is disabled in untrusted workspaces."
+    );
+    return;
+  }
+
+  const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const options: cp.ExecFileOptions = { cwd: workspaceRoot };
+  const syncOptions: cp.ExecSyncOptionsWithStringEncoding = {
+    cwd: workspaceRoot,
+    encoding: "utf8"
   };
 
   const turboSettings = workspace.getConfiguration("turbo");
-  let turboPath: string | undefined = turboSettings.get("path");
+  const configuredTurboPath: string | undefined = turboSettings.get("path");
   const useLocalTurbo: boolean = turboSettings.get("useLocalTurbo") ?? false;
+  let turboPath = resolveTurboPath(configuredTurboPath, workspaceRoot);
 
   logs.appendLine("starting the turbo extension");
-
-  if (turboPath && !fs.existsSync(turboPath)) {
-    logs.appendLine(
-      `manually specified turbo does not exist at path \`${turboPath}\`, attempting to locate it`
-    );
-    turboPath = undefined;
-  }
-
-  try {
-    if (turboPath == null) {
-      logs.appendLine("attempting to find global turbo");
-      turboPath = cp
-        .execSync(
-          // attempt to source two well known version managers
-          // as well as adding the bun global bin to the path
-          'bash -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; eval "$(brew shellenv)" > /dev/null 2>&1; export PATH="$HOME/.bun/bin:$PATH"; which turbo\'',
-          options
-        )
-        .trim();
-      logs.appendLine(`set turbo path to ${turboPath}`);
-    }
-  } catch (e: any) {
-    if (
-      e.message.includes("command not found") ||
-      e.message.includes("Command failed") ||
-      e.message.includes("which: no turbo in")
-    ) {
-      // attempt to find local turbo instead
-      logs.appendLine("prompting global turbo");
-      promptGlobalTurbo(useLocalTurbo);
-      turboPath = findLocalTurbo();
-    } else {
-      logs.appendLine(`unable to find turbo: ${e.message}`);
-    }
-  }
 
   if (turboPath) {
     logs.appendLine(`using turbo at path ${turboPath}`);
   }
 
+  const packagedLspPath = Uri.joinPath(
+    context.extensionUri,
+    "out",
+    `turborepo-lsp-${process.platform}-${process.arch}${
+      process.platform === "win32" ? ".exe" : ""
+    }`
+  ).fsPath;
+
+  const installedTurboLspPath = findInstalledTurboLsp(
+    workspaceRoot,
+    syncOptions,
+    turboPath
+  );
+
+  const daemonCommandPath = installedTurboLspPath ?? packagedLspPath;
+
+  const getTurboPath = async () => {
+    turboPath ??= findTurbo(workspaceRoot, syncOptions);
+    if (turboPath) {
+      return turboPath;
+    }
+
+    await promptGlobalTurbo(useLocalTurbo);
+    turboPath = findTurbo(workspaceRoot, syncOptions);
+    return turboPath;
+  };
+
+  const getDaemonCommandPath = async () => {
+    if (fs.existsSync(daemonCommandPath)) {
+      return daemonCommandPath;
+    }
+
+    return getTurboPath();
+  };
+
   context.subscriptions.push(
-    commands.registerCommand("turbo.daemon.start", () => {
-      cp.exec(`${turboPath} daemon start`, options, (err) => {
-        if (err) {
-          if (err.message.includes("command not found")) {
-            promptGlobalTurbo(useLocalTurbo);
+    commands.registerCommand("turbo.daemon.start", async () => {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
+        return;
+      }
+
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("start"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to start turbo: ${err.message}`);
+            }
           } else {
-            logs.appendLine(`unable to start turbo: ${err.message}`);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon started");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon started");
         }
-      });
+      );
     })
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.daemon.stop", () => {
-      cp.exec(`${turboPath} daemon stop`, options, (err) => {
+    commands.registerCommand("turbo.daemon.stop", async () => {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
+        return;
+      }
+
+      cp.execFile(daemonPath, createTurboDaemonArgs("stop"), options, (err) => {
         if (err) {
-          if (err.message.includes("command not found")) {
+          if (isCommandNotFoundError(err)) {
             promptGlobalTurbo(useLocalTurbo);
           } else {
             logs.appendLine(`unable to stop turbo: ${err.message}`);
@@ -145,31 +145,50 @@ export function activate(context: ExtensionContext) {
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.daemon.status", () => {
-      cp.exec(`${turboPath} daemon status`, options, (err) => {
-        if (err) {
-          if (err.message.includes("command not found")) {
-            promptGlobalTurbo(useLocalTurbo);
+    commands.registerCommand("turbo.daemon.status", async () => {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
+        return;
+      }
+
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("status"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to get turbo status: ${err.message}`);
+              updateStatusBarItem(false);
+            }
           } else {
-            logs.appendLine(`unable to get turbo status: ${err.message}`);
-            updateStatusBarItem(false);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon is running");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon is running");
         }
-      });
+      );
     })
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.run", (args) => {
+    commands.registerCommand("turbo.run", async (args: unknown) => {
+      const taskName = sanitizeTurboRunTaskName(args);
+      if (!taskName) {
+        window.showWarningMessage("Invalid Turborepo task name.");
+        return;
+      }
+
+      const turboPath = await getTurboPath();
+      if (!turboPath) {
+        return;
+      }
+
       const terminal = window.createTerminal({
-        name: `${args}`,
-        isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        ...createTurboRunTerminalOptions(turboPath, taskName),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
-      terminal.sendText(`${turboPath} run ${args}`);
       terminal.show();
     })
   );
@@ -179,7 +198,7 @@ export function activate(context: ExtensionContext) {
       const terminal = window.createTerminal({
         name: "Turbo Codemod",
         isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.sendText(`npx --yes @turbo/codemod ${args}`);
       terminal.show();
@@ -187,11 +206,11 @@ export function activate(context: ExtensionContext) {
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.install", (args) => {
+    commands.registerCommand("turbo.install", () => {
       const terminal = window.createTerminal({
         name: "Install Turbo",
         isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.sendText("npm i -g turbo && exit");
       terminal.show();
@@ -208,61 +227,35 @@ export function activate(context: ExtensionContext) {
   );
 
   toolbar = window.createStatusBarItem(StatusBarAlignment.Left, 100);
-  commands.executeCommand("turbo.daemon.start");
-
-  // decorate when changing the active editor editor
-  context.subscriptions.push(
-    window.onDidChangeActiveTextEditor(
-      (editor) => updateJSONDecorations(editor),
-      null,
-      context.subscriptions
-    )
-  );
-
-  // decorate when the document changes
-  context.subscriptions.push(
-    workspace.onDidChangeTextDocument(
-      (event) => {
-        if (
-          window.activeTextEditor &&
-          event.document === window.activeTextEditor.document
-        ) {
-          refreshDecorations(window.activeTextEditor);
-        }
-      },
-      null,
-      context.subscriptions
-    )
-  );
-
-  // decorate the active editor now
-  updateJSONDecorations(window.activeTextEditor);
 
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
 
-  const lspPath = Uri.joinPath(
-    context.extensionUri,
-    "out",
-    `turborepo-lsp-${process.platform}-${process.arch}${
-      process.platform === "win32" ? ".exe" : ""
-    }`
-  ).fsPath;
-
-  if (!fs.existsSync(lspPath)) {
+  if (!installedTurboLspPath && !fs.existsSync(packagedLspPath)) {
     window.showInformationMessage(
       `The turbo LSP is not yet supported on your platform (${process.platform}-${process.arch})`
     );
     return;
   }
 
+  const serverCommand = installedTurboLspPath ?? packagedLspPath;
+  const serverArgs = installedTurboLspPath ? ["__internal_lsp"] : [];
+
+  logs.appendLine(
+    installedTurboLspPath
+      ? `using installed turbo for LSP at ${installedTurboLspPath}`
+      : `using packaged turbo LSP at ${packagedLspPath}`
+  );
+
   const serverOptions: ServerOptions = {
     run: {
-      command: lspPath,
+      command: serverCommand,
+      args: serverArgs
     },
     debug: {
-      command: lspPath,
-    },
+      command: serverCommand,
+      args: serverArgs
+    }
   };
 
   // Options to control the language client
@@ -270,8 +263,9 @@ export function activate(context: ExtensionContext) {
     // Register the server for turbo json documents
     documentSelector: [
       { scheme: "file", pattern: "**/turbo.json" },
-      { scheme: "file", pattern: "**/package.json" },
-    ],
+      { scheme: "file", pattern: "**/turbo.jsonc" },
+      { scheme: "file", pattern: "**/package.json" }
+    ]
   };
 
   // Create the language client and start the client.
@@ -293,54 +287,191 @@ export function deactivate(): Thenable<void> | undefined {
   return client.stop();
 }
 
+function isCommandNotFoundError(err: Error): boolean {
+  return (
+    err.message.includes("command not found") || err.message.includes("ENOENT")
+  );
+}
+
 function updateStatusBarItem(running: boolean) {
   toolbar.command = running ? "turbo.daemon.stop" : "turbo.daemon.start";
   toolbar.text = running ? "turbo Running" : "turbo Stopped";
   toolbar.show();
 }
 
-function updateJSONDecorations(editor?: TextEditor) {
-  if (
-    !editor ||
-    !path.basename(editor.document.fileName).endsWith("turbo.json")
-  ) {
+function executableNames(name: string) {
+  return process.platform === "win32"
+    ? [`${name}.exe`, `${name}.cmd`, `${name}`]
+    : [name];
+}
+
+function resolveTurboPath(
+  turboPath: string | undefined,
+  workspaceRoot?: string
+) {
+  if (!turboPath) {
+    return undefined;
+  }
+
+  const resolvedPath = path.isAbsolute(turboPath)
+    ? turboPath
+    : path.resolve(workspaceRoot ?? process.cwd(), turboPath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    logs.appendLine(
+      `Manually specified turbo does not exist at path ${turboPath}`
+    );
+    return undefined;
+  }
+
+  if (fs.statSync(resolvedPath).isDirectory()) {
+    return findTurboInDirectory(resolvedPath);
+  }
+
+  return resolvedPath;
+}
+
+function findTurboInDirectory(directory: string) {
+  for (const executable of executableNames("turbo")) {
+    const candidate = path.join(directory, executable);
+    if (fs.existsSync(candidate) && !fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  }
+}
+
+function findExecutableOnPath(name: string) {
+  const pathEntries = (process.env.PATH ?? "").split(path.delimiter);
+  for (const pathEntry of pathEntries) {
+    const executable = findTurboInDirectory(pathEntry);
+    if (executable && path.basename(executable).startsWith(name)) {
+      return executable;
+    }
+  }
+}
+
+function findTurbo(
+  workspaceRoot: string | undefined,
+  options: cp.ExecSyncOptionsWithStringEncoding
+) {
+  logs.appendLine("attempting to find turbo");
+  return (
+    findExecutableOnPath("turbo") ?? findLocalTurbo(workspaceRoot, options)
+  );
+}
+
+function findInstalledTurboLsp(
+  workspaceRoot: string | undefined,
+  options: cp.ExecSyncOptionsWithStringEncoding,
+  configuredTurboPath: string | undefined
+) {
+  logs.appendLine("resolving turbo LSP server");
+
+  const candidates = [
+    { label: "configured turbo.path", path: configuredTurboPath },
+    {
+      label: "workspace node_modules/.bin",
+      path: workspaceRoot
+        ? findTurboInDirectory(path.join(workspaceRoot, "node_modules", ".bin"))
+        : undefined
+    },
+    { label: "PATH", path: findExecutableOnPath("turbo") }
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.path) {
+      logs.appendLine(`turbo LSP: no candidate from ${candidate.label}`);
+      continue;
+    }
+
+    logs.appendLine(
+      `turbo LSP: probing ${candidate.label} at ${candidate.path}`
+    );
+
+    const probe = probeInternalLsp(candidate.path, options);
+    if (probe.supported) {
+      logs.appendLine(
+        `turbo LSP: using ${candidate.label} at ${candidate.path}`
+      );
+      return candidate.path;
+    }
+
+    logs.appendLine(
+      `turbo LSP: rejected ${candidate.label} at ${candidate.path}: ${probe.reason}`
+    );
+  }
+
+  logs.appendLine(
+    "turbo LSP: no installed turbo candidate supports internal LSP; falling back to packaged LSP binary"
+  );
+}
+
+function probeInternalLsp(
+  turboPath: string,
+  options: cp.ExecSyncOptionsWithStringEncoding
+): InternalLspProbeResult {
+  try {
+    const output = cp
+      .execFileSync(turboPath, ["__internal_lsp", "--probe"], {
+        ...options,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 1000
+      })
+      .trim();
+
+    if (output === "turbo-lsp") {
+      return { supported: true };
+    }
+
+    return { supported: false, reason: formatProbeOutput(output) };
+  } catch (e) {
+    return { supported: false, reason: formatProbeError(e) };
+  }
+}
+
+function formatProbeOutput(output: string) {
+  const line = firstNonEmptyLine(output);
+  return line ? `unexpected probe output: ${line}` : "empty probe output";
+}
+
+function formatProbeError(error: unknown) {
+  const stderr = outputFromError(error, "stderr");
+  if (stderr) {
+    return firstNonEmptyLine(stderr) ?? "probe command failed with stderr";
+  }
+
+  const stdout = outputFromError(error, "stdout");
+  if (stdout) {
+    return `probe command failed with stdout: ${firstNonEmptyLine(stdout)}`;
+  }
+
+  if (error instanceof Error && error.message) {
+    return firstNonEmptyLine(error.message) ?? error.message;
+  }
+
+  return "probe command failed";
+}
+
+function outputFromError(error: unknown, key: "stdout" | "stderr") {
+  if (typeof error !== "object" || error === null || !(key in error)) {
     return;
   }
 
-  let depth = 0; // indicates we're not in a pipeline block
-  let inPipeline = false; // we do not use this right now but could highlight tasks
+  const output = (error as Record<string, unknown>)[key];
+  if (Buffer.isBuffer(output)) {
+    return output.toString("utf8").trim();
+  }
 
-  visit(editor.document.getText(), {
-    onObjectProperty: (property, offset) => {
-      // only highlight pipeline at the top level
-      if (property === "pipeline" && depth === 0 && !inPipeline) {
-        inPipeline = true;
-        for (let i = 1; i < 9; i++) {
-          const index = i + offset;
-          editor.setDecorations(pipelineColors[i], [
-            new Range(
-              editor.document.positionAt(index),
-              editor.document.positionAt(index + 1)
-            ),
-          ]);
-        }
-      }
-    },
-    onObjectBegin: () => {
-      if (depth === -1) {
-        depth = 0;
-      } else if (depth !== -1) {
-        depth += 1;
-      }
-    },
-    onObjectEnd: () => {
-      if (depth < -1) {
-        depth -= 1;
-      } else {
-        throw Error("imbalanced visitor");
-      }
-    },
-  });
+  if (typeof output === "string") {
+    return output.trim();
+  }
+}
+
+function firstNonEmptyLine(output: string) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 async function promptGlobalTurbo(useLocalTurbo: boolean) {
@@ -367,23 +498,29 @@ async function promptGlobalTurbo(useLocalTurbo: boolean) {
       );
 
       if (message === "Open Docs") {
-        env.openExternal(Uri.parse("https://turborepo.com/docs/installing"));
+        env.openExternal(Uri.parse("https://turborepo.dev/docs/installing"));
       }
     }
   } else if (answer === "Open Docs") {
-    env.openExternal(Uri.parse("https://turborepo.com/docs/installing"));
+    env.openExternal(Uri.parse("https://turborepo.dev/docs/installing"));
   } else if (answer === "Open Settings") {
     commands.executeCommand("workbench.action.openSettings", "turbo.path");
   }
 }
 
-function findLocalTurbo(): string | undefined {
-  const options: cp.ExecSyncOptionsWithStringEncoding = {
-    encoding: "utf8",
-    cwd: workspace.workspaceFolders?.[0].uri.path,
-  };
-
+function findLocalTurbo(
+  workspaceRoot: string | undefined,
+  options: cp.ExecSyncOptionsWithStringEncoding
+): string | undefined {
   const checks = [
+    () => {
+      if (workspaceRoot) {
+        logs.appendLine("attempting to find local turbo in node_modules/.bin");
+        return findTurboInDirectory(
+          path.join(workspaceRoot, "node_modules", ".bin")
+        );
+      }
+    },
     () => {
       logs.appendLine("attempting to find local turbo using npm");
       const npmList = cp.execSync("npm ls turbo --json", options);
@@ -395,29 +532,30 @@ function findLocalTurbo(): string | undefined {
       const PREFIX = "file:"; // npm ls returns a file: prefix
 
       if (packagePath?.startsWith(PREFIX)) {
-        return path.join(
+        const turboPath = path.join(
           "node_modules",
           packagePath.slice(PREFIX.length),
           "bin",
           "turbo"
         );
+        return resolveTurboPath(turboPath, workspaceRoot);
       }
     },
     () => {
       logs.appendLine("attempting to find local turbo using yarn");
       const turboBin = cp.execSync("yarn bin turbo", options);
-      return turboBin.trim();
+      return resolveTurboPath(turboBin.trim(), workspaceRoot);
     },
     () => {
       logs.appendLine("attempting to find local turbo using pnpm");
       const binFolder = cp.execSync("pnpm bin", options).trim();
-      return path.join(binFolder, "turbo");
+      return findTurboInDirectory(binFolder);
     },
     () => {
       logs.appendLine("attempting to find local turbo using bun");
       const binFolder = cp.execSync("bun pm bin", options).trim();
-      return path.join(binFolder, "turbo");
-    },
+      return findTurboInDirectory(binFolder);
+    }
   ];
 
   for (const potentialPath of checks) {

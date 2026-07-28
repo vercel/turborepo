@@ -1,27 +1,25 @@
-# Globwatch
+# turborepo-globwatch
 
-> Watch a set of globs
+## Purpose
 
-This library provides an async interface over notify and glob-match to
-efficiently watch a list of globs. Where possible it attempts to minimize the
-number of watched directories by registering watchers for the minimum possible
-set of files / folders by breaking down the glob pattern into a list of folders.
+Watches file system changes filtered by glob patterns. Wraps `notify` with glob-based filtering and provides "flushing" semantics to ensure watchers are synchronized with the file system.
 
-This is exposed as a `Stream` and a `Sink`. The stream produces `notify` events,
-whereas the `Sink` can be used to update the configuration on-the-fly.
+## Architecture
 
-For a basic example see the `examples/cancel.rs`.
-
-```rust
-let (watcher, mut config) = GlobWatcher::new("./flush").unwrap();
-let stop = StopSource::new();
-let mut stream = watcher.into_stream(stop.token());
-config.include(Path::new("/app/css").into());
-config.include(Path::new("/app/html").into());
-while let Some(Ok(e)) = stream.next().await {
-    debug!("received event: {:?}", e);
-
-    // use the cancellation token to stop the watcher
-    drop(stop);
-}
 ```
+File system events (notify)
+    └── turborepo-globwatch
+        ├── Filter events by glob patterns
+        ├── Flush mechanism (cookie files)
+        └── Stream of matching events
+```
+
+Exposed as a `Stream` and `Sink`:
+- Stream produces `notify` events for matching files
+- Sink allows updating watch configuration on-the-fly
+
+Optimizes by watching the minimum set of directories needed to cover the glob patterns.
+
+## Notes
+
+On some filesystems, events may arrive out of order or delayed. The flush mechanism uses cookie files to provide a round-trip guarantee, ensuring the watcher is current before answering queries. Used by the daemon for reliable file change detection.

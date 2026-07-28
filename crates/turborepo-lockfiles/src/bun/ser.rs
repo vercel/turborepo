@@ -1,6 +1,6 @@
 use serde::{Serialize, ser::SerializeTuple};
 
-use super::PackageEntry;
+use super::{PackageEntry, is_git_or_github_package, is_tarball_or_url_package};
 
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -20,29 +20,48 @@ use super::PackageEntry;
 // this) ]
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(4)?;
+        let is_git = is_git_or_github_package(&self.ident);
+        let is_url = is_tarball_or_url_package(&self.ident);
 
-        // First value is always the package key
+        let mut len = 1;
+        if self.root.is_some() {
+            len += 1;
+        } else {
+            if self.registry.is_some() && !is_git && !is_url {
+                len += 1;
+            }
+            if self.info.is_some() {
+                len += 1;
+            }
+            if let Some(checksum) = &self.checksum
+                && (!is_url || !checksum.is_empty())
+            {
+                len += 1;
+            }
+        }
+
+        let mut tuple = serializer.serialize_tuple(len)?;
         tuple.serialize_element(&self.ident)?;
 
-        // For root packages, only thing left to serialize is the root info
         if let Some(root) = &self.root {
             tuple.serialize_element(root)?;
             return tuple.end();
         }
 
-        // npm packages have a registry
-        if let Some(registry) = &self.registry {
+        if let Some(registry) = &self.registry
+            && !is_git
+            && !is_url
+        {
             tuple.serialize_element(registry)?;
         }
 
-        // All packages have info in the next slot
         if let Some(info) = &self.info {
             tuple.serialize_element(info)?;
         };
 
-        // npm packages, git, and github have a checksum/integrity
-        if let Some(checksum) = &self.checksum {
+        if let Some(checksum) = &self.checksum
+            && (!is_url || !checksum.is_empty())
+        {
             tuple.serialize_element(checksum)?;
         }
 
@@ -151,11 +170,106 @@ mod test {
             checksum: None,
         }
     );
+
+    // GitHub package fixture - should never have a registry field in output
+    fixture!(
+        github_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@tanstack/react-store@github:TanStack/store#24a971c".into(),
+            registry: None, // GitHub packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("@tanstack/store".into(), "0.7.0".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("24a971c".into()),
+            root: None,
+        }
+    );
+
+    // Git package fixture - should never have a registry field in output
+    fixture!(
+        git_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-package@git+https://github.com/user/repo#abc123".into(),
+            registry: None, // Git packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("lodash".into(), "4.17.21".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("abc123".into()),
+            root: None,
+        }
+    );
+
+    // File package fixture - should have only 2 elements: [ident, info]
+    fixture!(
+        file_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@api/sdk@file:apps/api/.api/apis/sdk".into(),
+            registry: None,
+            info: Some(PackageInfo {
+                dependencies: Some(("is-odd".into(), "^3.0.1".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
+    // Link package fixture - should have only 2 elements: [ident, info]
+    fixture!(
+        link_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-pkg@link:../../local-pkg".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: None,
+            root: None,
+        }
+    );
+
+    // Test fixture to verify defense-in-depth: even if a github package
+    // somehow has registry set (e.g., from corrupted input), serialization
+    // should NOT output the registry field
+    fixture!(
+        github_pkg_with_corrupted_registry,
+        PackageEntry,
+        PackageEntry {
+            ident: "@tanstack/react-store@github:TanStack/store#24a971c".into(),
+            registry: Some("".into()), // Incorrectly set registry (corruption case)
+            info: Some(PackageInfo {
+                dependencies: Some(("@tanstack/store".into(), "0.7.0".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("24a971c".into()),
+            root: None,
+        }
+    );
+
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
+    #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
+    #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
+    #[test_case(json!(["@api/sdk@file:apps/api/.api/apis/sdk", {"dependencies": {"is-odd": "^3.0.1"}}]), file_pkg() ; "file package")]
+    #[test_case(json!(["my-pkg@link:../../local-pkg", {}]), link_pkg() ; "link package")]
+    // Defense-in-depth test: corrupted registry should be stripped from github packages during
+    // serialization
+    #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_with_corrupted_registry() ; "github package with corrupted registry stripped")]
     fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(
         expected: serde_json::Value,
         input: &T,

@@ -1,0 +1,9 @@
+---
+source: crates/turborepo/tests/final_hash_contract.rs
+expression: contract
+---
+[initial]
+util#build hash=11cff3dd389fdfed external=459c029558afe716 framework= envMode=strict
+
+[changed]
+util#build hash=a489883a3c7cd307 external=459c029558afe716 framework= envMode=strict

@@ -2,10 +2,12 @@
 
 import picocolors from "picocolors";
 import { Command } from "commander";
-import { logger } from "@turbo/utils";
+import { logger, createNotifyUpdate } from "@turbo/utils";
 import cliPkg from "../package.json";
 import { summary, convert } from "./commands";
 import { ConvertError } from "./errors";
+
+const notifyUpdate = createNotifyUpdate({ packageInfo: cliPkg });
 
 const workspacesCli = new Command();
 
@@ -45,14 +47,19 @@ workspacesCli
   .argument("[path]", "Project root")
   .action(summary);
 
-workspacesCli.parseAsync().catch((error) => {
-  logger.log();
-  if (error instanceof ConvertError) {
-    logger.log(picocolors.red(error.message));
-  } else {
-    logger.log(picocolors.red("Unexpected error. Please report it as a bug:"));
-    logger.log(error);
-  }
-  logger.log();
-  process.exit(1);
-});
+workspacesCli
+  .parseAsync()
+  .then(() => notifyUpdate())
+  .catch(async (error) => {
+    logger.log();
+    if (error instanceof ConvertError) {
+      logger.log(picocolors.red(error.message));
+    } else {
+      logger.log(
+        picocolors.red("Unexpected error. Please report it as a bug:")
+      );
+      logger.log(error);
+    }
+    logger.log();
+    await notifyUpdate(1);
+  });

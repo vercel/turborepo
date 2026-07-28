@@ -1,7 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+#![allow(clippy::result_large_err)]
+
+use std::collections::{HashMap, HashSet};
 
 use either::Either;
 use napi::Error;
@@ -13,7 +12,6 @@ use turborepo_repository::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
         LockfileContents, PackageChangeMapper, PackageChanges,
     },
-    inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME, WorkspacePackage},
 };
 use turborepo_scm::SCM;
@@ -54,7 +52,6 @@ pub struct PackageManager {
 
 #[napi]
 pub struct Workspace {
-    workspace_state: WorkspaceState,
     /// The absolute path to the workspace root.
     #[napi(readonly)]
     pub absolute_path: String,
@@ -74,15 +71,13 @@ impl Package {
         name: String,
         workspace_path: &AbsoluteSystemPath,
         package_path: &AbsoluteSystemPath,
-    ) -> Self {
-        let relative_path = workspace_path
-            .anchor(package_path)
-            .expect("Package path is within the workspace");
-        Self {
+    ) -> Result<Self, turbopath::PathError> {
+        let relative_path = workspace_path.anchor(package_path)?;
+        Ok(Self {
             name,
             absolute_path: package_path.to_string(),
             relative_path: relative_path.to_string(),
-        }
+        })
     }
 
     fn dependents(
@@ -98,12 +93,9 @@ impl Package {
 
         pkgs.iter()
             .filter_map(|node| {
-                let info = graph.package_info(node.as_package_name())?;
-                // If we don't get a package name back, we'll just skip it.
-                let name = info.package_name()?;
-                let anchored_package_path = info.package_path();
-                let package_path = workspace_path.resolve(anchored_package_path);
-                Some(Package::new(name, workspace_path, &package_path))
+                let context = graph.package_task_context(node.as_package_name())?;
+                let package_path = workspace_path.resolve(context.directory());
+                Package::new(context.package().to_string(), workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -122,12 +114,9 @@ impl Package {
         pkgs.iter()
             .filter(|node| !matches!(node, PackageNode::Root))
             .filter_map(|node| {
-                let info = graph.package_info(node.as_package_name())?;
-                // If we don't get a package name back, we'll just skip it.
-                let name = info.package_name()?;
-                let anchored_package_path = info.package_path();
-                let package_path = workspace_path.resolve(anchored_package_path);
-                Some(Package::new(name, workspace_path, &package_path))
+                let context = graph.package_task_context(node.as_package_name())?;
+                let package_path = workspace_path.resolve(context.directory());
+                Package::new(context.package().to_string(), workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -188,21 +177,62 @@ impl Workspace {
         Ok(map)
     }
 
+    /// Returns all external packages from the lockfile as
+    /// `npm/<name>@<version>` strings. Collects the transitive external
+    /// dependencies of every workspace package and formats them using the
+    /// lockfile's human-readable name.
+    #[napi]
+    pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
+        let lockfile = self
+            .graph
+            .lockfile()
+            .ok_or_else(|| napi::Error::from_reason("No lockfile found"))?;
+
+        let mut seen = HashSet::new();
+        let mut result: Vec<String> = self
+            .graph
+            .package_task_contexts()
+            .filter_map(|context| {
+                let info = context.package_info();
+                debug_assert!(
+                    info.is_some() || !context.requires_compatibility_payload(),
+                    "builder invariant: required package context has no payload"
+                );
+                info.and_then(|info| info.transitive_dependencies.as_ref())
+            })
+            .flatten()
+            .filter(|pkg| seen.insert(&pkg.key))
+            .filter_map(|pkg| lockfile.human_name(pkg).map(|name| format!("npm/{name}")))
+            .collect();
+
+        result.sort();
+        Ok(result)
+    }
+
     pub fn get_lockfile_contents(
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         workspace_root: &AbsoluteSystemPath,
         from_commit: &str,
     ) -> LockfileContents {
-        let lockfile_name = self.graph.package_manager().lockfile_name();
-        if changed_files.contains(AnchoredSystemPath::new(&lockfile_name).unwrap()) {
+        let Some(package_manager) = self.graph.package_manager() else {
+            return LockfileContents::Unchanged;
+        };
+        let lockfile_name = package_manager.lockfile_name();
+        let Ok(lockfile_path) = AnchoredSystemPath::new(&lockfile_name) else {
+            return LockfileContents::Unchanged;
+        };
+
+        if changed_files.contains(lockfile_path) {
             let git = SCM::new(workspace_root);
             let anchored_path = workspace_root.join_component(lockfile_name);
-            git.previous_content(Some(from_commit), &anchored_path)
-                .map(LockfileContents::Changed)
-                .inspect_err(|e| debug!("{e}"))
-                .ok()
-                .unwrap_or(LockfileContents::UnknownChange)
+            match git.previous_content(Some(from_commit), &anchored_path) {
+                Ok(contents) => LockfileContents::Changed(contents),
+                Err(e) => {
+                    debug!("{e}");
+                    LockfileContents::UnknownChange
+                }
+            }
         } else {
             LockfileContents::Unchanged
         }
@@ -219,8 +249,7 @@ impl Workspace {
         base: Option<&str>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
-        let base = optimize_global_invalidations
-            .unwrap_or(false)
+        let base = matches!(optimize_global_invalidations, Some(true))
             .then(|| {
                 base.ok_or_else(|| {
                     Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
@@ -250,9 +279,11 @@ impl Workspace {
 
         let lockfile_contents = if let Some(base) = base {
             self.get_lockfile_contents(&changed_files, workspace_root, base)
-        } else if changed_files.contains(
-            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
-                .expect("the lockfile name will not be an absolute path"),
+        } else if matches!(
+            self.graph
+                .package_manager()
+                .map(|pm| AnchoredSystemPath::new(pm.lockfile_name())),
+            Some(Ok(path)) if changed_files.contains(path)
         ) {
             LockfileContents::UnknownChange
         } else {
@@ -267,10 +298,10 @@ impl Workspace {
         let packages = match package_changes {
             PackageChanges::All(_) => self
                 .graph
-                .packages()
-                .map(|(name, info)| WorkspacePackage {
-                    name: name.to_owned(),
-                    path: info.package_path().to_owned(),
+                .package_task_contexts()
+                .map(|context| WorkspacePackage {
+                    name: context.package().clone(),
+                    path: context.directory().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
             PackageChanges::Some(packages) => packages.into_keys().collect(),
@@ -286,7 +317,8 @@ impl Workspace {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), workspace_root, &package_path)
             })
-            .collect();
+            .collect::<Result<Vec<Package>, _>>()
+            .map_err(|e| Error::from_reason(e.to_string()))?;
 
         serializable_packages.sort_by_key(|p| p.name.clone());
 
@@ -319,11 +351,8 @@ impl Workspace {
                     Err(e) => return Err(Error::from_reason(e.to_string())),
                 };
                 let package_path = workspace_root.resolve(&package.path);
-                Ok(Package::new(
-                    package.name.to_string(),
-                    workspace_root,
-                    &package_path,
-                ))
+                Package::new(package.name.to_string(), workspace_root, &package_path)
+                    .map_err(|e| Error::from_reason(e.to_string()))
             }
         }
     }

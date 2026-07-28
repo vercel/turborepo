@@ -1,17 +1,12 @@
-use std::{fmt, sync::OnceLock};
+use std::fmt;
 
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
-use regex::Regex;
+use regex::regex;
 use semver::Version;
 use thiserror::Error;
 
 use super::identifiers::{Descriptor, Ident, Locator};
-
-fn tag_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^[^v][a-z0-9._-]*$").unwrap())
-}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -141,7 +136,7 @@ impl Resolution {
         // We have a match an we now override the dependency
         let mut dependency_override = dependency.clone();
         dependency_override.range = reference.to_string().into();
-        if Version::parse(reference).is_ok() || tag_regex().is_match(reference) {
+        if Version::parse(reference).is_ok() || regex!(r"^[^v][a-z0-9._-]*$").is_match(reference) {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
@@ -150,13 +145,14 @@ impl Resolution {
         // The patch still gets picked up as we include patches for any
         // packages in the pruned lockfile if the package is a member.
         if matches!(dependency_override.protocol(), Some("patch")) {
-            return Some(
-                Descriptor::from(
-                    Locator::from_patch_reference(reference)
-                        .expect("expected patch reference to contain locator"),
-                )
-                .into_owned(),
-            );
+            // If the patch reference can't be parsed (e.g. malformed or
+            // unusual encoding), fall back to the original dependency so
+            // resolution can continue instead of panicking.
+            // See https://github.com/vercel/turborepo/issues/3273
+            let Some(locator) = Locator::from_patch_reference(reference) else {
+                return Some(dependency.clone().into_owned());
+            };
+            return Some(Descriptor::from(locator).into_owned());
         }
 
         Some(dependency_override)
@@ -170,7 +166,7 @@ impl Resolution {
         default_protocol: &str,
     ) -> bool {
         match Version::parse(incomplete_reference).is_ok()
-            || tag_regex().is_match(incomplete_reference)
+            || regex!(r"^[^v][a-z0-9._-]*$").is_match(incomplete_reference)
         {
             // We need to inject a protocol
             true => {
@@ -325,6 +321,23 @@ mod test {
         assert_eq!(
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_patch_resolution_unparseable_falls_back() {
+        // When the patch reference can't be parsed by from_patch_reference,
+        // reduce_dependency should fall back to the original dependency
+        // instead of panicking. See https://github.com/vercel/turborepo/issues/3273
+        let resolution = parse_resolution("lodash@^4.17.21").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "patch:not-a-valid-patch-ref",
+            &Descriptor::try_from("lodash@npm:^4.17.21").unwrap(),
+            &Locator::try_from("test@workspace:.").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("lodash@npm:^4.17.21").unwrap())
         );
     }
 

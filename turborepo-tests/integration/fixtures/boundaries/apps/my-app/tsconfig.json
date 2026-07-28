@@ -1,10 +1,9 @@
 {
   "compilerOptions": {
     "paths": {
-      "@/*": [
-        "./*"
-      ],
+      "@/*": ["./*"],
       "!": ["../../packages/another/index.jsx"]
-    }
+    },
+    "strictNullChecks": true
   }
 }

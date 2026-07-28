@@ -1,7 +1,9 @@
-import { json, urlencoded } from "body-parser";
+import bodyParser from "body-parser";
 import express, { type Express } from "express";
 import morgan from "morgan";
 import cors from "cors";
+
+const { json, urlencoded } = bodyParser;
 
 export const createServer = (): Express => {
   const app = express();

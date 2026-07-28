@@ -1,0 +1,47 @@
+{
+  "name": "@repo/contract",
+  "version": "1.0.0",
+  "description": "Contract layer - Unified typebox Schema and type management",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./drizzle": {
+      "types": "./dist/drizzle/index.d.ts",
+      "import": "./dist/drizzle/index.js"
+    },
+    "./typebox": {
+      "types": "./dist/typebox/index.d.ts",
+      "import": "./dist/typebox/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc -b -w",
+    "clean": "rm -rf dist .tsbuildinfo .turbo",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "db:generate": "bun x drizzle-kit generate",
+    "db:migrate": "bun x drizzle-kit migrate",
+    "db:push": "bun x drizzle-kit push",
+    "db:push:prod": "bun x drizzle-kit push --config drizzle.config.prod.ts"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^1.0.0-beta.9-8d6992",
+    "drizzle-typebox": "^1.0.0-beta.9-8d6992",
+    "elysia": "^1.4.27"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "drizzle-kit": "^1.0.0-beta.9-8d6992",
+    "drizzle-typebox": "^1.0.0-beta.9-8d6992",
+    "@types/pg": "^8.18.0",
+    "typescript": "^5.9.3"
+  }
+}

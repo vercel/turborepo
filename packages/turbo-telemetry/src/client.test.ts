@@ -3,6 +3,8 @@ import { strict as assert } from "node:assert";
 import got from "got";
 import { TelemetryClient } from "./client";
 import { TelemetryConfig } from "./config";
+import { CreateTurboTelemetry } from "./events/create-turbo";
+import type { Event } from "./events/types";
 
 describe("TelemetryClient", () => {
   beforeEach(() => {
@@ -17,30 +19,30 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
       config,
       opts: {
-        batchSize: 2,
-      },
+        batchSize: 2
+      }
     });
 
     // add two events to trigger the batch flush
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     client.trackCommandStatus({
       command: "test-command",
-      status: "end",
+      status: "end"
     });
 
     assert.equal(mockPost.mock.callCount() > 0, true);
@@ -129,22 +131,22 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
-      config,
+      config
     });
 
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     assert.equal(mockPost.mock.callCount(), 0);
     assert.equal(client.hasPendingEvents(), true);
@@ -158,22 +160,22 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
-      config,
+      config
     });
 
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     assert.equal(mockPost.mock.callCount(), 0);
     assert.equal(client.hasPendingEvents(), false);
@@ -190,26 +192,26 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
       config,
       opts: {
-        batchSize: 2,
-      },
+        batchSize: 2
+      }
     });
 
     // add one event
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
 
     assert.equal(mockPost.mock.callCount(), 0);
@@ -263,5 +265,98 @@ describe("TelemetryClient", () => {
     );
 
     assert.equal(client.hasPendingEvents(), false);
+  });
+});
+
+describe("CreateTurboTelemetry", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
+  it("does not send credential-bearing create-turbo option values", async (t) => {
+    const mockPost = mock.fn();
+    t.mock.method(got, "post", mockPost);
+    const config = new TelemetryConfig({
+      configPath: "test-config-path",
+      config: {
+        telemetry_enabled: true,
+        telemetry_id: "telemetry-test-id",
+        telemetry_salt: "telemetry-salt"
+      }
+    });
+
+    const client = new CreateTurboTelemetry({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
+        version: "1.0.0"
+      },
+      config
+    });
+
+    client.trackOptionExample(
+      "https://user:ghp_secret@github.com/acme/private?token=secret#secret"
+    );
+    client.trackOptionExample("https://user:other_secret@example.com/private");
+    client.trackOptionExample("git@github.com:acme/private");
+    client.trackOptionExamplePath("private/path/with-secret");
+
+    await client.close();
+
+    assert.equal(mockPost.mock.callCount(), 1);
+    const payload = mockPost.mock.calls[0].arguments[1].json as Array<
+      Record<"package", Event>
+    >;
+    assert.deepEqual(
+      payload.map(({ package: event }) => [event.key, event.value]),
+      [
+        ["option:example", "github_url"],
+        ["option:example", "other_url"],
+        ["option:example", "official"],
+        ["option:example_path", "provided"]
+      ]
+    );
+
+    const serializedPayload = JSON.stringify(payload);
+    assert.equal(serializedPayload.includes("ghp_secret"), false);
+    assert.equal(serializedPayload.includes("other_secret"), false);
+    assert.equal(serializedPayload.includes("git@github.com"), false);
+    assert.equal(serializedPayload.includes("token=secret"), false);
+    assert.equal(serializedPayload.includes("private/path/with-secret"), false);
+  });
+
+  it("classifies create-turbo example option values coarsely", () => {
+    const config = new TelemetryConfig({
+      configPath: "test-config-path",
+      config: {
+        telemetry_enabled: false,
+        telemetry_id: "telemetry-test-id",
+        telemetry_salt: "telemetry-salt"
+      }
+    });
+
+    const client = new CreateTurboTelemetry({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
+        version: "1.0.0"
+      },
+      config
+    });
+
+    assert.equal(client.trackOptionExample("default")?.value, "default");
+    assert.equal(client.trackOptionExample("basic")?.value, "official");
+    assert.equal(
+      client.trackOptionExample("https://github.com/vercel/turborepo")?.value,
+      "github_url"
+    );
+    assert.equal(
+      client.trackOptionExample("https://example.com/template")?.value,
+      "other_url"
+    );
+    assert.equal(
+      client.trackOptionExamplePath("examples/basic")?.value,
+      "provided"
+    );
   });
 });

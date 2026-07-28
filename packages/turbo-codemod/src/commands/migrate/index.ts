@@ -1,24 +1,30 @@
 import os from "node:os";
 import { execSync } from "node:child_process";
 import picocolors from "picocolors";
-import { prompt } from "inquirer";
+import { input } from "@inquirer/prompts";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
-import { checkGitStatus } from "../../utils/checkGitStatus";
-import { directoryInfo } from "../../utils/directoryInfo";
-import { Runner } from "../../runner/Runner";
-import { looksLikeRepo } from "../../utils/looksLikeRepo";
+import { checkGitStatus } from "../../utils/check-git-status";
+import { directoryInfo } from "../../utils/directory-info";
+import { Runner } from "../../runner/runner";
+import { looksLikeRepo } from "../../utils/looks-like-repo";
 import type { TransformerResults } from "../../runner";
-import { getCurrentVersion } from "./steps/getCurrentVersion";
-import { getLatestVersion } from "./steps/getLatestVersion";
-import { getTransformsForMigration } from "./steps/getTransformsForMigration";
-import { getTurboUpgradeCommand } from "./steps/getTurboUpgradeCommand";
+import { transformer as updateVersionedSchema } from "../../transforms/update-versioned-schema-json";
+import { getCurrentVersion } from "./steps/get-current-version";
+import { getLatestVersion } from "./steps/get-latest-version";
+import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
+import { getTurboUpgradeCommand } from "./steps/get-turbo-upgrade-command";
+import {
+  detectCatalog,
+  updateCatalogVersion,
+  type CatalogInfo
+} from "./steps/update-catalog";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
-import { shutdownDaemon } from "./steps/shutdownDaemon";
+import { shutdownDaemon } from "./steps/shutdown-daemon";
 
 function endMigration({
   message,
-  success,
+  success
 }: {
   message?: string;
   success: boolean;
@@ -57,14 +63,10 @@ export async function migrate(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await prompt<{
-    directoryInput?: string;
-  }>([
-    {
-      type: "input",
-      name: "directoryInput",
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
       message: "Where is the root of the repo to migrate?",
-      when: !directory,
       default: ".",
       validate: (d: string) => {
         const { exists, absolute } = directoryInfo({ directory: d });
@@ -73,19 +75,17 @@ export async function migrate(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim(),
-    },
-  ]);
-
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
-  const { directoryInput: selectedDirectory = directory! } = answers;
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     return endMigration({
       success: false,
-      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`,
+      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`
     });
   }
 
@@ -94,7 +94,7 @@ export async function migrate(
       success: false,
       message: `Directory (${picocolors.dim(
         root
-      )}) does not appear to be a repository`,
+      )}) does not appear to be a repository`
     });
   }
 
@@ -106,7 +106,7 @@ export async function migrate(
       success: false,
       message: `Unable to read determine package manager details from ${picocolors.dim(
         root
-      )}`,
+      )}`
     });
   }
 
@@ -115,7 +115,7 @@ export async function migrate(
   if (!fromVersion) {
     return endMigration({
       success: false,
-      message: `Unable to infer the version of turbo being used by ${project.name}`,
+      message: `Unable to infer the version of turbo being used by ${project.name}`
     });
   }
 
@@ -130,14 +130,14 @@ export async function migrate(
     }
     return endMigration({
       success: false,
-      message,
+      message
     });
   }
 
   if (!toVersion) {
     return endMigration({
       success: false,
-      message: "Unable to fetch the latest version of turbo",
+      message: "Unable to fetch the latest version of turbo"
     });
   }
 
@@ -146,7 +146,7 @@ export async function migrate(
       success: true,
       message: `Nothing to do, current version (${picocolors.bold(
         fromVersion
-      )}) is the same as the requested version (${picocolors.bold(toVersion)})`,
+      )}) is the same as the requested version (${picocolors.bold(toVersion)})`
     });
   }
 
@@ -179,53 +179,55 @@ export async function migrate(
     os.EOL
   );
 
-  const results: Array<TransformerResults> = [];
-  for (const [idx, codemod] of codemods.entries()) {
-    logger.log(
-      `(${idx + 1}/${codemods.length}) ${picocolors.bold(
-        `Running ${codemod.name}`
-      )}`
-    );
-
-    // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
-    const result = await codemod.transformer({
+  // Check if turbo uses a catalog reference (e.g. "turbo": "catalog:" in package.json).
+  // If so, update the version in the catalog file instead of letting the package
+  // manager overwrite the catalog reference with a literal version.
+  let catalogInfo: CatalogInfo | undefined;
+  if (project) {
+    catalogInfo = detectCatalog({
       root: project.paths.root,
-      options,
-    });
-    Runner.logResults(result);
-    results.push(result);
-  }
-
-  const hasTransformError = results.some(
-    (result) =>
-      result.fatalError ||
-      Object.keys(result.changes).some((key) => result.changes[key].error)
-  );
-
-  if (hasTransformError) {
-    return endMigration({
-      success: false,
-      message:
-        "Could not complete migration due to codemod errors. Please fix the errors and try again.",
+      packageManager: project.packageManager
     });
   }
 
-  // step 5
+  if (catalogInfo) {
+    if (options.dryRun) {
+      logger.log(
+        `Would update turbo version in catalog file ${picocolors.dim(
+          catalogInfo.catalogFile
+        )} ${picocolors.dim("(dry run)")}`,
+        os.EOL
+      );
+    } else {
+      const updated = updateCatalogVersion({
+        catalogInfo,
+        version: toVersion
+      });
+      if (updated) {
+        logger.log(
+          `Updated turbo version to ${picocolors.bold(
+            toVersion
+          )} in ${picocolors.dim(catalogInfo.catalogFile)}`,
+          os.EOL
+        );
+      }
+    }
+  }
 
-  // find the upgrade command, and run it
+  // Find the upgrade command and run it before changing project configuration.
   const upgradeCommand = await getTurboUpgradeCommand({
     project,
     to: options.to,
+    catalogInfo
   });
 
   if (!upgradeCommand) {
     return endMigration({
       success: false,
-      message: "Unable to determine upgrade command",
+      message: "Unable to determine upgrade command"
     });
   }
 
-  // install
   if (options.install) {
     if (options.dryRun) {
       logger.log(
@@ -244,12 +246,75 @@ export async function migrate(
       } catch (err: unknown) {
         return endMigration({
           success: false,
-          message: `Unable to upgrade turbo: ${String(err)}`,
+          message: `Unable to upgrade turbo: ${String(err)}`
+        });
+      }
+
+      const installedVersion = getCurrentVersion(project, {
+        ...options,
+        from: undefined
+      });
+      if (installedVersion !== toVersion) {
+        return endMigration({
+          success: false,
+          message: [
+            "The package manager did not install the expected version of Turbo.",
+            "",
+            `Expected: ${toVersion}`,
+            `Installed: ${installedVersion ?? "unknown"}`,
+            "",
+            "No codemods or schema updates were applied."
+          ].join(os.EOL)
         });
       }
     }
   } else {
     logger.log(`Upgrade turbo with ${picocolors.bold(upgradeCommand)}`, os.EOL);
+  }
+
+  const results: Array<TransformerResults> = [];
+  for (const [idx, codemod] of codemods.entries()) {
+    logger.log(
+      `(${idx + 1}/${codemods.length}) ${picocolors.bold(
+        `Running ${codemod.name}`
+      )}`
+    );
+
+    // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
+    const result = await codemod.transformer({
+      root: project.paths.root,
+      options: { ...options, toVersion }
+    });
+    Runner.logResults(result);
+    results.push(result);
+  }
+
+  // Always update the $schema URL to match the target version.
+  // The versioned schema transform may not be selected by getTransformsForMigration
+  // during same-major migrations (e.g., 2.8.0 -> 2.9.3) since its introducedIn
+  // version has already passed. Running it here ensures the schema URL stays in sync.
+  const VERSIONED_SCHEMA_TRANSFORM = "update-versioned-schema-json";
+  if (!codemods.some((c) => c.name === VERSIONED_SCHEMA_TRANSFORM)) {
+    const schemaResult = updateVersionedSchema({
+      root: project.paths.root,
+      options: { ...options, toVersion }
+    });
+    Runner.logResults(schemaResult);
+    results.push(schemaResult);
+  }
+
+  const hasTransformError = results.some(
+    (result) =>
+      result.fatalError ||
+      Object.keys(result.changes).some((key) => result.changes[key].error)
+  );
+
+  if (hasTransformError) {
+    return endMigration({
+      success: false,
+      message:
+        "Could not complete migration due to codemod errors. Please fix the errors and try again."
+    });
   }
 
   endMigration({ success: true });

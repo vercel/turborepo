@@ -1,0 +1,12 @@
+{
+  "name": "berry-patch-resolution",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "resolutions": {
+    "is-odd@^3.0.0": "patch:is-odd@npm%3A3.0.1#./.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
+  },
+  "packageManager": "yarn@3.6.0"
+}

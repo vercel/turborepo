@@ -2,15 +2,15 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use chrono::Local;
-use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
-use turborepo_api_client::{APIAuth, APIClient};
-use turborepo_cache::AsyncCache;
+use tracing::Instrument;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turborepo_analytics::{start_analytics, AnalyticsHandle};
+use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
+use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -20,38 +20,70 @@ use turborepo_repository::{
     package_json,
     package_json::PackageJson,
 };
+use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_signals::{SignalHandler, SignalSubscriber};
-use turborepo_task_id::TaskName;
+use turborepo_scope::filter::ResolutionError;
+use turborepo_shim::TurboState;
+use turborepo_signals::SignalHandler;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorConfig, ColorSelector};
-#[cfg(feature = "daemon-package-discovery")]
-use {
-    crate::run::package_discovery::DaemonPackageDiscovery,
-    std::time::Duration,
-    turborepo_repository::discovery::{
-        Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
-        PackageDiscoveryBuilder,
-    },
-};
+use turborepo_types::{FilterMode, UIMode};
+use turborepo_ui::ColorConfig;
+use turborepo_vercel_api::CachingStatusResponse;
+use url::Url;
+
+type FilteredPackages = (
+    HashMap<PackageName, PackageInclusionReason>,
+    FilterMode,
+    HashSet<PackageName>,
+);
+
+#[derive(Default)]
+struct TaskEntrypointSelection {
+    candidates: HashSet<TaskId<'static>>,
+    selected: HashSet<TaskId<'static>>,
+    excluded: HashSet<TaskId<'static>>,
+    orchestration: HashMap<String, HashSet<TaskId<'static>>>,
+}
 
 use crate::{
-    cli::DryRunMode,
     commands::CommandBase,
-    config::resolve_turbo_config_path,
-    engine::{Engine, EngineBuilder},
+    engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
-    shim::TurboState,
-    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader, UIMode},
-    DaemonConnector,
+    run::{
+        scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
+        Run, RunCache,
+    },
+    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
+
+fn project_task_io_environment(
+    toolchains: &turborepo_repository::toolchain::ToolchainRegistry,
+    environment: &EnvironmentVariableMap,
+) -> Result<
+    HashMap<
+        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::toolchain::TaskIOEnvironment,
+    >,
+    turborepo_env::Error,
+> {
+    toolchains
+        .iter()
+        .map(|toolchain| {
+            let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
+            Ok((
+                toolchain.id(),
+                turborepo_repository::toolchain::TaskIOEnvironment::new(selected.into_inner()),
+            ))
+        })
+        .collect()
+}
 
 pub struct RunBuilder {
     processes: ProcessManager,
@@ -60,23 +92,32 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
-    api_client: APIClient,
-    analytics_sender: Option<AnalyticsSender>,
+    http_client: SharedHttpClient,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
-    should_print_prelude_override: Option<bool>,
+
     // In query, we don't want to validate the engine. Defaults to `true`
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
+    // When running under `turbo watch`, an output watcher is needed so that
+    // the run cache can register output globs and skip restoring outputs
+    // that are already on disk. Without this, cache restores write files
+    // that trigger the file watcher, causing an infinite rebuild loop.
+    output_watcher: Option<Arc<dyn turborepo_run_cache::OutputWatcher>>,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    // In watch mode with `watchUsingTaskInputs`, the file watcher provides
+    // the set of changed files that triggered the rebuild. Used to filter
+    // the engine down to only tasks whose declared inputs match.
+    changed_files_for_watch: Option<HashSet<turbopath::AnchoredSystemPathBuf>>,
 }
 
 impl RunBuilder {
-    pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_client = base.api_client()?;
-
+    #[tracing::instrument(skip_all)]
+    pub fn new(base: CommandBase, http_client: Option<SharedHttpClient>) -> Result<Self, Error> {
+        let http_client = http_client.unwrap_or_default();
         let opts = base.opts();
         let api_auth = base.api_auth()?;
 
@@ -84,7 +125,7 @@ impl RunBuilder {
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
-            atty::is(atty::Stream::Stdout) &&
+            std::io::stdout().is_terminal() &&
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
@@ -99,16 +140,18 @@ impl RunBuilder {
         Ok(Self {
             processes,
             opts,
-            api_client,
+            http_client,
             repo_root,
             color_config: ui,
             version,
             api_auth,
-            analytics_sender: None,
             entrypoint_packages: None,
-            should_print_prelude_override: None,
+
             should_validate_engine: true,
             add_all_tasks: false,
+            output_watcher: None,
+            query_server: None,
+            changed_files_for_watch: None,
         })
     }
 
@@ -117,8 +160,21 @@ impl RunBuilder {
         self
     }
 
-    pub fn hide_prelude(mut self) -> Self {
-        self.should_print_prelude_override = Some(false);
+    pub fn with_output_watcher(
+        mut self,
+        watcher: Arc<dyn turborepo_run_cache::OutputWatcher>,
+    ) -> Self {
+        self.output_watcher = Some(watcher);
+        self
+    }
+
+    pub fn with_query_server(mut self, server: Arc<dyn turborepo_query_api::QueryServer>) -> Self {
+        self.query_server = Some(server);
+        self
+    }
+
+    pub fn with_changed_files(mut self, files: HashSet<turbopath::AnchoredSystemPathBuf>) -> Self {
+        self.changed_files_for_watch = Some(files);
         self
     }
 
@@ -132,42 +188,210 @@ impl RunBuilder {
         self
     }
 
-    fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
-        let manager = self.processes.clone();
-        tokio::spawn(async move {
-            let _guard = signal_subscriber.listen().await;
-            manager.stop().await;
-        });
-    }
-
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
     }
 
-    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
-        self.analytics_sender = analytics_sender;
-        self
+    fn should_initialize_http_client(&self) -> bool {
+        self.api_auth.as_ref().is_some_and(APIAuth::is_linked)
+            || (self.opts.cache_opts.cache.remote.should_use() && self.api_auth.is_some())
     }
 
-    pub fn calculate_filtered_packages(
+    fn api_client_from_http(&self, http_client: reqwest::Client) -> APIClient {
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
+
+        APIClient::new_with_client(
+            http_client,
+            &self.opts.api_client_opts.api_url,
+            if timeout > 0 {
+                Some(Duration::from_secs(timeout))
+            } else {
+                None
+            },
+            if upload_timeout > 0 {
+                Some(Duration::from_secs(upload_timeout))
+            } else {
+                None
+            },
+            self.version,
+            self.opts.api_client_opts.preflight,
+        )
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn resolve_remote_cache_status(
+        &self,
+        preflight_handle: Option<
+            tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>,
+        >,
+    ) -> RemoteCacheStatus {
+        use turborepo_vercel_api::CachingStatus;
+
+        if let Some(reason) = self.opts.remote_cache_disabled_reason {
+            return RemoteCacheStatus::Disabled(reason);
+        }
+
+        let Some(handle) = preflight_handle else {
+            return RemoteCacheStatus::Enabled;
+        };
+
+        // Wait at most 250ms for the preflight check. This runs concurrently
+        // with graph building so in practice it's almost always done by now.
+        // If it's not, fall back to "enabled" — the connection warmup still
+        // benefits later cache operations.
+        let result = tokio::time::timeout(Duration::from_millis(250), handle).await;
+        match result {
+            Ok(Ok(Ok(response))) => match response.status {
+                CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                CachingStatus::Disabled => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::DisabledForTeam)
+                }
+                CachingStatus::OverLimit => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UsageLimitExceeded)
+                }
+                CachingStatus::Paused => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                }
+            },
+            Ok(Ok(Err(api_err))) => Self::map_api_error_to_status(api_err),
+            Ok(Err(_join_err)) => {
+                tracing::debug!("Remote cache preflight task panicked; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+            Err(_timeout) => {
+                tracing::debug!("Remote cache preflight timed out after 250ms; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+        }
+    }
+
+    fn map_api_error_to_status(err: turborepo_api_client::Error) -> RemoteCacheStatus {
+        match &err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() || e.is_timeout() => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::ReqwestError(e) => {
+                if let Some(status) = e.status() {
+                    if status == reqwest::StatusCode::UNAUTHORIZED
+                        || status == reqwest::StatusCode::FORBIDDEN
+                    {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::AuthenticationFailed,
+                        );
+                    }
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UsageLimitExceeded,
+                        );
+                    }
+                    if status.is_server_error() {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UnexpectedServerError,
+                        );
+                    }
+                }
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::InvalidToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::ForbiddenToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::CacheDisabled { status, .. } => {
+                use turborepo_vercel_api::CachingStatus;
+                match status {
+                    CachingStatus::Disabled => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::DisabledForTeam,
+                    ),
+                    CachingStatus::OverLimit => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::UsageLimitExceeded,
+                    ),
+                    CachingStatus::Paused => {
+                        RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                    }
+                    CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                }
+            }
+            turborepo_api_client::Error::InvalidJson { .. }
+            | turborepo_api_client::Error::UnknownCachingStatus(..)
+            | turborepo_api_client::Error::UnknownStatus { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UnexpectedServerError)
+            }
+            _ => RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+        }
+    }
+
+    /// The scan prefix for untracked-file discovery: the repo root anchored
+    /// to the git root. When the repo is nested inside a larger git
+    /// repository this restricts the scan to the repo's subtree; when the
+    /// two coincide it is empty and the scan walks the whole repository.
+    /// Every package lives under the repo root (enforced at discovery), so
+    /// this single prefix covers exactly what per-package prefixes used to.
+    fn repo_prefix_for_repo_index(
+        repo_root: &AbsoluteSystemPath,
+        index_root: &AbsoluteSystemPath,
+    ) -> Result<RelativeUnixPathBuf, turbopath::PathError> {
+        Ok(index_root.anchor(repo_root)?.to_unix())
+    }
+
+    /// Resolve the set of packages that should participate in this run.
+    ///
+    /// Starts with the result of scope resolution (which handles `--filter`
+    /// and `--affected`), then layers on root-task inclusion:
+    ///
+    /// - **No filter** (`AllPackages`): root tasks defined in `turbo.json` are
+    ///   included automatically.
+    /// - **Exclude-only** (`ExcludeOnly`): semantically "all packages minus
+    ///   excluded ones" — root tasks are still included unless the root Turbo
+    ///   namespace itself was explicitly excluded (e.g. `--filter=!//` or
+    ///   `--filter=!{.}`). Root-directory syntax addresses this namespace even
+    ///   when no root JavaScript package exists.
+    /// - **Explicit selection** (`ExplicitSelection`): the user opted into
+    ///   specific packages — root tasks are not auto-injected.
+    ///
+    /// When `AllPackages` is active and every requested task uses
+    /// `package#task` syntax, the set is narrowed to only the referenced
+    /// packages.
+    pub(crate) fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
-        let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
+    ) -> Result<FilteredPackages, Error> {
+        let (mut filtered_pkgs, filter_mode) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
             pkg_dep_graph,
             scm,
             root_turbo_json,
-        )?;
+        )
+        .map_err(|err| match err {
+            // A filter that names a Rust crate is a likely mistake when the
+            // repository has a Cargo workspace but Cargo package support is
+            // not enabled; point at the opt-in.
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !cargo_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::cargo::CARGO_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBeCargoCrate { name }
+            }
+            err => Error::Scope(err),
+        })?;
 
-        if is_all_packages {
+        let should_include_root_tasks = match filter_mode {
+            FilterMode::AllPackages => true,
+            FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
+            FilterMode::ExplicitSelection => false,
+        };
+
+        if should_include_root_tasks {
             for target in opts.run_opts.tasks.iter() {
                 let mut task_name = TaskName::from(target.as_str());
-                // If it's not a package task, we convert to a root task
                 if !task_name.is_package_task() {
                     task_name = task_name.into_root_task()
                 }
@@ -182,49 +406,117 @@ impl RunBuilder {
                     break;
                 }
             }
-        };
+        }
 
-        Ok(filtered_pkgs)
-    }
+        if matches!(filter_mode, FilterMode::AllPackages) {
+            // When all tasks use package#task syntax, we can narrow the package
+            // set to only the referenced packages rather than the entire monorepo.
+            let task_names: Vec<TaskName> = opts
+                .run_opts
+                .tasks
+                .iter()
+                .map(|t| TaskName::from(t.as_str()))
+                .collect();
+            let all_package_qualified =
+                !task_names.is_empty() && task_names.iter().all(|t| t.is_package_task());
+            if all_package_qualified {
+                let target_packages: HashSet<PackageName> = task_names
+                    .iter()
+                    .filter_map(|t| t.package().map(PackageName::from))
+                    .collect();
+                filtered_pkgs.retain(|pkg, _| target_packages.contains(pkg));
+            }
+        }
 
-    // Starts analytics and returns handle. This is not included in the main `build`
-    // function because we don't want the handle stored in the `Run` struct.
-    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
-        // If there's no API auth, we don't want to record analytics
-        let Some(api_auth) = self.api_auth.clone() else {
-            return (None, None);
-        };
-        api_auth
-            .is_linked()
-            .then(|| start_analytics(api_auth, self.api_client.clone()))
-            .unzip()
+        let unqualified_entrypoint_packages = filtered_pkgs.keys().cloned().collect();
+
+        // Packages referenced by `pkg#task` CLI args are direct task graph
+        // entry points regardless of --filter. Add them to filtered_pkgs so
+        // the engine builder iterates their workspace.
+        for task_str in &opts.run_opts.tasks {
+            let task_name = TaskName::from(task_str.as_str());
+            if let Some(pkg) = task_name.package() {
+                filtered_pkgs.entry(PackageName::from(pkg)).or_insert(
+                    PackageInclusionReason::IncludedByFilter {
+                        filters: vec![task_str.clone()],
+                    },
+                );
+            }
+        }
+
+        Ok((filtered_pkgs, filter_mode, unqualified_entrypoint_packages))
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        mut self,
+        self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-    ) -> Result<Run, Error> {
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
-            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
             turbo_version = %TurboState::version(),
-            numcpus = num_cpus::get(),
+            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        if let Some(subscriber) = signal_handler.subscribe() {
-            self.connect_process_manager(subscriber);
-        }
 
-        let scm = {
+        // SCM detection, the tracked repo index, and untracked-file discovery
+        // all run on one background task, overlapping package graph and
+        // engine construction. The SCM handle is sent back as soon as it
+        // exists so the main flow never waits behind the scans.
+        //
+        // Untracked discovery historically waited for the package graph to
+        // compute package prefixes, but the scan scope was always exactly
+        // the repo-root subtree: every package lives under the repo root
+        // (enforced at discovery), the root package's prefix is always in
+        // the set, and `UntrackedScope` deduplicates nested prefixes.
+        // Scanning the repo-root prefix directly is equivalent and needs
+        // nothing from the graph.
+        let (scm_tx, scm_rx) = tokio::sync::oneshot::channel();
+        let repo_index_task = {
             let repo_root = self.repo_root.clone();
-            tokio::task::spawn_blocking(move || SCM::new(&repo_root))
+            let git_root = self.opts.git_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
+                // The tracked half of the repo index only needs `.git/index`.
+                let tracked_index = {
+                    let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
+                    scm.build_tracked_repo_index_eager()
+                };
+                let _ = scm_tx.send(scm.clone());
+                tracked_index.map(|mut index| {
+                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                    let index_root = scm.git_root().unwrap_or(&repo_root);
+                    match Self::repo_prefix_for_repo_index(&repo_root, index_root) {
+                        Ok(repo_prefix) => {
+                            if let Err(e) =
+                                scm.populate_repo_index_untracked(&mut index, &[repo_prefix])
+                            {
+                                tracing::debug!("failed to populate untracked files: {e}");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "failed to compute repo prefix for untracked files: {e}"
+                            );
+                        }
+                    }
+                    index
+                })
+            })
         };
-        let package_json_path = self.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(&package_json_path)?;
+        // A pure Cargo workspace (experimentalCargoWorkspaces, no root
+        // package.json) has no JavaScript root manifest. A *missing* file is
+        // only tolerated in that mode; a malformed one always fails, and a
+        // missing one without Cargo support keeps the original hard error.
+        let root_package_json =
+            load_root_package_json(&self.repo_root, cargo_enabled(&self.opts.future_flags))?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -239,11 +531,8 @@ impl RunBuilder {
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
-            run_telemetry.track_remote_cache(self.api_client.base_url());
+            run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
-        let _is_structured_output = self.opts.run_opts.graph.is_some()
-            || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
-
         let is_single_package = self.opts.run_opts.single_package;
         repo_telemetry.track_type(if is_single_package {
             RepoType::SinglePackage
@@ -251,118 +540,46 @@ impl RunBuilder {
             RepoType::Monorepo
         });
 
-        let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
+        run_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
 
-        // Remove allow when daemon is flagged back on
-        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
-            (true, None) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
-                debug!("skipping turbod since we appear to be in a non-interactive context");
-                None
-            }
-            (_, Some(true)) | (false, None) => {
-                let can_start_server = true;
-                let can_kill_server = true;
+        // The daemon is no longer used for `turbo run`. It provided no measurable
+        // performance benefit and added IPC overhead. The daemon is still used by
+        // `turbo watch` which connects independently.
+        run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
-                // Determine custom turbo.json path if different from standard path
-                let custom_turbo_json_path =
-                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
-                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
-                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                let connector = DaemonConnector::new(
-                    can_start_server,
-                    can_kill_server,
-                    &self.repo_root,
-                    custom_turbo_json_path,
-                );
-
-                match (connector.connect().await, self.opts.run_opts.daemon) {
-                    (Ok(client), _) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Started);
-                        debug!("running in daemon mode");
-                        Some(client)
-                    }
-                    (Err(e), Some(true)) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon when forced {e}, exiting");
-                        return Err(e.into());
-                    }
-                    (Err(e), None) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon {e}");
-                        None
-                    }
-                    (_, Some(false)) => unreachable!(),
-                }
-            }
-            (_, Some(false)) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
-                debug!("skipping turbod since --no-daemon was passed");
-                None
-            }
-        };
+        if self.should_initialize_http_client() {
+            self.http_client.activate();
+        }
 
         let mut pkg_dep_graph = {
-            let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let mut builder =
+                PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+                    .with_single_package_mode(self.opts.run_opts.single_package)
+                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
+                    // Transitive closures compute on a background thread while
+                    // microfrontends config, turbo.json preloading, and other
+                    // package-list consumers run. Joined by the
+                    // `ensure_transitive_closures` call before package filtering,
+                    // the earliest possible consumer (`--affected` with a changed
+                    // lockfile compares closures).
+                    .defer_transitive_closures(true)
+                    // External dependency hashes are computed on the same
+                    // background thread, straight from the sorted closures, so
+                    // task hashing and run summaries read them as fields.
+                    .with_closure_hasher(std::sync::Arc::new(
+                        turborepo_task_hash::hash_sorted_closures,
+                    ));
+            if cargo_enabled(&self.opts.future_flags) {
+                builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
+                    self.repo_root.to_owned(),
+                ));
+            }
 
-            // Daemon package discovery depends on packageManager existing in package.json
-            let graph = if cfg!(feature = "daemon-package-discovery")
-                && !self.opts.repo_opts.allow_no_package_manager
-            {
-                match (&daemon, self.opts.run_opts.daemon) {
-                    (None, Some(true)) => {
-                        // We've asked for the daemon, but it's not available. This is an error
-                        return Err(turborepo_repository::package_graph::Error::Discovery(
-                            DiscoveryError::Unavailable,
-                        )
-                        .into());
-                    }
-                    (Some(daemon), Some(true)) => {
-                        // We have the daemon, and have explicitly asked to only use that
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        builder
-                            .with_package_discovery(daemon_discovery)
-                            .build()
-                            .await
-                    }
-                    (_, Some(false)) | (None, _) => {
-                        // We have explicitly requested to not use the daemon, or we don't have it
-                        // No change to default.
-                        builder.build().await
-                    }
-                    (Some(daemon), None) => {
-                        // We have the daemon, and it's not flagged off. Use the fallback strategy
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        let local_discovery = LocalPackageDiscoveryBuilder::new(
-                            self.repo_root.clone(),
-                            None,
-                            Some(root_package_json.clone()),
-                        )
-                        .build()?;
-                        let fallback_discover = FallbackPackageDiscovery::new(
-                            daemon_discovery,
-                            local_discovery,
-                            Duration::from_millis(10),
-                        );
-                        builder
-                            .with_package_discovery(fallback_discover)
-                            .build()
-                            .await
-                    }
-                }
-            } else {
-                builder.build().await
-            };
+            let graph = builder
+                .build()
+                .instrument(tracing::info_span!("pkg_dep_graph_build"))
+                .await;
 
             match graph {
                 Ok(graph) => graph,
@@ -383,155 +600,835 @@ impl RunBuilder {
             }
         };
 
-        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
+        if let Some(package_manager) = pkg_dep_graph.package_manager() {
+            repo_telemetry.track_package_manager(package_manager.name().to_string());
+        }
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs =
-            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
-                .inspect_err(|err| {
-                    warn!("Ignoring invalid microfrontends configuration: {err}");
-                })
-                .ok()
-                .flatten();
 
-        let scm = scm.await.expect("detecting scm panicked");
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.repo_root,
-            self.api_client.clone(),
-            self.api_auth.clone(),
-            self.analytics_sender.take(),
-        )?;
+        // The SCM handle arrives as soon as detection and the tracked index
+        // build finish; the untracked scan continues in the background and
+        // is joined just before the first repo-index consumer.
+        let scm = {
+            let _span = tracing::info_span!("scm_task_await").entered();
+            match scm_rx.await {
+                Ok(scm) => scm,
+                Err(_) => {
+                    // The sender only drops without sending if the SCM task
+                    // panicked; that panic surfaces when the repo-index task
+                    // is joined below. Detect inline so the run reaches that
+                    // point.
+                    SCM::new(&self.repo_root)
+                }
+            }
+        };
+        let micro_frontend_configs = {
+            let _span = tracing::info_span!("micro_frontends_from_disk").entered();
+            match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
+                Ok(configs) => configs,
+                Err(err) => {
+                    return Err(Error::MicroFrontends(err));
+                }
+            }
+        };
 
-        // restore config from task access trace if it's enabled
-        let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-        task_access.restore_config().await;
+        // SCM-independent work runs while the background scm_task continues.
+        // The await is deferred until just before the first SCM consumer,
+        // letting API client resolution, cache init, turbo.json loading,
+        // validation, env inference, and turbo.json preloading overlap with
+        // tracked git-index construction.
+
+        let api_client = if self.should_initialize_http_client() {
+            let _span = tracing::info_span!("resolve_api_client").entered();
+            let http_client = self.http_client.get_or_init().await?;
+            Some(self.api_client_from_http(http_client))
+        } else {
+            None
+        };
+
+        let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
+            if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
+                let token = auth.token.clone();
+                let team_id = auth.team_id.clone();
+                let team_slug = auth.team_slug.clone();
+                Some(tokio::spawn(
+                    async move {
+                        client
+                            .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                            .await
+                    }
+                    .instrument(tracing::info_span!("remote_cache_preflight")),
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let (analytics_sender, analytics_handle) = self
+            .api_auth
+            .as_ref()
+            .filter(|auth| auth.is_linked())
+            .and_then(|auth| {
+                api_client
+                    .clone()
+                    .map(|api_client| start_analytics(auth.clone(), api_client))
+            })
+            .unzip();
+
+        let scm_state = LazyScmState::new();
+        let scm_state_task = {
+            let scm = scm.clone();
+            let repo_root = self.repo_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("capture_scm_sha").entered();
+                scm.get_current_sha(&repo_root).ok()
+            })
+        };
+
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            AsyncCache::new(
+                &self.opts.cache_opts,
+                &self.repo_root,
+                api_client.clone(),
+                self.api_auth.clone(),
+                analytics_sender,
+                scm_state.clone(),
+            )?
+        };
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
-        let turbo_json_loader = if task_access.is_enabled() {
-            TurboJsonLoader::task_access(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if is_single_package {
-            TurboJsonLoader::single_package(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if !root_turbo_json_path.exists() &&
-        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
-        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
-        {
-            TurboJsonLoader::workspace_no_turbo_json(
-                reader,
-                pkg_dep_graph.packages(),
-                micro_frontend_configs.clone(),
-            )
-        } else if let Some(micro_frontends) = &micro_frontend_configs {
-            TurboJsonLoader::workspace_with_microfrontends(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-                micro_frontends.clone(),
-            )
-        } else {
-            TurboJsonLoader::workspace(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-            )
+        let turbo_json_loader = {
+            let _span = tracing::info_span!("turbo_json_loader_setup").entered();
+            if let (Some(root_package_json), true) = (
+                root_package_json.as_ref(),
+                TaskAccess::check_enabled(&self.repo_root),
+            ) {
+                UnifiedTurboJsonLoader::task_access(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if let (Some(root_package_json), true) =
+                (root_package_json.as_ref(), is_single_package)
+            {
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if !root_turbo_json_path.exists() &&
+            // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+            (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+            {
+                let package_scripts = pkg_dep_graph
+                    .package_task_contexts()
+                    .map(|context| {
+                        let package = context.package().clone();
+                        let info = context.package_info();
+                        if context.requires_compatibility_payload() && info.is_none() {
+                            return Err(Error::MissingPackagePayload(package));
+                        }
+                        Ok((
+                            package,
+                            info.into_iter()
+                                .flat_map(|info| info.package_json.scripts.keys().cloned())
+                                .collect(),
+                        ))
+                    })
+                    .collect::<Result<_, Error>>()?;
+                UnifiedTurboJsonLoader::workspace_no_turbo_json(
+                    reader,
+                    pkg_dep_graph.package_scope_directories(),
+                    package_scripts,
+                    micro_frontend_configs.clone(),
+                )
+            } else if let Some(micro_frontends) = &micro_frontend_configs {
+                UnifiedTurboJsonLoader::workspace_with_microfrontends(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.package_scope_directories(),
+                    micro_frontends.clone(),
+                )
+            } else {
+                UnifiedTurboJsonLoader::workspace(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.package_scope_directories(),
+                )
+            }
         };
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
+        let root_turbo_json = {
+            let _span = tracing::info_span!("root_turbo_json_load").entered();
+            turbo_json_loader.load(&PackageName::Root)?.clone()
+        };
 
-        pkg_dep_graph.validate()?;
+        {
+            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
+            pkg_dep_graph.validate()?;
+        }
 
-        let filtered_pkgs = Self::calculate_filtered_packages(
-            &self.repo_root,
-            &self.opts,
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+        crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            turbo_json_loader.preload_all();
+        });
+
+        // Package filtering reads transitive closures only when a git-based
+        // selector may compare lockfile closures: `--affected`, or a
+        // `--filter` containing a git range (bracket syntax). Joining the
+        // background closure computation here in only those cases lets the
+        // common run keep overlapping it with filtering and engine
+        // construction; the unconditional join below runs before the first
+        // universal consumer (task hashing).
+        let scope_may_read_closures = self.opts.scope_opts.affected_range.is_some()
+            || self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .any(|pattern| pattern.contains('['));
+        if scope_may_read_closures {
+            crate::rayon_compat::block_in_place(|| {
+                let _span = tracing::info_span!("ensure_transitive_closures").entered();
+                pkg_dep_graph.ensure_transitive_closures();
+            });
+        }
+
+        let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
+            let _span = tracing::info_span!("calculate_filtered_packages").entered();
+            Self::calculate_filtered_packages(
+                &self.repo_root,
+                &self.opts,
+                &pkg_dep_graph,
+                &scm,
+                &root_turbo_json,
+            )?
+        };
+        // The root Turbo task namespace exists independently of a root
+        // JavaScript package scope. Non-root namespaces, including aggregate
+        // scopes, come from authoritative repository knowledge.
+        let task_namespace_packages: Vec<_> = std::iter::once(PackageName::Root)
+            .chain(
+                pkg_dep_graph
+                    .package_scope_directories()
+                    .map(|(name, _)| name)
+                    .filter(|name| name != &PackageName::Root),
+            )
+            .collect();
+        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
             &pkg_dep_graph,
-            &scm,
-            &root_turbo_json,
-        )?;
+            unqualified_entrypoint_packages.iter(),
+            task_namespace_packages.iter(),
+            &filter_mode,
+        );
+        let explicitly_requested_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        scoped_entrypoint_exclusions
+            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
-        let env_at_execution_start = EnvironmentVariableMap::infer();
+        // When filterUsingTasks is active, --affected is handled by the
+        // same task-level filter rather than a separate codepath.
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.affected_range.is_some());
+
+        let use_task_level_affected = !use_task_level_filter
+            && self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        let use_watch_task_level_filter = self
+            .changed_files_for_watch
+            .as_ref()
+            .is_some_and(|changed_files| !changed_files.is_empty())
+            && self.opts.future_flags.watch_using_task_inputs;
+
+        let needs_all_packages = use_task_level_affected
+            || use_task_level_filter
+            || use_watch_task_level_filter
+            || self.add_all_tasks;
+        let entrypoint_exclusions = if needs_all_packages {
+            HashSet::new()
+        } else {
+            scoped_entrypoint_exclusions
+        };
+
+        // When task-level filtering or add_all_tasks is active, the engine must
+        // contain tasks for ALL packages so that tasks in packages not flagged
+        // by package-level scope resolution can still be matched. The
+        // task-level filter (below) does the pruning when needed.
+        let all_pkgs: Vec<PackageName> = if needs_all_packages {
+            task_namespace_packages
+        } else {
+            Vec::new()
+        };
+        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+            Box::new(all_pkgs.iter())
+        } else {
+            Box::new(filtered_pkgs.keys())
+        };
+
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
-            filtered_pkgs.keys(),
+            engine_pkgs,
+            &entrypoint_exclusions,
             &turbo_json_loader,
+            &env_at_execution_start,
         )?;
 
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
+
+        // --parallel removes inter-package dependencies from the package graph,
+        // requiring a fresh engine build. Affected filtering runs once afterward
+        // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
+            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+                Box::new(all_pkgs.iter())
+            } else {
+                Box::new(filtered_pkgs.keys())
+            };
             engine = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
-                filtered_pkgs.keys(),
+                engine_pkgs,
+                &entrypoint_exclusions,
                 &turbo_json_loader,
+                &env_at_execution_start,
             )?;
         }
 
-        let color_selector = ColorSelector::default();
+        // Task-level filter: resolve --filter and/or --affected against the task graph.
+        if use_task_level_filter {
+            let task_entrypoints = self
+                .opts
+                .future_flags
+                .strict_task_entrypoint_selection
+                .then(|| {
+                    self.command_task_entrypoints(
+                        &engine,
+                        &pkg_dep_graph,
+                        &all_pkgs.iter().cloned().collect(),
+                    )
+                });
+            let excluded_entrypoints = HashSet::new();
+            let selectors: Vec<turborepo_scope::TargetSelector> = self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .map(|p| p.parse())
+                .collect::<Result<_, _>>()
+                .map_err(ResolutionError::from)?;
+
+            let affected_constraint =
+                if let Some(affected_range) = &self.opts.scope_opts.affected_range {
+                    Some(super::task_filter::resolve_affected_tasks(
+                        &engine,
+                        affected_range,
+                        &pkg_dep_graph,
+                        &scm,
+                        &self.repo_root,
+                        &root_turbo_json.global_deps,
+                    )?)
+                } else {
+                    None
+                };
+
+            let package_tasks: HashSet<_> = self
+                .opts
+                .run_opts
+                .tasks
+                .iter()
+                .filter_map(|task| {
+                    TaskName::from(task.as_str())
+                        .task_id()
+                        .map(TaskId::into_owned)
+                })
+                .collect();
+            engine = super::task_filter::filter_engine_to_tasks_with_inclusions(
+                engine,
+                &selectors,
+                super::task_filter::TaskFilterConstraints {
+                    affected: affected_constraint.as_ref(),
+                    always_include: &package_tasks,
+                    entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.candidates),
+                    excluded_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map_or(&excluded_entrypoints, |selection| &selection.excluded),
+                    orchestration_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.orchestration),
+                },
+                &pkg_dep_graph,
+                &scm,
+                &self.repo_root,
+                &root_turbo_json.global_deps,
+            )?;
+        }
+
+        // Task-level --affected detection (separate from --filter).
+        if use_task_level_affected {
+            engine = self.filter_engine_to_affected_tasks(
+                engine,
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &scm,
+            )?;
+        }
+
+        if needs_all_packages {
+            engine = self.select_engine_task_entrypoints(engine, &pkg_dep_graph, &filter_mode);
+        }
+
+        if self.opts.future_flags.strict_task_entrypoint_selection
+            && !use_task_level_filter
+            && !self.add_all_tasks
+        {
+            let task_entrypoints = self.command_task_entrypoints(
+                &engine,
+                &pkg_dep_graph,
+                &unqualified_entrypoint_packages,
+            );
+            engine = super::task_filter::retain_strict_task_graph(
+                engine,
+                &pkg_dep_graph,
+                task_entrypoints.selected,
+                &task_entrypoints.orchestration,
+            );
+        }
+
+        // Validate after all filtering so the persistent task count reflects
+        // the actual tasks that will execute, not the full pre-filter engine.
+        if !self.opts.run_opts.parallel && self.should_validate_engine {
+            engine
+                .validate(
+                    &pkg_dep_graph,
+                    self.opts.run_opts.concurrency,
+                    self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
+                )
+                .map_err(Error::EngineValidation)?;
+        }
+
+        let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
 
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            color_selector,
-            daemon.clone(),
+            self.output_watcher,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
+        // futureFlags are hard gates: reject observability config when disabled.
+        if let Some(obs_opts) = &self.opts.experimental_observability {
+            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
+                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                    message: "experimentalObservability.otel is configured but \
+                              futureFlags.experimentalObservability is not enabled in turbo.json."
+                        .to_string(),
+                }
+                .into());
+            }
+        }
 
-        Ok(Run {
-            version: self.version,
-            color_config: self.color_config,
-            start_at,
-            processes: self.processes,
-            run_telemetry,
-            task_access,
-            repo_root: self.repo_root,
-            opts: Arc::new(self.opts),
-            api_client: self.api_client,
-            api_auth: self.api_auth,
-            env_at_execution_start,
-            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-            pkg_dep_graph: Arc::new(pkg_dep_graph),
-            turbo_json_loader,
-            root_turbo_json,
-            scm,
-            engine: Arc::new(engine),
-            run_cache,
-            signal_handler: signal_handler.clone(),
-            daemon,
-            should_print_prelude,
-            micro_frontend_configs,
-        })
+        let observability_handle = self
+            .opts
+            .experimental_observability
+            .as_ref()
+            .and_then(|opts| {
+                let token = opts.otel.as_ref().and_then(|otel| {
+                    if !otel.use_remote_cache_token.unwrap_or(false) {
+                        return None;
+                    }
+                    let endpoint = otel.endpoint.as_deref().unwrap_or("");
+                    let api_url = &self.opts.api_client_opts.api_url;
+                    if !origins_match(endpoint, api_url) {
+                        tracing::warn!(
+                            "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
+                             does not match the API URL ({api_url}). Skipping cache token \
+                             injection to prevent sending credentials to an unrelated endpoint."
+                        );
+                        return None;
+                    }
+                    self.api_auth.as_ref().map(|auth| auth.token.expose())
+                });
+                observability::Handle::try_init(opts, token)
+            });
+        // The untracked-file scan keeps running in the background;
+        // `execute_visitor` awaits it right before file hashing. Deferring
+        // the barrier lets everything between `Run` construction and
+        // hashing overlap the scan.
+        let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
+
+        {
+            let scm_state = scm_state.clone();
+            let scm = scm.clone();
+            let repo_index = repo_index.clone();
+            tokio::spawn(
+                async move {
+                    let sha = scm_state_task.await.ok().flatten();
+                    let repo_index = repo_index.get().await;
+                    let dirty_hash =
+                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
+                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
+                            None => scm.get_dirty_hash(),
+                        })
+                        .await
+                        .ok()
+                        .flatten();
+                    let state = if sha.is_some() || dirty_hash.is_some() {
+                        Some(CacheScmState { sha, dirty_hash })
+                    } else {
+                        None
+                    };
+                    scm_state.resolve(state);
+                }
+                .instrument(tracing::info_span!("capture_scm_state")),
+            );
+        }
+
+        // Unconditional join point for the background transitive-closure
+        // computation (idempotent when the conditional join above already
+        // ran). The graph is immutable once inside `Run`, and its first
+        // closure consumer (external dependency hashing) runs shortly after.
+        crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("ensure_transitive_closures").entered();
+            pkg_dep_graph.ensure_transitive_closures();
+        });
+
+        Ok((
+            Run {
+                version: self.version,
+                color_config: self.color_config,
+                start_at,
+                processes: self.processes,
+                run_telemetry,
+                task_access,
+                repo_root: self.repo_root,
+                opts: Arc::new(self.opts),
+                api_auth: self.api_auth,
+                api_client,
+                env_at_execution_start,
+                filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+                pkg_dep_graph: Arc::new(pkg_dep_graph),
+                turbo_json_loader,
+                root_turbo_json,
+                scm,
+                engine: Arc::new(engine),
+                run_cache,
+                signal_handler: signal_handler.clone(),
+                remote_cache_status,
+                micro_frontend_configs,
+                repo_index,
+                observability_handle,
+                query_server: self.query_server,
+                shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            },
+            analytics_handle,
+        ))
     }
 
+    /// Returns a new engine containing only tasks whose declared `inputs`
+    /// globs match the changed files (plus their transitive dependents).
+    /// Called after the engine is built via the normal scope resolution path.
+    ///
+    /// `scm.changed_files()` returns a `Result<Result<..>>`: the outer error
+    /// is an SCM communication failure (propagated via `?`), the inner error
+    /// means the change set couldn't be computed (e.g. invalid ref, shallow
+    /// clone). In the inner-error case, filtering is skipped and all tasks
+    /// run — a fail-open to prevent `--affected` from silently dropping tasks
+    /// when git state is ambiguous.
+    #[tracing::instrument(skip_all)]
+    fn filter_engine_to_affected_tasks(
+        &self,
+        engine: Engine,
+        pkg_dep_graph: &PackageGraph,
+        root_turbo_json: &TurboJson,
+        scm: &SCM,
+    ) -> Result<Engine, Error> {
+        let (from_ref, to_ref) = self
+            .opts
+            .scope_opts
+            .affected_range
+            .as_ref()
+            .ok_or(Error::MissingAffectedRange)?;
+        let maybe_changed_files = scm.changed_files(
+            &self.repo_root,
+            from_ref.as_deref(),
+            to_ref.as_deref(),
+            true,
+            true,
+            true,
+        )?;
+
+        match maybe_changed_files {
+            Ok(changed_files) => {
+                let total_tasks = engine.task_ids().count();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    &engine,
+                    pkg_dep_graph,
+                    &changed_files,
+                    &root_turbo_json.global_deps,
+                );
+                tracing::info!(
+                    total_tasks,
+                    affected_tasks = affected_tasks.len(),
+                    changed_files = changed_files.len(),
+                    "task-level affected detection complete"
+                );
+                Ok(engine.retain_affected_tasks(&affected_tasks))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = ?e,
+                    "SCM returned invalid change set; skipping task-level filtering"
+                );
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+                    "--affected could not determine changed files. All tasks will run. Check your \
+                     git fetch depth.",
+                )
+                .field("error", format!("{e:?}"))
+                .emit();
+                Ok(engine)
+            }
+        }
+    }
+
+    fn task_entrypoint_exclusions<'a>(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        candidates: impl Iterator<Item = &'a PackageName>,
+        exclusion_candidates: impl Iterator<Item = &'a PackageName>,
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let candidates: Vec<_> = candidates.cloned().collect();
+        let exclusion_candidates: Vec<_> = exclusion_candidates.cloned().collect();
+        self.opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|requested| TaskName::from(requested.as_str()))
+            .filter(|task| task.package().is_none())
+            .flat_map(|task| {
+                self.task_entrypoint_exclusions_for_task(
+                    pkg_dep_graph,
+                    &task,
+                    &candidates,
+                    &exclusion_candidates,
+                    filter_mode,
+                )
+            })
+            .collect()
+    }
+
+    fn command_task_entrypoints(
+        &self,
+        engine: &Engine,
+        pkg_dep_graph: &PackageGraph,
+        candidate_packages: &HashSet<PackageName>,
+    ) -> TaskEntrypointSelection {
+        let mut selection = TaskEntrypointSelection::default();
+
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if let Some(task_id) = task.task_id().map(TaskId::into_owned) {
+                if engine.task_definition(&task_id).is_some() {
+                    selection.candidates.insert(task_id.clone());
+                    selection.selected.insert(task_id.clone());
+                    if !task_has_command(engine, pkg_dep_graph, &task_id) {
+                        selection
+                            .orchestration
+                            .entry(task.to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                }
+                continue;
+            }
+
+            let has_command = pkg_dep_graph.package_task_contexts().any(|context| {
+                context
+                    .toolchain()
+                    .and_then(|id| pkg_dep_graph.toolchains().get(id))
+                    .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
+            }) || engine.task_ids().any(|task_id| {
+                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
+            });
+
+            for package in candidate_packages {
+                let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
+                if engine.task_definition(&task_id).is_none() {
+                    continue;
+                }
+
+                selection.candidates.insert(task_id.clone());
+                if !has_command || task_has_command(engine, pkg_dep_graph, &task_id) {
+                    selection.selected.insert(task_id.clone());
+                    if !has_command {
+                        selection
+                            .orchestration
+                            .entry(task.task().to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                } else {
+                    selection.excluded.insert(task_id);
+                }
+            }
+        }
+
+        selection
+    }
+
+    fn task_entrypoint_exclusions_for_task(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        task: &TaskName,
+        candidates: &[PackageName],
+        exclusion_candidates: &[PackageName],
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let mut exclusions = HashSet::new();
+        for toolchain in pkg_dep_graph.toolchains().iter() {
+            let toolchain_id = toolchain.id();
+            let candidate_names: Vec<_> = candidates
+                .iter()
+                .filter(|name| {
+                    pkg_dep_graph
+                        .package_toolchain(name)
+                        .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
+                })
+                .map(|name| name.as_str().to_string())
+                .collect();
+            let prefer_workspace = match filter_mode {
+                FilterMode::AllPackages => true,
+                FilterMode::ExcludeOnly { .. } => false,
+                FilterMode::ExplicitSelection => candidate_names.len() == 1,
+            };
+            let Some(selected) =
+                toolchain.select_task_entrypoints(task.task(), &candidate_names, prefer_workspace)
+            else {
+                continue;
+            };
+            let selected: HashSet<_> = selected.into_iter().collect();
+            exclusions.extend(
+                exclusion_candidates
+                    .iter()
+                    .filter(|name| {
+                        pkg_dep_graph
+                            .package_toolchain(name)
+                            .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
+                    })
+                    .map(|name| name.as_str().to_string())
+                    .filter(|name| !selected.contains(name))
+                    .map(|name| TaskId::new(&name, task.task()).into_owned()),
+            );
+        }
+        exclusions
+    }
+
+    fn select_engine_task_entrypoints(
+        &self,
+        engine: Engine,
+        pkg_dep_graph: &PackageGraph,
+        filter_mode: &FilterMode,
+    ) -> Engine {
+        let package_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        let mut exclusions = HashSet::new();
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if task.package().is_some() {
+                continue;
+            }
+            let candidates: Vec<_> = engine
+                .task_ids()
+                .filter(|task_id| {
+                    task_id.task() == task.task() && !package_tasks.contains(*task_id)
+                })
+                .map(|task_id| PackageName::from(task_id.package()))
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+            exclusions.extend(self.task_entrypoint_exclusions_for_task(
+                pkg_dep_graph,
+                &task,
+                &candidates,
+                &candidates,
+                filter_mode,
+            ));
+        }
+        if exclusions.is_empty() {
+            return engine;
+        }
+        engine.remove_tasks(&exclusions)
+    }
+
+    #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
-        turbo_json_loader: &TurboJsonLoader,
+        entrypoint_exclusions: &HashSet<TaskId<'static>>,
+        turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())
         });
+        // Inverse of global_deps_for_hash: when globalConfiguration is on,
+        // global deps are embedded in per-task inputs via prepend_global_inputs.
+        let global_deps_for_task_inputs = if self.opts.future_flags.global_configuration {
+            root_turbo_json.global_deps.clone()
+        } else {
+            Vec::new()
+        };
+        let task_io_environment =
+            project_task_io_environment(pkg_dep_graph.toolchains(), environment)
+                .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -540,8 +1437,16 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
+        .with_entrypoint_exclusions(entrypoint_exclusions.clone())
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
+        .with_global_deps(global_deps_for_task_inputs)
+        .with_global_env(root_turbo_json.global_env.clone())
+        .with_task_io_context(
+            self.opts.run_opts.pass_through_args.clone(),
+            self.opts.run_opts.tasks.clone(),
+            task_io_environment,
+        )
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -554,23 +1459,396 @@ impl RunBuilder {
 
         let mut engine = builder.build()?;
 
+        // In watch mode with the future flag, filter the engine to only tasks
+        // whose declared inputs match the changed files.
+        //
+        // When active, this REPLACES create_engine_for_subgraph because
+        // the entrypoint packages (from file watcher events) may not overlap
+        // with the affected tasks (e.g. a $TURBO_ROOT$ input in another
+        // package changes but the watcher only reports the package containing
+        // the file).
+        let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
+            if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                    &engine,
+                    pkg_dep_graph,
+                    &self.repo_root,
+                    changed_files,
+                    &root_turbo_json.global_deps,
+                );
+                tracing::info!(
+                    total_tasks = engine.task_ids().count(),
+                    affected_tasks = filter.directly_affected.len(),
+                    changed_files = filter.existing_files.len(),
+                    "watch task-level input filtering complete"
+                );
+                engine = engine.retain_watch_affected_tasks(&filter.directly_affected);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
-        if let Some(entrypoint_packages) = &self.entrypoint_packages {
-            engine = engine.create_engine_for_subgraph(entrypoint_packages);
-        }
-
-        if !self.opts.run_opts.parallel && self.should_validate_engine {
-            engine
-                .validate(
-                    pkg_dep_graph,
-                    self.opts.run_opts.concurrency,
-                    self.opts.run_opts.ui_mode,
-                    self.will_execute_tasks(),
-                )
-                .map_err(Error::EngineValidation)?;
+        if !watch_task_filtered {
+            if let Some(entrypoint_packages) = &self.entrypoint_packages {
+                engine = engine.create_engine_for_subgraph(entrypoint_packages);
+            }
         }
 
         Ok(engine)
+    }
+}
+
+/// Whether experimental Cargo package support is enabled, via
+/// `futureFlags.experimentalCargoWorkspaces` in the root turbo.json. The
+/// future flag is the only switch: it is repo-level configuration, so every
+/// invoker sees the same package graph.
+pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    future_flags.experimental_cargo_workspaces
+}
+
+pub(crate) fn load_root_package_json(
+    repo_root: &AbsoluteSystemPath,
+    cargo_enabled: bool,
+) -> Result<Option<PackageJson>, package_json::Error> {
+    match PackageJson::load(&repo_root.join_component("package.json")) {
+        Ok(package_json) => Ok(Some(package_json)),
+        Err(package_json::Error::Io(io))
+            if io.kind() == ErrorKind::NotFound
+                && cargo_enabled
+                && repo_root
+                    .join_component(turborepo_repository::cargo::CARGO_TOML)
+                    .exists() =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn origins_match(url1: &str, url2: &str) -> bool {
+    let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
+        return false;
+    };
+
+    if has_userinfo(&url1) || has_userinfo(&url2) {
+        return false;
+    }
+
+    url1.origin() == url2.origin()
+}
+
+fn has_userinfo(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
+}
+
+#[cfg(test)]
+mod task_io_context_tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_hash::TaskHashable;
+    use turborepo_repository::{
+        cargo::CargoToolchain,
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackages, Toolchain, ToolchainId, ToolchainRegistry,
+        },
+    };
+    use turborepo_types::EnvMode;
+
+    use super::project_task_io_environment;
+
+    struct Stub {
+        id: ToolchainId,
+        environment: Vec<&'static str>,
+    }
+
+    impl Toolchain for Stub {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async { Ok(DiscoveredPackages::default()) })
+        }
+
+        fn task_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<
+            Option<turborepo_repository::toolchain::TaskCommand>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
+
+        fn task_display_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> Option<String> {
+            None
+        }
+
+        fn defines_task(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> bool {
+            false
+        }
+
+        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
+            turborepo_repository::toolchain::WatchSpec::default()
+        }
+
+        fn prune_plan(
+            &self,
+            _kept_packages: &[String],
+        ) -> Result<
+            Option<turborepo_repository::toolchain::PrunePlan>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
+
+        fn task_io_env_vars(&self) -> &[&str] {
+            &self.environment
+        }
+    }
+
+    #[test]
+    fn projection_is_isolated_per_toolchain() {
+        let alpha = ToolchainId::new("alpha");
+        let beta = ToolchainId::new("beta");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
+        toolchains
+            .register(Arc::new(Stub {
+                id: beta.clone(),
+                environment: vec!["BETA_KEY"],
+            }))
+            .unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), "alpha".to_string()),
+            ("BETA_KEY".to_string(), "beta".to_string()),
+            ("UNDECLARED_SECRET".to_string(), "secret".to_string()),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        assert_eq!(projected.len(), 2);
+        let alpha_environment = projected.get(&alpha).unwrap();
+        assert_eq!(alpha_environment.get("ALPHA_TARGET"), Some("alpha"));
+        assert_eq!(alpha_environment.get("BETA_KEY"), None);
+        assert_eq!(alpha_environment.get("UNDECLARED_SECRET"), None);
+        let beta_environment = projected.get(&beta).unwrap();
+        assert_eq!(beta_environment.get("BETA_KEY"), Some("beta"));
+        assert_eq!(beta_environment.get("ALPHA_TARGET"), None);
+        assert_eq!(beta_environment.get("UNDECLARED_SECRET"), None);
+    }
+
+    #[test]
+    fn cargo_projection_keeps_only_rustup_selection_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(CargoToolchain::new(root)).unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
+            ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
+            (
+                "RUSTUP_DIST_SERVER".to_string(),
+                "https://example.invalid".to_string(),
+            ),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
+        assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
+        assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
+    }
+
+    fn projected_task_hash(layout: &str, secret: &str) -> String {
+        let alpha = ToolchainId::new("alpha");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), layout.to_string()),
+            ("UNDECLARED_SECRET".to_string(), secret.to_string()),
+        ]));
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let layout = projected
+            .get(&alpha)
+            .and_then(|environment| environment.get("ALPHA_TARGET"))
+            .unwrap();
+        let declared = vec!["ALPHA_*".to_string()];
+
+        TaskHashable {
+            global_hash: "global",
+            task_dependency_hashes: Vec::new(),
+            hash_of_files: "files",
+            external_deps_hash: None,
+            package_dir: None,
+            task: "build",
+            outputs: Default::default(),
+            pass_through_args: &[],
+            env: &declared,
+            resolved_env_vars: vec![format!("ALPHA_TARGET={layout}")],
+            pass_through_env: &[],
+            env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
+        }
+        .calculate_task_hash()
+        .unwrap()
+    }
+
+    #[test]
+    fn projected_declared_environment_changes_task_hash_only() {
+        let baseline = projected_task_hash("one", "secret-one");
+        assert_ne!(baseline, projected_task_hash("two", "secret-one"));
+        assert_eq!(baseline, projected_task_hash("one", "secret-two"));
+    }
+}
+
+#[cfg(test)]
+mod package_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn repo_index_prefix_is_git_root_relative_for_nested_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let repo_root = git_root.join_component("downloaded-app");
+
+        assert_eq!(
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &git_root).unwrap(),
+            RelativeUnixPathBuf::new("downloaded-app").unwrap()
+        );
+    }
+
+    #[test]
+    fn repo_index_prefix_is_empty_when_git_root_matches_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        assert_eq!(
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &repo_root).unwrap(),
+            RelativeUnixPathBuf::new("").unwrap()
+        );
+    }
+}
+
+#[cfg(test)]
+mod origins_match_tests {
+    use super::*;
+
+    #[test]
+    fn same_host_different_paths() {
+        assert!(origins_match(
+            "https://vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_hosts() {
+        assert!(!origins_match(
+            "https://third-party.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert!(origins_match(
+            "https://Vercel.COM/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn with_port() {
+        assert!(origins_match(
+            "https://vercel.com:443/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_ports_do_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com:4317/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_schemes_do_not_match() {
+        assert!(!origins_match(
+            "http://vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_subdomains_do_not_match() {
+        assert!(!origins_match(
+            "https://otel.vercel.com/v1",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn userinfo_host_bypass_does_not_match() {
+        assert!(!origins_match(
+            "https://api.vercel.com:443@attacker.example/otel",
+            "https://api.vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn same_origin_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://token@vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn api_url_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com/otel",
+            "https://token@vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn missing_scheme_returns_false() {
+        assert!(!origins_match("vercel.com/otel", "https://vercel.com/api"));
+    }
+
+    #[test]
+    fn empty_url_returns_false() {
+        assert!(!origins_match("", "https://vercel.com/api"));
     }
 }

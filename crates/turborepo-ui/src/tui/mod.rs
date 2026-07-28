@@ -4,7 +4,9 @@ mod debouncer;
 pub mod event;
 mod handle;
 mod input;
+mod log_panel;
 mod pane;
+pub mod panic_handler;
 mod popup;
 mod preferences;
 pub mod scroll;
@@ -15,7 +17,7 @@ mod table;
 mod task;
 mod term_output;
 
-pub use app::{run_app, terminal_big_enough};
+pub use app::{run_app, spawn_run_app, terminal_big_enough};
 use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
@@ -25,6 +27,8 @@ pub use pane::TerminalPane;
 use size::SizeInfo;
 pub use table::TaskTable;
 pub use term_output::TerminalOutput;
+
+const PANE_LEFT_PADDING_WITH_SIDEBAR: u16 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -40,4 +44,10 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Unable to persist preferences.")]
     Preferences(#[from] preferences::Error),
+    #[error(transparent)]
+    Ghostty(#[from] turborepo_ghostty::Error),
+    #[error("Failed to spawn TUI thread: {0}")]
+    ThreadSpawn(std::io::Error),
+    #[error("TUI thread exited unexpectedly")]
+    ThreadJoin,
 }

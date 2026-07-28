@@ -14,6 +14,11 @@ export interface TransformerOptions {
   force: boolean;
   dryRun: boolean;
   print: boolean;
+  /**
+   * The version of turbo being migrated to.
+   * Used by transforms that need version-specific behavior.
+   */
+  toVersion?: string;
 }
 
 export interface TransformerArgs {

@@ -1,0 +1,18 @@
+---
+source: crates/turborepo/tests/final_hash_contract.rs
+expression: contract
+---
+[default]
+my-app#build hash=4ba24816d0d333e9 external= framework= envMode=strict
+
+[strict]
+my-app#build hash=4ba24816d0d333e9 external= framework= envMode=strict
+
+[loose]
+my-app#build hash=960c70feddb78caf external= framework= envMode=loose
+
+[strict-with-global-passthrough]
+my-app#build hash=42f9b6d0c3906619 external= framework= envMode=strict
+
+[loose-with-global-passthrough]
+my-app#build hash=960c70feddb78caf external= framework= envMode=loose

@@ -1,9 +1,11 @@
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::CacheClient;
 use turborepo_auth::Token;
+use turborepo_json_rewrite::set_path;
+use turborepo_types::APIClientOpts;
 
 use super::{write_token, Error};
-use crate::{commands::CommandBase, opts::APIClientOpts, rewrite_json};
+use crate::commands::CommandBase;
 
 #[derive(Default, Debug, PartialEq)]
 struct ManualLoginOptions<'a> {
@@ -41,8 +43,8 @@ pub async fn login_manual(base: &mut CommandBase, force: bool) -> Result<(), Err
     api_client.with_base_url(api_url);
     let token = Token::new(token);
     check_credentials(&api_client, &token, &team_identifier).await?;
-    // update global config with token
-    write_token(base, token)?;
+    // update global config with token (manual login has no OAuth token set)
+    write_token(base, token, None)?;
     // ensure api url & team id/slug are present in turbo.json
     let turbo_json_path = base.root_turbo_json_path()?;
     write_remote(&turbo_json_path, api_client.base_url(), team_identifier)?;
@@ -97,7 +99,7 @@ impl ManualLoginOptions<'_> {
                 // figure out
                 let ask_for_team_id = dialoguer::Select::new()
                     .with_prompt("How do you want to specify your team?")
-                    .items(&["id", "slug"])
+                    .items(["id", "slug"])
                     .default(0)
                     .interact()?
                     == 0;
@@ -151,19 +153,19 @@ fn write_remote(
     let turbo_json_before = root_turbo_json
         .read_existing_to_string()?
         .unwrap_or_else(|| r#"{}"#.to_string());
-    let with_api_url = rewrite_json::set_path(
+    let with_api_url = set_path(
         &turbo_json_before,
         &["remoteCache", "apiUrl"],
-        &serde_json::to_string(api_url).unwrap(),
+        &serde_json::to_string(api_url)?,
     )?;
     let (key, value) = match team_id {
         TeamIdentifier::Id(id) => ("teamId", id),
         TeamIdentifier::Slug(slug) => ("teamSlug", slug),
     };
-    let with_team = rewrite_json::set_path(
+    let with_team = set_path(
         &with_api_url,
         &["remoteCache", key],
-        &serde_json::to_string(&value).unwrap(),
+        &serde_json::to_string(&value)?,
     )?;
     root_turbo_json.ensure_dir()?;
     root_turbo_json.create_with_contents(with_team)?;
@@ -182,12 +184,14 @@ mod test {
     fn test_default_api_url_filtered_out() {
         let api_opts = APIClientOpts {
             api_url: "https://vercel.com/api".into(),
+            api_url_source: None,
             team_id: None,
             team_slug: None,
             token: None,
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };
@@ -206,12 +210,14 @@ mod test {
     fn test_finds_existing_values() {
         let api_opts = APIClientOpts {
             api_url: "https://my-remote-cache.com".into(),
+            api_url_source: None,
             team_slug: Some("custom-cache".into()),
             team_id: None,
             token: Some("token".into()),
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };

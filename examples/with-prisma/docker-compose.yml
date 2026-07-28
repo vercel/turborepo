@@ -5,15 +5,15 @@ volumes:
     driver: local
 
 services:
-  mysql:
+  db:
     platform: linux/amd64
-    image: mysql:8.0.32
-    container_name: turborepo_mysql
+    image: postgres:15 # Use a specific version of Postgres
     restart: always
-    ports:
-      - 3306:3306
     environment:
-      MYSQL_DATABASE: turborepo
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      - POSTGRES_USER=sebi
+      - POSTGRES_PASSWORD=sebi_test_4444
+      - POSTGRES_DB=turborepo
+    ports:
+      - '5432:5432' # Expose the Postgres port to your local machine
     volumes:
-      - database:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data

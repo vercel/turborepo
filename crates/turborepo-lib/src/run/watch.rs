@@ -1,37 +1,57 @@
 use std::{
     collections::HashSet,
+    env,
     ops::DerefMut as _,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
-use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{select, sync::Notify, task::JoinHandle};
-use tracing::{instrument, trace, warn};
+use tokio::{
+    select,
+    sync::{broadcast, Notify},
+    task::JoinHandle,
+};
+use tracing::{debug, instrument, trace};
+use turbopath::AnchoredSystemPathBuf;
+use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
+use turborepo_filewatch::{
+    cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
+    package_watcher::PackageWatcher, FileSystemWatcher,
+};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
+use turborepo_scm::SCM;
+use turborepo_scope::target_selector::InvalidSelectorError;
+use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::sender::UISender;
+use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{
     commands::CommandBase,
     config::resolve_turbo_config_path,
-    daemon::{proto, DaemonConnectorError, DaemonError},
+    engine::{EngineExt, TaskNode},
     get_version, opts,
-    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    DaemonConnector, DaemonPaths,
+    package_changes_watcher::PackageChangesWatcher,
+    run::{self, builder::RunBuilder, Run},
 };
 
 #[derive(Debug)]
 enum ChangedPackages {
     All,
-    Some(HashSet<PackageName>),
+    Some {
+        packages: HashSet<PackageName>,
+        changed_files: HashSet<AnchoredSystemPathBuf>,
+    },
 }
 
 impl Default for ChangedPackages {
     fn default() -> Self {
-        ChangedPackages::Some(HashSet::new())
+        ChangedPackages::Some {
+            packages: HashSet::new(),
+            changed_files: HashSet::new(),
+        }
     }
 }
 
@@ -39,22 +59,104 @@ impl ChangedPackages {
     pub fn is_empty(&self) -> bool {
         match self {
             ChangedPackages::All => false,
-            ChangedPackages::Some(pkgs) => pkgs.is_empty(),
+            ChangedPackages::Some { packages, .. } => packages.is_empty(),
         }
+    }
+
+    /// Filter a `Some` set down to only packages in the watched set.
+    /// `All` is left unchanged because it triggers a full rebuild that
+    /// recomputes the watched set from scratch.
+    fn filter_to_watched(&mut self, watched_packages: &HashSet<PackageName>) {
+        if let ChangedPackages::Some { packages, .. } = self {
+            packages.retain(|pkg| watched_packages.contains(pkg));
+        }
+    }
+}
+
+/// In-process file watching infrastructure that replaces the daemon.
+/// All components are standalone structs from `turborepo-filewatch`
+/// and `turborepo-lib` — no gRPC or IPC involved.
+struct FileWatching {
+    // Kept alive so the OS-level watcher keeps running.
+    _watcher: Arc<FileSystemWatcher>,
+    glob_watcher: Arc<GlobWatcher>,
+    // Kept alive so its background tasks continue providing package
+    // discovery data to the HashWatcher.
+    _package_watcher: Arc<PackageWatcher>,
+    // Kept alive to maintain the watcher background task.
+    _package_changes_watcher: PackageChangesWatcher,
+    // Used by startup-timeout diagnostics to report the slowest-to-hash files.
+    hash_watcher: Arc<HashWatcher>,
+}
+
+/// Adapts `GlobWatcher` to the `OutputWatcher` trait so it can be passed
+/// to `RunCache`/`TaskCache` for output change tracking.
+struct InProcessOutputWatcher {
+    glob_watcher: Arc<GlobWatcher>,
+}
+
+impl OutputWatcher for InProcessOutputWatcher {
+    fn get_changed_outputs(
+        &self,
+        hash: String,
+        output_globs: Vec<String>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>> + Send>,
+    > {
+        let glob_watcher = self.glob_watcher.clone();
+        let candidates: HashSet<String> = output_globs.into_iter().collect();
+        Box::pin(async move {
+            glob_watcher
+                .get_changed_globs(hash, candidates, Duration::from_millis(100))
+                .await
+                .map_err(|e| OutputWatcherError(Box::new(e)))
+        })
+    }
+
+    fn notify_outputs_written(
+        &self,
+        hash: String,
+        output_globs: Vec<String>,
+        output_exclusion_globs: Vec<String>,
+        _time_saved: u64,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), OutputWatcherError>> + Send>>
+    {
+        let glob_watcher = self.glob_watcher.clone();
+        Box::pin(async move {
+            let glob_set = turborepo_filewatch::globwatcher::GlobSet::from_raw(
+                output_globs,
+                output_exclusion_globs,
+            )
+            .map_err(|e| OutputWatcherError(Box::new(e)))?;
+            glob_watcher
+                .watch_globs(hash, glob_set, Duration::from_millis(100))
+                .await
+                .map_err(|e| OutputWatcherError(Box::new(e)))
+        })
     }
 }
 
 pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
-    persistent_tasks_handle: Option<RunHandle>,
-    connector: DaemonConnector,
+    active_runs: Vec<RunHandle>,
+    // Stoppers from completed runs whose ProcessManagers may still track
+    // background persistent processes. Used by stop_impacted_tasks to kill
+    // interruptible persistent tasks on file changes. Cleared on All rebuild.
+    background_stoppers: Vec<run::RunStopper>,
+    _watching: FileWatching,
+    output_watcher: Arc<dyn OutputWatcher>,
+    // Subscribed eagerly (before building the Run) so we don't miss the
+    // initial Rediscover event from the PackageChangesWatcher.
+    package_change_events: broadcast::Receiver<PackageChangeEvent>,
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
+    shutdown_guard: Option<SubscriberGuard>,
     ui_sender: Option<UISender>,
-    ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+    ui_handle: Option<JoinHandle<()>>,
     experimental_write_cache: bool,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 struct RunHandle {
@@ -62,15 +164,43 @@ struct RunHandle {
     run_task: JoinHandle<Result<i32, run::Error>>,
 }
 
+/// Format the slowest-to-hash files reported by the [`HashWatcher`] into a
+/// leading-newline hint for a stalled-startup message, with one file per line
+/// since the paths are long and hard to scan inline, e.g.:
+///
+/// ```text
+///  Slowest files to hash:
+///   foo.tmp (12.3s, still hashing)
+///   bar (4.1s)
+/// ```
+///
+/// Returns an empty string when nothing notable was recorded.
+fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
+    use std::fmt::Write as _;
+
+    // Cap how many we list so the message stays readable.
+    const MAX_LISTED: usize = 3;
+    if slowest.is_empty() {
+        return String::new();
+    }
+    let mut hint = String::from(" Slowest files to hash:");
+    for f in slowest.iter().take(MAX_LISTED) {
+        let secs = f.duration.as_secs_f64();
+        if f.in_flight {
+            let _ = write!(hint, "\n  {} ({secs:.1}s, still hashing)", f.path);
+        } else {
+            let _ = write!(hint, "\n  {} ({secs:.1}s)", f.path);
+        }
+    }
+    hint
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("Failed to connect to daemon.")]
-    #[diagnostic(transparent)]
-    Daemon(#[from] DaemonError),
-    #[error("Failed to connect to daemon.")]
-    DaemonConnector(#[from] DaemonConnectorError),
-    #[error("Failed to decode message from daemon.")]
-    Decode(#[from] prost::DecodeError),
+    #[error("File watcher error: {0}")]
+    FileWatcher(#[from] turborepo_filewatch::WatchError),
+    #[error("Package watcher error: {0}")]
+    PackageWatcher(String),
     #[error("Could not get current executable.")]
     CurrentExe(std::io::Error),
     #[error("Could not start `turbo`.")]
@@ -91,18 +221,22 @@ pub enum Error {
         #[label]
         span: SourceSpan,
     },
-    #[error("Daemon connection closed.")]
-    ConnectionClosed,
+    #[error(
+        "Timed out after {0}s waiting for the file watcher to become ready. This usually means a \
+         large file is slowing the initial hash.{1}\nRemove or .gitignore it, or raise the limit \
+         with TURBO_WATCH_STARTUP_TIMEOUT (seconds)."
+    )]
+    FileWatchingTimeout(u64, String),
     #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
     #[error("Watch interrupted due to signal.")]
     SignalInterrupt,
-    #[error("Package change error.")]
-    PackageChange(#[from] tonic::Status),
+    #[error("Package change channel closed.")]
+    PackageChangeClosed,
+    #[error("Package change channel lagged.")]
+    PackageChangeLagged,
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
-    #[error("Could not connect to UI thread: {0}")]
-    UISend(String),
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
@@ -114,28 +248,15 @@ impl WatchClient {
         base: CommandBase,
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
+        query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+        subscriber: &crate::tracing::TurboSubscriber,
+        verbosity: u8,
     ) -> Result<Self, Error> {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
-        if matches!(base.opts.run_opts.daemon, Some(false)) {
-            warn!("daemon is required for watch, ignoring request to disable daemon");
-        }
-
-        let new_base = base.clone();
-        let run = Arc::new(
-            RunBuilder::new(new_base)?
-                .build(&handler, telemetry.clone())
-                .await?,
-        );
-
-        let watched_packages = run.get_relevant_packages();
-
-        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
-
-        // Determine if we're using a custom turbo.json path
         let custom_turbo_json_path =
             if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
                 tracing::info!(
@@ -148,158 +269,500 @@ impl WatchClient {
                 None
             };
 
-        let connector = DaemonConnector {
-            can_start_server: true,
-            can_kill_server: true,
-            paths: DaemonPaths::from_repo_root(&base.repo_root),
+        // Build the in-process file watching stack (replaces the daemon).
+        let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(
+            &base.repo_root,
+        )?);
+        let source = watcher.source();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            source.clone(),
+        );
+        let glob_watcher = Arc::new(GlobWatcher::new(
+            base.repo_root.clone(),
+            cookie_writer.clone(),
+            source.clone(),
+        ));
+        let package_watcher = Arc::new(
+            PackageWatcher::new(
+                base.repo_root.clone(),
+                source.clone(),
+                cookie_writer,
+                base.opts().repo_opts.allow_no_package_manager,
+            )
+            .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
+        );
+        let scm = SCM::new(&base.repo_root);
+        let hash_watcher = Arc::new(HashWatcher::new(
+            base.repo_root.clone(),
+            package_watcher.watch_discovery(),
+            source,
+            scm,
+        ));
+        // The watcher builds its own package graph; register the same
+        // toolchains a run would so it watches the same package set.
+        let mut extra_toolchains: Vec<
+            std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
+        > = Vec::new();
+        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
+            extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
+                base.repo_root.clone(),
+            ));
+        }
+        let package_changes_watcher = PackageChangesWatcher::new(
+            base.repo_root.clone(),
+            watcher.source(),
+            hash_watcher.clone(),
             custom_turbo_json_path,
+            base.opts().run_opts.single_package,
+            base.opts().repo_opts.allow_no_package_manager,
+            extra_toolchains,
+        );
+
+        // Subscribe before building the Run so we don't miss the initial
+        // Rediscover event that PackageChangesWatcher emits on startup.
+        let package_change_events = package_changes_watcher.package_changes().await;
+
+        let watching = FileWatching {
+            _watcher: watcher,
+            glob_watcher: glob_watcher.clone(),
+            _package_watcher: package_watcher,
+            _package_changes_watcher: package_changes_watcher,
+            hash_watcher,
         };
+
+        let output_watcher: Arc<dyn OutputWatcher> =
+            Arc::new(InProcessOutputWatcher { glob_watcher });
+
+        let new_base = base.clone();
+        let mut run_builder =
+            RunBuilder::new(new_base, None)?.with_output_watcher(output_watcher.clone());
+        if let Some(ref qs) = query_server {
+            run_builder = run_builder.with_query_server(qs.clone());
+        }
+        let sinks = LogSinks::new(base.color_config);
+        sinks.init_logger();
+
+        if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Shim),
+                message,
+            )
+            .emit();
+            unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
+        }
+
+        if verbosity > 0 {
+            if let Ok(path) = subscriber.redirect_stderr_to_file(base.repo_root.as_std_path()) {
+                tracing::debug!("Verbose tracing redirected to {path}");
+            }
+        }
+
+        let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
+        let run = Arc::new(run);
+
+        let watched_packages = run.get_relevant_packages();
+
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
+        sinks.disable_for_tui();
+
+        let (ui_sender, ui_handle) = run.start_ui(sinks.terminal.clone())?.unzip();
+
+        if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
+            sinks.tui.connect(tui_sender.clone());
+            if let Some(path) = subscriber.stderr_redirect_path() {
+                turborepo_log::info(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Tracing),
+                    format!("Verbose logs redirected to {path}"),
+                )
+                .emit();
+            } else {
+                subscriber.suppress_stderr();
+            }
+        } else {
+            sinks.enable_for_stream();
+            if subscriber.stderr_redirect_path().is_some() {
+                subscriber.restore_stderr();
+            }
+        }
 
         Ok(Self {
             base,
             run,
             watched_packages,
-            connector,
+            _watching: watching,
+            output_watcher,
+            package_change_events,
             handler,
+            shutdown_guard: None,
             telemetry,
             experimental_write_cache,
-            persistent_tasks_handle: None,
+            background_stoppers: Vec::new(),
+            active_runs: Vec::new(),
             ui_sender,
             ui_handle,
+            query_server,
         })
     }
 
     pub async fn start(&mut self) -> Result<(), Error> {
-        let connector = self.connector.clone();
-        let mut client = connector.connect().await?;
+        let mut events = std::mem::replace(
+            &mut self.package_change_events,
+            // Replace with a dummy receiver. The real one is consumed above.
+            broadcast::channel(1).1,
+        );
 
-        let mut events = client.package_changes().await?;
+        // Wait for the initial Rediscover event, which signals that the file
+        // watcher is ready. The PackageChangesWatcher emits this on startup.
+        // The initial scan (recursive watch setup + package graph build +
+        // hashing) can be slow when a large file or tree lives in the repo, so
+        // poll with a short per-attempt timeout and keep retrying up to a
+        // generous cap rather than failing on the first stall. The channel
+        // stays alive between attempts, so no events are lost.
+        const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
+        // Shared with the package-changes subscriber's inner wait so the inner
+        // timeout is never shorter than this outer cap.
+        let startup_cap =
+            Duration::from_secs(crate::package_changes_watcher::startup_timeout_secs());
+        let started = std::time::Instant::now();
+        let mut warned = false;
+        let initial_event = loop {
+            match tokio::time::timeout(STARTUP_ATTEMPT, events.recv()).await {
+                Ok(Ok(event)) => break event,
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
+                    return Err(Error::PackageChangeClosed)
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                    return Err(Error::PackageChangeLagged)
+                }
+                Err(_) => {
+                    if started.elapsed() >= startup_cap {
+                        return Err(Error::FileWatchingTimeout(
+                            startup_cap.as_secs(),
+                            slowest_files_hint(&self._watching.hash_watcher.slowest_files()),
+                        ));
+                    }
+                    if !warned {
+                        warned = true;
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                            format!(
+                                "File watcher still initializing after {}s, likely a large file \
+                                 is slowing the initial hash.{}\nRetrying...",
+                                STARTUP_ATTEMPT.as_secs(),
+                                slowest_files_hint(&self._watching.hash_watcher.slowest_files())
+                            ),
+                        )
+                        .emit();
+                    }
+                }
+            }
+        };
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
-        // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
-        // If we used a std::sync::Mutex, we could deadlock by spinning the lock
-        // and not yielding back to the tokio runtime.
-        let changed_packages = Mutex::new(ChangedPackages::default());
+        let pending_changes = Mutex::new(ChangedPackages::default());
         let notify_run = Arc::new(Notify::new());
         let notify_event = notify_run.clone();
 
-        let event_fut = async {
-            while let Some(event) = events.next().await {
-                let event = event?;
-                Self::handle_change_event(&changed_packages, event.event.unwrap())?;
-                notify_event.notify_one();
-            }
+        Self::handle_change_event(&pending_changes, initial_event);
+        notify_event.notify_one();
 
-            Err(Error::ConnectionClosed)
+        let event_fut = async {
+            loop {
+                match events.recv().await {
+                    Ok(ref event) => {
+                        debug!(?event, "received package change event");
+                        Self::handle_change_event(&pending_changes, event.clone());
+                        notify_event.notify_one();
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        return Err(Error::PackageChangeClosed);
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        Self::handle_change_event(&pending_changes, PackageChangeEvent::Rediscover);
+                        notify_event.notify_one();
+                    }
+                }
+            }
         };
 
         let run_fut = async {
-            let mut run_handle: Option<RunHandle> = None;
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
-                    let mut changed_packages_guard =
-                        changed_packages.lock().expect("poisoned lock");
-                    (!changed_packages_guard.is_empty())
-                        .then(|| std::mem::take(changed_packages_guard.deref_mut()))
+                    let mut guard = pending_changes
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
                 };
 
-                if let Some(changed_packages) = some_changed_packages {
-                    // Clean up currently running tasks
-                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
-                        // Shut down the tasks for the run
-                        stopper.stop().await;
-                        // Run should exit shortly after we stop all child tasks, wait for it to
-                        // finish to ensure all messages are flushed.
-                        let _ = run_task.await;
+                if let Some(mut changed_packages) = some_changed_packages {
+                    // Stop impacted tasks and wait for prior runs to finish
+                    // before starting new ones. This prevents concurrent
+                    // builds of the same package and stale cache-hit signals.
+                    debug!(?changed_packages, "processing changed packages");
+                    match changed_packages {
+                        ChangedPackages::Some {
+                            ref packages,
+                            ref changed_files,
+                        } => {
+                            let impacted = self.stop_impacted_tasks(packages, changed_files).await;
+                            if let ChangedPackages::Some {
+                                ref mut packages, ..
+                            } = changed_packages
+                            {
+                                *packages = impacted;
+                            }
+                        }
+                        ChangedPackages::All => {
+                            for stopper in self.background_stoppers.drain(..) {
+                                stopper.stop().await;
+                            }
+                            for handle in self.active_runs.drain(..) {
+                                handle.stopper.stop().await;
+                                let _ = handle.run_task.await;
+                            }
+                        }
                     }
-                    run_handle = Some(self.execute_run(changed_packages).await?);
+
+                    changed_packages.filter_to_watched(&self.watched_packages);
+
+                    let new_run = self.execute_run(changed_packages).await?;
+                    self.active_runs.push(new_run);
+
+                    // Wait for runs to complete before processing more events.
+                    // In watch mode the visitor treats persistent tasks as
+                    // fire-and-forget, so this only blocks on non-persistent
+                    // tasks (builds).
+                    debug!(
+                        active_runs = self.active_runs.len(),
+                        "waiting for runs to complete"
+                    );
+                    for handle in &mut self.active_runs {
+                        let _ = (&mut handle.run_task).await;
+                    }
+                    debug!("all runs completed, ready for next event");
+                    // Save stoppers before retain drops them — their PMs may
+                    // still track background persistent processes.
+                    for handle in &self.active_runs {
+                        if handle.run_task.is_finished() {
+                            self.background_stoppers.push(handle.stopper.clone());
+                        }
+                    }
+                    self.active_runs.retain(|h| !h.run_task.is_finished());
                 }
             }
         };
 
-        select! {
+        let shutdown_guard = select! {
             biased;
-            _ = signal_subscriber.listen() => {
-                tracing::info!("shutting down");
-                Err(Error::SignalInterrupt)
-            }
-            result = event_fut => {
-                result
-            }
-            run_result = run_fut => {
-                run_result
-            }
-        }
+            guard = signal_subscriber.listen() => guard.ok(),
+            result = event_fut => return result,
+            run_result = run_fut => return run_result,
+        };
+        self.shutdown_guard = shutdown_guard;
+        tracing::info!("shutting down");
+        Err(Error::SignalInterrupt)
     }
 
     #[instrument(skip(changed_packages))]
-    fn handle_change_event(
-        changed_packages: &Mutex<ChangedPackages>,
-        event: proto::package_change_event::Event,
-    ) -> Result<(), Error> {
-        // Should we recover here?
+    fn handle_change_event(changed_packages: &Mutex<ChangedPackages>, event: PackageChangeEvent) {
         match event {
-            proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
-                package_name,
-            }) => {
-                let package_name = PackageName::from(package_name);
-
-                match changed_packages.lock().expect("poisoned lock").deref_mut() {
-                    ChangedPackages::All => {
-                        // If we've already changed all packages, ignore
-                    }
-                    ChangedPackages::Some(ref mut pkgs) => {
-                        pkgs.insert(package_name);
-                    }
+            PackageChangeEvent::Package {
+                name,
+                changed_files: files,
+            } => match changed_packages
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .deref_mut()
+            {
+                ChangedPackages::All => {
+                    // Already rediscovering everything, ignore
                 }
+                ChangedPackages::Some {
+                    ref mut packages,
+                    ref mut changed_files,
+                } => {
+                    packages.insert(name);
+                    changed_files.extend(files.iter().cloned());
+                }
+            },
+            PackageChangeEvent::Rediscover => {
+                *changed_packages
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = ChangedPackages::All;
             }
-            proto::package_change_event::Event::RediscoverPackages(_) => {
-                *changed_packages.lock().expect("poisoned lock") = ChangedPackages::All;
-            }
-            proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
-                return Err(DaemonError::Unavailable(message).into());
+        }
+    }
+
+    pub async fn shutdown(&mut self) {
+        let force_shutdown_timeout = Run::force_shutdown_timeout();
+        let graceful_shutdown = self.handler.shutdown_reason() == Some(ShutdownReason::Signal);
+        if graceful_shutdown {
+            Run::emit_shutdown_started_once(
+                self.run.shutdown_started_emitted.as_ref(),
+                force_shutdown_timeout,
+            );
+        }
+
+        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        for stopper in &stoppers {
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
             }
         }
 
-        Ok(())
-    }
+        for handle in self.active_runs.drain(..) {
+            let RunHandle { stopper, run_task } = handle;
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
+            }
+            let _ = run_task.await;
+            stoppers.push(stopper);
+        }
 
-    /// Shut down any resources that run as part of watch.
-    pub async fn shutdown(&mut self) {
+        if stoppers
+            .iter()
+            .any(|stopper| stopper.cache_writes_enabled())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Finishing writing to cache...",
+            )
+            .emit();
+        }
+
+        for stopper in &stoppers {
+            stopper
+                .shutdown_cache(
+                    self.handler.shutdown_reason(),
+                    force_shutdown_timeout,
+                    Some(self.handler.subscribe_signals()),
+                )
+                .await;
+        }
+
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-            // Shut down the tasks for the run
-            stopper.stop().await;
-            // Run should exit shortly after we stop all child tasks, wait for it to finish
-            // to ensure all messages are flushed.
-            let _ = run_task.await;
+        // Render errors are logged by the watchdog inside `start_ui`.
+        if let Some(handle) = self.ui_handle.take() {
+            handle.await.ok();
         }
+        self.shutdown_guard.take();
     }
 
-    /// Executes a run with the given changed packages. Splits the run into two
-    /// parts:
-    /// 1. The persistent tasks that are not allowed to be interrupted
-    /// 2. The non-persistent tasks and the persistent tasks that are allowed to
-    ///    be interrupted
-    ///
-    /// Returns a handle to the task running (2)
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
-        // Should we recover here?
-        trace!("handling run with changed packages: {changed_packages:?}");
-        match changed_packages {
-            ChangedPackages::Some(packages) => {
-                let packages = packages
-                    .into_iter()
-                    .filter(|pkg| {
-                        // If not in the watched packages set, ignore
-                        self.watched_packages.contains(pkg)
+    async fn stop_impacted_tasks(
+        &self,
+        pkgs: &HashSet<PackageName>,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> HashSet<PackageName> {
+        let engine = self.run.engine();
+
+        let (task_ids, impacted_packages) =
+            if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                    engine,
+                    self.run.pkg_dep_graph(),
+                    self.run.repo_root(),
+                    changed_files,
+                    &self.run.root_turbo_json().global_deps,
+                );
+
+                let impacted_packages: HashSet<PackageName> = filter
+                    .execution_tasks
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (
+                    filter.execution_tasks.into_iter().collect::<Vec<_>>(),
+                    impacted_packages,
+                )
+            } else {
+                let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+
+                let task_ids: Vec<_> = impacted_nodes
+                    .iter()
+                    .filter_map(|node| match node {
+                        TaskNode::Task(task_id) => Some(task_id.clone()),
+                        TaskNode::Root => None,
                     })
                     .collect();
 
+                let impacted_packages: HashSet<PackageName> = task_ids
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (task_ids, impacted_packages)
+            };
+
+        debug!(
+            ?pkgs,
+            ?impacted_packages,
+            impacted_tasks = ?task_ids,
+            "identified impacted tasks for changed packages"
+        );
+
+        // Only stop tasks that are allowed to be restarted. Non-interruptible
+        // persistent tasks survive file changes — they are only killed on a
+        // full rebuild (ChangedPackages::All) or shutdown.
+        let stoppable_ids: Vec<_> = task_ids
+            .into_iter()
+            .filter(|tid| {
+                !engine
+                    .task_definition(tid)
+                    .is_some_and(|d| d.persistent && !d.interruptible)
+            })
+            .collect();
+
+        debug!(?stoppable_ids, "stopping interruptible tasks");
+        for handle in &self.active_runs {
+            handle.stopper.stop_tasks(&stoppable_ids).await;
+        }
+        for stopper in &self.background_stoppers {
+            stopper.stop_tasks(&stoppable_ids).await;
+        }
+
+        impacted_packages
+    }
+
+    /// Start executing tasks.
+    ///
+    /// If `changed_packages` is `Some(set)`, only tasks in those packages run.
+    /// If `All`, we rebuild the entire Run struct and re-run everything.
+    ///
+    /// Persistent tasks are handled as fire-and-forget by the visitor in watch
+    /// mode: they run as background processes tracked by the ProcessManager
+    /// while the run itself completes after non-persistent tasks finish.
+    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
+        trace!("handling run with changed packages: {changed_packages:?}");
+        match changed_packages {
+            ChangedPackages::Some {
+                packages,
+                changed_files,
+            } => {
                 let mut opts = self.base.opts().clone();
                 if !self.experimental_write_cache {
                     opts.cache_opts.cache.remote.write = false;
@@ -316,17 +779,28 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let run = RunBuilder::new(new_base)?
+                let mut run_builder = RunBuilder::new(new_base, None)?
+                    .with_output_watcher(self.output_watcher.clone())
                     .with_entrypoint_packages(packages)
-                    .hide_prelude()
-                    .build(&signal_handler, telemetry)
-                    .await?;
+                    .with_changed_files(changed_files);
+                if let Some(ref qs) = self.query_server {
+                    run_builder = run_builder.with_query_server(qs.clone());
+                }
+                let (run, _analytics) = run_builder.build(&signal_handler, telemetry).await?;
+
+                let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
+                if task_names.is_empty() {
+                    tracing::debug!("no executable tasks after filtering, skipping run");
+                    return Ok(RunHandle {
+                        stopper: run.stopper(),
+                        run_task: tokio::spawn(async { Ok(0) }),
+                    });
+                }
 
                 if let Some(sender) = &self.ui_sender {
-                    let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
-                    sender
-                        .restart_tasks(task_names)
-                        .map_err(|err| Error::UISend(format!("some packages changed: {err}")))?;
+                    if let Err(err) = sender.restart_tasks(task_names) {
+                        tracing::warn!("failed to notify UI of restarted tasks: {err}");
+                    }
                 }
 
                 let ui_sender = self.ui_sender.clone();
@@ -349,63 +823,335 @@ impl WatchClient {
                     self.base.color_config,
                 );
 
-                // rebuild run struct
-                self.run = RunBuilder::new(base.clone())?
-                    .hide_prelude()
+                let mut run_builder = RunBuilder::new(base.clone(), None)?
+                    .with_output_watcher(self.output_watcher.clone());
+                if let Some(ref qs) = self.query_server {
+                    run_builder = run_builder.with_query_server(qs.clone());
+                }
+                let (run, _analytics) = run_builder
                     .build(&self.handler, self.telemetry.clone())
-                    .await?
-                    .into();
+                    .await?;
+                self.run = run.into();
 
                 self.watched_packages = self.run.get_relevant_packages();
 
-                // Clean up currently running persistent tasks
-                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-                    // Shut down the tasks for the run
-                    stopper.stop().await;
-                    // Run should exit shortly after we stop all child tasks, wait for it to finish
-                    // to ensure all messages are flushed.
-                    let _ = run_task.await;
-                }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
-                    sender
-                        .update_tasks(task_names)
-                        .map_err(|err| Error::UISend(format!("all packages changed {err}")))?;
+                    if let Err(err) = sender.update_tasks(task_names) {
+                        tracing::warn!("failed to notify UI of updated tasks: {err}");
+                    }
                 }
 
-                if self.run.has_non_interruptible_tasks() {
-                    debug_assert!(
-                        self.persistent_tasks_handle.is_none(),
-                        "persistent handle should be empty before creating a new one"
-                    );
-                    let persistent_run = self.run.create_run_for_non_interruptible_tasks();
-                    let ui_sender = self.ui_sender.clone();
-                    // If we have persistent tasks, we run them on a separate thread
-                    // since persistent tasks don't finish
-                    self.persistent_tasks_handle = Some(RunHandle {
-                        stopper: persistent_run.stopper(),
-                        run_task: tokio::spawn(
-                            async move { persistent_run.run(ui_sender, true).await },
-                        ),
-                    });
-
-                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
-                    let ui_sender = self.ui_sender.clone();
-                    Ok(RunHandle {
-                        stopper: non_persistent_run.stopper(),
-                        run_task: tokio::spawn(async move {
-                            non_persistent_run.run(ui_sender, true).await
-                        }),
-                    })
-                } else {
-                    let ui_sender = self.ui_sender.clone();
-                    let run = self.run.clone();
-                    Ok(RunHandle {
-                        stopper: run.stopper(),
-                        run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
-                    })
-                }
+                let ui_sender = self.ui_sender.clone();
+                let run = self.run.clone();
+                Ok(RunHandle {
+                    stopper: run.stopper(),
+                    run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                })
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{
+        collections::HashSet,
+        sync::{Arc, Mutex},
+    };
+
+    use turbopath::AnchoredSystemPathBuf;
+    use turborepo_daemon::PackageChangeEvent;
+    use turborepo_repository::package_graph::PackageName;
+
+    use super::{ChangedPackages, WatchClient};
+
+    fn make_package_changed(name: &str) -> PackageChangeEvent {
+        PackageChangeEvent::Package {
+            name: PackageName::from(name),
+            changed_files: Arc::new(HashSet::new()),
+        }
+    }
+
+    fn make_package_changed_with_files(name: &str, files: &[&str]) -> PackageChangeEvent {
+        PackageChangeEvent::Package {
+            name: PackageName::from(name),
+            changed_files: Arc::new(
+                files
+                    .iter()
+                    .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+                    .collect(),
+            ),
+        }
+    }
+
+    fn make_rediscover() -> PackageChangeEvent {
+        PackageChangeEvent::Rediscover
+    }
+
+    #[test]
+    fn changed_packages_default_is_empty() {
+        let cp = ChangedPackages::default();
+        assert!(cp.is_empty());
+        assert!(matches!(cp, ChangedPackages::Some { ref packages, .. } if packages.is_empty()));
+    }
+
+    #[test]
+    fn changed_packages_all_is_never_empty() {
+        assert!(!ChangedPackages::All.is_empty());
+    }
+
+    #[test]
+    fn changed_packages_some_with_items_is_not_empty() {
+        let mut packages = HashSet::new();
+        packages.insert(PackageName::from("a"));
+        assert!(!ChangedPackages::Some {
+            packages,
+            changed_files: HashSet::new(),
+        }
+        .is_empty());
+    }
+
+    #[test]
+    fn handle_change_event_package_changed_inserts() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some { packages, .. } => {
+                assert_eq!(packages.len(), 1);
+                assert!(packages.contains(&PackageName::from("web")));
+            }
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_multiple_packages_accumulate() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_package_changed("ui"));
+        WatchClient::handle_change_event(&changed, make_package_changed("utils"));
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some { packages, .. } => {
+                assert_eq!(packages.len(), 3);
+                assert!(packages.contains(&PackageName::from("web")));
+                assert!(packages.contains(&PackageName::from("ui")));
+                assert!(packages.contains(&PackageName::from("utils")));
+            }
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_duplicate_package_deduplicates() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some { packages, .. } => assert_eq!(packages.len(), 1),
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_rediscover_sets_all() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_rediscover());
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn handle_change_event_package_changed_after_all_is_noop() {
+        let changed = Mutex::new(ChangedPackages::All);
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn handle_change_event_rediscover_then_rediscover_stays_all() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_rediscover());
+        WatchClient::handle_change_event(&changed, make_rediscover());
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn handle_change_event_accumulates_changed_files() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(
+            &changed,
+            make_package_changed_with_files("web", &["packages/web/src/index.ts"]),
+        );
+        WatchClient::handle_change_event(
+            &changed,
+            make_package_changed_with_files("ui", &["packages/ui/src/button.tsx"]),
+        );
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some {
+                packages,
+                changed_files,
+            } => {
+                assert_eq!(packages.len(), 2);
+                assert_eq!(changed_files.len(), 2);
+            }
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn filter_to_watched_removes_unwatched_packages() {
+        let watched: HashSet<_> = ["web", "ui"]
+            .iter()
+            .map(|s| PackageName::from(*s))
+            .collect();
+        let mut changed = ChangedPackages::Some {
+            packages: ["web", "api", "ui", "utils"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+            changed_files: HashSet::new(),
+        };
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some { packages, .. } => {
+                assert_eq!(packages.len(), 2);
+                assert!(packages.contains(&PackageName::from("web")));
+                assert!(packages.contains(&PackageName::from("ui")));
+                assert!(!packages.contains(&PackageName::from("api")));
+            }
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn filter_to_watched_leaves_all_unchanged() {
+        let watched: HashSet<_> = ["web"].iter().map(|s| PackageName::from(*s)).collect();
+        let mut changed = ChangedPackages::All;
+
+        changed.filter_to_watched(&watched);
+        assert!(matches!(changed, ChangedPackages::All));
+    }
+
+    #[test]
+    fn filter_to_watched_empty_watched_set_clears_all() {
+        let watched: HashSet<PackageName> = HashSet::new();
+        let mut changed = ChangedPackages::Some {
+            packages: ["web", "ui"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+            changed_files: HashSet::new(),
+        };
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some { packages, .. } => assert!(packages.is_empty()),
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn filter_to_watched_no_overlap() {
+        let watched: HashSet<_> = ["web"].iter().map(|s| PackageName::from(*s)).collect();
+        let mut changed = ChangedPackages::Some {
+            packages: ["api", "utils"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+            changed_files: HashSet::new(),
+        };
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some { packages, .. } => assert!(packages.is_empty()),
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn changed_packages_take_resets_to_default() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+
+        let taken = {
+            let mut guard = changed.lock().unwrap();
+            assert!(!guard.is_empty());
+            std::mem::take(&mut *guard)
+        };
+
+        let guard = changed.lock().unwrap();
+        assert!(guard.is_empty());
+
+        match taken {
+            ChangedPackages::Some { packages, .. } => {
+                assert!(packages.contains(&PackageName::from("web")));
+            }
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn slowest_files_hint_empty_when_nothing_recorded() {
+        assert_eq!(super::slowest_files_hint(&[]), "");
+    }
+
+    #[test]
+    fn slowest_files_hint_lists_files_and_flags_in_flight() {
+        use std::time::Duration;
+
+        use turbopath::RelativeUnixPathBuf;
+        use turborepo_scm::SlowestFile;
+
+        fn path(s: &str) -> RelativeUnixPathBuf {
+            RelativeUnixPathBuf::new(s).unwrap()
+        }
+
+        let files = vec![
+            SlowestFile {
+                path: path("big.tmp"),
+                duration: Duration::from_millis(12300),
+                in_flight: true,
+            },
+            SlowestFile {
+                path: path("bar"),
+                duration: Duration::from_millis(4100),
+                in_flight: false,
+            },
+        ];
+        let hint = super::slowest_files_hint(&files);
+        assert!(hint.contains("big.tmp"), "got: {hint}");
+        assert!(hint.contains("still hashing"), "got: {hint}");
+        assert!(hint.contains("bar"), "got: {hint}");
+        assert!(hint.contains("12.3s"), "got: {hint}");
+        // One file per line: each listed file should be on its own line.
+        assert!(
+            hint.lines()
+                .any(|l| l.contains("big.tmp") && !l.contains("bar")),
+            "files should be on separate lines, got: {hint:?}"
+        );
+        assert!(
+            hint.lines()
+                .any(|l| l.contains("bar") && !l.contains("big.tmp")),
+            "files should be on separate lines, got: {hint:?}"
+        );
     }
 }

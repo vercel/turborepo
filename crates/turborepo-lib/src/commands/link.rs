@@ -16,18 +16,17 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use thiserror::Error;
+use tracing::warn;
 use turborepo_api_client::{CacheClient, Client};
+use turborepo_gitignore::ensure_turbo_is_gitignored;
+use turborepo_json_rewrite::{set_path, unset_path, RewriteError};
+use turborepo_types::SecretString;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{DialoguerTheme, BOLD, GREY};
 use turborepo_vercel_api::{CachingStatus, Team};
 
-use crate::{
-    commands::CommandBase,
-    config,
-    gitignore::ensure_turbo_is_gitignored,
-    rewrite_json::{self, set_path, unset_path},
-};
+use crate::{commands::CommandBase, config};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -63,7 +62,7 @@ pub enum Error {
     #[error("Please re-run `link` after enabling caching.")]
     EnableCaching,
     #[error(transparent)]
-    Rewrite(#[from] rewrite_json::RewriteError),
+    Rewrite(#[from] RewriteError),
 }
 
 #[derive(Clone)]
@@ -76,7 +75,46 @@ pub(crate) const REMOTE_CACHING_INFO: &str =
     "Remote Caching makes your caching multiplayer,\nsharing build outputs and logs between \
      developers and CI/CD systems.\n\nBuild and deploy faster.";
 pub(crate) const REMOTE_CACHING_URL: &str =
-    "https://turborepo.com/docs/core-concepts/remote-caching";
+    "https://turborepo.dev/docs/core-concepts/remote-caching";
+
+fn is_auth_rejection_error(error: &turborepo_api_client::Error) -> bool {
+    match error {
+        turborepo_api_client::Error::InvalidToken { .. }
+        | turborepo_api_client::Error::ForbiddenToken { .. } => true,
+        turborepo_api_client::Error::UnknownStatus { code, .. } => code == "forbidden",
+        turborepo_api_client::Error::ReqwestError(err) => {
+            err.status() == Some(reqwest::StatusCode::FORBIDDEN)
+        }
+        _ => false,
+    }
+}
+
+async fn retry_with_recovered_token<T, F, Fut>(
+    token: &mut SecretString,
+    operation: F,
+) -> turborepo_api_client::Result<T>
+where
+    F: Fn(SecretString) -> Fut,
+    Fut: std::future::Future<Output = turborepo_api_client::Result<T>>,
+{
+    match operation(token.clone()).await {
+        Ok(result) => Ok(result),
+        Err(err) if is_auth_rejection_error(&err) => {
+            match turborepo_auth::recover_token_after_forbidden(token).await {
+                Ok(Some(recovered_token)) => {
+                    *token = recovered_token;
+                    operation(token.clone()).await
+                }
+                Ok(None) => Err(err),
+                Err(recovery_err) => {
+                    warn!("Failed to recover token for `turbo link`: {recovery_err}");
+                    Err(err)
+                }
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -91,7 +129,7 @@ pub(crate) const REMOTE_CACHING_URL: &str =
 pub(crate) async fn verify_caching_enabled<'a>(
     api_client: &(impl Client + CacheClient),
     team_id: &str,
-    token: &str,
+    token: &SecretString,
     selected_team: Option<SelectedTeam<'a>>,
 ) -> Result<(), Error> {
     let team_slug = selected_team.as_ref().and_then(|team| match team {
@@ -153,14 +191,21 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base
-        .opts()
-        .api_client_opts
-        .token
-        .as_deref()
-        .ok_or_else(|| Error::TokenNotFound {
-            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-        })?;
+
+    // Always try to get a valid token with automatic refresh if expired
+    let mut token: SecretString = match turborepo_auth::get_token_with_refresh().await {
+        Ok(Some(refreshed_token)) => refreshed_token,
+        Ok(None) | Err(_) => {
+            // Fall back to the token from config/CLI if refresh logic didn't work
+            base.opts()
+                .api_client_opts
+                .token
+                .clone()
+                .ok_or_else(|| Error::TokenNotFound {
+                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+                })?
+        }
+    };
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",
@@ -173,10 +218,12 @@ pub async fn link(
         return Err(Error::NotLinking);
     }
 
-    let user_response = api_client
-        .get_user(token)
-        .await
-        .map_err(Error::UserNotFound)?;
+    let user_response = retry_with_recovered_token(&mut token, |token| {
+        let api_client = &api_client;
+        async move { api_client.get_user(&token).await }
+    })
+    .await
+    .map_err(Error::UserNotFound)?;
 
     let user_display_name = user_response
         .user
@@ -184,10 +231,12 @@ pub async fn link(
         .as_deref()
         .unwrap_or(user_response.user.username.as_str());
 
-    let teams_response = api_client
-        .get_teams(token)
-        .await
-        .map_err(Error::TeamsRequest)?;
+    let teams_response = retry_with_recovered_token(&mut token, |token| {
+        let api_client = &api_client;
+        async move { api_client.get_teams(&token).await }
+    })
+    .await
+    .map_err(Error::TeamsRequest)?;
 
     let selected_team = if let Some(team_slug) = scope {
         SelectedTeam::Team(
@@ -206,7 +255,7 @@ pub async fn link(
         SelectedTeam::Team(team) => team.id.as_str(),
     };
 
-    verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone())).await?;
+    verify_caching_enabled(&api_client, team_id, &token, Some(selected_team.clone())).await?;
 
     let local_config_path = base.local_config_path();
     let before = local_config_path
@@ -278,8 +327,8 @@ fn should_enable_caching() -> Result<bool, Error> {
 
 #[cfg(test)]
 fn select_team<'a>(_: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a>, Error> {
-    let mut rng = rand::thread_rng();
-    let idx = rng.gen_range(0..(teams.len()));
+    let mut rng = rand::rng();
+    let idx = rng.random_range(0..teams.len());
     Ok(SelectedTeam::Team(&teams[idx]))
 }
 
@@ -376,7 +425,7 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{fs, time::Duration};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
@@ -417,7 +466,14 @@ mod test {
             .unwrap();
 
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let override_global_config_path =
             AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 

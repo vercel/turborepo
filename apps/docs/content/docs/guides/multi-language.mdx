@@ -1,0 +1,222 @@
+---
+title: Multi-language support
+description: Integrate unsupported languages with package scripts and workspace boundaries.
+product: turborepo
+type: guide
+summary: Add unsupported languages such as Go to Turborepo by wrapping projects in package-manager workspaces.
+prerequisites:
+  - /docs/crafting-your-repository/structuring-a-repository
+  - /docs/crafting-your-repository/configuring-tasks
+related:
+  - /docs/guides/tools/rust
+  - /docs/guides/migrating-from-nx
+---
+
+Turborepo uses package-manager workspaces and `package.json` scripts to discover most packages and tasks. A script can invoke any toolchain, so you can integrate a language without native Turborepo support by giving each independently cacheable project a package boundary.
+
+This guide uses Go as an example. Turborepo sees the package scripts, files, outputs, and package-manager dependency relationships. The Go toolchain remains responsible for resolving Go modules and compiling code; Turborepo does not infer the Go package graph.
+
+## Add the project to the workspace
+
+Suppose a Go service lives in `services/api`. Include that directory in your package-manager workspace:
+
+<PackageManagerTabs>
+  <Tab value="pnpm">
+
+```yaml title="./pnpm-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+```
+
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
+
+  </Tab>
+
+  <Tab value="yarn">
+
+```json title="./package.json"
+{
+  "workspaces": ["apps/*", "packages/*", "services/*"]
+}
+```
+
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="Yarn workspace documentation" />
+
+  </Tab>
+
+  <Tab value="npm">
+
+```json title="./package.json"
+{
+  "workspaces": ["apps/*", "packages/*", "services/*"]
+}
+```
+
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/using-npm/workspaces" text="npm workspace documentation" />
+
+  </Tab>
+
+  <Tab value="bun">
+
+```json title="./package.json"
+{
+  "workspaces": ["apps/*", "packages/*", "services/*"]
+}
+```
+
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="Bun workspace documentation" />
+
+  </Tab>
+</PackageManagerTabs>
+
+## Create a package boundary
+
+Add a `package.json` beside the Go module. Keep the actual toolchain commands in this package rather than in the repository root:
+
+```json title="./services/api/package.json"
+{
+  "name": "@repo/go-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "go build -o dist/api ./cmd/api",
+    "test": "go test ./...",
+    "lint": "go vet ./..."
+  }
+}
+```
+
+A minimal service can use a regular Go module:
+
+```text title="./services/api/go.mod"
+module example.com/acme/api
+
+go 1.24
+```
+
+```go title="./services/api/cmd/api/main.go"
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("API ready")
+}
+```
+
+Turborepo does not interpret `go.mod` or Go imports. It hashes files inside `services/api` as package inputs, then runs the declared scripts and lets Go resolve its own module graph.
+
+## Declare outputs
+
+Register the tasks in the root `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {},
+    "lint": {}
+  }
+}
+```
+
+The Go build has a package-specific output, so declare it close to the package instead of applying `dist/**` to every workspace:
+
+```json title="./services/api/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+For `@repo/go-api`, `dist/**` caches `services/api/dist/api`. Go's external build cache is separate and remains Go's responsibility.
+
+Run the service tasks like any other package task:
+
+```bash title="Terminal"
+turbo run build --filter=@repo/go-api
+turbo run test --filter=@repo/go-api
+turbo run lint --filter=@repo/go-api
+```
+
+## Create orchestration dependencies
+
+When another workspace package needs the compiled service artifact before its own build, declare a package-manager dependency. This dependency-free script keeps the example runnable without omitted framework dependencies:
+
+```json title="./apps/web/package.json"
+{
+  "name": "web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('web build')\""
+  }
+}
+```
+
+Add `@repo/go-api` using the local-workspace syntax for your package manager:
+
+<PackageManagerTabs>
+  <Tab value="pnpm">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab value="yarn">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "1.0.0"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab value="npm">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "1.0.0"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab value="bun">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+</PackageManagerTabs>
+
+The Yarn and npm ranges match `@repo/go-api`'s local `1.0.0` version, so both Yarn Classic and modern Yarn, as well as npm, link the workspace package. pnpm and Bun use the workspace protocol.
+
+With `dependsOn: ["^build"]`, `turbo run build --filter=web` builds `@repo/go-api` first. This dependency is orchestration metadata for Turborepo and the package manager; it does not make the Go module importable from JavaScript or teach Turborepo about Go package dependencies.
+
+Use one package boundary per Go project that should be independently filtered, invalidated, or cached. If several Go modules depend on one another, mirror only the ordering relationships Turborepo needs in their `package.json` files while continuing to describe the real source dependency graph with Go modules or a Go workspace.

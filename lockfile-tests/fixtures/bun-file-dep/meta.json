@@ -1,0 +1,10 @@
+{
+  "packageManager": "bun",
+  "packageManagerVersion": "bun@1.2.0",
+  "lockfileName": "bun.lock",
+  "frozenInstallCommand": ["bun", "install", "--frozen-lockfile"],
+  "expectedFailures": ["@api/sdk"],
+  "expectedFailureReasons": {
+    "@api/sdk": "Not a workspace. It's a file: protocol dependency (lib/sdk/) that the test runner discovers because it has a package.json, but turbo prune correctly rejects it since it's not in the workspaces config."
+  }
+}

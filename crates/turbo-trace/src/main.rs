@@ -1,10 +1,10 @@
-mod import_finder;
-mod tracer;
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 
 use camino::Utf8PathBuf;
 use clap::Parser;
 use miette::Report;
-use tracer::Tracer;
+use turbo_trace::Tracer;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
 
 #[derive(Parser, Debug)]

@@ -1,5 +1,14 @@
 {
   "name": "basic",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"]
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "10.5.0"
+    }
+  }
 }

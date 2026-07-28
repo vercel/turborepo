@@ -11,14 +11,24 @@ import {
   generateRemoveMatrix,
   generateReadMatrix,
   generateCleanMatrix,
-  generateConvertLockMatrix,
+  generateConvertLockMatrix
 } from "./test-utils";
 
 jest.mock("execa", () => jest.fn());
 
+type PackageJsonWithDevEngines = PackageJson & {
+  devEngines?: {
+    packageManager?: {
+      name: string;
+      version: string;
+    };
+    [key: string]: unknown;
+  };
+};
+
 describe("managers", () => {
   const { useFixture } = setupTestFixtures({
-    directory: path.join(__dirname, "../"),
+    directory: path.join(__dirname, "../")
   });
 
   describe("detect", () => {
@@ -28,7 +38,7 @@ describe("managers", () => {
         const { root } = useFixture({ fixture: `./${project}/${type}` });
 
         const detectResult = await MANAGERS[manager].detect({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
 
         expect(detectResult).toEqual(result);
@@ -40,11 +50,11 @@ describe("managers", () => {
     it.each(generateCreateMatrix())(
       "creates $manager project from $project $type project (interactive=$interactive, dry=$dry)",
       async ({ project, manager, type, interactive, dry }) => {
-        expect.assertions(2);
-
-        const { root } = useFixture({ fixture: `./${project}/${type}` });
+        const { root, readJson } = useFixture({
+          fixture: `./${project}/${type}`
+        });
         const testProject = await MANAGERS[project].read({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
 
         expect(testProject.packageManager).toEqual(project);
@@ -55,18 +65,26 @@ describe("managers", () => {
           logger: new Logger({ interactive, dry }),
           options: {
             interactive,
-            dry,
-          },
+            dry
+          }
         });
 
         if (dry) {
-          expect(
-            await MANAGERS[project].detect({ workspaceRoot: root })
-          ).toEqual(true);
+          await expect(
+            MANAGERS[project].detect({ workspaceRoot: root })
+          ).resolves.toEqual(true);
         } else {
-          expect(
-            await MANAGERS[manager].detect({ workspaceRoot: root })
-          ).toEqual(true);
+          await expect(
+            MANAGERS[manager].detect({ workspaceRoot: root })
+          ).resolves.toEqual(true);
+          const packageJson = readJson<PackageJsonWithDevEngines>(
+            path.join(root, "package.json")
+          );
+          expect(packageJson?.packageManager).toBeUndefined();
+          expect(packageJson?.devEngines?.packageManager).toEqual({
+            name: manager,
+            version: "1.2.3"
+          });
         }
       }
     );
@@ -81,13 +99,13 @@ describe("managers", () => {
         toManager,
         withNodeModules,
         interactive,
-        dry,
+        dry
       }) => {
         const { root, readJson, readYaml } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
         const project = await MANAGERS[fixtureManager].read({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
         expect(project.packageManager).toEqual(fixtureManager);
 
@@ -101,15 +119,17 @@ describe("managers", () => {
           logger: new Logger({ interactive, dry }),
           options: {
             interactive,
-            dry,
-          },
+            dry
+          }
         });
 
         if (withNodeModules) {
           expect(fs.existsSync(project.paths.nodeModules)).toEqual(dry);
         }
 
-        const packageJson = readJson<PackageJson>(project.paths.packageJson);
+        const packageJson = readJson<PackageJsonWithDevEngines>(
+          project.paths.packageJson
+        );
         if (dry) {
           expect(packageJson?.packageManager).toBeDefined();
           expect(packageJson?.packageManager?.split("@")[0]).toEqual(
@@ -136,6 +156,7 @@ describe("managers", () => {
           }
         } else {
           expect(packageJson?.packageManager).toBeUndefined();
+          expect(packageJson?.devEngines?.packageManager).toBeUndefined();
           if (fixtureType === "monorepo") {
             expect(packageJson?.workspaces).toBeUndefined();
 
@@ -152,6 +173,74 @@ describe("managers", () => {
         }
       }
     );
+
+    it("removes matching declarations and preserves declarations for other managers", async () => {
+      const { root, readJson, write } = useFixture({
+        fixture: "./npm/monorepo"
+      });
+      const packageJsonPath = path.join(root, "package.json");
+      const packageJson = readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      if (!packageJson) {
+        throw new Error("expected package.json fixture");
+      }
+      packageJson.packageManager = "pnpm@9.12.3";
+      packageJson.devEngines = {
+        ...packageJson.devEngines,
+        packageManager: {
+          name: "bun",
+          version: "1.1.0"
+        }
+      };
+      write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+      const project = await MANAGERS.npm.read({ workspaceRoot: root });
+      await MANAGERS.npm.remove({
+        project,
+        to: { name: "pnpm", version: "9.12.3" },
+        logger: new Logger({ interactive: false, dry: false }),
+        options: { interactive: false, dry: false }
+      });
+
+      const updatedPackageJson =
+        readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      expect(updatedPackageJson?.packageManager).toEqual("pnpm@9.12.3");
+      expect(updatedPackageJson?.devEngines?.packageManager).toEqual({
+        name: "bun",
+        version: "1.1.0"
+      });
+    });
+
+    it("removes both matching declaration fields", async () => {
+      const { root, readJson, write } = useFixture({
+        fixture: "./npm/monorepo"
+      });
+      const packageJsonPath = path.join(root, "package.json");
+      const packageJson = readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      if (!packageJson) {
+        throw new Error("expected package.json fixture");
+      }
+      packageJson.devEngines = {
+        ...packageJson.devEngines,
+        packageManager: {
+          name: "npm",
+          version: "10.5.0"
+        }
+      };
+      write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+      const project = await MANAGERS.npm.read({ workspaceRoot: root });
+      await MANAGERS.npm.remove({
+        project,
+        to: { name: "pnpm", version: "9.12.3" },
+        logger: new Logger({ interactive: false, dry: false }),
+        options: { interactive: false, dry: false }
+      });
+
+      const updatedPackageJson =
+        readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      expect(updatedPackageJson?.packageManager).toBeUndefined();
+      expect(updatedPackageJson?.devEngines?.packageManager).toBeUndefined();
+    });
   });
 
   describe("read", () => {
@@ -159,7 +248,7 @@ describe("managers", () => {
       "reads $toManager workspaces from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
       async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
         const { root, directoryName } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
 
         const read = async () =>
@@ -177,7 +266,7 @@ describe("managers", () => {
           return;
         }
         const project = await MANAGERS[toManager].read({
-          workspaceRoot: path.join(root),
+          workspaceRoot: path.join(root)
         });
 
         expect(project.name).toEqual(
@@ -192,13 +281,13 @@ describe("managers", () => {
         );
 
         if (fixtureManager === "pnpm") {
-          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+          new RegExp(`^.*/${directoryName}/pnpm-lock.yaml$`);
         } else if (fixtureManager === "yarn") {
-          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+          new RegExp(`^.*/${directoryName}/yarn.lock$`);
         } else if (fixtureManager === "npm") {
-          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+          new RegExp(`^.*/${directoryName}/package-lock.json$`);
         } else if (fixtureManager === "bun") {
-          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
+          new RegExp(`^.*/${directoryName}/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -208,7 +297,7 @@ describe("managers", () => {
           expect(project.workspaceData.globs).toEqual([]);
         } else {
           expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
-          project.workspaceData.workspaces.forEach((workspace) => {
+          for (const workspace of project.workspaceData.workspaces) {
             const type = ["web", "docs"].includes(workspace.name)
               ? "apps"
               : "packages";
@@ -220,7 +309,7 @@ describe("managers", () => {
             expect(workspace.paths.root).toMatch(
               new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
-          });
+          }
         }
       }
     );
@@ -231,7 +320,7 @@ describe("managers", () => {
       "reads $toManager workspaces using alternate format from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
       async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
         const { root, directoryName, readJson, write } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
 
         // alter the fixtures package.json to use the alternate workspace format
@@ -239,7 +328,7 @@ describe("managers", () => {
         const packageJson = readJson<PackageJson>(packageJsonPath);
         if (packageJson?.workspaces) {
           packageJson.workspaces = {
-            packages: packageJson.workspaces as Array<string>,
+            packages: packageJson.workspaces as Array<string>
           };
           write(packageJsonPath, JSON.stringify(packageJson, null, 2));
         }
@@ -259,7 +348,7 @@ describe("managers", () => {
           return;
         }
         const project = await MANAGERS[toManager].read({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
 
         expect(project.name).toEqual(
@@ -274,13 +363,13 @@ describe("managers", () => {
         );
 
         if (fixtureManager === "pnpm") {
-          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+          new RegExp(`^.*/${directoryName}/pnpm-lock.yaml$`);
         } else if (fixtureManager === "yarn") {
-          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+          new RegExp(`^.*/${directoryName}/yarn.lock$`);
         } else if (fixtureManager === "npm") {
-          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+          new RegExp(`^.*/${directoryName}/package-lock.json$`);
         } else if (fixtureManager === "bun") {
-          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
+          new RegExp(`^.*/${directoryName}/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -290,7 +379,7 @@ describe("managers", () => {
           expect(project.workspaceData.globs).toEqual([]);
         } else {
           expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
-          project.workspaceData.workspaces.forEach((workspace) => {
+          for (const workspace of project.workspaceData.workspaces) {
             const type = ["web", "docs"].includes(workspace.name)
               ? "apps"
               : "packages";
@@ -302,7 +391,7 @@ describe("managers", () => {
             expect(workspace.paths.root).toMatch(
               new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
-          });
+          }
         }
       }
     );
@@ -313,11 +402,11 @@ describe("managers", () => {
       "cleans $fixtureManager $fixtureType project (interactive=$interactive, dry=$dry)",
       async ({ fixtureManager, fixtureType, interactive, dry }) => {
         const { root } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
 
         const project = await MANAGERS[fixtureManager].read({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
 
         expect(project.packageManager).toEqual(fixtureManager);
@@ -327,8 +416,8 @@ describe("managers", () => {
           logger: new Logger({ interactive, dry }),
           options: {
             interactive,
-            dry,
-          },
+            dry
+          }
         });
 
         expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
@@ -341,11 +430,11 @@ describe("managers", () => {
       "converts lockfile for $fixtureManager $fixtureType project to $toManager format (interactive=$interactive, dry=$dry)",
       async ({ fixtureManager, fixtureType, toManager, interactive, dry }) => {
         const { root, exists } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
 
         const project = await MANAGERS[fixtureManager].read({
-          workspaceRoot: root,
+          workspaceRoot: root
         });
 
         expect(project.packageManager).toEqual(fixtureManager);
@@ -356,8 +445,8 @@ describe("managers", () => {
           logger: new Logger(),
           options: {
             interactive,
-            dry,
-          },
+            dry
+          }
         });
 
         if (fixtureManager !== toManager) {

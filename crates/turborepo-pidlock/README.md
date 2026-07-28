@@ -1,24 +1,19 @@
-# pidlock
+# turborepo-pidlock
 
-This is a vendored copy of https://github.com/rockstar/pidlock with some changes that are waiting to be upstreamed.
+## Purpose
 
-A library for working with pidfiles, with a lock-like API.
+PID file lock management for the daemon. Ensures only one daemon instance runs per repository.
 
-## Usage
+## Architecture
 
 ```
-extern crate pidlock;
-
-fn main() {
-    let mut lock = pidlock::Pidlock::new("/path/to/pidfile.pid".into());
-    lock.acquire().unwrap();
-
-    ...
-
-    lock.release().unwrap();
-}
+turborepo-pidlock
+    └── Pidlock
+        ├── acquire() - Create lock file with PID
+        ├── release() - Remove lock file
+        └── get_owner() - Query current lock holder
 ```
 
-## License
+## Notes
 
-pidlock is licensed under the MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+Vendored fork of the `pidlock` crate with Windows support and the ability to query the lock owner. Changes are pending upstream.

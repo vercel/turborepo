@@ -22,20 +22,18 @@ pub enum Error {
     SelfDependency(String),
 }
 
-pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
-    graph: &Graph<N, ()>,
+pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, E>,
     indices: I,
     direction: petgraph::Direction,
 ) -> HashSet<&N> {
     let mut visited = HashSet::new();
 
     let visitor = |event| {
-        if let petgraph::visit::DfsEvent::Discover(n, _) = event {
-            visited.insert(
-                graph
-                    .node_weight(n)
-                    .expect("node index found during dfs doesn't exist"),
-            );
+        if let petgraph::visit::DfsEvent::Discover(n, _) = event
+            && let Some(node) = graph.node_weight(n)
+        {
+            visited.insert(node);
         }
     };
 
@@ -78,9 +76,20 @@ pub fn cycles_and_cut_candidates<N: Clone + Hash + Eq, E: Clone>(
 /// in a cycle no longer being present.
 /// Minimal here means that if the cycle can be broken by only removing n edges,
 /// then only sets containing n edges will be returned.
+///
+/// For large SCCs the powerset enumeration is O(2^E) which becomes infeasible.
+/// When the edge count exceeds `MAX_EDGES_FOR_CUT_ANALYSIS` we skip the
+/// cut-candidate computation and return an empty `cuts` vec so callers still
+/// get the cycle members without hanging.
+const MAX_EDGES_FOR_CUT_ANALYSIS: usize = 15;
+
 fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
     graph: &Graph<N, E>,
 ) -> Vec<HashSet<(N, N)>> {
+    if graph.edge_count() > MAX_EDGES_FOR_CUT_ANALYSIS {
+        return Vec::new();
+    }
+
     let edge_sets = graph.edge_indices().powerset();
     let mut breaking_edge_sets = Vec::new();
 
@@ -101,12 +110,12 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
             breaking_edge_sets.push(
                 edge_set
                     .into_iter()
-                    .map(|edge| {
-                        let (src, dst) = graph.edge_endpoints(edge).unwrap();
-                        (
-                            graph.node_weight(src).unwrap().clone(),
-                            graph.node_weight(dst).unwrap().clone(),
-                        )
+                    .filter_map(|edge| {
+                        let (src, dst) = graph.edge_endpoints(edge)?;
+                        Some((
+                            graph.node_weight(src)?.clone(),
+                            graph.node_weight(dst)?.clone(),
+                        ))
                     })
                     .collect(),
             );
@@ -122,13 +131,22 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
     let cycle_lines = cycles
         .into_iter()
         .map(|Cycle { nodes, cuts }| {
-            let workspaces = nodes.into_iter().map(|id| graph.node_weight(id).unwrap());
-            let cuts = cuts.into_iter().map(format_cut).format("\n\t");
-            format!(
-                "\t{}\n\nThe cycle can be broken by removing any of these sets of \
-                 dependencies:\n\t{cuts}",
-                workspaces.format(", ")
-            )
+            let workspaces = nodes.into_iter().filter_map(|id| graph.node_weight(id));
+            if cuts.is_empty() {
+                format!(
+                    "\t{}\n\nCheck the `dependsOn` configuration for these tasks in turbo.json. \
+                     Cycles can be caused by topological (^) dependencies flowing through a \
+                     package dependency cycle, or by explicit task references that form a loop.",
+                    workspaces.format(", ")
+                )
+            } else {
+                let cuts = cuts.into_iter().map(format_cut).format("\n\t");
+                format!(
+                    "\t{}\n\nThe cycle can be broken by removing any of these sets of \
+                     dependencies:\n\t{cuts}",
+                    workspaces.format(", ")
+                )
+            }
         })
         .join("\n");
 
@@ -137,10 +155,9 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
     }
 
     for edge in graph.edge_references() {
-        if edge.source() == edge.target() {
-            let node = graph
-                .node_weight(edge.source())
-                .expect("edge pointed to missing node");
+        if edge.source() == edge.target()
+            && let Some(node) = graph.node_weight(edge.source())
+        {
             return Err(Error::SelfDependency(node.to_string()));
         }
     }
@@ -155,7 +172,7 @@ fn format_cut<N: Display>(edges: impl IntoIterator<Item = (N, N)>) -> String {
         .sorted()
         .format(", ");
 
-    format!("{{ {edges} }}")
+    edges.to_string()
 }
 
 struct CycleDetector {
@@ -249,7 +266,7 @@ mod test {
         	d, c, b, a
 
         The cycle can be broken by removing any of these sets of dependencies:
-        	{ b -> c }
+        	b -> c
         "###);
     }
 
@@ -270,7 +287,7 @@ mod test {
         let mut edges_that_break = HashSet::new();
         for brk in breaks {
             assert_eq!(brk.len(), 1);
-            edges_that_break.extend(brk.into_iter());
+            edges_that_break.extend(brk);
         }
         assert_eq!(
             edges_that_break,

@@ -2,11 +2,19 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build:embed": {
+      "outputs": ["src/templates/embedded.ts"],
+      "inputs": ["src/templates/simple-ts/**", "src/templates/simple-js/**"]
+    },
+    "check-types": {
+      "dependsOn": ["^build", "build:embed"]
+    },
     "test": {
       "dependsOn": ["build"]
     },
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "build:embed"],
+      "outputs": ["dist/**"]
     }
   }
 }

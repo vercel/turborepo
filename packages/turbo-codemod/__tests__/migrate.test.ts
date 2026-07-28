@@ -4,27 +4,50 @@ import * as turboWorkspaces from "@turbo/workspaces";
 import { setupTestFixtures, spyExit } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import { migrate } from "../src/commands/migrate";
-import * as checkGitStatus from "../src/utils/checkGitStatus";
-import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
-import * as getLatestVersion from "../src/commands/migrate/steps/getLatestVersion";
-import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
+import * as checkGitStatus from "../src/utils/check-git-status";
+import * as getCurrentVersion from "../src/commands/migrate/steps/get-current-version";
+import * as getLatestVersion from "../src/commands/migrate/steps/get-latest-version";
+import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/get-turbo-upgrade-command";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
+
+function expectedPackageJsonWithPackageManager({
+  name,
+  turboVersion
+}: {
+  name: string;
+  turboVersion: string;
+}) {
+  return {
+    dependencies: {},
+    devDependencies: {
+      turbo: turboVersion
+    },
+    devEngines: {
+      packageManager: {
+        name: "pnpm",
+        version: "1.2.3"
+      }
+    },
+    name,
+    version: "1.0.0"
+  };
+}
 
 describe("migrate", () => {
   const mockExit = spyExit();
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "migrate",
+    test: "migrate"
   });
 
   it("migrates from 1.0.0 to 1.7.0", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -50,13 +73,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -64,32 +89,29 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0",
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         lint: {},
         test: {
-          outputs: ["dist/**", "build/**"],
-        },
-      },
+          outputs: ["dist/**", "build/**"]
+        }
+      }
     });
 
     // verify mocks were called
@@ -111,7 +133,7 @@ describe("migrate", () => {
 
   it("migrates from 1.0.0 to 1.2.0 (dry run)", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -137,13 +159,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -154,7 +178,7 @@ describe("migrate", () => {
       force: false,
       dryRun: true,
       print: false,
-      install: true,
+      install: true
     });
 
     // make sure nothing changed
@@ -180,7 +204,7 @@ describe("migrate", () => {
 
   it("next version can be passed as an option", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -206,13 +230,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -221,32 +247,29 @@ describe("migrate", () => {
       dryRun: false,
       print: false,
       install: false,
-      to: "1.7.0",
+      to: "1.7.0"
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0",
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         test: {
-          outputs: ["dist/**", "build/**"],
+          outputs: ["dist/**", "build/**"]
         },
-        lint: {},
-      },
+        lint: {}
+      }
     });
 
     // verify mocks were called
@@ -268,7 +291,7 @@ describe("migrate", () => {
 
   it("current version can be passed as an option", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -291,13 +314,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -306,32 +331,29 @@ describe("migrate", () => {
       dryRun: false,
       print: false,
       install: false,
-      from: "1.0.0",
+      from: "1.0.0"
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0",
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         lint: {},
         test: {
-          outputs: ["dist/**", "build/**"],
-        },
-      },
+          outputs: ["dist/**", "build/**"]
+        }
+      }
     });
 
     // verify mocks were called
@@ -351,7 +373,7 @@ describe("migrate", () => {
 
   it("exits if the current version is the same as the new version", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -371,7 +393,7 @@ describe("migrate", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -379,7 +401,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(0);
@@ -398,7 +420,7 @@ describe("migrate", () => {
 
   it("continues when migration doesn't require codemods", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "npm";
@@ -409,7 +431,8 @@ describe("migrate", () => {
       .mockReturnValue(undefined);
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "getCurrentVersion")
-      .mockReturnValue("1.3.0");
+      .mockReturnValueOnce("1.3.0")
+      .mockReturnValueOnce("1.3.1");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.3.1");
@@ -424,7 +447,7 @@ describe("migrate", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -432,7 +455,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: true,
+      install: true
     });
 
     // verify mocks were called
@@ -443,18 +466,18 @@ describe("migrate", () => {
     expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
     expect(mockedExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
     expect(mockedExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
     expect(mockedExecSync).toHaveBeenNthCalledWith(
       3,
       "npm install turbo@1.3.1",
       {
         cwd: root,
-        stdio: "pipe",
+        stdio: "pipe"
       }
     );
 
@@ -469,7 +492,7 @@ describe("migrate", () => {
 
   it("installs the correct turbo version", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -481,7 +504,8 @@ describe("migrate", () => {
       .mockReturnValue(undefined);
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "getCurrentVersion")
-      .mockReturnValue("1.0.0");
+      .mockReturnValueOnce("1.0.0")
+      .mockReturnValueOnce("1.7.0");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.7.0");
@@ -495,13 +519,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
     const mockedExecSync = jest
@@ -512,32 +538,29 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: true,
+      install: true
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0",
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         lint: {},
         test: {
-          outputs: ["dist/**", "build/**"],
-        },
-      },
+          outputs: ["dist/**", "build/**"]
+        }
+      }
     });
 
     // verify mocks were called
@@ -550,18 +573,18 @@ describe("migrate", () => {
     expect(mockedExecSync).toHaveBeenCalled();
     expect(mockedExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
     expect(mockedExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
     expect(mockedExecSync).toHaveBeenNthCalledWith(
       3,
       "pnpm install -g turbo@1.7.0",
       {
         cwd: root,
-        stdio: "pipe",
+        stdio: "pipe"
       }
     );
 
@@ -575,13 +598,65 @@ describe("migrate", () => {
     mockedExecSync.mockRestore();
   });
 
-  it("fails gracefully when the correct upgrade command cannot be found", async () => {
+  it("fails when the package manager does not install the expected version", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo",
+      fixture: "turbo-2"
     });
 
     const packageManager = "pnpm";
-    const packageManagerVersion = "1.2.3";
+    const turboJson = readJson("turbo.json");
+
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "checkGitStatus")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "getCurrentVersion")
+      .mockReturnValue("2.8.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "getLatestVersion")
+      .mockResolvedValue("2.9.3");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm add turbo@latest --save-dev -w");
+    const mockedGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+    const mockedExecSync = jest
+      .spyOn(childProcess, "execSync")
+      .mockReturnValue("installed");
+
+    await migrate(root, {
+      force: false,
+      dryRun: false,
+      print: false,
+      install: true
+    });
+
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+    expect(readJson("turbo.json")).toStrictEqual(turboJson);
+    expect(mockedGetCurrentVersion).toHaveBeenCalledTimes(2);
+
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetWorkspaceDetails.mockRestore();
+    mockedExecSync.mockRestore();
+  });
+
+  it("fails gracefully when the correct upgrade command cannot be found", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "old-turbo"
+    });
+
+    const packageManager = "pnpm";
+    const packageJson = readJson("package.json");
+    const turboJson = readJson("turbo.json");
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -596,20 +671,12 @@ describe("migrate", () => {
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue(undefined);
-    const mockedGetAvailablePackageManagers = jest
-      .spyOn(turboUtils, "getAvailablePackageManagers")
-      .mockResolvedValue({
-        pnpm: packageManagerVersion,
-        npm: undefined,
-        yarn: undefined,
-        bun: undefined,
-      });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
     const mockedExecSync = jest
@@ -620,33 +687,11 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: true,
+      install: true
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0",
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
-    expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
-      pipeline: {
-        build: {
-          outputs: [".next/**", "!.next/cache/**"],
-        },
-        dev: {
-          cache: false,
-        },
-        lint: {},
-        test: {
-          outputs: ["dist/**", "build/**"],
-        },
-      },
-    });
+    expect(readJson("package.json")).toStrictEqual(packageJson);
+    expect(readJson("turbo.json")).toStrictEqual(turboJson);
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
 
@@ -655,16 +700,15 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
     expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
     expect(mockedExecSync).toHaveBeenCalledTimes(2);
     expect(mockedExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
     expect(mockedExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
       cwd: root,
-      stdio: "ignore",
+      stdio: "ignore"
     });
 
     // restore mocks
@@ -672,14 +716,13 @@ describe("migrate", () => {
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();
   });
 
   it("exits if current version is not passed and cannot be inferred", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
@@ -696,7 +739,7 @@ describe("migrate", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -704,7 +747,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -722,7 +765,7 @@ describe("migrate", () => {
 
   it("exits if latest version is not passed and cannot be inferred", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "npm";
@@ -742,7 +785,7 @@ describe("migrate", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -750,7 +793,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -770,7 +813,7 @@ describe("migrate", () => {
 
   it("exits if latest version throws", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "yarn";
@@ -789,7 +832,7 @@ describe("migrate", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -797,7 +840,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -817,11 +860,10 @@ describe("migrate", () => {
 
   it("exits if any transforms encounter an error", async () => {
     const { root } = useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
-    const packageManagerVersion = "1.2.3";
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -833,20 +875,15 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.7.0");
-    const mockedGetAvailablePackageManagers = jest
-      .spyOn(turboUtils, "getAvailablePackageManagers")
-      .mockResolvedValue({
-        pnpm: packageManagerVersion,
-        npm: undefined,
-        yarn: undefined,
-        bun: undefined,
-      });
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm add turbo@latest --save-dev -w");
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -854,7 +891,7 @@ describe("migrate", () => {
       force: false,
       dryRun: true,
       print: false,
-      install: true,
+      install: true
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -863,20 +900,20 @@ describe("migrate", () => {
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
-    expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
     expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetAvailablePackageManagers.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
   });
 
   it("exits if invalid directory is passed", async () => {
     useFixture({
-      fixture: "old-turbo",
+      fixture: "old-turbo"
     });
 
     // setup mocks
@@ -888,7 +925,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -902,7 +939,7 @@ describe("migrate", () => {
 
   it("exits if directory with no repo is passed", async () => {
     const { root } = useFixture({
-      fixture: "no-repo",
+      fixture: "no-repo"
     });
 
     // setup mocks
@@ -914,7 +951,7 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -928,7 +965,7 @@ describe("migrate", () => {
 
   it("migrates across majors with all required codemods", async () => {
     const { root, readJson } = useFixture({
-      fixture: "turbo-1",
+      fixture: "turbo-1"
     });
 
     const packageManager = "pnpm";
@@ -943,7 +980,7 @@ describe("migrate", () => {
       .mockReturnValue("1.99.99");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
-      .mockResolvedValue("2.0.0");
+      .mockResolvedValue("2.9.3");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("pnpm install -g turbo@latest");
@@ -954,13 +991,15 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -968,35 +1007,32 @@ describe("migrate", () => {
       force: false,
       dryRun: false,
       print: false,
-      install: false,
+      install: false
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.7.1",
-      },
-      name: "turbo-1",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "turbo-1",
+        turboVersion: "1.7.1"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://v2-9-3.turborepo.dev/schema.json",
       tasks: {
         build: {
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         lint: {
           inputs: ["$TURBO_DEFAULT$", ".env.local"],
-          outputs: [],
+          outputs: []
         },
         test: {
-          outputLogs: "errors-only",
-        },
-      },
+          outputLogs: "errors-only"
+        }
+      }
     });
 
     // verify mocks were called
@@ -1015,4 +1051,68 @@ describe("migrate", () => {
     mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
   }, 10000);
+
+  it("updates $schema URL during same-major migration", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "turbo-2"
+    });
+
+    const packageManager = "pnpm";
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "checkGitStatus")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "getCurrentVersion")
+      .mockReturnValue("2.8.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "getLatestVersion")
+      .mockResolvedValue("2.9.3");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm install turbo@2.9.3");
+    const mockedGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+
+    await migrate(root, {
+      force: false,
+      dryRun: false,
+      print: false,
+      install: false
+    });
+
+    expect(readJson("turbo.json")).toStrictEqual({
+      $schema: "https://v2-9-3.turborepo.dev/schema.json",
+      tasks: {
+        build: {
+          outputs: ["dist/**"]
+        },
+        lint: {},
+        test: {
+          outputs: []
+        }
+      }
+    });
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
+    expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetWorkspaceDetails.mockRestore();
+  });
 });

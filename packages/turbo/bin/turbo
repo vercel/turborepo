@@ -11,6 +11,7 @@ const path = require('path');
 
 // If we do not find the correct platform binary, should we attempt to install it?
 const SHOULD_INSTALL = true;
+const CTRL_C_BYTE = Buffer.from([0x03]);
 
 // If we do not find the correct platform binary, should we trust calling an emulated variant?
 const SHOULD_ATTEMPT_EMULATED = true;
@@ -34,6 +35,67 @@ function installUsingNPM() {
 // npm has multiple places that we need to look for a package name.
 function hasPackage(sourceObject, packageName) {
   return !!sourceObject[packageName] || !!sourceObject[`node_modules/${packageName}`];
+}
+
+// When invoked through a package manager's scripts (or npx/pnpm dlx/etc.),
+// the package manager identifies itself in npm_config_user_agent,
+// e.g. "pnpm/9.1.0 npm/? node/v20.11.0 darwin arm64".
+function detectPackageManager() {
+  const userAgent = process.env.npm_config_user_agent;
+  if (!userAgent) {
+    return null;
+  }
+
+  const match = userAgent.match(/^(\S+)\/(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return { name: match[1], majorVersion: Number(match[2]) };
+}
+
+function repairInstructions(packageManager) {
+  switch (packageManager.name) {
+    case 'pnpm':
+      return 'pnpm install --force';
+    case 'bun':
+      return 'bun install --force';
+    case 'yarn':
+      if (packageManager.majorVersion === 1) {
+        return 'yarn install --check-files';
+      }
+      return 'yarn install (after deleting your repository\'s node_modules directory)';
+    default:
+      return `${packageManager.name} install (after deleting your repository's node_modules directory)`;
+  }
+}
+
+// Binary packages were renamed from `turbo-<os>-<arch>` to `@turbo/<os>-<arch>`.
+// We try the scoped name first, then fall back to the legacy unscoped name so
+// that upgrades across the rename boundary still work without re-installing.
+function binaryPaths(platform, arch) {
+  const ext = platform === 'windows' ? '.exe' : '';
+  return [
+    `@turbo/${platform}-${arch}/bin/turbo${ext}`,
+    `turbo-${platform}-${arch}/bin/turbo${ext}`,
+  ];
+}
+
+function packageNames(platform, arch) {
+  return [
+    `@turbo/${platform}-${arch}`,
+    `turbo-${platform}-${arch}`,
+  ];
+}
+
+// Try require.resolve on each candidate, return the first that succeeds.
+function tryResolve(candidates) {
+  for (const candidate of candidates) {
+    try {
+      return require.resolve(candidate);
+    } catch (e) {}
+  }
+  return null;
 }
 
 // This provides logging messages as it progresses towards calculating the binary path.
@@ -68,49 +130,82 @@ function getBinaryPath() {
 
   let { platform, arch } = process;
   // Node uses `win32` but we want to use `windows` for consistency with
-  // our package naming conventions (i.e. `turbo-windows-64`).
+  // our package naming conventions (i.e. `@turbo/windows-64`).
   if (platform === "win32") {
     platform = "windows";
+  } else if (platform === "android") {
+    // Android (e.g. Termux) ships a Linux-compatible userspace and can
+    // run the `linux-<arch>` binary directly.
+    platform = "linux";
   }
   const resolvedArch = arch === 'x64' ? '64' : arch;
-  const ext = platform === 'windows' ? '.exe' : '';
 
   // Try all places in order until we get a hit.
 
+  const isSupported = availablePlatforms.includes(platform) && availableArchs.includes(resolvedArch);
+
   // 1. The package which contains the binary we _should_ be running.
-  const correctBinary = availablePlatforms.includes(platform) && availableArchs.includes(resolvedArch) ? `turbo-${platform}-${resolvedArch}/bin/turbo${ext}` : null;
-  if (correctBinary !== null) {
-    try {
-      return require.resolve(`${correctBinary}`);
-    } catch (e) {}
+  //    Try the scoped name (@turbo/<os>-<arch>) first, then the legacy name (turbo-<os>-<arch>).
+  const correctCandidates = isSupported ? binaryPaths(platform, resolvedArch) : [];
+  const resolved = tryResolve(correctCandidates);
+  if (resolved !== null) {
+    return resolved;
   }
 
   // 2. Install the binary that they need just in time.
-  if (SHOULD_INSTALL && correctBinary !== null) {
+  if (SHOULD_INSTALL && correctCandidates.length > 0) {
     console.warn('Turborepo did not find the correct binary for your platform.');
     console.warn('We will attempt to install it now.');
 
     try {
       installUsingNPM();
-      const resolvedPath = require.resolve(`${correctBinary}`);
-      console.warn('Installation has succeeded.');
-      return resolvedPath;
+      const resolvedPath = tryResolve(correctCandidates);
+      if (resolvedPath !== null) {
+        console.warn('Installation has succeeded.');
+        return resolvedPath;
+      }
+      console.warn('Installation has failed.');
+      console.warn();
+      console.warn('npm reported success, but the binary is still missing.');
+      console.warn('npm skips failed optional dependencies without reporting an error.');
+      console.warn('The reason for the failure is recorded in the debug log of your npm cache\'s _logs directory (see `npm config get cache`).');
     } catch (e) {
       console.warn('Installation has failed.');
+
+      // Show the underlying error so that failures are diagnosable.
+      const stderr = e?.stderr?.toString().trim();
+      const reason = stderr || e?.message;
+      if (reason) {
+        console.warn();
+        console.warn('The installation attempt reported:');
+        console.warn(reason);
+      }
+    }
+
+    // The repair attempt above uses npm regardless of the package manager
+    // that installed this tree. If the user came through a different package
+    // manager, point them at its equivalent repair command.
+    const packageManager = detectPackageManager();
+    if (packageManager !== null && packageManager.name !== 'npm') {
+      console.warn();
+      console.warn(`It looks like your project uses ${packageManager.name}. To reinstall the missing binary, run:`);
+      console.warn(repairInstructions(packageManager));
     }
   }
 
   // 3. Both Windows and macOS ARM boxes can run x64 binaries. Attempt to run under emulation.
-  const alternateBinary = (arch === "arm64" && ['darwin', 'windows'].includes(platform)) ? `turbo-${platform}-64/bin/turbo${ext}` : null;
-  if (SHOULD_ATTEMPT_EMULATED && alternateBinary !== null) {
-    try {
-      const resolvedPath = require.resolve(`${alternateBinary}`);
+  const alternateCandidates = (arch === "arm64" && ['darwin', 'windows'].includes(platform))
+    ? binaryPaths(platform, '64')
+    : [];
+  if (SHOULD_ATTEMPT_EMULATED && alternateCandidates.length > 0) {
+    const resolvedPath = tryResolve(alternateCandidates);
+    if (resolvedPath !== null) {
       console.warn(`Turborepo detected that you're running:\n${platform} ${resolvedArch}.`);
-      console.warn(`We were not able to find the binary at:\n${correctBinary}`);
-      console.warn(`We found a possibly-compatible binary at:\n${alternateBinary}`);
+      console.warn(`We were not able to find the binary at:\n${correctCandidates[0]}`);
+      console.warn(`We found a possibly-compatible binary at:\n${resolvedPath}`);
       console.warn(`We will attempt to run that binary.`);
       return resolvedPath;
-    } catch (e) {}
+    }
   }
 
   // We are not going to run `turbo` this invocation.
@@ -118,7 +213,7 @@ function getBinaryPath() {
 
   // Possible error scenarios:
   // - The user is on a platform/arch combination we do not support.
-  // - We somehow got detection wrong and never attempted to run the _actual_ `correctBinary` or `alternateBinary`.
+  // - We somehow got detection wrong and never attempted to run the _actual_ correct binary or alternate binary.
   // - The user doesn't have the correct packages installed for their platform.
 
   // Explain our detection attempt:
@@ -146,32 +241,33 @@ function getBinaryPath() {
     }
   }
 
-  if (correctBinary !== null) {
+  if (correctCandidates.length > 0) {
     console.error();
     console.error('***');
     console.error();
-    console.error(`We were not able to find the binary at:\n${correctBinary}`);
+    console.error(`We were not able to find the binary at:\n${correctCandidates.join('\nor: ')}`);
     console.error();
     console.error(`We looked for it at:`);
-    console.error(require.resolve.paths(correctBinary).join('\n'));
+    console.error(require.resolve.paths(correctCandidates[0]).join('\n'));
   }
-  if (alternateBinary !== null) {
+  if (alternateCandidates.length > 0) {
     console.error();
     console.error('***');
     console.error();
     console.error(`Your platform (${platform}) can sometimes run x86 under emulation.`);
-    console.error(`We did not find a possibly-compatible binary at:\n${alternateBinary}`);
+    console.error(`We did not find a possibly-compatible binary at:\n${alternateCandidates.join('\nor: ')}`);
     console.error();
     console.error(`We looked for it at:`);
-    console.error(require.resolve.paths(alternateBinary).join('\n'));
+    console.error(require.resolve.paths(alternateCandidates[0]).join('\n'));
   }
 
   // Investigate other failure modes.
 
   // Has the wrong platform's binaries available.
-  const availableBinaries = availablePlatforms.map(platform => availableArchs.map(arch => `turbo-${platform}-${arch}/bin/turbo${platform === 'windows' ? '.exe' : ''}`)).flat();
-  const definitelyWrongBinaries = availableBinaries.filter(binary => binary !== correctBinary && binary !== alternateBinary);
-  const otherInstalled = definitelyWrongBinaries.filter(binaryPath => {
+  const ownCandidates = new Set([...correctCandidates, ...alternateCandidates]);
+  const allBinaries = availablePlatforms.flatMap(p => availableArchs.flatMap(a => binaryPaths(p, a)));
+  const wrongPlatformBinaries = allBinaries.filter(b => !ownCandidates.has(b));
+  const otherInstalled = wrongPlatformBinaries.filter(binaryPath => {
     try {
       return require.resolve(binaryPath);
     } catch (e) {}
@@ -185,6 +281,14 @@ function getBinaryPath() {
     console.error('Turborepo checked to see if binaries for another platform are installed.');
     console.error('This typically indicates an error in sharing of pre-resolved node_modules across platforms.');
     console.error('One common reason for this is copying files to Docker.');
+
+    if (platform === 'windows' && otherInstalled.some((binaryPath) => binaryPath.includes('linux'))) {
+      console.error();
+      console.error('Turborepo found Linux binaries, but you are running on Windows.');
+      console.error('This usually means dependencies were installed from WSL in a directory shared with Windows.');
+      console.error('To fix this, delete your node_modules directory and reinstall your dependencies in the environment where you run turbo.');
+    }
+
     console.error();
     console.error(`We found these unnecessary binaries:`);
     console.error(otherInstalled.join('\n'));
@@ -195,7 +299,6 @@ function getBinaryPath() {
 
   // Check to see if we have partially-populated dependencies in the npm lockfile.
   const MAX_LOOKUPS = 10;
-  const availablePackages = availablePlatforms.map(platform => availableArchs.map(arch => `turbo-${platform}-${arch}`)).flat();
 
   try {
     // Attempt to find project root.
@@ -213,9 +316,13 @@ function getBinaryPath() {
 
         // If we don't show up in the lockfile it's the wrong lockfile.
         if (hasPackage(sourceObject, 'turbo')) {
-          // Check to see if all of `turbo-<PLATFORM>-<ARCH>` is included.
-          const hasAllPackages = availablePackages.every(package => hasPackage(sourceObject, package));
-          if (!hasAllPackages) {
+          // A platform is covered if either the scoped or legacy package name is in the lockfile.
+          const hasAllPlatforms = availablePlatforms.every(p =>
+            availableArchs.every(a =>
+              packageNames(p, a).some(name => hasPackage(sourceObject, name))
+            )
+          );
+          if (!hasAllPlatforms) {
             console.error();
             console.error('***');
             console.error();
@@ -261,14 +368,137 @@ function getBinaryPath() {
   process.exit(1);
 }
 
-// Run the binary we got.
-try {
-  child_process.execFileSync(
+function exitWithCodeOrSignal(code, signal) {
+  if (signal) {
+    try {
+      process.kill(process.pid, signal);
+      return;
+    } catch (e) {
+      process.exit(1);
+    }
+  }
+
+  process.exit(code === null ? 1 : code);
+}
+
+function shouldOwnWindowsCtrlC() {
+  if (process.platform !== "win32" || !process.stdin.isTTY) {
+    return false;
+  }
+
+  if (usesTui(process.argv.slice(2))) {
+    return false;
+  }
+
+  return Boolean(
+    process.env.npm_command ||
+    process.env.npm_lifecycle_event ||
+    process.env.npm_config_user_agent
+  );
+}
+
+function usesTui(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--ui=tui") {
+      return true;
+    }
+    if (arg === "--ui" && args[i + 1] === "tui") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function runTurbo() {
+  if (shouldOwnWindowsCtrlC()) {
+    return runTurboChild(
+      {
+        ...process.env,
+        __TURBO_WINDOWS_CTRL_C_FD: "3",
+      },
+      true
+    );
+  }
+
+  runTurboChild(process.env, false);
+}
+
+function runTurboChild(env, useCtrlCPipe) {
+  const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
-    { stdio: "inherit" }
+    {
+      stdio: useCtrlCPipe ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
+      env,
+    }
   );
-} catch (e) {
-  if (e && e.status) process.exit(e.status);
-  throw e;
+
+  const ctrlCPipe = useCtrlCPipe ? child.stdio[3] : null;
+  ctrlCPipe?.on("error", () => {});
+
+  const sendCtrlC = () => {
+    if (ctrlCPipe && !ctrlCPipe.destroyed && ctrlCPipe.writable) {
+      ctrlCPipe.write(CTRL_C_BYTE);
+    }
+  };
+
+  const restoreStdin = () => {
+    if (!useCtrlCPipe) {
+      return;
+    }
+
+    if (process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.pause();
+  };
+
+  const handleInput = (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 0x03) {
+        sendCtrlC();
+      }
+    }
+  };
+
+  if (useCtrlCPipe) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", handleInput);
+  }
+
+  const handleSigint = () => {
+    // Keep the wrapper alive and let native turbo handle graceful shutdown.
+    sendCtrlC();
+  };
+
+  const handleSigterm = () => {
+    if (!child.killed) {
+      child.kill("SIGTERM");
+    }
+  };
+
+  const cleanup = () => {
+    process.off("SIGINT", handleSigint);
+    process.off("SIGTERM", handleSigterm);
+    process.stdin.off("data", handleInput);
+    restoreStdin();
+    ctrlCPipe?.destroy();
+  };
+
+  process.on("SIGINT", handleSigint);
+  process.on("SIGTERM", handleSigterm);
+
+  child.once("error", (error) => {
+    cleanup();
+    throw error;
+  });
+
+  child.once("exit", (code, signal) => {
+    cleanup();
+    exitWithCodeOrSignal(code, signal);
+  });
 }
+
+runTurbo();

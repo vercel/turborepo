@@ -23,7 +23,7 @@ describe("getVersionInfo", () => {
     });
     t.mock.method(fs, "readFile", mockReadFile);
     await assert.rejects(() => getVersionInfo("version.txt"), {
-      message: "File not found",
+      message: "File not found"
     });
   });
 });

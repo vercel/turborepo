@@ -7,10 +7,13 @@ use ratatui::{
 };
 
 const BIND_LIST: &[&str] = [
+    "l       - Toggle log panel",
     "m       - Toggle this help popup",
-    "↑ or j  - Select previous task",
-    "↓ or k  - Select next task",
-    "h       - Toggle task list",
+    "↑ or k  - Select previous task",
+    "↓ or j  - Select next task",
+    "h       - Show selected task logs full-screen (toggle)",
+    "s       - Stream all task logs (toggle)",
+    "Shift+h - Toggle task list",
     "p       - Toggle pinned task selection",
     "/       - Filter tasks to search term",
     "ESC     - Clear filter",

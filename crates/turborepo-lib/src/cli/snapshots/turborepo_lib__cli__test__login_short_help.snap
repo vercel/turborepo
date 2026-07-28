@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-lib/src/cli/mod.rs
+expression: "String::from_utf8(buf).unwrap()"
+---
+Login to your Vercel account
+
+Usage: login [OPTIONS]
+
+Options:
+      --sso-team <SSO_TEAM>  
+      --manual               Manually enter token instead of requesting one from the login service
+  -h, --help                 Print help

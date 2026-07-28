@@ -25,7 +25,7 @@ fn log_status(config: TelemetryConfig, base: &CommandBase) {
             );
         }
     }
-    println!("Learn more: https://turborepo.com/docs/telemetry");
+    println!("Learn more: https://turborepo.dev/docs/telemetry");
 }
 
 fn log_error(message: &str, error: &str, base: &CommandBase) {

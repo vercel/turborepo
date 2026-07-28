@@ -19,7 +19,7 @@ import { collectLinkErrors } from "./markdown.ts";
 
 /** Main function that triggers link validation across .mdx files */
 const validateAllInternalLinks = async (): Promise<void> => {
-  let errorReports = await collectLinkErrors();
+  const errorReports = await collectLinkErrors();
   if (errorReports.length === 0) {
     console.log("Link validation was successful.");
     return;
@@ -29,7 +29,7 @@ const validateAllInternalLinks = async (): Promise<void> => {
     .map((linkError) => ({
       link: linkError.href,
       type: linkError.type,
-      path: linkError.doc.path,
+      path: linkError.doc.path
     }))
     .sort((a, b) => a.type.localeCompare(b.type));
 

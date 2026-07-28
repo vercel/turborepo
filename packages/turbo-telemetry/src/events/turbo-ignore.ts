@@ -10,14 +10,14 @@ const TASK_ALLOWLIST: Readonly<Array<string>> = [
   "checktypes",
   "check-types",
   "type-check",
-  "check",
+  "check"
 ] as const;
 
 export class TurboIgnoreTelemetry extends TelemetryClient {
   trackCI(): Event | undefined {
     return this.track({
       key: "ci",
-      value: name ?? "unknown",
+      value: name ?? "unknown"
     });
   }
 
@@ -29,7 +29,7 @@ export class TurboIgnoreTelemetry extends TelemetryClient {
     if (provided) {
       return this.trackCliArgument({
         argument: "workspace",
-        value: "provided",
+        value: "provided"
       });
     }
   }
@@ -43,7 +43,7 @@ export class TurboIgnoreTelemetry extends TelemetryClient {
     if (value) {
       return this.trackCliOption({
         option: "task",
-        value: TASK_ALLOWLIST.includes(value) ? value : "other",
+        value: TASK_ALLOWLIST.includes(value) ? value : "other"
       });
     }
   }
@@ -52,7 +52,7 @@ export class TurboIgnoreTelemetry extends TelemetryClient {
     if (value) {
       return this.trackCliOption({
         option: "fallback",
-        value,
+        value
       });
     }
   }
@@ -65,7 +65,7 @@ export class TurboIgnoreTelemetry extends TelemetryClient {
     if (value) {
       return this.trackCliOption({
         option: "directory",
-        value: "custom",
+        value: "custom"
       });
     }
   }
@@ -74,7 +74,7 @@ export class TurboIgnoreTelemetry extends TelemetryClient {
     if (value !== undefined) {
       return this.trackCliOption({
         option: "max_buffer",
-        value: value.toString(),
+        value: value.toString()
       });
     }
   }

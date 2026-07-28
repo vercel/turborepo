@@ -12,9 +12,9 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+filetime = "0.2"
 futures = { workspace = true }
 insta = { workspace = true }
-libc = "0.2.146"
 port_scanner = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
@@ -30,16 +30,17 @@ bytes.workspace = true
 camino = { workspace = true }
 futures = { workspace = true }
 hmac = "0.12.1"
+libc = "0.2.146"
 miette = { workspace = true }
 os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
-petgraph = "0.6.3"
+petgraph = { workspace = true }
 pin-project = "1.1.5"
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tar = "0.4.38"
+tar = "0.4.45"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
@@ -48,4 +49,13 @@ tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-analytics = { workspace = true }
 turborepo-api-client = { workspace = true }
-zstd = "0.12.3"
+turborepo-auth = { workspace = true }
+turborepo-log = { path = "../turborepo-log" }
+turborepo-types = { workspace = true }
+zstd = { version = "0.13.3", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }

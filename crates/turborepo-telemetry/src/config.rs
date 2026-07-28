@@ -82,12 +82,12 @@ impl TelemetryConfig {
         // file and write a new one, otherwise return the error
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
-            Err(ConfigError::FileParse { .. }) => {
+            Err(err @ ConfigError::FileParse { .. }) => {
                 config_path
                     .remove_file()
                     .map_err(|e| ConfigError::Message(e.to_string()))?;
                 write_new_config(&config_path)?;
-                return Err(settings.unwrap_err());
+                return Err(err);
             }
             // Propagate other errors
             Err(err) => return Err(err),
@@ -111,16 +111,20 @@ impl TelemetryConfig {
     }
 
     pub fn one_way_hash(input: &str) -> String {
-        match TelemetryConfig::with_default_config_path() {
-            Ok(config) => config.one_way_hash_with_config_salt(input),
-            Err(_) => TelemetryConfig::one_way_hash_with_tmp_salt(input),
+        // The salt is generated once and then never changes for the lifetime
+        // of the config file, so read it once per process instead of
+        // re-reading and re-parsing the config file on every call — this
+        // runs several times per task during a run.
+        static CONFIG_SALT: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        let salt = CONFIG_SALT.get_or_init(|| {
+            TelemetryConfig::with_default_config_path()
+                .ok()
+                .map(|config| config.config.telemetry_salt)
+        });
+        match salt {
+            Some(salt) => one_way_hash_with_salt(salt, input),
+            None => TelemetryConfig::one_way_hash_with_tmp_salt(input),
         }
-    }
-
-    /// Obfuscate with the config salt - this is used for all sensitive event
-    /// data
-    fn one_way_hash_with_config_salt(&self, input: &str) -> String {
-        one_way_hash_with_salt(&self.config.telemetry_salt, input)
     }
 
     /// Obfuscate with a temporary salt - this is used as a fallback when the
@@ -135,7 +139,11 @@ impl TelemetryConfig {
     }
 
     pub fn show_alert(&mut self, color_config: ColorConfig) {
-        if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
+        if !self.has_seen_alert()
+            && self.is_enabled()
+            && Self::is_telemetry_warning_enabled()
+            && turborepo_ci::Vendor::get_constant() != Some("VERCEL")
+        {
             eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(color_config, BOLD, "{}", "Attention:"),
@@ -167,7 +175,7 @@ impl TelemetryConfig {
                         color_config,
                         GREY,
                         "{}",
-                        "https://turborepo.com/docs/telemetry"
+                        "https://turborepo.dev/docs/telemetry"
                     )
                 ),
             );

@@ -1,0 +1,27 @@
+{
+  "name": "@eventmate/audit",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "typecheck": "bunx tsgo --noEmit"
+  },
+  "dependencies": {
+    "@eventmate/database": "workspace:*",
+    "zod": "catalog:zod3"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  }
+}

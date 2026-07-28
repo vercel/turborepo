@@ -83,14 +83,17 @@ impl AbsoluteSystemPathBuf {
         if unknown.is_absolute() {
             Self(unknown)
         } else {
-            Self(
-                base.as_path()
-                    .join(unknown)
-                    .as_std_path()
-                    .clean()
-                    .try_into()
-                    .expect("clean should produce valid UTF-8"),
-            )
+            let path = match base
+                .as_path()
+                .join(unknown)
+                .as_std_path()
+                .clean()
+                .try_into()
+            {
+                Ok(path) => path,
+                Err(err) => panic!("clean should produce valid UTF-8: {err:?}"),
+            };
+            Self(path)
         }
     }
 
@@ -246,7 +249,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
 
     use crate::{AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
@@ -271,6 +274,15 @@ mod tests {
                 .unwrap()
                 .join_unix_path(tail),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
+        );
+
+        let normalized_tail = RelativeUnixPathBuf::new("workspace/package.json").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("/some/dir")
+                .unwrap()
+                .join_unix_path_unchecked(normalized_tail),
+            AbsoluteSystemPathBuf::new("/some/dir/workspace/package.json").unwrap(),
         );
     }
 
@@ -298,6 +310,15 @@ mod tests {
                 .unwrap()
                 .join_unix_path(&tail),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
+        );
+
+        let normalized_tail = RelativeUnixPathBuf::new("workspace/package.json").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("C:\\some\\dir")
+                .unwrap()
+                .join_unix_path_unchecked(&normalized_tail),
+            AbsoluteSystemPathBuf::new("C:\\some\\dir\\workspace\\package.json").unwrap(),
         );
     }
 }

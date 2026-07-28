@@ -1,18 +1,17 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use biome_deserialize::{Text, json::deserialize_from_json_str};
-use biome_deserialize_macros::Deserializable;
-use biome_diagnostics::DiagnosticExt;
-use biome_json_parser::JsonParserOptions;
 use miette::Diagnostic;
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
-use turborepo_unescape::UnescapedString;
+use turborepo_errors::{ParseDiagnostic, Spanned};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DependencyKind {
+    Production,
+    Development,
+    Peer { optional: bool },
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +22,8 @@ pub struct PackageJson {
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_manager: Option<Spanned<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_engines: Option<Spanned<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,6 +38,8 @@ pub struct PackageJson {
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
     #[serde(flatten)]
     pub other: BTreeMap<String, serde_json::Value>,
@@ -52,31 +55,6 @@ pub struct PnpmConfig {
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserializable)]
-pub struct RawPackageJson {
-    pub name: Option<Spanned<UnescapedString>>,
-    pub version: Option<UnescapedString>,
-    pub package_manager: Option<Spanned<UnescapedString>>,
-    pub dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
-    pub resolutions: Option<BTreeMap<String, UnescapedString>>,
-    pub pnpm: Option<RawPnpmConfig>,
-    // Unstructured fields kept for round trip capabilities
-    #[deserializable(rest)]
-    pub other: BTreeMap<Text, serde_json::Value>,
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserializable)]
-pub struct RawPnpmConfig {
-    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
-    // Unstructured config options kept for round trip capabilities
-    #[deserializable(rest)]
-    pub other: BTreeMap<Text, serde_json::Value>,
-}
-
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Unable to read package.json: {0}")]
@@ -88,75 +66,6 @@ pub enum Error {
     Parse(#[related] Vec<ParseDiagnostic>),
 }
 
-impl WithMetadata for RawPackageJson {
-    fn add_text(&mut self, text: Arc<str>) {
-        if let Some(ref mut package_manager) = self.package_manager {
-            package_manager.add_text(text.clone());
-        }
-        self.scripts
-            .iter_mut()
-            .for_each(|(_, v)| v.add_text(text.clone()));
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        if let Some(ref mut package_manager) = self.package_manager {
-            package_manager.add_path(path.clone());
-        }
-        self.scripts
-            .iter_mut()
-            .for_each(|(_, v)| v.add_path(path.clone()));
-    }
-}
-
-impl From<RawPackageJson> for PackageJson {
-    fn from(raw: RawPackageJson) -> Self {
-        Self {
-            name: raw.name.map(|s| s.map(|s| s.into())),
-            version: raw.version.map(|s| s.into()),
-            package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
-            dependencies: raw
-                .dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            dev_dependencies: raw
-                .dev_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            optional_dependencies: raw
-                .optional_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            peer_dependencies: raw
-                .peer_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            scripts: raw
-                .scripts
-                .into_iter()
-                .map(|(k, v)| (k, v.map(|v| v.into())))
-                .collect(),
-            resolutions: raw
-                .resolutions
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            pnpm: raw.pnpm.map(|p| p.into()),
-            other: raw
-                .other
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        }
-    }
-}
-
-impl From<RawPnpmConfig> for PnpmConfig {
-    fn from(raw: RawPnpmConfig) -> Self {
-        Self {
-            patched_dependencies: raw.patched_dependencies,
-            other: raw
-                .other
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        }
-    }
-}
-
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
         tracing::trace!("loading package.json from {}", path);
@@ -165,29 +74,7 @@ impl PackageJson {
     }
 
     pub fn load_from_str(contents: &str, path: &str) -> Result<PackageJson, Error> {
-        let (result, errors): (Option<RawPackageJson>, _) =
-            deserialize_from_json_str(contents, JsonParserOptions::default(), path).consume();
-        if !errors.is_empty() {
-            return Err(Error::Parse(
-                errors
-                    .into_iter()
-                    .map(|d| {
-                        d.with_file_source_code(contents)
-                            .with_file_path(path)
-                            .as_ref()
-                            .into()
-                    })
-                    .collect(),
-            ));
-        }
-
-        // We expect a result if there are no errors
-        let mut package_json = result.expect("no parse errors produced but no result");
-
-        package_json.add_path(path.into());
-        package_json.add_text(contents.into());
-
-        Ok(package_json.into())
+        crate::manifest_parser::parse(contents, path)
     }
 
     // Utility method for easy construction of package.json during testing
@@ -198,11 +85,53 @@ impl PackageJson {
     }
 
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
-        self.dev_dependencies
+        self.dependencies
+            .iter()
+            .flatten()
+            .chain(self.dev_dependencies.iter().flatten())
+            .chain(self.optional_dependencies.iter().flatten())
+            .chain(self.peer_dependencies.iter().flatten())
+    }
+
+    pub fn dependencies_with_kind(
+        &self,
+    ) -> impl Iterator<Item = (&String, &String, DependencyKind)> + '_ {
+        let normal = self
+            .dependencies
             .iter()
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
-            .chain(self.dependencies.iter().flatten())
+            .map(|(name, version)| (name, version, DependencyKind::Production));
+        let dev = self
+            .dev_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Development));
+        let peer = self
+            .peer_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| {
+                (
+                    name,
+                    version,
+                    DependencyKind::Peer {
+                        optional: self.is_optional_peer_dependency(name),
+                    },
+                )
+            });
+        normal.chain(dev).chain(peer)
+    }
+
+    pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
+        self.other
+            .get("peerDependenciesMeta")
+            .and_then(|meta| meta.as_object())
+            .and_then(|meta| meta.get(name))
+            .and_then(|entry| entry.as_object())
+            .and_then(|entry| entry.get("optional"))
+            .and_then(|optional| optional.as_bool())
+            .unwrap_or(false)
     }
 
     /// Returns the command for script_name if it is non-empty
@@ -241,15 +170,79 @@ mod test {
     #[test_case(json!({"name": "foo", "pnpm": {"another-field": 1}}) ; "pnpm without patches")]
     #[test_case(json!({"version": "1.2", "foo": "bar" }) ; "version")]
     #[test_case(json!({"packageManager": "npm@9", "foo": "bar"}) ; "package manager")]
+    #[test_case(json!({"devEngines": {"runtime": {"name": "node", "version": "22.0.0"}, "packageManager": {"name": "pnpm", "version": "9.12.3", "onFail": "warn", "future": true}}, "foo": "bar"}) ; "dev engines")]
     #[test_case(json!({"dependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dependencies")]
     #[test_case(json!({"devDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dev dependencies")]
     #[test_case(json!({"optionalDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "optional dependencies")]
     #[test_case(json!({"peerDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "peer dependencies")]
+    #[test_case(json!({"peerDependenciesMeta": { "turbo": { "optional": true } }, "foo": "bar"}) ; "peer dependencies meta")]
     #[test_case(json!({"scripts": { "build": "turbo build" }, "foo": "bar"}) ; "scripts")]
     #[test_case(json!({"resolutions": { "turbo": "latest" }, "foo": "bar"}) ; "resolutions")]
     fn test_roundtrip(json: serde_json::Value) {
         let package_json: PackageJson = PackageJson::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(package_json).unwrap();
         assert_eq!(actual, json);
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test_case("{\"name\": \"\n}" ; "quote before newline")]
+    #[test_case("{\"dependencies\": {\"turbo\": \"" ; "quote at eof")]
+    fn test_unterminated_string_reports_parse_error(contents: &str) {
+        assert!(PackageJson::load_from_str(contents, "package.json").is_err());
+    }
+
+    #[test]
+    fn all_dependencies_prefers_dependencies_over_dev() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "shared-pkg": "2.0.0" },
+            "devDependencies": { "shared-pkg": "1.0.0", "dev-only": "1.0.0" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        // Simulate the first-occurrence-wins dedup used by Dependencies::new.
+        let mut deduped = std::collections::BTreeMap::new();
+        for (k, v) in pkg.all_dependencies() {
+            deduped.entry(k.as_str()).or_insert(v.as_str());
+        }
+        // dependencies version must win over devDependencies
+        assert_eq!(deduped.get("shared-pkg"), Some(&"2.0.0"));
+        assert_eq!(deduped.get("dev-only"), Some(&"1.0.0"));
+    }
+
+    #[test]
+    fn all_dependencies_iteration_order() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "shared-pkg": "2.0.0" },
+            "devDependencies": { "shared-pkg": "1.0.0" },
+            "peerDependencies": { "shared-pkg": "*" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        let versions: Vec<_> = pkg
+            .all_dependencies()
+            .filter(|(k, _)| k.as_str() == "shared-pkg")
+            .map(|(_, v)| v.as_str())
+            .collect();
+        // dependencies must come first, then devDependencies, then peer
+        assert_eq!(versions, vec!["2.0.0", "1.0.0", "*"]);
+    }
+
+    #[test]
+    fn dependencies_with_kind_assigns_dev_kind() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "prod-pkg": "1.0.0", "shared-pkg": "2.0.0" },
+            "devDependencies": { "dev-pkg": "1.0.0", "shared-pkg": "1.0.0" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        let mut kinds = std::collections::HashMap::new();
+        for (name, _, kind) in pkg.dependencies_with_kind() {
+            kinds.entry(name.as_str()).or_insert(kind);
+        }
+        assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Production));
+        assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Development));
+        assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Production));
     }
 }

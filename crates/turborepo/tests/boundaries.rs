@@ -35,3 +35,15 @@ fn test_boundaries_on_basic_monorepo() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_boundaries_circular() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "boundaries_circular",
+        "npm@10.5.0",
+        "query",
+        "get boundaries lints" => ["query { boundaries { items { message import } } }"],
+    );
+
+    Ok(())
+}

@@ -2,7 +2,7 @@ use std::{
     backtrace::Backtrace,
     collections::HashSet,
     env::{self, VarError},
-    fs::{self},
+    fs,
     path::PathBuf,
     process::Command,
 };
@@ -14,7 +14,7 @@ use turbopath::{
 };
 use turborepo_ci::Vendor;
 
-use crate::{Error, GitRepo, SCM};
+use crate::{Error, GitRepo, RepoGitIndex, SCM};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InvalidRange {
@@ -23,17 +23,42 @@ pub struct InvalidRange {
 }
 
 impl SCM {
-    pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
-        match self {
-            Self::Git(git) => git.get_current_branch(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
-        }
-    }
-
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
             Self::Git(git) => git.get_current_sha(),
             Self::Manual => Err(Error::GitRequired(path.to_owned())),
+        }
+    }
+
+    pub fn get_current_branch_and_sha(
+        &self,
+        _path: &AbsoluteSystemPath,
+    ) -> (Option<String>, Option<String>) {
+        match self {
+            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
+            Self::Manual => (None, None),
+        }
+    }
+
+    /// Compute a hash that summarizes all uncommitted changes in the working
+    /// tree: staged changes, unstaged changes, and untracked files.
+    /// Returns `None` for manual SCM mode, when the working tree is clean,
+    /// or when a git command fails (errors are logged as warnings).
+    pub fn get_dirty_hash(&self) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash(),
+            Self::Manual => None,
+        }
+    }
+
+    /// Compute a dirty hash from an already-built repo index instead of
+    /// spawning `git status`. This preserves the same tracked-content diff
+    /// input as [`Self::get_dirty_hash`], while reusing the untracked-file
+    /// state Turbo already collected for file hashing.
+    pub fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash_from_repo_index(repo_index),
+            Self::Manual => None,
         }
     }
 
@@ -184,6 +209,226 @@ impl GitRepo {
         Ok(output.trim().to_owned())
     }
 
+    fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
+        if git_ref.starts_with('-') {
+            return Err(Error::InvalidGitRef(git_ref.to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Compute a hash summarizing all uncommitted state in the working tree.
+    /// Uses `git status --porcelain -z` (which files are dirty/untracked) and
+    /// `git diff HEAD` (the actual content changes for tracked files) as inputs
+    /// to a SHA-256 hash. Returns `None` if the working tree is clean or if
+    /// git commands fail (with a warning logged).
+    ///
+    /// The diff output is streamed through the hasher to avoid buffering
+    /// arbitrarily large diffs into memory. `--no-ext-diff` and `--no-binary`
+    /// ensure deterministic, bounded output regardless of user git config.
+    ///
+    /// Note: content of untracked files (not yet `git add`ed) is not included
+    /// in the diff — only their filenames from `git status` contribute.
+    fn get_dirty_hash(&self) -> Option<String> {
+        use sha2::{Digest, Sha256};
+
+        let status_output = match self.execute_git_command(&["status", "--porcelain", "-z"], "") {
+            Ok(output) => output,
+            Err(e) => {
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+                    format!("failed to get git status for dirty hash: {e}"),
+                )
+                .emit();
+                return None;
+            }
+        };
+
+        if status_output.is_empty() {
+            return None;
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(&status_output);
+        self.finish_dirty_hash(hasher, true)
+    }
+
+    fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        let has_status = repo_index.append_dirty_status_to_hasher(&mut hasher);
+
+        // If the repo index proved the working tree clean of unstaged
+        // changes, and the index's cache-tree equals HEAD's tree (no staged
+        // changes), then `git diff HEAD` is guaranteed to produce no output
+        // — skip spawning it. On stat-stale indexes (snapshot-restored
+        // workspaces) that subprocess re-hashes every tracked file with
+        // sha1dc and costs seconds of serial wall time.
+        let info_attributes_exists = self
+            .root
+            .join_components(&[".git", "info", "attributes"])
+            .exists();
+        if let Some((root, sensitivity)) =
+            repo_index.tracked_diff_clean_root(info_attributes_exists)
+        {
+            let eol_ok = match sensitivity {
+                crate::repo_index::EolSensitivity::ConfigIndependent => true,
+                crate::repo_index::EolSensitivity::RequiresInertEolConversion => {
+                    self.eol_conversion_inert()
+                }
+            };
+            if eol_ok
+                && self
+                    .head_tree_oid()
+                    .is_some_and(|head_tree| head_tree == root)
+            {
+                // The diff would have contributed nothing to the hasher, so
+                // the resulting hash is identical to the diff-running path.
+                if !has_status {
+                    return None;
+                }
+                return Some(hex::encode(hasher.finalize()));
+            }
+        }
+
+        self.finish_dirty_hash(hasher, has_status)
+    }
+
+    /// Returns true when git provably performs no eol conversion at checkin:
+    /// `core.autocrlf` is unset or false, no `core.attributesFile` is
+    /// configured, and no default global/system attribute files exist.
+    /// Conservative on any failure.
+    fn eol_conversion_inert(&self) -> bool {
+        let Ok(output) = self.execute_git_command(&["config", "-z", "--list"], "") else {
+            return false;
+        };
+        let mut autocrlf_ok = true;
+        for kv in output.split(|b| *b == 0) {
+            // `-z` output: `key\nvalue` per NUL-terminated record.
+            let mut parts = kv.splitn(2, |b| *b == b'\n');
+            let key = parts.next().unwrap_or_default();
+            let value = parts.next().unwrap_or_default();
+            match key {
+                b"core.autocrlf" => {
+                    // Last definition wins, mirroring git.
+                    autocrlf_ok = value.eq_ignore_ascii_case(b"false");
+                }
+                b"core.attributesfile" => return false,
+                _ => {}
+            }
+        }
+        if !autocrlf_ok {
+            return false;
+        }
+
+        // Default global attributes locations git consults when
+        // core.attributesFile is unset.
+        let xdg_attrs = std::env::var_os("XDG_CONFIG_HOME")
+            .map(|base| {
+                std::path::PathBuf::from(base)
+                    .join("git")
+                    .join("attributes")
+            })
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(|home| std::path::PathBuf::from(home).join(".config/git/attributes"))
+            });
+        if xdg_attrs.is_some_and(|p| p.exists()) {
+            return false;
+        }
+        // System-wide attributes. The exact path depends on git's compiled
+        // prefix; /etc/gitattributes is the common location.
+        !std::path::Path::new("/etc/gitattributes").exists()
+    }
+
+    /// Resolve `HEAD^{tree}` to its oid. `None` on failure (unborn HEAD,
+    /// corrupt repo) — callers treat that as "nothing proven".
+    fn head_tree_oid(&self) -> Option<String> {
+        let output = self
+            .execute_git_command(&["rev-parse", "HEAD^{tree}"], "")
+            .ok()?;
+        let output = String::from_utf8(output).ok()?;
+        let trimmed = output.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    }
+
+    fn finish_dirty_hash(&self, mut hasher: sha2::Sha256, has_status: bool) -> Option<String> {
+        use sha2::Digest;
+
+        // Try `git diff HEAD` first. In a freshly initialized repo with no
+        // commits, HEAD doesn't exist and git exits with code 128. Fall back
+        // to `git diff --cached` which diffs the index against an empty tree,
+        // correctly capturing staged file content without needing HEAD.
+        let diff_has_content = match self.stream_diff_into_hasher(
+            &["diff", "HEAD", "--no-ext-diff", "--no-color"],
+            &mut hasher,
+        ) {
+            Some(has_content) => has_content,
+            None => match self.stream_diff_into_hasher(
+                &["diff", "--cached", "--no-ext-diff", "--no-color"],
+                &mut hasher,
+            ) {
+                Some(has_content) => has_content,
+                None => {
+                    turborepo_log::warn(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+                        "failed to run git diff for dirty hash",
+                    )
+                    .emit();
+                    false
+                }
+            },
+        };
+
+        if !has_status && !diff_has_content {
+            return None;
+        }
+
+        Some(hex::encode(hasher.finalize()))
+    }
+
+    /// Spawn a git diff subprocess, streaming its stdout into `hasher`.
+    /// Returns whether the diff had content, or `None` if the command failed.
+    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> Option<bool> {
+        use std::{io::Read, process::Stdio};
+
+        use sha2::Digest;
+
+        let mut child = match Command::new(self.bin.as_std_path())
+            .args(args)
+            .current_dir(&self.root)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(_) => return None,
+        };
+
+        let mut has_content = false;
+        if let Some(stdout) = child.stdout.take() {
+            let mut reader = std::io::BufReader::new(stdout);
+            let mut buf = [0u8; 65536];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        has_content = true;
+                        hasher.update(&buf[..n]);
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+
+        child
+            .wait()
+            .is_ok_and(|s| s.success())
+            .then_some(has_content)
+    }
+
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
     pub fn get_github_base_ref(base_ref_env: CIEnv) -> Option<String> {
         // make sure we're running in a CI environment
@@ -236,55 +481,34 @@ impl GitRepo {
 
     fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
+            Self::validate_git_ref(valid_from)?;
             return Ok(valid_from.to_string());
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref(env) {
+            Self::validate_git_ref(&github_base_ref)?;
             // we don't fall through to checking against main or master
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            
-            // Try the github_base_ref first
-            if let Ok(_) = self.execute_git_command(&["rev-parse", &github_base_ref], "") {
-                eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                return Ok(github_base_ref);
-            }
-            
-            // Try the remote version of github_base_ref
-            let remote_github_base_ref = format!("origin/{}", github_base_ref);
-            if let Ok(_) = self.execute_git_command(&["rev-parse", &remote_github_base_ref], "") {
-                eprintln!("Resolved base ref from GitHub Actions event (remote): {remote_github_base_ref}");
-                return Ok(remote_github_base_ref);
-            }
-            
-            eprintln!(
-                "Failed to resolve base ref '{github_base_ref}' or '{remote_github_base_ref}' from GitHub Actions event"
-            );
-            return Err(Error::UnableToResolveRef);
+            return match self
+                .execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "")
+            {
+                Ok(_) => {
+                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                    Ok(github_base_ref)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
+                         event: {e}"
+                    );
+                    Err(Error::UnableToResolveRef)
+                }
+            };
         }
 
-        // Try local main branch
-        if let Ok(_) = self.execute_git_command(&["rev-parse", "main"], "") {
-            return Ok("main".to_string());
-        }
-
-        // Try remote main branch
-        if let Ok(_) = self.execute_git_command(&["rev-parse", "origin/main"], "") {
-            return Ok("origin/main".to_string());
-        }
-
-        // Try local master branch
-        if let Ok(_) = self.execute_git_command(&["rev-parse", "master"], "") {
-            return Ok("master".to_string());
-        }
-
-        // Try remote master branch
-        if let Ok(_) = self.execute_git_command(&["rev-parse", "origin/master"], "") {
-            return Ok("origin/master".to_string());
-        }
-
-        Err(Error::UnableToResolveRef)
+        default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
     fn changed_files(
@@ -305,21 +529,17 @@ impl GitRepo {
         // If a to commit is not specified for `diff-tree` it will change the comparison
         // to be between the provided commit and it's parent
         let to_commit = to_commit.unwrap_or("HEAD");
-        let mut args = vec![
-            "diff-tree",
-            "-r",
-            "--name-only",
-            "--no-commit-id",
-            &valid_from,
-            to_commit,
-        ];
+        Self::validate_git_ref(to_commit)?;
+        let mut args = vec!["diff-tree", "-r", "--name-only", "--no-commit-id", "-z"];
 
         if merge_base {
             args.push("--merge-base");
         }
 
+        args.extend(["--end-of-options", &valid_from, to_commit]);
+
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -327,14 +547,20 @@ impl GitRepo {
             // Add untracked files or unstaged changes, i.e. files that are not in git at
             // all
             let ls_files_output = self.execute_git_command(
-                &["ls-files", "--others", "--modified", "--exclude-standard"],
+                &[
+                    "ls-files",
+                    "--others",
+                    "--modified",
+                    "--exclude-standard",
+                    "-z",
+                ],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
-                self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
+                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -366,15 +592,18 @@ impl GitRepo {
         files: &mut HashSet<AnchoredSystemPathBuf>,
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
-    ) {
-        let stdout = String::from_utf8(stdout).unwrap();
-        for line in stdout.lines() {
-            let path = RelativeUnixPath::new(line).unwrap();
-            let anchored_to_turbo_root_file_path = self
-                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
-                .unwrap();
+    ) -> Result<(), Error> {
+        let stdout = String::from_utf8_lossy(&stdout);
+        for line in stdout.split('\0') {
+            if line.is_empty() {
+                continue;
+            }
+            let path = RelativeUnixPath::new(line)?;
+            let anchored_to_turbo_root_file_path =
+                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
             files.insert(anchored_to_turbo_root_file_path);
         }
+        Ok(())
     }
 
     fn reanchor_path_from_git_root_to_turbo_root(
@@ -396,8 +625,20 @@ impl GitRepo {
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
-        self.execute_git_command(&["show", &arg], "")
+        self.execute_git_command(&["show", "--end-of-options", &arg], "")
     }
+}
+
+fn default_base_ref(mut branch_exists: impl FnMut(&str) -> bool) -> Result<String, Error> {
+    if branch_exists("main") {
+        return Ok("main".to_string());
+    }
+
+    if branch_exists("master") {
+        return Ok("master".to_string());
+    }
+
+    Err(Error::UnableToResolveRef)
 }
 
 /// Finds the content of a file at a previous commit. Assumes file is in a git
@@ -431,7 +672,7 @@ pub fn previous_content(
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         collections::HashSet,
         env::VarError,
         fs,
@@ -439,32 +680,53 @@ mod tests {
         process::Command,
     };
 
-    use git2::{Oid, Repository, RepositoryInitOptions};
     use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{CIEnv, InvalidRange, previous_content};
+    use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
     use crate::{
-        Error, GitRepo, SCM,
+        Error, GitRepo, RepoGitIndex, SCM,
         git::{GitHubCommit, GitHubEvent},
     };
 
-    fn setup_repository(
-        init_opts: Option<&RepositoryInitOptions>,
-    ) -> Result<(TempDir, Repository), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init_opts(
-            repo_root.path(),
-            init_opts.unwrap_or(&RepositoryInitOptions::new()),
-        )
-        .unwrap();
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "test").unwrap();
-        config.set_str("user.email", "test@example.com").unwrap();
+    fn run_git(repo_root: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repo_root)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@test.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@test.com")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
 
-        Ok((repo_root, repo))
+    fn setup_repository(initial_head: Option<&str>) -> Result<(TempDir, PathBuf), Error> {
+        let repo_root = tempfile::tempdir()?;
+        run_git(repo_root.path(), &["init"]);
+        if let Some(branch) = initial_head {
+            run_git(
+                repo_root.path(),
+                &["symbolic-ref", "HEAD", &format!("refs/heads/{}", branch)],
+            );
+        }
+        run_git(repo_root.path(), &["config", "user.name", "test"]);
+        run_git(
+            repo_root.path(),
+            &["config", "user.email", "test@example.com"],
+        );
+
+        let path = repo_root.path().to_path_buf();
+        Ok((repo_root, path))
     }
 
     fn changed_files(
@@ -499,65 +761,23 @@ mod tests {
             .collect::<HashSet<_>>())
     }
 
-    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.add_path(path).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = previous_commit
-            .map(|oid| repo.find_commit(oid))
-            .transpose()
-            .unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            previous_commit.as_ref().as_slice(),
-        )
-        .unwrap()
+    fn commit_file(repo_root: &Path, path: &Path, _previous_commit: Option<&str>) -> String {
+        run_git(repo_root, &["add", &path.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
-    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.remove_path(path).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = repo.find_commit(previous_commit).unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            std::slice::from_ref(&&previous_commit),
-        )
-        .unwrap()
+    fn commit_delete(repo_root: &Path, path: &Path) -> String {
+        run_git(repo_root, &["rm", &path.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
-    fn commit_rename(repo: &Repository, source: &Path, dest: &Path, previous_commit: Oid) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.remove_path(source).unwrap();
-        index.add_path(dest).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = repo.find_commit(previous_commit).unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            std::slice::from_ref(&&previous_commit),
-        )
-        .unwrap()
+    fn commit_rename(repo_root: &Path, source: &Path, dest: &Path) -> String {
+        run_git(repo_root, &["rm", &source.to_string_lossy()]);
+        run_git(repo_root, &["add", &dest.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
     #[test]
@@ -603,18 +823,17 @@ mod tests {
 
     #[test]
     fn test_deleted_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, file_path, None);
+        let first_commit_sha = commit_file(&repo_path, file_path, None);
 
         fs::remove_file(&file)?;
-        let _second_commit_oid = commit_delete(&repo, file_path, first_commit_oid);
+        let _second_commit_sha = commit_delete(&repo_path, file_path);
 
-        let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
         let files = changed_files(
@@ -631,20 +850,19 @@ mod tests {
 
     #[test]
     fn test_renamed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, file_path, None);
+        let first_commit_sha = commit_file(&repo_path, file_path, None);
 
         fs::rename(file, repo_root.path().join("bar.js")).unwrap();
 
         let new_file_path = Path::new("bar.js");
-        let _second_commit_oid = commit_rename(&repo, file_path, new_file_path, first_commit_oid);
+        let _second_commit_sha = commit_rename(&repo_path, file_path, new_file_path);
 
-        let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
         let files = changed_files(
@@ -663,41 +881,47 @@ mod tests {
     }
     #[test]
     fn test_merge_base() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let first_file = repo_root.path().join("foo.js");
         fs::write(first_file, "let z = 0;")?;
         // Create a base commit. This will *not* be the merge base
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
 
         let second_file = repo_root.path().join("bar.js");
         fs::write(second_file, "let y = 1;")?;
         // This commit will be the merge base
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&first_commit_sha));
 
         let third_file = repo_root.path().join("baz.js");
         fs::write(third_file, "let x = 2;")?;
         // Create a first commit off of merge base
-        let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid));
+        let third_commit_sha =
+            commit_file(&repo_path, Path::new("baz.js"), Some(&second_commit_sha));
 
-        // Move head back to merge base
-        repo.set_head_detached(second_commit_oid).unwrap();
+        // Move HEAD back to merge base without resetting the working tree.
+        // `git reset --soft` moves HEAD but keeps the index and working tree intact,
+        // matching the old git2 `set_head_detached` behavior.
+        run_git(&repo_path, &["reset", "--soft", &second_commit_sha]);
         let fourth_file = repo_root.path().join("qux.js");
         fs::write(fourth_file, "let w = 3;")?;
         // Create a second commit off of merge base
-        let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid));
+        let fourth_commit_sha =
+            commit_file(&repo_path, Path::new("qux.js"), Some(&second_commit_sha));
 
-        repo.set_head_detached(third_commit_oid).unwrap();
-        let merge_base = repo
-            .merge_base(third_commit_oid, fourth_commit_oid)
-            .unwrap();
+        run_git(&repo_path, &["checkout", "--detach", &third_commit_sha]);
+        let merge_base = run_git(
+            &repo_path,
+            &["merge-base", &third_commit_sha, &fourth_commit_sha],
+        );
 
-        assert_eq!(merge_base, second_commit_oid);
+        assert_eq!(merge_base, second_commit_sha);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(&third_commit_oid.to_string()),
-            Some(&fourth_commit_oid.to_string()),
+            Some(&third_commit_sha),
+            Some(&fourth_commit_sha),
             false,
         )?;
 
@@ -711,14 +935,13 @@ mod tests {
 
     #[test]
     fn test_changed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
-        let mut index = repo.index().unwrap();
+        let (repo_root, repo_path) = setup_repository(None)?;
         let turbo_root = repo_root.path();
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -757,8 +980,7 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Add file to index
-        index.add_path(Path::new("bar.js")).unwrap();
-        index.write().unwrap();
+        run_git(&repo_path, &["add", "bar.js"]);
 
         // Test that uncommitted file in index is not marked as changed when not
         // checking uncommitted
@@ -782,14 +1004,15 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Now commit file
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&first_commit_sha));
 
         // Test that only second file is marked as changed when we check commit range
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(second_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
@@ -803,8 +1026,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(second_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
@@ -813,7 +1036,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             None,
             true,
         )?;
@@ -823,18 +1046,18 @@ mod tests {
         );
 
         // Commit the new file so it shows up in the changed files
-        let third_commit_oid = commit_file(
-            &repo,
+        let third_commit_sha = commit_file(
+            &repo_path,
             &Path::new("subdir").join("baz.js"),
-            Some(second_commit_oid),
+            Some(&second_commit_sha),
         );
 
         // Test that `turbo_root` filters out files not in the specified directory
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(third_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(third_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
@@ -844,12 +1067,12 @@ mod tests {
 
     #[test]
     fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        commit_file(&repo, Path::new("foo.js"), None);
+        commit_file(&repo_path, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -873,7 +1096,7 @@ mod tests {
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
     fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
         // Create additional nested directory to test that we return a system path
@@ -882,7 +1105,7 @@ mod tests {
 
         let file = repo_root.path().join("subdir").join("foo.js");
         fs::write(file, "let z = 0;")?;
-        let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("subdir/foo.js"), None);
 
         let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
@@ -905,21 +1128,19 @@ mod tests {
             assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
         }
 
-        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit));
+        commit_file(
+            &repo_path,
+            Path::new("subdir/src/bar.js"),
+            Some(&first_commit_sha),
+        );
+
+        let head_sha = run_git(&repo_path, &["rev-parse", "HEAD"]);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit.to_string().as_str()),
-            Some(
-                repo.head()
-                    .unwrap()
-                    .peel_to_commit()
-                    .unwrap()
-                    .id()
-                    .to_string()
-                    .as_str(),
-            ),
+            Some(first_commit_sha.as_str()),
+            Some(head_sha.as_str()),
             false,
         )?;
 
@@ -938,19 +1159,20 @@ mod tests {
 
     #[test]
     fn test_previous_content() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
         let file = root.join_component("foo.js");
         file.create_with_contents("let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("foo.js"), Some(&first_commit_sha));
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
             file.to_string(),
         )?;
 
@@ -958,14 +1180,14 @@ mod tests {
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             file.to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             "foo.js".to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
@@ -975,20 +1197,21 @@ mod tests {
 
     #[test]
     fn test_revparse() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let file = root.join_component("foo.js");
         file.create_with_contents("let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("foo.js"), Some(&first_commit_sha));
 
-        let revparsed_head = repo.revparse_single("HEAD").unwrap();
-        assert_eq!(revparsed_head.id(), second_commit_oid);
-        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1").unwrap();
-        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
+        let revparsed_head = run_git(&repo_path, &["rev-parse", "HEAD"]);
+        assert_eq!(revparsed_head, second_commit_sha);
+        let revparsed_head_minus_1 = run_git(&repo_path, &["rev-parse", "HEAD~1"]);
+        assert_eq!(revparsed_head_minus_1, first_commit_sha);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
@@ -1008,9 +1231,9 @@ mod tests {
 
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 0;")?;
-        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid));
-        let third_commit = repo.find_commit(third_commit_oid).unwrap();
-        repo.branch("release-1", &third_commit, false).unwrap();
+        let third_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&second_commit_sha));
+        run_git(&repo_path, &["branch", "release-1", &third_commit_sha]);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
@@ -1024,157 +1247,99 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(vec!["main"],                      None,            Some("main"))]
-    #[test_case(vec!["master"],                    None,            Some("master"))]
-    #[test_case(vec!["ziltoid"],                   None,            None)]
-    #[test_case(vec!["ziltoid", "main"],           Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "main"],           Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "main"],           None,            Some("main"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master"],         None,            Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "master", "main"], None,            Some("main"))]
-    fn test_base_resolution(
-        branches_to_create: Vec<&str>,
-        target_branch: Option<&str>,
-        expected: Option<&str>,
-    ) -> Result<(), Error> {
-        let mut repo_opts = RepositoryInitOptions::new();
+    #[test]
+    fn test_default_base_ref_resolution() {
+        for (branches, expected) in [
+            (vec!["main"], Some("main")),
+            (vec!["master"], Some("master")),
+            (vec!["ziltoid"], None),
+            (vec!["ziltoid", "main"], Some("main")),
+            (vec!["ziltoid", "master"], Some("master")),
+            (vec!["ziltoid", "master", "main"], Some("main")),
+        ] {
+            let branches = HashSet::<&str>::from_iter(branches);
+            let actual = default_base_ref(|branch| branches.contains(branch)).ok();
 
-        let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
+            assert_eq!(actual.as_deref(), expected);
+        }
+    }
 
-        let repo_init = repo_opts.initial_head(first_branch);
-        let (repo_root, repo) = setup_repository(Some(repo_init))?;
+    #[test]
+    fn test_base_resolution_uses_override_before_default_branches() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        // WARNING:
-        // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. make async Rust good")?;
-        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
-        let commit = repo.find_commit(first_commit).unwrap();
+        commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        remaining_branches.iter().for_each(|branch| {
-            repo.branch(branch, &commit, true).unwrap();
-        });
+        let git = GitRepo::find(&root).unwrap();
+        let actual = git.resolve_base(Some("ziltoid"), CIEnv::none())?;
 
-        let thing = GitRepo::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
-
-        assert_eq!(actual.as_deref(), expected);
+        assert_eq!(actual, "ziltoid");
 
         Ok(())
     }
 
     #[test]
-    fn test_resolve_base_falls_back_to_remote_main() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+    fn test_changed_files_rejects_option_like_refs() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let file = root.join_component("todo.txt");
-        file.create_with_contents("1. test remote fallback")?;
-        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        // Delete the local main branch that was created by the commit
-        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
 
-        // Create a remote tracking branch for main
-        repo.reference(
-            "refs/remotes/origin/main",
-            first_commit,
-            false,
-            "create remote main",
-        ).unwrap();
+        let scm = SCM::new(&root);
+        let base_result =
+            scm.changed_files(&root, Some(&injected_ref), Some("HEAD"), false, false, true);
 
-        let git_repo = GitRepo::find(&root).unwrap();
-        let result = git_repo.resolve_base(None, CIEnv::none()).unwrap();
+        assert_matches!(
+            base_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
 
-        assert_eq!(result, "origin/main");
+        let head_result =
+            scm.changed_files(&root, Some("HEAD"), Some(&injected_ref), false, false, true);
+
+        assert_matches!(
+            head_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
+
         Ok(())
     }
 
     #[test]
-    fn test_resolve_base_falls_back_to_remote_master() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+    fn test_previous_content_rejects_option_like_ref() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let file = root.join_component("todo.txt");
-        file.create_with_contents("1. test remote fallback")?;
-        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        // Delete the local main branch that was created by the commit
-        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
+        let result = previous_content(
+            repo_root.path().to_path_buf(),
+            Some(&injected_ref),
+            file.to_string(),
+        );
 
-        // Create a remote tracking branch for master (no main exists)
-        repo.reference(
-            "refs/remotes/origin/master",
-            first_commit,
-            false,
-            "create remote master",
-        ).unwrap();
+        assert_matches!(
+            result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
 
-        let git_repo = GitRepo::find(&root).unwrap();
-        let result = git_repo.resolve_base(None, CIEnv::none()).unwrap();
-
-        assert_eq!(result, "origin/master");
-        Ok(())
-    }
-
-    #[test]
-    fn test_resolve_base_github_actions_falls_back_to_remote() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
-        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let file = root.join_component("todo.txt");
-        file.create_with_contents("1. test github remote fallback")?;
-        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
-
-        // Delete the local main branch that was created by the commit
-        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
-
-        // Create a remote tracking branch for feature-branch
-        repo.reference(
-            "refs/remotes/origin/feature-branch",
-            first_commit,
-            false,
-            "create remote feature-branch",
-        ).unwrap();
-
-        let env = CIEnv {
-            is_github_actions: true,
-            github_base_ref: Ok("feature-branch".to_string()),
-            github_event_path: Err(VarError::NotPresent),
-        };
-
-        let git_repo = GitRepo::find(&root).unwrap();
-        let result = git_repo.resolve_base(None, env).unwrap();
-
-        assert_eq!(result, "origin/feature-branch");
-        Ok(())
-    }
-
-    #[test]
-    fn test_resolve_base_github_actions_errors_when_branch_missing() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
-        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let file = root.join_component("todo.txt");
-        file.create_with_contents("1. test error case")?;
-        let _first_commit = commit_file(&repo, Path::new("todo.txt"), None);
-
-        let env = CIEnv {
-            is_github_actions: true,
-            github_base_ref: Ok("non-existent-branch".to_string()),
-            github_event_path: Err(VarError::NotPresent),
-        };
-
-        let git_repo = GitRepo::find(&root).unwrap();
-        let result = git_repo.resolve_base(None, env);
-
-        assert_matches!(result, Err(Error::UnableToResolveRef));
         Ok(())
     }
 
@@ -1191,7 +1356,7 @@ mod tests {
 
         assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
 
-        let (repo_root, _repo) = setup_repository(None)?;
+        let (repo_root, _repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let commit_does_not_exist = changed_files(
@@ -1230,17 +1395,14 @@ mod tests {
 
     #[test]
     fn test_changed_files_no_base() -> Result<(), Error> {
-        let mut repo_opts = RepositoryInitOptions::new();
-
-        let repo_init = repo_opts.initial_head("my-main");
-        let (repo_root, repo) = setup_repository(Some(repo_init))?;
+        let (repo_root, repo_path) = setup_repository(Some("my-main"))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         // WARNING:
         // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. explain why async Rust is good")?;
-        let _first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+        let _first_commit = commit_file(&repo_path, Path::new("todo.txt"), None);
 
         let scm = SCM::new(&root);
         let actual = scm
@@ -1253,6 +1415,106 @@ mod tests {
                 from_ref: None,
                 to_ref: Some("HEAD".to_string()),
             })
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_unicode_filenames_in_changed_files() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        // Test various Unicode filenames that should be properly handled with -z flag
+        let test_files = vec![
+            "测试文件.txt",      // Chinese
+            "テストファイル.js", // Japanese
+            "файл.rs",           // Cyrillic
+            "file with spaces.txt",
+            "emoji_🚀.md",
+            "café.ts",  // Latin with diacritics
+            "ñoño.jsx", // Spanish with tildes
+            "αβγ.py",   // Greek
+        ];
+
+        // Create initial commit with a base file
+        let base_file = root.join_component("base.txt");
+        base_file.create_with_contents("base content")?;
+        let first_commit_sha = commit_file(&repo_path, Path::new("base.txt"), None);
+
+        // Create and commit all Unicode files
+        for filename in &test_files {
+            let file_path = root.join_component(filename);
+            file_path.create_with_contents(format!("content for {}", filename))?;
+        }
+
+        // Get changed files with uncommitted Unicode files
+        let scm = SCM::new(&root);
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        // Verify all Unicode files are detected in uncommitted changes
+        for filename in &test_files {
+            assert!(
+                files.iter().any(|f| f.to_string().contains(filename)),
+                "Failed to detect uncommitted Unicode file: {}",
+                filename
+            );
+        }
+
+        // Commit all Unicode files
+        let mut last_commit = first_commit_sha.clone();
+        for filename in &test_files {
+            last_commit = commit_file(&repo_path, Path::new(filename), Some(&last_commit));
+        }
+
+        // Test committed Unicode files in range
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some(first_commit_sha.as_str()),
+            Some("HEAD"),
+            false,
+        )?;
+
+        // Verify all Unicode files are detected in commit range
+        for filename in &test_files {
+            assert!(
+                files.iter().any(|f| f.contains(filename)),
+                "Failed to detect committed Unicode file: {}",
+                filename
+            );
+        }
+
+        // Test modification of Unicode files
+        let modified_file = "测试文件.txt";
+        let file_path = root.join_component(modified_file);
+        file_path.create_with_contents("modified content")?;
+
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        assert!(
+            files.iter().any(|f| f.to_string().contains(modified_file)),
+            "Failed to detect modified Unicode file: {}",
+            modified_file
+        );
+
+        // Test deletion of Unicode files
+        let delete_file = "emoji_🚀.md";
+        let file_path = root.join_component(delete_file);
+        std::fs::remove_file(file_path.as_std_path())?;
+
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        assert!(
+            files.iter().any(|f| f.to_string().contains(delete_file)),
+            "Failed to detect deleted Unicode file: {}",
+            delete_file
         );
 
         Ok(())
@@ -1436,5 +1698,719 @@ mod tests {
         let actual = github_event.get_parent_ref_of_first_commit();
 
         assert_eq!(None, actual);
+    }
+
+    #[test]
+    fn test_dirty_hash_clean_tree_returns_none() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert_eq!(scm.get_dirty_hash(), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_unstaged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "modified").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_staged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "staged content").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_untracked_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(repo_root.path().join("untracked.txt"), "new file").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_deterministic() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "dirty").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash1 = scm.get_dirty_hash();
+        let hash2 = scm.get_dirty_hash();
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_dirty_hash_different_content_produces_different_hash() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "content A").unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash_a = scm.get_dirty_hash();
+
+        fs::write(&file, "content B").unwrap();
+        let hash_b = scm.get_dirty_hash();
+
+        assert_ne!(
+            hash_a, hash_b,
+            "different content should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_manual_scm_returns_none() {
+        assert_eq!(SCM::Manual.get_dirty_hash(), None);
+    }
+
+    /// Differential matrix: the repo-index dirty hash must agree with the
+    /// `git status`-based dirty hash on whether the tree is dirty, across
+    /// every class of working-tree state. This is the contract that protects
+    /// cache provenance metadata from regressing.
+    #[test]
+    fn test_dirty_hash_paths_agree_across_states() {
+        type Mutation = fn(&Path);
+        let cases: &[(&str, Mutation, bool)] = &[
+            ("clean", |_root| {}, false),
+            (
+                "unstaged_modification",
+                |root| fs::write(root.join("foo.txt"), "modified").unwrap(),
+                true,
+            ),
+            (
+                "staged_modification",
+                |root| {
+                    fs::write(root.join("foo.txt"), "staged").unwrap();
+                    run_git(root, &["add", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_new_file",
+                |root| {
+                    fs::write(root.join("brand_new.txt"), "new").unwrap();
+                    run_git(root, &["add", "brand_new.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_deletion",
+                |root| {
+                    run_git(root, &["rm", "-q", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "unstaged_deletion",
+                |root| fs::remove_file(root.join("foo.txt")).unwrap(),
+                true,
+            ),
+            (
+                "untracked_file",
+                |root| fs::write(root.join("untracked.txt"), "hi").unwrap(),
+                true,
+            ),
+            (
+                "untracked_nested",
+                |root| {
+                    fs::create_dir_all(root.join("deep/dir")).unwrap();
+                    fs::write(root.join("deep/dir/f.txt"), "hi").unwrap();
+                },
+                true,
+            ),
+            (
+                "gitignored_untracked",
+                |root| fs::write(root.join("ignored.tmp"), "hi").unwrap(),
+                false,
+            ),
+            (
+                "intent_to_add",
+                |root| {
+                    fs::write(root.join("ita.txt"), "ita").unwrap();
+                    run_git(root, &["add", "-N", "ita.txt"]);
+                },
+                true,
+            ),
+            (
+                "racy_rewrite_same_content",
+                |root| {
+                    // Rewrite identical content: mtime changes, content does
+                    // not. The gix index conservatively classifies this as
+                    // modified; the dirty hash must not.
+                    let path = root.join("foo.txt");
+                    let content = fs::read(&path).unwrap();
+                    fs::write(&path, content).unwrap();
+                },
+                false,
+            ),
+        ];
+
+        for (name, mutate, expected_dirty) in cases {
+            let (repo_root, repo_path) = setup_repository(None).unwrap();
+            fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+            fs::write(repo_root.path().join(".gitignore"), "*.tmp\n").unwrap();
+            commit_file(&repo_path, Path::new("foo.txt"), None);
+            run_git(repo_root.path(), &["add", ".gitignore"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "gitignore"]);
+
+            mutate(repo_root.path());
+
+            let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+            let scm = SCM::new(&git_root);
+            let git = make_git_repo(&git_root);
+            let repo_index = RepoGitIndex::new(&git).unwrap();
+
+            let old = scm.get_dirty_hash();
+            let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+            assert_eq!(
+                old.is_some(),
+                *expected_dirty,
+                "{name}: status-based path expected dirty={expected_dirty}, got {old:?}"
+            );
+            assert_eq!(
+                new.is_some(),
+                *expected_dirty,
+                "{name}: repo-index path expected dirty={expected_dirty}, got {new:?}"
+            );
+
+            // Determinism: rebuilding the index over the same state must
+            // reproduce the same hash.
+            let repo_index2 = RepoGitIndex::new(&git).unwrap();
+            let new2 = scm.get_dirty_hash_from_repo_index(&repo_index2);
+            assert_eq!(
+                new, new2,
+                "{name}: repo-index dirty hash must be deterministic"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_unstaged_modification() {
+        // Regression test: an unstaged modification to a tracked file must
+        // produce a dirty hash. An earlier version of the repo-index path
+        // short-circuited on `git diff --cached` (staged-only) and missed
+        // this, the most common dirty state.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "modified but not staged").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "unstaged modification must produce a dirty hash"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_name_sensitivity() {
+        // Different untracked file names must produce different hashes.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+
+        fs::write(repo_root.path().join("name_one.txt"), "x").unwrap();
+        let hash_one = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+        fs::remove_file(repo_root.path().join("name_one.txt")).unwrap();
+
+        fs::write(repo_root.path().join("name_two.txt"), "x").unwrap();
+        let hash_two = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+
+        assert_ne!(
+            hash_one, hash_two,
+            "different untracked file names must produce different hashes"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_dirty_hash_untracked_symlink_agreement() {
+        // An untracked symlink is the one entry class where the repo-index
+        // untracked walk (regular files only) and `git status` (lists
+        // symlinks) could disagree. Pin whatever the truth is.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("untracked_link")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let old = scm.get_dirty_hash();
+        let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+        assert_eq!(
+            old.is_some(),
+            new.is_some(),
+            "untracked symlink dirtiness must agree: status-based={old:?}, repo-index={new:?}"
+        );
+        assert!(new.is_some(), "untracked symlink must dirty the tree");
+
+        // A broken symlink is still untracked state.
+        fs::remove_file(repo_root.path().join("untracked_link")).unwrap();
+        std::os::unix::fs::symlink("does_not_exist", repo_root.path().join("broken_link")).unwrap();
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+        let broken = scm.get_dirty_hash_from_repo_index(&repo_index);
+        assert!(
+            broken.is_some(),
+            "broken untracked symlink must dirty the tree"
+        );
+        assert_ne!(
+            new, broken,
+            "different symlink names must produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_clean_tree_returns_none() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(repo_root.path().join("untracked.txt"), "new file").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_staged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "staged content").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    /// After `git read-tree HEAD` every index entry loses its stat info, so
+    /// every tracked file becomes a verification candidate (the
+    /// snapshot-restored-workspace scenario). On a clean tree the
+    /// verification pass must prove `git diff HEAD` empty and skip it.
+    #[test]
+    fn test_dirty_hash_stale_index_clean_tree_skips_diff() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "other content\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+            run_git(repo_root.path(), &["add", "link.txt"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+        }
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_some(),
+            "clean stale index must prove the tree clean"
+        );
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A genuinely modified file on a stale index must block the skip and
+    /// produce a dirty hash through the diff path.
+    #[test]
+    fn test_dirty_hash_stale_index_modified_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "changed").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Staged changes invalidate the index's cache-tree, so the skip gate
+    /// must not fire even when every candidate verifies clean.
+    #[test]
+    fn test_dirty_hash_stale_index_staged_change_blocks_skip() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "staged").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "staged change must block the diff skip"
+        );
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// An exec-bit flip is content-identical but `git diff HEAD` reports it
+    /// as a mode change. Verification must not let the skip fire.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_exec_bit_flip() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::set_permissions(
+            repo_root.path().join("foo.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "exec-bit mismatch must block the diff skip"
+        );
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "mode change must produce a dirty hash"
+        );
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// CRLF-containing content that raw-matches the index blocks the skip
+    /// (git's checkin conversion could disagree under configs we don't
+    /// read), but the diff then confirms cleanliness — both paths must
+    /// still report clean.
+    #[test]
+    fn test_dirty_hash_stale_index_crlf_content_stays_clean() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("win.txt"), b"a\r\nb\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "win.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "crlf"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "CRLF text content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// Binary content with CRLFs must not be treated as config-independent:
+    /// a forced `text` attribute from a global/system attributes file makes
+    /// git eol-convert even binary content, so the proof must stay
+    /// eol-sensitive.
+    #[test]
+    fn test_dirty_hash_stale_index_binary_crlf_content_stays_eol_sensitive() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("blob.bin"), b"\x00binary\r\ndata\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "blob.bin"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bin"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "binary CRLF content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A retargeted symlink on a stale index must be caught as dirty.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_symlink_retarget() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+        run_git(repo_root.path(), &["add", "link.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::remove_file(repo_root.path().join("link.txt")).unwrap();
+        std::os::unix::fs::symlink("elsewhere.txt", repo_root.path().join("link.txt")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Verified stat-stale entries must yield identical package hashes to a
+    /// fresh index, with nothing left to re-hash per package.
+    #[test]
+    fn test_stale_index_package_hashes_match_fresh() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "more\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let git = make_git_repo(&git_root);
+        let prefix = turbopath::RelativeUnixPathBuf::new("").unwrap();
+
+        let fresh = RepoGitIndex::new(&git).unwrap();
+        let (fresh_hashes, _fresh_to_hash) = fresh.get_package_hashes(&prefix).unwrap();
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let stale = RepoGitIndex::new(&git).unwrap();
+        let (stale_hashes, stale_to_hash) = stale.get_package_hashes(&prefix).unwrap();
+
+        assert_eq!(
+            fresh_hashes, stale_hashes,
+            "stale-index package hashes must match fresh-index hashes"
+        );
+        assert!(
+            stale_to_hash.is_empty(),
+            "verified entries must not be deferred to per-package hashing, got {stale_to_hash:?}"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_no_commits_untracked_file() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("new.txt"), "hello").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(
+            scm.get_dirty_hash().is_some(),
+            "fresh repo with untracked files should produce a dirty hash"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_no_commits_staged_content_affects_hash() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+
+        fs::write(&file, "content A").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash_a = scm.get_dirty_hash();
+
+        fs::write(&file, "content B").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+        let hash_b = scm.get_dirty_hash();
+
+        assert_ne!(
+            hash_a, hash_b,
+            "different staged content in a fresh repo should produce different hashes"
+        );
+    }
+
+    fn make_git_repo(root: &AbsoluteSystemPath) -> GitRepo {
+        let bin = GitRepo::find_bin().expect("git binary required for tests");
+        GitRepo {
+            root: root.to_owned(),
+            bin,
+            attrs: std::sync::OnceLock::new(),
+            slowest_files: None,
+        }
+    }
+
+    #[test]
+    fn test_add_files_from_stdout_rejects_absolute_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let repo = make_git_repo(&root);
+
+        let stdout = b"/absolute/path\0normal/file\0".to_vec();
+        let mut files = HashSet::new();
+        let result = repo.add_files_from_stdout(&mut files, &root, stdout);
+
+        assert_matches!(result, Err(Error::Path(PathError::NotRelative(_), _)));
+        assert!(
+            files.is_empty(),
+            "no files should be added before the error"
+        );
+    }
+
+    #[test]
+    fn test_add_files_from_stdout_rejects_unanchorable_paths() {
+        let git_root_dir = tempfile::tempdir().unwrap();
+        let turbo_root_dir = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(git_root_dir.path()).unwrap();
+        let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root_dir.path()).unwrap();
+        let repo = make_git_repo(&git_root);
+
+        // Path is valid and relative, but when joined with git_root it produces an
+        // absolute path that isn't under turbo_root — reanchoring fails.
+        let stdout = b"some/file.txt\0".to_vec();
+        let mut files = HashSet::new();
+        let result = repo.add_files_from_stdout(&mut files, &turbo_root, stdout);
+
+        assert_matches!(result, Err(Error::Path(PathError::NotParent(_, _), _)));
+    }
+
+    #[test]
+    fn test_changed_files_propagates_path_error() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("foo.txt");
+        file.create_with_contents("content")?;
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let new_file = root.join_component("bar.txt");
+        new_file.create_with_contents("new content")?;
+
+        // Use a turbo_root that is NOT a subdirectory of the git root.
+        // The turbo_root_relative_to_git_root check at the start of changed_files
+        // will fail, producing Error::Path.
+        let separate_dir = tempfile::tempdir()?;
+        let bad_turbo_root = AbsoluteSystemPathBuf::try_from(separate_dir.path()).unwrap();
+        let scm = SCM::new(&root);
+
+        let result = scm.changed_files(&bad_turbo_root, Some("HEAD"), None, true, false, false);
+        assert_matches!(result, Err(Error::Path(PathError::NotParent(_, _), _)));
+
+        Ok(())
     }
 }

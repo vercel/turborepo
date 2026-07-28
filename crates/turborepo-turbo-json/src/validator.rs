@@ -1,0 +1,431 @@
+//! Validation logic for turbo.json configurations
+//!
+//! This module provides the `Validator` struct and validation functions for
+//! turbo.json files. Validation rules differ between root turbo.json and
+//! package configuration files.
+
+use miette::{NamedSource, SourceSpan};
+use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
+
+use crate::{
+    TurboJson,
+    error::{Error, UnnecessaryPackageTaskSyntaxError},
+};
+
+/// Delimiter used for topological dependencies in task definitions (e.g.,
+/// "^build")
+pub const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
+
+/// Type alias for validation functions
+///
+/// Each validation function takes a reference to a Validator and a TurboJson,
+/// and returns a vector of errors found during validation.
+pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
+
+const ROOT_VALIDATIONS: &[TurboJSONValidation] = &[
+    validate_with_has_no_topo,
+    validate_no_task_extends_in_root,
+    validate_root_command_positions,
+];
+const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
+    validate_with_has_no_topo,
+    validate_no_package_task_syntax,
+    validate_extends,
+    validate_package_command_positions,
+];
+
+/// Validator for TurboJson structures with context-aware validation
+///
+/// The validator applies different validation rules based on whether the
+/// turbo.json is a root configuration or a package configuration:
+///
+/// - Root turbo.json: Cannot have task-level `extends`, can have `globalEnv`,
+///   etc.
+/// - Package turbo.json: Must have `extends`, cannot use package task syntax
+pub struct Validator {}
+
+impl Validator {
+    /// Creates a new validator instance
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Builder method to configure the validator with future flags
+    ///
+    /// Future flags can enable or disable certain validation rules based on
+    /// feature flags defined in the root turbo.json.
+    pub fn with_future_flags(self, _future_flags: crate::FutureFlags) -> Self {
+        // Currently a no-op, but allows for future extension
+        self
+    }
+
+    /// Validates a TurboJson based on its package context
+    ///
+    /// Root turbo.json files have different validation rules than Package
+    /// Configuration files. This method automatically selects the appropriate
+    /// validation rules based on:
+    ///
+    /// 1. The package name (Root vs Other)
+    /// 2. Whether the config file is actually the root turbo.json (detected by
+    ///    path)
+    ///
+    /// # Arguments
+    ///
+    /// * `package_name` - The name of the package this turbo.json belongs to
+    /// * `turbo_json` - The parsed TurboJson to validate
+    ///
+    /// # Returns
+    ///
+    /// A vector of validation errors. Empty if validation passes.
+    pub fn validate_turbo_json(
+        &self,
+        package_name: &PackageName,
+        turbo_json: &TurboJson,
+    ) -> Vec<Error> {
+        // Check if this is the root turbo.json based on its path.
+        // This can happen when a workspace includes "." as a package. In that
+        // case, the root turbo.json would be loaded for that package but should
+        // still be validated with root schema.
+        let is_root_turbo_json = turbo_json.is_root_config();
+        let validations = match package_name {
+            PackageName::Root => ROOT_VALIDATIONS,
+            PackageName::Other(_) if is_root_turbo_json => ROOT_VALIDATIONS,
+            PackageName::Other(_) => PACKAGE_VALIDATIONS,
+        };
+        validations
+            .iter()
+            .flat_map(|validation| validation(self, turbo_json))
+            .collect()
+    }
+}
+
+impl Default for Validator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Validates that package task syntax is not used in workspace turbo.json
+///
+/// In workspace turbo.json files, tasks should be defined without the package
+/// prefix (e.g., "build" instead of "my-package#build").
+pub fn validate_no_package_task_syntax(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter(|(task_name, _)| task_name.is_package_task())
+        .map(|(task_name, entry)| {
+            let (span, text) = entry.span_and_text("turbo.json");
+            Error::UnnecessaryPackageTaskSyntax(Box::new(UnnecessaryPackageTaskSyntaxError {
+                actual: task_name.to_string(),
+                wanted: task_name.task().to_string(),
+                span,
+                text,
+            }))
+        })
+        .collect()
+}
+
+/// Validates that the `extends` field is properly configured
+///
+/// Package turbo.json files must:
+/// 1. Have an `extends` field (cannot be empty)
+/// 2. Have "//" (root) as the first entry when extending from multiple packages
+pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
+    if turbo_json.extends.is_empty() {
+        let path = turbo_json.path().map_or("turbo.json", |p| p.as_ref());
+
+        let (span, text) = match turbo_json.text() {
+            Some(text) => {
+                let len = text.len();
+                let span: SourceSpan = (0, len - 1).into();
+                (Some(span), text.to_string())
+            }
+            None => (None, String::new()),
+        };
+
+        return vec![Error::NoExtends {
+            span,
+            text: NamedSource::new(path, text),
+        }];
+    }
+    // Root must always be first when extending from multiple packages
+    if let Some(package_name) = turbo_json
+        .extends
+        .first()
+        .filter(|name| *name != ROOT_PKG_NAME)
+    {
+        let _ = package_name; // Used for the filter condition
+        let path = turbo_json.path().map_or("turbo.json", |p| p.as_ref());
+
+        let (span, text) = match turbo_json.text() {
+            Some(text) => {
+                let len = text.len();
+                let span: SourceSpan = (0, len - 1).into();
+                (Some(span), text.to_string())
+            }
+            None => (None, String::new()),
+        };
+        // Root needs to be first
+        return vec![Error::ExtendsRootFirst {
+            span,
+            text: NamedSource::new(path, text),
+        }];
+    }
+    vec![]
+}
+
+/// Validates that the `with` field does not contain topological dependencies
+///
+/// The `with` field is used to specify sibling tasks that should run alongside
+/// the current task. It cannot use the "^" prefix which denotes topological
+/// (dependency) relationships.
+pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .values()
+        .flat_map(|definition| {
+            definition.with.iter().flatten().filter_map(|with_task| {
+                if with_task.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
+                    let (span, text) = with_task.span_and_text("turbo.json");
+                    Some(Error::InvalidTaskWith { span, text })
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
+}
+
+/// Validates that task-level `extends` is not used in root turbo.json
+///
+/// The task-level `extends` field (which controls whether a task inherits
+/// from root configuration) can only be used in package turbo.json files,
+/// not in the root turbo.json.
+pub fn validate_no_task_extends_in_root(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            if let Some(spanned) = definition.extends.as_ref() {
+                let (span, text) = spanned.span_and_text("turbo.json");
+                Some(Error::TaskExtendsInRoot {
+                    task_name: task_name.to_string(),
+                    span,
+                    text,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Validates `command` positions in the root turbo.json.
+///
+/// The per-toolchain map form is a *default* — it only makes sense on
+/// unscoped tasks, where the toolchain is not yet determined. An opt-out
+/// (`null`/`[]`) is the opposite: it cancels a broader default for one
+/// package, so it only makes sense in package-scoped positions.
+pub fn validate_root_command_positions(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            let command = definition.command.as_ref()?;
+            let scoped = task_name.package().is_some();
+            match command.as_inner() {
+                crate::raw::RawCommand::PerToolchain(_) if scoped => {
+                    let (span, text) = command.span_and_text("turbo.json");
+                    Some(Error::TaskCommandMapInScopedPosition {
+                        task_name: task_name.to_string(),
+                        span,
+                        text,
+                    })
+                }
+                crate::raw::RawCommand::OptOut if !scoped => {
+                    let (span, text) = command.span_and_text("turbo.json");
+                    Some(Error::TaskCommandOptOutUnscoped {
+                        task_name: task_name.to_string(),
+                        span,
+                        text,
+                    })
+                }
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// Validates `command` shapes in Package Configurations: the file already
+/// scopes every task to one package (and one toolchain), so the
+/// per-toolchain map form is never valid. Opt-outs are — that is their
+/// natural home.
+pub fn validate_package_command_positions(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            let command = definition.command.as_ref()?;
+            if matches!(command.as_inner(), crate::raw::RawCommand::PerToolchain(_)) {
+                let (span, text) = command.span_and_text("turbo.json");
+                Some(Error::TaskCommandMapInScopedPosition {
+                    task_name: task_name.to_string(),
+                    span,
+                    text,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{RawPackageTurboJson, RawTurboJson};
+
+    #[test]
+    fn test_validator_new() {
+        let _validator = Validator::new();
+        // Just verify it can be created
+    }
+
+    #[test]
+    fn test_validator_default() {
+        let _validator = Validator::default();
+        // Just verify default works
+    }
+
+    #[test]
+    fn test_validator_with_future_flags() {
+        let _validator = Validator::new().with_future_flags(crate::FutureFlags::default());
+        // Just verify the builder pattern works
+    }
+
+    #[test]
+    fn test_topological_delimiter_constant() {
+        assert_eq!(TOPOLOGICAL_PIPELINE_DELIMITER, "^");
+    }
+
+    #[test]
+    fn test_command_map_rejected_in_scoped_positions() {
+        // Root turbo.json: a package-scoped key already determines the
+        // toolchain, so the map form is noise.
+        let raw = crate::RawRootTurboJson::parse(
+            r#"{"tasks":{"web#test":{"command":{"javascript":["vitest"]}}}}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [Error::TaskCommandMapInScopedPosition { .. }]
+            ),
+            "got: {errors:?}"
+        );
+
+        // Package Configurations scope every task to one package.
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"test":{"command":{"javascript":["vitest"]}}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [Error::TaskCommandMapInScopedPosition { .. }]
+            ),
+            "got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_command_opt_out_rejected_on_unscoped_root_task() {
+        let raw =
+            crate::RawRootTurboJson::parse(r#"{"tasks":{"test":{"command":null}}}"#, "turbo.json")
+                .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(
+            matches!(errors.as_slice(), [Error::TaskCommandOptOutUnscoped { .. }]),
+            "got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_command_valid_positions_pass() {
+        // Unscoped root map + scoped root opt-out + unscoped root argv: all
+        // legal.
+        let raw = crate::RawRootTurboJson::parse(
+            r#"{"tasks":{
+                "test":{"command":{"javascript":["vitest"]}},
+                "web#test":{"command":null},
+                "clean":{"command":["rm","-rf","dist"]}
+            }}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(errors.is_empty(), "got: {errors:?}");
+
+        // Package Configuration opt-out: the natural home.
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"test":{"command":null}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+        assert!(errors.is_empty(), "got: {errors:?}");
+    }
+
+    #[test]
+    fn test_package_turbo_json_without_extends_errors() {
+        let raw = RawPackageTurboJson::parse(
+            r#"{"tasks":{"build":{"outputs":["out/**"]}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+
+        assert!(matches!(errors.as_slice(), [Error::NoExtends { .. }]));
+    }
+
+    #[test]
+    fn test_package_turbo_json_rejects_package_task_syntax() {
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"web#build":{"outputs":["out/**"]}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+
+        assert!(matches!(
+            errors.as_slice(),
+            [Error::UnnecessaryPackageTaskSyntax(_)]
+        ));
+    }
+}

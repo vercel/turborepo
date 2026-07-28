@@ -17,6 +17,7 @@ pub struct Command {
     env: BTreeMap<OsString, OsString>,
     open_stdin: bool,
     env_clear: bool,
+    serial_group: Option<String>,
 }
 
 impl Command {
@@ -29,6 +30,7 @@ impl Command {
             env: BTreeMap::new(),
             open_stdin: false,
             env_clear: false,
+            serial_group: None,
         }
     }
 
@@ -106,9 +108,24 @@ impl Command {
     pub fn program(&self) -> &OsStr {
         &self.program
     }
+
+    /// Mark this command as part of a mutually-exclusive execution group:
+    /// the executor runs at most one command per group at a time. Used for
+    /// tools that hold global locks (e.g. Cargo's build-directory lock),
+    /// where concurrent processes cannot make progress anyway and just emit
+    /// "waiting for file lock" noise.
+    pub fn serial_group(&mut self, group: impl Into<String>) -> &mut Self {
+        self.serial_group = Some(group.into());
+        self
+    }
+
+    /// The command's mutually-exclusive execution group, if any.
+    pub fn serial_group_name(&self) -> Option<&str> {
+        self.serial_group.as_deref()
+    }
 }
 
-impl From<Command> for tokio::process::Command {
+impl From<Command> for std::process::Command {
     fn from(value: Command) -> Self {
         let Command {
             program,
@@ -117,9 +134,10 @@ impl From<Command> for tokio::process::Command {
             env,
             open_stdin,
             env_clear,
+            serial_group: _,
         } = value;
 
-        let mut cmd = tokio::process::Command::new(program);
+        let mut cmd = std::process::Command::new(program);
         if env_clear {
             cmd.env_clear();
         }
@@ -138,6 +156,12 @@ impl From<Command> for tokio::process::Command {
             cmd.current_dir(cwd.as_std_path());
         }
         cmd
+    }
+}
+
+impl From<Command> for tokio::process::Command {
+    fn from(value: Command) -> Self {
+        tokio::process::Command::from(std::process::Command::from(value))
     }
 }
 

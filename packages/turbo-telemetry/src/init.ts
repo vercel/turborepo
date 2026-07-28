@@ -6,14 +6,14 @@ import type { TelemetryClientClasses, PackageInfo } from "./events/types";
 
 const telemetryClients: TelemetryClientClasses = {
   "create-turbo": CreateTurboTelemetry,
-  "turbo-ignore": TurboIgnoreTelemetry,
+  "turbo-ignore": TurboIgnoreTelemetry
 };
 
 const TELEMETRY_API = "https://telemetry.vercel.com";
 
 export async function initTelemetry<T extends keyof TelemetryClientClasses>({
   packageInfo,
-  opts,
+  opts
 }: {
   packageInfo: PackageInfo;
   opts?: Args["opts"];
@@ -32,7 +32,7 @@ export async function initTelemetry<T extends keyof TelemetryClientClasses>({
       api: TELEMETRY_API,
       packageInfo,
       config,
-      opts,
+      opts
     });
 
     return { telemetry } as {

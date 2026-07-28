@@ -6,7 +6,7 @@ import { transformer } from "../src/transforms/create-turbo-config";
 describe("create-turbo-config", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "create-turbo-config",
+    test: "create-turbo-config"
   });
 
   it("package.json config exists but no turbo.json config - basic", () => {
@@ -22,7 +22,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should now exist (and match the package.json config)
@@ -59,7 +59,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should now exist (and match the package.json config)
@@ -85,7 +85,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const repeatResult = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
     // result should be correct
     expect(repeatResult.fatalError).toBeUndefined();
@@ -118,7 +118,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: true, print: false },
+      options: { force: false, dryRun: true, print: false }
     });
 
     // turbo.json still not exist (dry run)
@@ -155,7 +155,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: true },
+      options: { force: false, dryRun: false, print: true }
     });
 
     // turbo.json should now exist (and match the package.json config)
@@ -192,7 +192,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: true, print: true },
+      options: { force: false, dryRun: true, print: true }
     });
 
     // turbo.json still not exist (dry run)
@@ -230,7 +230,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should still not exist
@@ -267,7 +267,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should still not exist
@@ -294,7 +294,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should still exist
@@ -337,7 +337,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // make sure we didn't change the package.json
@@ -384,7 +384,7 @@ describe("create-turbo-config", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // turbo.json should still not exist (error writing)

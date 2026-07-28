@@ -1,14 +1,14 @@
 import path from "node:path";
 import fs from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
-import { isDefaultExample } from "../utils/isDefaultExample";
+import { isDefaultExample } from "../utils/is-default-example";
 import type { TransformInput, TransformResult, MetaJson } from "./types";
 import { TransformError } from "./errors";
 
 const REPO_NAMES = ["turbo", "turborepo"];
 
 const meta = {
-  name: "official-starter",
+  name: "official-starter"
 };
 
 /**
@@ -36,7 +36,7 @@ export async function transform(args: TransformInput): TransformResult {
 
   let metaJson: MetaJson | undefined;
 
-  // 1. remove meta file (used for generating the examples page on turborepo.com)
+  // 1. remove meta file (used for generating the examples page on turborepo.dev)
   try {
     metaJson = fs.readJsonSync(rootMetaJsonPath) as MetaJson;
     fs.rmSync(rootMetaJsonPath, { force: true });
@@ -53,7 +53,7 @@ export async function transform(args: TransformInput): TransformResult {
     } catch {
       throw new TransformError("Unable to read package.json", {
         transform: meta.name,
-        fatal: false,
+        fatal: false
       });
     }
 
@@ -78,12 +78,12 @@ export async function transform(args: TransformInput): TransformResult {
 
       try {
         fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
-          spaces: 2,
+          spaces: 2
         });
       } catch (err) {
         throw new TransformError("Unable to write package.json", {
           transform: meta.name,
-          fatal: false,
+          fatal: false
         });
       }
     }

@@ -1,20 +1,24 @@
-#![feature(cow_is_borrowed)]
-#![feature(assert_matches)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 //! Turborepo's library for authenticating with the Vercel API.
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
 mod auth;
+pub(crate) mod device_flow;
 mod error;
-mod login_server;
 mod ui;
 
+use std::time::Duration;
+
 pub use auth::*;
+pub use device_flow::TokenSet;
 pub use error::Error;
-pub use login_server::*;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
+use turborepo_json_rewrite::{set_path, unset_path};
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {
@@ -25,7 +29,60 @@ pub struct TeamInfo<'a> {
 pub const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
+pub const TURBO_AUTH_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
+
+const VERCEL_OAUTH_TOKEN_URL: &str = "https://api.vercel.com/login/oauth/token";
+const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://api.vercel.com/login/oauth/token/introspect";
+const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
+const TOKEN_EXCHANGE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
+const ACCESS_TOKEN_SUBJECT_TYPE: &str = "urn:ietf:params:oauth:token-type:access_token";
+const AUTH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Clone, Default)]
+pub struct AuthTokens {
+    pub token: Option<SecretString>,
+    pub refresh_token: Option<SecretString>,
+    pub expires_at: Option<u64>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OAuthTokenResponse {
+    access_token: SecretString,
+    refresh_token: Option<SecretString>,
+    expires_in: Option<u64>,
+}
+
+fn auth_tokens_from_oauth_response(
+    oauth_response: OAuthTokenResponse,
+    fallback_refresh_token: Option<SecretString>,
+) -> AuthTokens {
+    AuthTokens {
+        token: Some(oauth_response.access_token),
+        refresh_token: oauth_response.refresh_token.or(fallback_refresh_token),
+        expires_at: Some(
+            current_unix_time_secs()
+                + oauth_response
+                    .expires_in
+                    .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
+        ),
+    }
+}
+
+pub(crate) fn build_auth_http_client() -> Result<reqwest::Client, Error> {
+    build_auth_http_client_with_timeout(AUTH_CONNECT_TIMEOUT, AUTH_REQUEST_TIMEOUT)
+}
+
+fn build_auth_http_client_with_timeout(
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> Result<reqwest::Client, Error> {
+    Ok(reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout)
+        .build()?)
+}
 
 /// Token.
 ///
@@ -36,15 +93,19 @@ pub const TURBO_TOKEN_FILE: &str = "config.json";
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// An existing token on the filesystem
-    Existing(String),
+    Existing(SecretString),
     /// A token that was just created, but not yet written to the filesystem
-    New(String),
+    New(SecretString),
 }
+
 impl Token {
     pub fn new(token: String) -> Self {
-        Self::New(token)
+        Self::New(SecretString::new(token))
     }
     pub fn existing(token: String) -> Self {
+        Self::Existing(SecretString::new(token))
+    }
+    pub fn existing_secret(token: SecretString) -> Self {
         Self::Existing(token)
     }
     /// Reads a token from a file. If the file is a JSON object with a
@@ -69,7 +130,7 @@ impl Token {
                     }
                 })?;
                 if let Some(token) = wrapper.token {
-                    Ok(Self::Existing(token))
+                    Ok(Self::Existing(SecretString::new(token)))
                 } else {
                     Err(Error::TokenNotFound)
                 }
@@ -78,12 +139,45 @@ impl Token {
         }
     }
 
+    /// Reads token, refresh token, and expiration metadata from a JSON file.
+    pub fn from_auth_file(path: &AbsoluteSystemPath) -> Result<AuthTokens, Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AuthWrapper {
+            token: Option<String>,
+            refresh_token: Option<String>,
+            expires_at: Option<u64>,
+        }
+
+        match path.read_existing_to_string()? {
+            Some(content) => {
+                let wrapper = serde_json::from_str::<AuthWrapper>(&content).map_err(|err| {
+                    Error::InvalidTokenFileFormat {
+                        path: path.to_string(),
+                        source: err,
+                    }
+                })?;
+                Ok(AuthTokens {
+                    token: wrapper.token.map(SecretString::new),
+                    refresh_token: wrapper.refresh_token.map(SecretString::new),
+                    expires_at: wrapper.expires_at,
+                })
+            }
+            None => Ok(AuthTokens {
+                token: None,
+                refresh_token: None,
+                expires_at: None,
+            }),
+        }
+    }
+
     /// Checks if the token is still valid. The checks ran are:
     /// 1. If the token is active.
-    /// 2. If the token has access to the cache.
-    ///     - If the token is forbidden from accessing the cache, we consider it
-    ///       invalid.
-    /// 3. We are able to fetch the user associated with the token.
+    /// 2. We are able to fetch the user associated with the token (only when
+    ///    `valid_message_fn` is provided).
+    ///
+    /// This validates token activity and user identity only. It does NOT
+    /// verify team or cache access; use `has_cache_access` for that.
     ///
     /// ## Arguments
     /// * `client` - The client to use for API calls.
@@ -93,7 +187,7 @@ impl Token {
     // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
-    pub async fn is_valid<T: Client + TokenClient + CacheClient>(
+    pub async fn is_valid<T: Client + TokenClient>(
         &self,
         client: &T,
         // Making this optional since there are cases where we don't want to do anything after
@@ -102,11 +196,8 @@ impl Token {
         // passed in a user's email if the token is valid.
         valid_message_fn: Option<impl FnOnce(&str)>,
     ) -> Result<bool, Error> {
-        let (is_active, has_cache_access) = tokio::try_join!(
-            self.is_active(client),
-            self.has_cache_access(client, None, None)
-        )?;
-        if !is_active || !has_cache_access {
+        let is_active = self.is_active(client).await?;
+        if !is_active {
             return Ok(false);
         }
 
@@ -123,20 +214,20 @@ impl Token {
         error: reqwest::Error,
     ) -> Result<bool, Error> {
         if error.status() == Some(reqwest::StatusCode::FORBIDDEN) {
-            let metadata = self.fetch_metadata(client).await?;
-            if !metadata.token_type.is_empty() {
-                return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
-                    status: error
-                        .status()
-                        .unwrap_or(reqwest::StatusCode::FORBIDDEN)
-                        .as_u16(),
-                    url: error
-                        .url()
-                        .map(|u| u.to_string())
-                        .unwrap_or("Unknown url".to_string()),
-                    message: error.to_string(),
-                }));
-            }
+            // If we can successfully fetch metadata, the token is valid but
+            // lacks permission for this operation.
+            let _metadata = self.fetch_metadata(client).await?;
+            return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
+                status: error
+                    .status()
+                    .unwrap_or(reqwest::StatusCode::FORBIDDEN)
+                    .as_u16(),
+                url: error
+                    .url()
+                    .map(|u| u.to_string())
+                    .unwrap_or("Unknown url".to_string()),
+                message: error.to_string(),
+            }));
         }
 
         Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
@@ -152,7 +243,7 @@ impl Token {
     /// * `sso_team` - The team to validate the token against.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
-    pub async fn is_valid_sso<T: Client + TokenClient + CacheClient>(
+    pub async fn is_valid_sso<T: Client + TokenClient>(
         &self,
         client: &T,
         sso_team: &str,
@@ -180,10 +271,7 @@ impl Token {
                     return Err(Error::SSOTeamNotFound(sso_team.to_owned()));
                 }
 
-                let has_cache_access = self
-                    .has_cache_access(client, Some(info.id), Some(info.slug))
-                    .await?;
-                if !is_active || !has_cache_access {
+                if !is_active {
                     return Ok(false);
                 }
 
@@ -270,10 +358,10 @@ impl Token {
         client.delete_token(self.into_inner()).await?;
         Ok(())
     }
-    /// Returns the underlying token string.
-    pub fn into_inner(&self) -> &str {
+    /// Returns the underlying token.
+    pub fn into_inner(&self) -> &SecretString {
         match self {
-            Self::Existing(token) | Self::New(token) => token.as_str(),
+            Self::Existing(token) | Self::New(token) => token,
         }
     }
 }
@@ -282,8 +370,14 @@ fn current_unix_time() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis()
+        .map_or(0, |duration| duration.as_millis())
+}
+
+pub(crate) fn current_unix_time_secs() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
 }
 
 // As of the time of writing, this should always be true, since a token that
@@ -305,10 +399,197 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
     all_scopes_active && (active_at <= current_time)
 }
 
+impl AuthTokens {
+    /// Checks if the access token has expired based on expiresAt field
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            let current_time = current_unix_time_secs();
+            current_time >= expires_at
+        } else {
+            false
+        }
+    }
+
+    /// Persists auth metadata into turborepo/config.json while preserving any
+    /// unrelated config fields already stored there.
+    pub fn write_to_config_file(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        let before = path
+            .read_existing_to_string()?
+            .unwrap_or_else(|| String::from("{}"));
+
+        let token = self
+            .token
+            .as_ref()
+            .map(|token| serde_json::to_string(token.expose()))
+            .transpose()?;
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
+            .map(|token| serde_json::to_string(token.expose()))
+            .transpose()?;
+
+        let after = match token {
+            Some(token) => set_path(&before, &["token"], &token)?,
+            None => unset_path(&before, &["token"], false)?.unwrap_or(before),
+        };
+        let after = match refresh_token {
+            Some(refresh_token) => set_path(&after, &["refreshToken"], &refresh_token)?,
+            None => unset_path(&after, &["refreshToken"], false)?.unwrap_or(after),
+        };
+        let after = match self.expires_at {
+            Some(expires_at) => set_path(&after, &["expiresAt"], &expires_at.to_string())?,
+            None => unset_path(&after, &["expiresAt"], false)?.unwrap_or(after),
+        };
+
+        path.ensure_dir()?;
+        path.create_with_contents_secret(after)?;
+        Ok(())
+    }
+
+    pub fn clear_from_config_file(path: &AbsoluteSystemPath) -> Result<(), Error> {
+        let Some(before) = path.read_existing_to_string()? else {
+            return Ok(());
+        };
+
+        let after = unset_path(&before, &["token"], false)?.unwrap_or(before);
+        let after = unset_path(&after, &["refreshToken"], false)?.unwrap_or(after);
+        let after = unset_path(&after, &["expiresAt"], false)?.unwrap_or(after);
+
+        path.ensure_dir()?;
+        path.create_with_contents_secret(after)?;
+        Ok(())
+    }
+
+    /// Attempts to refresh the access token using the refresh token.
+    /// Introspects the refresh token first to discover the correct client_id.
+    pub async fn refresh_token(&self) -> Result<AuthTokens, Error> {
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
+            .ok_or_else(|| Error::TokenNotFound)?;
+
+        let client = build_auth_http_client()?;
+
+        // Introspect the refresh token to discover its client_id
+        let client_id = Self::introspect_client_id(&client, refresh_token).await?;
+
+        let params = [
+            ("refresh_token", refresh_token.expose()),
+            ("grant_type", "refresh_token"),
+            ("client_id", client_id.as_str()),
+        ];
+
+        let mut request = client.post(VERCEL_OAUTH_TOKEN_URL).form(&params);
+        if let Some(agent) = turborepo_ai_agents::get_agent() {
+            request = request.header("x-ai-agent", agent);
+        }
+        let response = request.send().await?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            return Err(Error::TokenRefreshFailed {
+                status: status.as_u16(),
+            });
+        }
+
+        let response_text = response.text().await?;
+
+        let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
+
+        Ok(auth_tokens_from_oauth_response(
+            oauth_response,
+            Some(refresh_token.clone()),
+        ))
+    }
+
+    pub async fn exchange_legacy_token(&self) -> Result<AuthTokens, Error> {
+        self.exchange_token_with_url(VERCEL_OAUTH_TOKEN_URL).await
+    }
+
+    async fn exchange_token_with_url(&self, token_url: &str) -> Result<AuthTokens, Error> {
+        let subject_token = self.token.as_ref().ok_or(Error::TokenNotFound)?;
+        let client = build_auth_http_client()?;
+        let params = [
+            ("grant_type", TOKEN_EXCHANGE_GRANT_TYPE),
+            ("client_id", crate::device_flow::TURBOREPO_CLIENT_ID),
+            ("subject_token", subject_token.expose()),
+            ("subject_token_type", ACCESS_TOKEN_SUBJECT_TYPE),
+        ];
+
+        let mut request = client.post(token_url).form(&params);
+        if let Some(agent) = turborepo_ai_agents::get_agent() {
+            request = request.header("x-ai-agent", agent);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            return Err(Error::TokenExchangeFailed {
+                status: status.as_u16(),
+                message,
+            });
+        }
+
+        let response_text = response.text().await?;
+        let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
+        Ok(auth_tokens_from_oauth_response(oauth_response, None))
+    }
+
+    /// Introspects a token to discover its client_id.
+    async fn introspect_client_id(
+        client: &reqwest::Client,
+        token: &SecretString,
+    ) -> Result<String, Error> {
+        #[derive(Deserialize)]
+        struct IntrospectionResponse {
+            #[serde(default)]
+            client_id: Option<String>,
+        }
+
+        let response = client
+            .post(VERCEL_OAUTH_INTROSPECT_URL)
+            .form(&[("token", token.expose())])
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Error::IntrospectionFailed {
+                message: format!("HTTP {}", response.status()),
+            });
+        }
+
+        let resp: IntrospectionResponse = response.json().await?;
+        resp.client_id.ok_or(Error::IntrospectionFailed {
+            message: "missing client_id in introspection response".to_string(),
+        })
+    }
+
+    /// Writes the auth tokens to the auth.json file
+    pub fn write_to_auth_file(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        use serde_json::json;
+
+        let content = json!({
+            "// Note": "This is your Vercel credentials file. DO NOT SHARE!",
+            "// Docs": "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json",
+            "token": self.token.as_ref().map(|t| t.expose()),
+            "refreshToken": self.refresh_token.as_ref().map(|t| t.expose()),
+            "expiresAt": self.expires_at,
+        });
+
+        let json_string = serde_json::to_string_pretty(&content)?;
+        path.ensure_dir()?;
+        path.create_with_contents_secret(json_string)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::backtrace::Backtrace;
+    use std::{backtrace::Backtrace, time::Duration};
 
+    use httpmock::prelude::*;
     use insta::assert_snapshot;
     use reqwest::{Method, RequestBuilder, Response};
     use tempfile::tempdir;
@@ -320,6 +601,29 @@ mod tests {
     use url::Url;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_auth_http_client_times_out_stalled_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+
+        let client =
+            build_auth_http_client_with_timeout(Duration::from_secs(5), Duration::from_millis(50))
+                .unwrap();
+
+        let err = client
+            .get(format!("http://{addr}"))
+            .send()
+            .await
+            .expect_err("stalled response should time out");
+
+        server.abort();
+        assert!(err.is_timeout(), "expected timeout error, got {err}");
+    }
 
     // Shared mock client that can be reused across tests
     struct MockUserClient {
@@ -333,7 +637,10 @@ mod tests {
     }
 
     impl Client for MockUserClient {
-        async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
+        async fn get_user(
+            &self,
+            token: &SecretString,
+        ) -> turborepo_api_client::Result<UserResponse> {
             if !self.should_succeed {
                 return Err(turborepo_api_client::Error::UnknownStatus {
                     code: "unauthorized".to_string(),
@@ -342,7 +649,7 @@ mod tests {
                 });
             }
 
-            if token.is_empty() {
+            if token.expose().is_empty() {
                 return Err(turborepo_api_client::Error::UnknownStatus {
                     code: "empty_token".to_string(),
                     message: "Token cannot be empty".to_string(),
@@ -356,17 +663,19 @@ mod tests {
                     username: "test_user".to_string(),
                     email: "test@example.com".to_string(),
                     name: Some("Test User".to_string()),
-                    created_at: Some(123456789),
                 },
             })
         }
 
-        async fn get_teams(&self, _token: &str) -> turborepo_api_client::Result<TeamsResponse> {
+        async fn get_teams(
+            &self,
+            _token: &SecretString,
+        ) -> turborepo_api_client::Result<TeamsResponse> {
             unimplemented!("get_teams")
         }
         async fn get_team(
             &self,
-            _token: &str,
+            _token: &SecretString,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -376,10 +685,13 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            _token: &str,
+            token: &SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
-            unimplemented!("verify_sso_token")
+            Ok(VerifiedSsoUser {
+                token: token.clone(),
+                team_id: None,
+            })
         }
         async fn handle_403(_response: Response) -> turborepo_api_client::Error {
             unimplemented!("handle_403")
@@ -395,19 +707,12 @@ mod tests {
         let quick_scope = |expiry| Scope {
             expires_at: expiry,
             scope_type: "".to_string(),
-            origin: "".to_string(),
-            created_at: 0,
             team_id: None,
         };
         let mock_response = |active_at, scopes| ResponseTokenMetadata {
             active_at,
             scopes,
-            // These fields don't matter in the test
-            id: "".to_string(),
-            name: "".to_string(),
-            token_type: "".to_string(),
-            origin: "".to_string(),
-            created_at: 0,
+            client_id: None,
         };
 
         let cases = vec![
@@ -466,7 +771,7 @@ mod tests {
 
         let result = Token::from_file(&file_path).expect("Failed to read token from file");
 
-        assert!(matches!(result, Token::Existing(ref t) if t == "valid_token_here"));
+        assert!(matches!(result, Token::Existing(ref t) if t.expose() == "valid_token_here"));
     }
 
     #[test]
@@ -498,6 +803,363 @@ mod tests {
         assert!(matches!(result, Err(Error::TokenNotFound)));
     }
 
+    #[test]
+    fn test_auth_tokens_is_expired() {
+        let current_time = current_unix_time_secs();
+
+        // Test with no expiry (should not be expired)
+        let tokens_no_expiry = AuthTokens {
+            token: Some(SecretString::new("test_token".to_string())),
+            refresh_token: Some(SecretString::new("refresh_token".to_string())),
+            expires_at: None,
+        };
+        assert!(!tokens_no_expiry.is_expired());
+
+        // Test with future expiry (should not be expired)
+        let tokens_future_expiry = AuthTokens {
+            token: Some(SecretString::new("test_token".to_string())),
+            refresh_token: Some(SecretString::new("refresh_token".to_string())),
+            expires_at: Some(current_time + 3600), // 1 hour in the future
+        };
+        assert!(!tokens_future_expiry.is_expired());
+
+        // Test with past expiry (should be expired)
+        let tokens_past_expiry = AuthTokens {
+            token: Some(SecretString::new("test_token".to_string())),
+            refresh_token: Some(SecretString::new("refresh_token".to_string())),
+            expires_at: Some(current_time - 3600), // 1 hour in the past
+        };
+        assert!(tokens_past_expiry.is_expired());
+
+        // Test edge case: exactly at expiry time (should be expired)
+        let tokens_exact_expiry = AuthTokens {
+            token: Some(SecretString::new("test_token".to_string())),
+            refresh_token: Some(SecretString::new("refresh_token".to_string())),
+            expires_at: Some(current_time),
+        };
+        assert!(tokens_exact_expiry.is_expired());
+    }
+
+    #[test]
+    fn test_from_auth_file_with_valid_data() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let auth_content = r#"{
+            "token": "vca_test_token_123",
+            "refreshToken": "refresh_token_456",
+            "expiresAt": 1234567890
+        }"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(
+            result.token.as_ref().map(|t| t.expose()),
+            Some("vca_test_token_123")
+        );
+        assert_eq!(
+            result.refresh_token.as_ref().map(|t| t.expose()),
+            Some("refresh_token_456")
+        );
+        assert_eq!(result.expires_at, Some(1234567890));
+    }
+
+    #[test]
+    fn test_from_auth_file_with_missing_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        // Test with only token field
+        let auth_content = r#"{"token": "legacy_token_123"}"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(
+            result.token.as_ref().map(|t| t.expose()),
+            Some("legacy_token_123")
+        );
+        assert_eq!(result.refresh_token, None);
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_from_auth_file_empty_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("nonexistent_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let result = Token::from_auth_file(&file_path).expect("Should return empty AuthTokens");
+
+        assert!(result.token.is_none());
+        assert!(result.refresh_token.is_none());
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_write_to_auth_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("test_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tokens = AuthTokens {
+            token: Some(SecretString::new("vca_test_token".to_string())),
+            refresh_token: Some(SecretString::new("test_refresh_token".to_string())),
+            expires_at: Some(1234567890),
+        };
+
+        tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read back and verify
+        let content = file_path
+            .read_to_string()
+            .expect("Failed to read auth file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["token"], "vca_test_token");
+        assert_eq!(parsed["refreshToken"], "test_refresh_token");
+        assert_eq!(parsed["expiresAt"], 1234567890);
+
+        // Verify the JSON structure includes the expected comments
+        assert!(content.contains("This is your Vercel credentials file"));
+        assert!(content.contains(
+            "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json"
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_to_auth_file_sets_restricted_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("test_auth_perms.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tokens = AuthTokens {
+            token: Some(SecretString::new("vca_test_token".to_string())),
+            refresh_token: Some(SecretString::new("test_refresh_token".to_string())),
+            expires_at: Some(1234567890),
+        };
+
+        tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        let metadata = std::fs::metadata(file_path.as_path()).expect("Failed to read metadata");
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "auth file should have owner-only permissions (0o600), got {mode:o}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_missing_refresh_token() {
+        let tokens = AuthTokens {
+            token: Some(SecretString::new("vca_test_token".to_string())),
+            refresh_token: None, // No refresh token
+            expires_at: Some(current_unix_time_secs() - 3600),
+        };
+
+        let result = tokens.refresh_token().await;
+        assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_exchange_legacy_token() {
+        let mock = MockServer::start_async().await;
+        let exchange = mock
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/login/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(format!(
+                        "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&client_id={}&subject_token=legacy-token&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token",
+                        crate::device_flow::TURBOREPO_CLIENT_ID
+                    ));
+                then.status(200).body(
+                    r#"{"access_token":"turbo-scoped-token","refresh_token":"turbo-refresh-token","expires_in":1800}"#,
+                );
+            })
+            .await;
+
+        let exchanged = AuthTokens {
+            token: Some(SecretString::new("legacy-token".to_string())),
+            refresh_token: None,
+            expires_at: None,
+        }
+        .exchange_token_with_url(&mock.url("/login/oauth/token"))
+        .await
+        .expect("Failed to exchange legacy token");
+
+        exchange.assert_async().await;
+        assert_eq!(
+            exchanged.token.as_ref().map(|token| token.expose()),
+            Some("turbo-scoped-token")
+        );
+        assert_eq!(
+            exchanged.refresh_token.as_ref().map(|token| token.expose()),
+            Some("turbo-refresh-token")
+        );
+        assert!(exchanged.expires_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_exchange_legacy_token_without_refresh_token() {
+        let mock = MockServer::start_async().await;
+        let exchange = mock
+            .mock_async(|when, then| {
+                when.method(POST).path("/login/oauth/token");
+                then.status(200)
+                    .body(r#"{"access_token":"turbo-scoped-token","expires_in":1800}"#);
+            })
+            .await;
+
+        let exchanged = AuthTokens {
+            token: Some(SecretString::new("legacy-token".to_string())),
+            refresh_token: Some(SecretString::new("legacy-refresh-token".to_string())),
+            expires_at: None,
+        }
+        .exchange_token_with_url(&mock.url("/login/oauth/token"))
+        .await
+        .expect("Failed to exchange legacy token");
+
+        exchange.assert_async().await;
+        assert_eq!(
+            exchanged.token.as_ref().map(|token| token.expose()),
+            Some("turbo-scoped-token")
+        );
+        assert!(exchanged.refresh_token.is_none());
+    }
+
+    #[test]
+    fn test_auth_tokens_roundtrip() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("roundtrip_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let original_tokens = AuthTokens {
+            token: Some(SecretString::new("vca_roundtrip_token".to_string())),
+            refresh_token: Some(SecretString::new("roundtrip_refresh_token".to_string())),
+            expires_at: Some(1234567890),
+        };
+
+        // Write tokens to file
+        original_tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read tokens back from file
+        let read_tokens = Token::from_auth_file(&file_path).expect("Failed to read auth file");
+
+        // Verify they match
+        assert_eq!(
+            original_tokens.token.as_ref().map(|t| t.expose()),
+            read_tokens.token.as_ref().map(|t| t.expose())
+        );
+        assert_eq!(
+            original_tokens.refresh_token.as_ref().map(|t| t.expose()),
+            read_tokens.refresh_token.as_ref().map(|t| t.expose())
+        );
+        assert_eq!(original_tokens.expires_at, read_tokens.expires_at);
+    }
+
+    #[test]
+    fn test_write_to_config_file_preserves_existing_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(r#"{"apiUrl":"https://example.com","teamSlug":"acme"}"#)
+            .expect("Failed to write config file");
+
+        let auth_tokens = AuthTokens {
+            token: Some(SecretString::new("token-123".to_string())),
+            refresh_token: Some(SecretString::new("refresh-456".to_string())),
+            expires_at: Some(12345),
+        };
+
+        auth_tokens
+            .write_to_config_file(&file_path)
+            .expect("Failed to update config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["apiUrl"], "https://example.com");
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert_eq!(parsed["token"], "token-123");
+        assert_eq!(parsed["refreshToken"], "refresh-456");
+        assert_eq!(parsed["expiresAt"], 12345);
+    }
+
+    #[test]
+    fn test_write_to_config_file_clears_stale_refresh_metadata() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(
+                r#"{"teamSlug":"acme","token":"old-token","refreshToken":"old-refresh","expiresAt":12345}"#,
+            )
+            .expect("Failed to write config file");
+
+        let auth_tokens = AuthTokens {
+            token: Some(SecretString::new("new-token".to_string())),
+            refresh_token: None,
+            expires_at: None,
+        };
+
+        auth_tokens
+            .write_to_config_file(&file_path)
+            .expect("Failed to update config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert_eq!(parsed["token"], "new-token");
+        assert!(parsed.get("refreshToken").is_none());
+        assert!(parsed.get("expiresAt").is_none());
+    }
+
+    #[test]
+    fn test_clear_from_config_file_preserves_non_auth_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(
+                r#"{"teamSlug":"acme","token":"old-token","refreshToken":"old-refresh","expiresAt":12345}"#,
+            )
+            .expect("Failed to write config file");
+
+        AuthTokens::clear_from_config_file(&file_path).expect("Failed to clear config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert!(parsed.get("token").is_none());
+        assert!(parsed.get("refreshToken").is_none());
+        assert!(parsed.get("expiresAt").is_none());
+    }
+
     enum MockErrorType {
         Error,
         Forbidden,
@@ -515,7 +1177,7 @@ mod tests {
         async fn get_artifact(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
             _method: Method,
@@ -526,7 +1188,7 @@ mod tests {
         async fn fetch_artifact(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -544,9 +1206,11 @@ mod tests {
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
-            _token: &str,
+            _token: &SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
+            _sha: Option<&str>,
+            _dirty_hash: Option<&str>,
         ) -> Result<(), turborepo_api_client::Error> {
             unimplemented!()
         }
@@ -554,7 +1218,7 @@ mod tests {
         async fn artifact_exists(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -563,7 +1227,7 @@ mod tests {
 
         async fn get_caching_status(
             &self,
-            _token: &str,
+            _token: &SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
@@ -602,7 +1266,7 @@ mod tests {
             response: MockCachingResponse::CachingStatus(true),
         };
 
-        let token = Token::Existing("existing_token".to_string());
+        let token = Token::existing("existing_token".to_string());
         let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
@@ -621,7 +1285,7 @@ mod tests {
             response: MockCachingResponse::Error(MockErrorType::Forbidden),
         };
 
-        let token = Token::Existing("existing_token".to_string());
+        let token = Token::existing("existing_token".to_string());
         let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
@@ -640,7 +1304,7 @@ mod tests {
             response: MockCachingResponse::Error(MockErrorType::Error),
         };
 
-        let token = Token::Existing("existing_token".to_string());
+        let token = Token::existing("existing_token".to_string());
         let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
@@ -661,7 +1325,7 @@ mod tests {
     impl TokenClient for MockTokenClient {
         async fn get_metadata(
             &self,
-            _token: &str,
+            _token: &SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if self.should_fail {
                 return Err(turborepo_api_client::Error::UnknownStatus {
@@ -675,18 +1339,14 @@ mod tests {
                 Ok(metadata.clone())
             } else {
                 Ok(ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "test".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
-                    created_at: 0,
+                    client_id: None,
                 })
             }
         }
 
-        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             if self.should_fail {
                 return Err(turborepo_api_client::Error::UnknownStatus {
                     code: "error".to_string(),
@@ -725,13 +1385,9 @@ mod tests {
         // Test active token
         let client = MockTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "test".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_time - 100,
-                created_at: 0,
+                client_id: None,
             }),
             should_fail: false,
         };
@@ -741,15 +1397,8 @@ mod tests {
         let client = MockTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
                 active_at: current_time + 1000,
-                ..ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "test".to_string(),
-                    origin: "test".to_string(),
-                    scopes: vec![],
-                    created_at: 0,
-                    active_at: 0,
-                }
+                scopes: vec![],
+                client_id: None,
             }),
             should_fail: false,
         };
@@ -773,7 +1422,7 @@ mod tests {
         file_path.create_with_contents(r#"{"token": ""}"#).unwrap();
 
         let result = Token::from_file(&file_path).expect("Failed to read token from file");
-        assert!(matches!(result, Token::Existing(ref t) if t.is_empty()));
+        assert!(matches!(result, Token::Existing(ref t) if t.expose().is_empty()));
     }
 
     #[test]
@@ -797,24 +1446,20 @@ mod tests {
     impl TokenClient for MockSSOTokenClient {
         async fn get_metadata(
             &self,
-            _token: &str,
+            _token: &SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if let Some(metadata) = &self.metadata_response {
                 Ok(metadata.clone())
             } else {
                 Ok(ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
-                    created_at: 0,
+                    client_id: None,
                 })
             }
         }
 
-        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
@@ -824,13 +1469,9 @@ mod tests {
         let token = Token::new("test-token".to_string());
         let client = MockSSOTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "sso".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
-                created_at: 0,
+                client_id: None,
             }),
         };
 
@@ -849,39 +1490,6 @@ mod tests {
             Err(Error::APIError(
                 turborepo_api_client::Error::InvalidToken { .. }
             ))
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_handle_sso_token_error_forbidden_without_token_type() {
-        let token = Token::new("test-token".to_string());
-        let client = MockSSOTokenClient {
-            metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "".to_string(),
-                origin: "test".to_string(),
-                scopes: vec![],
-                active_at: current_unix_time() - 100,
-                created_at: 0,
-            }),
-        };
-
-        let errorful_response = reqwest::Response::from(
-            http::Response::builder()
-                .status(reqwest::StatusCode::FORBIDDEN)
-                .body("")
-                .unwrap(),
-        );
-
-        let result = token
-            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
-            .await;
-        assert!(matches!(
-            result,
-            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
-                _
-            )))
         ));
     }
 
@@ -940,5 +1548,43 @@ mod tests {
         let user_result = empty_token.user(&MockUserClient::new(true)).await;
         assert!(user_result.is_err());
         assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
+    }
+
+    #[test]
+    fn token_debug_redacts_value() {
+        let existing = Token::existing("my-secret-existing-token".to_string());
+        let new = Token::new("my-secret-new-token".to_string());
+        let existing_debug = format!("{:?}", existing);
+        let new_debug = format!("{:?}", new);
+        assert!(
+            !existing_debug.contains("my-secret-existing-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(
+            !new_debug.contains("my-secret-new-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(existing_debug.contains("***"));
+        assert!(new_debug.contains("***"));
+    }
+
+    #[test]
+    fn auth_tokens_debug_redacts_secrets() {
+        let tokens = AuthTokens {
+            token: Some(SecretString::new("access-token-123".to_string())),
+            refresh_token: Some(SecretString::new("refresh-456".to_string())),
+            expires_at: Some(12345),
+        };
+        let debug = format!("{:?}", tokens);
+        assert!(
+            !debug.contains("access-token-123"),
+            "Debug output should not contain the access token"
+        );
+        assert!(
+            !debug.contains("refresh-456"),
+            "Debug output should not contain the refresh token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("12345"));
     }
 }

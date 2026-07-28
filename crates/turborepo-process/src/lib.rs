@@ -9,24 +9,27 @@
 //! As of now, the manager will execute futures in a random order, and
 //! must be either `wait`ed on or `stop`ped to drive state.
 
+#![cfg_attr(windows, feature(windows_process_extensions_show_window))]
 #![deny(clippy::all)]
-#![feature(assert_matches)]
 
 mod child;
 mod command;
+#[cfg(windows)]
+mod job_object;
 
 use std::{
-    io,
-    sync::{Arc, Mutex},
+    collections::HashMap,
+    io::{self, IsTerminal},
+    sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
 
 pub use command::Command;
-use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
+use turborepo_task_id::TaskId;
 
-pub use self::child::{Child, ChildExit};
+pub use self::child::{Child, ChildExit, ChildStdin};
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -36,13 +39,25 @@ pub use self::child::{Child, ChildExit};
 pub struct ProcessManager {
     state: Arc<Mutex<ProcessManagerInner>>,
     use_pty: bool,
+    // Captured before the TUI may put stdout in raw mode. Reapply it to child
+    // PTYs so task processes do not inherit TUI-specific terminal settings.
+    #[cfg(unix)]
+    pty_termios: Option<libc::termios>,
 }
 
 #[derive(Debug)]
 struct ProcessManagerInner {
     is_closing: bool,
-    children: Vec<child::Child>,
+    children: HashMap<TaskId<'static>, Vec<child::Child>>,
     size: Option<PtySize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CloseMode {
+    Stop,
+    Shutdown(Option<Duration>),
+    Kill,
+    Wait,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -52,15 +67,23 @@ pub struct PtySize {
 }
 
 impl ProcessManager {
+    fn lock_state(&self) -> MutexGuard<'_, ProcessManagerInner> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn new(use_pty: bool) -> Self {
         debug!("spawning children with pty: {use_pty}");
         Self {
             state: Arc::new(Mutex::new(ProcessManagerInner {
                 is_closing: false,
-                children: Vec::new(),
+                children: HashMap::new(),
                 size: None,
             })),
             use_pty,
+            #[cfg(unix)]
+            pty_termios: use_pty.then(capture_stdout_termios).flatten(),
         }
     }
 
@@ -68,8 +91,20 @@ impl ProcessManager {
     pub fn infer() -> Self {
         // Only use PTY if we're not on windows and we're currently hooked up to a
         // in a TTY
-        let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
+        let use_pty = !cfg!(windows) && std::io::stdout().is_terminal();
         Self::new(use_pty)
+    }
+
+    pub fn running_task_ids(&self) -> Vec<String> {
+        let lock = self.lock_state();
+        let mut task_ids = lock
+            .children
+            .iter()
+            .filter(|(_, children)| children.iter().any(|child| !child.has_exited()))
+            .map(|(task_id, _)| task_id.to_string())
+            .collect::<Vec<_>>();
+        task_ids.sort();
+        task_ids
     }
 
     /// Returns whether children will be spawned attached to a pseudoterminal
@@ -95,39 +130,113 @@ impl ProcessManager {
     /// If spawn returns None, the process manager is closed and the child
     /// process was not spawned. If spawn returns Some(Err), the process
     /// manager is open, but the child process failed to spawn.
+    ///
+    /// The task_id is used to track which processes belong to which tasks,
+    /// enabling selective stopping of processes by task.
     pub fn spawn(
         &self,
         command: Command,
         stop_timeout: Duration,
+        task_id: TaskId<'static>,
     ) -> Option<io::Result<child::Child>> {
         let label = tracing::enabled!(tracing::Level::TRACE)
             .then(|| command.label())
             .unwrap_or_default();
         trace!("acquiring lock for spawning {label}");
-        let mut lock = self.state.lock().unwrap();
+        let mut lock = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         trace!("acquired lock for spawning {label}");
         if lock.is_closing {
             debug!("process manager closing");
             return None;
         }
         let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
+        #[cfg(unix)]
+        let child = child::Child::spawn_with_termios(
+            command,
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
+            pty_size,
+            self.pty_termios,
+        );
+        #[cfg(not(unix))]
         let child = child::Child::spawn(
             command,
-            child::ShutdownStyle::Graceful(stop_timeout),
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
             pty_size,
         );
         if let Ok(child) = &child {
-            lock.children.push(child.clone());
+            lock.children
+                .entry(task_id)
+                .or_default()
+                .push(child.clone());
         }
         trace!("releasing lock for spawning {label}");
         Some(child)
     }
 
-    /// Stop the process manager, closing all child processes. On posix
-    /// systems this will send a SIGINT, and on windows it will just kill
-    /// the process immediately.
+    /// Stop the process manager, closing all child processes. On posix systems
+    /// this will send SIGINT to the process group for non-PTY children and to
+    /// the direct child for PTY children. On Windows, children spawned under
+    /// ConPTY receive a Ctrl-C keystroke via the pseudoconsole input; other
+    /// children share turbo's console and are expected to receive console
+    /// Ctrl-C events directly, with a force kill after the child stop
+    /// timeout as the fallback.
     pub async fn stop(&self) {
-        self.close(|mut c| async move { c.stop().await }).await
+        self.close(CloseMode::Stop).await
+    }
+
+    /// Gracefully shut down all child processes, optionally escalating to a
+    /// force kill after `stop_timeout` elapses.
+    pub async fn shutdown(&self, stop_timeout: Option<Duration>) {
+        self.close(CloseMode::Shutdown(stop_timeout)).await
+    }
+
+    /// Force kill all child processes immediately.
+    pub async fn kill_all(&self) {
+        self.close(CloseMode::Kill).await
+    }
+
+    /// Stop all processes associated with the given task IDs.
+    /// This is used to selectively restart tasks without shutting down
+    /// the entire process manager.
+    pub async fn stop_tasks(&self, task_ids: &[TaskId<'static>]) {
+        let children_to_stop: Vec<_> = {
+            let mut lock = self.lock_state();
+
+            // If we're closing, return early - close() will stop all children and they
+            // should report Shutdown. By checking is_closing under the lock, we ensure
+            // mutual exclusion: either close() runs first (we return early here), or we
+            // run first and remove children before close() can see them.
+            if lock.is_closing {
+                return;
+            }
+
+            task_ids
+                .iter()
+                .filter_map(|task_id| lock.children.remove(task_id))
+                .flatten()
+                .collect()
+        };
+
+        debug!(
+            "stopping {} processes for {} tasks",
+            children_to_stop.len(),
+            task_ids.len()
+        );
+
+        let mut set = JoinSet::new();
+        for child in children_to_stop {
+            set.spawn(async move {
+                let mut child = child;
+                child.stop().await
+            });
+        }
+
+        while let Some(out) = set.join_next().await {
+            trace!("process exited: {:?}", out);
+        }
     }
 
     /// Stop the process manager, waiting for all child processes to exit.
@@ -135,7 +244,7 @@ impl ProcessManager {
     /// If you want to set a timeout, use `tokio::time::timeout` and
     /// `Self::stop` if the timeout elapses.
     pub async fn wait(&self) {
-        self.close(|mut c| async move { c.wait().await }).await
+        self.close(CloseMode::Wait).await
     }
 
     /// Close the process manager, running the given callback on each child
@@ -144,19 +253,31 @@ impl ProcessManager {
     /// with two different strategies will propagate both signals to the child
     /// processes. clearing the task queue and re-enabling spawning are both
     /// idempotent operations
-    async fn close<F, C>(&self, callback: F)
-    where
-        F: Fn(Child) -> C + Sync + Send + Copy + 'static,
-        C: Future<Output = Option<ChildExit>> + Sync + Send + 'static,
-    {
+    async fn close(&self, close_mode: CloseMode) {
         let mut set = JoinSet::new();
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
             lock.is_closing = true;
-            for child in lock.children.iter() {
+
+            for child in lock.children.values().flatten() {
+                // Mark each child as closing so it knows this is a shutdown, not a restart.
+                // This is done under the lock to ensure mutual exclusion with stop_tasks().
+                child.set_closing();
                 let child = child.clone();
-                set.spawn(async move { callback(child).await });
+                set.spawn(async move {
+                    let mut child = child;
+                    match close_mode {
+                        CloseMode::Stop => child.stop().await,
+                        CloseMode::Shutdown(stop_timeout) => {
+                            child
+                                .shutdown(child::ShutdownStyle::Graceful(stop_timeout))
+                                .await
+                        }
+                        CloseMode::Kill => child.kill().await,
+                        CloseMode::Wait => child.wait().await,
+                    }
+                });
             }
         }
 
@@ -167,16 +288,25 @@ impl ProcessManager {
         }
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
-
-            // just allocate a new vec rather than clearing the old one
-            lock.children = vec![];
+            let mut lock = self.lock_state();
+            lock.children.clear();
         }
     }
 
     pub fn set_pty_size(&self, rows: u16, cols: u16) {
-        self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+        self.lock_state().size = Some(PtySize { rows, cols });
     }
+
+    pub fn is_closing(&self) -> bool {
+        self.lock_state().is_closing
+    }
+}
+
+#[cfg(unix)]
+fn capture_stdout_termios() -> Option<libc::termios> {
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    let result = unsafe { libc::tcgetattr(libc::STDOUT_FILENO, termios.as_mut_ptr()) };
+    (result == 0).then(|| unsafe { termios.assume_init() })
 }
 
 impl ProcessManagerInner {
@@ -204,7 +334,7 @@ impl Default for PtySize {
 
 #[cfg(test)]
 mod test {
-    use std::time::Instant;
+    use std::{fs, time::Instant};
 
     use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
@@ -223,6 +353,28 @@ mod test {
         cmd
     }
 
+    fn test_task_id() -> TaskId<'static> {
+        TaskId::new("test-pkg", "test-task")
+    }
+
+    #[cfg(unix)]
+    fn process_exists(pid: libc::pid_t) -> bool {
+        let result = unsafe { libc::kill(pid, 0) };
+        result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+
+    #[cfg(unix)]
+    async fn wait_for_process_to_exit(pid: libc::pid_t) {
+        for _ in 0..50 {
+            if !process_exists(pid) {
+                return;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        panic!("process {pid} should have exited");
+    }
+
     const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
         ChildExit::Killed
     } else {
@@ -233,7 +385,11 @@ mod test {
     async fn test_basic() {
         let manager = ProcessManager::new(false);
         let mut child = manager
-            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
+            .spawn(
+                get_script_command("hello_world.js"),
+                Duration::from_secs(2),
+                test_task_id(),
+            )
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
@@ -247,9 +403,13 @@ mod test {
         let manager = ProcessManager::new(false);
 
         let children = (0..2)
-            .map(|_| {
+            .map(|i| {
                 manager
-                    .spawn(get_command(), Duration::from_secs(2))
+                    .spawn(
+                        get_command(),
+                        Duration::from_secs(2),
+                        TaskId::new("test-pkg", &format!("task-{i}")).into_owned(),
+                    )
                     .unwrap()
                     .unwrap()
             })
@@ -269,7 +429,7 @@ mod test {
     async fn test_closed() {
         let manager = ProcessManager::new(false);
         let mut child = manager
-            .spawn(get_command(), Duration::from_secs(2))
+            .spawn(get_command(), Duration::from_secs(2), test_task_id())
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
@@ -287,7 +447,7 @@ mod test {
         // Verify that we can't start new child processes
         assert!(
             manager
-                .spawn(get_command(), Duration::from_secs(2))
+                .spawn(get_command(), Duration::from_secs(2), test_task_id())
                 .is_none()
         );
 
@@ -298,7 +458,11 @@ mod test {
     async fn test_exit_code() {
         let manager = ProcessManager::new(false);
         let mut child = manager
-            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
+            .spawn(
+                get_script_command("hello_world.js"),
+                Duration::from_secs(2),
+                test_task_id(),
+            )
             .unwrap()
             .unwrap();
 
@@ -315,7 +479,11 @@ mod test {
     async fn test_message_after_stop() {
         let manager = ProcessManager::new(false);
         let mut child = manager
-            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
+            .spawn(
+                get_script_command("hello_world.js"),
+                Duration::from_secs(2),
+                test_task_id(),
+            )
             .unwrap()
             .unwrap();
 
@@ -337,13 +505,16 @@ mod test {
     #[tokio::test]
     async fn test_reuse_manager() {
         let manager = ProcessManager::new(false);
-        manager.spawn(get_command(), Duration::from_secs(2));
+        manager.spawn(get_command(), Duration::from_secs(2), test_task_id());
 
         sleep(Duration::from_millis(100)).await;
 
         manager.stop().await;
 
-        assert!(manager.state.lock().unwrap().children.is_empty());
+        {
+            let lock = manager.state.lock().unwrap();
+            assert!(lock.children.is_empty());
+        }
 
         // TODO: actually do some check that this is idempotent
         // idempotent
@@ -361,12 +532,13 @@ mod test {
         let manager = ProcessManager::new(false);
         let tasks = FuturesUnordered::new();
 
-        for _ in 0..10 {
+        for i in 0..10 {
             let manager = manager.clone();
             let command = get_script_command(script);
+            let task_id = TaskId::new("test-pkg", &format!("task-{i}")).into_owned();
             tasks.push(tokio::spawn(async move {
                 manager
-                    .spawn(command, Duration::from_secs(1))
+                    .spawn(command, Duration::from_secs(1), task_id)
                     .unwrap()
                     .unwrap()
                     .wait()
@@ -396,7 +568,7 @@ mod test {
 
         let mut out = Vec::new();
         let mut child = manager
-            .spawn(get_command(), Duration::from_secs(1))
+            .spawn(get_command(), Duration::from_secs(1), test_task_id())
             .unwrap()
             .unwrap();
 
@@ -422,5 +594,203 @@ mod test {
         let finish_time = Instant::now();
 
         assert!((finish_time - start_time).lt(&Duration::from_secs(2)));
+    }
+
+    #[tokio::test]
+    async fn test_stop_tasks_selective() {
+        let manager = ProcessManager::new(false);
+        let task_id_1 = TaskId::new("pkg-a", "build").into_owned();
+        let task_id_2 = TaskId::new("pkg-b", "build").into_owned();
+
+        let mut child1 = manager
+            .spawn(get_command(), Duration::from_secs(2), task_id_1.clone())
+            .unwrap()
+            .unwrap();
+        let mut child2 = manager
+            .spawn(get_command(), Duration::from_secs(2), task_id_2)
+            .unwrap()
+            .unwrap();
+
+        sleep(Duration::from_millis(50)).await;
+        manager.stop_tasks(&[task_id_1]).await;
+
+        assert_eq!(child1.wait().await, STOPPED_EXIT);
+        assert!(!child1.is_closing());
+
+        manager.stop().await;
+
+        assert_eq!(child2.wait().await, STOPPED_EXIT);
+        assert!(child2.is_closing());
+    }
+
+    #[tokio::test]
+    async fn test_stop_tasks_during_close() {
+        let manager = ProcessManager::new(false);
+        let task_id = TaskId::new("pkg-a", "build").into_owned();
+
+        let mut child = manager
+            .spawn(get_command(), Duration::from_secs(2), task_id.clone())
+            .unwrap()
+            .unwrap();
+
+        sleep(Duration::from_millis(50)).await;
+
+        let task_ids = [task_id];
+        let (_, _) = join! {
+            manager.stop(),
+            manager.stop_tasks(&task_ids),
+        };
+
+        assert_eq!(child.wait().await, STOPPED_EXIT);
+        assert!(child.is_closing());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_shutdown_can_be_force_killed() {
+        let manager = ProcessManager::new(false);
+        let mut child = manager
+            .spawn(
+                get_script_command("sleep_5_ignore.js"),
+                Duration::from_secs(30),
+                test_task_id(),
+            )
+            .unwrap()
+            .unwrap();
+
+        // Give the child time to install its SIGINT handler before we begin the
+        // graceful shutdown flow.
+        sleep(Duration::from_millis(500)).await;
+
+        let shutdown_manager = manager.clone();
+        let shutdown = tokio::spawn(async move {
+            shutdown_manager.shutdown(None).await;
+        });
+
+        sleep(Duration::from_millis(100)).await;
+        assert!(
+            !shutdown.is_finished(),
+            "graceful shutdown should still be waiting before force kill"
+        );
+
+        manager.kill_all().await;
+        shutdown.await.unwrap();
+
+        assert_eq!(child.wait().await, Some(ChildExit::Killed));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_shutdown_waits_for_process_group_after_child_exit() {
+        let manager = ProcessManager::new(false);
+        let pid_file =
+            std::env::temp_dir().join(format!("turbo-process-grandchild-{}", std::process::id()));
+        let _ = fs::remove_file(&pid_file);
+
+        let script = format!(
+            "trap 'exit 0' INT; sh -c 'trap \"\" INT TERM; while true; do sleep 0.2; done' & echo \
+             $! > {}; while true; do sleep 0.2; done",
+            pid_file.display()
+        );
+        let mut command = Command::new("sh");
+        command.args(["-c", &script]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        let grandchild_pid = loop {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+            {
+                break pid;
+            }
+            sleep(Duration::from_millis(50)).await;
+        };
+
+        let shutdown_manager = manager.clone();
+        let shutdown = tokio::spawn(async move {
+            shutdown_manager.shutdown(None).await;
+        });
+
+        sleep(Duration::from_millis(500)).await;
+        assert!(
+            !shutdown.is_finished(),
+            "shutdown should wait for the still-running process group"
+        );
+        assert!(
+            process_exists(grandchild_pid),
+            "grandchild should still be running before force kill"
+        );
+
+        manager.kill_all().await;
+        tokio::time::timeout(Duration::from_secs(5), shutdown)
+            .await
+            .expect("shutdown should finish after force kill")
+            .expect("shutdown task should not panic");
+        assert_eq!(child.wait().await, Some(ChildExit::Killed));
+        wait_for_process_to_exit(grandchild_pid).await;
+
+        let _ = fs::remove_file(pid_file);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_successful_task_cleans_up_long_lived_worker_after_output_drain() {
+        let manager = ProcessManager::new(false);
+        let marker_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-marker-never-{}",
+            std::process::id()
+        ));
+        let pid_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-worker-never-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        let mut command = Command::new("node");
+        command.args([
+            std::ffi::OsString::from("./test/scripts/normal_exit_worker.js"),
+            marker_file.as_os_str().to_os_string(),
+            pid_file.as_os_str().to_os_string(),
+            std::ffi::OsString::from("never"),
+        ]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        let mut worker_pid = None;
+        for _ in 0..50 {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+            {
+                worker_pid = Some(pid);
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        let worker_pid = worker_pid.expect("worker pid file should have been written");
+
+        assert!(
+            process_exists(worker_pid),
+            "worker process {worker_pid} should be alive before output drain"
+        );
+
+        let mut output = Vec::new();
+        let exit = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        .expect("successful output drain should not hang on a long-lived worker")
+        .expect("output drain should succeed");
+
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
+        wait_for_process_to_exit(worker_pid).await;
     }
 }

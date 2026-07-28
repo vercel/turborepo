@@ -4,12 +4,13 @@ import http from "node:http";
 import https from "node:https";
 import picocolors from "picocolors";
 import { Argument, Command, Option } from "commander";
-import { logger } from "@turbo/utils";
+import { logger, createNotifyUpdate } from "@turbo/utils";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
-import { notifyUpdate } from "./utils/notifyUpdate";
 import { workspace, run, raw } from "./commands";
 import { GeneratorError } from "./utils/error";
+
+const notifyUpdate = createNotifyUpdate({ packageInfo: cliPkg });
 
 // Support http proxy vars
 const agent = new ProxyAgent();
@@ -81,7 +82,7 @@ turboGenCli
   .addOption(
     new Option("-t, --type <type>", "The type of workspace to create").choices([
       "app",
-      "package",
+      "package"
     ])
   )
   .addOption(
@@ -116,8 +117,13 @@ turboGenCli
 
 turboGenCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(() => notifyUpdate())
   .catch(async (error) => {
+    // User pressed Ctrl+C — exit silently.
+    if (error?.name === "ExitPromptError") {
+      process.exit(0);
+    }
+
     logger.log();
     if (error instanceof GeneratorError) {
       logger.error(error.message);
@@ -126,6 +132,5 @@ turboGenCli
       logger.log(error);
     }
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });

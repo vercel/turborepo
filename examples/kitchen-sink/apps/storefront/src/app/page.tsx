@@ -18,7 +18,7 @@ export default function Store() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <Link href="https://turborepo.com" newTab>
+        <Link href="https://turborepo.dev" newTab>
           Turborepo
         </Link>
         {" & "}

@@ -1,0 +1,17 @@
+{
+  "name": "root",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "eslint-config-custom": "workspace:*",
+    "prettier": "latest",
+    "turbo": "latest"
+  },
+  "packageManager": "pnpm@7.33.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "lodash@4.17.21": "patches/lodash@4.17.21.patch",
+      "underscore@1.13.4": "patches/underscore@1.13.4.patch"
+    }
+  }
+}

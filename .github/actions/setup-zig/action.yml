@@ -1,0 +1,76 @@
+name: "Setup Zig"
+description: "Installs the Zig toolchain required to build libghostty-vt"
+inputs:
+  version:
+    description: "Zig version to install"
+    required: false
+    default: "0.15.2"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Zig
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        version="${{ inputs.version }}"
+        zig_dir="${{ github.workspace }}/zig"
+        mkdir -p "$zig_dir"
+
+        zig_arch() {
+          case "$(uname -m)" in
+            x86_64 | amd64) echo "x86_64" ;;
+            aarch64 | arm64) echo "aarch64" ;;
+            *)
+              echo "Unsupported architecture: $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+        }
+
+        arch="$(zig_arch)"
+
+        case "${{ runner.os }}" in
+          Linux)
+            archive="zig-${arch}-linux-${version}"
+            executable="${zig_dir}/zig"
+            curl --fail --show-error --silent --location \
+              --output zig.tar.xz \
+              "https://ziglang.org/download/${version}/${archive}.tar.xz"
+            tar -xJf zig.tar.xz -C "$zig_dir" --strip-components 1
+            rm zig.tar.xz
+            ;;
+          macOS)
+            archive="zig-${arch}-macos-${version}"
+            executable="${zig_dir}/zig"
+            curl --fail --show-error --silent --location \
+              --output zig.tar.xz \
+              "https://ziglang.org/download/${version}/${archive}.tar.xz"
+            tar -xJf zig.tar.xz -C "$zig_dir" --strip-components 1
+            rm zig.tar.xz
+            ;;
+          Windows)
+            archive="zig-${arch}-windows-${version}"
+            executable="${zig_dir}/zig.exe"
+            curl --fail --show-error --silent --location \
+              --output zig.zip \
+              "https://ziglang.org/download/${version}/${archive}.zip"
+            unzip -q zig.zip
+            extracted_dir="${archive}"
+            mv "${extracted_dir}"/* "$zig_dir/"
+            rm -rf "$extracted_dir" zig.zip
+            ;;
+          *)
+            echo "Unsupported runner OS: ${{ runner.os }}" >&2
+            exit 1
+            ;;
+        esac
+
+        # Prefer this toolchain over any preinstalled `zig` on the runner.
+        echo "${zig_dir}" >> "$GITHUB_PATH"
+        echo "ZIG_EXECUTABLE=${executable}" >> "$GITHUB_ENV"
+        echo "ZIG_GLOBAL_CACHE_DIR=${zig_dir}/global-cache" >> "$GITHUB_ENV"
+        mkdir -p "${zig_dir}/global-cache"
+
+        "${executable}" version

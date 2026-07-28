@@ -1,33 +1,72 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go/.devcontainer/base.Dockerfile
+# Use Ubuntu 22.04 LTS as base image
+FROM mcr.microsoft.com/vscode/devcontainers/base:ubuntu-22.04
 
-# [Choice] Go version (use -bullseye variants on local arm64/Apple Silicon): 1, 1.16, 1.17, 1-bullseye, 1.16-bullseye, 1.17-bullseye, 1-buster, 1.16-buster, 1.17-buster
-ARG VARIANT="1.18-bullseye"
-FROM mcr.microsoft.com/vscode/devcontainers/go:0-${VARIANT}
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+ENV PATH=/usr/local/cargo/bin:$PATH
+ENV RUST_VERSION=nightly-2025-06-20
 
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-  && apt-get -y install --no-install-recommends \
-  # Chromium for running Turbopack benchmarks
-  chromium \
-  # Used for plotters graph visualizations in turbopack benchmarks
-  libfontconfig1-dev
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    # Build essentials
+    build-essential \
+    pkg-config \
+    # LLD linker (required on Linux per CONTRIBUTING.md)
+    lld \
+    # Protocol Buffers compiler
+    protobuf-compiler \
+    # Cap'n Proto
+    capnproto \
+    libcapnp-dev \
+    # Testing utilities (optional but useful)
+    jq \
+    zstd \
+    # SSL development libraries
+    libssl-dev \
+    # Additional utilities
+    curl \
+    wget \
+    git \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
 
-# Add hyperfine, a useful benchmarking tool
-RUN dpkgArch="$(dpkg --print-architecture)"; \
-  wget "https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_${dpkgArch}.deb" && dpkg -i "hyperfine_1.12.0_${dpkgArch}.deb"
+# Install Node.js v22 (using NodeSource repository for exact version control)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-#
-# Everything below is run as the vscode user. If superuser permissions are necessary,
-# run it before this. Otherwise, prefer running as the vscode user.
-#
+# Install pnpm globally (specific version as per package.json)
+RUN npm install -g pnpm@8.14.0
+
+# Install Rust with the specific nightly version and components
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+    --default-toolchain ${RUST_VERSION} \
+    --profile minimal \
+    --component rustfmt,clippy \
+    -y \
+    && chmod -R a+w $RUSTUP_HOME $CARGO_HOME
+
+# Create cache directories for better performance
+RUN mkdir -p /home/vscode/.cache /usr/local/cargo \
+    && chown -R vscode:vscode /home/vscode/.cache /usr/local/cargo
+
+# Set the default user to vscode
 USER vscode
 
-# [Choice] Node.js version: none, lts/*, 16, 14, 12, 10
-ARG NODE_VERSION="none"
-RUN if [ "${NODE_VERSION}" != "none" ]; then umask 0002 && sh -c ". /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION}" 2>&1; fi
+# Verify installations
+RUN node --version \
+    && npm --version \
+    && pnpm --version \
+    && rustc --version \
+    && cargo --version \
+    && protoc --version \
+    && capnp --version \
+    && jq --version \
+    && zstd --version \
+    && which lld
 
-RUN sh -c ". /usr/local/share/nvm/nvm.sh && npm install -g vercel yarn yalc pnpm nodemon" 2>&1
-
-# The installer from https://rustup.rs/ homepage, with the following changes:
-#   * `-y` to accept without interactivity
-#   * `--default-toolchain none` to avoid installing stable rust. Our specific toolchain is installed post-create.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+WORKDIR /workspace

@@ -1,53 +1,67 @@
-// This module doesn't require git2, but it is only used by modules that require
-// git2.
-#![cfg(feature = "git2")]
-use std::io::{ErrorKind, Read};
+use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
 
-use globwalk::fix_glob_pattern;
-use hex::ToHex;
+use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
-use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
+};
 use wax::{Glob, Program, any};
 
-use crate::{Error, GitHashes};
+use crate::{Error, GitHashes, OidHash};
 
-fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
-    let mut hasher = Sha1::new();
-    let mut f = path.open()?;
-    let mut buffer = Vec::new();
-    // Note that read_to_end reads the target if f is a symlink. Currently, this can
-    // happen when we are hashing a specific set of files, which in turn only
-    // happens for handling dotEnv files. It is likely that in the future we
-    // will want to ensure that the target is better accounted for in the set of
-    // inputs to the task. Manual hashing, as well as global deps and other
-    // places that support globs all ignore symlinks.
-    let size = f.read_to_end(&mut buffer)?;
-    hasher.update("blob ".as_bytes());
-    hasher.update(size.to_string().as_bytes());
-    hasher.update([b'\0']);
-    hasher.update(buffer.as_slice());
-    let result = hasher.finalize();
-    Ok(result.encode_hex::<String>())
+fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a, str> {
+    if is_glob_pattern(pattern) {
+        return Cow::Borrowed(pattern);
+    }
+    let Ok(rel) = RelativeUnixPath::new(pattern) else {
+        return Cow::Borrowed(pattern);
+    };
+    let resolved = base.join_unix_path(rel);
+    if resolved.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+        if pattern.ends_with('/') {
+            Cow::Owned(format!("{pattern}**"))
+        } else {
+            Cow::Owned(format!("{pattern}/**"))
+        }
+    } else {
+        Cow::Borrowed(pattern)
+    }
 }
 
-fn to_glob(input: &str) -> Result<Glob<'_>, Error> {
+fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
     let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
 
     Ok(g)
 }
 
+/// Hash a set of files as git blob objects, applying CRLF→LF normalization
+/// when `.gitattributes` requires it.
+///
+/// `attrs_root` overrides where `.gitattributes` is loaded from (e.g. the
+/// git root when falling back from the git path). When `None`, uses
+/// `root_path`.
+///
+/// `cached_attrs` reuses a pre-loaded `GitAttrs` (e.g. from `GitRepo`'s
+/// `OnceLock`). When `None`, attrs are loaded from `attrs_root`.
 pub(crate) fn hash_files(
     root_path: &AbsoluteSystemPath,
     files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     allow_missing: bool,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    let effective_attrs_root = attrs_root.unwrap_or(root_path);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut hashes = GitHashes::new();
     for file in files.into_iter() {
-        let path = root_path.resolve(file.as_ref());
-        match git_like_hash_file(&path) {
-            Ok(hash) => hashes.insert(file.as_ref().to_unix(), hash),
+        let anchored = file.as_ref();
+        let path = root_path.resolve(anchored);
+        let root_relative = anchored.to_unix();
+        let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
+        match hash_file_with_attrs(&path, attr_path.as_str(), attrs) {
+            Ok(hash) => hashes.insert(root_relative, hash),
             Err(Error::Io(ref io_error, _))
                 if allow_missing && io_error.kind() == ErrorKind::NotFound =>
             {
@@ -59,31 +73,107 @@ pub(crate) fn hash_files(
     Ok(hashes)
 }
 
+/// Hash a file as a git blob, applying CRLF→LF normalization when
+/// `.gitattributes` requires it.
+///
+/// `attr_path` must be relative to the root where `GitAttrs` was loaded
+/// (typically turbo_root or git_root). This is NOT necessarily the same as
+/// the package-relative path used for hash map insertion — callers must
+/// compute the correct root-relative path.
+fn hash_file_with_attrs(
+    path: &AbsoluteSystemPath,
+    attr_path: &str,
+    attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<OidHash, Error> {
+    let text_attr = attrs
+        .map(|a| a.resolve_text_attr(attr_path))
+        .unwrap_or(crate::crlf::TextAttr::Unspecified);
+
+    crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
+}
+
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
     inputs: &[S],
     include_default_files: bool,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
+    let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
+
+    let effective_attrs_root = attrs_root.unwrap_or(turbo_root);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut default_file_hashes = GitHashes::new();
-    let mut excluded_file_hashes = GitHashes::new();
+    let mut excluded_file_paths = HashSet::new();
+
+    // Inputs that reference parent directories (contain "..") can't be found by
+    // the WalkBuilder since it only walks within the package directory. Handle
+    // these separately using globwalk rooted at turbo_root, matching the git
+    // path's behavior.
+    let mut local_inputs: Vec<&str> = Vec::new();
+    let mut external_inclusions = Vec::new();
+    let mut external_exclusions = Vec::new();
+    for pattern in inputs {
+        let pattern = pattern.as_ref();
+        let is_exclusion = pattern.starts_with('!');
+        let raw = if is_exclusion { &pattern[1..] } else { pattern };
+
+        if raw.starts_with("..") {
+            let mut glob_buf =
+                String::with_capacity(package_unix_path.as_str().len() + 1 + raw.len());
+            glob_buf.push_str(package_unix_path.as_str());
+            glob_buf.push('/');
+            glob_buf.push_str(raw);
+            if is_exclusion {
+                external_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            } else {
+                external_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            }
+        } else {
+            local_inputs.push(pattern);
+        }
+    }
+
+    if !external_inclusions.is_empty() {
+        let files = globwalk::globwalk(
+            turbo_root,
+            &external_inclusions,
+            &external_exclusions,
+            globwalk::WalkType::Files,
+        )?;
+        for file_path in &files {
+            let relative_path =
+                AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
+                    .to_unix();
+            // Use attrs-root-relative path for .gitattributes pattern matching.
+            let attr_path = effective_attrs_root.anchor(file_path)?.to_unix();
+            let hash = hash_file_with_attrs(file_path, attr_path.as_str(), attrs)?;
+            hashes.insert(relative_path, hash);
+        }
+    }
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
-    for pattern in inputs {
-        let pattern = pattern.as_ref();
+    for pattern in &local_inputs {
         if let Some(exclusion) = pattern.strip_prefix('!') {
             let g = to_glob(exclusion)?;
             excludes.push(g);
         } else {
-            let g = to_glob(pattern)?;
+            // If the pattern has no glob metacharacters and resolves to a
+            // directory, treat it as "dir/**" to match all files inside.
+            // This mirrors what globwalk::add_doublestar_to_dir does in the
+            // git code path.
+            let effective_pattern = expand_dir_pattern(&full_package_path, pattern);
+            let g = to_glob(effective_pattern.as_ref())?;
             includes.push(g);
         }
     }
-    let include_pattern = if includes.is_empty() {
+    let include_pattern = if includes.is_empty() && external_inclusions.is_empty() {
         None
     } else {
         // Add in package.json and turbo.json to input patterns. Both file paths are
@@ -113,7 +203,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
         // regular behavior
-        .git_ignore(inputs.is_empty())
+        .git_ignore(local_inputs.is_empty() && external_inclusions.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
@@ -121,9 +211,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     for dirent in walker {
         let dirent = dirent?;
         let metadata = dirent.metadata()?;
-        // We need to do this here, rather than as a filter, because the root
-        // directory is always yielded and not subject to the supplied filter.
-        if metadata.is_dir() {
+        // Skip anything that isn't a regular file (directories, symlinks,
+        // sockets, FIFOs, device nodes). This must be here rather than as a
+        // walker filter because the root directory is always yielded.
+        if !metadata.is_file() {
             continue;
         }
 
@@ -145,11 +236,8 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             continue;
         }
 
-        // FIXME: we don't hash symlinks...
-        if metadata.is_symlink() {
-            continue;
-        }
-        let hash = git_like_hash_file(path)?;
+        let attr_path = effective_attrs_root.anchor(path)?.to_unix();
+        let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
         hashes.insert(relative_path, hash);
     }
 
@@ -166,9 +254,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         for dirent in walker {
             let dirent = dirent?;
             let metadata = dirent.metadata()?;
-            // We need to do this here, rather than as a filter, because the root
-            // directory is always yielded and not subject to the supplied filter.
-            if metadata.is_dir() {
+            // Skip anything that isn't a regular file. Must be here rather
+            // than as a walker filter because the root directory is always
+            // yielded.
+            if !metadata.is_file() {
                 continue;
             }
 
@@ -179,18 +268,19 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             if let Some(exclude_pattern) = exclude_pattern.as_ref()
                 && exclude_pattern.is_match(relative_path.as_str())
             {
-                // track excludes so we can exclude them to the hash map later
-                if !metadata.is_symlink() {
-                    let hash = git_like_hash_file(path)?;
-                    excluded_file_hashes.insert(relative_path.clone(), hash);
-                }
-            }
-
-            // FIXME: we don't hash symlinks...
-            if metadata.is_symlink() {
+                // Track excluded paths — no need to hash since we only use the
+                // path for filtering.
+                excluded_file_paths.insert(relative_path);
                 continue;
             }
-            let hash = git_like_hash_file(path)?;
+
+            // Skip files already hashed in the first walk to avoid redundant I/O.
+            if hashes.contains_key(&relative_path) {
+                continue;
+            }
+
+            let attr_path = effective_attrs_root.anchor(path)?.to_unix();
+            let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
             default_file_hashes.insert(relative_path, hash);
         }
     }
@@ -198,14 +288,16 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     // merge default with all hashes
     hashes.extend(default_file_hashes);
     // remove excluded files
-    hashes.retain(|key, _| !excluded_file_hashes.contains_key(key));
+    if !excluded_file_paths.is_empty() {
+        hashes.retain(|key, _| !excluded_file_paths.contains(key));
+    }
 
     Ok(hashes)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
 
     use test_case::test_case;
     use turbopath::{
@@ -239,7 +331,7 @@ mod tests {
             if files.contains(&"existing-file.txt") {
                 expected.insert(
                     RelativeUnixPathBuf::new("existing-file.txt").unwrap(),
-                    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".to_string(),
+                    OidHash::from_hex_str("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
                 );
             }
             expected
@@ -248,7 +340,7 @@ mod tests {
         let files = files
             .iter()
             .map(|s| AnchoredSystemPathBuf::from_raw(s).unwrap());
-        match hash_files(&turbo_root, files, allow_missing) {
+        match hash_files(&turbo_root, files, allow_missing, None, None) {
             Err(e) => assert!(want_err, "unexpected error {e}"),
             Ok(hashes) => assert_eq!(hashes, expected),
         }
@@ -276,6 +368,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-from-to-file").unwrap()].iter(),
             true,
+            None,
+            None,
         )
         .unwrap();
         let from_to_file_hash = out
@@ -293,6 +387,8 @@ mod tests {
                 &turbo_root,
                 [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
                 true,
+                None,
+                None,
             );
             match out.err().unwrap() {
                 Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
@@ -305,6 +401,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
             false,
+            None,
+            None,
         );
         #[cfg(windows)]
         let expected_err_kind = ErrorKind::PermissionDenied;
@@ -317,6 +415,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
             true,
+            None,
+            None,
         )
         .unwrap();
         let broken_hash = out.get(&RelativeUnixPathBuf::new("symlink-broken").unwrap());
@@ -327,6 +427,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
             false,
+            None,
+            None,
         );
         match out.err().unwrap() {
             Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
@@ -406,17 +508,23 @@ mod tests {
                 println!("unix_pkg_path: {unix_pkg_path}");
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
                 println!("unix_pkg_file_path: {unix_pkg_file_path}");
-                expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
             }
         }
         expected.insert(
             RelativeUnixPathBuf::new(".gitignore").unwrap(),
-            "3237694bc3312ded18386964a855074af7b066af".to_owned(),
+            OidHash::from_hex_str("3237694bc3312ded18386964a855074af7b066af"),
         );
 
-        let hashes =
-            get_package_file_hashes_without_git::<&str>(&turbo_root, &pkg_path, &[], false)
-                .unwrap();
+        let hashes = get_package_file_hashes_without_git::<&str>(
+            &turbo_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(hashes, expected);
 
         // set a hash for an ignored file
@@ -440,7 +548,7 @@ mod tests {
                     || unix_pkg_file_path.ends_with("turbo.json"))
                     && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                    expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
                 }
             }
         }
@@ -450,9 +558,360 @@ mod tests {
             &pkg_path,
             &["**/*file", "!some-dir/excluded-file"],
             false,
+            None,
+            None,
         )
         .unwrap();
 
         assert_eq!(hashes, expected);
+    }
+
+    #[test]
+    fn test_include_default_files_deduplicates_with_explicit_includes() {
+        // When include_default_files=true AND explicit includes are provided,
+        // the first walk collects files matching the includes, and the second
+        // walk collects gitignore-respecting defaults. Files appearing in both
+        // walks should not be hashed twice — verify that the result is correct
+        // and contains each file exactly once.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        // Create files: one matched by the explicit include, one only in defaults
+        let shared_file = pkg_dir.join_component("shared.ts");
+        shared_file.create_with_contents("shared content").unwrap();
+
+        let default_only = pkg_dir.join_component("default-only.ts");
+        default_only
+            .create_with_contents("default only content")
+            .unwrap();
+
+        let package_json = pkg_dir.join_component("package.json");
+        package_json.create_with_contents("{}").unwrap();
+
+        let turbo_json = pkg_dir.join_component("turbo.json");
+        turbo_json.create_with_contents("{}").unwrap();
+
+        // "*.ts" matches both shared.ts and default-only.ts in the first walk
+        // (since git_ignore=false for explicit inputs). The second walk with
+        // git_ignore=true should not re-hash files already found.
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // All four files should appear exactly once
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("shared.ts").unwrap()),
+            "shared.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("default-only.ts").unwrap()),
+            "default-only.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "package.json should be present (added by include pattern augmentation)"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("turbo.json").unwrap()),
+            "turbo.json should be present (added by include pattern augmentation)"
+        );
+
+        // Verify the hash values are deterministic (same content = same hash)
+        let hashes2 = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(hashes, hashes2, "hashes should be deterministic");
+    }
+
+    #[test]
+    fn test_include_default_files_with_exclusion() {
+        // Verify that exclusions work correctly when include_default_files=true:
+        // excluded files should not appear even if the default walk finds them.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("lib").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let keep = pkg_dir.join_component("keep.ts");
+        keep.create_with_contents("keep").unwrap();
+
+        let excluded = pkg_dir.join_component("excluded.ts");
+        excluded.create_with_contents("excluded").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts", "!excluded.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("keep.ts").unwrap()),
+            "keep.ts should be present"
+        );
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
+            "excluded.ts should NOT be present"
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/9574
+    /// Directory names as inputs (e.g. "src") should match all files inside.
+    #[test]
+    fn test_directory_input_matches_all_files_inside() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let src_dir = pkg_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents("export const x = 1")
+            .unwrap();
+        let nested = src_dir.join_component("utils");
+        nested.create_dir_all().unwrap();
+        nested
+            .join_component("helper.ts")
+            .create_with_contents("export const h = 2")
+            .unwrap();
+
+        // A file outside "src" that should NOT be included
+        pkg_dir
+            .join_component("readme.md")
+            .create_with_contents("readme")
+            .unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["src"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
+            "src/index.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap()),
+            "src/utils/helper.ts should be present"
+        );
+        // package.json and turbo.json are auto-added when includes are specified
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("readme.md").unwrap()),
+            "readme.md should NOT be present"
+        );
+    }
+
+    /// Directory input combined with include_default_files should include
+    /// both the directory contents and default (gitignore-respecting) files.
+    #[test]
+    fn test_directory_input_with_default_files() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let src_dir = pkg_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents("code")
+            .unwrap();
+
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        pkg_dir
+            .join_component("other.ts")
+            .create_with_contents("other")
+            .unwrap();
+
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], true, None, None)
+                .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
+            "src/index.ts should be in explicit includes"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("other.ts").unwrap()),
+            "other.ts should be in default files"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "package.json should be present"
+        );
+    }
+
+    /// Verify that the manual (non-git) hashing path produces OIDs identical
+    /// to `git hash-object`. This is the manual-path counterpart of
+    /// `hash_object::test::test_blob_hash_matches_git_hash_object` and
+    /// covers the streaming I/O boundary conditions.
+    #[test]
+    fn test_manual_hash_matches_git_hash_object() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // 128KB: spans multiple 64KB read buffers
+        let multi_buf_content = vec![b'A'; 128 * 1024];
+        // Exactly 64KB: boundary where one read fills the buffer and the next returns 0
+        let exact_buf_content = vec![b'B'; 64 * 1024];
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("empty.txt", b"".to_vec()),
+            ("hello.txt", b"hello world\n".to_vec()),
+            ("binary.bin", vec![0u8, 1, 2, 255, 254, 253]),
+            ("small.txt", vec![b'x'; 10_000]),
+            ("multi_buf.bin", multi_buf_content),
+            ("exact_buf.bin", exact_buf_content),
+            // CRLF edge cases: without --filters, git hash-object hashes raw
+            // bytes. These must remain stable after CRLF normalization is added
+            // to ensure we only normalize when .gitattributes says to.
+            ("lone-cr.txt", b"hello\rworld\n".to_vec()),
+            ("mixed-eol.txt", b"line1\nline2\r\nline3\n".to_vec()),
+            ("trailing-cr.bin", b"data\r".to_vec()),
+            ("crlf-in-binary.bin", vec![0x00, b'\r', b'\n', 0xFF, 0xFE]),
+            ("pure-crlf.txt", b"a\r\nb\r\nc\r\n".to_vec()),
+        ];
+
+        for (name, content) in &cases {
+            std::fs::write(turbo_root.as_path().join(name), content).unwrap();
+        }
+
+        // Use a temp git repo so we can call `git hash-object`
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(turbo_root.as_path())
+            .output()
+            .unwrap();
+
+        for (name, _) in &cases {
+            let output = std::process::Command::new("git")
+                .args(["hash-object", name])
+                .current_dir(turbo_root.as_path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git hash-object failed for {name}");
+            let expected_hash = String::from_utf8(output.stdout).unwrap();
+            let expected_hash = expected_hash.trim();
+
+            let path = turbo_root.join_component(name);
+            let actual = crate::crlf::manual_hash_file_maybe_normalized(
+                &path,
+                crate::crlf::TextAttr::Unspecified,
+            )
+            .unwrap();
+            assert_eq!(
+                &*actual, expected_hash,
+                "manual hash for {name} must match git hash-object"
+            );
+        }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/10485
+    //
+    // Inputs referencing parent directories (e.g. "../../root-file") should be
+    // included in the hash output, matching the behavior of the git path.
+    #[test]
+    fn test_parent_dir_inputs_are_hashed() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // turbo_root/
+        //   root-file
+        //   packages/
+        //     my-app/
+        //       package.json
+        let root_file = turbo_root.join_component("root-file");
+        root_file
+            .create_with_contents("root file contents")
+            .unwrap();
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/my-app").unwrap();
+        let full_pkg_path = turbo_root.resolve(&pkg_path);
+        full_pkg_path.create_dir_all().unwrap();
+
+        let pkg_json = full_pkg_path.join_component("package.json");
+        pkg_json.create_with_contents("{}").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../root-file"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("../../root-file").unwrap()),
+            "input referencing a parent directory should be hashed, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/10485
+    //
+    // Same as above but with a glob pattern that traverses parent directories.
+    #[test]
+    fn test_parent_dir_glob_inputs_are_hashed() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // turbo_root/
+        //   root-file
+        //   packages/
+        //     my-app/
+        //       package.json
+        let root_file = turbo_root.join_component("root-file");
+        root_file
+            .create_with_contents("root file contents")
+            .unwrap();
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/my-app").unwrap();
+        let full_pkg_path = turbo_root.resolve(&pkg_path);
+        full_pkg_path.create_dir_all().unwrap();
+
+        let pkg_json = full_pkg_path.join_component("package.json");
+        pkg_json.create_with_contents("{}").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../*-file"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("../../root-file").unwrap()),
+            "glob input traversing parent directories should find files, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
     }
 }

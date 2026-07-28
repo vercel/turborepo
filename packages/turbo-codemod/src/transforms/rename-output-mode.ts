@@ -1,11 +1,16 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import {
+  type PackageJson,
+  getTurboConfigs,
+  resolveTurboConfigPath
+} from "@turbo/utils";
 import type { PipelineV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "rename-output-mode";
@@ -14,8 +19,12 @@ const DESCRIPTION =
 const INTRODUCED_IN = "2.0.0-canary.0";
 
 function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
+    if (Object.hasOwn(taskDef, "outputMode")) {
       (taskDef as PipelineV2).outputLogs = taskDef.outputMode;
       delete taskDef.outputMode;
     }
@@ -26,12 +35,12 @@ function migrateConfig(config: SchemaV1) {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   // If `turbo` key is detected in package.json, require user to run the other codemod first.
@@ -48,35 +57,39 @@ export function transformer({
   if ("turbo" in packageJSON) {
     return runner.abortTransform({
       reason:
-        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
     });
   }
 
   log.info("Renaming `outputMode` key in task config to `outputLogs`");
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 
   const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config) {
       runner.modifyFile({
         filePath,
-        after: migrateConfig(config),
+        after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }
@@ -85,7 +98,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

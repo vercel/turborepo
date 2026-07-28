@@ -1,0 +1,211 @@
+use std::sync::Arc;
+
+use async_graphql::{Json, Object};
+use turborepo_engine::TaskNode;
+use turborepo_errors::Spanned;
+use turborepo_task_id::TaskId;
+use turborepo_types::TaskCommandOverride;
+
+use crate::{package::Package, Array, Error, QueryRun};
+
+pub struct RepositoryTask {
+    pub name: String,
+    pub package: Package,
+    pub script: Option<Spanned<String>>,
+}
+
+impl RepositoryTask {
+    pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
+        let package = Package::new(run.clone(), task_id.package().into())?;
+        let script = package.get_tasks().get(task_id.task()).cloned();
+
+        Ok(RepositoryTask {
+            name: task_id.task().to_string(),
+            package,
+            script,
+        })
+    }
+
+    pub fn executes(&self) -> bool {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        match self
+            .package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.command.as_ref())
+        {
+            Some(TaskCommandOverride::Argv(_)) => true,
+            Some(TaskCommandOverride::OptOut) => false,
+            None => self
+                .package
+                .run()
+                .pkg_dep_graph()
+                .package_task_context(self.package.get_name())
+                .and_then(|context| {
+                    self.package
+                        .run()
+                        .pkg_dep_graph()
+                        .toolchains()
+                        .get(context.toolchain()?)
+                        .map(|toolchain| (context, toolchain))
+                })
+                .is_some_and(|(context, toolchain)| toolchain.defines_task(&context, &self.name)),
+        }
+    }
+
+    fn collect_and_sort<'a>(
+        &self,
+        task_id: &TaskId<'a>,
+        tasks: impl IntoIterator<Item = &'a TaskNode>,
+    ) -> Result<Array<RepositoryTask>, Error> {
+        let mut tasks = tasks
+            .into_iter()
+            .filter_map(|task| match task {
+                TaskNode::Root => None,
+                TaskNode::Task(task) if task == task_id => None,
+                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
+            })
+            .collect::<Result<Array<_>, _>>()?;
+        tasks.sort_by(|a, b| {
+            a.package
+                .get_name()
+                .cmp(b.package.get_name())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        Ok(tasks)
+    }
+}
+
+#[Object]
+impl RepositoryTask {
+    async fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    async fn package(&self) -> Package {
+        self.package.clone()
+    }
+
+    async fn full_name(&self) -> String {
+        format!("{}#{}", self.package.get_name(), self.name)
+    }
+
+    async fn script(&self) -> Option<String> {
+        self.script.as_ref().map(|script| script.value.to_string())
+    }
+
+    /// The fully resolved `experimentalCI` configuration for this task from
+    /// turbo.json, including Package Configuration overrides. Either a
+    /// boolean or an object with arbitrary keys. Null if the key is not set.
+    #[graphql(name = "experimentalCI")]
+    async fn experimental_ci(&self) -> Result<Option<Json<serde_json::Value>>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.experimental_ci.as_ref())
+            .map(|config| serde_json::to_value(config).map(Json).map_err(Error::from))
+            .transpose()
+    }
+
+    async fn direct_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+
+        self.collect_and_sort(
+            &task_id,
+            self.package
+                .run()
+                .engine()
+                .dependents(&task_id)
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    async fn direct_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::new(self.package.get_name().as_ref(), &self.name);
+
+        self.collect_and_sort(
+            &task_id,
+            self.package
+                .run()
+                .engine()
+                .dependencies(&task_id)
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    async fn indirect_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        let direct_dependents = self
+            .package
+            .run()
+            .engine()
+            .dependencies(&task_id)
+            .unwrap_or_default();
+
+        self.collect_and_sort(
+            &task_id,
+            self.package
+                .run()
+                .engine()
+                .transitive_dependents(&task_id)
+                .into_iter()
+                .filter(|node| !direct_dependents.contains(node)),
+        )
+    }
+
+    async fn indirect_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        let direct_dependencies = self
+            .package
+            .run()
+            .engine()
+            .dependencies(&task_id)
+            .unwrap_or_default();
+        let mut dependencies = self
+            .package
+            .run()
+            .engine()
+            .transitive_dependencies(&task_id)
+            .into_iter()
+            .filter(|node| !direct_dependencies.contains(node))
+            .filter_map(|node| match node {
+                TaskNode::Root => None,
+                TaskNode::Task(task) if task == &task_id => None,
+                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
+            })
+            .collect::<Result<Array<_>, _>>()?;
+
+        dependencies.sort_by(|a, b| {
+            a.package
+                .get_name()
+                .cmp(b.package.get_name())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+
+        Ok(dependencies)
+    }
+
+    async fn all_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.collect_and_sort(
+            &task_id,
+            self.package.run().engine().transitive_dependents(&task_id),
+        )
+    }
+
+    async fn all_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.collect_and_sort(
+            &task_id,
+            self.package
+                .run()
+                .engine()
+                .transitive_dependencies(&task_id),
+        )
+    }
+}

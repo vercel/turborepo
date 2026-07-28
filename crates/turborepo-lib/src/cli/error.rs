@@ -1,18 +1,15 @@
-use std::backtrace;
-
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_daemon::DaemonError;
+use turborepo_json_rewrite::RewriteError;
 use turborepo_repository::package_graph;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, link, login, ls, prune, CommandBase},
-    daemon::DaemonError,
-    query,
-    rewrite_json::RewriteError,
+    commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
     run,
     run::{builder::RunBuilder, watch},
 };
@@ -20,13 +17,13 @@ use crate::{
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("No command specified.")]
-    NoCommand(#[backtrace] backtrace::Backtrace),
+    NoCommand,
+    #[error("Query server not available. The turbo query command requires the full turbo binary.")]
+    QueryNotAvailable,
     #[error("{0}")]
-    Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    Bin(#[from] bin::Error),
     #[error(transparent)]
     Boundaries(#[from] crate::boundaries::Error),
-    #[error(transparent)]
-    Clone(#[from] crate::commands::clone::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -44,7 +41,11 @@ pub enum Error {
     #[error(transparent)]
     Daemon(#[from] DaemonError),
     #[error(transparent)]
+    Docs(#[from] docs::Error),
+    #[error(transparent)]
     Generate(#[from] generate::Error),
+    #[error(transparent)]
+    GetMfePort(#[from] get_mfe_port::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
@@ -64,18 +65,24 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Query(#[from] query::Error),
+    Query(#[from] turborepo_query_api::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
+    #[error("Devtools error: {0}")]
+    Devtools(Box<turborepo_devtools::ServerError>),
     #[error(transparent)]
     Opts(#[from] crate::opts::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Dialoguer(#[from] dialoguer::Error),
+    #[error("Failed to build Tokio runtime: {0}")]
+    Runtime(#[source] std::io::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;
@@ -88,8 +95,8 @@ pub async fn print_potential_tasks(
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base)?;
-    let run = run_builder.build(&handler, telemetry).await?;
+    let run_builder = RunBuilder::new(base, None)?;
+    let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 
     println!("No tasks provided, here are some potential ones\n",);
@@ -124,4 +131,59 @@ pub async fn print_potential_tasks(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_mfe_port_error_conversion() {
+        // Test NoPackageJson error
+        let err = get_mfe_port::Error::NoPackageJson;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "No package.json found in current directory"
+        );
+
+        // Test NoPackageName error
+        let err = get_mfe_port::Error::NoPackageName;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "package.json is missing the 'name' field"
+        );
+
+        // Test NoMicrofrontendsConfig error
+        let err = get_mfe_port::Error::NoMicrofrontendsConfig;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(cli_err.to_string(), "No microfrontends configuration found");
+
+        // Test PackageNotInConfig error
+        let err = get_mfe_port::Error::PackageNotInConfig("my-app".to_string());
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "Package 'my-app' not found in microfrontends configuration"
+        );
+    }
+
+    #[test]
+    fn test_get_mfe_port_error_source() {
+        // Test that error source chain works properly
+        let err = get_mfe_port::Error::NoPackageJson;
+        let cli_err: Error = err.into();
+
+        match cli_err {
+            Error::GetMfePort(inner) => {
+                assert!(matches!(inner, get_mfe_port::Error::NoPackageJson));
+            }
+            _ => panic!("Expected GetMfePort error variant"),
+        }
+    }
 }

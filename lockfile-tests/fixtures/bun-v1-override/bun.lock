@@ -1,0 +1,42 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bun-override-fixture",
+    },
+    "apps/app-a": {
+      "name": "app-a",
+      "version": "1.0.0",
+      "dependencies": {
+        "is-number": "^7.0.0",
+      },
+    },
+    "apps/app-b": {
+      "name": "app-b",
+      "version": "1.0.0",
+      "dependencies": {
+        "kind-of": "^6.0.0",
+      },
+    },
+    "packages/shared": {
+      "name": "shared",
+      "version": "1.0.0",
+    },
+  },
+  "overrides": {
+    "is-number": "7.0.0",
+    "kind-of": "6.0.3",
+  },
+  "packages": {
+    "app-a": ["app-a@workspace:apps/app-a"],
+
+    "app-b": ["app-b@workspace:apps/app-b"],
+
+    "is-number": ["is-number@7.0.0", "", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
+
+    "kind-of": ["kind-of@6.0.3", "", {}, "sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw=="],
+
+    "shared": ["shared@workspace:packages/shared"],
+  }
+}

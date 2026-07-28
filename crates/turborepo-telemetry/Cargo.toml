@@ -20,7 +20,6 @@ chrono = { workspace = true, features = ["serde"] }
 config = { version = "0.13.4", default-features = false, features = ["json"] }
 futures = { workspace = true }
 hex = "0.4.3"
-once_cell = "1.18.0"
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -29,6 +28,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }
+turborepo-ai-agents = { workspace = true }
 turborepo-api-client = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-dirs = { path = "../turborepo-dirs" }

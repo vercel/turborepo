@@ -1,4 +1,3 @@
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 //! Turborepo's path handling library.
@@ -211,8 +210,10 @@ pub enum UnknownPathType {
 /// an `AnchoredSystemPathBuf` depending on whether it
 /// is absolute or relative.
 pub fn categorize(path: &Utf8Path) -> UnknownPathType {
-    let path = Utf8PathBuf::try_from(path_clean::clean(path))
-        .expect("path cleaning should preserve UTF-8");
+    let path = match Utf8PathBuf::try_from(path_clean::clean(path)) {
+        Ok(path) => path,
+        Err(err) => panic!("path cleaning should preserve UTF-8: {err:?}"),
+    };
     if path.is_absolute() {
         UnknownPathType::Absolute(AbsoluteSystemPathBuf(path))
     } else {

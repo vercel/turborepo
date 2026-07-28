@@ -1,0 +1,168 @@
+---
+title: Nuxt
+description: Learn more about using Nuxt in your monorepo.
+product: turborepo
+type: integration
+summary: Add and configure Nuxt applications in your Turborepo monorepo.
+related:
+  - /docs/guides/frameworks/framework-bindings
+  - /docs/guides/microfrontends
+  - /docs/guides/frameworks/vite
+---
+
+[Nuxt](https://nuxt.com/) is an open source framework that makes web development intuitive and powerful.
+
+## Quickstart
+
+To get started with Nuxt in a Turborepo quickly, use [the `with-vue-nuxt` example](https://github.com/vercel/turborepo/tree/main/examples/with-vue-nuxt):
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Adding a Nuxt application to an existing repository
+
+Use [Nuxi](https://www.npmjs.com/package/nuxi), Nuxt's CLI, to set up a new Nuxt application in a package. From the root of your repository, run:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+bunx nuxi@latest init apps/my-app
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Integrating with your repository
+
+To add [Internal Packages](/docs/core-concepts/internal-packages) to your new application, install them into the app with your package manager:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+</PackageManagerTabs>
+
+Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
+
+### Customizing tasks
+
+By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/docs/reference/package-configurations).
+
+### Microfrontends
+
+When using Nuxt with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `base` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
+
+```ts title="./apps/my-app/vite.config.ts"
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  base: "/admin",
+});
+```

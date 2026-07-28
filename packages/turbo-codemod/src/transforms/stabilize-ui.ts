@@ -1,10 +1,9 @@
-import path from "node:path";
-import fs from "fs-extra";
+import { resolveTurboConfigPath } from "@turbo/utils";
 import type { RootSchema } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "stabilize-ui";
@@ -27,26 +26,30 @@ function migrateConfig(config: ExperimentalSchema): RootSchema {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info(`Renaming \`experimentalUI\` key in turbo.json to \`ui\``);
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 
   const turboJson: RootSchema = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   return runner.finish();
@@ -56,7 +59,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

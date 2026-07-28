@@ -17,6 +17,10 @@ pub enum Error {
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    Path(#[from] PathError),
+    #[error("Workspace package resolves outside repository root: {0}")]
+    WorkspacePackageOutsideRepo(String),
 }
 
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
@@ -62,7 +66,7 @@ fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, Er
     let fixed = fix_glob_pattern(raw);
     Glob::new(&fixed)
         .map(|g| g.into_owned())
-        .map_err(|e| Error::invalid_glob(fixed, e))
+        .map_err(|e| Error::invalid_glob(fixed.into_owned(), e))
 }
 
 fn any_with_contextual_error(
@@ -148,12 +152,24 @@ impl WorkspaceGlobs {
         &self,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
-        let files = globwalk::globwalk(
-            repo_root,
-            &self.package_json_inclusions,
-            &self.validated_exclusions,
-            globwalk::WalkType::Files,
-        )?;
+        let files = {
+            let _span = tracing::info_span!("package_json_walk").entered();
+            globwalk::globwalk_with_settings(
+                repo_root,
+                &self.package_json_inclusions,
+                &self.validated_exclusions,
+                globwalk::WalkType::Files,
+                globwalk::Settings::default().follow_links(),
+            )?
+        };
+        let _span = tracing::info_span!("package_json_realpath_check").entered();
+        let repo_root = repo_root.to_realpath()?;
+        for file in &files {
+            let real_file = file.to_realpath()?;
+            if !real_file.starts_with(&repo_root) {
+                return Err(Error::WorkspacePackageOutsideRepo(file.to_string()));
+            }
+        }
         Ok(files.into_iter())
     }
 }
@@ -174,5 +190,118 @@ mod test {
                 .collect::<Vec<_>>(),
             &["scripts/package.json", "packages/**/package.json"]
         );
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/2517
+    // Workspace packages behind symlinked directories must be discovered by
+    // get_package_jsons().
+    #[cfg(unix)]
+    mod symlink_workspace_discovery {
+        use std::collections::HashSet;
+
+        use turbopath::AbsoluteSystemPathBuf;
+
+        use super::*;
+
+        #[test]
+        fn discovers_package_behind_symlinked_directory() {
+            let tmp = tempfile::TempDir::with_prefix("ws-symlink").unwrap();
+            let root = tmp.path();
+
+            // Real package
+            std::fs::create_dir_all(root.join("apps/web")).unwrap();
+            std::fs::write(root.join("apps/web/package.json"), r#"{"name": "web"}"#).unwrap();
+
+            // Symlinked package: widgets/widget-a -> ../submodules/widget-a
+            std::fs::create_dir_all(root.join("submodules/widget-a")).unwrap();
+            std::fs::write(
+                root.join("submodules/widget-a/package.json"),
+                r#"{"name": "widget-a"}"#,
+            )
+            .unwrap();
+            std::fs::create_dir_all(root.join("widgets")).unwrap();
+            std::os::unix::fs::symlink("../submodules/widget-a", root.join("widgets/widget-a"))
+                .unwrap();
+
+            let repo_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let globs = WorkspaceGlobs::new(vec!["apps/*", "widgets/*"], vec![]).unwrap();
+
+            let package_jsons: HashSet<String> = globs
+                .get_package_jsons(&repo_root)
+                .unwrap()
+                .map(|p| repo_root.anchor(p).unwrap().to_string())
+                .collect();
+
+            let expected: HashSet<String> = HashSet::from_iter([
+                "apps/web/package.json".replace('/', std::path::MAIN_SEPARATOR_STR),
+                "widgets/widget-a/package.json".replace('/', std::path::MAIN_SEPARATOR_STR),
+            ]);
+
+            assert_eq!(
+                package_jsons, expected,
+                "should discover packages behind symlinks"
+            );
+        }
+
+        #[test]
+        fn discovers_package_behind_symlink_with_doublestar_glob() {
+            let tmp = tempfile::TempDir::with_prefix("ws-symlink-dstar").unwrap();
+            let root = tmp.path();
+
+            // Symlinked nested package
+            std::fs::create_dir_all(root.join("external/nested/deep-pkg")).unwrap();
+            std::fs::write(
+                root.join("external/nested/deep-pkg/package.json"),
+                r#"{"name": "deep-pkg"}"#,
+            )
+            .unwrap();
+            std::fs::create_dir_all(root.join("packages")).unwrap();
+            std::os::unix::fs::symlink("../external/nested", root.join("packages/nested")).unwrap();
+
+            let repo_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let globs = WorkspaceGlobs::new(vec!["packages/**"], vec![]).unwrap();
+
+            let package_jsons: HashSet<String> = globs
+                .get_package_jsons(&repo_root)
+                .unwrap()
+                .map(|p| repo_root.anchor(p).unwrap().to_string())
+                .collect();
+
+            assert!(
+                package_jsons.contains(
+                    &"packages/nested/deep-pkg/package.json"
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                ),
+                "doublestar glob should find packages behind symlinks, got: {package_jsons:?}"
+            );
+        }
+
+        #[test]
+        fn rejects_package_behind_symlink_outside_repo_root() {
+            let root_tmp = tempfile::TempDir::with_prefix("ws-symlink-outside-root").unwrap();
+            let root = root_tmp.path();
+            let outside_tmp = tempfile::TempDir::with_prefix("ws-symlink-outside-target").unwrap();
+            let outside = outside_tmp.path();
+
+            std::fs::create_dir_all(outside.join("widget-a")).unwrap();
+            std::fs::write(
+                outside.join("widget-a/package.json"),
+                r#"{"name": "widget-a"}"#,
+            )
+            .unwrap();
+            std::fs::create_dir_all(root.join("widgets")).unwrap();
+            std::os::unix::fs::symlink(outside.join("widget-a"), root.join("widgets/widget-a"))
+                .unwrap();
+
+            let repo_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let globs = WorkspaceGlobs::new(vec!["widgets/*"], vec![]).unwrap();
+
+            let result = globs.get_package_jsons(&repo_root);
+
+            assert!(
+                result.is_err(),
+                "workspace discovery should reject symlinked packages outside the repo root"
+            );
+        }
     }
 }

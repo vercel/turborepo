@@ -35,7 +35,7 @@ describe("findPackages", () => {
       ["apps/app/src/util/useful-file.ts", "app-a"],
       [
         "apps/app/src/very/deeply/nested/file/that/is/deep/as/can/be/with/a/package.ts",
-        "app-a",
+        "app-a"
       ],
       ["apps/app/src/util/non-typescript-file.txt", "app-a"],
       ["apps/app/src/a-directory", "app-a"],
@@ -56,7 +56,7 @@ describe("findPackages", () => {
       ["apps/app/src/util/../../../../apps/app", "app-a"],
       ["not a legal ^&(^) path", undefined],
       ["package.json", undefined],
-      ["tsconfig.json", undefined],
+      ["tsconfig.json", undefined]
     ]) {
       if (result === undefined) {
         assert.rejects(

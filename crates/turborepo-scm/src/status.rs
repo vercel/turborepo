@@ -1,6 +1,3 @@
-// This module does not require git2, but is only used by modules that require
-// git2
-#![cfg(feature = "git2")]
 use std::{
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
@@ -9,7 +6,13 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{Error, GitHashes, GitRepo, git_path::require_git_path, wait_for_success};
+
+pub(crate) struct RepoStatusEntry {
+    pub path: RelativeUnixPathBuf,
+    pub is_delete: bool,
+    pub is_untracked: bool,
+}
 
 impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
@@ -54,11 +57,11 @@ fn read_status<R: Read>(
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut to_hash = Vec::new();
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
+        let path = require_git_path(entry.filename, "git status path")?;
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
@@ -75,9 +78,28 @@ fn read_status<R: Read>(
     Ok(to_hash)
 }
 
+#[allow(dead_code)]
+fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
+    let mut entries = Vec::new();
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_status(&buffer)?;
+        let path = require_git_path(entry.filename, "git status path")?;
+        entries.push(RepoStatusEntry {
+            path,
+            is_delete: entry.is_delete,
+            is_untracked: entry.is_untracked,
+        });
+        buffer.clear();
+    }
+    Ok(entries)
+}
+
 struct StatusEntry<'a> {
     filename: &'a [u8],
     is_delete: bool,
+    is_untracked: bool,
 }
 
 fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
@@ -102,6 +124,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
         StatusEntry {
             filename,
             is_delete: x[0] == b'D' || y[0] == b'D',
+            is_untracked: x[0] == b'?' && y[0] == b'?',
         },
     ))
 }
@@ -113,7 +136,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::GitHashes;
+    use crate::{Error, GitHashes, OidHash};
 
     #[test]
     fn test_status() {
@@ -136,7 +159,7 @@ mod tests {
         ];
         for (input, prefix, (expected_filename, expect_delete)) in tests {
             let prefix = RelativeUnixPathBuf::new(*prefix).unwrap();
-            let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
+            let mut hashes = to_hash_map(&[(expected_filename, "abc")]);
             let to_hash = read_status(input.as_bytes(), &root_path, &prefix, &mut hashes).unwrap();
             if *expect_delete {
                 assert_eq!(hashes.len(), 0, "input: {input}");
@@ -148,11 +171,35 @@ mod tests {
         }
     }
 
-    fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
+    #[test]
+    fn test_status_rejects_non_utf8_filename() {
+        let root_path = AbsoluteSystemPathBuf::cwd().unwrap();
+        let prefix = RelativeUnixPathBuf::new("").unwrap();
+        let mut hashes = GitHashes::new();
+        let err = read_status(
+            b"M  bad-\xff\0".as_slice(),
+            &root_path,
+            &prefix,
+            &mut hashes,
         )
+        .unwrap_err();
+
+        match err {
+            Error::UnsupportedGitPath { origin, path, .. } => {
+                assert_eq!(origin, "git status path");
+                assert_eq!(path, "bad-\\xff");
+            }
+            _ => panic!("expected unsupported git path error"),
+        }
+    }
+
+    fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            let padded = format!("{:0<40}", hash);
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(&padded),
+            )
+        }))
     }
 }
