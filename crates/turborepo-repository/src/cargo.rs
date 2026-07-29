@@ -454,6 +454,36 @@ pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Opt
     })
 }
 
+/// Build native-task facts for a Cargo package from its verb tables.
+pub fn native_tasks_for_package(
+    details: &CargoPackageDetails,
+    package: &str,
+) -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::NativeTask;
+
+    let scope_arg = match details.kind {
+        CargoPackageKind::Workspace => "--workspace".to_string(),
+        CargoPackageKind::Entrypoint | CargoPackageKind::Library => {
+            format!("--package={package}")
+        }
+    };
+    registered_tasks(details)
+        .into_iter()
+        .filter_map(|task| {
+            let subcommand = task_subcommand(details.kind, task)?;
+            let display = display_command(details.kind, task, package)?;
+            Some(NativeTask::cargo(
+                task,
+                display,
+                subcommand,
+                scope_arg.clone(),
+                (subcommand != "run").then(|| "cargo".to_string()),
+                pass_through_uses_separator(subcommand),
+            ))
+        })
+        .collect()
+}
+
 /// Whether pass-through args for `subcommand` must follow a `--` separator.
 /// These subcommands forward everything after `--` to the underlying tool
 /// (the built binary for `run`, the test/bench harness, clippy's lint
@@ -1103,11 +1133,6 @@ impl Toolchain for CargoToolchain {
         override_command: Option<&[String]>,
     ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
         self.validate_context(context)?;
-        // An override replaces the verb-table resolution and applies to any
-        // crate, including tasks outside the built-in verb tables. The serial
-        // group survives when the override still invokes cargo: the
-        // group exists because of cargo's build-directory lock, a property
-        // of the binary, not of the verb table.
         if let Some(override_command) = override_command {
             let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
                 .then(|| "cargo".to_string());
@@ -1118,50 +1143,24 @@ impl Toolchain for CargoToolchain {
                 serial_group,
             ));
         }
-        let name = context.package().as_ref();
-        let Some(details) = self.package_details(name) else {
+        let Some(native_task) = context.native_tasks().get(task) else {
             return Ok(None);
         };
-        let Some(subcommand) = task_subcommand(details.kind, task) else {
-            return Ok(None);
-        };
-
         let cargo_binary = self
             .cargo_binary
             .get_or_init(|| which::which("cargo"))
             .as_deref()
             .map_err(|err| toolchain::Error::Failed(Box::new(CargoCommandError::Which(*err))))?;
-
-        let scope = match context.kind() {
-            // `--package=<name>` as a single token so a hostile crate name can
-            // never be interpreted as a separate flag.
-            crate::package_graph::PackageTaskContextKind::Package => format!("--package={name}"),
-            crate::package_graph::PackageTaskContextKind::Aggregate => "--workspace".to_string(),
-            crate::package_graph::PackageTaskContextKind::Root => return Ok(None),
-        };
-        let mut args: Vec<std::ffi::OsString> =
-            vec![subcommand.into(), scope.into(), "--locked".into()];
-        if let Some(pass_through_args) = pass_through_args {
-            if pass_through_uses_separator(subcommand) {
-                args.push("--".into());
-            }
-            args.extend(pass_through_args.iter().map(std::ffi::OsString::from));
-        }
-
-        Ok(Some(toolchain::TaskCommand {
-            program: cargo_binary.as_os_str().to_owned(),
-            args,
-            // Scoping flags select the work, so we always run from the
-            // workspace root.
-            cwd: self.repo_root.clone(),
-            // Concurrent cargo processes serialize on Cargo's
-            // build-directory lock anyway (while emitting "Blocking waiting
-            // for file lock" noise), so run them one at a time and let each
-            // cargo use all cores internally. `cargo run` is exempt: the
-            // process outlives its build phase (dev servers etc.) and would
-            // starve the group.
-            serial_group: (subcommand != "run").then(|| "cargo".to_string()),
-        }))
+        crate::native_tasks::resolve_task_command(
+            context,
+            native_task,
+            None,
+            None,
+            Some(cargo_binary),
+            pass_through_args,
+            None,
+        )
+        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
     }
 
     fn task_display_command(
@@ -1170,9 +1169,10 @@ impl Toolchain for CargoToolchain {
         task: &str,
     ) -> Option<String> {
         self.owns_context(context).then_some(())?;
-        let name = context.package().as_ref();
-        let details = self.package_details(name)?;
-        display_command(details.kind, task, name)
+        context
+            .native_tasks()
+            .get(task)
+            .and_then(|native_task| native_task.display().map(str::to_string))
     }
 
     fn task_defaults(
@@ -1198,16 +1198,11 @@ impl Toolchain for CargoToolchain {
         &self,
         context: &crate::package_graph::PackageTaskContext<'_>,
     ) -> Vec<String> {
-        self.owns_context(context)
-            .then(|| context.package().as_ref())
-            .and_then(|name| self.package_details(name))
-            .map(|details| {
-                registered_tasks(&details)
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default()
+        if self.owns_context(context) {
+            context.native_tasks().registered_names()
+        } else {
+            Vec::new()
+        }
     }
 
     fn registers_task(
@@ -1215,10 +1210,7 @@ impl Toolchain for CargoToolchain {
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
-        self.owns_context(context)
-            .then(|| context.package().as_ref())
-            .and_then(|name| self.package_details(name))
-            .is_some_and(|details| registered_tasks(&details).contains(&task))
+        self.owns_context(context) && context.native_tasks().registers(task)
     }
 
     /// Route rustc invocations through the embedded sccache, with the
@@ -1299,11 +1291,7 @@ impl Toolchain for CargoToolchain {
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
-        self.owns_context(context)
-            .then(|| context.package().as_ref())
-            .and_then(|name| self.package_details(name))
-            .and_then(|details| task_subcommand(details.kind, task))
-            .is_some()
+        self.owns_context(context) && context.native_tasks().defines(task)
     }
 
     fn derives_task_io(
@@ -1750,16 +1738,15 @@ impl Toolchain for CargoToolchain {
                     })
                     .map(|dir| dir.to_unix().to_string())
                     .unwrap_or_default();
-                self.record_details(
-                    cargo_crate.name.clone(),
-                    CargoPackageDetails {
-                        kind,
-                        deliverables: cargo_crate.deliverables,
-                        manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
-                        dir,
-                        compilation_dependencies: cargo_crate.compilation_dependencies,
-                    },
-                );
+                let details = CargoPackageDetails {
+                    kind,
+                    deliverables: cargo_crate.deliverables,
+                    manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
+                    dir,
+                    compilation_dependencies: cargo_crate.compilation_dependencies,
+                };
+                let native_tasks = native_tasks_for_package(&details, &cargo_crate.name);
+                self.record_details(cargo_crate.name.clone(), details);
                 let external_dependencies: HashSet<turborepo_lockfiles::Package> = closures
                     .remove(&cargo_crate.name)
                     .unwrap_or_default()
@@ -1778,7 +1765,8 @@ impl Toolchain for CargoToolchain {
                         cargo_crate.manifest_path,
                         Some(external_dependencies),
                     )
-                    .with_native_relationships(relationships),
+                    .with_native_relationships(relationships)
+                    .with_native_tasks(native_tasks),
                 );
             }
 
@@ -1787,16 +1775,16 @@ impl Toolchain for CargoToolchain {
             // name`. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
             if !crate_names.is_empty() {
-                self.record_details(
-                    workspace_name.clone(),
-                    CargoPackageDetails {
-                        kind: CargoPackageKind::Workspace,
-                        deliverables: Vec::new(),
-                        manifest_alters_output_layout: false,
-                        dir: String::new(),
-                        compilation_dependencies: Vec::new(),
-                    },
-                );
+                let workspace_details = CargoPackageDetails {
+                    kind: CargoPackageKind::Workspace,
+                    deliverables: Vec::new(),
+                    manifest_alters_output_layout: false,
+                    dir: String::new(),
+                    compilation_dependencies: Vec::new(),
+                };
+                let workspace_native_tasks =
+                    native_tasks_for_package(&workspace_details, &workspace_name);
+                self.record_details(workspace_name.clone(), workspace_details);
                 crate_names.sort();
                 let relationships = crate_names
                     .into_iter()
@@ -1815,7 +1803,8 @@ impl Toolchain for CargoToolchain {
                         // of all closures is this package's external surface.
                         Some(workspace_externals),
                     )
-                    .with_native_relationships(relationships),
+                    .with_native_relationships(relationships)
+                    .with_native_tasks(workspace_native_tasks),
                 );
             }
 
@@ -3858,13 +3847,30 @@ release: 1.96.0-nightly\n",
     }
 
     #[rustfmt::skip]
-    fn task_context<'a>(root: &'a AbsoluteSystemPath, name: &str, directory: &'a str, package: Option<&'a crate::package_graph::PackageInfo>) -> crate::package_graph::PackageTaskContext<'a> {
+    fn task_context<'a>(
+        toolchain: &CargoToolchain,
+        root: &'a AbsoluteSystemPath,
+        name: &str,
+        directory: &'a str,
+        package: Option<&'a crate::package_graph::PackageInfo>,
+    ) -> crate::package_graph::PackageTaskContext<'a> {
         let kind = if directory.is_empty() {
             crate::package_graph::PackageTaskContextKind::Aggregate
         } else {
             crate::package_graph::PackageTaskContextKind::Package
         };
-        crate::package_graph::PackageTaskContext::new_for_test(name.into(), root, turbopath::AnchoredSystemPath::new(directory).unwrap(), package, kind, Some(&ToolchainId::RUST))
+        let native_tasks = toolchain
+            .package_details(name)
+            .map(|details| native_tasks_for_package(&details, name));
+        crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+            name.into(),
+            root,
+            turbopath::AnchoredSystemPath::new(directory).unwrap(),
+            package,
+            kind,
+            Some(&ToolchainId::RUST),
+            native_tasks,
+        )
     }
 
     fn os_args(args: &[&str]) -> Vec<std::ffi::OsString> {
@@ -3882,12 +3888,12 @@ release: 1.96.0-nightly\n",
         toolchain.discover_packages().await.unwrap();
 
         let stale_package = package_info("stale-name");
-        let app_context = task_context(&root, "app", "crates/app", Some(&stale_package));
-        let lib_a_context = task_context(&root, "lib-a", "crates/lib-a", None);
-        let workspace_context = task_context(&root, "fixture-ws", "", Some(&stale_package));
+        let app_context = task_context(&toolchain, &root, "app", "crates/app", Some(&stale_package));
+        let lib_a_context = task_context(&toolchain, &root, "lib-a", "crates/lib-a", None);
+        let workspace_context = task_context(&toolchain, &root, "fixture-ws", "", Some(&stale_package));
 
         let foreign_root = root.join_component("foreign");
-        let foreign_context = task_context(&foreign_root, "app", "crates/app", None);
+        let foreign_context = task_context(&toolchain, &foreign_root, "app", "crates/app", None);
         assert!(toolchain.task_command(&foreign_context, "build", None, None).unwrap_err().to_string().contains("belongs to repository"));
 
         // Entrypoint build: scoped to the crate, serialized on the cargo
@@ -4069,8 +4075,15 @@ release: 1.96.0-nightly\n",
         toolchain.discover_packages().await.unwrap();
 
         let stale_package = package_info("stale-name");
-        let lib_a_context = task_context(&root, "lib-a", "crates/lib-a", Some(&stale_package));
-        let workspace_context = task_context(&root, "fixture-ws", "", Some(&stale_package));
+        let lib_a_context = task_context(
+            &toolchain,
+            &root,
+            "lib-a",
+            "crates/lib-a",
+            Some(&stale_package),
+        );
+        let workspace_context =
+            task_context(&toolchain, &root, "fixture-ws", "", Some(&stale_package));
 
         // An override applies to any crate and any task. cwd is the package's
         // directory, and an argv still invoking cargo keeps the serial group
@@ -4087,7 +4100,12 @@ release: 1.96.0-nightly\n",
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
 
         // A non-cargo argv drops the group; pass-through args append
-        // verbatim (no separator injection).
+        // verbatim (no separator injection). Overrides must not require the
+        // cargo binary, even for tasks present in the native catalog.
+        toolchain
+            .cargo_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
         let override_argv = vec!["./scripts/test.sh".to_string()];
         let cmd = toolchain
             .task_command(
@@ -4116,9 +4134,9 @@ release: 1.96.0-nightly\n",
         let app = package_info("app");
         let lib_a = package_info("lib-a");
         let workspace = package_info("fixture-ws");
-        let app_ctx = task_context(&root, "app", "crates/app", Some(&app));
-        let lib_ctx = task_context(&root, "lib-a", "crates/lib-a", Some(&lib_a));
-        let workspace_ctx = task_context(&root, "fixture-ws", "", Some(&workspace));
+        let app_ctx = task_context(&toolchain, &root, "app", "crates/app", Some(&app));
+        let lib_ctx = task_context(&toolchain, &root, "lib-a", "crates/lib-a", Some(&lib_a));
+        let workspace_ctx = task_context(&toolchain, &root, "fixture-ws", "", Some(&workspace));
         let environment = toolchain::TaskIOEnvironment::default();
         let context = toolchain::TaskIOContext {
             task_args: None,
