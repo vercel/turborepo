@@ -1029,17 +1029,6 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn workspace_transitive_closure<'graph, 'node, I: IntoIterator<Item = &'node PackageNode>>(
-        &'graph self,
-        nodes: I,
-    ) -> HashSet<&'graph PackageNode> {
-        if self.production {
-            self.package_graph.production_transitive_closure(nodes)
-        } else {
-            self.package_graph.transitive_closure(nodes)
-        }
-    }
-
     fn internal_dependencies(&self) -> Result<Vec<PackageName>, Error> {
         // Install-oriented package closure including required same-name peer
         // workspaces — from relationship knowledge, not PackageJson peer tables.
