@@ -47,7 +47,7 @@ jobs:
             exit 0
           fi
 
-          if [[ "$PR_AUTHOR" != "turbobot" || "$PR_TITLE" != "chore: Release Turborepo "* ]]; then
+          if [[ "$PR_AUTHOR" != "github-actions[bot]" || "$PR_TITLE" != "chore: Release Turborepo "* ]]; then
             echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
             echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
             exit 0

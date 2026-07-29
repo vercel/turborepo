@@ -14,7 +14,18 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Validate release source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require protected main
+        if: github.ref_name != github.event.repository.default_branch
+        run: |
+          echo "::error::Library releases must run from the default branch."
+          exit 1
+
   build:
+    needs: [preflight]
     defaults:
       run:
         shell: bash -leo pipefail {0}
@@ -271,24 +282,26 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     needs: [package]
     if: ${{ !inputs.dry_run }}
     steps:
-      - name: Create PR
+      - name: Checkout trusted release validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Create, validate, and merge release PR
         env:
-          TURBOBOT_TOKEN: ${{ secrets.TURBOBOT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.package.outputs.version }}"
           BRANCH="${{ needs.package.outputs.branch }}"
-          BOT_LOGIN=$(GH_TOKEN="$TURBOBOT_TOKEN" gh api user --jq '.login')
-          if [ "$BOT_LOGIN" != "turbobot" ]; then
-            echo "::error::TURBOBOT must authenticate as turbobot, got ${BOT_LOGIN}"
-            exit 1
-          fi
 
-          PR_URL=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr list \
+          PR_URL=$(gh pr list \
             --repo "${{ github.repository }}" \
             --head "${BRANCH}" \
             --base main \
@@ -296,15 +309,66 @@ jobs:
             --json url \
             --jq '.[0].url // ""')
           if [ -z "$PR_URL" ]; then
-            PR_URL=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr create \
+            PR_URL=$(gh pr create \
               --repo "${{ github.repository }}" \
               --title "chore: Release Turbo repository packages ${VERSION}" \
               --body "Bumps \`@turbo/repository\` packages to \`${VERSION}\`." \
               --head "${BRANCH}" \
               --base main)
           fi
-          PR_NUM=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
-          echo "Created release PR #${PR_NUM}"
+          PR_NUM=$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
+          HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_BASE_SHA="$BASE_SHA" \
+          PR_HEAD_SHA="$HEAD_SHA" \
+          PR_HEAD_REF="$BRANCH" \
+          PR_TITLE="chore: Release Turbo repository packages ${VERSION}" \
+            node scripts/validate-release-pr.mjs
+
+          DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
+          gh workflow run release-pr-checks.yml \
+            --ref "$BRANCH" \
+            -f pr-number="$PR_NUM" \
+            -f expected-head-sha="$HEAD_SHA" \
+            -f run-id="$DISPATCH_ID"
+
+          CHECK_RUN_ID=""
+          for _ in $(seq 1 30); do
+            CHECK_RUN_ID=$(gh run list \
+              --workflow release-pr-checks.yml \
+              --branch "$BRANCH" \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,displayTitle,headSha \
+              --jq "[.[] | select(.displayTitle == \"Release PR checks ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
+            if [ -n "$CHECK_RUN_ID" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$CHECK_RUN_ID" ]; then
+            echo "::error::Unable to find dispatched release PR checks run"
+            exit 1
+          fi
+
+          gh run watch "$CHECK_RUN_ID" --exit-status
+          CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
+                "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \
+                "$(jq -r '.title' <<< "$CURRENT_PR")" != "chore: Release Turbo repository packages ${VERSION}" || \
+                "$(jq -r '.base.ref' <<< "$CURRENT_PR")" != "main" || \
+                "$(jq -r '.base.sha' <<< "$CURRENT_PR")" != "$BASE_SHA" || \
+                "$(jq -r '.base.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.head.ref' <<< "$CURRENT_PR")" != "$BRANCH" || \
+                "$(jq -r '.head.sha' <<< "$CURRENT_PR")" != "$HEAD_SHA" || \
+                "$(jq -r '.head.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.state' <<< "$CURRENT_PR")" != "open" || \
+                "$(jq -r '.draft' <<< "$CURRENT_PR")" != "false" ]]; then
+            echo "::error::Release PR metadata changed after validation"
+            exit 1
+          fi
+          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --match-head-commit "$HEAD_SHA"
 
   cleanup-on-failure:
     name: Cleanup Failed Release
