@@ -70,11 +70,17 @@ impl Package {
     pub fn get_tasks(&self) -> HashMap<String, Spanned<String>> {
         self.run
             .pkg_dep_graph()
-            .package_json(&self.name)
-            .map(|json| {
-                json.scripts
+            .package_task_context(&self.name)
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .tasks()
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .filter_map(|task| {
+                        task.script()
+                            .cloned()
+                            .map(|script| (task.name().to_string(), script))
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -86,16 +92,14 @@ impl Package {
             .run
             .pkg_dep_graph()
             .package_task_context(&self.name)
-            .and_then(|context| {
-                self.run
-                    .pkg_dep_graph()
-                    .toolchains()
-                    .get(context.toolchain()?)
-                    .map(|toolchain| toolchain.registered_tasks(&context))
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .registered_names()
+                    .into_iter()
+                    .collect()
             })
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+            .unwrap_or_default();
         self.get_tasks()
             .into_keys()
             .chain(

@@ -134,11 +134,14 @@ impl ProperTaskGraphBuilder {
             })
             .unwrap_or_default();
 
-        // Also add all scripts from root package.json as potential root tasks
-        // This ensures tasks like //#build:ts are allowed even if not in turbo.json
-        if let Some(root_pkg_json) = pkg_graph.package_json(&PackageName::Root) {
-            for script_name in root_pkg_json.scripts.keys() {
-                let task_name = TaskName::from(format!("//#{}", script_name)).into_owned();
+        // Also add catalog-backed root tasks so //#script tasks appear even
+        // when not listed in turbo.json.
+        if let Some(context) = pkg_graph.package_task_context(&PackageName::Root) {
+            for native_task in context.native_tasks().tasks() {
+                if native_task.script().is_none() {
+                    continue;
+                }
+                let task_name = TaskName::from(format!("//#{}", native_task.name())).into_owned();
                 if !root_tasks.contains(&task_name) {
                     root_tasks.push(task_name);
                 }
@@ -175,11 +178,11 @@ impl ProperTaskGraphBuilder {
                     let task = task_id.task().to_string();
                     let id = task_id.to_string();
 
-                    // Get script from package.json
+                    // Get display/script text from the native-task catalog.
                     let script = pkg_graph
-                        .package_json(&PackageName::from(task_id.package()))
-                        .and_then(|pj| pj.scripts.get(task_id.task()))
-                        .map(|s| s.value.clone())
+                        .package_task_context(&PackageName::from(task_id.package()))
+                        .and_then(|context| context.native_tasks().get(task_id.task()))
+                        .and_then(|task| task.script().map(|script| script.as_inner().clone()))
                         .unwrap_or_default();
 
                     nodes.push(TaskNode {
