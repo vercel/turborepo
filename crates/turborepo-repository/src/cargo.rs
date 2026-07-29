@@ -3854,7 +3854,6 @@ release: 1.96.0-nightly\n",
                 name: Some(Spanned::new(name.to_string())),
                 ..Default::default()
             },
-            ..Default::default()
         }
     }
 

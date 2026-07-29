@@ -149,6 +149,7 @@ pub(crate) struct DiscoveredPackageParts {
     pub scope_kind: DiscoveredScopeKind,
     pub descriptor: PackageJson,
     pub manifest_path: AbsoluteSystemPathBuf,
+    #[allow(dead_code)]
     pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     pub native_relationships: Option<Vec<Relationship>>,
 }
@@ -1291,7 +1292,6 @@ mod tests {
                 "scripts": { "build": "next build", "empty": "" }
             }))
             .unwrap(),
-            ..Default::default()
         };
         let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
         let context = crate::package_graph::PackageTaskContext::new_for_test(

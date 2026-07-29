@@ -1060,18 +1060,12 @@ mod tests {
                 PackageName::Other("pkg-a".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             ),
             (
                 PackageName::Other("pkg-b".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             ),
         ];

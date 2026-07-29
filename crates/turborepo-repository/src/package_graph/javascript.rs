@@ -7,8 +7,7 @@ use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    ExternalDependencyChange, PackageGraph, PackageInfo, PackageName, ROOT_PKG_NAME,
-    WorkspacePackage,
+    ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage,
     builder::{ClosureHasher, apply_resolution_fingerprints},
 };
 use crate::{
@@ -24,58 +23,13 @@ use crate::{
     toolchain::ToolchainId,
 };
 
-/// One JavaScript resolution snapshot and its temporary compatibility
-/// projection. Both inline and deferred production create this exact shape.
+/// One JavaScript resolution snapshot. Both production paths create this
+/// exact generation-backed shape; compatibility projections onto `PackageInfo`
+/// have been deleted.
 pub(super) struct ResolutionSnapshot {
     pub generation: Arc<ExternalResolutionGeneration>,
-    pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
     pub warning: Option<String>,
 }
-
-impl ResolutionSnapshot {
-    pub(super) fn project_legacy(
-        &mut self,
-        package_payloads: &mut HashMap<PackageName, PackageInfo>,
-        knowledge: &RepositoryKnowledge,
-    ) {
-        let fingerprints = self
-            .generation
-            .domains()
-            .iter()
-            .find(|domain| domain.toolchain() == &ToolchainId::JAVASCRIPT)
-            .and_then(|domain| match domain.data() {
-                ExternalResolutionData::Resolved { packages, .. } => Some(
-                    packages
-                        .iter()
-                        .filter_map(|package| {
-                            package
-                                .fingerprint()
-                                .map(|fingerprint| (package.package(), fingerprint.as_str()))
-                        })
-                        .collect::<HashMap<_, _>>(),
-                ),
-                ExternalResolutionData::Unavailable(_) => None,
-            })
-            .unwrap_or_default();
-        for (name, info) in package_payloads {
-            let facts = scope_directory_and_toolchain(knowledge, name);
-            let Some((directory, toolchain)) = facts else {
-                continue;
-            };
-            if toolchain != &ToolchainId::JAVASCRIPT {
-                continue;
-            }
-            let directory = directory.to_unix();
-            info.transitive_dependencies = self.closures.remove(directory.as_str());
-            info.external_deps_hash = fingerprints
-                .get(name.as_str())
-                .map(|fingerprint| (*fingerprint).to_string());
-        }
-    }
-}
-
-pub(super) type DeferredResolutionReceiver =
-    std::sync::mpsc::Receiver<Result<ResolutionSnapshot, String>>;
 
 fn scope_directory_and_toolchain<'a>(
     knowledge: &'a RepositoryKnowledge,
@@ -157,7 +111,6 @@ pub(super) fn unavailable_resolution(
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
         generation: Arc::new(generation),
-        closures: HashMap::new(),
         warning,
     })
 }
@@ -224,7 +177,6 @@ pub(super) fn resolve_dependencies(
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
         generation: Arc::new(generation),
-        closures,
         warning: None,
     })
 }
