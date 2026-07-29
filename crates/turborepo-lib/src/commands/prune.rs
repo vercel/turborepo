@@ -15,9 +15,7 @@ use turbopath::{
     RelativeUnixPath, RelativeUnixPathBuf,
 };
 use turborepo_repository::{
-    package_graph::{
-        self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind,
-    },
+    package_graph::{self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
     toolchain::ToolchainId,
@@ -1065,28 +1063,10 @@ impl<'a> Prune<'a> {
             let context = self.package_context(workspace)?;
             // Required external peers (not same-workspace packages) from
             // declaration knowledge — not PackageJson peer tables.
-            let peer_dependencies = context
-                .external_declarations()
-                .iter()
-                .filter(|declaration| {
-                    matches!(
-                        declaration.kind(),
-                        turborepo_repository::relationships::DependencyKind::Peer {
-                            optional: false
-                        }
-                    )
-                })
-                .filter(|declaration| {
-                    self.package_graph
-                        .package_task_context(&PackageName::from(declaration.package_name()))
-                        .is_none()
-                })
-                .map(|declaration| {
-                    (
-                        declaration.package_name().to_string(),
-                        declaration.specifier().to_string(),
-                    )
-                })
+            let peer_dependencies = self
+                .package_graph
+                .required_external_peer_declarations(workspace)
+                .map(|(name, specifier)| (name.to_string(), specifier.to_string()))
                 .collect::<BTreeMap<_, _>>();
 
             if peer_dependencies.is_empty() {
