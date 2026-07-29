@@ -10,6 +10,7 @@ use turbopath::{PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
+    native_tasks::NativeCommandTemplate,
     package_graph::{PackageGraph, PackageName, PackageTaskContext},
     toolchain::CompileCacheEndpoint,
 };
@@ -145,11 +146,6 @@ pub enum CommandProviderError {
     MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
-    MissingToolchain {
-        toolchain: turborepo_repository::toolchain::ToolchainId,
-        package_name: PackageName,
-    },
     #[error(transparent)]
     Toolchain(#[from] turborepo_repository::toolchain::Error),
 }
@@ -174,6 +170,10 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
+    /// Lazily resolved package-manager binary path for JS framing.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved cargo binary path for Cargo framing.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -190,6 +190,28 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             mfe_configs,
             compile_cache,
             command_overrides,
+            package_manager_binary: std::sync::OnceLock::new(),
+            cargo_binary: std::sync::OnceLock::new(),
+        }
+    }
+
+    fn package_manager_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        let Some(package_manager) = self.package_graph.package_manager() else {
+            return Ok(None);
+        };
+        match self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+        {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(error) => Err(CommandProviderError::Which(*error)),
+        }
+    }
+
+    fn cargo_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.cargo_binary.get_or_init(|| which::which("cargo")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
         }
     }
 
@@ -253,11 +275,24 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             return Ok(Some(cmd));
         };
 
-        let spec = self
-            .package_graph
-            .resolve_native_task_command(
+        let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
+            let (package_manager_binary, cargo_binary) = if override_command.is_some() {
+                (None, None)
+            } else {
+                match native_task.command() {
+                    Some(NativeCommandTemplate::JavaScriptPackageManagerRun { .. }) => {
+                        (self.package_manager_binary()?, None)
+                    }
+                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?),
+                    None => (None, None),
+                }
+            };
+            turborepo_repository::native_tasks::resolve_task_command(
                 &package_context,
-                task_id.task(),
+                native_task,
+                self.package_graph.package_manager(),
+                package_manager_binary,
+                cargo_binary,
                 self.task_args.args_for_task(task_id),
                 override_command,
             )
@@ -265,7 +300,21 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 CommandProviderError::Toolchain(turborepo_repository::toolchain::Error::Failed(
                     Box::new(error),
                 ))
-            })?;
+            })?
+        } else if let Some(override_command) = override_command {
+            let serial_group = (toolchain_id
+                == &turborepo_repository::toolchain::ToolchainId::RUST
+                && override_command.first().map(String::as_str) == Some("cargo"))
+            .then(|| "cargo".to_string());
+            turborepo_repository::toolchain::override_task_command(
+                &package_context,
+                override_command,
+                self.task_args.args_for_task(task_id),
+                serial_group,
+            )
+        } else {
+            None
+        };
         let Some(spec) = spec else {
             return Ok(None);
         };
@@ -621,6 +670,46 @@ mod tests {
         assert!(!should_inject_toolchain_compile_cache(Some(
             &TaskCommandOverride::OptOut
         )));
+    }
+
+    #[tokio::test]
+    async fn command_override_does_not_resolve_package_manager_binary() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([(
+                    "build".to_owned(),
+                    Spanned::new("next build".to_owned()),
+                )]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let task_id = TaskId::new("web", "build").into_owned();
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &package_graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+        provider
+            .package_manager_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(command.is_some(), "override should bypass binary lookup");
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
