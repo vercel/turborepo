@@ -216,7 +216,8 @@ The remaining payload deletion phases are explicit:
   relationship knowledge now owns graph assembly, while JavaScript declarations
   remain a temporary classification input.
 - **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
-- **Phase 4:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
+- **Phase 4 (in progress):** Native task/command knowledge is produced into an immutable catalog at repository construction. JavaScript scripts and Cargo verb tables contribute observations; `Toolchain` task callbacks are adapters over that catalog. Remaining work migrates engine/turbo-json/executor/query/summary consumers and deletes legacy script reads.
+- **Phase 5:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,

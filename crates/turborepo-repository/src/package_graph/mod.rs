@@ -99,6 +99,8 @@ pub struct PackageGraph {
     /// Toolchains registered during graph construction. Authoritative contexts
     /// determine which registrations were active for a particular concern.
     toolchains: crate::toolchain::ToolchainRegistry,
+    /// Immutable native-task catalog produced during repository construction.
+    native_task_knowledge: Arc<crate::native_tasks::NativeTaskKnowledge>,
 }
 
 /// The WorkspacePackage.
@@ -220,6 +222,7 @@ pub struct PackageTaskContext<'a> {
     directory: &'a AnchoredSystemPath,
     package_info: Option<&'a PackageInfo>,
     external_declarations: &'a ExternalDeclarations,
+    native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
     requires_compatibility_payload: bool,
@@ -236,10 +239,60 @@ impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
     pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+        Self::new_for_test_with_native_tasks(package, repository_root, directory, package_info, kind, toolchain, None)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_native_tasks(
+        package: PackageName,
+        repository_root: &'a AbsoluteSystemPath,
+        directory: &'a AnchoredSystemPath,
+        package_info: Option<&'a PackageInfo>,
+        kind: PackageTaskContextKind,
+        toolchain: Option<&'a crate::toolchain::ToolchainId>,
+        native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
+    ) -> Self {
         static EXTERNAL_DECLARATIONS: OnceLock<ExternalDeclarations> = OnceLock::new();
-        let external_declarations = EXTERNAL_DECLARATIONS.get_or_init(ExternalDeclarations::default);
-        let requires_compatibility_payload = package != PackageName::Root || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
-        Self { package, repository_root, directory, package_info, external_declarations, kind, toolchain, requires_compatibility_payload }
+        static UNKNOWN_NATIVE_TASKS: crate::native_tasks::ScopeNativeTasks =
+            crate::native_tasks::ScopeNativeTasks::UnknownScope;
+        let external_declarations =
+            EXTERNAL_DECLARATIONS.get_or_init(ExternalDeclarations::default);
+        let native_tasks = if let Some(tasks) = native_tasks {
+            let scope = if tasks.is_empty() {
+                crate::native_tasks::ScopeNativeTasks::Empty
+            } else {
+                crate::native_tasks::ScopeNativeTasks::Available(tasks.into_boxed_slice())
+            };
+            Box::leak(Box::new(scope)) as &'static _
+        } else if let Some(info) = package_info {
+            let observation = crate::native_tasks::observation_from_package_json(
+                package.as_str(),
+                &info.package_json,
+            );
+            let scope = if observation.tasks.is_empty() {
+                crate::native_tasks::ScopeNativeTasks::Empty
+            } else {
+                crate::native_tasks::ScopeNativeTasks::Available(
+                    observation.tasks.into_boxed_slice(),
+                )
+            };
+            Box::leak(Box::new(scope)) as &'static _
+        } else {
+            &UNKNOWN_NATIVE_TASKS
+        };
+        let requires_compatibility_payload = package != PackageName::Root
+            || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
+        Self {
+            package,
+            repository_root,
+            directory,
+            package_info,
+            external_declarations,
+            native_tasks,
+            kind,
+            toolchain,
+            requires_compatibility_payload,
+        }
     }
 
     pub fn package(&self) -> &PackageName {
@@ -261,6 +314,10 @@ impl<'a> PackageTaskContext<'a> {
     pub fn external_declarations(&self) -> PackageExternalDeclarations<'_> {
         self.external_declarations
             .for_package(self.package.as_str())
+    }
+
+    pub fn native_tasks(&self) -> &'a crate::native_tasks::ScopeNativeTasks {
+        self.native_tasks
     }
 
     pub fn kind(&self) -> PackageTaskContextKind {
@@ -674,6 +731,7 @@ impl PackageGraph {
             }
         };
         let package_info = self.package_payloads.get(&package);
+        let native_tasks = self.native_task_knowledge.for_scope(package.as_str());
 
         Some(PackageTaskContext {
             package,
@@ -681,6 +739,7 @@ impl PackageGraph {
             directory,
             package_info,
             external_declarations: self.external_declaration_view(),
+            native_tasks,
             kind,
             toolchain,
             requires_compatibility_payload,

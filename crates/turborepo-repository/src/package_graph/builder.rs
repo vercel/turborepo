@@ -94,6 +94,8 @@ pub enum Error {
     MissingRelationshipKnowledge,
     #[error("external resolution generation failed: {0}")]
     ExternalResolution(String),
+    #[error("native task knowledge generation failed: {0}")]
+    NativeTasks(String),
     #[error("package or aggregate scope at {path} uses reserved root identity //")]
     ReservedRootIdentity { path: AnchoredSystemPathBuf },
     #[error("relationship source {identity} has no authoritative repository scope")]
@@ -382,6 +384,7 @@ struct BuildState<'a, S, T> {
     relationship_knowledge: Option<Arc<RelationshipKnowledge>>,
     native_relationships: HashMap<String, Vec<Relationship>>,
     native_external_resolutions: Vec<ExternalResolutionDomain>,
+    native_task_observations: Vec<crate::native_tasks::NativeTaskObservation>,
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
@@ -421,6 +424,7 @@ struct ObservedPackage {
     scope: PackageScopeObservation,
     compatibility: Option<(String, PackageInfo)>,
     native_relationships: Option<(String, Vec<Relationship>)>,
+    native_tasks: Option<crate::native_tasks::NativeTaskObservation>,
 }
 
 impl PackageGraphAssembler {
@@ -659,6 +663,7 @@ where
             relationship_knowledge: None,
             native_relationships: HashMap::new(),
             native_external_resolutions: Vec::new(),
+            native_task_observations: Vec::new(),
             lockfile,
             package_manager: None,
             package_jsons,
@@ -684,10 +689,22 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             manifest_path,
             external_dependencies: _,
             native_relationships,
+            native_tasks,
         } = package.into_parts();
         // Toolchain-resolved external identities are contributed to the
         // resolution generation separately; PackageInfo no longer carries
         // closure/hash compatibility projections.
+        let native_task_observation = match (name.as_ref(), native_tasks) {
+            (Some(identity), Some(tasks)) => Some(crate::native_tasks::NativeTaskObservation {
+                scope: identity.clone(),
+                tasks,
+            }),
+            (Some(identity), None) => Some(crate::native_tasks::observation_from_package_json(
+                identity.clone(),
+                &json,
+            )),
+            (None, _) => None,
+        };
         let entry = PackageInfo { package_json: json };
         let observation = PackageScopeObservation {
             identity: name.clone(),
@@ -710,6 +727,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             scope: observation,
             compatibility,
             native_relationships,
+            native_tasks: native_task_observation,
         })
     }
 
@@ -770,6 +788,9 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             if let Some((source, relationships)) = observed.native_relationships {
                 self.native_relationships.insert(source, relationships);
             }
+            if let Some(tasks) = observed.native_tasks {
+                self.native_task_observations.push(tasks);
+            }
         }
         let root_name = self.root_package_json.as_ref().map(|package_json| {
             package_json
@@ -802,6 +823,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             relationship_knowledge,
             native_relationships,
             native_external_resolutions,
+            native_task_observations,
             root_package_json,
             lockfile,
             package_manager,
@@ -818,6 +840,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             relationship_knowledge,
             native_relationships,
             native_external_resolutions,
+            native_task_observations,
             root_package_json,
             lockfile,
             package_manager,
@@ -837,6 +860,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             relationship_knowledge: _,
             native_relationships: _,
             native_external_resolutions: _,
+            native_task_observations,
             root_package_json,
             lockfile,
             javascript,
@@ -918,6 +942,17 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         };
 
         debug_assert!(single, "expected single package graph");
+        let mut native_task_observations = native_task_observations;
+        if let Some(root_package_json) = &root_package_json {
+            native_task_observations.push(crate::native_tasks::observation_from_package_json(
+                "//",
+                root_package_json,
+            ));
+        }
+        let native_task_knowledge = Arc::new(
+            crate::native_tasks::NativeTaskKnowledge::build(&knowledge, native_task_observations)
+                .map_err(|error| Error::NativeTasks(error.to_string()))?,
+        );
         Ok(PackageGraph {
             graph: workspace_graph,
             root_node_index,
@@ -935,6 +970,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
+            native_task_knowledge,
         })
     }
 }
@@ -1090,6 +1126,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             knowledge,
             relationship_knowledge,
             native_external_resolutions,
+            native_task_observations,
             root_package_json,
             javascript,
             toolchains,
@@ -1105,6 +1142,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             // Native contributions were consumed before lockfile setup.
             native_relationships: HashMap::new(),
             native_external_resolutions,
+            native_task_observations,
             root_package_json,
             lockfile,
             package_manager,
@@ -1278,6 +1316,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             assembler,
             knowledge,
             relationship_knowledge,
+            native_task_observations,
             root_package_json,
             toolchains,
             ..
@@ -1295,6 +1334,22 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_workspace_index,
             node_lookup,
         } = assembler.finish();
+
+        // Include root JavaScript scripts when a root package.json exists.
+        let mut native_task_observations = native_task_observations;
+        if let Some(root_package_json) = &root_package_json {
+            native_task_observations.push(crate::native_tasks::observation_from_package_json(
+                "//",
+                root_package_json,
+            ));
+        }
+        let native_task_knowledge = Arc::new(
+            crate::native_tasks::NativeTaskKnowledge::build(&knowledge, native_task_observations)
+                .map_err(|error| {
+                discovery::Error::Failed(Box::new(Error::NativeTasks(error.to_string())))
+            })?,
+        );
+
         Ok(PackageGraph {
             graph: workspace_graph,
             root_node_index,
@@ -1312,6 +1367,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
+            native_task_knowledge,
         })
     }
 }
