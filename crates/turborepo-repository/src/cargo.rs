@@ -1133,19 +1133,17 @@ impl Toolchain for CargoToolchain {
         override_command: Option<&[String]>,
     ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
         self.validate_context(context)?;
+        if let Some(override_command) = override_command {
+            let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
+                .then(|| "cargo".to_string());
+            return Ok(toolchain::override_task_command(
+                context,
+                override_command,
+                pass_through_args,
+                serial_group,
+            ));
+        }
         let Some(native_task) = context.native_tasks().get(task) else {
-            // Overrides still apply to scopes that own this toolchain even
-            // when the catalog has no verb for the task name.
-            if let Some(override_command) = override_command {
-                let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
-                    .then(|| "cargo".to_string());
-                return Ok(toolchain::override_task_command(
-                    context,
-                    override_command,
-                    pass_through_args,
-                    serial_group,
-                ));
-            }
             return Ok(None);
         };
         let cargo_binary = self
@@ -1160,7 +1158,7 @@ impl Toolchain for CargoToolchain {
             None,
             Some(cargo_binary),
             pass_through_args,
-            override_command,
+            None,
         )
         .map_err(|error| toolchain::Error::Failed(Box::new(error)))
     }
@@ -4102,7 +4100,12 @@ release: 1.96.0-nightly\n",
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
 
         // A non-cargo argv drops the group; pass-through args append
-        // verbatim (no separator injection).
+        // verbatim (no separator injection). Overrides must not require the
+        // cargo binary, even for tasks present in the native catalog.
+        toolchain
+            .cargo_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
         let override_argv = vec!["./scripts/test.sh".to_string()];
         let cmd = toolchain
             .task_command(

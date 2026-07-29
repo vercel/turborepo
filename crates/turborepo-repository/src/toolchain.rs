@@ -969,23 +969,23 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         let Some(native_task) = context.native_tasks().get(task) else {
             return Ok(None);
         };
-        let package_manager = self.resolved_package_manager.get();
-        let package_manager_binary = package_manager.map(|package_manager| {
-            self.package_manager_binary
-                .get_or_init(|| which::which(package_manager.command()))
-        });
-        let package_manager_binary = match package_manager_binary {
-            Some(Ok(path)) => Some(path.as_path()),
-            Some(Err(err)) => {
+        let Some(package_manager) = self.resolved_package_manager.get() else {
+            return Ok(None);
+        };
+        let package_manager_binary = match self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+        {
+            Ok(path) => path.as_path(),
+            Err(err) => {
                 return Err(Error::Failed(Box::new(JavaScriptCommandError::Which(*err))));
             }
-            None => None,
         };
         crate::native_tasks::resolve_task_command(
             context,
             native_task,
-            package_manager,
-            package_manager_binary,
+            Some(package_manager),
+            Some(package_manager_binary),
             None,
             pass_through_args,
             None,
@@ -1290,6 +1290,19 @@ mod tests {
             Some(&package),
             crate::package_graph::PackageTaskContextKind::Package,
             Some(&ToolchainId::JAVASCRIPT),
+        );
+
+        let unresolved_toolchain = JavaScriptToolchain::new(
+            StubDiscovery,
+            repo_root_buf.clone(),
+            Some(PackageManager::Npm),
+        );
+        assert!(
+            unresolved_toolchain
+                .task_command(&context, "build", None, None)
+                .unwrap()
+                .is_none(),
+            "an unresolved package manager must preserve the no-op fallback"
         );
 
         let command = toolchain
