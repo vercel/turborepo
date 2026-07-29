@@ -1,9 +1,5 @@
 //! Parser-neutral external dependency declarations and exact resolutions.
 
-// Producer and repository-knowledge wiring intentionally lands after these
-// contracts, so the crate-private validated views are not consumed yet.
-#![allow(dead_code)]
-
 use std::collections::HashSet;
 
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -351,6 +347,7 @@ impl ExternalResolutionGeneration {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn domains(&self) -> &[ExternalResolutionDomain] {
         &self.domains
     }

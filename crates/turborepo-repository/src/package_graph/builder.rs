@@ -5,20 +5,27 @@ use std::{
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
-use tracing::{Instrument, warn};
+use sha2::{Digest, Sha256};
+use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    PackageGraph, PackageInfo, PackageName, PackageNode,
+    JavaScriptResolutionKnowledge, JavaScriptResolutionSnapshot, PackageGraph, PackageInfo,
+    PackageName, PackageNode,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
 };
 use crate::{
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
+    },
+    external_resolution::{
+        ExternalDeclarationView, ExternalPackageIdentity, ExternalResolutionData,
+        ExternalResolutionDomain, ExternalResolutionGeneration, PackageResolution,
+        ResolutionCompleteness, ResolutionFingerprint, ResolutionUnavailableReason,
     },
     knowledge::{
         PackageScopeObservation, RelationshipGroup, RelationshipKnowledge, RepositoryKnowledge,
@@ -88,6 +95,8 @@ pub enum Error {
     MissingRepositoryKnowledge,
     #[error("repository relationship knowledge was not constructed")]
     MissingRelationshipKnowledge,
+    #[error("external resolution generation failed: {0}")]
+    ExternalResolution(String),
     #[error("package or aggregate scope at {path} uses reserved root identity //")]
     ReservedRootIdentity { path: AnchoredSystemPathBuf },
     #[error("relationship source {identity} has no authoritative repository scope")]
@@ -393,6 +402,7 @@ struct BuildState<'a, S, T> {
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
     lockfile: Option<Box<dyn Lockfile>>,
+    package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     defer_closures: bool,
     closure_hasher: Option<ClosureHasher>,
@@ -666,6 +676,7 @@ where
             relationship_knowledge: None,
             native_relationships: HashMap::new(),
             lockfile,
+            package_manager: None,
             package_jsons,
             root_package_json,
             defer_closures,
@@ -819,6 +830,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_relationships,
             root_package_json,
             lockfile,
+            package_manager,
             javascript,
             toolchains,
             defer_closures,
@@ -834,6 +846,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_relationships,
             root_package_json,
             lockfile,
+            package_manager,
             javascript,
             toolchains,
             defer_closures,
@@ -919,7 +932,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             knowledge,
             relationship_knowledge,
             relationship_projections: std::sync::OnceLock::new(),
-            deferred_closures: std::sync::Mutex::new(None),
+            javascript_resolution: std::sync::Mutex::new(JavaScriptResolutionKnowledge::absent()),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
@@ -1094,6 +1107,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_relationships: HashMap::new(),
             root_package_json,
             lockfile,
+            package_manager,
             defer_closures,
             closure_hasher,
             package_jsons: None,
@@ -1139,6 +1153,128 @@ fn scope_definition_path<'a>(
     }
 }
 
+fn build_failure(error: Error) -> discovery::Error {
+    discovery::Error::Failed(Box::new(error))
+}
+
+fn javascript_resolution_packages(
+    knowledge: &RepositoryKnowledge,
+) -> Vec<(&str, &AnchoredSystemPath)> {
+    let mut packages = Vec::new();
+    if knowledge.root_javascript_scope().is_some() {
+        packages.push((super::ROOT_PKG_NAME, knowledge.repository_directory()));
+    }
+    packages.extend(
+        knowledge
+            .scopes()
+            .filter(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT)
+            .map(|scope| (scope.identity(), scope.directory())),
+    );
+    packages.sort_unstable_by_key(|(identity, _)| *identity);
+    packages
+}
+
+fn fingerprint_package_resolutions(packages: &[PackageResolution]) -> ResolutionFingerprint {
+    fn update(hasher: &mut Sha256, value: &str) {
+        hasher.update((value.len() as u64).to_le_bytes());
+        hasher.update(value.as_bytes());
+    }
+
+    let mut hasher = Sha256::new();
+    for package in packages {
+        update(&mut hasher, package.package());
+        for identity in package.identities() {
+            update(&mut hasher, identity.key());
+            update(&mut hasher, identity.version());
+        }
+    }
+    ResolutionFingerprint::new(format!("{:x}", hasher.finalize()))
+}
+
+fn unavailable_javascript_resolution(
+    knowledge: &RepositoryKnowledge,
+    definition_source: AnchoredSystemPathBuf,
+    code: &str,
+    message: String,
+    warning: Option<String>,
+) -> Result<JavaScriptResolutionSnapshot, String> {
+    let domain = ExternalResolutionDomain::new(
+        ToolchainId::JAVASCRIPT,
+        AnchoredSystemPathBuf::default(),
+        [definition_source],
+        ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
+    );
+    let generation = ExternalResolutionGeneration::build(knowledge, vec![domain])
+        .map_err(|error| error.to_string())?;
+    Ok(JavaScriptResolutionSnapshot {
+        generation: Arc::new(generation),
+        closures: HashMap::new(),
+        hashes: HashMap::new(),
+        warning,
+    })
+}
+
+fn resolve_javascript_dependencies(
+    knowledge: &RepositoryKnowledge,
+    lockfile: &dyn Lockfile,
+    external_dependencies: HashMap<String, BTreeMap<String, String>>,
+    definition_source: AnchoredSystemPathBuf,
+    closure_hasher: Option<&ClosureHasher>,
+) -> Result<JavaScriptResolutionSnapshot, String> {
+    let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
+        lockfile,
+        external_dependencies,
+        false,
+    ) {
+        Ok(closures) => closures,
+        Err(error) => {
+            let message = error.to_string();
+            return unavailable_javascript_resolution(
+                knowledge,
+                definition_source,
+                "closure-unavailable",
+                message.clone(),
+                Some(message),
+            );
+        }
+    };
+    let hashes = closure_hasher
+        .map(|hasher| hasher(&closures))
+        .unwrap_or_default();
+    let packages = javascript_resolution_packages(knowledge)
+        .into_iter()
+        .map(|(identity, directory)| {
+            let exact_identities = closures
+                .get(directory.to_unix().as_str())
+                .into_iter()
+                .flatten()
+                .map(|package| {
+                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone())
+                });
+            PackageResolution::new(identity, exact_identities)
+        })
+        .collect::<Vec<_>>();
+    let fingerprint = fingerprint_package_resolutions(&packages);
+    let domain = ExternalResolutionDomain::new(
+        ToolchainId::JAVASCRIPT,
+        AnchoredSystemPathBuf::default(),
+        [definition_source],
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Complete,
+            fingerprint,
+            packages,
+        },
+    );
+    let generation = ExternalResolutionGeneration::build(knowledge, vec![domain])
+        .map_err(|error| error.to_string())?;
+    Ok(JavaScriptResolutionSnapshot {
+        generation: Arc::new(generation),
+        closures,
+        hashes,
+        warning: None,
+    })
+}
+
 impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
@@ -1147,75 +1283,33 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .knowledge
             .as_deref()
             .ok_or(Error::MissingRepositoryKnowledge)?;
-        self.assembler
-            .package_payloads
-            .iter()
-            // Only JavaScript packages participate in the JS lockfile's
-            // external-dependency closures. This map is keyed by directory,
-            // and a non-JS package can share a directory with a JS one (the
-            // synthetic Cargo workspace package lives at the repo root, like
-            // the root package) — including both would let HashMap iteration
-            // order decide which entry survives, flipping the root's
-            // external-dependency hash run to run.
-            .filter_map(|(name, entry)| {
-                let (directory, toolchain) = scope_directory_and_toolchain(knowledge, name)?;
-                (toolchain == &ToolchainId::JAVASCRIPT).then_some((directory, entry))
-            })
-            .map(|(directory, entry)| {
-                let workspace_path = directory.to_unix();
-                let workspace_string = workspace_path.as_str();
-                let external_deps = entry
-                    .unresolved_external_dependencies
-                    .as_ref()
-                    .map(|deps| {
-                        deps.iter()
-                            .map(|(name, version)| (name.to_string(), version.to_string()))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                Ok((workspace_string.to_string(), external_deps))
-            })
-            .collect()
-    }
-
-    #[tracing::instrument(skip_all)]
-    fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
-        let Some(lockfile) = self.lockfile.as_deref() else {
-            return Ok(());
-        };
-
-        // We cannot ignore missing packages in this context, it would indicate a
-        // malformed or stale lockfile.
-        let mut closures = turborepo_lockfiles::all_transitive_closures_sorted(
-            lockfile,
-            self.all_external_dependencies()?,
-            false,
-        )?;
-        let mut hashes = self
-            .closure_hasher
-            .as_ref()
-            .map(|hasher| hasher(&closures))
-            .unwrap_or_default();
-        let knowledge = self
-            .knowledge
+        let relationships = self
+            .relationship_knowledge
             .as_deref()
-            .ok_or(Error::MissingRepositoryKnowledge)?;
-        for (name, entry) in &mut self.assembler.package_payloads {
-            // Mirror of the filter in all_external_dependencies: a non-JS
-            // package sharing a directory with a JS package must not steal
-            // its closure.
-            let Some((directory, toolchain)) = scope_directory_and_toolchain(knowledge, name)
-            else {
+            .ok_or(Error::MissingRelationshipKnowledge)?;
+        let mut by_source: BTreeMap<String, BTreeMap<String, String>> =
+            javascript_resolution_packages(knowledge)
+                .into_iter()
+                .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
+                .collect();
+        for declaration in ExternalDeclarationView::build(relationships).declarations() {
+            let Some(dependencies) = by_source.get_mut(declaration.source()) else {
                 continue;
             };
-            if toolchain != &ToolchainId::JAVASCRIPT {
-                continue;
-            }
-            let dir = directory.to_unix().to_string();
-            entry.transitive_dependencies = closures.remove(&dir);
-            entry.external_deps_hash = hashes.remove(&dir);
+            dependencies
+                .entry(declaration.package_name().to_string())
+                .or_insert_with(|| declaration.specifier().to_string());
         }
-        Ok(())
+
+        Ok(by_source
+            .into_iter()
+            .filter_map(|(identity, dependencies)| {
+                let name = package_name_from_identity(&identity);
+                let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
+                (toolchain == &ToolchainId::JAVASCRIPT)
+                    .then(|| (directory.to_unix().to_string(), dependencies))
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self))]
@@ -1226,69 +1320,110 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
         // consumers (microfrontends config, turbo.json preloading, engine
         // construction) overlap with the closure work instead of waiting
         // behind it. `PackageGraph::ensure_transitive_closures` joins.
-        let mut deferred_closures = None;
-        let arc_lockfile: Option<Arc<dyn Lockfile>> = if self.defer_closures {
-            let lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take().map(Arc::from);
-            if let Some(lockfile) = lockfile.clone() {
+        let knowledge = self
+            .knowledge
+            .clone()
+            .ok_or_else(|| build_failure(Error::MissingRepositoryKnowledge))?;
+        let package_manager = self.package_manager.clone();
+        if let (Some(javascript), Some(package_manager)) = (&self.javascript, &package_manager) {
+            javascript.set_resolved_package_manager(package_manager.clone());
+        }
+        let definition_source = package_manager
+            .as_ref()
+            .map(|package_manager| AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name()))
+            .transpose()
+            .map_err(Error::from)
+            .map_err(build_failure)?;
+        let arc_lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take().map(Arc::from);
+        let mut javascript_resolution = JavaScriptResolutionKnowledge::absent();
+
+        if let Some(definition_source) = definition_source {
+            if let Some(lockfile) = arc_lockfile.clone() {
                 match self.all_external_dependencies() {
-                    Ok(external_deps) => {
+                    Ok(external_dependencies) if self.defer_closures => {
                         let (tx, rx) = std::sync::mpsc::sync_channel(1);
                         let hasher = self.closure_hasher.clone();
+                        let resolution_knowledge = Arc::clone(&knowledge);
+                        let deferred_source = definition_source.clone();
                         let spawned = std::thread::Builder::new()
                             .name("turbo-closures".into())
                             .spawn(move || {
-                                let result = turborepo_lockfiles::all_transitive_closures_sorted(
+                                let result = resolve_javascript_dependencies(
+                                    &resolution_knowledge,
                                     lockfile.as_ref(),
-                                    external_deps,
-                                    false,
-                                )
-                                .map(|closures| {
-                                    let hashes = hasher
-                                        .as_ref()
-                                        .map(|hasher| hasher(&closures))
-                                        .unwrap_or_default();
-                                    super::DeferredClosures { closures, hashes }
-                                });
-                                let _ = tx.send(result.map_err(|e| e.to_string()));
+                                    external_dependencies,
+                                    deferred_source,
+                                    hasher.as_ref(),
+                                );
+                                let _ = tx.send(result);
                             });
                         match spawned {
-                            Ok(_) => deferred_closures = Some(rx),
-                            Err(e) => {
-                                warn!("Unable to spawn transitive closure thread: {}", e);
+                            Ok(_) => {
+                                javascript_resolution =
+                                    JavaScriptResolutionKnowledge::resolving(rx);
+                            }
+                            Err(error) => {
+                                warn!("Unable to spawn transitive closure thread: {}", error);
+                                let snapshot = unavailable_javascript_resolution(
+                                    &knowledge,
+                                    definition_source,
+                                    "worker-unavailable",
+                                    error.to_string(),
+                                    None,
+                                )
+                                .map_err(|message| {
+                                    build_failure(Error::ExternalResolution(message))
+                                })?;
+                                javascript_resolution =
+                                    JavaScriptResolutionKnowledge::complete(snapshot.generation);
                             }
                         }
                     }
-                    Err(e) => {
-                        warn!("Unable to calculate transitive closures: {}", e);
+                    Ok(external_dependencies) => {
+                        let mut snapshot = turborepo_rayon_compat::block_in_place(|| {
+                            resolve_javascript_dependencies(
+                                &knowledge,
+                                lockfile.as_ref(),
+                                external_dependencies,
+                                definition_source,
+                                self.closure_hasher.as_ref(),
+                            )
+                        })
+                        .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
+                        if let Some(warning) = snapshot.warning.take() {
+                            warn!("Unable to calculate transitive closures: {}", warning);
+                        }
+                        let generation = Arc::clone(&snapshot.generation);
+                        snapshot.project_legacy(&mut self.assembler.package_payloads, &knowledge);
+                        javascript_resolution = JavaScriptResolutionKnowledge::complete(generation);
+                    }
+                    Err(error) => {
+                        warn!("Unable to calculate transitive closures: {}", error);
+                        let snapshot = unavailable_javascript_resolution(
+                            &knowledge,
+                            definition_source,
+                            "declarations-unavailable",
+                            error.to_string(),
+                            None,
+                        )
+                        .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
+                        javascript_resolution =
+                            JavaScriptResolutionKnowledge::complete(snapshot.generation);
                     }
                 }
+            } else {
+                let snapshot = unavailable_javascript_resolution(
+                    &knowledge,
+                    definition_source,
+                    "lockfile-unavailable",
+                    "JavaScript lockfile could not be read or parsed".to_string(),
+                    None,
+                )
+                .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
+                javascript_resolution =
+                    JavaScriptResolutionKnowledge::complete(snapshot.generation);
             }
-            lockfile
-        } else {
-            if let Err(e) =
-                turborepo_rayon_compat::block_in_place(|| self.populate_transitive_dependencies())
-            {
-                warn!("Unable to calculate transitive closures: {}", e);
-            }
-            self.lockfile.take().map(Arc::from)
-        };
-        // A pure Cargo workspace has no JavaScript toolchain, hence no package
-        // manager to resolve.
-        let package_manager = match &self.javascript {
-            Some(javascript) => {
-                let package_manager = javascript
-                    .package_manager()
-                    .instrument(tracing::debug_span!("package discovery"))
-                    .await?
-                    .with_resolved_nub_lockfile(self.repo_root);
-                // Command resolution is synchronous; record the resolved
-                // package manager on the toolchain so it does not re-run
-                // discovery.
-                javascript.set_resolved_package_manager(package_manager.clone());
-                Some(package_manager)
-            }
-            None => None,
-        };
+        }
         let Self {
             assembler,
             knowledge,
@@ -1322,7 +1457,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             knowledge,
             relationship_knowledge,
             relationship_projections: std::sync::OnceLock::new(),
-            deferred_closures: std::sync::Mutex::new(deferred_closures),
+            javascript_resolution: std::sync::Mutex::new(javascript_resolution),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
