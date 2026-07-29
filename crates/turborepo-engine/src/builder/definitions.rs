@@ -339,14 +339,26 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .map(|(definition, _)| definition),
         );
         let had_explicit_cache = processed_task_definition.cache.is_some();
-        // Toolchain defaults describe the command the toolchain synthesizes.
-        // An override owns its behavior, including the generic cache default.
-        if should_apply_toolchain_defaults(command_override.as_ref())
-            && let Some((context, toolchain)) = package_context.as_ref().zip(toolchain)
-        {
-            let defaults = toolchain.task_defaults(context, task_id.as_inner().task());
-            if processed_task_definition.cache.is_none() {
-                processed_task_definition.cache = defaults.cache.map(Spanned::new);
+        // JavaScript packages compose defaults from foundational task-contract
+        // knowledge (empty today). Other toolchains temporarily retain
+        // Toolchain::task_defaults until their ports.
+        let uses_js_task_contract = package_context.as_ref().is_some_and(|context| {
+            context.task_contract().toolchain()
+                == Some(&turborepo_repository::toolchain::ToolchainId::JAVASCRIPT)
+        });
+        if should_apply_toolchain_defaults(command_override.as_ref()) {
+            if uses_js_task_contract {
+                if let Some(context) = package_context.as_ref() {
+                    let defaults = context.task_contract().defaults();
+                    if processed_task_definition.cache.is_none() {
+                        processed_task_definition.cache = defaults.cache.map(Spanned::new);
+                    }
+                }
+            } else if let Some((context, toolchain)) = package_context.as_ref().zip(toolchain) {
+                let defaults = toolchain.task_defaults(context, task_id.as_inner().task());
+                if processed_task_definition.cache.is_none() {
+                    processed_task_definition.cache = defaults.cache.map(Spanned::new);
+                }
             }
         }
         let had_explicit_inputs = processed_task_definition.inputs.is_some();
@@ -378,15 +390,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        // Apply toolchain-derived hash wiring: extra input globs and env
-        // vars, cacheable outputs, and default-hashing behavior. For
-        // JavaScript this is nothing (turbo.json is the whole story); for
-        // Cargo it is the workspace files, crate closures, and deliverable
-        // artifacts. `$TURBO_DEFAULT$` on a derived task means "everything
-        // the toolchain derives automatically", so explicit `inputs` can
-        // append without forfeiting automatic invalidation; explicit inputs
-        // without `$TURBO_DEFAULT$` take full control.
+        // Apply derived hash wiring. JavaScript uses foundational task-contract
+        // knowledge and never participates in Toolchain derived-I/O dispatch
+        // (turbo.json is the whole story). Cargo temporarily retains
+        // Toolchain::derived_task_io until its Rust port.
+        // `$TURBO_DEFAULT$` on a derived task means "everything the toolchain
+        // derives automatically", so explicit `inputs` can append without
+        // forfeiting automatic invalidation; explicit inputs without
+        // `$TURBO_DEFAULT$` take full control.
         if inherits_toolchain_task_io(task_def.command.as_ref())
+            && !uses_js_task_contract
             && let Some((package_context, toolchain)) = package_context
                 .as_ref()
                 .zip(toolchain)
