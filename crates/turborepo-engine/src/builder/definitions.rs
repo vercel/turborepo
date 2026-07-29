@@ -412,16 +412,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             // `dependencies` walks the package's full transitive closure,
             // which is far too expensive to compute per task just to hand
             // to a toolchain that derives nothing (JavaScript).
+            let package = PackageName::from(task_id.as_inner().package());
             let dependencies: Vec<_> = self
                 .package_graph
-                .dependencies(&PackageNode::Workspace(PackageName::from(
-                    task_id.as_inner().package(),
-                )))
-                .into_iter()
-                .filter_map(|dep| match dep {
-                    PackageNode::Workspace(name) => self.package_graph.package_task_context(name),
-                    _ => None,
-                })
+                .hash_relationships()
+                .dependency_inputs(&package)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|dependency| self.package_graph.package_task_context(dependency))
                 .collect();
             let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
             let empty_environment = turborepo_repository::toolchain::TaskIOEnvironment::default();
