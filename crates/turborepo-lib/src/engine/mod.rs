@@ -162,13 +162,15 @@ impl EngineExt for Engine<Built> {
                                 package_name: dep_id.package().to_string(),
                             })?;
 
-                    let package_json = package_graph
-                        .package_json(&PackageName::from(dep_id.package()))
-                        .ok_or_else(|| ValidateError::MissingPackageJson {
+                    let package_name = PackageName::from(dep_id.package());
+                    let Some(dep_context) = package_graph.package_task_context(&package_name)
+                    else {
+                        return Err(ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
-                        })?;
+                        });
+                    };
                     if task_definition.persistent
-                        && package_json.scripts.contains_key(dep_id.task())
+                        && dep_context.native_tasks().defines(dep_id.task())
                     {
                         let (span, text) = self
                             .task_locations()
@@ -185,20 +187,15 @@ impl EngineExt for Engine<Built> {
                     }
                 }
 
-                // check if the package for the task has that task in its package.json
+                // check if the package for the task defines an executable native task
                 let package_name = PackageName::from(task_id.package().to_string());
-                let info = package_graph.package_info(&package_name).ok_or_else(|| {
-                    ValidateError::MissingPackageJson {
+                let Some(context) = package_graph.package_task_context(&package_name) else {
+                    return Err(ValidateError::MissingPackageJson {
                         package: task_id.package().to_string(),
-                    }
-                })?;
+                    });
+                };
 
-                let package_has_task = info
-                    .package_json
-                    .scripts
-                    .get(task_id.task())
-                    // handle legacy behaviour from go where an empty string may appear
-                    .is_some_and(|script| !script.is_empty());
+                let package_has_task = context.native_tasks().defines(task_id.task());
 
                 let task_is_persistent = self
                     .task_definition(task_id)
