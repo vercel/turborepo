@@ -112,12 +112,12 @@ impl UnifiedTurboJsonLoader {
     pub fn single_package(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::single_package(
             reader,
             root_turbo_json,
-            package_json,
+            root_scripts,
         ))
     }
 
