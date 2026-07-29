@@ -15,9 +15,7 @@ use turbopath::{
     RelativeUnixPath, RelativeUnixPathBuf,
 };
 use turborepo_repository::{
-    package_graph::{
-        self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind,
-    },
+    package_graph::{self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
     toolchain::ToolchainId,
@@ -280,11 +278,9 @@ pub async fn prune(
                 workspace_names.push(workspace);
                 continue;
             }
-            let payload = prune.required_package_payload(&context)?;
             prune.copy_workspace(
                 context.directory(),
                 definition_path,
-                &payload.package_json,
                 &excluded_dev_workspaces,
             )?;
             workspace_paths.push(context.directory().to_unix().to_string());
@@ -490,15 +486,6 @@ impl<'a> Prune<'a> {
             .ok_or_else(|| Error::MissingWorkspace(package.clone()))
     }
 
-    fn required_package_payload<'graph>(
-        &self,
-        context: &PackageTaskContext<'graph>,
-    ) -> Result<&'graph package_graph::PackageInfo, Error> {
-        context
-            .package_info()
-            .ok_or_else(|| Error::MissingPackagePayload(context.package().clone()))
-    }
-
     fn package_definition_path<'graph>(
         &'graph self,
         context: &PackageTaskContext<'graph>,
@@ -584,9 +571,6 @@ impl<'a> Prune<'a> {
             trace!("target: {}", context.package());
             trace!("workspace directory: {}", context.directory());
             trace!("workspace definition: {definition_path}");
-            if context.requires_compatibility_payload() && context.package_info().is_none() {
-                return Err(Error::MissingPackagePayload(context.package().clone()));
-            }
             let declarations: Vec<_> = package_graph
                 .external_declarations(context.package())
                 .iter()
@@ -870,7 +854,6 @@ impl<'a> Prune<'a> {
         &self,
         workspace_directory: &AnchoredSystemPath,
         definition_path: &AnchoredSystemPath,
-        workspace_package_json: &PackageJson,
         excluded_dev_workspaces: &HashSet<String>,
     ) -> Result<(), Error> {
         let package_json_path = self.root.resolve(definition_path);
@@ -883,6 +866,18 @@ impl<'a> Prune<'a> {
         let definition_name = package_json_path
             .file_name()
             .ok_or(Error::WorkspaceAtFilesystemRoot)?;
+        // Load from the authoritative definition path — not PackageInfo.
+        let workspace_package_json =
+            PackageJson::load(&package_json_path).map_err(|error| match error {
+                turborepo_repository::package_json::Error::Io(io)
+                    if io.kind() == ErrorKind::NotFound =>
+                {
+                    Error::MissingPackageDefinition(PackageName::Other(
+                        workspace_directory.to_string(),
+                    ))
+                }
+                other => Error::PackageJson(other),
+            })?;
         let pruned_package_json = if excluded_dev_workspaces.is_empty() {
             None
         } else {
@@ -923,7 +918,7 @@ impl<'a> Prune<'a> {
                 turborepo_fs::copy_file(&package_json_path, docker_package_json)?;
             }
             self.create_docker_bin_stubs(
-                workspace_package_json,
+                &workspace_package_json,
                 &original_dir,
                 &docker_workspace_dir,
             )?;
@@ -989,18 +984,11 @@ impl<'a> Prune<'a> {
 
         for workspace in all_workspaces {
             let context = self.package_context(&workspace)?;
-            let payload = if context.requires_compatibility_payload() {
-                Some(self.required_package_payload(&context)?)
-            } else {
-                context.package_info()
-            };
             let workspace_abs_dir = self.root.resolve(context.directory());
 
-            for (_dep_name, dep_version) in payload
-                .into_iter()
-                .flat_map(|payload| payload.package_json.all_dependencies())
-            {
-                let Some(path_str) = dep_version.strip_prefix("file:") else {
+            // `file:` dependencies from declaration knowledge.
+            for declaration in context.external_declarations().iter() {
+                let Some(path_str) = declaration.specifier().strip_prefix("file:") else {
                     continue;
                 };
 
@@ -1237,7 +1225,7 @@ mod tests {
     use super::{
         bin_paths, finalized_path_is_contained,
         prune_js::{merge_preserving_key_order, prune_package_json_workspaces},
-        sync_prune_finalize_files, Error, Prune, ADDITIONAL_FILES,
+        sync_prune_finalize_files, Prune, ADDITIONAL_FILES,
     };
 
     struct MockDiscovery;
@@ -1565,14 +1553,8 @@ mod tests {
             definition_path.to_unix().as_str(),
             "packages/web/package.json"
         );
-        let payload = prune.required_package_payload(&context).unwrap();
         prune
-            .copy_workspace(
-                context.directory(),
-                definition_path,
-                &payload.package_json,
-                &HashSet::new(),
-            )
+            .copy_workspace(context.directory(), definition_path, &HashSet::new())
             .unwrap();
 
         assert_eq!(
@@ -1593,18 +1575,18 @@ mod tests {
         );
         assert!(!prune.full_directory.join_component("stale").exists());
 
+        // Closure/copy no longer require PackageInfo; definition-path IO is
+        // the fail-closed source for package.json during workspace copy.
         assert!(prune
             .package_graph
             .remove_package_info_for_test(&web)
             .is_some());
-        // Closure selection uses relationship knowledge and no longer requires
-        // PackageInfo; fail-closed payload checks happen at copy/render time.
         assert!(prune.internal_dependencies().is_ok());
         let context = prune.package_context(&web).unwrap();
-        assert!(matches!(
-            prune.required_package_payload(&context),
-            Err(Error::MissingPackagePayload(package)) if package == web
-        ));
+        let definition_path = prune.package_definition_path(&context).unwrap();
+        assert!(prune
+            .copy_workspace(context.directory(), definition_path, &HashSet::new())
+            .is_ok());
     }
 
     #[tokio::test]
