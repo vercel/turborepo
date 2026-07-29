@@ -764,24 +764,15 @@ impl<'a> Prune<'a> {
             self.copy_patch_file(patch)?;
         }
 
-        if let Some(ws_config) = rendered.workspace_patch_config_path {
-            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+        if let Some(workspace_config) = &rendered.workspace_config {
+            let ws_path = AnchoredSystemPathBuf::from_raw(workspace_config.path)?;
             let out_ws = self.out_directory.resolve(&ws_path);
-            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &out_ws,
-                &rendered.pruned_patches,
-            )?;
+            out_ws.create_with_contents(&workspace_config.contents)?;
             let full_ws = self.full_directory.resolve(&ws_path);
-            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &full_ws,
-                &rendered.pruned_patches,
-            )?;
+            full_ws.create_with_contents(&workspace_config.contents)?;
             if self.docker {
                 let docker_ws = self.docker_directory().resolve(&ws_path);
-                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                    &docker_ws,
-                    &rendered.pruned_patches,
-                )?;
+                docker_ws.create_with_contents(&workspace_config.contents)?;
             }
         }
 
