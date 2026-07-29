@@ -51,6 +51,10 @@ pub enum Error {
     #[error(transparent)]
     PackageGraph(#[from] package_graph::Error),
     #[error(transparent)]
+    RelationshipProjection(
+        #[from] turborepo_repository::package_graph::RelationshipProjectionError,
+    ),
+    #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("`turbo` does not support workspaces at file system root.")]
     WorkspaceAtFilesystemRoot,
@@ -1046,69 +1050,22 @@ impl<'a> Prune<'a> {
     }
 
     fn internal_dependencies(&self) -> Result<Vec<PackageName>, Error> {
-        let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
-            .chain(
-                self.scope
-                    .iter()
-                    .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
-            )
-            .collect::<Vec<_>>();
-        let mut names = self
-            .workspace_transitive_closure(workspaces.iter())
-            .into_iter()
-            .filter_map(|node| match node {
-                PackageNode::Root => None,
-                PackageNode::Workspace(workspace) => Some(workspace.clone()),
-            })
-            .collect::<HashSet<_>>();
-
-        loop {
-            let mut changed = false;
-            for workspace in names.clone() {
-                let context = self.package_context(&workspace)?;
-                let payload = match context.package_info() {
-                    Some(payload) => payload,
-                    None if context.requires_compatibility_payload() => {
-                        return Err(Error::MissingPackagePayload(context.package().clone()));
-                    }
-                    None => continue,
-                };
-                for (peer_name, _) in payload.package_json.peer_dependencies.iter().flatten() {
-                    if payload.package_json.is_optional_peer_dependency(peer_name) {
-                        continue;
-                    }
-
-                    let peer = PackageName::from(peer_name.as_str());
-                    if self.package_graph.package_task_context(&peer).is_some()
-                        && names.insert(peer)
-                    {
-                        changed = true;
-                    }
-                }
-            }
-
-            if !changed {
-                break;
-            }
-
-            let workspace_nodes = names
-                .iter()
-                .cloned()
-                .map(PackageNode::Workspace)
-                .collect::<Vec<_>>();
-            names.extend(
-                self.workspace_transitive_closure(workspace_nodes.iter())
-                    .into_iter()
-                    .filter_map(|node| match node {
-                        PackageNode::Root => None,
-                        PackageNode::Workspace(workspace) => Some(workspace.clone()),
-                    }),
-            );
-        }
-
-        let mut names = names.into_iter().collect::<Vec<_>>();
-        names.sort();
-        Ok(names)
+        // Install-oriented package closure including required same-name peer
+        // workspaces — from relationship knowledge, not PackageJson peer tables.
+        let seeds: Vec<PackageName> = self
+            .scope
+            .iter()
+            .map(|workspace| PackageName::Other(workspace.clone()))
+            .collect();
+        let mode = if self.production {
+            turborepo_repository::package_graph::PruneDependencyMode::ProductionOnly
+        } else {
+            turborepo_repository::package_graph::PruneDependencyMode::IncludeDevDependencies
+        };
+        Ok(self
+            .package_graph
+            .prune_relationships()
+            .package_closure(&seeds, mode)?)
     }
 
     fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
@@ -1126,20 +1083,30 @@ impl<'a> Prune<'a> {
 
         for workspace in workspaces {
             let context = self.package_context(workspace)?;
-            let payload = self.required_package_payload(&context)?;
-
-            let peer_dependencies = payload
-                .package_json
-                .peer_dependencies
+            // Required external peers (not same-workspace packages) from
+            // declaration knowledge — not PackageJson peer tables.
+            let peer_dependencies = context
+                .external_declarations()
                 .iter()
-                .flatten()
-                .filter(|(name, _)| !payload.package_json.is_optional_peer_dependency(name))
-                .filter(|(name, _)| {
+                .filter(|declaration| {
+                    matches!(
+                        declaration.kind(),
+                        turborepo_repository::relationships::DependencyKind::Peer {
+                            optional: false
+                        }
+                    )
+                })
+                .filter(|declaration| {
                     self.package_graph
-                        .package_task_context(&PackageName::from(name.as_str()))
+                        .package_task_context(&PackageName::from(declaration.package_name()))
                         .is_none()
                 })
-                .map(|(name, version)| (name.clone(), version.clone()))
+                .map(|declaration| {
+                    (
+                        declaration.package_name().to_string(),
+                        declaration.specifier().to_string(),
+                    )
+                })
                 .collect::<BTreeMap<_, _>>();
 
             if peer_dependencies.is_empty() {
@@ -1641,8 +1608,12 @@ mod tests {
             .package_graph
             .remove_package_info_for_test(&web)
             .is_some());
+        // Closure selection uses relationship knowledge and no longer requires
+        // PackageInfo; fail-closed payload checks happen at copy/render time.
+        assert!(prune.internal_dependencies().is_ok());
+        let context = prune.package_context(&web).unwrap();
         assert!(matches!(
-            prune.internal_dependencies(),
+            prune.required_package_payload(&context),
             Err(Error::MissingPackagePayload(package)) if package == web
         ));
     }
