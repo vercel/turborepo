@@ -678,10 +678,13 @@ mod tests {
         let package_graph = package_graph(
             &repo_root,
             &package_dir,
-            PackageJson::from_value(serde_json::json!({
-                "scripts": { "build": "next build" }
-            }))
-            .unwrap(),
+            PackageJson {
+                scripts: BTreeMap::from([(
+                    "build".to_owned(),
+                    Spanned::new("next build".to_owned()),
+                )]),
+                ..Default::default()
+            },
         )
         .await;
         let task_id = TaskId::new("web", "build").into_owned();
