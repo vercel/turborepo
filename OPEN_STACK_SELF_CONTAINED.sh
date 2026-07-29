@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Self-contained stacked PR opener — bodies embedded.
-# Usage: bash OPEN_STACK_SELF_CONTAINED.sh
 set -euo pipefail
 REPO="${REPO:-vercel/turborepo}"
 TMPDIR_BODIES="$(mktemp -d)"
@@ -849,4 +848,32 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Migrate MFE dependency detection off PackageInfo" \
   --body-file "$TMPDIR_BODIES/27-5838.md"
 
-echo "Opened 27-layer stack through tip."
+cat > "$TMPDIR_BODIES/28-5839.md" << 'BODY_28'
+## Intent
+
+Continue TURBO-5787: prune peer / optional-peer handling must use **relationship knowledge** (`prune_relationships` / external peer declarations) instead of `PackageJson` peer tables on PackageInfo.
+
+**Stack:** Compatibility-removal layer 2. Base = `shew/turbo-5838-migrate-mfe-dependency-detection-off-packageinfo`.
+
+## Changes
+
+- `internal_dependencies` uses `PruneRelationships::package_closure`
+- External required peers for lockfile keys come from `external_declarations`
+- Fail-closed PackageInfo checks remain at copy/render time
+
+## Testing
+
+- `cargo test -p turborepo-lib --lib commands::prune` (15 passed)
+- `cargo test -p turbo --test prune_test golden_inventory` (2 passed)
+- `cargo clippy -p turborepo-lib --all-targets -- -D warnings`
+
+Closes TURBO-5839.
+BODY_28
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5838-migrate-mfe-dependency-detection-off-packageinfo \
+  --head shew/turbo-5839-migrate-prune-peer-helpers-off-packagejson \
+  --title "refactor: Migrate prune peer helpers off PackageJson" \
+  --body-file "$TMPDIR_BODIES/28-5839.md"
+
+echo "Opened 28-layer stack."

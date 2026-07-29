@@ -166,4 +166,10 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Migrate MFE dependency detection off PackageInfo" \
   --body-file "$ROOT/stack-pr-bodies/27-5838.md"
 
-echo "Opened Phase 3–8 + 5787 first leaf (through 5838) stack."
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5838-migrate-mfe-dependency-detection-off-packageinfo \
+  --head shew/turbo-5839-migrate-prune-peer-helpers-off-packagejson \
+  --title "refactor: Migrate prune peer helpers off PackageJson" \
+  --body-file "$ROOT/stack-pr-bodies/28-5839.md"
+
+echo "Opened stack through TURBO-5839."
