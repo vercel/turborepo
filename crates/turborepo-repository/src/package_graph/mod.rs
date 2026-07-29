@@ -16,6 +16,7 @@ use turborepo_lockfiles::Lockfile;
 
 use crate::{
     discovery::LocalPackageDiscoveryBuilder,
+    external_resolution::{ExternalResolutionGeneration, ExternalResolutionStatus},
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
     package_manager::PackageManager,
@@ -35,17 +36,87 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
-/// Background transitive-closure result: per-workspace sorted closures and
-/// their external-dependency hashes, keyed by workspace unix directory.
-pub(crate) struct DeferredClosures {
+/// One JavaScript resolution snapshot and its temporary compatibility
+/// projection. Both inline and deferred production create this exact shape.
+pub(crate) struct JavaScriptResolutionSnapshot {
+    pub generation: Arc<ExternalResolutionGeneration>,
     pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
     pub hashes: HashMap<String, String>,
+    pub warning: Option<String>,
 }
 
-/// Channel end delivering the background transitive-closure result, or a
-/// rendered error message.
-pub(crate) type DeferredClosuresReceiver =
-    std::sync::mpsc::Receiver<Result<DeferredClosures, String>>;
+impl JavaScriptResolutionSnapshot {
+    pub(crate) fn project_legacy(
+        &mut self,
+        package_payloads: &mut HashMap<PackageName, PackageInfo>,
+        knowledge: &RepositoryKnowledge,
+    ) {
+        for (name, info) in package_payloads {
+            let facts = match name {
+                PackageName::Root => knowledge
+                    .root_javascript_scope()
+                    .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
+                PackageName::Other(name) => knowledge
+                    .scope(name)
+                    .map(|scope| (scope.directory(), scope.toolchain())),
+            };
+            let Some((directory, toolchain)) = facts else {
+                continue;
+            };
+            if toolchain != &crate::toolchain::ToolchainId::JAVASCRIPT {
+                continue;
+            }
+            let directory = directory.to_unix();
+            info.transitive_dependencies = self.closures.remove(directory.as_str());
+            info.external_deps_hash = self.hashes.remove(directory.as_str());
+        }
+    }
+}
+
+pub(crate) type DeferredResolutionReceiver =
+    std::sync::mpsc::Receiver<Result<JavaScriptResolutionSnapshot, String>>;
+
+#[derive(Debug)]
+pub(crate) struct JavaScriptResolutionKnowledge {
+    status: ExternalResolutionStatus,
+    generation: Option<Arc<ExternalResolutionGeneration>>,
+    receiver: Option<DeferredResolutionReceiver>,
+}
+
+impl JavaScriptResolutionKnowledge {
+    pub(crate) fn absent() -> Self {
+        Self {
+            status: ExternalResolutionStatus::Complete,
+            generation: None,
+            receiver: None,
+        }
+    }
+
+    pub(crate) fn complete(generation: Arc<ExternalResolutionGeneration>) -> Self {
+        Self {
+            status: ExternalResolutionStatus::Complete,
+            generation: Some(generation),
+            receiver: None,
+        }
+    }
+
+    pub(crate) fn resolving(receiver: DeferredResolutionReceiver) -> Self {
+        Self {
+            status: ExternalResolutionStatus::Resolving,
+            generation: None,
+            receiver: Some(receiver),
+        }
+    }
+
+    fn take_receiver(&mut self) -> Option<DeferredResolutionReceiver> {
+        self.receiver.take()
+    }
+
+    fn finish(&mut self, generation: Option<Arc<ExternalResolutionGeneration>>) {
+        self.status = ExternalResolutionStatus::Complete;
+        self.generation = generation;
+    }
+}
 
 #[derive(Debug)]
 pub struct PackageGraph {
@@ -64,10 +135,10 @@ pub struct PackageGraph {
     #[allow(dead_code)]
     relationship_knowledge: Arc<RelationshipKnowledge>,
     relationship_projections: OnceLock<projections::RelationshipProjections>,
-    /// Receiver for background transitive-closure computation when the graph
-    /// was built with deferred closures. Consumed (exactly once) by
+    /// The sole owner of JavaScript external-resolution lifecycle and terminal
+    /// knowledge. Deferred production is joined exactly once by
     /// [`Self::ensure_transitive_closures`].
-    deferred_closures: Mutex<Option<DeferredClosuresReceiver>>,
+    javascript_resolution: Mutex<JavaScriptResolutionKnowledge>,
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
     /// Lazily computed internal dependencies of the root package. They are
@@ -775,50 +846,58 @@ impl PackageGraph {
     /// consumer of `PackageInfo::transitive_dependencies` runs.
     pub fn ensure_transitive_closures(&mut self) {
         let receiver = self
-            .deferred_closures
+            .javascript_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take();
+            .take_receiver();
         let Some(receiver) = receiver else {
             return;
         };
         match receiver.recv() {
-            Ok(Ok(DeferredClosures {
-                mut closures,
-                mut hashes,
-            })) => {
-                let knowledge = &self.knowledge;
-                for (name, info) in &mut self.package_payloads {
-                    // Mirror of the filter in the inline path
-                    // (`populate_transitive_dependencies`): a non-JS package
-                    // sharing a directory with a JS package must not steal
-                    // its closure.
-                    let facts = match name {
-                        PackageName::Root => knowledge
-                            .root_javascript_scope()
-                            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
-                        PackageName::Other(name) => knowledge
-                            .scope(name)
-                            .map(|scope| (scope.directory(), scope.toolchain())),
-                    };
-                    let Some((directory, toolchain)) = facts else {
-                        continue;
-                    };
-                    if toolchain != &crate::toolchain::ToolchainId::JAVASCRIPT {
-                        continue;
-                    }
-                    let dir = directory.to_unix();
-                    info.transitive_dependencies = closures.remove(dir.as_str());
-                    info.external_deps_hash = hashes.remove(dir.as_str());
+            Ok(Ok(mut snapshot)) => {
+                if let Some(warning) = snapshot.warning.take() {
+                    tracing::warn!("Unable to calculate transitive closures: {}", warning);
                 }
+                let generation = Arc::clone(&snapshot.generation);
+                snapshot.project_legacy(&mut self.package_payloads, &self.knowledge);
+                self.javascript_resolution
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .finish(Some(generation));
             }
             Ok(Err(e)) => {
                 tracing::warn!("Unable to calculate transitive closures: {}", e);
+                self.javascript_resolution
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .finish(None);
             }
             Err(_) => {
                 tracing::warn!("transitive closure thread disappeared without a result");
+                self.javascript_resolution
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .finish(None);
             }
         }
+    }
+
+    pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
+        self.javascript_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .status
+    }
+
+    #[cfg(test)]
+    pub(crate) fn external_resolution_generation(
+        &self,
+    ) -> Option<Arc<ExternalResolutionGeneration>> {
+        self.javascript_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .generation
+            .clone()
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
@@ -1793,6 +1872,72 @@ mod test {
         );
     }
 
+    #[tokio::test]
+    async fn javascript_resolution_distinguishes_resolved_empty_from_unavailable() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let root_package = || PackageJson::from_value(json!({ "name": "root" })).unwrap();
+
+        let resolved = PackageGraph::builder(&root, root_package())
+            .with_package_discovery(MockDiscovery)
+            .with_lockfile(Some(Box::new(MockLockfile {})))
+            .build()
+            .await
+            .unwrap();
+        let resolved_generation = resolved
+            .external_resolution_generation()
+            .expect("resolved generation should be retained");
+        let resolved_domain = &resolved_generation.domains()[0];
+        assert_eq!(
+            resolved_domain.definition_sources()[0].as_str(),
+            "package-lock.json"
+        );
+        let crate::external_resolution::ExternalResolutionData::Resolved {
+            completeness,
+            fingerprint,
+            packages,
+        } = resolved_domain.data()
+        else {
+            panic!("expected resolved terminal data")
+        };
+        assert_eq!(
+            completeness,
+            &crate::external_resolution::ResolutionCompleteness::Complete
+        );
+        assert!(!fingerprint.as_str().is_empty());
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].package(), ROOT_PKG_NAME);
+        assert!(packages[0].identities().is_empty());
+        assert_eq!(
+            resolved
+                .package_payloads
+                .get(&PackageName::Root)
+                .and_then(|info| info.transitive_dependencies.as_deref()),
+            Some(&[][..])
+        );
+
+        let unavailable = PackageGraph::builder(&root, root_package())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+        let unavailable_generation = unavailable
+            .external_resolution_generation()
+            .expect("unavailable generation should be retained");
+        let crate::external_resolution::ExternalResolutionData::Unavailable(reason) =
+            unavailable_generation.domains()[0].data()
+        else {
+            panic!("expected unavailable terminal data")
+        };
+        assert_eq!(reason.code(), "lockfile-unavailable");
+        assert!(
+            unavailable
+                .package_payloads
+                .get(&PackageName::Root)
+                .is_some_and(|info| info.transitive_dependencies.is_none())
+        );
+    }
+
     /// A graph built with deferred closures must, after
     /// `ensure_transitive_closures`, be indistinguishable from one built
     /// inline.
@@ -1863,6 +2008,19 @@ mod test {
         .await
         .unwrap();
 
+        assert_eq!(
+            inline.external_resolution_status(),
+            ExternalResolutionStatus::Complete
+        );
+        assert_eq!(
+            deferred.external_resolution_status(),
+            ExternalResolutionStatus::Resolving
+        );
+        let inline_generation = inline
+            .external_resolution_generation()
+            .expect("inline resolution should be available");
+        assert_eq!(inline_generation.domains().len(), 1);
+
         // Before the join, closures are absent.
         assert!(
             deferred
@@ -1875,6 +2033,17 @@ mod test {
         deferred.ensure_transitive_closures();
         // Idempotent.
         deferred.ensure_transitive_closures();
+
+        assert_eq!(
+            deferred.external_resolution_status(),
+            ExternalResolutionStatus::Complete
+        );
+        assert_eq!(
+            inline_generation,
+            deferred
+                .external_resolution_generation()
+                .expect("deferred resolution should be available after joining")
+        );
 
         for (name, info) in &inline.package_payloads {
             let deferred_info = deferred.package_payloads.get(name).unwrap();
