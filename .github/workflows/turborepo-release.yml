@@ -921,7 +921,7 @@ jobs:
             node .release-validator/scripts/validate-release-pr.mjs
 
           DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
-          gh workflow run release-review-gate.yml \
+          gh workflow run release-pr-checks.yml \
             --ref "$STAGE_BRANCH" \
             -f pr-number="$PR_NUM" \
             -f expected-head-sha="$HEAD_SHA" \
@@ -930,19 +930,19 @@ jobs:
           CHECK_RUN_ID=""
           for _ in $(seq 1 30); do
             CHECK_RUN_ID=$(gh run list \
-              --workflow release-review-gate.yml \
+              --workflow release-pr-checks.yml \
               --branch "$STAGE_BRANCH" \
               --event workflow_dispatch \
               --limit 20 \
               --json databaseId,displayTitle,headSha \
-              --jq "[.[] | select(.displayTitle == \"Release review gate ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
+              --jq "[.[] | select(.displayTitle == \"Release PR checks ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
             if [ -n "$CHECK_RUN_ID" ]; then
               break
             fi
             sleep 2
           done
           if [ -z "$CHECK_RUN_ID" ]; then
-            echo "::error::Unable to find dispatched release review gate run"
+            echo "::error::Unable to find dispatched release PR checks run"
             exit 1
           fi
 
