@@ -520,29 +520,16 @@ impl Run {
             if !self.filtered_pkgs.contains(name) {
                 continue;
             }
-            let package_info = context.package_info();
-            if context.requires_compatibility_payload() && package_info.is_none() {
-                return Err(Error::MissingPackagePayload(name.clone()));
-            }
-            for task_name in package_info
-                .into_iter()
-                .flat_map(|info| info.package_json.scripts.keys())
-            {
-                tasks
-                    .entry(task_name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(name.to_string())
-            }
-            if let Some(toolchain) = context
-                .toolchain()
-                .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
-            {
-                for task_name in toolchain.registered_tasks(&context) {
-                    tasks
-                        .entry(task_name)
-                        .or_insert_with(Vec::new)
-                        .push(name.to_string());
+            // Authored scripts and registered native tasks both come from the
+            // native-task catalog produced at repository construction.
+            for native_task in context.native_tasks().tasks() {
+                if !native_task.executable() && !native_task.registered() {
+                    continue;
                 }
+                tasks
+                    .entry(native_task.name().to_string())
+                    .or_insert_with(Vec::new)
+                    .push(name.to_string());
             }
         }
 
