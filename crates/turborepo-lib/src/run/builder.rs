@@ -73,8 +73,13 @@ fn project_task_io_environment(
     >,
     turborepo_env::Error,
 > {
+    // JavaScript task-I/O environment patterns come from foundational contract
+    // knowledge (empty today). Do not dispatch through Toolchain for JS.
     toolchains
         .iter()
+        .filter(|toolchain| {
+            toolchain.id() != turborepo_repository::toolchain::ToolchainId::JAVASCRIPT
+        })
         .map(|toolchain| {
             let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
             Ok((
@@ -1571,6 +1576,36 @@ mod task_io_context_tests {
         fn task_io_env_vars(&self) -> &[&str] {
             &self.environment
         }
+    }
+
+    #[test]
+    fn javascript_toolchain_is_excluded_from_task_io_projection() {
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains
+            .register(Arc::new(Stub {
+                id: ToolchainId::JAVASCRIPT,
+                environment: vec!["NODE_*"],
+            }))
+            .unwrap();
+        toolchains
+            .register(Arc::new(Stub {
+                id: ToolchainId::new("other"),
+                environment: vec!["OTHER_*"],
+            }))
+            .unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("NODE_ENV".to_string(), "production".to_string()),
+            ("OTHER_KEY".to_string(), "value".to_string()),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        assert!(!projected.contains_key(&ToolchainId::JAVASCRIPT));
+        assert_eq!(
+            projected
+                .get(&ToolchainId::new("other"))
+                .and_then(|environment| environment.get("OTHER_KEY")),
+            Some("value")
+        );
     }
 
     #[test]

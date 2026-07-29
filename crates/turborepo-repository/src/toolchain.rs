@@ -858,21 +858,8 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         ToolchainId::JAVASCRIPT
     }
 
-    fn derived_task_io(
-        &self,
-        _package: &crate::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-        _path_to_root: &str,
-        _dependencies: &[crate::package_graph::PackageTaskContext<'_>],
-        _wants_automatic_inputs: bool,
-        _context: &TaskIOContext<'_>,
-    ) -> Option<DerivedTaskIO> {
-        // Deliberately nothing: for JavaScript, turbo.json is the whole
-        // story — inputs default to the package's files, outputs are
-        // whatever the user declares, and no tool-level files or env vars
-        // are implied. This is the real answer, not an unimplemented stub.
-        None
-    }
+    // Task-contract derived I/O for JavaScript is foundational knowledge
+    // (empty / turbo.json-owned). Do not override Toolchain::derived_task_io.
 
     fn watch_spec(&self) -> WatchSpec {
         // Deliberately nothing: JavaScript workspace redefinition (a new or
