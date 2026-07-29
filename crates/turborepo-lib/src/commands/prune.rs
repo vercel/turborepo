@@ -839,14 +839,20 @@ impl<'a> Prune<'a> {
             trace!("target: {}", context.package());
             trace!("workspace directory: {}", context.directory());
             trace!("workspace definition: {definition_path}");
-            if let Some(payload) = context.package_info() {
-                trace!(
-                    "external dependencies: {:?}",
-                    &payload.unresolved_external_dependencies
-                );
-            } else if context.requires_compatibility_payload() {
+            if context.requires_compatibility_payload() && context.package_info().is_none() {
                 return Err(Error::MissingPackagePayload(context.package().clone()));
             }
+            let declarations: Vec<_> = package_graph
+                .external_declarations(context.package())
+                .iter()
+                .map(|declaration| {
+                    (
+                        declaration.package_name().to_string(),
+                        declaration.specifier().to_string(),
+                    )
+                })
+                .collect();
+            trace!("external dependencies: {:?}", declarations);
         }
 
         // A JavaScript project must have a lockfile to subgraph. A pure Cargo

@@ -178,8 +178,9 @@ Represents the workspace structure and package dependencies:
   Global hashing consumes the same root resolution fingerprint as task hashing
   and, when JavaScript resolution is unavailable, hashes resolution definition
   sources plus the root package.json instead of reading the singleton lockfile
-  object. The snapshot projects temporary `PackageInfo` closure/hash fields only
-  until the Phase 3 deletion gate removes them.
+  object. Phase 3 deletion removed `PackageInfo` closure/hash compatibility
+  fields and deferred resolution installation; readiness belongs to repository
+  construction.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate
@@ -212,7 +213,7 @@ The remaining payload deletion phases are explicit:
 - **Phase 2:** Move script and version reads behind task queries; normalized
   relationship knowledge now owns graph assembly, while JavaScript declarations
   remain a temporary classification input.
-- **Phase 3:** Move unresolved dependency and lockfile-closure/hash state behind lockfile and hashing queries.
+- **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
 - **Phase 4:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
 
 Task hashing, run-cache path construction, and run-summary task directories use
