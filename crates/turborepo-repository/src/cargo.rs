@@ -42,6 +42,10 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    external_resolution::{
+        ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
+        PackageResolution, ResolutionCompleteness, ResolutionFingerprint,
+    },
     package_json::{DependencyKind, PackageJson},
     relationships::Relationship,
     toolchain::{
@@ -133,6 +137,20 @@ pub enum Error {
     RustcOutputUtf8(#[from] std::str::Utf8Error),
     #[error("invalid `rustc -vV` output: {reason}")]
     InvalidRustcOutput { reason: &'static str },
+    #[error(transparent)]
+    ResolutionPath(#[from] turbopath::PathError),
+}
+
+fn package_resolution(
+    package: impl Into<String>,
+    identities: &HashSet<turborepo_lockfiles::Package>,
+) -> PackageResolution {
+    PackageResolution::new(
+        package,
+        identities.iter().map(|identity| {
+            ExternalPackageIdentity::new(identity.key.clone(), identity.version.clone())
+        }),
+    )
 }
 
 fn parse_rustc_info(stdout: &[u8]) -> Result<(turborepo_lockfiles::Package, String), Error> {
@@ -1709,6 +1727,7 @@ impl Toolchain for CargoToolchain {
                 .collect();
 
             let mut packages = Vec::with_capacity(crates.len() + 1);
+            let mut resolutions = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
             for cargo_crate in crates {
                 let relationships = cargo_crate
@@ -1747,6 +1766,10 @@ impl Toolchain for CargoToolchain {
                     .into_iter()
                     .chain(std::iter::once(rustc.clone()))
                     .collect();
+                resolutions.push(package_resolution(
+                    cargo_crate.name.clone(),
+                    &external_dependencies,
+                ));
                 crate_names.push(cargo_crate.name.clone());
                 packages.push(
                     DiscoveredPackage::package(
@@ -1779,6 +1802,10 @@ impl Toolchain for CargoToolchain {
                     .into_iter()
                     .map(|name| Relationship::internal(name, DependencyKind::Production))
                     .collect();
+                resolutions.push(package_resolution(
+                    workspace_name.clone(),
+                    &workspace_externals,
+                ));
                 packages.push(
                     DiscoveredPackage::aggregate(
                         workspace_name,
@@ -1792,7 +1819,21 @@ impl Toolchain for CargoToolchain {
                 );
             }
 
-            Ok(DiscoveredPackages::new(packages, workspace_roots))
+            let fingerprint = ResolutionFingerprint::from_packages(&resolutions);
+            let resolution = ExternalResolutionDomain::new(
+                ToolchainId::RUST,
+                AnchoredSystemPathBuf::default(),
+                [AnchoredSystemPathBuf::from_raw(CARGO_LOCK)
+                    .map_err(Error::from)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
+                ExternalResolutionData::Resolved {
+                    completeness: ResolutionCompleteness::Complete,
+                    fingerprint,
+                    packages: resolutions,
+                },
+            );
+            Ok(DiscoveredPackages::new(packages, workspace_roots)
+                .with_external_resolution(resolution))
         })
     }
 }
@@ -3691,10 +3732,31 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         assert_eq!(toolchain.id(), ToolchainId::RUST);
 
-        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        let (packages, roots, resolutions) =
+            toolchain.discover_packages().await.unwrap().into_parts();
         assert_eq!(roots.len(), 1);
         assert_eq!(roots[0].kind(), "cargo");
         assert_eq!(roots[0].path(), root.as_ref());
+        assert_eq!(resolutions.len(), 1);
+        assert_eq!(resolutions[0].toolchain(), &ToolchainId::RUST);
+        assert_eq!(resolutions[0].definition_sources()[0].as_str(), CARGO_LOCK);
+        let ExternalResolutionData::Resolved {
+            completeness,
+            fingerprint,
+            packages: resolution_packages,
+        } = resolutions[0].data()
+        else {
+            panic!("Cargo resolution must be complete")
+        };
+        assert_eq!(completeness, &ResolutionCompleteness::Complete);
+        assert!(!fingerprint.as_str().is_empty());
+        assert_eq!(resolution_packages.len(), 4);
+        assert!(resolution_packages.iter().all(|package| {
+            package
+                .identities()
+                .iter()
+                .any(|identity| identity.key() == "rustc")
+        }));
         let mut packages: Vec<_> = packages
             .into_iter()
             .map(DiscoveredPackage::into_parts)
@@ -3766,9 +3828,11 @@ release: 1.96.0-nightly\n",
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
         let toolchain = CargoToolchain::new(root);
-        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        let (packages, roots, resolutions) =
+            toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
         assert!(roots.is_empty());
+        assert!(resolutions.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3777,9 +3841,11 @@ release: 1.96.0-nightly\n",
         write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
 
         let toolchain = CargoToolchain::new(root);
-        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        let (packages, roots, resolutions) =
+            toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
         assert_eq!(roots.len(), 1);
+        assert!(resolutions.is_empty());
     }
 
     fn package_info(name: &str) -> crate::package_graph::PackageInfo {

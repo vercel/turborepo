@@ -151,15 +151,17 @@ Represents the workspace structure and package dependencies:
   consumers pay no construction cost. They expose only authoritative package
   identities plus the always-present root Turbo task namespace, never the
   package graph's structural root sentinel.
-- Produces JavaScript external-resolution knowledge from the normalized
-  external declaration view. Inline and deferred lockfile closure calculation
-  create the same immutable snapshot, including exact opaque identities,
-  definition source, completeness, and a stable fingerprint. Missing,
-  unparseable, or incomplete lockfile resolution produces explicit unavailable
-  terminal data rather than a resolved-empty set. A single resolution owner
-  tracks lifecycle status, and the snapshot projects the temporary
-  `PackageInfo` closure/hash fields, keeping legacy consumers byte-compatible
-  until their migration.
+- Produces shared JavaScript and Cargo external-resolution knowledge. JavaScript
+  consumes the normalized external declaration view; inline and deferred
+  lockfile closure calculation create the same immutable snapshot. Cargo
+  contributes per-crate closures, the aggregate workspace union, and the full
+  `rustc -vV` identity from the same sets used by compatibility payloads. Cargo
+  keeps missing, stale, or invalid lockfile and compiler identity failures
+  fatal. Core validates the combined domains and retains exact opaque
+  identities, definition sources, completeness, and stable fingerprints. A
+  single resolution owner tracks lifecycle status, and the snapshot projects
+  temporary `PackageInfo` closure/hash fields byte-compatibly until consumer
+  migration.
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field

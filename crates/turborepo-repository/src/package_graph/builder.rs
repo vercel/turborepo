@@ -5,7 +5,6 @@ use std::{
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
-use sha2::{Digest, Sha256};
 use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -13,7 +12,7 @@ use turbopath::{
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    JavaScriptResolutionKnowledge, JavaScriptResolutionSnapshot, PackageGraph, PackageInfo,
+    ExternalResolutionKnowledge, JavaScriptResolutionSnapshot, PackageGraph, PackageInfo,
     PackageName, PackageNode,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
 };
@@ -398,6 +397,7 @@ struct BuildState<'a, S, T> {
     knowledge: Option<Arc<RepositoryKnowledge>>,
     relationship_knowledge: Option<Arc<RelationshipKnowledge>>,
     native_relationships: HashMap<String, Vec<Relationship>>,
+    native_external_resolutions: Vec<ExternalResolutionDomain>,
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
@@ -675,6 +675,7 @@ where
             knowledge: None,
             relationship_knowledge: None,
             native_relationships: HashMap::new(),
+            native_external_resolutions: Vec::new(),
             lockfile,
             package_manager: None,
             package_jsons,
@@ -776,7 +777,9 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 continue;
             }
             let output = toolchain.discover_packages().await?;
-            let (packages, roots) = output.into_parts();
+            let (packages, roots, external_resolutions) = output.into_parts();
+            self.native_external_resolutions
+                .extend(external_resolutions);
             workspace_roots.extend(
                 roots
                     .into_iter()
@@ -828,6 +831,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             knowledge,
             relationship_knowledge,
             native_relationships,
+            native_external_resolutions,
             root_package_json,
             lockfile,
             package_manager,
@@ -844,6 +848,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             knowledge,
             relationship_knowledge,
             native_relationships,
+            native_external_resolutions,
             root_package_json,
             lockfile,
             package_manager,
@@ -863,6 +868,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             knowledge,
             relationship_knowledge: _,
             native_relationships: _,
+            native_external_resolutions: _,
             root_package_json,
             lockfile,
             javascript,
@@ -932,7 +938,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             knowledge,
             relationship_knowledge,
             relationship_projections: std::sync::OnceLock::new(),
-            javascript_resolution: std::sync::Mutex::new(JavaScriptResolutionKnowledge::absent()),
+            external_resolution: std::sync::Mutex::new(ExternalResolutionKnowledge::absent()),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
@@ -1090,6 +1096,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             assembler,
             knowledge,
             relationship_knowledge,
+            native_external_resolutions,
             root_package_json,
             javascript,
             toolchains,
@@ -1105,6 +1112,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             relationship_knowledge,
             // Native contributions were consumed before lockfile setup.
             native_relationships: HashMap::new(),
+            native_external_resolutions,
             root_package_json,
             lockfile,
             package_manager,
@@ -1174,25 +1182,9 @@ fn javascript_resolution_packages(
     packages
 }
 
-fn fingerprint_package_resolutions(packages: &[PackageResolution]) -> ResolutionFingerprint {
-    fn update(hasher: &mut Sha256, value: &str) {
-        hasher.update((value.len() as u64).to_le_bytes());
-        hasher.update(value.as_bytes());
-    }
-
-    let mut hasher = Sha256::new();
-    for package in packages {
-        update(&mut hasher, package.package());
-        for identity in package.identities() {
-            update(&mut hasher, identity.key());
-            update(&mut hasher, identity.version());
-        }
-    }
-    ResolutionFingerprint::new(format!("{:x}", hasher.finalize()))
-}
-
 fn unavailable_javascript_resolution(
     knowledge: &RepositoryKnowledge,
+    mut domains: Vec<ExternalResolutionDomain>,
     definition_source: AnchoredSystemPathBuf,
     code: &str,
     message: String,
@@ -1204,7 +1196,8 @@ fn unavailable_javascript_resolution(
         [definition_source],
         ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
     );
-    let generation = ExternalResolutionGeneration::build(knowledge, vec![domain])
+    domains.push(domain);
+    let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(JavaScriptResolutionSnapshot {
         generation: Arc::new(generation),
@@ -1216,6 +1209,7 @@ fn unavailable_javascript_resolution(
 
 fn resolve_javascript_dependencies(
     knowledge: &RepositoryKnowledge,
+    mut domains: Vec<ExternalResolutionDomain>,
     lockfile: &dyn Lockfile,
     external_dependencies: HashMap<String, BTreeMap<String, String>>,
     definition_source: AnchoredSystemPathBuf,
@@ -1231,6 +1225,7 @@ fn resolve_javascript_dependencies(
             let message = error.to_string();
             return unavailable_javascript_resolution(
                 knowledge,
+                domains,
                 definition_source,
                 "closure-unavailable",
                 message.clone(),
@@ -1254,7 +1249,7 @@ fn resolve_javascript_dependencies(
             PackageResolution::new(identity, exact_identities)
         })
         .collect::<Vec<_>>();
-    let fingerprint = fingerprint_package_resolutions(&packages);
+    let fingerprint = ResolutionFingerprint::from_packages(&packages);
     let domain = ExternalResolutionDomain::new(
         ToolchainId::JAVASCRIPT,
         AnchoredSystemPathBuf::default(),
@@ -1265,7 +1260,8 @@ fn resolve_javascript_dependencies(
             packages,
         },
     );
-    let generation = ExternalResolutionGeneration::build(knowledge, vec![domain])
+    domains.push(domain);
+    let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(JavaScriptResolutionSnapshot {
         generation: Arc::new(generation),
@@ -1335,7 +1331,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .map_err(Error::from)
             .map_err(build_failure)?;
         let arc_lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take().map(Arc::from);
-        let mut javascript_resolution = JavaScriptResolutionKnowledge::absent();
+        let mut external_resolution = ExternalResolutionKnowledge::absent();
+        let mut native_external_resolutions = std::mem::take(&mut self.native_external_resolutions);
 
         if let Some(definition_source) = definition_source {
             if let Some(lockfile) = arc_lockfile.clone() {
@@ -1345,11 +1342,21 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                         let hasher = self.closure_hasher.clone();
                         let resolution_knowledge = Arc::clone(&knowledge);
                         let deferred_source = definition_source.clone();
+                        let deferred_native_resolutions = Arc::new(std::sync::Mutex::new(
+                            std::mem::take(&mut native_external_resolutions),
+                        ));
+                        let thread_native_resolutions = Arc::clone(&deferred_native_resolutions);
                         let spawned = std::thread::Builder::new()
                             .name("turbo-closures".into())
                             .spawn(move || {
+                                let native_resolutions = std::mem::take(
+                                    &mut *thread_native_resolutions
+                                        .lock()
+                                        .unwrap_or_else(|poisoned| poisoned.into_inner()),
+                                );
                                 let result = resolve_javascript_dependencies(
                                     &resolution_knowledge,
+                                    native_resolutions,
                                     lockfile.as_ref(),
                                     external_dependencies,
                                     deferred_source,
@@ -1359,13 +1366,17 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                             });
                         match spawned {
                             Ok(_) => {
-                                javascript_resolution =
-                                    JavaScriptResolutionKnowledge::resolving(rx);
+                                external_resolution = ExternalResolutionKnowledge::resolving(rx);
                             }
                             Err(error) => {
                                 warn!("Unable to spawn transitive closure thread: {}", error);
                                 let snapshot = unavailable_javascript_resolution(
                                     &knowledge,
+                                    std::mem::take(
+                                        &mut *deferred_native_resolutions
+                                            .lock()
+                                            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+                                    ),
                                     definition_source,
                                     "worker-unavailable",
                                     error.to_string(),
@@ -1374,8 +1385,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                 .map_err(|message| {
                                     build_failure(Error::ExternalResolution(message))
                                 })?;
-                                javascript_resolution =
-                                    JavaScriptResolutionKnowledge::complete(snapshot.generation);
+                                external_resolution =
+                                    ExternalResolutionKnowledge::complete(snapshot.generation);
                             }
                         }
                     }
@@ -1383,6 +1394,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                         let mut snapshot = turborepo_rayon_compat::block_in_place(|| {
                             resolve_javascript_dependencies(
                                 &knowledge,
+                                std::mem::take(&mut native_external_resolutions),
                                 lockfile.as_ref(),
                                 external_dependencies,
                                 definition_source,
@@ -1395,34 +1407,40 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                         }
                         let generation = Arc::clone(&snapshot.generation);
                         snapshot.project_legacy(&mut self.assembler.package_payloads, &knowledge);
-                        javascript_resolution = JavaScriptResolutionKnowledge::complete(generation);
+                        external_resolution = ExternalResolutionKnowledge::complete(generation);
                     }
                     Err(error) => {
                         warn!("Unable to calculate transitive closures: {}", error);
                         let snapshot = unavailable_javascript_resolution(
                             &knowledge,
+                            std::mem::take(&mut native_external_resolutions),
                             definition_source,
                             "declarations-unavailable",
                             error.to_string(),
                             None,
                         )
                         .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
-                        javascript_resolution =
-                            JavaScriptResolutionKnowledge::complete(snapshot.generation);
+                        external_resolution =
+                            ExternalResolutionKnowledge::complete(snapshot.generation);
                     }
                 }
             } else {
                 let snapshot = unavailable_javascript_resolution(
                     &knowledge,
+                    std::mem::take(&mut native_external_resolutions),
                     definition_source,
                     "lockfile-unavailable",
                     "JavaScript lockfile could not be read or parsed".to_string(),
                     None,
                 )
                 .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
-                javascript_resolution =
-                    JavaScriptResolutionKnowledge::complete(snapshot.generation);
+                external_resolution = ExternalResolutionKnowledge::complete(snapshot.generation);
             }
+        } else if !native_external_resolutions.is_empty() {
+            let generation =
+                ExternalResolutionGeneration::build(&knowledge, native_external_resolutions)
+                    .map_err(|error| build_failure(Error::ExternalResolution(error.to_string())))?;
+            external_resolution = ExternalResolutionKnowledge::complete(Arc::new(generation));
         }
         let Self {
             assembler,
@@ -1457,7 +1475,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             knowledge,
             relationship_knowledge,
             relationship_projections: std::sync::OnceLock::new(),
-            javascript_resolution: std::sync::Mutex::new(javascript_resolution),
+            external_resolution: std::sync::Mutex::new(external_resolution),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,

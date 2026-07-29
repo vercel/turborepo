@@ -77,13 +77,13 @@ pub(crate) type DeferredResolutionReceiver =
     std::sync::mpsc::Receiver<Result<JavaScriptResolutionSnapshot, String>>;
 
 #[derive(Debug)]
-pub(crate) struct JavaScriptResolutionKnowledge {
+pub(crate) struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
     receiver: Option<DeferredResolutionReceiver>,
 }
 
-impl JavaScriptResolutionKnowledge {
+impl ExternalResolutionKnowledge {
     pub(crate) fn absent() -> Self {
         Self {
             status: ExternalResolutionStatus::Complete,
@@ -135,10 +135,10 @@ pub struct PackageGraph {
     #[allow(dead_code)]
     relationship_knowledge: Arc<RelationshipKnowledge>,
     relationship_projections: OnceLock<projections::RelationshipProjections>,
-    /// The sole owner of JavaScript external-resolution lifecycle and terminal
-    /// knowledge. Deferred production is joined exactly once by
+    /// The sole owner of external-resolution lifecycle and terminal knowledge
+    /// across toolchains. Deferred JavaScript production is joined once by
     /// [`Self::ensure_transitive_closures`].
-    javascript_resolution: Mutex<JavaScriptResolutionKnowledge>,
+    external_resolution: Mutex<ExternalResolutionKnowledge>,
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
     /// Lazily computed internal dependencies of the root package. They are
@@ -846,7 +846,7 @@ impl PackageGraph {
     /// consumer of `PackageInfo::transitive_dependencies` runs.
     pub fn ensure_transitive_closures(&mut self) {
         let receiver = self
-            .javascript_resolution
+            .external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take_receiver();
@@ -860,21 +860,21 @@ impl PackageGraph {
                 }
                 let generation = Arc::clone(&snapshot.generation);
                 snapshot.project_legacy(&mut self.package_payloads, &self.knowledge);
-                self.javascript_resolution
+                self.external_resolution
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .finish(Some(generation));
             }
             Ok(Err(e)) => {
                 tracing::warn!("Unable to calculate transitive closures: {}", e);
-                self.javascript_resolution
+                self.external_resolution
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .finish(None);
             }
             Err(_) => {
                 tracing::warn!("transitive closure thread disappeared without a result");
-                self.javascript_resolution
+                self.external_resolution
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .finish(None);
@@ -883,7 +883,7 @@ impl PackageGraph {
     }
 
     pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
-        self.javascript_resolution
+        self.external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .status
@@ -893,7 +893,7 @@ impl PackageGraph {
     pub(crate) fn external_resolution_generation(
         &self,
     ) -> Option<Arc<ExternalResolutionGeneration>> {
-        self.javascript_resolution
+        self.external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .generation
@@ -2549,7 +2549,9 @@ version = "0.1.0"
         // Several iterations: the closure-attribution regression this guards
         // was decided by HashMap iteration order, roughly a coin flip per
         // process/build.
-        for _ in 0..8 {
+        let mut expected_cargo_fingerprint = None;
+        for iteration in 0..8 {
+            let defer_resolution = iteration % 2 == 1;
             let mut pkg_graph = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
@@ -2566,9 +2568,11 @@ version = "0.1.0"
             }))
             .with_lockfile(Some(Box::new(MockLockfile {})))
             .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .defer_transitive_closures(defer_resolution)
             .build()
             .await
             .unwrap();
+            pkg_graph.ensure_transitive_closures();
 
             assert!(pkg_graph.validate().is_ok());
             assert!(pkg_graph.package_task_contexts().all(|context| {
@@ -2723,6 +2727,58 @@ version = "0.1.0"
                 "the cargo workspace package must not carry JS lockfile entries, got {:?}",
                 workspace_pkg.transitive_dependencies
             );
+
+            let resolution = pkg_graph
+                .external_resolution_generation()
+                .expect("mixed repository should retain external resolution knowledge");
+            assert_eq!(resolution.domains().len(), 2);
+            let cargo_domain = resolution
+                .domains()
+                .iter()
+                .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::RUST)
+                .expect("Cargo should contribute one resolution domain");
+            assert_eq!(cargo_domain.definition_sources()[0].as_str(), "Cargo.lock");
+            let crate::external_resolution::ExternalResolutionData::Resolved {
+                completeness,
+                fingerprint,
+                packages,
+            } = cargo_domain.data()
+            else {
+                panic!("Cargo resolution must be available")
+            };
+            assert_eq!(
+                completeness,
+                &crate::external_resolution::ResolutionCompleteness::Complete
+            );
+            if let Some(expected) = &expected_cargo_fingerprint {
+                assert_eq!(fingerprint, expected);
+            } else {
+                expected_cargo_fingerprint = Some(fingerprint.clone());
+            }
+            assert_eq!(packages.len(), 4);
+            for package in packages {
+                assert!(
+                    package
+                        .identities()
+                        .iter()
+                        .any(|identity| identity.key() == "rustc"),
+                    "{} must include the compiler identity",
+                    package.package()
+                );
+                let legacy: HashSet<_> = pkg_graph
+                    .package_info(&PackageName::from(package.package()))
+                    .and_then(|info| info.transitive_dependencies.as_ref())
+                    .into_iter()
+                    .flatten()
+                    .map(|identity| (identity.key.as_str(), identity.version.as_str()))
+                    .collect();
+                let normalized: HashSet<_> = package
+                    .identities()
+                    .iter()
+                    .map(|identity| (identity.key(), identity.version()))
+                    .collect();
+                assert_eq!(normalized, legacy);
+            }
         }
     }
 
@@ -2741,6 +2797,14 @@ version = "0.1.0"
             .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
+        let resolution = pkg_graph
+            .external_resolution_generation()
+            .expect("pure Cargo repository should retain external resolution knowledge");
+        assert_eq!(resolution.domains().len(), 1);
+        assert_eq!(
+            resolution.domains()[0].toolchain(),
+            &crate::toolchain::ToolchainId::RUST
+        );
         assert!(
             pkg_graph.relationship_projections.get().is_none(),
             "relationship projections must remain lazy for current consumers"
