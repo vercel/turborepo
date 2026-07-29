@@ -2,7 +2,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_engine::GraphVisualizerError;
-use turborepo_repository::{package_graph, package_graph::PackageName};
+use turborepo_repository::package_graph;
 use turborepo_scope::filter::ResolutionError;
 use turborepo_task_hash::{global_hash, Error as TaskHashError};
 use turborepo_ui::tui;
@@ -69,8 +69,6 @@ pub enum Error {
     Join(#[from] tokio::task::JoinError),
     #[error("Missing root workspace")]
     MissingRootWorkspace,
-    #[error("Missing compatibility package payload for {0}")]
-    MissingPackagePayload(PackageName),
     #[error("File hash task did not complete")]
     FileHashTaskIncomplete,
     #[error("Internal dependency hash task did not complete")]

@@ -30,8 +30,6 @@ pub struct TaskSummaryFactory<'a, E, H, R> {
 pub enum Error {
     #[error("No workspace found for {0}")]
     MissingWorkspace(String),
-    #[error("No compatibility package payload found for {0}")]
-    MissingPackagePayload(PackageName),
     #[error("No external dependency hash found for {0}")]
     MissingExternalDependencyHash(PackageName),
     #[error("No task definition found for {0}")]
@@ -174,13 +172,6 @@ where
             })
             .unwrap_or_default();
 
-        if package_context.requires_compatibility_payload()
-            && package_context.package_info().is_none()
-        {
-            return Err(Error::MissingPackagePayload(
-                package_context.package().clone(),
-            ));
-        }
         let hash_of_external_dependencies = self.hash_of_external_dependencies(task_id)?;
 
         Ok(SharedTaskSummary {
@@ -464,7 +455,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn summary_fails_closed_when_required_payload_is_missing() {
+    async fn summary_uses_knowledge_when_package_payload_is_missing() {
         let (_tempdir, mut graph) = summary_graph().await;
         let app = PackageName::from("app");
         assert!(graph.remove_package_info_for_test(&app).is_some());
@@ -484,10 +475,9 @@ mod tests {
             None,
         );
 
-        assert!(matches!(
-            factory.task_summary(task_id, None),
-            Err(Error::MissingPackagePayload(name)) if name == app
-        ));
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.package, app.as_str());
+        assert_eq!(summary.shared.hash_of_external_dependencies, "");
     }
 
     #[tokio::test]
