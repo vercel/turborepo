@@ -11,7 +11,10 @@ const ENV_NAMES = [
   "EXPECTED_HEAD_SHA",
 ];
 
-async function withGitHub({ files, reviews = [], permission = "write" }, fn) {
+async function withGitHub(
+  { files, filePages, reviews = [], permission = "write" },
+  fn,
+) {
   const originalFetch = globalThis.fetch;
   const originalEnv = Object.fromEntries(
     ENV_NAMES.map((name) => [name, process.env[name]]),
@@ -35,12 +38,14 @@ async function withGitHub({ files, reviews = [], permission = "write" }, fn) {
   };
 
   globalThis.fetch = async (url) => {
-    const path = new URL(url).pathname;
+    const parsed = new URL(url);
+    const path = parsed.pathname;
     if (path.endsWith("/pulls/42")) {
       return response(pull);
     }
-    if (path.includes("/compare/")) {
-      return response({ files });
+    if (path.endsWith("/pulls/42/files")) {
+      const page = Number(parsed.searchParams.get("page"));
+      return response(filePages?.[page - 1] ?? files);
     }
     if (path.endsWith("/pulls/42/reviews")) {
       return response(reviews);
@@ -75,6 +80,28 @@ async function withGitHub({ files, reviews = [], permission = "write" }, fn) {
 test("defers non-release paths to the native team review policy", async () => {
   await withGitHub(
     { files: [{ filename: "crates/turborepo-lib/src/lib.rs" }] },
+    async () => assert.doesNotReject(run()),
+  );
+});
+
+test("defers fork PRs with non-release paths to native review", async () => {
+  await withGitHub(
+    { files: [{ filename: "crates/turborepo-lib/src/lib.rs" }] },
+    async (pull) => {
+      pull.head.repo.full_name = "contributor/turborepo";
+      await assert.doesNotReject(run());
+    },
+  );
+});
+
+test("finds non-release paths after the first page", async () => {
+  await withGitHub(
+    {
+      filePages: [
+        Array.from({ length: 100 }, () => ({ filename: "version.txt" })),
+        [{ filename: "crates/turborepo-lib/src/lib.rs" }],
+      ],
+    },
     async () => assert.doesNotReject(run()),
   );
 });
