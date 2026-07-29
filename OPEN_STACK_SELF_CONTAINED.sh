@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Self-contained stacked PR opener for multi-language architecture work.
-# Bodies are embedded — no external stack-pr-bodies/ directory required.
+# Self-contained stacked PR opener — bodies embedded.
 # Usage: bash OPEN_STACK_SELF_CONTAINED.sh
-# Requires: gh auth with PR create permission on vercel/turborepo
 set -euo pipefail
 REPO="${REPO:-vercel/turborepo}"
 TMPDIR_BODIES="$(mktemp -d)"
@@ -758,4 +756,97 @@ gh pr create --repo "$REPO" --draft \
   --title "test: Add prune golden fixtures for retained files and layers" \
   --body-file "$TMPDIR_BODIES/24-5835.md"
 
-echo "Opened Phase 3–7 (through 5835) stack."
+cat > "$TMPDIR_BODIES/25-5836.md" << 'BODY_25'
+## Intent
+
+Finish Phase 7: `commands/prune.rs` must only select closures, perform path-safe layout, and materialize typed `JavaScriptPruneRenderResult` artifacts — with no inline JS lockfile/manifest/patch format interpretation.
+
+**Stack:** Phase 7 layer 4. Base = `shew/turbo-5835-add-prune-golden-fixtures-for-retained-files-and-layers`.
+
+## Changes
+
+- `materialize_javascript_render` writes render artifacts without format logic
+- Workspace patch-config path comes from the render result (not a pnpm branch in orchestration)
+- ARCHITECTURE.md marks Phase 7 complete
+
+## Testing
+
+- `cargo test -p turborepo-lib --lib commands::prune` (15 passed)
+- `cargo test -p turbo --test prune_test golden_inventory` (2 passed)
+- `cargo clippy -p turborepo-lib --all-targets -- -D warnings`
+
+Closes TURBO-5836.
+BODY_25
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5835-add-prune-golden-fixtures-for-retained-files-and-layers \
+  --head shew/turbo-5836-delete-js-format-interpretation-from-prune-orchestration \
+  --title "refactor: Delete JS format interpretation from prune orchestration" \
+  --body-file "$TMPDIR_BODIES/25-5836.md"
+
+cat > "$TMPDIR_BODIES/26-5837.md" << 'BODY_26'
+## Intent
+
+Phase 8 audit: confirm query/summary/run/engine/devtools/watch/prune consumers are views over shared knowledge, migrate any owned leftover script reads, and explicitly park remaining `PackageJson`/`PackageInfo` construction/compat reads under TURBO-5787.
+
+**Stack:** Phase 8 layer 1. Base = `shew/turbo-5836-delete-js-format-interpretation-from-prune-orchestration`.
+
+## Changes
+
+- Devtools package-graph scripts list reads native-task catalog instead of `PackageJson::scripts`
+- ARCHITECTURE.md Phase 8 audit status + inventory of remaining compat reads for TURBO-5787
+
+## Remaining (TURBO-5787)
+
+- `PackageInfo` / payload map deletion
+- MFE `all_dependencies` via compatibility payload
+- Prune peer/optional-peer helpers via `PackageJson`
+- Graph construction entry `PackageJson::load` sites
+- LSP unsaved-buffer `PackageJson` adapter (intentionally retained)
+- Full `JavaScriptToolchain` removal
+
+## Testing
+
+- `cargo check -p turborepo-devtools`
+- `cargo clippy -p turborepo-devtools -p turborepo-lib --all-targets -- -D warnings`
+
+Closes TURBO-5837.
+BODY_26
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5836-delete-js-format-interpretation-from-prune-orchestration \
+  --head shew/turbo-5837-audit-and-close-remaining-js-knowledge-consumer-reads \
+  --title "refactor: Audit and close remaining JS knowledge consumer reads" \
+  --body-file "$TMPDIR_BODIES/26-5837.md"
+
+cat > "$TMPDIR_BODIES/27-5838.md" << 'BODY_27'
+## Intent
+
+Start TURBO-5787 (JS compatibility removal): microfrontends `@vercel/microfrontends` dependency detection must use **external-declaration knowledge**, not `PackageInfo::package_json.all_dependencies()`.
+
+**Stack:** Compatibility-removal layer 1. Base = `shew/turbo-5837-audit-and-close-remaining-js-knowledge-consumer-reads`.
+
+## Changes
+
+- `has_mfe_dependency` reads `PackageTaskContext::external_declarations`
+- `javascript_packages` no longer yields `PackageInfo`
+
+## Out of scope
+
+PackageInfo deletion, JavaScriptToolchain deletion, prune peer helpers.
+
+## Testing
+
+- `cargo test -p turborepo-lib --lib microfrontends` (24 passed)
+- `cargo clippy -p turborepo-lib --all-targets -- -D warnings`
+
+Closes TURBO-5838.
+BODY_27
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5837-audit-and-close-remaining-js-knowledge-consumer-reads \
+  --head shew/turbo-5838-migrate-mfe-dependency-detection-off-packageinfo \
+  --title "refactor: Migrate MFE dependency detection off PackageInfo" \
+  --body-file "$TMPDIR_BODIES/27-5838.md"
+
+echo "Opened 27-layer stack through tip."

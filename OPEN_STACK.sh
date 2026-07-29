@@ -148,4 +148,22 @@ gh pr create --repo "$REPO" --draft \
   --title "test: Add prune golden fixtures for retained files and layers" \
   --body-file "$ROOT/stack-pr-bodies/24-5835.md"
 
-echo "Opened Phase 3–7 (through 5835) stack."
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5835-add-prune-golden-fixtures-for-retained-files-and-layers \
+  --head shew/turbo-5836-delete-js-format-interpretation-from-prune-orchestration \
+  --title "refactor: Delete JS format interpretation from prune orchestration" \
+  --body-file "$ROOT/stack-pr-bodies/25-5836.md"
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5836-delete-js-format-interpretation-from-prune-orchestration \
+  --head shew/turbo-5837-audit-and-close-remaining-js-knowledge-consumer-reads \
+  --title "refactor: Audit and close remaining JS knowledge consumer reads" \
+  --body-file "$ROOT/stack-pr-bodies/26-5837.md"
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5837-audit-and-close-remaining-js-knowledge-consumer-reads \
+  --head shew/turbo-5838-migrate-mfe-dependency-detection-off-packageinfo \
+  --title "refactor: Migrate MFE dependency detection off PackageInfo" \
+  --body-file "$ROOT/stack-pr-bodies/27-5838.md"
+
+echo "Opened Phase 3–8 + 5787 first leaf (through 5838) stack."
