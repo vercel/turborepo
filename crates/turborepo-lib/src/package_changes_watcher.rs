@@ -771,7 +771,9 @@ impl Subscriber {
                     continue;
                 };
 
-                let watch_spec = repo_state.pkg_dep_graph.toolchains().watch_spec();
+                // Classify using foundational change knowledge + active
+                // toolchain WatchSpecs (same source as rediscovery reinit).
+                let watch_spec = repo_state.pkg_dep_graph.active_watch_spec();
                 let action = classify_changed_files(
                     &trie,
                     &self.repo_root,

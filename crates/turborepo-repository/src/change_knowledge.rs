@@ -100,14 +100,18 @@ impl ChangeKnowledge {
         &self.package_directories
     }
 
-    /// Project change knowledge into the watcher `WatchSpec` shape, then merge
-    /// temporary toolchain specs (e.g. Cargo) on top.
+    /// Project change knowledge into the watcher `WatchSpec` shape.
+    ///
+    /// Only workspace-configuration paths and ignore prefixes are projected
+    /// into rediscovery triggers. Per-package `package.json` and lockfile
+    /// changes continue to flow through `ChangeMapper` / lockfile content
+    /// analysis so we preserve today's affectedness granularity; those facts
+    /// remain available via [`Self::membership_file_names`] and
+    /// [`Self::resolution_paths`].
     pub fn to_watch_spec(&self) -> WatchSpec {
-        let mut definition_paths = self.membership_paths.clone();
-        definition_paths.extend(self.resolution_paths.iter().cloned());
         WatchSpec {
-            definition_file_names: self.membership_file_names.clone(),
-            definition_paths,
+            definition_file_names: Vec::new(),
+            definition_paths: self.membership_paths.clone(),
             ignore_prefixes: self.ignore_prefixes.clone(),
         }
     }
@@ -174,7 +178,21 @@ mod tests {
         assert_eq!(change.resolution_paths(), ["package-lock.json"]);
         assert!(change.package_directories().contains_key("web"));
         let watch = change.to_watch_spec();
-        assert!(watch.definition_file_names.contains(&"package.json".into()));
-        assert!(watch.definition_paths.contains(&"package-lock.json".into()));
+        assert!(watch.definition_file_names.is_empty());
+        assert!(watch.definition_paths.is_empty()); // npm has no workspace config path
+    }
+
+    #[test]
+    fn pnpm_workspace_config_projects_into_watch_spec() {
+        let knowledge = javascript_repository();
+        let change = ChangeKnowledge::javascript(&knowledge, Some(&PackageManager::Pnpm));
+        assert_eq!(change.resolution_paths(), ["pnpm-lock.yaml"]);
+        let watch = change.to_watch_spec();
+        assert!(
+            watch
+                .definition_paths
+                .iter()
+                .any(|path| path.contains("pnpm-workspace"))
+        );
     }
 }
