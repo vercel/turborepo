@@ -1,0 +1,209 @@
+name: Auto-merge release PR
+
+on:
+  workflow_run:
+    workflows: [Test, JS Package Tests]
+    types: [requested, completed]
+
+concurrency:
+  group: auto-merge-release-pr-${{ github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  dismiss-stale-approval:
+    name: Dismiss stale release approval
+    if: >-
+      github.event.action == 'requested' &&
+      github.event.workflow_run.pull_requests[0] != null &&
+      (startsWith(github.event.workflow_run.pull_requests[0].head.ref, 'staging-') ||
+      startsWith(github.event.workflow_run.pull_requests[0].head.ref, 'library-release/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Revoke prior automation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+          if [[ "$(jq -r '.user.login' <<< "$PR")" != "turbobot" || \
+                "$(jq -r '.user.id' <<< "$PR")" != "6168750" || \
+                "$(jq -r '.head.repo.full_name' <<< "$PR")" != "${{ github.repository }}" ]]; then
+            exit 0
+          fi
+
+          HEAD_REF=$(jq -r '.head.ref' <<< "$PR")
+          if [[ "$HEAD_REF" != staging-* && "$HEAD_REF" != library-release/* ]]; then
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --disable-auto || true
+          REVIEW_IDS=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and .state == "APPROVED") | .id')
+          while read -r REVIEW_ID; do
+            if [ -n "$REVIEW_ID" ]; then
+              gh api --method PUT \
+                "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/dismissals" \
+                -f message="Release PR metadata or head changed; revalidation is required."
+            fi
+          done <<< "$REVIEW_IDS"
+
+  merge:
+    name: Validate and merge release PR
+    if: >-
+      github.event.action == 'completed' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.pull_requests[0] != null &&
+      (startsWith(github.event.workflow_run.pull_requests[0].head.ref, 'staging-') ||
+      startsWith(github.event.workflow_run.pull_requests[0].head.ref, 'library-release/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      checks: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Read trusted PR metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+          if [[ "$(jq -r '.user.login' <<< "$PR")" != "turbobot" || \
+                "$(jq -r '.user.id' <<< "$PR")" != "6168750" || \
+                "$(jq -r '.base.ref' <<< "$PR")" != "$DEFAULT_BRANCH" || \
+                "$(jq -r '.base.repo.full_name' <<< "$PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.head.repo.full_name' <<< "$PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.state' <<< "$PR")" != "open" || \
+                "$(jq -r '.draft' <<< "$PR")" != "false" ]]; then
+            echo "is-release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          HEAD_REF=$(jq -r '.head.ref' <<< "$PR")
+          if [[ ! "$HEAD_REF" =~ ^staging- && ! "$HEAD_REF" =~ ^library-release/ ]]; then
+            echo "is-release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "is-release=true" >> "$GITHUB_OUTPUT"
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "title=$(jq -r '.title' <<< "$PR")" >> "$GITHUB_OUTPUT"
+          echo "base-sha=$(jq -r '.base.sha' <<< "$PR")" >> "$GITHUB_OUTPUT"
+          echo "head-sha=$(jq -r '.head.sha' <<< "$PR")" >> "$GITHUB_OUTPUT"
+          echo "head-ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout trusted validator
+        if: steps.metadata.outputs.is-release == 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Revoke prior automation
+        if: steps.metadata.outputs.is-release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.metadata.outputs.number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --disable-auto || true
+          REVIEW_IDS=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and .state == "APPROVED") | .id')
+          while read -r REVIEW_ID; do
+            if [ -n "$REVIEW_ID" ]; then
+              gh api --method PUT \
+                "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/dismissals" \
+                -f message="Release PR requires a fresh validation and approval."
+            fi
+          done <<< "$REVIEW_IDS"
+
+      - name: Validate release changes
+        if: steps.metadata.outputs.is-release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ steps.metadata.outputs.base-sha }}
+          PR_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+          PR_HEAD_REF: ${{ steps.metadata.outputs.head-ref }}
+          PR_TITLE: ${{ steps.metadata.outputs.title }}
+        run: node scripts/validate-release-pr.mjs
+
+      - name: Check required checks
+        id: checks
+        if: steps.metadata.outputs.is-release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.metadata.outputs.number }}
+          EXPECTED_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+        run: |
+          CURRENT_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+          if [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHECKS=$(gh pr checks "$PR_NUMBER" --required --json name,bucket 2>/dev/null || true)
+          TEST_RESULT=$(jq -r '.[] | select(.name == "Test Summary") | .bucket' <<< "$CHECKS")
+          JS_RESULT=$(jq -r '.[] | select(.name == "JS Test Summary") | .bucket' <<< "$CHECKS")
+          if [[ "$TEST_RESULT" == "pass" && "$JS_RESULT" == "pass" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Approve and merge validated head
+        if: steps.checks.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.metadata.outputs.number }}
+          EXPECTED_TITLE: ${{ steps.metadata.outputs.title }}
+          EXPECTED_BASE_SHA: ${{ steps.metadata.outputs.base-sha }}
+          EXPECTED_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+          EXPECTED_HEAD_REF: ${{ steps.metadata.outputs.head-ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          REVIEW_ID=""
+          MERGED=false
+          cleanup() {
+            if [[ "$MERGED" != "true" && -n "$REVIEW_ID" ]]; then
+              gh api --method PUT \
+                "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/dismissals" \
+                -f message="The validated release PR was not merged." || true
+            fi
+          }
+          trap cleanup EXIT
+
+          validate_metadata() {
+            local PR
+            PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+            [[ "$(jq -r '.user.login' <<< "$PR")" == "turbobot" && \
+               "$(jq -r '.user.id' <<< "$PR")" == "6168750" && \
+               "$(jq -r '.title' <<< "$PR")" == "$EXPECTED_TITLE" && \
+               "$(jq -r '.base.ref' <<< "$PR")" == "$DEFAULT_BRANCH" && \
+               "$(jq -r '.base.sha' <<< "$PR")" == "$EXPECTED_BASE_SHA" && \
+               "$(jq -r '.base.repo.full_name' <<< "$PR")" == "${{ github.repository }}" && \
+               "$(jq -r '.head.ref' <<< "$PR")" == "$EXPECTED_HEAD_REF" && \
+               "$(jq -r '.head.sha' <<< "$PR")" == "$EXPECTED_HEAD_SHA" && \
+               "$(jq -r '.head.repo.full_name' <<< "$PR")" == "${{ github.repository }}" && \
+               "$(jq -r '.state' <<< "$PR")" == "open" && \
+               "$(jq -r '.draft' <<< "$PR")" == "false" ]]
+          }
+
+          validate_metadata
+          gh pr merge "$PR_NUMBER" --disable-auto || true
+          REVIEW_ID=$(gh api --method POST \
+            "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            -f event=APPROVE \
+            -f commit_id="$EXPECTED_HEAD_SHA" \
+            --jq '.id')
+          validate_metadata
+          gh pr merge "$PR_NUMBER" --squash --match-head-commit "$EXPECTED_HEAD_SHA"
+          MERGED=true

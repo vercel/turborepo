@@ -20,8 +20,7 @@ No manual intervention required for canary releases.
    - For custom pre-releases, use `prepatch`, `preminor`, or `premajor`
    - Check the "Dry Run" box to test the workflow without publishing
 
-2. A PR is automatically opened to merge the release branch back into `main`
-   - Merge this promptly to avoid conflicts
+2. A PR is automatically opened, approved, and queued to merge the release branch back into `main` after required checks pass.
 
 ### Release `@turbo/repository`
 
@@ -29,6 +28,7 @@ No manual intervention required for canary releases.
 
 2. Create a release by triggering the [Turborepo Library Release][5] workflow.
    - Check the "Dry Run" box to run the full release workflow without publishing any packages.
+   - The release PR is automatically approved and queued to merge after required checks pass.
 
 ### Notes
 
@@ -406,9 +406,9 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-**For manual releases**: A PR is automatically created using the `thomaseizinger/create-pull-request` action. Merge it as soon as possible after publishing.
+For stable, custom, and canary releases, the release workflow uses the `TURBOBOT` secret to create a PR as `turbobot` with the title `chore: Release Turborepo <version>`. A separate trusted-base workflow validates the exact generated manifest, skill, and version changes, waits for the required `Test Summary` and `JS Test Summary` checks, and then approves and squash-merges the validated head SHA. A new commit dismisses the automation approval and requires validation to restart.
 
-**For canary releases**: The canary workflow creates a PR with auto-merge enabled. The PR includes:
+The PR includes:
 
 - A list of commits/PRs included since the last canary
 - A link to versioned docs (if aliasing succeeded)
@@ -523,11 +523,14 @@ packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.t
 
 #### Environment Variables
 
-| Variable                    | Purpose                                   | Example                       |
-| --------------------------- | ----------------------------------------- | ----------------------------- |
-| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust    | `true`                        |
-| `TURBO_BINARY_PATH`         | Override binary path (development only)   | `/path/to/turbo`              |
-| `GH_TOKEN`                  | GitHub API token for commit/PR steps only | `${{ secrets.GITHUB_TOKEN }}` |
+| Variable                    | Purpose                                                      | Example                       |
+| --------------------------- | ------------------------------------------------------------ | ----------------------------- |
+| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust                       | `true`                        |
+| `TURBO_BINARY_PATH`         | Override binary path (development only)                      | `/path/to/turbo`              |
+| `GH_TOKEN`                  | GitHub API token for commit and workflow-owned PR operations | `${{ secrets.GITHUB_TOKEN }}` |
+| `TURBOBOT_TOKEN`            | Creates release PRs as `turbobot` so PR checks are triggered | `${{ secrets.TURBOBOT }}`     |
+
+`TURBOBOT` must authenticate as the `turbobot` account. Repository settings must permit GitHub Actions to approve pull requests. The trusted-base auto-merge workflow does not execute code from the release branch; it validates files through the GitHub API using immutable base and head SHAs.
 
 #### API Commit Helper
 
@@ -659,10 +662,14 @@ If a canary release fails after some packages were published but before others:
 
 If a canary release PR is created but fails to auto-merge:
 
-1. **Check branch protection**: Ensure required status checks are passing
-2. **Check for conflicts**: The staging branch may have diverged from main
-3. **Manual merge**: If checks pass, manually merge the PR via GitHub UI
-4. **Cleanup if abandoned**: If you need to abandon the release:
+1. **Check authentication**: Ensure `TURBOBOT` authenticates as `turbobot`.
+2. **Check repository settings**: Ensure GitHub Actions may approve pull requests.
+3. **Check semantic validation**: Inspect the `Auto-merge release PR` workflow for unexpected files or manifest fields.
+4. **Check branch protection**: Ensure `Test Summary` and `JS Test Summary` are passing.
+5. **Check the PR head**: A new commit invalidates the previous automation approval and restarts validation.
+6. **Check for conflicts**: The staging branch may have diverged from `main`.
+7. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
+8. **Cleanup if abandoned**: If you need to abandon the release:
 
    ```bash
    # Delete the staging branch
@@ -679,7 +686,7 @@ If canary releases keep firing when they shouldn't:
 
 2. **Investigate the cause**:
    - Check if the skip detection is working: the `check-skip` job should skip when the latest commit is a release PR merge or when no relevant files changed since the last canary tag
-   - Verify that release PR commit messages match the expected format: `release(turborepo): <version>`
+   - Verify that the release PR was opened by `turbobot` with the title `chore: Release Turborepo <version>`
 
 3. **Fix and re-enable**:
    - Ensure the release PR title follows the expected format

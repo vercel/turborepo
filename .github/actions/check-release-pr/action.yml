@@ -1,12 +1,11 @@
 name: Check Release PR
 description: |
-  Detects automated release PRs created by github-actions[bot] with title
-  matching "release(turborepo):*". These PRs only contain generated release
+  Detects automated release PRs created by turbobot with title matching
+  "chore: Release Turborepo *". These PRs only contain generated release
   updates and can skip full test suites.
 
-  This action also validates that release PRs only modify expected files
-  (version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG,
-  pnpm-lock.yaml, and generated Turborepo skill files).
+  This action also validates that release PRs only modify known release
+  package manifests, version.txt, and generated Turborepo skill files.
 
 outputs:
   is-release-pr:
@@ -36,8 +35,8 @@ runs:
           exit 0
         fi
 
-        # Check if PR is from github-actions[bot] with release title
-        if [[ "$PR_AUTHOR" == "github-actions[bot]" && "$PR_TITLE" =~ ^release\(turborepo\): ]]; then
+        # Check if PR is from turbobot with the release title
+        if [[ "$PR_AUTHOR" == "turbobot" && "$PR_TITLE" == "chore: Release Turborepo "* ]]; then
           if [[ "$PR_HEAD_REPO" != "$REPOSITORY" || ! "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "is-release-pr=false" >> $GITHUB_OUTPUT
             echo "Not a release PR branch (head: $PR_HEAD_REPO:$PR_HEAD_REF)"
@@ -68,7 +67,7 @@ runs:
         echo "$CHANGED_FILES"
 
         # Validate each file matches expected release patterns
-        ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/SKILL\.md|skills/turborepo/references/best-practices/structure\.md|skills/turborepo/references/configuration/RULE\.md|skills/turborepo/references/environment/RULE\.md|skills/turborepo/references/environment/gotchas\.md)$"
+        ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
 
         INVALID_FILES=""
         while IFS= read -r file; do
@@ -80,7 +79,7 @@ runs:
         if [[ -n "$INVALID_FILES" ]]; then
           echo "::error::Release PR contains unexpected files that are not generated release updates:"
           echo "$INVALID_FILES"
-          echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or generated Turborepo skill files"
+          echo "::error::Release PRs should only modify known release package manifests, version.txt, or generated Turborepo skill files"
           exit 1
         fi
 
