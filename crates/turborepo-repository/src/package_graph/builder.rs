@@ -2493,7 +2493,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_external_peer_dep_is_not_retained_as_external() {
+    async fn test_external_peer_dep_is_retained_as_peer_declaration() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
 
@@ -2528,23 +2528,25 @@ mod test {
         .unwrap();
 
         let a = PackageName::from("a");
-        let a_external = {
-            let decls: std::collections::BTreeMap<_, _> = graph
-                .external_declarations(&a)
-                .iter()
-                .map(|d| (d.package_name().to_string(), d.specifier().to_string()))
-                .collect();
-            decls
-        };
+        let declaration = graph
+            .external_declarations(&a)
+            .iter()
+            .find(|declaration| declaration.package_name() == "react")
+            .expect("external peer should remain available to declaration consumers");
+        assert_eq!(declaration.kind(), DependencyKind::Peer { optional: false });
+        let resolution_inputs =
+            javascript::external_dependencies(&graph.knowledge, &graph.relationship_knowledge);
         assert!(
-            !a_external.contains_key("react"),
-            "external peer dependency should not be retained as an external dep, got: {:?}",
-            a_external
+            resolution_inputs
+                .values()
+                .all(|dependencies| !dependencies.contains_key("react")),
+            "external peer dependency must not reach JavaScript resolution inputs, got: \
+             {resolution_inputs:?}"
         );
     }
 
     #[tokio::test]
-    async fn test_optional_external_peer_is_not_retained() {
+    async fn test_external_peers_preserve_optional_metadata() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
 
@@ -2581,23 +2583,27 @@ mod test {
         .unwrap();
 
         let a = PackageName::from("a");
-        let a_external = {
-            let decls: std::collections::BTreeMap<_, _> = graph
-                .external_declarations(&a)
-                .iter()
-                .map(|d| (d.package_name().to_string(), d.specifier().to_string()))
-                .collect();
-            decls
-        };
-        assert!(
-            !a_external.contains_key("react"),
-            "optional peer should not be retained, got: {:?}",
-            a_external
+        let peers: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&a)
+            .iter()
+            .map(|declaration| (declaration.package_name(), declaration.kind()))
+            .collect();
+        assert_eq!(
+            peers.get("react"),
+            Some(&DependencyKind::Peer { optional: true })
         );
+        assert_eq!(
+            peers.get("lodash"),
+            Some(&DependencyKind::Peer { optional: false })
+        );
+        let resolution_inputs =
+            javascript::external_dependencies(&graph.knowledge, &graph.relationship_knowledge);
         assert!(
-            !a_external.contains_key("lodash"),
-            "required peer should not be retained, got: {:?}",
-            a_external
+            resolution_inputs.values().all(|dependencies| {
+                !dependencies.contains_key("react") && !dependencies.contains_key("lodash")
+            }),
+            "peer dependencies must not reach JavaScript resolution inputs, got: \
+             {resolution_inputs:?}"
         );
     }
 
@@ -2653,7 +2659,8 @@ mod test {
         .unwrap();
 
         let app = PackageNode::Workspace(PackageName::from("app"));
-        let lib = PackageNode::Workspace(PackageName::from("lib"));
+        let lib_name = PackageName::from("lib");
+        let lib = PackageNode::Workspace(lib_name.clone());
 
         let lib_closure = graph.transitive_closure([&lib]);
         assert!(
@@ -2666,20 +2673,19 @@ mod test {
             "prune closure for app should include its regular dependency lib"
         );
 
-        let lib_external: std::collections::BTreeMap<_, _> = graph
-            .external_declarations(&PackageName::from("lib"))
+        let react = graph
+            .external_declarations(&lib_name)
             .iter()
-            .map(|declaration| {
-                (
-                    declaration.package_name().to_string(),
-                    declaration.specifier().to_string(),
-                )
-            })
-            .collect();
+            .find(|declaration| declaration.package_name() == "react")
+            .expect("external peer should remain available to declaration consumers");
+        assert_eq!(react.kind(), DependencyKind::Peer { optional: false });
+        let resolution_inputs =
+            javascript::external_dependencies(&graph.knowledge, &graph.relationship_knowledge);
         assert!(
-            !lib_external.contains_key("react"),
-            "external peer should not be retained by package graph, got: {:?}",
-            lib_external
+            resolution_inputs
+                .values()
+                .all(|dependencies| !dependencies.contains_key("react")),
+            "external peer must not reach JavaScript resolution inputs, got: {resolution_inputs:?}"
         );
     }
 
