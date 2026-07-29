@@ -1135,8 +1135,10 @@ impl Run {
             .pkg_dep_graph
             .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
+        // Compatibility-payload presence is still required for JS root scopes;
+        // engines for hashing come from task-contract knowledge instead.
         let empty_root_workspace = turborepo_repository::package_graph::PackageInfo::default();
-        let root_workspace = match root_context.package_info() {
+        let _root_workspace = match root_context.package_info() {
             Some(payload) => payload,
             None if !root_context.requires_compatibility_payload() => &empty_root_workspace,
             None => return Err(Error::MissingPackagePayload(PackageName::Root)),
@@ -1206,8 +1208,10 @@ impl Run {
                         .pkg_dep_graph
                         .external_resolution_global_file_fallback()
                         .unwrap_or_default();
+                    let root_engines = self.pkg_dep_graph.root_engines();
+                    let root_engines = (!root_engines.is_empty()).then_some(root_engines);
                     global_file_result = Some(collect_global_file_hash_inputs(
-                        root_workspace,
+                        root_engines,
                         &self.repo_root,
                         self.pkg_dep_graph.package_manager(),
                         &resolution_file_fallback,
