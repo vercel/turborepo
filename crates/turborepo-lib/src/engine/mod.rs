@@ -90,10 +90,7 @@ pub(crate) fn task_has_command(
     {
         Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
         Some(turborepo_types::TaskCommandOverride::OptOut) => false,
-        None => context
-            .toolchain()
-            .and_then(|id| package_graph.toolchains().get(id))
-            .is_some_and(|toolchain| toolchain.defines_task(&context, task.task())),
+        None => context.native_tasks().defines(task.task()),
     }
 }
 
@@ -105,14 +102,11 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Task(task) => Some(task),
             })
             .filter(|task| {
-                // Ask the package's toolchain whether the task resolves to a
-                // runnable command — the same authority execution uses. For
-                // JS packages this is the package.json scripts lookup; for
-                // Cargo packages it consults the verb tables, so toolchain
-                // tasks appear in the TUI task list. A resolved `command`
-                // override is authoritative in both directions: an argv
-                // executes even where the toolchain defines nothing, and an
-                // opt-out never executes even where it does.
+                // Ask the native-task catalog whether the task resolves to a
+                // runnable command — the same authority execution uses. A
+                // resolved `command` override is authoritative in both
+                // directions: an argv executes even where the catalog defines
+                // nothing, and an opt-out never executes even where it does.
                 task_has_command(self, pkg_graph, task)
             })
             .map(ToString::to_string)

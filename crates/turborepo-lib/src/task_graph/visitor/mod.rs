@@ -710,29 +710,36 @@ impl<'a> Visitor<'a> {
                 });
                 break;
             };
-            let command = package_context
-                .package_info()
-                .and_then(|workspace| workspace.package_json.scripts.get(info.task()));
+            // Recursive turbo detection uses catalog authored display/source
+            // facts, not a live PackageJson::scripts read.
+            if info.package() == ROOT_PKG_NAME {
+                if let Some(native_task) = package_context.native_tasks().get(info.task()) {
+                    if let Some(cmd) = native_task.display().or_else(|| {
+                        native_task
+                            .script()
+                            .map(|script| script.as_inner().as_str())
+                    }) {
+                        if command_invokes_turbo(cmd) {
+                            let package_task_event =
+                                PackageTaskEventBuilder::new(info.package(), info.task())
+                                    .with_parent(telemetry);
+                            package_task_event.track_error(TrackedErrors::RecursiveError);
+                            let (span, text) = native_task
+                                .script()
+                                .map(|script| script.span_and_text("package.json"))
+                                .unwrap_or((None, NamedSource::new("", String::new())));
 
-            match command {
-                Some(cmd)
-                    if info.package() == ROOT_PKG_NAME && command_invokes_turbo(cmd.as_str()) =>
-                {
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(info.package(), info.task())
-                            .with_parent(telemetry);
-                    package_task_event.track_error(TrackedErrors::RecursiveError);
-                    let (span, text) = cmd.span_and_text("package.json");
-
-                    dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                        task_name: info.to_string(),
-                        command: cmd.to_string(),
-                        span,
-                        text,
-                    })));
-                    break;
+                            dispatch_error =
+                                Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                                    task_name: info.to_string(),
+                                    command: cmd.to_string(),
+                                    span,
+                                    text,
+                                })));
+                            break;
+                        }
+                    }
                 }
-                _ => (),
             }
 
             let Some(task_definition) = engine.task_definition(&info) else {
