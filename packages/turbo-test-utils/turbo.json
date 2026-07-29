@@ -2,14 +2,6 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
-    "test": {
-      "dependsOn": ["build"],
-      "command": ["pnpm", "exec", "jest"]
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "command": ["pnpm", "exec", "tsdown"]
-    },
     "lint:prettier": {
       "command": [
         "pnpm",
@@ -18,7 +10,7 @@
         "-c",
         ".",
         "--cache",
-        "--ignore-path=../../.prettierignore"
+        "--ignore-path=../../.prettier-ignore"
       ]
     }
   }

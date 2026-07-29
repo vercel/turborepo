@@ -3,12 +3,15 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "dependsOn": ["build"],
-      "command": ["pnpm", "exec", "jest"]
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "command": ["pnpm", "exec", "tsdown"]
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/client.test.ts",
+        "src/config.test.ts",
+        "src/utils.test.ts"
+      ]
     },
     "lint:prettier": {
       "command": [

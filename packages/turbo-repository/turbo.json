@@ -2,6 +2,9 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "check-types": {
+      "command": null
+    },
     "build": {
       // The napi crate's build task is a hash-only dependency: it invalidates
       // this task whenever the crate's transitive Rust sources change without
@@ -10,10 +13,27 @@
       // longer participates in the hash.
       "dependsOn": ["turborepo-napi#build"],
       "env": ["NODE_VERSION", "RUSTFLAGS"],
-      "outputs": ["js/dist/**/*", "native/**/*"]
+      "outputs": ["js/dist/**/*", "native/**/*"],
+      "command": ["bash", "scripts/build.sh", "--dts", "../js/index.d.ts"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "__tests__/affected-packages.test.ts",
+        "__tests__/exports.test.ts",
+        "__tests__/find-packages.test.ts",
+        "__tests__/lockfile-packages.test.ts",
+        "__tests__/workspace.test.ts"
+      ]
+    },
+    "package": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "command": ["node", "scripts/publish.mjs"]
     }
   }
 }

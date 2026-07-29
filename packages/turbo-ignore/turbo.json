@@ -3,16 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["build:bundle"],
-      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.build.json"]
-    },
-    "build:bundle": {
-      "cache": false,
-      "dependsOn": ["^build"],
       "command": ["pnpm", "exec", "tsdown"]
-    },
-    "dev": {
-      "command": ["pnpm", "exec", "tsdown", "--watch"]
     },
     "test": {
       "command": ["pnpm", "exec", "jest"]

@@ -1,0 +1,50 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/package-json.test.ts",
+        "src/turbo-daemon-command.test.ts",
+        "src/turbo-run-terminal-options.test.ts"
+      ]
+    },
+    "esbuild": {
+      "outputs": ["out/main.js", "out/main.js.map"],
+      "command": ["npm", "run", "esbuild-base", "--", "--sourcemap"]
+    },
+    "esbuild-watch": {
+      "cache": false,
+      "persistent": true,
+      "command": ["npm", "run", "esbuild-base", "--", "--sourcemap", "--watch"]
+    },
+    "package": {
+      "cache": false,
+      "command": [
+        "pnpm",
+        "exec",
+        "vsce",
+        "package",
+        "--no-dependencies",
+        "--baseContentUrl",
+        "https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc"
+      ]
+    },
+    "publish": {
+      "cache": false,
+      "command": [
+        "pnpm",
+        "exec",
+        "vsce",
+        "publish",
+        "--no-dependencies",
+        "--baseContentUrl",
+        "https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc"
+      ]
+    }
+  }
+}
