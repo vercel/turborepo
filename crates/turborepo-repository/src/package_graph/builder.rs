@@ -988,6 +988,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             )
             .map_err(|error| Error::TaskContracts(error.to_string()))?
         });
+        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::javascript(
+            &knowledge,
+            package_manager.as_ref(),
+        ));
 
         Ok(PackageGraph {
             graph: workspace_graph,
@@ -1008,6 +1012,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             toolchains,
             native_task_knowledge,
             task_contract_knowledge,
+            change_knowledge,
         })
     }
 }
@@ -1420,6 +1425,10 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 discovery::Error::Failed(Box::new(Error::TaskContracts(error.to_string())))
             })?
         });
+        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::javascript(
+            &knowledge,
+            package_manager.as_ref(),
+        ));
 
         Ok(PackageGraph {
             graph: workspace_graph,
@@ -1440,6 +1449,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             toolchains,
             native_task_knowledge,
             task_contract_knowledge,
+            change_knowledge,
         })
     }
 }
