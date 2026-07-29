@@ -1,0 +1,7 @@
+---
+source: crates/turborepo/tests/prune_test.rs
+expression: "prune_retained_packages(&stdout).join(\"\\n\")"
+---
+shared
+util
+web
