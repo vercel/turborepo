@@ -393,6 +393,10 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
+
       - parallel:
           - name: Setup Protoc
             uses: ./.github/actions/setup-protoc
@@ -401,6 +405,7 @@ jobs:
               github-token: ${{ secrets.GITHUB_TOKEN }}
 
           - name: Setup capnproto
+            if: runner.os != 'macOS'
             uses: ./.github/actions/setup-capnproto
 
           - name: Rust Setup
