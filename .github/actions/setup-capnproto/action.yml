@@ -44,20 +44,7 @@ runs:
     - name: "Setup capnproto for macos"
       if: runner.os == 'macOS'
       shell: bash
-      run: |
-        for attempt in 1 2 3 4 5; do
-          if brew install capnp; then
-            exit 0
-          fi
-
-          if [[ "$attempt" -eq 5 ]]; then
-            exit 1
-          fi
-
-          delay=$((attempt * 5))
-          echo "Homebrew install failed, retrying in ${delay} seconds..."
-          sleep "$delay"
-        done
+      run: brew install capnp
 
     - name: "Cache capnproto (Windows)"
       if: runner.os == 'Windows' && inputs.use-cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

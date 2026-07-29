@@ -197,6 +197,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
+
       - parallel:
           # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
           # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
@@ -229,6 +233,7 @@ jobs:
             uses: ./.github/actions/setup-zig
 
           - name: Setup capnproto
+            if: runner.os != 'macOS'
             uses: ./.github/actions/setup-capnproto
 
           - name: Restore Cargo target
@@ -419,6 +424,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
+
       - parallel:
           # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
           # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
@@ -448,6 +457,7 @@ jobs:
             uses: ./.github/actions/setup-zig
 
           - name: Setup capnproto
+            if: runner.os != 'macOS'
             uses: ./.github/actions/setup-capnproto
 
       - name: Install Global Turbo

@@ -81,8 +81,13 @@ jobs:
         if: ${{ matrix.settings.prepare }}
         run: ${{ matrix.settings.prepare }}
 
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
+
       - parallel:
           - name: Setup capnproto
+            if: runner.os != 'macOS'
             uses: ./.github/actions/setup-capnproto
 
           - name: Rust Setup
