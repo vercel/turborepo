@@ -22,7 +22,7 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     external_resolution::{
-        ExternalDeclarationView, ExternalPackageIdentity, ExternalResolutionData,
+        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
         ExternalResolutionDomain, ExternalResolutionGeneration, PackageResolution,
         ResolutionCompleteness, ResolutionFingerprint, ResolutionUnavailableReason,
     },
@@ -542,13 +542,21 @@ impl PackageGraphAssembler {
                 match (relationship.kind(), relationship.target()) {
                     (DependencyKind::Peer { .. }, _) => {}
                     (
-                        DependencyKind::Production | DependencyKind::Development,
+                        DependencyKind::Production
+                        | DependencyKind::Optional
+                        | DependencyKind::Development,
                         RelationshipTarget::Internal(target),
                     ) => {
-                        internal.entry(target).or_insert(relationship.kind());
+                        let kind = match relationship.kind() {
+                            DependencyKind::Optional => DependencyKind::Production,
+                            kind => kind,
+                        };
+                        internal.entry(target).or_insert(kind);
                     }
                     (
-                        DependencyKind::Production | DependencyKind::Development,
+                        DependencyKind::Production
+                        | DependencyKind::Optional
+                        | DependencyKind::Development,
                         RelationshipTarget::UnresolvedExternal { name, specifier },
                     ) => {
                         external
@@ -900,8 +908,32 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 )?)
             }
         };
-        let relationship_knowledge =
-            Arc::new(RelationshipKnowledge::build(&knowledge, Vec::new())?);
+        let relationship_groups = root_package_json
+            .as_ref()
+            .map(|package_json| {
+                RelationshipGroup::new(
+                    "//",
+                    package_json
+                        .dependencies_with_kind()
+                        .map(|(name, specifier, kind)| {
+                            Relationship::new(
+                                name,
+                                kind,
+                                RelationshipTarget::UnresolvedExternal {
+                                    name: name.clone(),
+                                    specifier: specifier.clone(),
+                                },
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .into_iter()
+            .collect();
+        let relationship_knowledge = Arc::new(RelationshipKnowledge::build(
+            &knowledge,
+            relationship_groups,
+        )?);
         let PackageGraphAssembly {
             package_payloads,
             workspace_graph,
@@ -937,6 +969,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             knowledge,
             relationship_knowledge,
+            external_declarations: std::sync::OnceLock::new(),
             relationship_projections: std::sync::OnceLock::new(),
             external_resolution: std::sync::Mutex::new(ExternalResolutionKnowledge::absent()),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
@@ -1288,7 +1321,10 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 .into_iter()
                 .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
                 .collect();
-        for declaration in ExternalDeclarationView::build(relationships).declarations() {
+        for declaration in ExternalDeclarations::build(relationships).declarations() {
+            if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
+                continue;
+            }
             let Some(dependencies) = by_source.get_mut(declaration.source()) else {
                 continue;
             };
@@ -1474,6 +1510,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             lockfile: arc_lockfile,
             knowledge,
             relationship_knowledge,
+            external_declarations: std::sync::OnceLock::new(),
             relationship_projections: std::sync::OnceLock::new(),
             external_resolution: std::sync::Mutex::new(external_resolution),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
@@ -1999,6 +2036,24 @@ mod test {
             &root,
             PackageJson {
                 name: Some(Spanned::new("user-facing-root-name".into())),
+                dependencies: Some(
+                    [("prod".to_string(), "1".to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
+                optional_dependencies: Some(
+                    [("optional".to_string(), "1".to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
+                dev_dependencies: Some(
+                    [("dev".to_string(), "1".to_string())].into_iter().collect(),
+                ),
+                peer_dependencies: Some(
+                    [("peer".to_string(), "1".to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
                 ..Default::default()
             },
         )
@@ -2022,6 +2077,19 @@ mod test {
         let contexts = graph.package_task_contexts().collect::<Vec<_>>();
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].package(), &PackageName::Root);
+        assert_eq!(
+            contexts[0]
+                .external_declarations()
+                .iter()
+                .map(|declaration| (declaration.declaration_name(), declaration.kind()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("prod", DependencyKind::Production),
+                ("optional", DependencyKind::Optional),
+                ("dev", DependencyKind::Development),
+                ("peer", DependencyKind::Peer { optional: false }),
+            ]
+        );
         assert_eq!(
             graph
                 .package_dir(&PackageName::Root)

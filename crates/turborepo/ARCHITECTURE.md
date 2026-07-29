@@ -161,7 +161,10 @@ Represents the workspace structure and package dependencies:
   identities, definition sources, completeness, and stable fingerprints. A
   single resolution owner tracks lifecycle status, and the snapshot projects
   temporary `PackageInfo` closure/hash fields byte-compatibly until consumer
-  migration.
+  migration. Framework inference and boundaries validation consume the
+  package-scoped declaration projection directly; aliases, duplicate
+  precedence, optional declarations, and peers remain explicit normalized
+  facts rather than raw manifest reads.
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field

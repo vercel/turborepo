@@ -16,7 +16,10 @@ use turborepo_lockfiles::Lockfile;
 
 use crate::{
     discovery::LocalPackageDiscoveryBuilder,
-    external_resolution::{ExternalResolutionGeneration, ExternalResolutionStatus},
+    external_resolution::{
+        ExternalDeclarations, ExternalResolutionGeneration, ExternalResolutionStatus,
+        PackageExternalDeclarations,
+    },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
     package_manager::PackageManager,
@@ -134,6 +137,7 @@ pub struct PackageGraph {
     /// unresolved external declaration maps.
     #[allow(dead_code)]
     relationship_knowledge: Arc<RelationshipKnowledge>,
+    external_declarations: OnceLock<ExternalDeclarations>,
     relationship_projections: OnceLock<projections::RelationshipProjections>,
     /// The sole owner of external-resolution lifecycle and terminal knowledge
     /// across toolchains. Deferred JavaScript production is joined once by
@@ -281,6 +285,7 @@ pub struct PackageTaskContext<'a> {
     repository_root: &'a AbsoluteSystemPath,
     directory: &'a AnchoredSystemPath,
     package_info: Option<&'a PackageInfo>,
+    external_declarations: &'a ExternalDeclarations,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
     requires_compatibility_payload: bool,
@@ -297,8 +302,10 @@ impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
     pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+        static EXTERNAL_DECLARATIONS: OnceLock<ExternalDeclarations> = OnceLock::new();
+        let external_declarations = EXTERNAL_DECLARATIONS.get_or_init(ExternalDeclarations::default);
         let requires_compatibility_payload = package != PackageName::Root || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
-        Self { package, repository_root, directory, package_info, kind, toolchain, requires_compatibility_payload }
+        Self { package, repository_root, directory, package_info, external_declarations, kind, toolchain, requires_compatibility_payload }
     }
 
     pub fn package(&self) -> &PackageName {
@@ -315,6 +322,11 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn package_info(&self) -> Option<&'a PackageInfo> {
         self.package_info
+    }
+
+    pub fn external_declarations(&self) -> PackageExternalDeclarations<'_> {
+        self.external_declarations
+            .for_package(self.package.as_str())
     }
 
     pub fn kind(&self) -> PackageTaskContextKind {
@@ -358,6 +370,19 @@ pub struct ExternalDependencyChange {
 }
 
 impl PackageGraph {
+    fn external_declaration_view(&self) -> &ExternalDeclarations {
+        self.external_declarations
+            .get_or_init(|| ExternalDeclarations::build(&self.relationship_knowledge))
+    }
+
+    pub fn external_declarations<'a>(
+        &'a self,
+        package: &'a PackageName,
+    ) -> PackageExternalDeclarations<'a> {
+        self.external_declaration_view()
+            .for_package(package.as_str())
+    }
+
     fn relationship_projections(&self) -> &projections::RelationshipProjections {
         self.relationship_projections.get_or_init(|| {
             projections::RelationshipProjections::build(
@@ -712,6 +737,7 @@ impl PackageGraph {
             repository_root: self.knowledge.repository_root(),
             directory,
             package_info,
+            external_declarations: self.external_declaration_view(),
             kind,
             toolchain,
             requires_compatibility_payload,

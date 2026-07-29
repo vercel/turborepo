@@ -28,6 +28,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
 use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations,
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageInfo, PackageName, PackageNode},
     toolchain::ToolchainId,
 };
@@ -50,6 +51,12 @@ pub trait PackageGraphProvider: Send + Sync {
     fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_>;
     /// Phase 2 compatibility payload used only for dependency information.
     fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
+    fn external_declarations<'a>(
+        &'a self,
+        name: &'a PackageName,
+    ) -> PackageExternalDeclarations<'a> {
+        PackageExternalDeclarations::new(&[], name.as_str())
+    }
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>>;
     fn dependencies(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
     fn ancestors(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
@@ -74,6 +81,13 @@ impl PackageGraphProvider for PackageGraph {
 
     fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
         PackageGraph::package_info(self, name)
+    }
+
+    fn external_declarations<'a>(
+        &'a self,
+        name: &'a PackageName,
+    ) -> PackageExternalDeclarations<'a> {
+        PackageGraph::external_declarations(self, name)
     }
 
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>> {
@@ -613,7 +627,6 @@ impl BoundariesChecker {
         let file_result = Self::check_package_files(
             ctx,
             package_name,
-            package_info,
             package_directory,
             &implicit_dependencies,
             global_implicit_dependencies,
@@ -641,7 +654,6 @@ impl BoundariesChecker {
     fn check_package_files<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         package_name: &PackageName,
-        package_info: &PackageInfo,
         package_directory: &turbopath::AnchoredSystemPath,
         implicit_dependencies: &HashMap<String, Spanned<()>>,
         global_implicit_dependencies: &HashMap<String, Spanned<()>>,
@@ -701,12 +713,9 @@ impl BoundariesChecker {
         let dependency_locations = DependencyLocations {
             package: package_name,
             internal_dependencies: &internal_dependencies,
-            package_json: &package_info.package_json,
+            external_declarations: ctx.pkg_dep_graph.external_declarations(package_name),
             implicit_dependencies,
             global_implicit_dependencies,
-            unresolved_external_dependencies: package_info
-                .unresolved_external_dependencies
-                .as_ref(),
         };
 
         type FileResult = Result<(Vec<BoundariesDiagnostic>, Vec<String>), Error>;
