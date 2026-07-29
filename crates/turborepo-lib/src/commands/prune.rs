@@ -16,7 +16,7 @@ use turbopath::{
 };
 use turborepo_repository::{
     package_graph::{
-        self, PackageGraph, PackageName, PackageNode, PackageTaskContext, PackageTaskContextKind,
+        self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind,
     },
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
