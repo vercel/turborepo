@@ -6,7 +6,7 @@
       "command": ["pnpm", "exec", "tsdown"]
     },
     "test": {
-      "command": ["pnpm", "exec", "jest"]
+      "command": ["pnpm", "exec", "jest", "--runInBand", "--forceExit"]
     },
     "lint:prettier": {
       "command": [
