@@ -195,3 +195,110 @@ pub(crate) fn merge_preserving_key_order(
         (_, pruned) => pruned.clone(),
     }
 }
+
+/// Inputs for the JavaScript-only prune rendering step.
+///
+/// Closure selection and filesystem layout remain in `commands/prune.rs`;
+/// this struct carries only the facts needed to rewrite JS lockfiles,
+/// root manifests, patches, and workspace patch tables.
+pub(crate) struct JavaScriptPruneRenderInput<'a> {
+    pub package_manager: &'a PackageManager,
+    pub root_package_json: &'a PackageJson,
+    pub original_lockfile: &'a dyn turborepo_lockfiles::Lockfile,
+    pub workspace_paths: &'a [String],
+    pub lockfile_keys: &'a [String],
+    pub excluded_dev_workspaces: &'a HashSet<String>,
+    pub repo_root: &'a AbsoluteSystemPath,
+    pub original_root_package_json_contents: &'a str,
+    pub uses_per_workspace_lockfiles: bool,
+}
+
+/// How the pruned lockfile should be materialized by layout code.
+#[derive(Debug)]
+pub(crate) enum JavaScriptPruneLockfileArtifact {
+    /// Copy the original root lockfile as-is (per-workspace lockfile mode).
+    CopyOriginalRoot,
+    /// Write these encoded bytes as the pruned root lockfile.
+    Encoded(Vec<u8>),
+}
+
+/// Outputs of the JavaScript prune rendering step.
+#[derive(Debug)]
+pub(crate) struct JavaScriptPruneRenderResult {
+    pub lockfile_name: &'static str,
+    pub lockfile: JavaScriptPruneLockfileArtifact,
+    /// `None` means copy the original root package.json unchanged.
+    pub root_package_json_contents: Option<String>,
+    pub pruned_patches: Vec<RelativeUnixPathBuf>,
+    pub prune_pnpm_workspace_patches: bool,
+}
+
+/// Render JavaScript lockfile/manifest/patch artifacts for a pruned repository.
+///
+/// Performs no filesystem writes other than reads already implied by patch
+/// path collection helpers.
+pub(crate) fn render_javascript_prune(
+    input: JavaScriptPruneRenderInput<'_>,
+) -> Result<JavaScriptPruneRenderResult, Error> {
+    let subgraph = input
+        .original_lockfile
+        .subgraph(input.workspace_paths, input.lockfile_keys)?;
+    let lockfile_name = input.package_manager.lockfile_name();
+    let lockfile = if input.uses_per_workspace_lockfiles {
+        JavaScriptPruneLockfileArtifact::CopyOriginalRoot
+    } else {
+        JavaScriptPruneLockfileArtifact::Encoded(subgraph.encode()?)
+    };
+
+    let original_patches = collect_patch_paths(
+        input.original_lockfile,
+        input.root_package_json,
+        input.repo_root,
+        input.package_manager,
+    )?;
+    let pruned_patches = if original_patches.is_empty() {
+        Vec::new()
+    } else {
+        collect_patch_paths(
+            subgraph.as_ref(),
+            input.root_package_json,
+            input.repo_root,
+            input.package_manager,
+        )?
+    };
+
+    let original_value: serde_json::Value =
+        serde_json::from_str(input.original_root_package_json_contents)?;
+    let root_package_json_contents = if !original_patches.is_empty()
+        || original_value.get("workspaces").is_some()
+        || !input.excluded_dev_workspaces.is_empty()
+    {
+        let pruned_json = if original_patches.is_empty() {
+            input.root_package_json.clone()
+        } else {
+            input.package_manager.prune_patched_packages(
+                input.root_package_json,
+                &pruned_patches,
+                input.repo_root,
+            )
+        };
+
+        let mut pruned_value = serde_json::to_value(&pruned_json)?;
+        prune_package_json_workspaces(&mut pruned_value, input.workspace_paths);
+        prune_package_json_dev_dependencies(&mut pruned_value, input.excluded_dev_workspaces);
+        let merged = merge_preserving_key_order(&original_value, &pruned_value);
+        let mut contents = serde_json::to_string_pretty(&merged)?;
+        contents.push('\n');
+        Some(contents)
+    } else {
+        None
+    };
+
+    Ok(JavaScriptPruneRenderResult {
+        lockfile_name,
+        lockfile,
+        root_package_json_contents,
+        pruned_patches,
+        prune_pnpm_workspace_patches: input.package_manager.is_pnpm_family(),
+    })
+}
