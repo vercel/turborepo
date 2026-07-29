@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -10,7 +10,6 @@ use petgraph::{
     visit::EdgeRef,
 };
 use serde::Serialize;
-use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -18,7 +17,8 @@ use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
         ExternalDeclarations, ExternalResolutionData, ExternalResolutionGeneration,
-        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolutionState,
+        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolution,
+        PackageResolutionState, ResolutionCompleteness,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -389,6 +389,30 @@ pub struct ExternalDependencyChange {
     pub added: Vec<turborepo_lockfiles::Package>,
     /// Dependencies that were removed from the package
     pub removed: Vec<turborepo_lockfiles::Package>,
+}
+
+fn resolved_javascript_packages(
+    generation: &ExternalResolutionGeneration,
+) -> Result<&[PackageResolution], ChangedPackagesError> {
+    let domain = generation
+        .domains()
+        .iter()
+        .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)
+        .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+    match domain.data() {
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Complete,
+            packages,
+            ..
+        } => Ok(packages),
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Partial(_),
+            ..
+        }
+        | ExternalResolutionData::Unavailable(_) => {
+            Err(ChangedPackagesError::ResolutionUnavailable)
+        }
+    }
 }
 
 impl PackageGraph {
@@ -993,6 +1017,14 @@ impl PackageGraph {
             .clone()
     }
 
+    #[cfg(test)]
+    pub(crate) fn remove_external_resolution_for_test(&mut self) {
+        self.external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .generation = None;
+    }
+
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
         let entry = self.package_payloads.get(package)?;
         Some(&entry.package_json)
@@ -1291,124 +1323,122 @@ impl PackageGraph {
             .collect()
     }
 
-    /// Returns a list of changed packages based on the contents of a previous
-    /// `Lockfile`. This assumes that none of the package.json in the package
-    /// change, it is the responsibility of the caller to verify this.
+    pub fn changed_packages_from_lockfile_contents(
+        &self,
+        previous_lockfile_contents: &[u8],
+    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
+        let package_manager = self
+            .package_manager()
+            .ok_or(ChangedPackagesError::NoLockfile)?;
+        let root_package_json = self
+            .root_package_json()
+            .ok_or(ChangedPackagesError::NoLockfile)?;
+        let yarnrc = matches!(package_manager, PackageManager::Berry)
+            .then(|| crate::package_manager::yarnrc::YarnRc::from_file(self.repo_root()))
+            .transpose()?;
+        let previous = package_manager.parse_lockfile(
+            root_package_json,
+            previous_lockfile_contents,
+            yarnrc,
+        )?;
+        self.changed_packages_from_lockfile(previous.as_ref())
+    }
+
+    /// Returns packages whose normalized external resolution changed from the
+    /// provided previous lockfile. Callers remain responsible for detecting
+    /// descriptor changes independently.
     pub fn changed_packages_from_lockfile(
         &self,
-        previous: &dyn Lockfile,
+        previous_lockfile: &dyn Lockfile,
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
+        let package_manager = self
+            .package_manager()
+            .ok_or(ChangedPackagesError::NoLockfile)?;
+        let definition_source = AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name())?;
+        let previous_resolution = builder::resolve_javascript_dependencies(
+            &self.knowledge,
+            Vec::new(),
+            previous_lockfile,
+            builder::javascript_external_dependencies(
+                &self.knowledge,
+                &self.relationship_knowledge,
+            ),
+            true,
+            definition_source,
+            None,
+        )
+        .map_err(ChangedPackagesError::Resolution)?;
+        let current_resolution = self
+            .external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let current_packages = resolved_javascript_packages(
+            current_resolution
+                .generation
+                .as_deref()
+                .ok_or(ChangedPackagesError::ResolutionUnavailable)?,
+        )?;
+        let previous_packages = resolved_javascript_packages(&previous_resolution.generation)?;
 
-        for context in self.package_task_contexts() {
-            if context.requires_compatibility_payload() && context.package_info().is_none() {
-                return Err(ChangedPackagesError::MissingPackagePayload(
-                    context.package().clone(),
-                ));
-            }
-        }
-
-        let external_deps = self
-            .package_task_contexts()
-            .filter_map(|context| {
-                let info = context.package_info()?;
-                let dep = info.unresolved_external_dependencies.as_ref()?;
-                Some((
-                    context.directory().to_unix().to_string(),
-                    dep.iter()
-                        .map(|(name, version)| (name.to_owned(), version.to_owned()))
-                        .collect(),
-                ))
-            })
-            .collect::<HashMap<_, BTreeMap<_, _>>>();
-
-        // We're comparing to a previous lockfile, it's possible that a package was
-        // added and thus won't exist in the previous lockfile. In that case,
-        // we're fine to ignore it. Assuming there is not a commit with a stale
-        // lockfile, the same commit should add the package, so it will get
-        // picked up as changed.
-        let closures =
-            turborepo_lockfiles::all_transitive_closures_sorted(previous, external_deps, true)?;
-
-        let global_change = current.global_change(previous);
-
-        let changed = if global_change {
-            None
-        } else {
+        let all_changes = || {
             self.package_task_contexts()
-                .filter_map(|context| {
-                    let info = context.package_info()?;
-                    let name = context.package().clone();
-                    let package_dir = context.directory();
-                    let previous_closure = closures.get(package_dir.to_unix().as_str());
-                    // Both closures are sorted by (key, version), so `Vec`
-                    // equality is set equality here.
-                    let not_equal = previous_closure != info.transitive_dependencies.as_ref();
-                    if not_equal {
-                        let empty = Vec::new();
-                        let prev_deps = previous_closure.unwrap_or(&empty);
-                        let curr_deps = info.transitive_dependencies.as_ref().unwrap_or(&empty);
-                        let prev_set: HashSet<&turborepo_lockfiles::Package> =
-                            prev_deps.iter().map(|pkg| &**pkg).collect();
-                        let curr_set: HashSet<&turborepo_lockfiles::Package> =
-                            curr_deps.iter().map(|pkg| &**pkg).collect();
-                        debug!(
-                            "package {name} has differing closure: {:?}",
-                            prev_set.symmetric_difference(&curr_set)
-                        );
-                        // {a, b} -> {a, c}
-                        // b was removed
-                        // c was added
-                        let added = curr_set
-                            .difference(&prev_set)
-                            .map(|pkg| (*pkg).clone())
-                            .sorted()
-                            .collect::<Vec<_>>();
-                        let removed = prev_set
-                            .difference(&curr_set)
-                            .map(|pkg| (*pkg).clone())
-                            .sorted()
-                            .collect::<Vec<_>>();
-                        Some((name, package_dir, added, removed))
-                    } else {
-                        None
-                    }
-                })
-                .map(|(name, package_dir, added, removed)| match name {
-                    PackageName::Other(n) => {
-                        let w_name = PackageName::Other(n.to_owned());
-                        let package = WorkspacePackage {
-                            name: w_name.clone(),
-                            path: package_dir.to_owned(),
-                        };
-                        Some(ExternalDependencyChange {
-                            package,
-                            added,
-                            removed,
-                        })
-                    }
-                    // if the root package has changed, then we should report `None`
-                    // since all packages need to be revalidated
-                    PackageName::Root => None,
-                })
-                .collect::<Option<Vec<_>>>()
-        };
-
-        Ok(changed.unwrap_or_else(|| {
-            self.package_task_contexts()
-                .map(|context| {
-                    let package = WorkspacePackage {
+                .map(|context| ExternalDependencyChange {
+                    package: WorkspacePackage {
                         name: context.package().clone(),
                         path: context.directory().to_owned(),
-                    };
-                    ExternalDependencyChange {
-                        package,
-                        added: Vec::new(),
-                        removed: Vec::new(),
-                    }
+                    },
+                    added: Vec::new(),
+                    removed: Vec::new(),
                 })
                 .collect()
-        }))
+        };
+        if current.global_change(previous_lockfile) {
+            return Ok(all_changes());
+        }
+
+        let previous_by_package: HashMap<_, _> = previous_packages
+            .iter()
+            .map(|package| (package.package(), package))
+            .collect();
+        let mut changed = Vec::new();
+        for package in current_packages {
+            let previous = previous_by_package
+                .get(package.package())
+                .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+            if package.identities() == previous.identities() {
+                continue;
+            }
+            if package.package() == ROOT_PKG_NAME {
+                return Ok(all_changes());
+            }
+
+            let previous: BTreeSet<_> = previous.identities().iter().collect();
+            let current: BTreeSet<_> = package.identities().iter().collect();
+            let to_lockfile_package =
+                |identity: &&crate::external_resolution::ExternalPackageIdentity| {
+                    turborepo_lockfiles::Package::new(identity.key(), identity.version())
+                };
+            let name = PackageName::from(package.package());
+            let context = self
+                .package_task_context(&name)
+                .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+            changed.push(ExternalDependencyChange {
+                package: WorkspacePackage {
+                    name,
+                    path: context.directory().to_owned(),
+                },
+                added: current
+                    .difference(&previous)
+                    .map(to_lockfile_package)
+                    .collect(),
+                removed: previous
+                    .difference(&current)
+                    .map(to_lockfile_package)
+                    .collect(),
+            });
+        }
+        Ok(changed)
     }
 
     pub fn internal_dependencies_for_external_dependency(
@@ -1484,8 +1514,16 @@ impl PackageGraph {
 pub enum ChangedPackagesError {
     #[error("No lockfile")]
     NoLockfile,
-    #[error("Missing compatibility payload for package {0}")]
-    MissingPackagePayload(PackageName),
+    #[error("External resolution unavailable")]
+    ResolutionUnavailable,
+    #[error("External resolution failed: {0}")]
+    Resolution(String),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+    #[error("Package manager error: {0}")]
+    PackageManager(#[from] crate::package_manager::Error),
+    #[error("Yarn config error: {0}")]
+    Yarnrc(#[from] crate::package_manager::yarnrc::Error),
     #[error("Lockfile error")]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
@@ -1540,7 +1578,13 @@ mod test {
     use turborepo_errors::Spanned;
 
     use super::*;
-    use crate::discovery::PackageDiscovery;
+    use crate::{
+        change_mapper::{
+            AllPackageChangeReason, ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents,
+            PackageChanges,
+        },
+        discovery::PackageDiscovery,
+    };
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
@@ -1583,14 +1627,26 @@ mod test {
     }
 
     fn apply_patch(dir: &Path, target: &str, patch_file: &str) {
-        let status = Command::new("patch")
-            .args([target, patch_file])
+        let patch = fs::read_to_string(dir.join(patch_file))
+            .unwrap()
+            .lines()
+            .map(|line| {
+                line.strip_prefix("+++ ")
+                    .map_or_else(|| line.to_string(), |_| format!("+++ {target}"))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        let rewritten = tempfile::NamedTempFile::new().unwrap();
+        fs::write(rewritten.path(), patch).unwrap();
+        let status = Command::new("git")
+            .args(["apply", "--unsafe-paths"])
+            .arg(rewritten.path())
             .current_dir(dir)
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
             .status()
             .unwrap();
-        assert!(status.success(), "patch {target} {patch_file} failed");
+        assert!(status.success(), "git apply {patch_file} failed");
     }
 
     fn setup_lockfile_aware_fixture(dir: &Path, pm_name: &str) {
@@ -1683,6 +1739,7 @@ mod test {
             let root_package_json =
                 PackageJson::load(&root.join_component("package.json")).unwrap();
 
+            let previous_contents = fs::read(tempdir.path().join(lockfile)).unwrap();
             let previous = package_manager
                 .read_lockfile(&root, &root_package_json)
                 .unwrap();
@@ -1702,12 +1759,45 @@ mod test {
                 vec![PackageName::from("b")],
                 "{pm_name}: dependency lockfile change should only affect b"
             );
+
+            {
+                let detector =
+                    GlobalDepsPackageChangeMapper::new(&dep_graph, std::iter::empty::<&str>())
+                        .unwrap();
+                let mapper = ChangeMapper::new(&dep_graph, Vec::new(), detector);
+                assert_eq!(
+                    mapper
+                        .changed_packages(
+                            HashSet::new(),
+                            LockfileContents::Changed(b"invalid lockfile".to_vec()),
+                        )
+                        .unwrap(),
+                    PackageChanges::All(AllPackageChangeReason::LockfileChangeDetectionFailed)
+                );
+            }
+
             let missing = PackageName::from("b");
             assert!(dep_graph.remove_package_info_for_test(&missing).is_some());
-            assert!(matches!(
-                dep_graph.changed_packages_from_lockfile(previous.as_ref()),
-                Err(ChangedPackagesError::MissingPackagePayload(name)) if name == missing
-            ));
+            assert_eq!(
+                dep_graph
+                    .changed_packages_from_lockfile(previous.as_ref())
+                    .unwrap()
+                    .into_iter()
+                    .map(|change| change.package.name)
+                    .collect::<Vec<_>>(),
+                vec![missing]
+            );
+
+            dep_graph.remove_external_resolution_for_test();
+            let detector =
+                GlobalDepsPackageChangeMapper::new(&dep_graph, std::iter::empty::<&str>()).unwrap();
+            let mapper = ChangeMapper::new(&dep_graph, Vec::new(), detector);
+            assert_eq!(
+                mapper
+                    .changed_packages(HashSet::new(), LockfileContents::Changed(previous_contents),)
+                    .unwrap(),
+                PackageChanges::All(AllPackageChangeReason::LockfileChangeDetectionFailed)
+            );
 
             let previous_dep = package_manager
                 .read_lockfile(&root, &root_package_json)
@@ -1724,7 +1814,8 @@ mod test {
                 .map(|change| change.package.name.clone())
                 .collect::<HashSet<_>>();
             assert!(
-                root_changed_names.contains(&PackageName::from("a"))
+                root_changed_names.contains(&PackageName::Root)
+                    && root_changed_names.contains(&PackageName::from("a"))
                     && root_changed_names.contains(&PackageName::from("b")),
                 "{pm_name}: root lockfile change should affect all workspaces: \
                  {root_changed_names:?}"

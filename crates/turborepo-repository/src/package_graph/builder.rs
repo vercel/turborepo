@@ -1246,6 +1246,38 @@ fn javascript_resolution_packages(
     packages
 }
 
+pub(super) fn javascript_external_dependencies(
+    knowledge: &RepositoryKnowledge,
+    relationships: &RelationshipKnowledge,
+) -> HashMap<String, BTreeMap<String, String>> {
+    let mut by_source: BTreeMap<String, BTreeMap<String, String>> =
+        javascript_resolution_packages(knowledge)
+            .into_iter()
+            .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
+            .collect();
+    for declaration in ExternalDeclarations::build(relationships).declarations() {
+        if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
+            continue;
+        }
+        let Some(dependencies) = by_source.get_mut(declaration.source()) else {
+            continue;
+        };
+        dependencies
+            .entry(declaration.package_name().to_string())
+            .or_insert_with(|| declaration.specifier().to_string());
+    }
+
+    by_source
+        .into_iter()
+        .filter_map(|(identity, dependencies)| {
+            let name = package_name_from_identity(&identity);
+            let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
+            (toolchain == &ToolchainId::JAVASCRIPT)
+                .then(|| (directory.to_unix().to_string(), dependencies))
+        })
+        .collect()
+}
+
 fn unavailable_javascript_resolution(
     knowledge: &RepositoryKnowledge,
     mut domains: Vec<ExternalResolutionDomain>,
@@ -1272,18 +1304,19 @@ fn unavailable_javascript_resolution(
     })
 }
 
-fn resolve_javascript_dependencies(
+pub(super) fn resolve_javascript_dependencies(
     knowledge: &RepositoryKnowledge,
     mut domains: Vec<ExternalResolutionDomain>,
     lockfile: &dyn Lockfile,
     external_dependencies: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
     definition_source: AnchoredSystemPathBuf,
     closure_hasher: Option<&ClosureHasher>,
 ) -> Result<JavaScriptResolutionSnapshot, String> {
     let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
         lockfile,
         external_dependencies,
-        false,
+        ignore_missing_packages,
     ) {
         Ok(closures) => closures,
         Err(error) => {
@@ -1346,32 +1379,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .relationship_knowledge
             .as_deref()
             .ok_or(Error::MissingRelationshipKnowledge)?;
-        let mut by_source: BTreeMap<String, BTreeMap<String, String>> =
-            javascript_resolution_packages(knowledge)
-                .into_iter()
-                .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
-                .collect();
-        for declaration in ExternalDeclarations::build(relationships).declarations() {
-            if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
-                continue;
-            }
-            let Some(dependencies) = by_source.get_mut(declaration.source()) else {
-                continue;
-            };
-            dependencies
-                .entry(declaration.package_name().to_string())
-                .or_insert_with(|| declaration.specifier().to_string());
-        }
-
-        Ok(by_source
-            .into_iter()
-            .filter_map(|(identity, dependencies)| {
-                let name = package_name_from_identity(&identity);
-                let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
-                (toolchain == &ToolchainId::JAVASCRIPT)
-                    .then(|| (directory.to_unix().to_string(), dependencies))
-            })
-            .collect())
+        Ok(javascript_external_dependencies(knowledge, relationships))
     }
 
     #[tracing::instrument(skip(self))]
@@ -1425,6 +1433,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                     native_resolutions,
                                     lockfile.as_ref(),
                                     external_dependencies,
+                                    false,
                                     deferred_source,
                                     hasher.as_ref(),
                                 );
@@ -1464,6 +1473,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                 std::mem::take(&mut native_external_resolutions),
                                 lockfile.as_ref(),
                                 external_dependencies,
+                                false,
                                 definition_source,
                                 self.closure_hasher.as_ref(),
                             )
