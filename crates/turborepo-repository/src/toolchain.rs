@@ -51,6 +51,7 @@ use turborepo_errors::Spanned;
 
 use crate::{
     discovery::{self, PackageDiscovery},
+    external_resolution::ExternalResolutionDomain,
     package_json::PackageJson,
     package_manager::PackageManager,
     relationships::Relationship,
@@ -181,6 +182,7 @@ impl WorkspaceRoot {
 pub struct DiscoveredPackages {
     packages: Vec<DiscoveredPackage>,
     workspace_roots: Vec<WorkspaceRoot>,
+    external_resolutions: Vec<ExternalResolutionDomain>,
 }
 
 impl DiscoveredPackages {
@@ -188,7 +190,13 @@ impl DiscoveredPackages {
         Self {
             packages,
             workspace_roots,
+            external_resolutions: Vec::new(),
         }
+    }
+
+    pub fn with_external_resolution(mut self, resolution: ExternalResolutionDomain) -> Self {
+        self.external_resolutions.push(resolution);
+        self
     }
 
     pub fn packages(&self) -> &[DiscoveredPackage] {
@@ -199,8 +207,18 @@ impl DiscoveredPackages {
         &self.workspace_roots
     }
 
-    pub fn into_parts(self) -> (Vec<DiscoveredPackage>, Vec<WorkspaceRoot>) {
-        (self.packages, self.workspace_roots)
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<DiscoveredPackage>,
+        Vec<WorkspaceRoot>,
+        Vec<ExternalResolutionDomain>,
+    ) {
+        (
+            self.packages,
+            self.workspace_roots,
+            self.external_resolutions,
+        )
     }
 }
 

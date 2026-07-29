@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use sha2::{Digest, Sha256};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
@@ -177,6 +178,27 @@ impl ResolutionFingerprint {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub(crate) fn from_packages(packages: &[PackageResolution]) -> Self {
+        fn update(hasher: &mut Sha256, value: &str) {
+            hasher.update((value.len() as u64).to_le_bytes());
+            hasher.update(value.as_bytes());
+        }
+
+        let mut packages: Vec<_> = packages.iter().collect();
+        packages.sort_unstable_by_key(|package| package.package());
+        let mut hasher = Sha256::new();
+        for package in packages {
+            update(&mut hasher, package.package());
+            let mut identities: Vec<_> = package.identities().iter().collect();
+            identities.sort_unstable();
+            for identity in identities {
+                update(&mut hasher, identity.key());
+                update(&mut hasher, identity.version());
+            }
+        }
+        Self::new(format!("{:x}", hasher.finalize()))
     }
 }
 
