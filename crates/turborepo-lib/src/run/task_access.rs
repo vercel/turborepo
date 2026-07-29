@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::File,
     io::Write,
     sync::{Arc, Mutex},
 };
@@ -10,6 +10,7 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
+use turborepo_repository::native_tasks::ScopeNativeTasks;
 use turborepo_scm::SCM;
 use turborepo_task_executor::TaskAccessProvider;
 use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
@@ -51,11 +52,6 @@ pub struct TaskAccessTraceFile {
     pub outputs: Vec<UnescapedString>,
 }
 
-#[derive(Deserialize, Debug)]
-struct PackageJson {
-    scripts: Option<std::collections::HashMap<String, String>>,
-}
-
 pub fn trace_file_path(
     repo_root: &AbsoluteSystemPathBuf,
     task_hash: &str,
@@ -63,30 +59,21 @@ pub fn trace_file_path(
     repo_root.join_components(&[".turbo", task_hash, TASK_ACCESS_TRACE_NAME])
 }
 
-fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, std::io::Error> {
-    // TODO: use the existing config methods here
+fn task_access_trace_enabled(
+    repo_root: &AbsoluteSystemPathBuf,
+    root_tasks: &ScopeNativeTasks,
+) -> bool {
     let root_turbo_json_path = &repo_root.join_component(TURBO_CONFIG_FILE);
     if root_turbo_json_path.exists() {
-        return Ok(false);
+        return false;
     }
 
-    // read package.json at root through the same observation vocabulary as
-    // the native-task catalog — do not read scripts for task identity directly.
-    let package_json_path = repo_root.join_components(&["package.json"]);
-    let package_json_content = fs::read_to_string(package_json_path)?;
-    let package: PackageJson = serde_json::from_str(&package_json_content)?;
-    let scripts = package.scripts.unwrap_or_default();
-    let scripts: std::collections::BTreeMap<_, _> = scripts
-        .into_iter()
-        .map(|(name, value)| (name, turborepo_errors::Spanned::new(value)))
-        .collect();
-    let observation = turborepo_repository::native_tasks::observation_from_scripts("//", &scripts);
-    Ok(observation.tasks.iter().any(|task| {
+    root_tasks.tasks().iter().any(|task| {
         task.name() == "build"
             && task
                 .script()
                 .is_some_and(|script| script.as_inner() == "next build")
-    }))
+    })
 }
 
 impl TaskAccessTraceFile {
@@ -190,9 +177,13 @@ pub struct TaskAccess {
 }
 
 impl TaskAccess {
-    pub fn new(repo_root: AbsoluteSystemPathBuf, cache: AsyncCache, scm: &SCM) -> Self {
+    pub fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        cache: AsyncCache,
+        scm: &SCM,
+        enabled: bool,
+    ) -> Self {
         let root = repo_root.clone();
-        let enabled = task_access_trace_enabled(&root).unwrap_or(false);
         let trace_by_task = Arc::new(Mutex::new(HashMap::<String, TaskAccessTraceFile>::new()));
         let mut config_cache = Option::<ConfigCache>::None;
 
@@ -240,8 +231,8 @@ impl TaskAccess {
     /// Check if task access tracing is enabled without constructing the
     /// full TaskAccess (which requires a cache). Used early in the build
     /// pipeline before the HTTP client is available.
-    pub fn check_enabled(repo_root: &AbsoluteSystemPathBuf) -> bool {
-        task_access_trace_enabled(repo_root).unwrap_or(false)
+    pub fn check_enabled(repo_root: &AbsoluteSystemPathBuf, root_tasks: &ScopeNativeTasks) -> bool {
+        task_access_trace_enabled(repo_root, root_tasks)
     }
 
     pub async fn restore_config(&self) {
@@ -360,7 +351,11 @@ impl TaskAccessProvider for TaskAccess {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use tempfile::tempdir;
+    use turborepo_errors::Spanned;
+    use turborepo_repository::native_tasks::{observation_from_scripts, ScopeNativeTasks};
 
     use super::*;
 
@@ -373,6 +368,37 @@ mod tests {
             },
             outputs,
         }
+    }
+
+    fn root_tasks(build_script: &str) -> ScopeNativeTasks {
+        let observation = observation_from_scripts(
+            "//",
+            &BTreeMap::from([("build".into(), Spanned::new(build_script.into()))]),
+        );
+        ScopeNativeTasks::Available(observation.tasks.into_boxed_slice())
+    }
+
+    #[test]
+    fn task_access_eligibility_uses_native_task_knowledge() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        assert!(task_access_trace_enabled(
+            &repo_root,
+            &root_tasks("next build")
+        ));
+        assert!(!task_access_trace_enabled(
+            &repo_root,
+            &root_tasks("next build --turbo")
+        ));
+
+        repo_root
+            .join_component(TURBO_CONFIG_FILE)
+            .create_with_contents("{}")
+            .unwrap();
+        assert!(!task_access_trace_enabled(
+            &repo_root,
+            &root_tasks("next build")
+        ));
     }
 
     #[test]

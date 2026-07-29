@@ -703,19 +703,25 @@ impl RunBuilder {
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
+        let root_native_tasks = pkg_dep_graph
+            .package_task_context(&PackageName::Root)
+            .map(|context| context.native_tasks());
+        let task_access_enabled = root_package_json.is_some()
+            && root_native_tasks
+                .is_some_and(|tasks| TaskAccess::check_enabled(&self.repo_root, tasks));
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
-            if let (Some(root_package_json), true) = (
-                root_package_json.as_ref(),
-                TaskAccess::check_enabled(&self.repo_root),
-            ) {
+            if task_access_enabled {
+                let root_scripts = root_native_tasks
+                    .map(|tasks| tasks.script_names())
+                    .unwrap_or_default();
                 UnifiedTurboJsonLoader::task_access(
                     reader,
                     root_turbo_json_path.clone(),
-                    root_package_json.clone(),
+                    root_scripts,
                 )
             } else if is_single_package {
                 let root_scripts = pkg_dep_graph
@@ -890,7 +896,12 @@ impl RunBuilder {
 
         let task_access = {
             let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            let ta = TaskAccess::new(
+                self.repo_root.clone(),
+                async_cache.clone(),
+                &scm,
+                task_access_enabled,
+            );
             ta.restore_config().await;
             ta
         };
