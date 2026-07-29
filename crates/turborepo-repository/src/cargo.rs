@@ -1616,7 +1616,6 @@ impl Toolchain for CargoToolchain {
                         Some(cargo_crate.name.clone()),
                         PackageJson::default(),
                         cargo_crate.manifest_path,
-                        Some(external_dependencies),
                     )
                     .with_native_relationships(relationships)
                     .with_native_tasks(native_tasks),
@@ -1651,9 +1650,6 @@ impl Toolchain for CargoToolchain {
                         workspace_name,
                         PackageJson::default(),
                         self.repo_root.join_component(CARGO_TOML),
-                        // Workspace-scoped verbs run every crate, so the union
-                        // of all closures is this package's external surface.
-                        Some(workspace_externals),
                     )
                     .with_native_relationships(relationships)
                     .with_native_tasks(workspace_native_tasks),
@@ -3626,6 +3622,12 @@ release: 1.96.0-nightly\n",
                 .iter()
                 .any(|identity| identity.key() == "rustc")
         }));
+        assert!(
+            resolution_packages
+                .iter()
+                .all(|package| package.identities().len() == 1),
+            "the all-local fixture should expose only compiler identities"
+        );
         let mut packages: Vec<_> = packages
             .into_iter()
             .map(DiscoveredPackage::into_parts)
@@ -3637,23 +3639,6 @@ release: 1.96.0-nightly\n",
             .map(|package| package.name.as_deref().unwrap())
             .collect();
         assert_eq!(names, vec!["app", "fixture-ws", "lib-a", "lib-a-test-util"]);
-
-        for package in &packages {
-            let rustc = package
-                .external_dependencies
-                .as_ref()
-                .and_then(|dependencies| {
-                    dependencies
-                        .iter()
-                        .find(|dependency| dependency.key == "rustc")
-                })
-                .expect("compiler identity stamps every Cargo package");
-            let mut lines = rustc.version.lines();
-            assert!(lines.next().is_some_and(|line| line.starts_with("rustc ")));
-            assert!(
-                lines.any(|line| { line.starts_with("host: ") && line.len() > "host: ".len() })
-            );
-        }
 
         let app = &packages[0];
         assert!(app.descriptor.dependencies.is_none());
@@ -3667,7 +3652,7 @@ release: 1.96.0-nightly\n",
             root.join_components(&["crates", "app", "Cargo.toml"])
         );
 
-        // The synthetic workspace package is anchored at the root manifest
+        // The workspace aggregate is anchored at the root manifest
         // and depends on every crate.
         let workspace = &packages[1];
         assert_eq!(workspace.manifest_path, root.join_component(CARGO_TOML));
@@ -3682,15 +3667,6 @@ release: 1.96.0-nightly\n",
                 Relationship::internal("lib-a-test-util", DependencyKind::Production),
             ]
         );
-
-        // This all-local fixture has no external lockfile dependencies; the
-        // compiler identity is the only external identity.
-        let app_externals = app.external_dependencies.as_ref().unwrap();
-        assert_eq!(app_externals.len(), 1);
-        let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
-        assert_eq!(lib_a_externals.len(), 1);
-        let workspace_externals = workspace.external_dependencies.as_ref().unwrap();
-        assert_eq!(workspace_externals.len(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]

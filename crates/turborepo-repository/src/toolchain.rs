@@ -122,19 +122,6 @@ pub struct DiscoveredPackage {
     /// Absolute path to the package's native manifest (`package.json`,
     /// `Cargo.toml`, ...).
     manifest_path: AbsoluteSystemPathBuf,
-    /// External-dependency identities for this package, when the toolchain
-    /// resolves them at discovery time. They feed the package's
-    /// external-dependency hash: a task's hash changes exactly when an
-    /// identity in its package's set changes. Cargo computes these from
-    /// Cargo.lock (per-crate transitive closures) plus a compiler-version
-    /// stamp.
-    ///
-    /// `None` defers to the toolchain's own pipeline. Known debt (see
-    /// module docs): JavaScript's closures are computed by the graph
-    /// builder's lockfile phase — deliberately concurrent with run setup —
-    /// rather than through this field; folding that in requires a
-    /// deferred-aware trait surface.
-    external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     /// Native relationship facts, already classified by the producer. `None`
     /// preserves compatibility by asking core to classify `descriptor`,
     /// regardless of the producer's toolchain id.
@@ -157,8 +144,6 @@ pub(crate) struct DiscoveredPackageParts {
     pub scope_kind: DiscoveredScopeKind,
     pub descriptor: PackageJson,
     pub manifest_path: AbsoluteSystemPathBuf,
-    #[allow(dead_code)]
-    pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     pub native_relationships: Option<Vec<Relationship>>,
     pub native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
 }
@@ -241,7 +226,6 @@ impl DiscoveredPackage {
         name: Option<String>,
         mut descriptor: PackageJson,
         manifest_path: AbsoluteSystemPathBuf,
-        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     ) -> Self {
         let name_source = descriptor
             .name
@@ -255,7 +239,6 @@ impl DiscoveredPackage {
             scope_kind: DiscoveredScopeKind::Package,
             descriptor,
             manifest_path,
-            external_dependencies,
             native_relationships: None,
             native_tasks: None,
         }
@@ -267,7 +250,6 @@ impl DiscoveredPackage {
         name: String,
         mut descriptor: PackageJson,
         manifest_path: AbsoluteSystemPathBuf,
-        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     ) -> Self {
         descriptor.name = Some(Spanned::new(name.clone()));
         Self {
@@ -276,7 +258,6 @@ impl DiscoveredPackage {
             scope_kind: DiscoveredScopeKind::Aggregate,
             descriptor,
             manifest_path,
-            external_dependencies,
             native_relationships: None,
             native_tasks: None,
         }
@@ -303,7 +284,6 @@ impl DiscoveredPackage {
             scope_kind,
             descriptor,
             manifest_path,
-            external_dependencies,
             native_relationships,
             native_tasks,
         } = self;
@@ -313,7 +293,6 @@ impl DiscoveredPackage {
             scope_kind,
             descriptor,
             manifest_path,
-            external_dependencies,
             native_relationships,
             native_tasks,
         }
@@ -923,10 +902,6 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                             name,
                             descriptor,
                             workspace.package_json,
-                            // JavaScript closures come from the builder's
-                            // (deliberately concurrent) lockfile phase; see
-                            // the field docs.
-                            None,
                         ))
                     })
                     .collect::<Result<Vec<_>, Error>>()
@@ -1004,7 +979,6 @@ mod tests {
             Some("authoritative-name".to_string()),
             mismatched.clone(),
             path.clone(),
-            None,
         )
         .into_parts();
         assert_eq!(package.name.as_deref(), Some("authoritative-name"));
@@ -1014,7 +988,7 @@ mod tests {
             Some("authoritative-name")
         );
 
-        let unnamed = DiscoveredPackage::package(None, mismatched, path.clone(), None).into_parts();
+        let unnamed = DiscoveredPackage::package(None, mismatched, path.clone()).into_parts();
         assert_eq!(unnamed.name, None);
         assert_eq!(unnamed.name_source, None);
         assert_eq!(unnamed.descriptor.name, None);
@@ -1030,18 +1004,13 @@ mod tests {
                 ..Default::default()
             },
             path.clone(),
-            None,
         )
         .into_parts();
         assert_eq!(matching.name_source, Some(authored_name.to(())));
 
-        let aggregate = DiscoveredPackage::aggregate(
-            "workspace".to_string(),
-            PackageJson::default(),
-            path,
-            None,
-        )
-        .into_parts();
+        let aggregate =
+            DiscoveredPackage::aggregate("workspace".to_string(), PackageJson::default(), path)
+                .into_parts();
         assert_eq!(aggregate.name.as_deref(), Some("workspace"));
         assert_eq!(aggregate.name_source, None);
         assert_eq!(aggregate.scope_kind, DiscoveredScopeKind::Aggregate);

@@ -136,7 +136,6 @@ impl Toolchain for AggregateToolchain {
                     "cargo-workspace".to_owned(),
                     PackageJson::default(),
                     self.repo_root.join_component("Cargo.toml"),
-                    Some(HashSet::new()),
                 )],
                 vec![WorkspaceRoot::new("aggregate-test", self.repo_root.clone())],
             ))
@@ -199,7 +198,6 @@ impl Toolchain for StubIOToolchain {
                     },
                     self.repo_root
                         .join_components(&["packages", name, "stub.json"]),
-                    Some(HashSet::new()),
                 )
             };
             Ok(DiscoveredPackages::new(

@@ -155,7 +155,7 @@ Represents the workspace structure and package dependencies:
   consumes the normalized external declaration view; inline and deferred
   lockfile closure calculation create the same immutable snapshot. Cargo
   contributes per-crate closures, the aggregate workspace union, and the full
-  `rustc -vV` identity from the same sets used by compatibility payloads. Cargo
+  `rustc -vV` identity directly through its external-resolution domain. Cargo
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
   identities, definition sources, completeness, and stable fingerprints. A
