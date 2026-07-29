@@ -888,13 +888,20 @@ jobs:
       - name: Create PR with auto-merge
         id: create-pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TURBOBOT_TOKEN: ${{ secrets.TURBOBOT }}
+          WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
 
-          PR_URL=$(gh pr create \
-            --title "release(turborepo): ${VERSION}" \
+          BOT_LOGIN=$(GH_TOKEN="$TURBOBOT_TOKEN" gh api user --jq '.login')
+          if [ "$BOT_LOGIN" != "turbobot" ]; then
+            echo "::error::TURBOBOT must authenticate as turbobot, got ${BOT_LOGIN}"
+            exit 1
+          fi
+
+          PR_URL=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr create \
+            --title "chore: Release Turborepo ${VERSION}" \
             --body-file pr-body.md \
             --head "${STAGE_BRANCH}" \
             --base main)
@@ -903,7 +910,8 @@ jobs:
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "number=$PR_NUM" >> $GITHUB_OUTPUT
 
-          gh pr merge "$PR_NUM" --auto --squash
+          GH_TOKEN="$WORKFLOW_TOKEN" gh pr review "$PR_NUM" --approve
+          GH_TOKEN="$WORKFLOW_TOKEN" gh pr merge "$PR_NUM" --auto --squash
 
   cleanup-on-failure:
     name: "Cleanup Failed Release"
