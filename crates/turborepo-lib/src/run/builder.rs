@@ -1256,14 +1256,13 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph.package_task_contexts().any(|context| {
-                context
-                    .toolchain()
-                    .and_then(|id| pkg_dep_graph.toolchains().get(id))
-                    .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
-            }) || engine.task_ids().any(|task_id| {
-                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
-            });
+            let has_command = pkg_dep_graph
+                .package_task_contexts()
+                .any(|context| context.native_tasks().defines(task.task()))
+                || engine.task_ids().any(|task_id| {
+                    task_id.task() == task.task()
+                        && task_has_command(engine, pkg_dep_graph, task_id)
+                });
 
             for package in candidate_packages {
                 let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
