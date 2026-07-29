@@ -1,7 +1,7 @@
 //! Parser-neutral external dependency declarations and exact resolutions.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ops::Range,
 };
 
@@ -492,6 +492,92 @@ pub(crate) enum ExternalResolutionError {
         toolchain: ToolchainId,
         identity: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ExternalResolutionChanges {
+    All,
+    Packages(Vec<PackageResolutionChange>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PackageResolutionChange {
+    pub package: String,
+    pub added: Vec<ExternalPackageIdentity>,
+    pub removed: Vec<ExternalPackageIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum ExternalResolutionComparisonError {
+    #[error("external resolution unavailable")]
+    Unavailable,
+    #[error("previous external resolution is missing package {0}")]
+    MissingPackage(String),
+}
+
+/// Compares two complete, normalized resolution domains without knowing which
+/// ecosystem produced them.
+pub(crate) fn compare_resolution_data(
+    current: &ExternalResolutionData,
+    previous: &ExternalResolutionData,
+    invalidate_all: bool,
+    root_package: &str,
+) -> Result<ExternalResolutionChanges, ExternalResolutionComparisonError> {
+    fn resolved_packages(
+        data: &ExternalResolutionData,
+    ) -> Result<&[PackageResolution], ExternalResolutionComparisonError> {
+        match data {
+            ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Complete,
+                packages,
+                ..
+            } => Ok(packages),
+            ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Partial(_),
+                ..
+            }
+            | ExternalResolutionData::Unavailable(_) => {
+                Err(ExternalResolutionComparisonError::Unavailable)
+            }
+        }
+    }
+    let current = resolved_packages(current)?;
+    let previous = resolved_packages(previous)?;
+    if invalidate_all {
+        return Ok(ExternalResolutionChanges::All);
+    }
+
+    let previous_by_package: BTreeMap<_, _> = previous
+        .iter()
+        .map(|package| (package.package(), package))
+        .collect();
+    let mut changes = Vec::new();
+    for package in current {
+        let previous = previous_by_package.get(package.package()).ok_or_else(|| {
+            ExternalResolutionComparisonError::MissingPackage(package.package().to_string())
+        })?;
+        if package.identities() == previous.identities() {
+            continue;
+        }
+        if package.package() == root_package {
+            return Ok(ExternalResolutionChanges::All);
+        }
+
+        let previous: BTreeSet<_> = previous.identities().iter().collect();
+        let current: BTreeSet<_> = package.identities().iter().collect();
+        changes.push(PackageResolutionChange {
+            package: package.package().to_string(),
+            added: current
+                .difference(&previous)
+                .map(|identity| (*identity).clone())
+                .collect(),
+            removed: previous
+                .difference(&current)
+                .map(|identity| (*identity).clone())
+                .collect(),
+        });
+    }
+    Ok(ExternalResolutionChanges::Packages(changes))
 }
 
 #[cfg(test)]

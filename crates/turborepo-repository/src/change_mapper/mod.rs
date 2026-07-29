@@ -14,11 +14,8 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::{
-    package_graph::{
-        ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
-    },
-    package_manager::{PackageManager, yarnrc},
+use crate::package_graph::{
+    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
 };
 
 mod package;
@@ -305,28 +302,9 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let yarnrc = if matches!(
-            self.pkg_graph.package_manager(),
-            Some(PackageManager::Berry)
-        ) {
-            Some(yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())?)
-        } else {
-            None
-        };
-        let Some(package_manager) = self.pkg_graph.package_manager() else {
-            return Ok(Vec::new());
-        };
-        let Some(root_package_json) = self.pkg_graph.root_package_json() else {
-            return Ok(Vec::new());
-        };
-        let previous_lockfile =
-            package_manager.parse_lockfile(root_package_json, lockfile_content, yarnrc)?;
-
-        let additional_packages = self
-            .pkg_graph
-            .changed_packages_from_lockfile(previous_lockfile.as_ref())?;
-
-        Ok(additional_packages)
+        self.pkg_graph
+            .changed_packages_from_lockfile_contents(lockfile_content)
+            .map_err(Into::into)
     }
 
     pub fn lockfile_changed(
@@ -346,26 +324,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 pub enum ChangeMapError {
     #[error(transparent)]
     Wax(#[from] wax::BuildError),
-    #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
-    #[error("Yarn config error: {0}")]
-    Yarnrc(#[from] yarnrc::Error),
-    #[error("No lockfile")]
-    NoLockfile,
-    #[error("Missing compatibility payload for package {0}")]
-    MissingPackagePayload(PackageName),
-    #[error("Lockfile error: {0}")]
-    Lockfile(turborepo_lockfiles::Error),
-}
-
-impl From<ChangedPackagesError> for ChangeMapError {
-    fn from(value: ChangedPackagesError) -> Self {
-        match value {
-            ChangedPackagesError::NoLockfile => Self::NoLockfile,
-            ChangedPackagesError::MissingPackagePayload(name) => Self::MissingPackagePayload(name),
-            ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
-        }
-    }
+    #[error(transparent)]
+    ChangedPackages(#[from] ChangedPackagesError),
 }
 
 #[cfg(test)]
