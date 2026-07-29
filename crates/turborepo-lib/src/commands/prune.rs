@@ -1286,7 +1286,7 @@ impl<'a> Prune<'a> {
             .package_graph
             .transitive_external_dependencies(workspaces.iter())
             .into_iter()
-            .map(|pkg| pkg.key.clone())
+            .map(|pkg| pkg.key)
             .collect::<HashSet<_>>();
 
         let lockfile = self

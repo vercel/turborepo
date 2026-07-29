@@ -106,6 +106,9 @@ pub struct PackageGraph {
     /// across toolchains. Deferred JavaScript production is joined once by
     /// [`Self::ensure_transitive_closures`].
     external_resolution: Mutex<ExternalResolutionKnowledge>,
+    /// Lazy reverse index from resolved external identities to internal
+    /// dependents. Built once from the resolution generation for query and
+    /// related package-listing consumers.
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
     /// Lazily computed internal dependencies of the root package. They are
@@ -1227,29 +1230,70 @@ impl PackageGraph {
         visited
     }
 
+    /// Exact external identities attributed to the requested packages.
+    ///
+    /// Reads the immutable resolution generation rather than
+    /// `PackageInfo::transitive_dependencies`. Callers that need deferred
+    /// resolution must join it first via [`Self::ensure_transitive_closures`].
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
         packages: I,
-    ) -> HashSet<&turborepo_lockfiles::Package> {
-        packages
-            .into_iter()
-            .filter_map(|package| self.package_payloads.get(package))
-            .filter_map(|entry| entry.transitive_dependencies.as_ref())
-            .flatten()
-            .map(|pkg| &**pkg)
-            .collect()
+    ) -> HashSet<turborepo_lockfiles::Package> {
+        let requested: HashSet<&str> = packages.into_iter().map(PackageName::as_str).collect();
+        if requested.is_empty() {
+            return HashSet::new();
+        }
+        self.resolved_external_identities(|package| requested.contains(package))
     }
 
     pub fn internal_dependencies_for_external_dependency(
         &self,
         external_package: &turborepo_lockfiles::Package,
     ) -> Option<&HashSet<PackageNode>> {
-        // In order to answer this once we have to calculate the info for every external
-        // package so we store the results
+        // Lazy reverse index over resolution-generation identities. Built once
+        // per graph and shared by query / N-API consumers.
         let map = self
             .external_dep_to_internal_dependents
             .get_or_init(|| self.build_external_dep_to_internal_dependents_map());
         map.get(external_package)
+    }
+
+    /// Collect exact external identities from resolved domains for packages
+    /// matching `include_package`.
+    fn resolved_external_identities(
+        &self,
+        mut include_package: impl FnMut(&str) -> bool,
+    ) -> HashSet<turborepo_lockfiles::Package> {
+        let resolution = self
+            .external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(generation) = resolution.generation.as_ref() else {
+            return HashSet::new();
+        };
+
+        let mut identities = HashSet::new();
+        for domain in generation.domains() {
+            let ExternalResolutionData::Resolved {
+                packages: resolved_packages,
+                ..
+            } = domain.data()
+            else {
+                continue;
+            };
+            for package in resolved_packages {
+                if !include_package(package.package()) {
+                    continue;
+                }
+                for identity in package.identities() {
+                    identities.insert(turborepo_lockfiles::Package::new(
+                        identity.key(),
+                        identity.version(),
+                    ));
+                }
+            }
+        }
+        identities
     }
 
     /// Builds a map from external dependencies to the set of internal workspace
@@ -1257,29 +1301,46 @@ impl PackageGraph {
     fn build_external_dep_to_internal_dependents_map(
         &self,
     ) -> HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> {
-        // TODO: provide size hint from Lockfile trait
+        let resolution = self
+            .external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(generation) = resolution.generation.as_ref() else {
+            return HashMap::new();
+        };
+
         let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
-        // First find which packages directly depend on each external package
-        for context in self.package_task_contexts() {
-            let Some(info) = context.package_info() else {
-                debug_assert!(
-                    !context.requires_compatibility_payload(),
-                    "builder invariant: required package context has no payload"
-                );
+        // Direct dependents from resolution identities only — no PackageInfo
+        // closure payload reads.
+        for domain in generation.domains() {
+            let ExternalResolutionData::Resolved {
+                packages: resolved_packages,
+                ..
+            } = domain.data()
+            else {
                 continue;
             };
-            for dep in info.transitive_dependencies.iter().flatten() {
-                let rdeps = map.entry((**dep).clone()).or_default();
-                rdeps.insert(PackageNode::Workspace(context.package().clone()));
+            for package in resolved_packages {
+                let workspace = PackageNode::Workspace(PackageName::from(package.package()));
+                for identity in package.identities() {
+                    let rdeps = map
+                        .entry(turborepo_lockfiles::Package::new(
+                            identity.key(),
+                            identity.version(),
+                        ))
+                        .or_default();
+                    rdeps.insert(workspace.clone());
+                }
             }
         }
-        // Now trace through all ancestors of the direct dependants
+        drop(resolution);
+
+        // Expand through graph ancestors. Root external/internal dependencies
+        // imply the whole workspace depends on the external package.
         let root_internal_dependencies = self.root_internal_dependencies();
         let root_external_dependencies =
             self.transitive_external_dependencies(Some(&PackageName::Root));
         for (external_pkg, rdeps) in map.iter_mut() {
-            // If one of the reverse dependencies of this external package is a root
-            // dependency, everything depends on this
             if root_external_dependencies.contains(external_pkg)
                 || !root_internal_dependencies.is_disjoint(rdeps)
             {
@@ -1352,7 +1413,7 @@ impl AsRef<str> for PackageName {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, path::Path, process::Command};
+    use std::{fs, path::Path, process::Command, time::Instant};
 
     use serde_json::json;
     use turbopath::AbsoluteSystemPathBuf;
@@ -1833,7 +1894,43 @@ mod test {
         assert_eq!(bar_deps, &vec![Arc::new(b.clone()), Arc::new(c.clone())]);
         assert_eq!(
             pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
-            HashSet::from_iter(vec![&a, &b, &c,])
+            HashSet::from_iter([a.clone(), b.clone(), c.clone()])
+        );
+
+        assert!(
+            pkg_graph
+                .external_dep_to_internal_dependents
+                .get()
+                .is_none(),
+            "reverse index must stay lazy until first query"
+        );
+
+        let first = Instant::now();
+        let c_dependents = pkg_graph
+            .internal_dependencies_for_external_dependency(&c)
+            .expect("shared external identity should index dependents")
+            .clone();
+        let first_elapsed = first.elapsed();
+        assert!(c_dependents.contains(&PackageNode::Workspace(foo.clone())));
+        assert!(c_dependents.contains(&PackageNode::Workspace(bar.clone())));
+
+        let second = Instant::now();
+        let again = pkg_graph
+            .internal_dependencies_for_external_dependency(&c)
+            .expect("cached reverse index should remain available")
+            .clone();
+        let second_elapsed = second.elapsed();
+        assert_eq!(c_dependents, again);
+        assert!(
+            second_elapsed <= first_elapsed,
+            "cached reverse-index lookup ({second_elapsed:?}) should not exceed first build \
+             ({first_elapsed:?})"
+        );
+        assert!(
+            pkg_graph
+                .external_dep_to_internal_dependents
+                .get()
+                .is_some()
         );
     }
 

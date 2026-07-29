@@ -780,7 +780,7 @@ impl RepositoryQuery {
         let mut packages = pkg_dep_graph
             .transitive_external_dependencies(all_package_names.iter())
             .into_iter()
-            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg))
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)

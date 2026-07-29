@@ -167,10 +167,12 @@ Represents the workspace structure and package dependencies:
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
   ecosystem knowledge; unavailable, parse, and comparison failures retain the
-  conservative all-packages fallback. The snapshot projects temporary
-  `PackageInfo` closure/hash fields for the remaining global-hash migration.
-  Framework inference and boundaries validation consume the package-scoped
-  declaration projection directly;
+  conservative all-packages fallback. Query external-package listing and the
+  lazy reverse index of internal dependents read exact identities from the
+  same resolution generation; human display names remain lockfile formatting.
+  The snapshot projects temporary `PackageInfo` closure/hash fields for the
+  remaining global-hash migration. Framework inference and boundaries
+  validation consume the package-scoped declaration projection directly;
   aliases, duplicate
   precedence, optional declarations, and peers remain explicit normalized
   facts rather than raw manifest reads.
