@@ -1905,11 +1905,10 @@ mod test {
         );
     }
 
-    // Regression test: connect_internal_dependencies must produce correct
-    // graph edges and external deps regardless of iteration order or
-    // parallelism. This captures the exact edges and
-    // unresolved_external_dependencies so any refactor of the collection phase
-    // (e.g. rayon parallelization) is safe.
+    // Regression test: relationship projection must produce correct graph
+    // edges and external declaration views regardless of iteration order or
+    // parallelism. This captures edges and declaration projections so any
+    // refactor of the collection phase (e.g. rayon parallelization) is safe.
     #[tokio::test]
     async fn test_connect_internal_dependencies_produces_correct_edges() {
         let root =
