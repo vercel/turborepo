@@ -102,11 +102,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         Ok(package_graph
             .package_task_context(&PackageName::from(task_id.package()))
-            .and_then(|context| {
-                let toolchain = package_graph.toolchains().get(context.toolchain()?)?;
-                Some((context, toolchain))
-            })
-            .is_some_and(|(context, toolchain)| toolchain.registers_task(&context, task_id.task())))
+            .is_some_and(|context| context.native_tasks().registers(task_id.task())))
     }
 
     fn has_task_definition_in_run_inner(
@@ -260,12 +256,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // tasks that depend on them.
         let defines_task = package_context
             .as_ref()
-            .zip(toolchain)
-            .is_some_and(|(context, toolchain)| toolchain.defines_task(context, task_id.task()));
+            .is_some_and(|context| context.native_tasks().defines(task_id.task()));
         let registered_task = package_context
             .as_ref()
-            .zip(toolchain)
-            .is_some_and(|(context, toolchain)| toolchain.registers_task(context, task_id.task()));
+            .is_some_and(|context| context.native_tasks().registers(task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
@@ -331,15 +325,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let command_override = resolve_command_override(
             scoped_command,
             unscoped_command,
-            package_context
-                .as_ref()
-                .zip(toolchain)
-                .and_then(|(context, toolchain)| {
-                    Some((
-                        context.toolchain()?,
-                        toolchain.authors_task(context, task_id.as_inner().task()),
-                    ))
-                }),
+            package_context.as_ref().and_then(|context| {
+                Some((
+                    context.toolchain()?,
+                    context.native_tasks().authors(task_id.as_inner().task()),
+                ))
+            }),
         );
 
         let mut processed_task_definition = ProcessedTaskDefinition::from_iter(
@@ -471,13 +462,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let registered_task = self
             .package_graph
             .package_task_context(&package_name)
-            .and_then(|context| {
-                let toolchain = self.package_graph.toolchains().get(context.toolchain()?)?;
-                Some((context, toolchain))
-            })
-            .is_some_and(|(context, toolchain)| {
-                toolchain.registers_task(&context, task_id.as_inner().task())
-            });
+            .is_some_and(|context| context.native_tasks().registers(task_id.as_inner().task()));
         Ok(Self::resolve_task_definitions_from_chain(
             turbo_json_chain,
             task_id,
