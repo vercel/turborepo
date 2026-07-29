@@ -1309,9 +1309,18 @@ impl PackageGraph {
     /// Mirrors the historical behavior of hashing `package.json` plus the
     /// package-manager lockfile path when a lockfile object was not loaded:
     /// include the repository root `package.json` and any existing resolution
-    /// definition sources from the JavaScript domain.
+    /// definition sources from the JavaScript domain. Single-package mode has
+    /// no resolution generation, so it retains the package-manager fallback.
     pub fn external_resolution_global_file_fallback(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
-        let generation = self.resolution_generation()?;
+        let Some(generation) = self.resolution_generation() else {
+            let package_manager = self.package_manager()?;
+            let mut paths = vec![self.repo_root().join_component("package.json")];
+            let lockfile_path = package_manager.lockfile_path(self.repo_root());
+            if lockfile_path.exists() {
+                paths.push(lockfile_path);
+            }
+            return Some(paths);
+        };
         let domain = generation
             .domains()
             .iter()
