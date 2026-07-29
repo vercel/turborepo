@@ -218,6 +218,7 @@ The remaining payload deletion phases are explicit:
 - **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
 - **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. `Toolchain::task_command` / `task_display_command` / `authors_task` / `registered_tasks` / `registers_task` / `defines_task` have been deleted — only the JavaScript producer and the LSP unsaved-source adapter parse scripts.
 - **Phase 5 (in progress):** Task-contract knowledge catalog is produced for JavaScript scopes; engine composition and global `engines` hashing consume it; JS packages are excluded from Toolchain task-I/O environment dispatch. Remaining: fuller hash/framework contract production and final Phase 5 gate. Later: Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
+- **Phase 6 (complete for JS change knowledge first wave):** Change knowledge is produced at repository construction; watcher classification and scope lockfile probes consume it via `active_watch_spec` / `resolution_paths` rather than ad-hoc package-manager probes.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,
@@ -279,8 +280,9 @@ topological (`^`) dependencies.
 The package graph is generic over language toolchains. The existing discovery
 method returns one envelope containing packages/scopes and workspace-root
 observations. Core validates the combined contributed roots
-without adding another behavioral toolchain method. Watching native marker-only
-changes that are not observed by today's package watcher remains Phase 6 work.
+without adding another behavioral toolchain method. Watch classification consumes foundational change knowledge (JavaScript
+membership/workspace/resolution triggers) combined with active toolchain
+`WatchSpec`s; remaining marker-only edge cases stay follow-up work.
 Native discovery output contributes package/scope observations to repository
 knowledge, while a
 `Toolchain` continues to answer ecosystem-specific behavioral questions such as
