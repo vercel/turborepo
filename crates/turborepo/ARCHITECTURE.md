@@ -172,9 +172,11 @@ Represents the workspace structure and package dependencies:
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
   ecosystem knowledge; unavailable, parse, and comparison failures retain the
-  conservative all-packages fallback. The snapshot projects temporary
-  `PackageInfo` closure/hash fields for the remaining prune and global-hash
-  migrations.
+  conservative all-packages fallback. Prune lockfile-key unions also consume
+  exact per-package resolution identities for retained JavaScript workspaces,
+  while external-peer closure expansion still consults the lockfile directly.
+  The snapshot projects temporary `PackageInfo` closure/hash fields for the
+  remaining global-hash migration.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate
