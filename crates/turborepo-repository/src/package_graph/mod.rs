@@ -3038,10 +3038,7 @@ version = "0.1.0"
             Some(&crate::toolchain::ToolchainId::RUST)
         );
         let command = pkg_graph
-            .toolchains()
-            .get(app_context.toolchain().unwrap())
-            .unwrap()
-            .task_command(&app_context, "build", None, None)
+            .resolve_native_task_command(&app_context, "build", None, None)
             .unwrap()
             .unwrap();
         assert_eq!(
