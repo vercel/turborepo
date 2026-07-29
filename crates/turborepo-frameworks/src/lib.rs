@@ -178,10 +178,10 @@ mod tests {
     #[test_case(PackageInfo::default(), None, true; "empty dependencies")]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("blitz".to_string(), "*".to_string())].into_iter().collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("blitz", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("blitzjs")),
         true;
@@ -189,13 +189,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("blitz", "*"), ("next", "*")]
-                    .into_iter()
-                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
-                    .collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("blitz", "*"), ("next", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("blitzjs")),
         true;
@@ -203,13 +200,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("next", "*")]
-                    .into_iter()
-                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
-                    .collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("next", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("nextjs")),
         true;
@@ -217,13 +211,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("solid-js", "*"), ("solid-start", "*")]
-                    .into_iter()
-                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
-                    .collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("solid-js", "*"), ("solid-start", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("solidstart")),
         true;
@@ -231,13 +222,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("nuxt3", "*")]
-                    .into_iter()
-                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
-                    .collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("nuxt", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("nuxtjs")),
         true;
@@ -245,13 +233,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            unresolved_external_dependencies: Some(
-                vec![("react-scripts", "*")]
-                    .into_iter()
-                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
-                    .collect()
-            ),
-            ..Default::default()
+            package_json: PackageJson {
+                dependencies: deps(&[("react-scripts", "*")]),
+                ..Default::default()
+            },
         },
         Some(get_framework_by_slug("create-react-app")),
         true;
@@ -259,16 +244,15 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            package_json: PackageJson {
-              dependencies: Some(
+              package_json: PackageJson {
+                            dependencies: Some(
                 vec![("next", "*")]
                     .into_iter()
                     .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
                     .collect()
               ),
-              ..Default::default()
-            },
-            ..Default::default()
+                            ..Default::default()
+              },
         },
         Some(get_framework_by_slug("nextjs")),
         false;
@@ -276,16 +260,15 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            package_json: PackageJson {
-              dev_dependencies: Some(
+              package_json: PackageJson {
+                            dev_dependencies: Some(
                 vec![("vite", "*")]
                     .into_iter()
                     .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
                     .collect()
               ),
-              ..Default::default()
-            },
-            ..Default::default()
+                            ..Default::default()
+              },
         },
         Some(get_framework_by_slug("vite")),
         false;
@@ -294,11 +277,10 @@ mod tests {
     #[test_case(PackageInfo::default(), None, false; "empty dependencies in non-monorepo")]
     #[test_case(
         PackageInfo {
-            package_json: PackageJson {
-                dev_dependencies: deps(&[("vite", "*")]),
-                ..Default::default()
-            },
-            ..Default::default()
+                package_json: PackageJson {
+                                dev_dependencies: deps(&[("vite", "*")]),
+                                ..Default::default()
+                },
         },
         None,
         true;
@@ -306,12 +288,11 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            package_json: PackageJson {
-                dependencies: deps(&[("solid-js", "*")]),
+                package_json: PackageJson {
+                                dependencies: deps(&[("solid-js", "*")]),
                 dev_dependencies: deps(&[("solid-start", "*")]),
-                ..Default::default()
-            },
-            ..Default::default()
+                                ..Default::default()
+                },
         },
         Some(get_framework_by_slug("solidstart")),
         false;
@@ -319,11 +300,10 @@ mod tests {
     )]
     #[test_case(
         PackageInfo {
-            package_json: PackageJson {
-                dev_dependencies: deps(&[("react-scripts", "*")]),
-                ..Default::default()
-            },
-            ..Default::default()
+                package_json: PackageJson {
+                                dev_dependencies: deps(&[("react-scripts", "*")]),
+                                ..Default::default()
+                },
         },
         Some(get_framework_by_slug("create-react-app")),
         false;
@@ -336,7 +316,8 @@ mod tests {
     ) {
         let declarations = if is_monorepo {
             workspace_info
-                .unresolved_external_dependencies
+                .package_json
+                .dependencies
                 .iter()
                 .flatten()
                 .map(|(name, specifier)| {
@@ -367,7 +348,7 @@ mod tests {
                 .map(|(name, specifier, kind)| {
                     ExternalDeclaration::new("workspace", name, name, specifier, kind)
                 })
-                .collect()
+                .collect::<Vec<_>>()
         };
         let framework = infer_framework(
             PackageExternalDeclarations::new(&declarations, "workspace"),

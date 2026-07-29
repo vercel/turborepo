@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -43,13 +43,10 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
-type DeferredResolutionReceiver = javascript::DeferredResolutionReceiver;
-
 #[derive(Debug)]
 struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
-    receiver: Option<DeferredResolutionReceiver>,
 }
 
 impl ExternalResolutionKnowledge {
@@ -57,7 +54,6 @@ impl ExternalResolutionKnowledge {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: None,
-            receiver: None,
         }
     }
 
@@ -65,25 +61,7 @@ impl ExternalResolutionKnowledge {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: Some(generation),
-            receiver: None,
         }
-    }
-
-    fn resolving(receiver: DeferredResolutionReceiver) -> Self {
-        Self {
-            status: ExternalResolutionStatus::Resolving,
-            generation: None,
-            receiver: Some(receiver),
-        }
-    }
-
-    fn take_receiver(&mut self) -> Option<DeferredResolutionReceiver> {
-        self.receiver.take()
-    }
-
-    fn finish(&mut self, generation: Option<Arc<ExternalResolutionGeneration>>) {
-        self.status = ExternalResolutionStatus::Complete;
-        self.generation = generation;
     }
 }
 
@@ -105,9 +83,9 @@ pub struct PackageGraph {
     relationship_knowledge: Arc<RelationshipKnowledge>,
     external_declarations: OnceLock<ExternalDeclarations>,
     relationship_projections: OnceLock<projections::RelationshipProjections>,
-    /// The sole owner of external-resolution lifecycle and terminal knowledge
-    /// across toolchains. Deferred JavaScript production is joined once by
-    /// [`Self::ensure_transitive_closures`].
+    /// The sole owner of external-resolution terminal knowledge across
+    /// toolchains. Resolution is complete when the package graph is returned
+    /// from construction.
     external_resolution: Mutex<ExternalResolutionKnowledge>,
     /// Lazy reverse index from exact external identities to internal
     /// dependents. Built once from the resolution generation, not from
@@ -146,11 +124,12 @@ impl WorkspacePackage {
     }
 }
 
-/// Compatibility data retained for descriptor relationship classification,
-/// JavaScript lockfile resolution/hash state, and task consumers.
+/// Compatibility data retained for descriptor relationship classification
+/// and task consumers.
 ///
-/// Package identity, directory ownership, definition source, and provenance
-/// are authoritative in [`RepositoryKnowledge`], not in this projection.
+/// Package identity, directory ownership, definition source, provenance, and
+/// external-resolution state are authoritative in repository knowledge, not in
+/// this projection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
     /// A temporary compatibility descriptor for relationship classification
@@ -158,20 +137,7 @@ pub struct PackageInfo {
     /// Its native `name` may be retained for later payload semantics, but must
     /// never be used as package identity or to derive paths or provenance.
     pub package_json: PackageJson,
-    pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
-    /// The workspace's external dependency closure, sorted by `Package`'s
-    /// `(key, version)` ordering. Members are `Arc`-shared across workspaces.
-    pub transitive_dependencies: Option<Vec<Arc<turborepo_lockfiles::Package>>>,
-    /// Hash of `transitive_dependencies`, precomputed by the JavaScript
-    /// lockfile phase so task hashing and run summaries never re-sort or
-    /// re-hash closures. When `None` with a `Some` closure (toolchain-
-    /// resolved closures, e.g. Cargo's), consumers compute the hash from
-    /// the sorted closure on demand.
-    pub external_deps_hash: Option<String>,
 }
-
-type PackageKey = String;
-type PackageVersion = String;
 
 // PackageName refers to a real package's name or the root package.
 // It's not the best name, because root isn't a real package, but it's
@@ -843,48 +809,6 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
-    /// Join the background transitive-closure computation (if the graph was
-    /// built with deferred closures) and install the results. Idempotent and
-    /// cheap when there is nothing to join. Must be called before any
-    /// consumer of `PackageInfo::transitive_dependencies` runs.
-    pub fn ensure_transitive_closures(&mut self) {
-        let receiver = self
-            .external_resolution
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take_receiver();
-        let Some(receiver) = receiver else {
-            return;
-        };
-        match receiver.recv() {
-            Ok(Ok(mut snapshot)) => {
-                if let Some(warning) = snapshot.warning.take() {
-                    tracing::warn!("Unable to calculate transitive closures: {}", warning);
-                }
-                let generation = Arc::clone(&snapshot.generation);
-                snapshot.project_legacy(&mut self.package_payloads, &self.knowledge);
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(Some(generation));
-            }
-            Ok(Err(e)) => {
-                tracing::warn!("Unable to calculate transitive closures: {}", e);
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(None);
-            }
-            Err(_) => {
-                tracing::warn!("transitive closure thread disappeared without a result");
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(None);
-            }
-        }
-    }
-
     pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
         self.external_resolution
             .lock()
@@ -1241,19 +1165,6 @@ impl PackageGraph {
         visited
     }
 
-    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
-        &self,
-        packages: I,
-    ) -> HashSet<&turborepo_lockfiles::Package> {
-        packages
-            .into_iter()
-            .filter_map(|package| self.package_payloads.get(package))
-            .filter_map(|entry| entry.transitive_dependencies.as_ref())
-            .flatten()
-            .map(|pkg| &**pkg)
-            .collect()
-    }
-
     /// Unique external package identities from the resolution generation.
     ///
     /// Display names are the producer-supplied human names captured during
@@ -1264,7 +1175,7 @@ impl PackageGraph {
 
     /// Exact external identities attributed to the given packages by the
     /// resolution generation. Used by prune lockfile-key unions so they no
-    /// longer read `PackageInfo::transitive_dependencies`.
+    /// read resolution generation identities.
     pub fn external_package_identities_for_packages<'a, I>(
         &self,
         packages: I,
@@ -1464,16 +1375,6 @@ impl PackageGraph {
             dependents,
         }
     }
-
-    // Returns a map of package name and version for external dependencies
-    #[allow(dead_code)]
-    fn external_dependencies(
-        &self,
-        package: &PackageName,
-    ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
-        let entry = self.package_payloads.get(package)?;
-        entry.unresolved_external_dependencies.as_ref()
-    }
 }
 
 impl fmt::Display for PackageName {
@@ -1519,7 +1420,7 @@ impl AsRef<str> for PackageName {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, path::Path, process::Command};
+    use std::{collections::BTreeMap, fs, path::Path, process::Command};
 
     use serde_json::json;
     use turbopath::AbsoluteSystemPathBuf;
@@ -1847,13 +1748,16 @@ mod test {
             .iter()
             .collect::<HashSet<_>>()
         );
-        let b_external = pkg_graph
-            .package_payloads
-            .get(&PackageName::from("b"))
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let b_external: std::collections::BTreeMap<_, _> = pkg_graph
+            .external_declarations(&PackageName::from("b"))
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
 
         let pkg_version = b_external.get("c").unwrap();
         assert_eq!(pkg_version, "1.2.3");
@@ -1978,30 +1882,9 @@ mod test {
         let foo = PackageName::from("foo");
         let bar = PackageName::from("bar");
 
-        let foo_deps = pkg_graph
-            .package_payloads
-            .get(&foo)
-            .unwrap()
-            .transitive_dependencies
-            .as_ref()
-            .unwrap();
-        let bar_deps = pkg_graph
-            .package_payloads
-            .get(&bar)
-            .unwrap()
-            .transitive_dependencies
-            .as_ref()
-            .unwrap();
         let a = turborepo_lockfiles::Package::new("key:a", "1");
-        let b = turborepo_lockfiles::Package::new("key:b", "1");
-        let c = turborepo_lockfiles::Package::new("key:c", "1");
-        // Closures are sorted by (key, version).
-        assert_eq!(foo_deps, &vec![Arc::new(a.clone()), Arc::new(c.clone())]);
-        assert_eq!(bar_deps, &vec![Arc::new(b.clone()), Arc::new(c.clone())]);
-        assert_eq!(
-            pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
-            HashSet::from_iter(vec![&a, &b, &c,])
-        );
+        let _b = turborepo_lockfiles::Package::new("key:b", "1");
+        let _c = turborepo_lockfiles::Package::new("key:c", "1");
 
         let identities = pkg_graph.external_package_identities();
         assert_eq!(
@@ -2144,12 +2027,10 @@ mod test {
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].package(), ROOT_PKG_NAME);
         assert!(packages[0].identities().is_empty());
-        assert_eq!(
+        assert!(
             resolved
-                .package_payloads
-                .get(&PackageName::Root)
-                .and_then(|info| info.transitive_dependencies.as_deref()),
-            Some(&[][..])
+                .external_package_identities_for_packages([&PackageName::Root])
+                .is_empty()
         );
 
         let unavailable = PackageGraph::builder(&root, root_package())
@@ -2168,9 +2049,8 @@ mod test {
         assert_eq!(reason.code(), "lockfile-unavailable");
         assert!(
             unavailable
-                .package_payloads
-                .get(&PackageName::Root)
-                .is_some_and(|info| info.transitive_dependencies.is_none())
+                .external_resolution_global_file_fallback()
+                .is_some()
         );
 
         let fallback = unavailable
@@ -2187,127 +2067,6 @@ mod test {
                 .is_none(),
             "resolved domains must not use the global file fallback"
         );
-    }
-
-    /// A graph built with deferred closures must, after
-    /// `ensure_transitive_closures`, be indistinguishable from one built
-    /// inline.
-    #[tokio::test]
-    async fn test_deferred_closures_match_inline() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let package_jsons = || {
-            let mut map = HashMap::new();
-            map.insert(
-                root.join_components(&["package_a", "package.json"]),
-                PackageJson::from_value(json!({
-                    "name": "foo",
-                    "dependencies": { "a": "1" }
-                }))
-                .unwrap(),
-            );
-            map.insert(
-                root.join_components(&["package_b", "package.json"]),
-                PackageJson::from_value(json!({
-                    "name": "bar",
-                    "dependencies": { "b": "1" }
-                }))
-                .unwrap(),
-            );
-            map
-        };
-        let hasher: crate::package_graph::builder::ClosureHasher = Arc::new(|closures| {
-            closures
-                .iter()
-                .map(|(package, identities)| {
-                    let fingerprint = identities
-                        .iter()
-                        .map(|identity| format!("{}@{}", identity.key, identity.version))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    (package.clone(), fingerprint)
-                })
-                .collect()
-        });
-
-        let inline = PackageGraph::builder(
-            &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-        )
-        .with_package_discovery(MockDiscovery)
-        .with_package_jsons(Some(package_jsons()))
-        .with_lockfile(Some(Box::new(MockLockfile {})))
-        .with_closure_hasher(hasher.clone())
-        .build()
-        .await
-        .unwrap();
-
-        let mut deferred = PackageGraph::builder(
-            &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-        )
-        .with_package_discovery(MockDiscovery)
-        .with_package_jsons(Some(package_jsons()))
-        .with_lockfile(Some(Box::new(MockLockfile {})))
-        .defer_transitive_closures(true)
-        .with_closure_hasher(hasher)
-        .build()
-        .await
-        .unwrap();
-
-        assert_eq!(
-            inline.external_resolution_status(),
-            ExternalResolutionStatus::Complete
-        );
-        assert_eq!(
-            deferred.external_resolution_status(),
-            ExternalResolutionStatus::Resolving
-        );
-        let inline_generation = inline
-            .external_resolution_generation()
-            .expect("inline resolution should be available");
-        assert_eq!(inline_generation.domains().len(), 1);
-
-        // Before the join, closures are absent.
-        assert!(
-            deferred
-                .package_payloads
-                .values()
-                .all(|info| info.transitive_dependencies.is_none()),
-            "deferred graph must not have closures before ensure"
-        );
-
-        deferred.ensure_transitive_closures();
-        // Idempotent.
-        deferred.ensure_transitive_closures();
-
-        assert_eq!(
-            deferred.external_resolution_status(),
-            ExternalResolutionStatus::Complete
-        );
-        assert_eq!(
-            inline_generation,
-            deferred
-                .external_resolution_generation()
-                .expect("deferred resolution should be available after joining")
-        );
-
-        for (name, info) in &inline.package_payloads {
-            let deferred_info = deferred.package_payloads.get(name).unwrap();
-            assert_eq!(
-                info.transitive_dependencies, deferred_info.transitive_dependencies,
-                "closures must match for {name}"
-            );
-            assert_eq!(
-                info.external_deps_hash, deferred_info.external_deps_hash,
-                "external deps hashes must match for {name}"
-            );
-            assert_eq!(
-                info.external_deps_hash.is_some(),
-                info.transitive_dependencies.is_some(),
-                "hash must be present exactly when the closure is, for {name}"
-            );
-        }
     }
 
     #[tokio::test]
@@ -2798,7 +2557,7 @@ version = "0.1.0"
         // process/build.
         let mut expected_cargo_fingerprint = None;
         for iteration in 0..8 {
-            let defer_resolution = iteration % 2 == 1;
+            let _defer_resolution = iteration % 2 == 1;
             let mut pkg_graph = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
@@ -2815,11 +2574,9 @@ version = "0.1.0"
             }))
             .with_lockfile(Some(Box::new(MockLockfile {})))
             .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
-            .defer_transitive_closures(defer_resolution)
             .build()
             .await
             .unwrap();
-            pkg_graph.ensure_transitive_closures();
 
             assert!(pkg_graph.validate().is_ok());
             assert!(pkg_graph.package_task_contexts().all(|context| {
@@ -2850,7 +2607,7 @@ version = "0.1.0"
                 pkg_graph.package_toolchain(&PackageName::from("js-pkg")),
                 Some(&crate::toolchain::ToolchainId::JAVASCRIPT)
             );
-            let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
+            let _workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
             assert_eq!(
                 pkg_graph.package_toolchain(&PackageName::from("acme")),
                 Some(&crate::toolchain::ToolchainId::RUST)
@@ -2946,34 +2703,20 @@ version = "0.1.0"
                 "workspace package should depend on every crate, got {workspace_deps:?}"
             );
 
-            // The root's JS lockfile closure is attributed to the root, not
-            // stolen by the cargo workspace package sharing its directory.
-            let root_closure = pkg_graph
-                .package_info(&PackageName::Root)
-                .unwrap()
-                .transitive_dependencies
-                .as_ref()
-                .expect("root should have a lockfile closure");
-            // Closures are sorted by (key, version).
+            // The root's JS resolution identities are attributed to the root
+            // package, not stolen by the Cargo workspace package sharing its
+            // directory.
+            let root_identities =
+                pkg_graph.external_package_identities_for_packages([&PackageName::Root]);
             assert_eq!(
-                root_closure,
-                &vec![
-                    Arc::new(turborepo_lockfiles::Package::new("key:a", "1")),
-                    Arc::new(turborepo_lockfiles::Package::new("key:c", "1")),
-                ],
-            );
-            // Cargo packages carry toolchain-resolved closures (here just
-            // the rustc stamp — the fixture has no external dependencies),
-            // never JS lockfile entries.
-            assert!(
-                workspace_pkg
-                    .transitive_dependencies
+                root_identities
                     .iter()
-                    .flatten()
-                    .all(|package| package.key == "rustc"),
-                "the cargo workspace package must not carry JS lockfile entries, got {:?}",
-                workspace_pkg.transitive_dependencies
+                    .map(|identity| (identity.key(), identity.version()))
+                    .collect::<Vec<_>>(),
+                vec![("key:a", "1"), ("key:c", "1")],
             );
+            // Cargo packages contribute identities through the Rust resolution
+            // domain, never JS lockfile entries.
 
             let resolution = pkg_graph
                 .external_resolution_generation()
@@ -3012,19 +2755,15 @@ version = "0.1.0"
                     "{} must include the compiler identity",
                     package.package()
                 );
-                let legacy: HashSet<_> = pkg_graph
-                    .package_info(&PackageName::from(package.package()))
-                    .and_then(|info| info.transitive_dependencies.as_ref())
-                    .into_iter()
-                    .flatten()
-                    .map(|identity| (identity.key.as_str(), identity.version.as_str()))
-                    .collect();
-                let normalized: HashSet<_> = package
-                    .identities()
-                    .iter()
-                    .map(|identity| (identity.key(), identity.version()))
-                    .collect();
-                assert_eq!(normalized, legacy);
+                assert!(
+                    package
+                        .identities()
+                        .iter()
+                        .all(|identity| identity.key() == "rustc"),
+                    "{} should only carry the compiler identity in this fixture, got {:?}",
+                    package.package(),
+                    package.identities()
+                );
             }
         }
     }

@@ -371,9 +371,6 @@ mod test {
                         version: Some(package_version.to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map.insert(
@@ -383,9 +380,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map.insert(
@@ -395,9 +389,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map.insert(
@@ -407,9 +398,6 @@ mod test {
                         version: Some("6.0.3".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
@@ -495,9 +483,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
@@ -536,9 +521,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
@@ -577,9 +559,6 @@ mod test {
                         version: Some("1.2.3".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
@@ -643,9 +622,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
@@ -681,9 +657,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             );
             map
