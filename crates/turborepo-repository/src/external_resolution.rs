@@ -137,10 +137,42 @@ impl<'a> PackageExternalDeclarations<'a> {
 }
 
 /// An exact, opaque external package identity.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Equality, ordering, and hashing are defined by `(key, version)` only.
+/// `human_name` is display metadata captured at observation time so query
+/// consumers do not re-read native lockfiles.
+#[derive(Debug, Clone)]
 pub struct ExternalPackageIdentity {
     key: String,
     version: String,
+    human_name: Option<String>,
+}
+
+impl PartialEq for ExternalPackageIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.version == other.version
+    }
+}
+
+impl Eq for ExternalPackageIdentity {}
+
+impl PartialOrd for ExternalPackageIdentity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExternalPackageIdentity {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.key, &self.version).cmp(&(&other.key, &other.version))
+    }
+}
+
+impl std::hash::Hash for ExternalPackageIdentity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+        self.version.hash(state);
+    }
 }
 
 impl ExternalPackageIdentity {
@@ -148,7 +180,13 @@ impl ExternalPackageIdentity {
         Self {
             key: key.into(),
             version: version.into(),
+            human_name: None,
         }
+    }
+
+    pub fn with_human_name(mut self, human_name: impl Into<String>) -> Self {
+        self.human_name = Some(human_name.into());
+        self
     }
 
     pub fn key(&self) -> &str {
@@ -157,6 +195,15 @@ impl ExternalPackageIdentity {
 
     pub fn version(&self) -> &str {
         &self.version
+    }
+
+    /// Prefer the producer-supplied display name; otherwise the opaque key.
+    pub fn display_name(&self) -> &str {
+        self.human_name.as_deref().unwrap_or(&self.key)
+    }
+
+    pub fn human_name(&self) -> Option<&str> {
+        self.human_name.as_deref()
     }
 }
 

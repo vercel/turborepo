@@ -162,13 +162,19 @@ Represents the workspace structure and package dependencies:
   single resolution owner tracks lifecycle status. Task hashing and run/task
   summaries (including OpenTelemetry external-input attributes) consume the
   same stored byte-compatible package resolution fingerprint and preserve
-  explicit unavailable states without closure fallback hashing. The JavaScript
+  explicit unavailable states without closure fallback hashing. Query external
+  package listing, human names, and internal-dependent reverse indexes read
+  the same resolution generation (including a lazy compact reverse index)
+  rather than `PackageInfo` closures or live lockfile human-name callbacks.
+  N-API JavaScript lockfile package listing uses the JavaScript domain of that
+  generation. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
   ecosystem knowledge; unavailable, parse, and comparison failures retain the
   conservative all-packages fallback. The snapshot projects temporary
-  `PackageInfo` closure/hash fields for the remaining global-hash migration.
+  `PackageInfo` closure/hash fields for the remaining prune and global-hash
+  migrations.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate

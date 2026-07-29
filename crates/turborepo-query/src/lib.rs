@@ -772,15 +772,13 @@ impl RepositoryQuery {
     }
 
     async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
-        let pkg_dep_graph = self.run.pkg_dep_graph();
-        let all_package_names: Vec<_> = pkg_dep_graph
-            .package_scope_directories()
-            .map(|(name, _)| name)
-            .collect();
-        let mut packages = pkg_dep_graph
-            .transitive_external_dependencies(all_package_names.iter())
-            .into_iter()
-            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+        let mut packages = self
+            .run
+            .pkg_dep_graph()
+            .external_package_identities()
+            .iter()
+            .cloned()
+            .map(|identity| ExternalPackage::from_identity(self.run.clone(), identity))
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)
