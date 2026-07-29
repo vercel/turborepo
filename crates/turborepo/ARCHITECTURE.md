@@ -175,8 +175,11 @@ Represents the workspace structure and package dependencies:
   conservative all-packages fallback. Prune lockfile-key unions also consume
   exact per-package resolution identities for retained JavaScript workspaces,
   while external-peer closure expansion still consults the lockfile directly.
-  The snapshot projects temporary `PackageInfo` closure/hash fields for the
-  remaining global-hash migration.
+  Global hashing consumes the same root resolution fingerprint as task hashing
+  and, when JavaScript resolution is unavailable, hashes resolution definition
+  sources plus the root package.json instead of reading the singleton lockfile
+  object. The snapshot projects temporary `PackageInfo` closure/hash fields only
+  until the Phase 3 deletion gate removes them.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate

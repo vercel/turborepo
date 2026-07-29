@@ -11,7 +11,6 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
 use turborepo_hash::{GlobalHashable, TurboHash};
-use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     package_graph::PackageInfo,
     package_manager::{self, PackageManager},
@@ -62,13 +61,13 @@ pub struct GlobalHashableInputs<'a> {
 }
 
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
-pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
+pub fn get_global_hash_inputs<'a>(
     root_external_dependencies_hash: Option<&'a str>,
     root_internal_dependencies_hash: Option<&'a str>,
     root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: Option<&PackageManager>,
-    lockfile: Option<&L>,
+    resolution_file_fallback: &[AbsoluteSystemPathBuf],
     global_file_dependencies: &'a [String],
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
@@ -86,7 +85,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         root_package,
         root_path,
         package_manager,
-        lockfile,
+        resolution_file_fallback,
         global_file_dependencies,
         env_at_execution_start,
         global_env,
@@ -129,15 +128,16 @@ pub struct GlobalFileHashInputs<'a> {
 /// can be run concurrently with package file hashing and internal deps
 /// hashing since it has no dependencies on those results.
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
-pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
+pub fn collect_global_file_hash_inputs<'a>(
     root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
     // Absent for a pure Cargo workspace: there is no JavaScript package
-    // manager, root manifest, or lockfile to fold into the global hash. The
-    // Cargo lockfile and manifest are hashed per-task through the toolchain's
-    // derived inputs instead.
+    // manager to enumerate workspace exclusions for `globalDependencies`.
     package_manager: Option<&PackageManager>,
-    lockfile: Option<&L>,
+    // When JavaScript resolution is unavailable, hash the resolution
+    // definition sources (typically the lockfile path) and root package.json
+    // instead of folding lockfile contents into the external fingerprint.
+    resolution_file_fallback: &[AbsoluteSystemPathBuf],
     global_file_dependencies: &'a [String],
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
@@ -156,17 +156,8 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     let mut global_deps =
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
-    // The root package.json and the JavaScript lockfile are global inputs
-    // only when there is a JavaScript project. A pure Cargo workspace has
-    // neither.
-    if let Some(package_manager) = package_manager
-        && lockfile.is_none()
-    {
-        global_deps.insert(root_path.join_component("package.json"));
-        let lockfile_path = package_manager.lockfile_path(root_path);
-        if lockfile_path.exists() {
-            global_deps.insert(lockfile_path);
-        }
+    for path in resolution_file_fallback {
+        global_deps.insert(path.clone());
     }
 
     // .gitattributes drives CRLF→LF normalization which affects file hashes.
@@ -395,7 +386,6 @@ impl<'a> GlobalHashInputsTrait for GlobalHashableInputs<'a> {
 mod tests {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
-    use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
     use turborepo_scm::SCM;
     use turborepo_types::EnvMode;
@@ -419,7 +409,7 @@ mod tests {
 
         let env_var_map = EnvironmentVariableMap::default();
         let package_info = PackageInfo::default();
-        let lockfile: Option<&dyn Lockfile> = None;
+        let fallback = [root.join_component("package.json")];
         #[cfg(windows)]
         let file_deps = ["C:\\some\\path".to_string()];
         #[cfg(not(windows))]
@@ -430,7 +420,7 @@ mod tests {
             &package_info,
             &root,
             Some(&PackageManager::Pnpm),
-            lockfile,
+            &fallback,
             &file_deps,
             &env_var_map,
             &[],
