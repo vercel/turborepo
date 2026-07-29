@@ -1,6 +1,6 @@
 name: Check Release PR
 description: |
-  Detects automated release PRs created by turbobot with title matching
+  Detects automated release PRs created by github-actions[bot] with title matching
   "chore: Release Turborepo *". These PRs only contain generated release
   updates and can skip full test suites.
 
@@ -35,8 +35,8 @@ runs:
           exit 0
         fi
 
-        # Check if PR is from turbobot with the release title
-        if [[ "$PR_AUTHOR" == "turbobot" && "$PR_TITLE" == "chore: Release Turborepo "* ]]; then
+        # Check if PR is from github-actions[bot] with the release title
+        if [[ "$PR_AUTHOR" == "github-actions[bot]" && "$PR_TITLE" == "chore: Release Turborepo "* ]]; then
           if [[ "$PR_HEAD_REPO" != "$REPOSITORY" || ! "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "is-release-pr=false" >> $GITHUB_OUTPUT
             echo "Not a release PR branch (head: $PR_HEAD_REPO:$PR_HEAD_REF)"

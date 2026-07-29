@@ -277,7 +277,7 @@ async function github(path) {
   return response.json();
 }
 
-async function changedFiles(repository, baseSha, headSha) {
+export async function getChangedFiles(repository, baseSha, headSha) {
   const comparison = await github(
     `/repos/${repository}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(headSha)}`,
   );
@@ -306,7 +306,7 @@ export async function run() {
     headRef: requiredEnv("PR_HEAD_REF"),
     title: requiredEnv("PR_TITLE"),
   });
-  const apiFiles = await changedFiles(repository, baseSha, headSha);
+  const apiFiles = await getChangedFiles(repository, baseSha, headSha);
   const files = await Promise.all(
     apiFiles.map(async ({ filename: path, status }) => ({
       path,

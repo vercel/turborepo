@@ -1,0 +1,58 @@
+name: Release review gate
+run-name: ${{ inputs.run-id && format('Release review gate {0}', inputs.run-id) || '' }}
+
+on:
+  pull_request:
+    types: [edited, opened, ready_for_review, reopened, synchronize]
+  pull_request_review:
+    types: [dismissed, submitted]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        required: true
+        type: number
+      expected-head-sha:
+        required: true
+        type: string
+      run-id:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Release Semantic Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Validate review requirement
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected-head-sha }}
+        run: node scripts/validate-review-gate.mjs
+
+  test-summary:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'Test Summary' || 'Release test exemption placeholder' }}
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Generated release changes validated"
+
+  js-test-summary:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'JS Test Summary' || 'Release JS test exemption placeholder' }}
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Generated release changes validated"

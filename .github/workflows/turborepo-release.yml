@@ -794,6 +794,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -885,21 +886,22 @@ jobs:
             echo "First release - no previous tag." >> pr-body.md
           fi
 
-      - name: Create release PR
+      - name: Checkout trusted release validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: .release-validator
+          persist-credentials: false
+
+      - name: Create, validate, and merge release PR
         id: create-pr
         env:
-          TURBOBOT_TOKEN: ${{ secrets.TURBOBOT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
 
-          BOT_LOGIN=$(GH_TOKEN="$TURBOBOT_TOKEN" gh api user --jq '.login')
-          if [ "$BOT_LOGIN" != "turbobot" ]; then
-            echo "::error::TURBOBOT must authenticate as turbobot, got ${BOT_LOGIN}"
-            exit 1
-          fi
-
-          PR_URL=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr create \
+          PR_URL=$(gh pr create \
             --title "chore: Release Turborepo ${VERSION}" \
             --body-file pr-body.md \
             --head "${STAGE_BRANCH}" \
@@ -908,6 +910,59 @@ jobs:
           echo "url=$PR_URL" >> $GITHUB_OUTPUT
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "number=$PR_NUM" >> $GITHUB_OUTPUT
+
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
+          HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_BASE_SHA="$BASE_SHA" \
+          PR_HEAD_SHA="$HEAD_SHA" \
+          PR_HEAD_REF="$STAGE_BRANCH" \
+          PR_TITLE="chore: Release Turborepo ${VERSION}" \
+            node .release-validator/scripts/validate-release-pr.mjs
+
+          DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
+          gh workflow run release-review-gate.yml \
+            --ref "$STAGE_BRANCH" \
+            -f pr-number="$PR_NUM" \
+            -f expected-head-sha="$HEAD_SHA" \
+            -f run-id="$DISPATCH_ID"
+
+          CHECK_RUN_ID=""
+          for _ in $(seq 1 30); do
+            CHECK_RUN_ID=$(gh run list \
+              --workflow release-review-gate.yml \
+              --branch "$STAGE_BRANCH" \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,displayTitle,headSha \
+              --jq "[.[] | select(.displayTitle == \"Release review gate ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
+            if [ -n "$CHECK_RUN_ID" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$CHECK_RUN_ID" ]; then
+            echo "::error::Unable to find dispatched release review gate run"
+            exit 1
+          fi
+
+          gh run watch "$CHECK_RUN_ID" --exit-status
+          CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
+                "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \
+                "$(jq -r '.title' <<< "$CURRENT_PR")" != "chore: Release Turborepo ${VERSION}" || \
+                "$(jq -r '.base.ref' <<< "$CURRENT_PR")" != "main" || \
+                "$(jq -r '.base.sha' <<< "$CURRENT_PR")" != "$BASE_SHA" || \
+                "$(jq -r '.base.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.head.ref' <<< "$CURRENT_PR")" != "$STAGE_BRANCH" || \
+                "$(jq -r '.head.sha' <<< "$CURRENT_PR")" != "$HEAD_SHA" || \
+                "$(jq -r '.head.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.state' <<< "$CURRENT_PR")" != "open" || \
+                "$(jq -r '.draft' <<< "$CURRENT_PR")" != "false" ]]; then
+            echo "::error::Release PR metadata changed after validation"
+            exit 1
+          fi
+          gh pr merge "$PR_NUM" --squash --match-head-commit "$HEAD_SHA"
 
   cleanup-on-failure:
     name: "Cleanup Failed Release"

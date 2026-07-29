@@ -406,7 +406,7 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-For stable, custom, and canary releases, the release workflow uses the `TURBOBOT` secret to create a PR as `turbobot` with the title `chore: Release Turborepo <version>`. A separate trusted-base workflow validates the exact generated manifest, skill, and version changes, waits for the required `Test Summary` and `JS Test Summary` checks, and then approves and squash-merges the validated head SHA. A new commit dismisses the automation approval and requires validation to restart.
+For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. It dispatches the release review gate on the pinned staging head. The gate validates the exact generated manifest, skill, and version changes and supplies the required semantic and test summary checks. The release workflow then revalidates the head SHA and squash-merges the PR.
 
 The PR includes:
 
@@ -528,9 +528,8 @@ packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.t
 | `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust                       | `true`                        |
 | `TURBO_BINARY_PATH`         | Override binary path (development only)                      | `/path/to/turbo`              |
 | `GH_TOKEN`                  | GitHub API token for commit and workflow-owned PR operations | `${{ secrets.GITHUB_TOKEN }}` |
-| `TURBOBOT_TOKEN`            | Creates release PRs as `turbobot` so PR checks are triggered | `${{ secrets.TURBOBOT }}`     |
 
-`TURBOBOT` must authenticate as the `turbobot` account. Repository settings must permit GitHub Actions to approve pull requests. The trusted-base auto-merge workflow does not execute code from the release branch; it validates files through the GitHub API using immutable base and head SHAs.
+The main branch ruleset exempts exact generated release paths from the native team-review requirement and requires the `Release Semantic Validation` check. Non-release changes to those paths still require a write-authorized human approval through the review gate. Validation reads files through the GitHub API using immutable base and head SHAs.
 
 #### API Commit Helper
 
@@ -662,14 +661,12 @@ If a canary release fails after some packages were published but before others:
 
 If a canary release PR is created but fails to auto-merge:
 
-1. **Check authentication**: Ensure `TURBOBOT` authenticates as `turbobot`.
-2. **Check repository settings**: Ensure GitHub Actions may approve pull requests.
-3. **Check semantic validation**: Inspect the `Auto-merge release PR` workflow for unexpected files or manifest fields.
-4. **Check branch protection**: Ensure `Test Summary` and `JS Test Summary` are passing.
-5. **Check the PR head**: A new commit invalidates the previous automation approval and restarts validation.
-6. **Check for conflicts**: The staging branch may have diverged from `main`.
-7. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
-8. **Cleanup if abandoned**: If you need to abandon the release:
+1. **Check semantic validation**: Inspect the `Release review gate` workflow for unexpected files or manifest fields.
+2. **Check branch protection**: Ensure `Release Semantic Validation`, `Test Summary`, and `JS Test Summary` are passing.
+3. **Check the PR head**: A new commit invalidates the dispatched head SHA and requires validation to restart.
+4. **Check for conflicts**: The staging branch may have diverged from `main`.
+5. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
+6. **Cleanup if abandoned**: If you need to abandon the release:
 
    ```bash
    # Delete the staging branch
@@ -686,7 +683,7 @@ If canary releases keep firing when they shouldn't:
 
 2. **Investigate the cause**:
    - Check if the skip detection is working: the `check-skip` job should skip when the latest commit is a release PR merge or when no relevant files changed since the last canary tag
-   - Verify that the release PR was opened by `turbobot` with the title `chore: Release Turborepo <version>`
+   - Verify that the release PR was opened by `github-actions[bot]` with the title `chore: Release Turborepo <version>`
 
 3. **Fix and re-enable**:
    - Ensure the release PR title follows the expected format
