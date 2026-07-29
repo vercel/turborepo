@@ -637,21 +637,24 @@ impl PackageGraph {
         &self.toolchains
     }
 
-    /// The watch behavior of toolchains that contributed at least one
-    /// authoritative execution scope to this graph. Registered toolchains
-    /// that were inactive (notably extras in single-package mode) are omitted.
+    /// Watch classification facts for this graph: foundational change knowledge
+    /// (JavaScript membership/workspace triggers and ignore prefixes) combined
+    /// with active toolchain `WatchSpec`s (Cargo until its Rust port).
+    ///
+    /// Registered toolchains that were inactive (notably extras in
+    /// single-package mode) are omitted from the toolchain contribution.
     pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
         let active: HashSet<_> = self
             .package_task_contexts()
             .filter_map(|context| context.toolchain().cloned())
             .collect();
-        let mut watch_spec = crate::toolchain::WatchSpec::default();
+        let mut toolchain_spec = crate::toolchain::WatchSpec::default();
         for toolchain in self.toolchains.iter() {
             if active.contains(&toolchain.id()) {
-                watch_spec.extend(toolchain.watch_spec());
+                toolchain_spec.extend(toolchain.watch_spec());
             }
         }
-        watch_spec
+        self.change_knowledge.combined_watch_spec(toolchain_spec)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
