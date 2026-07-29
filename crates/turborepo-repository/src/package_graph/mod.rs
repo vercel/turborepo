@@ -1260,6 +1260,48 @@ impl PackageGraph {
         &self.external_dependency_index().identities
     }
 
+    /// Exact external identities attributed to the given packages by the
+    /// resolution generation. Used by prune lockfile-key unions so they no
+    /// longer read `PackageInfo::transitive_dependencies`.
+    pub fn external_package_identities_for_packages<'a, I>(
+        &self,
+        packages: I,
+    ) -> Vec<ExternalPackageIdentity>
+    where
+        I: IntoIterator<Item = &'a PackageName>,
+    {
+        let wanted: HashSet<&str> = packages.into_iter().map(PackageName::as_str).collect();
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        let Some(generation) = self.resolution_generation() else {
+            return Vec::new();
+        };
+
+        let mut seen = HashSet::new();
+        let mut identities = Vec::new();
+        for domain in generation.domains() {
+            let ExternalResolutionData::Resolved {
+                packages: resolved, ..
+            } = domain.data()
+            else {
+                continue;
+            };
+            for package in resolved {
+                if !wanted.contains(package.package()) {
+                    continue;
+                }
+                for identity in package.identities() {
+                    if seen.insert(identity.clone()) {
+                        identities.push(identity.clone());
+                    }
+                }
+            }
+        }
+        identities.sort();
+        identities
+    }
+
     /// Resolve a lockfile package to the generation identity that shares its
     /// exact `(key, version)`, retaining any stored human name.
     pub fn resolve_external_package_identity(
@@ -1952,8 +1994,25 @@ mod test {
                 "key:c", "1",
             ))
             .expect("c should have dependents");
-        assert!(c_dependents.contains(&PackageNode::Workspace(foo)));
-        assert!(c_dependents.contains(&PackageNode::Workspace(bar)));
+        assert!(c_dependents.contains(&PackageNode::Workspace(foo.clone())));
+        assert!(c_dependents.contains(&PackageNode::Workspace(bar.clone())));
+
+        let foo_identities = pkg_graph.external_package_identities_for_packages([&foo]);
+        assert_eq!(
+            foo_identities
+                .iter()
+                .map(|identity| (identity.key(), identity.version()))
+                .collect::<Vec<_>>(),
+            vec![("key:a", "1"), ("key:c", "1")]
+        );
+        let bar_identities = pkg_graph.external_package_identities_for_packages([&bar]);
+        assert_eq!(
+            bar_identities
+                .iter()
+                .map(|identity| identity.key())
+                .collect::<HashSet<_>>(),
+            HashSet::from(["key:b", "key:c"])
+        );
     }
 
     #[tokio::test]
