@@ -542,6 +542,10 @@ struct CompiledGlobs {
     /// `<prefix>/*/<suffix>` shapes; they never went through wax
     /// compilation.
     shallow_wildcards: Vec<(PathBuf, PathBuf)>,
+    /// Include patterns classified from their raw strings as
+    /// `<literal-prefix>/**` shapes; they never went through wax
+    /// compilation.
+    recursive_all: Vec<PathBuf>,
     ex_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
 }
@@ -558,6 +562,11 @@ enum SimplePattern {
     /// Exactly one bare `*` segment with a non-empty literal suffix:
     /// resolvable by one readdir plus a stat per child.
     Shallow(PathBuf, PathBuf),
+    /// A literal prefix followed by a single trailing `**` segment
+    /// (e.g. `/repo/packages/foo/src/**`): every entry under the prefix
+    /// matches, so the walk needs no pattern matching at all. This is the
+    /// most common `inputs`/`outputs` shape (`src/**`, `dist/**`).
+    RecursiveAll(PathBuf),
     /// Anything else — compile with wax as before.
     Complex,
 }
@@ -581,6 +590,26 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
     if segments.is_empty() {
         return SimplePattern::Complex;
     }
+    let root = if pattern.starts_with('/') { "/" } else { "" };
+
+    // `<literal-prefix>/**`: a single trailing tree wildcard after plain
+    // segments. Checked before the generic scan since `**` is neither a
+    // plain segment nor a bare `*`.
+    if segments.len() >= 2
+        && segments[segments.len() - 1] == "**"
+        && segments[..segments.len() - 1]
+            .iter()
+            .enumerate()
+            .all(|(index, segment)| {
+                (index == 0 && is_plain_windows_drive(segment)) || plain_segment(segment)
+            })
+    {
+        return SimplePattern::RecursiveAll(PathBuf::from(format!(
+            "{root}{}",
+            segments[..segments.len() - 1].join("/")
+        )));
+    }
+
     let mut star_index = None;
     for (index, segment) in segments.iter().enumerate() {
         if *segment == "*" {
@@ -595,7 +624,6 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
         }
     }
 
-    let root = if pattern.starts_with('/') { "/" } else { "" };
     match star_index {
         None => SimplePattern::Literal(PathBuf::from(format!("{root}{}", segments.join("/")))),
         // Require at least one suffix segment after the star — `dir/*`
@@ -636,11 +664,13 @@ fn compile_globs<S: AsRef<str>>(
     // literal and `<prefix>/*/<suffix>` workspace patterns.
     let mut literal_paths = Vec::new();
     let mut shallow_wildcards = Vec::new();
+    let mut recursive_all = Vec::new();
     let mut complex_paths = Vec::new();
     for path in include_paths {
         match classify_simple_pattern(&path) {
             SimplePattern::Literal(path) => literal_paths.push(path),
             SimplePattern::Shallow(prefix, suffix) => shallow_wildcards.push((prefix, suffix)),
+            SimplePattern::RecursiveAll(prefix) => recursive_all.push(prefix),
             SimplePattern::Complex => complex_paths.push(path),
         }
     }
@@ -655,6 +685,7 @@ fn compile_globs<S: AsRef<str>>(
         include_patterns,
         literal_paths,
         shallow_wildcards,
+        recursive_all,
         ex_patterns,
         ex_filter,
     })
@@ -834,9 +865,121 @@ fn walk_compiled_globs(
         })
         .collect::<Result<HashSet<_>, _>>()?;
 
+    for prefix in &compiled.recursive_all {
+        walk_recursive_all(
+            prefix,
+            walk_type,
+            &compiled.base_path,
+            &compiled.ex_patterns,
+            settings,
+            &mut results,
+        )?;
+    }
+
     results.extend(literal_results);
     results.extend(shallow_results);
     Ok(results)
+}
+
+/// Walk every entry under `prefix` for a `<literal-prefix>/**` pattern
+/// without any pattern matching, mirroring the wax walk semantics used by
+/// [`walk_glob`]:
+///
+/// - the prefix itself matches (a tree wildcard matches zero components);
+/// - symlinks are yielded as files and never followed (wax's default
+///   `LinkBehavior::ReadFile`), except at the walk root, which walkdir follows
+///   by default;
+/// - exclusions are matched per entry against the absolute slash path;
+/// - with `ignore_nested_packages`, any non-base directory containing a
+///   `package.json` is discarded along with its subtree;
+/// - missing and permission-denied paths are skipped, other IO errors propagate
+///   (EMFILE is retried by the caller via [`retry_on_emfile`]).
+fn walk_recursive_all(
+    prefix: &Path,
+    walk_type: WalkType,
+    walk_base: &Path,
+    ex_patterns: &[Glob<'static>],
+    settings: Settings,
+    results: &mut HashSet<AbsoluteSystemPathBuf>,
+) -> Result<(), WalkError> {
+    let excluded = |path: &Path| -> bool {
+        if ex_patterns.is_empty() {
+            return false;
+        }
+        let path_str = path.to_slash_lossy();
+        ex_patterns.iter().any(|ex| ex.is_match(path_str.as_ref()))
+    };
+    let ignorable_io_error = |e: &std::io::Error| {
+        matches!(
+            e.kind(),
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied
+        )
+    };
+    let prune_nested_package = |dir: &Path| {
+        settings.ignore_nested_packages && dir != walk_base && dir.join("package.json").exists()
+    };
+
+    // The walk root follows symlinks (walkdir's `follow_root_links` default).
+    let root_meta = match std::fs::metadata(prefix) {
+        Ok(meta) => meta,
+        Err(e) if ignorable_io_error(&e) => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+
+    let mut yield_entry = |path: &Path, is_file: bool| -> Result<(), WalkError> {
+        let wanted = match walk_type {
+            WalkType::Files => is_file,
+            WalkType::Folders => !is_file,
+            WalkType::All => true,
+        };
+        if wanted && !excluded(path) {
+            results.insert(AbsoluteSystemPathBuf::try_from(path)?);
+        }
+        Ok(())
+    };
+
+    if !root_meta.is_dir() {
+        yield_entry(prefix, true)?;
+        return Ok(());
+    }
+    if prune_nested_package(prefix) {
+        return Ok(());
+    }
+    yield_entry(prefix, false)?;
+
+    let mut stack = vec![prefix.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if ignorable_io_error(&e) => continue,
+            Err(e) => return Err(e.into()),
+        };
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) if ignorable_io_error(&e) => continue,
+                Err(e) => return Err(e.into()),
+            };
+            let path = entry.path();
+            // `file_type` does not follow symlinks: a symlink is yielded as
+            // a file and never descended into, like wax's ReadFile behavior.
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(e) if ignorable_io_error(&e) => continue,
+                Err(e) => return Err(e.into()),
+            };
+            if file_type.is_dir() {
+                if prune_nested_package(&path) {
+                    continue;
+                }
+                yield_entry(&path, false)?;
+                stack.push(path);
+            } else {
+                yield_entry(&path, true)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[tracing::instrument(skip_all)]
