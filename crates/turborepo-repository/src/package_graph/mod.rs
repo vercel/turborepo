@@ -10,7 +10,9 @@ use petgraph::{
     visit::EdgeRef,
 };
 use serde::Serialize;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{
@@ -1302,6 +1304,33 @@ impl PackageGraph {
         identities
     }
 
+    /// Global-hash file fallback when JavaScript resolution is unavailable.
+    ///
+    /// Mirrors the historical behavior of hashing `package.json` plus the
+    /// package-manager lockfile path when a lockfile object was not loaded:
+    /// include the repository root `package.json` and any existing resolution
+    /// definition sources from the JavaScript domain.
+    pub fn external_resolution_global_file_fallback(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
+        let generation = self.resolution_generation()?;
+        let domain = generation
+            .domains()
+            .iter()
+            .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)?;
+        match domain.data() {
+            ExternalResolutionData::Resolved { .. } => None,
+            ExternalResolutionData::Unavailable(_) => {
+                let mut paths = vec![self.repo_root().join_component("package.json")];
+                for source in domain.definition_sources() {
+                    let path = self.repo_root().resolve(source);
+                    if path.exists() {
+                        paths.push(path);
+                    }
+                }
+                Some(paths)
+            }
+        }
+    }
+
     /// Resolve a lockfile package to the generation identity that shares its
     /// exact `(key, version)`, retaining any stored human name.
     pub fn resolve_external_package_identity(
@@ -2142,6 +2171,21 @@ mod test {
                 .package_payloads
                 .get(&PackageName::Root)
                 .is_some_and(|info| info.transitive_dependencies.is_none())
+        );
+
+        let fallback = unavailable
+            .external_resolution_global_file_fallback()
+            .expect("unavailable JS resolution should expose a global file fallback");
+        assert!(
+            fallback
+                .iter()
+                .any(|path| path.file_name() == Some("package.json"))
+        );
+        assert!(
+            resolved
+                .external_resolution_global_file_fallback()
+                .is_none(),
+            "resolved domains must not use the global file fallback"
         );
     }
 
