@@ -101,6 +101,8 @@ pub struct PackageGraph {
     toolchains: crate::toolchain::ToolchainRegistry,
     /// Immutable native-task catalog produced during repository construction.
     native_task_knowledge: Arc<crate::native_tasks::NativeTaskKnowledge>,
+    /// Immutable task-contract catalog produced during repository construction.
+    task_contract_knowledge: Arc<crate::task_contracts::TaskContractKnowledge>,
 }
 
 /// The WorkspacePackage.
@@ -223,6 +225,7 @@ pub struct PackageTaskContext<'a> {
     package_info: Option<&'a PackageInfo>,
     external_declarations: &'a ExternalDeclarations,
     native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
+    task_contract: crate::task_contracts::ScopeTaskContract,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
     requires_compatibility_payload: bool,
@@ -282,6 +285,11 @@ impl<'a> PackageTaskContext<'a> {
         };
         let requires_compatibility_payload = package != PackageName::Root
             || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
+        let task_contract = if toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT) {
+            crate::task_contracts::ScopeTaskContract::javascript()
+        } else {
+            crate::task_contracts::ScopeTaskContract::empty()
+        };
         Self {
             package,
             repository_root,
@@ -289,6 +297,7 @@ impl<'a> PackageTaskContext<'a> {
             package_info,
             external_declarations,
             native_tasks,
+            task_contract,
             kind,
             toolchain,
             requires_compatibility_payload,
@@ -318,6 +327,10 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn native_tasks(&self) -> &'a crate::native_tasks::ScopeNativeTasks {
         self.native_tasks
+    }
+
+    pub fn task_contract(&self) -> &crate::task_contracts::ScopeTaskContract {
+        &self.task_contract
     }
 
     pub fn kind(&self) -> PackageTaskContextKind {
@@ -732,6 +745,7 @@ impl PackageGraph {
         };
         let package_info = self.package_payloads.get(&package);
         let native_tasks = self.native_task_knowledge.for_scope(package.as_str());
+        let task_contract = self.task_contract_knowledge.for_scope(package.as_str());
 
         Some(PackageTaskContext {
             package,
@@ -740,6 +754,7 @@ impl PackageGraph {
             package_info,
             external_declarations: self.external_declaration_view(),
             native_tasks,
+            task_contract,
             kind,
             toolchain,
             requires_compatibility_payload,

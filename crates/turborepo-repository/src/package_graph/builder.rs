@@ -96,6 +96,8 @@ pub enum Error {
     ExternalResolution(String),
     #[error("native task knowledge generation failed: {0}")]
     NativeTasks(String),
+    #[error("Task contract knowledge error: {0}")]
+    TaskContracts(String),
     #[error("package or aggregate scope at {path} uses reserved root identity //")]
     ReservedRootIdentity { path: AnchoredSystemPathBuf },
     #[error("relationship source {identity} has no authoritative repository scope")]
@@ -953,6 +955,27 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             crate::native_tasks::NativeTaskKnowledge::build(&knowledge, native_task_observations)
                 .map_err(|error| Error::NativeTasks(error.to_string()))?,
         );
+
+        let task_contract_knowledge = Arc::new({
+            let observations = knowledge.scopes().map(|scope| {
+                let contract = if scope.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT {
+                    crate::task_contracts::ScopeTaskContract::javascript()
+                } else {
+                    crate::task_contracts::ScopeTaskContract::empty()
+                };
+                (scope.identity().to_owned(), contract)
+            });
+            let mut observations: Vec<_> = observations.collect();
+            if knowledge.root_javascript_scope().is_some() {
+                observations.push((
+                    "//".to_string(),
+                    crate::task_contracts::ScopeTaskContract::javascript(),
+                ));
+            }
+            crate::task_contracts::TaskContractKnowledge::build(observations)
+                .map_err(|error| Error::TaskContracts(error.to_string()))?
+        });
+
         Ok(PackageGraph {
             graph: workspace_graph,
             root_node_index,
@@ -971,6 +994,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
             native_task_knowledge,
+            task_contract_knowledge,
         })
     }
 }
@@ -1349,6 +1373,26 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 discovery::Error::Failed(Box::new(Error::NativeTasks(error.to_string())))
             })?,
         );
+        let task_contract_knowledge = Arc::new({
+            let observations = knowledge.scopes().map(|scope| {
+                let contract = if scope.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT {
+                    crate::task_contracts::ScopeTaskContract::javascript()
+                } else {
+                    crate::task_contracts::ScopeTaskContract::empty()
+                };
+                (scope.identity().to_owned(), contract)
+            });
+            let mut observations: Vec<_> = observations.collect();
+            if knowledge.root_javascript_scope().is_some() {
+                observations.push((
+                    "//".to_string(),
+                    crate::task_contracts::ScopeTaskContract::javascript(),
+                ));
+            }
+            crate::task_contracts::TaskContractKnowledge::build(observations).map_err(|error| {
+                discovery::Error::Failed(Box::new(Error::TaskContracts(error.to_string())))
+            })?
+        });
 
         Ok(PackageGraph {
             graph: workspace_graph,
@@ -1368,6 +1412,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_internal_dependencies: std::sync::OnceLock::new(),
             toolchains,
             native_task_knowledge,
+            task_contract_knowledge,
         })
     }
 }
