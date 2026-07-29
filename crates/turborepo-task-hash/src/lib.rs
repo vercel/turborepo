@@ -577,7 +577,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
 
         // See if we can infer a framework
         let framework = do_framework_inference
-            .then(|| workspace.and_then(|workspace| infer_framework(workspace, is_monorepo)))
+            .then(|| infer_framework(package_context.external_declarations(), is_monorepo))
             .flatten()
             .inspect(|framework| {
                 debug!("auto detected framework for {}", task_id.package());

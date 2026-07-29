@@ -7,6 +7,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
     Production,
+    Optional,
     Development,
     Peer { optional: bool },
 }

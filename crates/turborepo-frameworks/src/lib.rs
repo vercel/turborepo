@@ -5,7 +5,9 @@
 use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;
-use turborepo_repository::package_graph::PackageInfo;
+use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations, relationships::DependencyKind,
+};
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -85,30 +87,24 @@ fn get_frameworks() -> Result<&'static [Framework], &'static serde_json::Error> 
 }
 
 impl Matcher {
-    pub fn test(&self, workspace: &PackageInfo, is_monorepo: bool) -> bool {
-        // In the case where we're not in a monorepo, i.e. single package mode,
-        // `unresolved_external_dependencies` is not populated. In which case we
-        // check both `dependencies` and `devDependencies` so that frameworks
-        // installed as dev dependencies (e.g. Vite, Astro, SvelteKit) are
-        // correctly detected.
+    pub fn test(&self, declarations: PackageExternalDeclarations<'_>, is_monorepo: bool) -> bool {
         let has_dep = |dep: &str| -> bool {
-            if is_monorepo {
-                workspace
-                    .unresolved_external_dependencies
-                    .as_ref()
-                    .is_some_and(|deps| deps.contains_key(dep))
-            } else {
-                workspace
-                    .package_json
-                    .dependencies
-                    .as_ref()
-                    .is_some_and(|deps| deps.contains_key(dep))
-                    || workspace
-                        .package_json
-                        .dev_dependencies
-                        .as_ref()
-                        .is_some_and(|deps| deps.contains_key(dep))
-            }
+            declarations.iter().any(|declaration| {
+                let kind_matches = if is_monorepo {
+                    !matches!(declaration.kind(), DependencyKind::Peer { .. })
+                } else {
+                    matches!(
+                        declaration.kind(),
+                        DependencyKind::Production | DependencyKind::Development
+                    )
+                };
+                let name = if is_monorepo {
+                    declaration.package_name()
+                } else {
+                    declaration.declaration_name()
+                };
+                kind_matches && name == dep
+            })
         };
 
         match self.strategy {
@@ -137,12 +133,15 @@ impl std::fmt::Display for Slug {
     }
 }
 
-pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
+pub fn infer_framework(
+    declarations: PackageExternalDeclarations<'_>,
+    is_monorepo: bool,
+) -> Option<&Framework> {
     let frameworks = get_frameworks().ok()?;
 
     frameworks
         .iter()
-        .find(|framework| framework.dependency_match.test(workspace, is_monorepo))
+        .find(|framework| framework.dependency_match.test(declarations, is_monorepo))
 }
 
 #[cfg(test)]
@@ -151,7 +150,11 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
 
     use test_case::test_case;
-    use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
+    use turborepo_repository::{
+        external_resolution::{ExternalDeclaration, PackageExternalDeclarations},
+        package_graph::PackageInfo,
+        package_json::PackageJson,
+    };
 
     use super::*;
 
@@ -331,8 +334,91 @@ mod tests {
         expected: Option<&Framework>,
         is_monorepo: bool,
     ) {
-        let framework = infer_framework(&workspace_info, is_monorepo);
+        let declarations = if is_monorepo {
+            workspace_info
+                .unresolved_external_dependencies
+                .iter()
+                .flatten()
+                .map(|(name, specifier)| {
+                    ExternalDeclaration::new(
+                        "workspace",
+                        name,
+                        name,
+                        specifier,
+                        DependencyKind::Production,
+                    )
+                })
+                .collect::<Vec<_>>()
+        } else {
+            workspace_info
+                .package_json
+                .dependencies
+                .iter()
+                .flatten()
+                .map(|(name, specifier)| (name, specifier, DependencyKind::Production))
+                .chain(
+                    workspace_info
+                        .package_json
+                        .dev_dependencies
+                        .iter()
+                        .flatten()
+                        .map(|(name, specifier)| (name, specifier, DependencyKind::Development)),
+                )
+                .map(|(name, specifier, kind)| {
+                    ExternalDeclaration::new("workspace", name, name, specifier, kind)
+                })
+                .collect()
+        };
+        let framework = infer_framework(
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+            is_monorepo,
+        );
         assert_eq!(framework, expected);
+    }
+
+    #[test]
+    fn aliases_and_peer_declarations_preserve_framework_behavior() {
+        let declarations = vec![
+            ExternalDeclaration::new(
+                "workspace",
+                "next-alias",
+                "next",
+                "npm:next@latest",
+                DependencyKind::Production,
+            ),
+            ExternalDeclaration::new(
+                "workspace",
+                "blitz",
+                "blitz",
+                "*",
+                DependencyKind::Peer { optional: false },
+            ),
+        ];
+        let view = PackageExternalDeclarations::new(&declarations, "workspace");
+
+        assert_eq!(
+            infer_framework(view, true),
+            Some(get_framework_by_slug("nextjs"))
+        );
+        assert_eq!(infer_framework(view, false), None);
+    }
+
+    #[test]
+    fn optional_declarations_preserve_single_package_behavior() {
+        let declarations = vec![ExternalDeclaration::new(
+            "workspace",
+            "next",
+            "next",
+            "latest",
+            DependencyKind::Optional,
+        )];
+        let view = PackageExternalDeclarations::new(&declarations, "workspace");
+
+        assert_eq!(
+            infer_framework(view, true),
+            Some(get_framework_by_slug("nextjs"))
+        );
+        assert_eq!(infer_framework(view, false), None);
     }
 
     #[test]

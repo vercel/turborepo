@@ -1,6 +1,9 @@
 //! Parser-neutral external dependency declarations and exact resolutions.
 
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 use sha2::{Digest, Sha256};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -22,6 +25,22 @@ pub struct ExternalDeclaration {
 }
 
 impl ExternalDeclaration {
+    pub fn new(
+        source: impl Into<String>,
+        declaration_name: impl Into<String>,
+        package_name: impl Into<String>,
+        specifier: impl Into<String>,
+        kind: DependencyKind,
+    ) -> Self {
+        Self {
+            source: source.into(),
+            declaration_name: declaration_name.into(),
+            package_name: package_name.into(),
+            specifier: specifier.into(),
+            kind,
+        }
+    }
+
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -44,24 +63,21 @@ impl ExternalDeclaration {
 }
 
 /// Immutable declaration-side input to external resolution producers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ExternalDeclarationView {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExternalDeclarations {
     declarations: Box<[ExternalDeclaration]>,
+    ranges: HashMap<String, Range<usize>>,
 }
 
-impl ExternalDeclarationView {
+impl ExternalDeclarations {
     pub(crate) fn build(relationships: &RelationshipKnowledge) -> Self {
         let mut declarations = Vec::new();
+        let mut ranges = HashMap::new();
         for group in relationships.groups() {
+            let start = declarations.len();
             let mut seen = HashSet::new();
             for relationship in group.relationships() {
                 if !seen.insert(relationship.declaration_name()) {
-                    continue;
-                }
-                if !matches!(
-                    relationship.kind(),
-                    DependencyKind::Production | DependencyKind::Development
-                ) {
                     continue;
                 }
                 let RelationshipTarget::UnresolvedExternal { name, specifier } =
@@ -69,22 +85,54 @@ impl ExternalDeclarationView {
                 else {
                     continue;
                 };
-                declarations.push(ExternalDeclaration {
-                    source: group.source().to_string(),
-                    declaration_name: relationship.declaration_name().to_string(),
-                    package_name: name.clone(),
-                    specifier: specifier.clone(),
-                    kind: relationship.kind(),
-                });
+                declarations.push(ExternalDeclaration::new(
+                    group.source(),
+                    relationship.declaration_name(),
+                    name,
+                    specifier,
+                    relationship.kind(),
+                ));
             }
+            ranges.insert(group.source().to_string(), start..declarations.len());
         }
         Self {
             declarations: declarations.into_boxed_slice(),
+            ranges,
         }
     }
 
-    pub(crate) fn declarations(&self) -> &[ExternalDeclaration] {
+    pub fn declarations(&self) -> &[ExternalDeclaration] {
         &self.declarations
+    }
+
+    pub fn for_package<'a>(&'a self, source: &'a str) -> PackageExternalDeclarations<'a> {
+        let declarations = self
+            .ranges
+            .get(source)
+            .map(|range| &self.declarations[range.clone()])
+            .unwrap_or_default();
+        PackageExternalDeclarations::new(declarations, source)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PackageExternalDeclarations<'a> {
+    declarations: &'a [ExternalDeclaration],
+    source: &'a str,
+}
+
+impl<'a> PackageExternalDeclarations<'a> {
+    pub fn new(declarations: &'a [ExternalDeclaration], source: &'a str) -> Self {
+        Self {
+            declarations,
+            source,
+        }
+    }
+
+    pub fn iter(self) -> impl DoubleEndedIterator<Item = &'a ExternalDeclaration> + Clone + 'a {
+        self.declarations
+            .iter()
+            .filter(move |declaration| declaration.source() == self.source)
     }
 }
 
@@ -488,8 +536,8 @@ mod tests {
         )
         .unwrap();
 
-        let view = ExternalDeclarationView::build(&relationships);
-        assert_eq!(view.declarations().len(), 1);
+        let view = ExternalDeclarations::build(&relationships);
+        assert_eq!(view.declarations().len(), 2);
         let declaration = &view.declarations()[0];
         assert_eq!(declaration.source(), "app");
         assert_eq!(declaration.declaration_name(), "alias");

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use camino::Utf8Path;
 use miette::{NamedSource, SourceSpan};
@@ -9,8 +9,8 @@ use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations,
     package_graph::{PackageName, PackageNode},
-    package_json::PackageJson,
 };
 use unrs_resolver::{ResolveError, Resolver};
 
@@ -22,8 +22,7 @@ pub struct DependencyLocations<'a> {
     // The containing package's name. We allow a package to import itself per JavaScript convention
     pub(crate) package: &'a PackageName,
     pub(crate) internal_dependencies: &'a HashSet<&'a PackageNode>,
-    pub(crate) package_json: &'a PackageJson,
-    pub(crate) unresolved_external_dependencies: Option<&'a BTreeMap<String, String>>,
+    pub(crate) external_declarations: PackageExternalDeclarations<'a>,
     pub(crate) implicit_dependencies: &'a HashMap<String, Spanned<()>>,
     pub(crate) global_implicit_dependencies: &'a HashMap<String, Spanned<()>>,
 }
@@ -37,39 +36,11 @@ impl<'a> DependencyLocations<'a> {
         // JavaScript convention
         self.package == package_name.as_package_name()
             || self.internal_dependencies.contains(package_name)
-            || self
-                .unresolved_external_dependencies
-                .is_some_and(|external_dependencies| {
-                    external_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .dependencies
-                .as_ref()
-                .is_some_and(|dependencies| {
-                    dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .dev_dependencies
-                .as_ref()
-                .is_some_and(|dev_dependencies| {
-                    dev_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .peer_dependencies
-                .as_ref()
-                .is_some_and(|peer_dependencies| {
-                    peer_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .optional_dependencies
-                .as_ref()
-                .is_some_and(|optional_dependencies| {
-                    optional_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
+            || self.external_declarations.iter().any(|declaration| {
+                let package_name = package_name.as_package_name().as_str();
+                declaration.declaration_name() == package_name
+                    || declaration.package_name() == package_name
+            })
             || self
                 .implicit_dependencies
                 .contains_key(package_name.as_package_name().as_str())
@@ -450,11 +421,66 @@ pub(crate) fn check_package_import(
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
+
     use test_case::test_case;
     use turbo_trace::Tracer;
+    use turborepo_repository::{
+        external_resolution::ExternalDeclaration, package_json::PackageJson,
+    };
 
     use super::*;
     use crate::BoundariesResult;
+
+    fn declarations(package_json: &PackageJson) -> Vec<ExternalDeclaration> {
+        package_json
+            .dependencies_with_kind()
+            .map(|(name, specifier, kind)| {
+                ExternalDeclaration::new("my-app", name, name, specifier, kind)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn declaration_projection_accepts_alias_targets_and_all_dependency_kinds() {
+        let package = PackageName::from("my-app");
+        let declarations = vec![
+            ExternalDeclaration::new(
+                "my-app",
+                "alias",
+                "target",
+                "npm:target@1",
+                turborepo_repository::relationships::DependencyKind::Production,
+            ),
+            ExternalDeclaration::new(
+                "my-app",
+                "optional",
+                "optional",
+                "1",
+                turborepo_repository::relationships::DependencyKind::Optional,
+            ),
+            ExternalDeclaration::new(
+                "my-app",
+                "peer",
+                "peer",
+                "1",
+                turborepo_repository::relationships::DependencyKind::Peer { optional: false },
+            ),
+        ];
+        let locations = DependencyLocations {
+            package: &package,
+            internal_dependencies: &HashSet::new(),
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
+            implicit_dependencies: &HashMap::new(),
+            global_implicit_dependencies: &HashMap::new(),
+        };
+
+        for dependency in ["alias", "target", "optional", "peer"] {
+            assert!(
+                locations.is_dependency(&PackageNode::Workspace(PackageName::from(dependency)))
+            );
+        }
+    }
 
     #[test_case("bun", true ; "bun bare import")]
     #[test_case("bun:test", true ; "bun test module")]
@@ -586,12 +612,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };
@@ -634,12 +660,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };
@@ -683,12 +709,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };

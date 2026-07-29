@@ -107,7 +107,9 @@ impl RelationshipIndex {
                 };
                 if !matches!(
                     kind,
-                    DependencyKind::Production | DependencyKind::Development
+                    DependencyKind::Production
+                        | DependencyKind::Optional
+                        | DependencyKind::Development
                 ) {
                     continue;
                 }
@@ -125,7 +127,9 @@ impl RelationshipIndex {
             prune_production[source.index()].extend(
                 effective_concrete
                     .iter()
-                    .filter(|(_, kind)| *kind == DependencyKind::Production)
+                    .filter(|(_, kind)| {
+                        matches!(kind, DependencyKind::Production | DependencyKind::Optional)
+                    })
                     .map(|(target, _)| *target),
             );
             prune_production[source.index()].extend(required_peers);
