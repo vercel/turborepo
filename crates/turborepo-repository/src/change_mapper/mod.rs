@@ -190,6 +190,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             }),
                         );
 
+                        self.add_relationship_affected_packages(&mut changed_pkgs);
+
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
 
@@ -208,6 +210,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     // We don't know if the lockfile changed or not, so we can't assume anything
                     LockfileContents::Unchanged => {
                         debug!("the lockfile did not change");
+                        self.add_relationship_affected_packages(&mut changed_pkgs);
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
                 }
@@ -259,30 +262,30 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             }
         }
 
-        self.add_toolchain_affected_packages(&mut changed_packages);
         PackageChanges::Some(changed_packages)
     }
 
-    fn add_toolchain_affected_packages(
+    fn add_relationship_affected_packages(
         &self,
         changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
     ) {
-        let directly_changed: Vec<_> = changed_packages
+        let mut directly_changed: Vec<_> = changed_packages
             .keys()
             .map(|package| package.name.clone())
             .collect();
+        directly_changed.sort();
         for dependency in directly_changed {
-            let Some(context) = self.pkg_graph.package_task_context(&dependency) else {
+            let Some(affected_packages) = self
+                .pkg_graph
+                .affected_relationships()
+                .additional_affected_by(&dependency)
+            else {
                 continue;
             };
-            let Some(toolchain_id) = context.toolchain() else {
-                continue;
-            };
-            let Some(toolchain) = self.pkg_graph.toolchains().get(toolchain_id) else {
-                continue;
-            };
-            for affected in toolchain.additional_affected_packages(dependency.as_str()) {
-                let name = PackageName::Other(affected);
+            for name in affected_packages {
+                if name == dependency {
+                    continue;
+                }
                 let Some(context) = self.pkg_graph.package_task_context(&name) else {
                     continue;
                 };

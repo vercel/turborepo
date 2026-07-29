@@ -471,7 +471,7 @@ impl PackageGraph {
         self.relationship_projections().filtering()
     }
 
-    /// Returns reverse ordering relationships for affectedness propagation.
+    /// Returns reverse input relationships for affectedness propagation.
     pub fn affected_relationships(&self) -> &AffectedRelationships {
         self.relationship_projections().affected()
     }

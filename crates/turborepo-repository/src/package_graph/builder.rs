@@ -524,6 +524,9 @@ impl PackageGraphAssembler {
             let mut seen = HashSet::new();
             let mut internal = HashMap::<&str, DependencyKind>::new();
             for relationship in group.relationships() {
+                if !relationship.orders_tasks() {
+                    continue;
+                }
                 if !seen.insert(relationship.declaration_name()) {
                     continue;
                 }
