@@ -37,9 +37,8 @@ use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_hash::{
-    collect_global_file_hash_inputs, compute_external_deps_hashes, get_external_deps_hash,
-    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs,
-    PackageInputsHashes,
+    collect_global_file_hash_inputs, compute_external_deps_hashes, get_internal_deps_hash,
+    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
@@ -1216,11 +1215,15 @@ impl Run {
                 s.spawn(|_| {
                     let _span =
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    let resolution_file_fallback = self
+                        .pkg_dep_graph
+                        .external_resolution_global_file_fallback()
+                        .unwrap_or_default();
                     global_file_result = Some(collect_global_file_hash_inputs(
                         root_workspace,
                         &self.repo_root,
                         self.pkg_dep_graph.package_manager(),
-                        self.pkg_dep_graph.lockfile(),
+                        &resolution_file_fallback,
                         self.root_turbo_json.global_deps_for_hash(),
                         &self.env_at_execution_start,
                         &self.root_turbo_json.global_env,
@@ -1249,12 +1252,21 @@ impl Run {
             global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
         let external_deps_hashes = external_deps_hashes.transpose()?;
 
-        let root_external_dependencies_hash = is_monorepo.then(|| {
-            root_workspace
-                .external_deps_hash
-                .clone()
-                .unwrap_or_else(|| get_external_deps_hash(&root_workspace.transitive_dependencies))
-        });
+        let root_external_dependencies_hash = if is_monorepo {
+            let cache = external_deps_hashes.as_ref().ok_or_else(|| {
+                turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+            })?;
+            Some(
+                cache
+                    .get(PackageName::Root.as_str())
+                    .cloned()
+                    .ok_or_else(|| {
+                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+                    })?,
+            )
+        } else {
+            None
+        };
 
         let pass_through_env = match env_mode {
             EnvMode::Loose => {

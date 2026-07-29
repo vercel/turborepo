@@ -1967,6 +1967,11 @@ mod test {
             Some("user-facing-root-name")
         );
         assert_eq!(retained_generation.packages().count(), 0);
+        assert_eq!(
+            graph.external_resolution_global_file_fallback(),
+            Some(vec![root.join_component("package.json")]),
+            "single-package mode must preserve package.json as a global hash input"
+        );
 
         let contexts = graph.package_task_contexts().collect::<Vec<_>>();
         assert_eq!(contexts.len(), 1);
