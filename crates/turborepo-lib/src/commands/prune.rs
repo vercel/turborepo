@@ -1284,9 +1284,9 @@ impl<'a> Prune<'a> {
     fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
         let mut keys = self
             .package_graph
-            .transitive_external_dependencies(workspaces.iter())
+            .external_package_identities_for_packages(workspaces.iter())
             .into_iter()
-            .map(|pkg| pkg.key.clone())
+            .map(|identity| identity.key().to_string())
             .collect::<HashSet<_>>();
 
         let lockfile = self
