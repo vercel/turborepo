@@ -253,10 +253,11 @@ pub struct TurboJsonLoader<U: TurboJsonUpdater = NoOpUpdater> {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 enum Strategy<U: TurboJsonUpdater> {
     SinglePackage {
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     },
     Workspace {
         // Map of package names to their package specific turbo.json
@@ -318,14 +319,14 @@ impl TurboJsonLoader<NoOpUpdater> {
     pub fn single_package(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self {
             reader,
             cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::SinglePackage {
                 root_turbo_json,
-                package_json,
+                root_scripts,
             },
         }
     }
@@ -449,13 +450,13 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
         let reader = &self.reader;
         match &self.strategy {
             Strategy::SinglePackage {
-                package_json,
+                root_scripts,
                 root_turbo_json,
             } => {
                 if !matches!(package, PackageName::Root) {
                     Err(LoaderError::InvalidTurboJsonLoad(package.clone()).into())
                 } else {
-                    load_from_root_package_json(reader, root_turbo_json, package_json)
+                    load_from_root_scripts(reader, root_turbo_json, root_scripts)
                         .map_err(|e| e.into())
                 }
             }
@@ -643,23 +644,68 @@ fn load_from_root_package_json(
 
     // TODO: Add location info from package.json
     for script_name in root_package_json.scripts.keys() {
-        let task_name = TaskName::from(script_name.as_str());
-        if !turbo_json.has_task(&task_name) {
-            let task_name = task_name.into_root_task();
-            // Explicitly set cache to Some(false) in this definition
-            // so we can pretend it was set on purpose. That way it
-            // won't get clobbered by the merge function.
-            turbo_json.tasks.insert(
-                task_name,
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(false)),
-                    ..RawTaskDefinition::default()
-                }),
-            );
-        }
+        insert_synthesized_root_task(&mut turbo_json, script_name);
     }
 
     Ok(turbo_json)
+}
+
+fn load_from_root_scripts(
+    reader: &TurboJsonReader,
+    turbo_json_path: &AbsoluteSystemPath,
+    root_scripts: &[String],
+) -> Result<TurboJson, LoaderError> {
+    let mut turbo_json = match reader.read(turbo_json_path, true) {
+        Ok(Some(mut turbo_json)) => {
+            let mut pipeline = Pipeline::default();
+            for (task_name, task_definition) in turbo_json.tasks {
+                if task_name.is_package_task() {
+                    let (span, text) = task_definition.span_and_text("turbo.json");
+
+                    return Err(LoaderError::TurboJson(
+                        Error::PackageTaskInSinglePackageMode {
+                            task_id: task_name.to_string(),
+                            span,
+                            text,
+                        },
+                    ));
+                }
+
+                pipeline.insert(task_name.into_root_task(), task_definition);
+            }
+
+            turbo_json.tasks = pipeline;
+
+            turbo_json
+        }
+        Ok(None) => TurboJson::default(),
+        Err(e) => {
+            return Err(LoaderError::TurboJson(e));
+        }
+    };
+
+    for script_name in root_scripts {
+        insert_synthesized_root_task(&mut turbo_json, script_name);
+    }
+
+    Ok(turbo_json)
+}
+
+fn insert_synthesized_root_task(turbo_json: &mut TurboJson, script_name: &str) {
+    let task_name = TaskName::from(script_name);
+    if !turbo_json.has_task(&task_name) {
+        let task_name = task_name.into_root_task();
+        // Explicitly set cache to Some(false) in this definition
+        // so we can pretend it was set on purpose. That way it
+        // won't get clobbered by the merge function.
+        turbo_json.tasks.insert(
+            task_name,
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                ..RawTaskDefinition::default()
+            }),
+        );
+    }
 }
 
 fn root_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, LoaderError> {
@@ -921,11 +967,9 @@ mod tests {
         }
 
         let reader = TurboJsonReader::new(repo_root.to_owned());
-        let loader = TurboJsonLoader::<NoOpUpdater>::single_package(
-            reader,
-            root_turbo_json,
-            root_package_json,
-        );
+        let root_scripts: Vec<_> = root_package_json.scripts.keys().cloned().collect();
+        let loader =
+            TurboJsonLoader::<NoOpUpdater>::single_package(reader, root_turbo_json, root_scripts);
         let mut turbo_json = loader.load(&PackageName::Root).unwrap().clone();
         turbo_json.clear_metadata();
         for task_definition in turbo_json.tasks.values_mut() {
@@ -948,7 +992,7 @@ mod tests {
         let single_loader = TurboJsonLoader::<NoOpUpdater>::single_package(
             reader.clone(),
             junk_path.to_owned(),
-            PackageJson::default(),
+            Vec::new(),
         );
         let task_access_loader = TurboJsonLoader::<NoOpUpdater>::task_access(
             reader,
