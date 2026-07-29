@@ -435,7 +435,6 @@ impl ExternalResolutionDomain {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExternalResolutionStatus {
     Pending,
-    Resolving,
     Complete,
 }
 
