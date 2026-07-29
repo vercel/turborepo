@@ -3,7 +3,6 @@
 import {
   CLI_PACKAGE_PATHS,
   LIBRARY_PACKAGE_PATHS,
-  getChangedFiles,
   run as validateRelease,
 } from "./validate-release-pr.mjs";
 
@@ -38,6 +37,20 @@ function isReleaseReviewPath(path) {
     LIBRARY_PACKAGE_PATHS.includes(path) ||
     /^skills\/turborepo\/.*\.md$/.test(path)
   );
+}
+
+async function hasNonReleasePath(repository, pullNumber) {
+  for (let page = 1; ; page += 1) {
+    const files = await github(
+      `/repos/${repository}/pulls/${pullNumber}/files?per_page=100&page=${page}`,
+    );
+    if (files.some(({ filename }) => !isReleaseReviewPath(filename))) {
+      return true;
+    }
+    if (files.length < 100) {
+      return false;
+    }
+  }
 }
 
 async function hasValidApproval(repository, pull) {
@@ -93,7 +106,6 @@ export async function run() {
   if (
     pull.base.ref !== pull.base.repo.default_branch ||
     pull.base.repo.full_name !== repository ||
-    pull.head.repo.full_name !== repository ||
     pull.state !== "open" ||
     pull.draft
   ) {
@@ -108,8 +120,7 @@ export async function run() {
     throw new Error("Review gate is not running on the dispatched SHA");
   }
 
-  const files = await getChangedFiles(repository, pull.base.sha, pull.head.sha);
-  if (files.some(({ filename }) => !isReleaseReviewPath(filename))) {
+  if (await hasNonReleasePath(repository, pull.number)) {
     console.log("Native team review policy applies to this pull request");
     return;
   }
@@ -117,6 +128,7 @@ export async function run() {
   const isAutomatedRelease =
     pull.user.login === "github-actions[bot]" &&
     pull.user.id === 41898282 &&
+    pull.head.repo.full_name === repository &&
     (/^staging-/.test(pull.head.ref) ||
       /^library-release\//.test(pull.head.ref));
   if (isAutomatedRelease) {
