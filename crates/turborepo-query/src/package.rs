@@ -70,11 +70,21 @@ impl Package {
     pub fn get_tasks(&self) -> HashMap<String, Spanned<String>> {
         self.run
             .pkg_dep_graph()
-            .package_json(&self.name)
-            .map(|json| {
-                json.scripts
+            .package_task_context(&self.name)
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .tasks()
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .filter_map(|task| {
+                        task.script()
+                            .cloned()
+                            .or_else(|| {
+                                task.display()
+                                    .map(|display| Spanned::new(display.to_string()))
+                            })
+                            .map(|script| (task.name().to_string(), script))
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -82,29 +92,28 @@ impl Package {
 
     pub fn get_task_names(&self) -> BTreeSet<String> {
         let packages = HashSet::from([self.name.clone()]);
-        let registered_tasks: HashSet<_> = self
+        let catalog_tasks: HashSet<_> = self
             .run
             .pkg_dep_graph()
             .package_task_context(&self.name)
-            .and_then(|context| {
-                self.run
-                    .pkg_dep_graph()
-                    .toolchains()
-                    .get(context.toolchain()?)
-                    .map(|toolchain| toolchain.registered_tasks(&context))
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .tasks()
+                    .iter()
+                    .filter(|task| task.executable() || task.registered() || task.authored())
+                    .map(|task| task.name().to_string())
+                    .collect()
             })
-            .unwrap_or_default()
+            .unwrap_or_default();
+        catalog_tasks
             .into_iter()
-            .collect();
-        self.get_tasks()
-            .into_keys()
             .chain(
                 self.run
                     .engine()
                     .task_ids_for_packages(&packages)
                     .into_iter()
-                    .map(|task| task.task().to_string())
-                    .filter(|task| registered_tasks.contains(task)),
+                    .map(|task| task.task().to_string()),
             )
             .collect()
     }
