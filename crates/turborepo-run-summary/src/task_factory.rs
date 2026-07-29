@@ -278,13 +278,14 @@ fn summary_command(
     task_definition: &TaskDefinition,
     task: &str,
 ) -> String {
+    let _ = package_graph;
     match &task_definition.command {
         Some(turborepo_types::TaskCommandOverride::Argv(argv)) => argv.join(" "),
         Some(turborepo_types::TaskCommandOverride::OptOut) => "<OPT OUT>".to_string(),
         None => package_context
-            .toolchain()
-            .and_then(|id| package_graph.toolchains().get(id))
-            .and_then(|toolchain| toolchain.task_display_command(package_context, task))
+            .native_tasks()
+            .get(task)
+            .and_then(|native_task| native_task.display().map(str::to_string))
             .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
     }
 }

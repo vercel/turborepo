@@ -1554,35 +1554,6 @@ mod task_io_context_tests {
             Box::pin(async { Ok(DiscoveredPackages::default()) })
         }
 
-        fn task_command(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-            _pass_through_args: Option<&[String]>,
-            _override_command: Option<&[String]>,
-        ) -> Result<
-            Option<turborepo_repository::toolchain::TaskCommand>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
-        }
-
-        fn task_display_command(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> Option<String> {
-            None
-        }
-
-        fn defines_task(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> bool {
-            false
-        }
-
         fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
             turborepo_repository::toolchain::WatchSpec::default()
         }

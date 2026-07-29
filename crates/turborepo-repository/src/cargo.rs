@@ -1043,19 +1043,6 @@ pub struct CargoToolchain {
     /// resolution. Keyed by package name.
     details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
     workspace_details: std::sync::Mutex<Option<CargoWorkspaceDetails>>,
-    /// The cargo binary, resolved lazily so runs without Cargo tasks never
-    /// pay for a PATH scan.
-    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
-}
-
-#[derive(Debug, thiserror::Error)]
-enum CargoCommandError {
-    #[error("Unable to find cargo binary: {0}")]
-    Which(#[from] which::Error),
-    #[error("Cargo task context belongs to repository {actual}, expected {expected}")]
-    ForeignRepository { actual: String, expected: String },
-    #[error("Cargo task context has non-Rust provenance")]
-    WrongToolchain,
 }
 
 impl CargoToolchain {
@@ -1064,7 +1051,6 @@ impl CargoToolchain {
             repo_root,
             details: std::sync::Mutex::new(HashMap::new()),
             workspace_details: std::sync::Mutex::new(None),
-            cargo_binary: std::sync::OnceLock::new(),
         })
     }
 
@@ -1094,26 +1080,6 @@ impl CargoToolchain {
         context.repository_root() == self.repo_root.as_ref()
             && context.toolchain() == Some(&ToolchainId::RUST)
     }
-
-    fn validate_context(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-    ) -> Result<(), toolchain::Error> {
-        if context.repository_root() != self.repo_root.as_ref() {
-            return Err(toolchain::Error::Failed(Box::new(
-                CargoCommandError::ForeignRepository {
-                    actual: context.repository_root().to_string(),
-                    expected: self.repo_root.to_string(),
-                },
-            )));
-        }
-        if context.toolchain() != Some(&ToolchainId::RUST) {
-            return Err(toolchain::Error::Failed(Box::new(
-                CargoCommandError::WrongToolchain,
-            )));
-        }
-        Ok(())
-    }
 }
 
 impl Toolchain for CargoToolchain {
@@ -1123,56 +1089,6 @@ impl Toolchain for CargoToolchain {
 
     fn task_io_env_vars(&self) -> &[&str] {
         TASK_IO_ENV_VARS
-    }
-
-    fn task_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        pass_through_args: Option<&[String]>,
-        override_command: Option<&[String]>,
-    ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
-        self.validate_context(context)?;
-        if let Some(override_command) = override_command {
-            let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
-                .then(|| "cargo".to_string());
-            return Ok(toolchain::override_task_command(
-                context,
-                override_command,
-                pass_through_args,
-                serial_group,
-            ));
-        }
-        let Some(native_task) = context.native_tasks().get(task) else {
-            return Ok(None);
-        };
-        let cargo_binary = self
-            .cargo_binary
-            .get_or_init(|| which::which("cargo"))
-            .as_deref()
-            .map_err(|err| toolchain::Error::Failed(Box::new(CargoCommandError::Which(*err))))?;
-        crate::native_tasks::resolve_task_command(
-            context,
-            native_task,
-            None,
-            None,
-            Some(cargo_binary),
-            pass_through_args,
-            None,
-        )
-        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
-    }
-
-    fn task_display_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> Option<String> {
-        self.owns_context(context).then_some(())?;
-        context
-            .native_tasks()
-            .get(task)
-            .and_then(|native_task| native_task.display().map(str::to_string))
     }
 
     fn task_defaults(
@@ -1192,25 +1108,6 @@ impl Toolchain for CargoToolchain {
             });
 
         toolchain::TaskDefaults { cache }
-    }
-
-    fn registered_tasks(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-    ) -> Vec<String> {
-        if self.owns_context(context) {
-            context.native_tasks().registered_names()
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn registers_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        self.owns_context(context) && context.native_tasks().registers(task)
     }
 
     /// Route rustc invocations through the embedded sccache, with the
@@ -1286,14 +1183,6 @@ impl Toolchain for CargoToolchain {
         vars
     }
 
-    fn defines_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        self.owns_context(context) && context.native_tasks().defines(task)
-    }
-
     fn derives_task_io(
         &self,
         package: &crate::package_graph::PackageTaskContext<'_>,
@@ -1301,7 +1190,7 @@ impl Toolchain for CargoToolchain {
     ) -> bool {
         // Mirrors the early returns of `derived_task_io`: a known crate
         // with a Cargo subcommand for this task.
-        self.defines_task(package, task)
+        self.owns_context(package) && package.native_tasks().defines(task)
     }
 
     fn additional_affected_packages(&self, package: &str) -> Vec<String> {
@@ -3877,6 +3766,39 @@ release: 1.96.0-nightly\n",
         args.iter().map(std::ffi::OsString::from).collect()
     }
 
+    fn resolve_cargo_cmd(
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> Option<crate::toolchain::TaskCommand> {
+        let cargo_binary = override_command
+            .is_none()
+            .then(|| which::which("cargo").ok())
+            .flatten();
+        if let Some(native_task) = context.native_tasks().get(task) {
+            return crate::native_tasks::resolve_task_command(
+                context,
+                native_task,
+                None,
+                None,
+                cargo_binary.as_deref(),
+                pass_through_args,
+                override_command,
+            )
+            .unwrap();
+        }
+        let override_command = override_command?;
+        let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
+            .then(|| "cargo".to_string());
+        crate::toolchain::override_task_command(
+            context,
+            override_command,
+            pass_through_args,
+            serial_group,
+        )
+    }
+
     #[rustfmt::skip]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_task_commands() {
@@ -3894,13 +3816,11 @@ release: 1.96.0-nightly\n",
 
         let foreign_root = root.join_component("foreign");
         let foreign_context = task_context(&toolchain, &foreign_root, "app", "crates/app", None);
-        assert!(toolchain.task_command(&foreign_context, "build", None, None).unwrap_err().to_string().contains("belongs to repository"));
+        assert!(!toolchain.owns_context(&foreign_context));
 
         // Entrypoint build: scoped to the crate, serialized on the cargo
         // group, run from the workspace root.
-        let cmd = toolchain
-            .task_command(&app_context, "build", None, None)
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&app_context, "build", None, None)
             .expect("entrypoint build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=app", "--locked"]));
         assert_eq!(cmd.cwd, root);
@@ -3908,10 +3828,7 @@ release: 1.96.0-nightly\n",
 
         // `run` is exempt from the serial group and forwards pass-through
         // args to the binary after `--`.
-        let cmd = toolchain
-            .task_command(&app_context, "dev", Some(&["--port".to_string()]), None)
-            .unwrap()
-            .expect("entrypoint dev resolves to cargo run");
+        let cmd = resolve_cargo_cmd(&app_context, "dev", Some(&["--port".to_string()]), None).expect("entrypoint dev resolves to cargo run");
         assert_eq!(
             cmd.args,
             os_args(&["run", "--package=app", "--locked", "--", "--port"])
@@ -3920,76 +3837,58 @@ release: 1.96.0-nightly\n",
 
         // Other subcommands attach pass-through args as cargo flags, no
         // separator.
-        let cmd = toolchain
-            .task_command(
+        let cmd = resolve_cargo_cmd(
                 &app_context,
                 "build",
                 Some(&["--release".to_string()]),
                 None,
-            )
-            .unwrap()
-            .expect("entrypoint build resolves");
+            ).expect("entrypoint build resolves");
         assert_eq!(
             cmd.args,
             os_args(&["build", "--package=app", "--locked", "--release"])
         );
 
         // A filtered library build resolves directly to that package.
-        let cmd = toolchain
-            .task_command(&lib_a_context, "build", None, None)
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&lib_a_context, "build", None, None)
             .expect("library build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=lib-a", "--locked"]));
-        let cmd = toolchain
-            .task_command(&lib_a_context, "test", None, None)
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&lib_a_context, "test", None, None)
             .expect("library test resolves");
         assert_eq!(cmd.args, os_args(&["test", "--package=lib-a", "--locked"]));
-        let cmd = toolchain
-            .task_command(&app_context, "check", None, None)
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&app_context, "check", None, None)
             .expect("entrypoint check resolves");
         assert_eq!(cmd.args, os_args(&["check", "--package=app", "--locked"]));
 
         // The workspace package runs verification verbs at workspace scope.
-        let cmd = toolchain
-            .task_command(&workspace_context, "lint", None, None)
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&workspace_context, "lint", None, None)
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace", "--locked"]));
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
 
         // Harness-forwarding subcommands separate pass-through args with
         // `--`; e.g. `turbo test -- --nocapture` reaches the test harness.
-        let cmd = toolchain
-            .task_command(
+        let cmd = resolve_cargo_cmd(
                 &workspace_context,
                 "test",
                 Some(&["--nocapture".to_string()]),
                 None,
-            )
-            .unwrap()
-            .expect("workspace test resolves");
+            ).expect("workspace test resolves");
         assert_eq!(
             cmd.args,
             os_args(&["test", "--workspace", "--locked", "--", "--nocapture"])
         );
         assert!(
-            toolchain
-                .task_command(&workspace_context, "build", None, None)
-                .unwrap()
+            resolve_cargo_cmd(&workspace_context, "build", None, None)
                 .is_none(),
             "workspace-wide build would duplicate entrypoint builds"
         );
 
         // Display strings derive from the same tables.
-        assert_eq!(toolchain.task_display_command(&app_context, "build").as_deref(), Some("cargo build --package=app --locked"));
-        assert_eq!(toolchain.task_display_command(&workspace_context, "test").as_deref(), Some("cargo test --workspace --locked"));
-        assert_eq!(toolchain.task_display_command(&lib_a_context, "test").as_deref(), Some("cargo test --package=lib-a --locked"));
+        assert_eq!(app_context.native_tasks().get("build").and_then(|t| t.display()), Some("cargo build --package=app --locked"));
+        assert_eq!(workspace_context.native_tasks().get("test").and_then(|t| t.display()), Some("cargo test --workspace --locked"));
+        assert_eq!(lib_a_context.native_tasks().get("test").and_then(|t| t.display()), Some("cargo test --package=lib-a --locked"));
         assert_eq!(
-            toolchain
-                .task_display_command(&lib_a_context, "build")
-                .as_deref(),
+            lib_a_context.native_tasks().get("build").and_then(|t| t.display()),
             Some("cargo build --package=lib-a --locked")
         );
 
@@ -4090,9 +3989,7 @@ release: 1.96.0-nightly\n",
         // (the group
         // exists because of cargo's build-directory lock).
         let override_argv = vec!["cargo".to_string(), "fuzz".to_string(), "run".to_string()];
-        let cmd = toolchain
-            .task_command(&lib_a_context, "fuzz", None, Some(&override_argv))
-            .unwrap()
+        let cmd = resolve_cargo_cmd(&lib_a_context, "fuzz", None, Some(&override_argv))
             .expect("override defines the task for a library crate");
         assert_eq!(cmd.program, std::ffi::OsString::from("cargo"));
         assert_eq!(cmd.args, os_args(&["fuzz", "run"]));
@@ -4102,20 +3999,14 @@ release: 1.96.0-nightly\n",
         // A non-cargo argv drops the group; pass-through args append
         // verbatim (no separator injection). Overrides must not require the
         // cargo binary, even for tasks present in the native catalog.
-        toolchain
-            .cargo_binary
-            .set(Err(which::Error::CannotFindBinaryPath))
-            .unwrap();
         let override_argv = vec!["./scripts/test.sh".to_string()];
-        let cmd = toolchain
-            .task_command(
-                &workspace_context,
-                "test",
-                Some(&["--fast".to_string()]),
-                Some(&override_argv),
-            )
-            .unwrap()
-            .expect("override resolves");
+        let cmd = resolve_cargo_cmd(
+            &workspace_context,
+            "test",
+            Some(&["--fast".to_string()]),
+            Some(&override_argv),
+        )
+        .expect("override resolves");
         assert_eq!(cmd.program, std::ffi::OsString::from("./scripts/test.sh"));
         assert_eq!(cmd.args, os_args(&["--fast"]));
         // The workspace package's directory is the repo root.
@@ -4144,11 +4035,11 @@ release: 1.96.0-nightly\n",
         };
 
         // defines_task mirrors the verb tables.
-        assert!(toolchain.defines_task(&app_ctx, "build"));
-        assert!(toolchain.defines_task(&app_ctx, "test"));
-        assert!(toolchain.defines_task(&lib_ctx, "test"));
-        assert!(toolchain.defines_task(&lib_ctx, "build"));
-        assert!(toolchain.defines_task(&workspace_ctx, "test"));
+        assert!(app_ctx.native_tasks().defines("build"));
+        assert!(app_ctx.native_tasks().defines("test"));
+        assert!(lib_ctx.native_tasks().defines("test"));
+        assert!(lib_ctx.native_tasks().defines("build"));
+        assert!(workspace_ctx.native_tasks().defines("test"));
 
         // Entrypoint build with automatic inputs: workspace files + the
         // dependency crate closure as inputs (own sources via default
