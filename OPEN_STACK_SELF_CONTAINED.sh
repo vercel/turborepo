@@ -876,4 +876,32 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Migrate prune peer helpers off PackageJson" \
   --body-file "$TMPDIR_BODIES/28-5839.md"
 
-echo "Opened 28-layer stack."
+cat > "$TMPDIR_BODIES/29-5840.md" << 'BODY_29'
+## Intent
+
+Continue TURBO-5787: prune workspace copy must load `package.json` from the authoritative definition path and must not require `PackageInfo` payloads. `file:` dependency copying uses external-declaration knowledge.
+
+**Stack:** Compatibility-removal layer 3. Base = `shew/turbo-5839-migrate-prune-peer-helpers-off-packagejson`.
+
+## Changes
+
+- `copy_workspace` loads PackageJson from definition path
+- `copy_file_dependencies` iterates `external_declarations` for `file:` specs
+- Remove `required_package_payload` from prune orchestration
+
+## Testing
+
+- `cargo test -p turborepo-lib --lib commands::prune` (15 passed)
+- `cargo test -p turbo --test prune_test golden_inventory` (2 passed)
+- `cargo clippy -p turborepo-lib --all-targets -- -D warnings`
+
+Closes TURBO-5840.
+BODY_29
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5839-migrate-prune-peer-helpers-off-packagejson \
+  --head shew/turbo-5840-stop-requiring-packageinfo-for-prune-workspace-copy \
+  --title "refactor: Stop requiring PackageInfo for prune workspace copy" \
+  --body-file "$TMPDIR_BODIES/29-5840.md"
+
+echo "Opened 29-layer stack."

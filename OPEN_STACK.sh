@@ -172,4 +172,10 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Migrate prune peer helpers off PackageJson" \
   --body-file "$ROOT/stack-pr-bodies/28-5839.md"
 
-echo "Opened stack through TURBO-5839."
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5839-migrate-prune-peer-helpers-off-packagejson \
+  --head shew/turbo-5840-stop-requiring-packageinfo-for-prune-workspace-copy \
+  --title "refactor: Stop requiring PackageInfo for prune workspace copy" \
+  --body-file "$ROOT/stack-pr-bodies/29-5840.md"
+
+echo "Opened stack through TURBO-5840."
