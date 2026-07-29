@@ -686,6 +686,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     ) -> Result<ObservedPackage, Error> {
         let DiscoveredPackageParts {
             name,
+            name_source,
             scope_kind,
             descriptor: json,
             manifest_path,
@@ -710,6 +711,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         let entry = PackageInfo { package_json: json };
         let observation = PackageScopeObservation {
             identity: name.clone(),
+            name_source,
             definition_path: manifest_path.clone(),
             toolchain,
             scope_kind: match scope_kind {
@@ -1743,7 +1745,12 @@ mod test {
                 (
                     root.join_components(&["apps", "app", "package.json"]),
                     PackageJson {
-                        name: Some(Spanned::new("app".into())),
+                        name: Some(
+                            Spanned::new("app".to_string())
+                                .with_range(9..14)
+                                .with_text(r#"{"name": "app"}"#)
+                                .with_path("apps/app/package.json".into()),
+                        ),
                         ..Default::default()
                     },
                 ),
@@ -1844,6 +1851,15 @@ mod test {
                 Some("apps/app/package.json".to_string())
             );
             assert_eq!(app_view.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+            let app_name_source = app_view
+                .name_source()
+                .expect("the authored JavaScript name retains diagnostic provenance");
+            assert_eq!(app_name_source.range, Some(9..14));
+            assert_eq!(app_name_source.text.as_deref(), Some(r#"{"name": "app"}"#));
+            assert_eq!(
+                app_name_source.path.as_deref(),
+                Some("apps/app/package.json")
+            );
             assert_eq!(graph.node_views().count(), 4);
 
             let mut packages = graph

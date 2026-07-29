@@ -111,6 +111,9 @@ pub struct DiscoveredPackage {
     /// Real user-facing identity, extracted by the native producer. `None`
     /// preserves JavaScript's historical unnamed-package suppression.
     name: Option<String>,
+    /// Source provenance for the authored package name when it agrees with the
+    /// authoritative identity.
+    name_source: Option<Spanned<()>>,
     /// Whether this is a real package or an execution-only aggregate scope.
     scope_kind: DiscoveredScopeKind,
     /// Temporary relationship/task compatibility data; never identity or path
@@ -150,6 +153,7 @@ pub(crate) enum DiscoveredScopeKind {
 
 pub(crate) struct DiscoveredPackageParts {
     pub name: Option<String>,
+    pub name_source: Option<Spanned<()>>,
     pub scope_kind: DiscoveredScopeKind,
     pub descriptor: PackageJson,
     pub manifest_path: AbsoluteSystemPathBuf,
@@ -239,9 +243,15 @@ impl DiscoveredPackage {
         manifest_path: AbsoluteSystemPathBuf,
         external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     ) -> Self {
+        let name_source = descriptor
+            .name
+            .as_ref()
+            .filter(|source| name.as_deref() == Some(source.as_str()))
+            .map(|source| source.to(()));
         descriptor.name = name.clone().map(Spanned::new);
         Self {
             name,
+            name_source,
             scope_kind: DiscoveredScopeKind::Package,
             descriptor,
             manifest_path,
@@ -262,6 +272,7 @@ impl DiscoveredPackage {
         descriptor.name = Some(Spanned::new(name.clone()));
         Self {
             name: Some(name),
+            name_source: None,
             scope_kind: DiscoveredScopeKind::Aggregate,
             descriptor,
             manifest_path,
@@ -288,6 +299,7 @@ impl DiscoveredPackage {
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
+            name_source,
             scope_kind,
             descriptor,
             manifest_path,
@@ -297,6 +309,7 @@ impl DiscoveredPackage {
         } = self;
         DiscoveredPackageParts {
             name,
+            name_source,
             scope_kind,
             descriptor,
             manifest_path,
@@ -986,7 +999,12 @@ mod tests {
         })
         .unwrap();
         let mismatched = PackageJson {
-            name: Some(Spanned::new("payload-name".to_string())),
+            name: Some(
+                Spanned::new("payload-name".to_string())
+                    .with_range(9..23)
+                    .with_text(r#"{"name": "payload-name"}"#)
+                    .with_path("package.json".into()),
+            ),
             ..Default::default()
         };
 
@@ -998,6 +1016,7 @@ mod tests {
         )
         .into_parts();
         assert_eq!(package.name.as_deref(), Some("authoritative-name"));
+        assert_eq!(package.name_source, None);
         assert_eq!(
             package.descriptor.name.as_ref().map(|name| name.as_str()),
             Some("authoritative-name")
@@ -1005,7 +1024,24 @@ mod tests {
 
         let unnamed = DiscoveredPackage::package(None, mismatched, path.clone(), None).into_parts();
         assert_eq!(unnamed.name, None);
+        assert_eq!(unnamed.name_source, None);
         assert_eq!(unnamed.descriptor.name, None);
+
+        let authored_name = Spanned::new("authoritative-name".to_string())
+            .with_range(9..29)
+            .with_text(r#"{"name": "authoritative-name"}"#)
+            .with_path("package.json".into());
+        let matching = DiscoveredPackage::package(
+            Some("authoritative-name".to_string()),
+            PackageJson {
+                name: Some(authored_name.clone()),
+                ..Default::default()
+            },
+            path.clone(),
+            None,
+        )
+        .into_parts();
+        assert_eq!(matching.name_source, Some(authored_name.to(())));
 
         let aggregate = DiscoveredPackage::aggregate(
             "workspace".to_string(),
@@ -1015,6 +1051,7 @@ mod tests {
         )
         .into_parts();
         assert_eq!(aggregate.name.as_deref(), Some("workspace"));
+        assert_eq!(aggregate.name_source, None);
         assert_eq!(aggregate.scope_kind, DiscoveredScopeKind::Aggregate);
         assert_eq!(
             aggregate.descriptor.name.as_ref().map(|name| name.as_str()),

@@ -412,6 +412,7 @@ mod tests {
             Some(Some("root".to_string())),
             &[PackageScopeObservation {
                 identity: Some("web".to_string()),
+                name_source: None,
                 definition_path: root.join_components(&["apps", "web", "package.json"]),
                 toolchain: ToolchainId::JAVASCRIPT,
                 scope_kind: ScopeKind::Package,

@@ -208,9 +208,10 @@ Compatibility payloads still provide JavaScript relationship-classification
 inputs, lockfile resolution and hash state, and task construction data. Cargo
 no longer synthesizes JavaScript dependency maps, but retains empty
 `PackageJson` descriptors until task compatibility payloads are removed.
-Native manifests and metadata do not enter repository knowledge. Native
-definition paths must remain within the repository, including after resolving
-existing symlinks.
+Native manifest objects do not enter repository knowledge. Repository knowledge
+may retain bounded diagnostic provenance for an authoritative fact, such as an
+authored JavaScript package name's source text and span. Native definition paths
+must remain within the repository, including after resolving existing symlinks.
 
 The remaining payload deletion phases are explicit:
 
@@ -222,7 +223,7 @@ The remaining payload deletion phases are explicit:
 - **Phase 5 (in progress):** Task-contract knowledge catalog is produced for JavaScript scopes; engine composition and global `engines` hashing consume it; JS packages are excluded from Toolchain task-I/O environment dispatch. Remaining: fuller hash/framework contract production and final Phase 5 gate. Later: Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
 - **Phase 6 (complete for JS change knowledge first wave):** Change knowledge is produced at repository construction; watcher classification and scope lockfile probes consume it via `active_watch_spec` / `resolution_paths` rather than ad-hoc package-manager probes.
 - **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Golden inventories cover standard and Docker layouts.
-- **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, manifest-backed boundary tags, and package-manager detection — tracked for deletion under TURBO-5787 (`PackageInfo` / `JavaScriptToolchain` removal), not deferred silently.
+- **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, and package-manager detection — tracked for deletion under TURBO-5787 (`PackageInfo` / `JavaScriptToolchain` removal), not deferred silently. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,

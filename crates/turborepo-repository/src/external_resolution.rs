@@ -648,12 +648,14 @@ mod tests {
             &[
                 PackageScopeObservation {
                     identity: Some("app".to_string()),
+                    name_source: None,
                     definition_path: root.join_components(&["apps", "app", "package.json"]),
                     toolchain: ToolchainId::JAVASCRIPT,
                     scope_kind: ScopeKind::Package,
                 },
                 PackageScopeObservation {
                     identity: Some("crate".to_string()),
+                    name_source: None,
                     definition_path: root.join_components(&["crates", "crate", "Cargo.toml"]),
                     toolchain: ToolchainId::RUST,
                     scope_kind: ScopeKind::Package,
