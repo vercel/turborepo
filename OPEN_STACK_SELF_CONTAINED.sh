@@ -904,4 +904,25 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Stop requiring PackageInfo for prune workspace copy" \
   --body-file "$TMPDIR_BODIES/29-5840.md"
 
-echo "Opened 29-layer stack."
+cat > "$TMPDIR_BODIES/30-5841.md" << 'BODY_30'
+## Intent
+
+Continue TURBO-5787: MicroFrontendProxyProvider must not require PackageInfo payloads. Dependency detection uses external declarations; custom proxy detection already uses the native-task catalog.
+
+**Stack:** Compatibility-removal layer 4. Base = `shew/turbo-5840-stop-requiring-packageinfo-for-prune-workspace-copy`.
+
+## Testing
+
+- `cargo test -p turborepo-task-executor --lib command::tests` (10 passed)
+- `cargo clippy -p turborepo-task-executor --all-targets -- -D warnings`
+
+Closes TURBO-5841.
+BODY_30
+
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5840-stop-requiring-packageinfo-for-prune-workspace-copy \
+  --head shew/turbo-5841-stop-requiring-packageinfo-for-mfe-proxy-command-framing \
+  --title "refactor: Stop requiring PackageInfo for MFE proxy command framing" \
+  --body-file "$TMPDIR_BODIES/30-5841.md"
+
+echo "Opened 30-layer stack through tip."

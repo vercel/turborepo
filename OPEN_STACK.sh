@@ -178,4 +178,10 @@ gh pr create --repo "$REPO" --draft \
   --title "refactor: Stop requiring PackageInfo for prune workspace copy" \
   --body-file "$ROOT/stack-pr-bodies/29-5840.md"
 
-echo "Opened stack through TURBO-5840."
+gh pr create --repo "$REPO" --draft \
+  --base shew/turbo-5840-stop-requiring-packageinfo-for-prune-workspace-copy \
+  --head shew/turbo-5841-stop-requiring-packageinfo-for-mfe-proxy-command-framing \
+  --title "refactor: Stop requiring PackageInfo for MFE proxy command framing" \
+  --body-file "$ROOT/stack-pr-bodies/30-5841.md"
+
+echo "Opened stack through TURBO-5841."
