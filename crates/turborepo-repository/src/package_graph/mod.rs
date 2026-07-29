@@ -939,6 +939,50 @@ impl PackageGraph {
             .generation = None;
     }
 
+    /// Resolve a native or override command plan from the catalog.
+    ///
+    /// Binary lookup (`which`) is performed here so callers receive a concrete
+    /// [`TaskCommand`]. Package-manager / cargo framing comes from the
+    /// catalog templates, not from `Toolchain::task_command`.
+    pub fn resolve_native_task_command(
+        &self,
+        context: &PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> Result<Option<crate::toolchain::TaskCommand>, crate::native_tasks::ResolveNativeCommandError>
+    {
+        let package_manager = self.package_manager();
+        let package_manager_binary = package_manager
+            .and_then(|package_manager| which::which(package_manager.command()).ok());
+        let cargo_binary = which::which("cargo").ok();
+
+        if let Some(native_task) = context.native_tasks().get(task) {
+            return crate::native_tasks::resolve_task_command(
+                context,
+                native_task,
+                package_manager,
+                package_manager_binary.as_deref(),
+                cargo_binary.as_deref(),
+                pass_through_args,
+                override_command,
+            );
+        }
+
+        let Some(override_command) = override_command else {
+            return Ok(None);
+        };
+        let serial_group = (context.toolchain() == Some(&crate::toolchain::ToolchainId::RUST)
+            && override_command.first().map(String::as_str) == Some("cargo"))
+        .then(|| "cargo".to_string());
+        Ok(crate::toolchain::override_task_command(
+            context,
+            override_command,
+            pass_through_args,
+            serial_group,
+        ))
+    }
+
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
         let entry = self.package_payloads.get(package)?;
         Some(&entry.package_json)
