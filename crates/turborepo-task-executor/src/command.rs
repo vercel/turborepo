@@ -154,14 +154,13 @@ pub enum CommandProviderError {
     Toolchain(#[from] turborepo_repository::toolchain::Error),
 }
 
-/// Command provider that resolves commands through the package's toolchain.
+/// Command provider that resolves commands through the native-task catalog.
 ///
-/// The toolchain owns command construction (JavaScript: run the package.json
-/// script via the package manager; Cargo: `cargo <verb>` scoped to the
-/// crate or workspace). This provider adapts the resolved [`TaskCommand`]
-/// data into a process command and applies concerns that are not
-/// toolchain-specific: the task environment, stdin policy, and
-/// microfrontends proxy decorations.
+/// The catalog owns native command templates (JavaScript: package-manager
+/// `run <script>`; Cargo: `cargo <verb>` scoped to crate/workspace). This
+/// provider adapts the resolved [`TaskCommand`] data into a process command
+/// and applies concerns that are not native-task-specific: the task
+/// environment, stdin policy, and microfrontends proxy decorations.
 #[derive(Debug)]
 pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
@@ -172,7 +171,7 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// one is running for this run.
     compile_cache: Option<&'a CompileCacheEndpoint>,
     /// Resolved `command` overrides by task, from the engine's task
-    /// definitions. An argv replaces the toolchain's own resolution; an
+    /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
 }
@@ -253,23 +252,20 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.open_stdin();
             return Ok(Some(cmd));
         };
-        let toolchain = self
-            .package_graph
-            .toolchains()
-            .get(toolchain_id)
-            .ok_or_else(|| CommandProviderError::MissingToolchain {
-                toolchain: toolchain_id.clone(),
-                package_name: package_context.package().clone(),
-            })?;
 
-        let spec = toolchain
-            .task_command(
+        let spec = self
+            .package_graph
+            .resolve_native_task_command(
                 &package_context,
                 task_id.task(),
                 self.task_args.args_for_task(task_id),
                 override_command,
             )
-            .map_err(CommandProviderError::from)?;
+            .map_err(|error| {
+                CommandProviderError::Toolchain(turborepo_repository::toolchain::Error::Failed(
+                    Box::new(error),
+                ))
+            })?;
         let Some(spec) = spec else {
             return Ok(None);
         };
@@ -308,12 +304,11 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_MFE_PORT", port.to_string());
         }
 
-        // The toolchain decides how the injection composes with the task's
-        // environment (competing configuration suppresses it, ambient
-        // settings are tolerated) and returns exactly what to inject; see
-        // `Toolchain::compile_cache_env`.
+        // Compile-cache injection remains toolchain-owned until environment
+        // contracts move; look up the toolchain only for that decoration.
         if should_inject_toolchain_compile_cache(command_override)
             && let Some(endpoint) = self.compile_cache
+            && let Some(toolchain) = self.package_graph.toolchains().get(toolchain_id)
         {
             let vars = toolchain.compile_cache_env(endpoint, environment);
             if vars.is_empty() {
