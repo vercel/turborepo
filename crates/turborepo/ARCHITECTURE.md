@@ -161,11 +161,13 @@ Represents the workspace structure and package dependencies:
   identities, definition sources, completeness, and stable fingerprints. A
   single resolution owner tracks lifecycle status. Task hashing consumes the
   stored byte-compatible package resolution fingerprint and preserves explicit
-  unavailable states without closure fallback hashing. Lockfile affectedness
-  resolves the current declarations against the previous lockfile with the same
-  producer, then compares normalized package identities; unavailable, parse, and
-  comparison failures retain the conservative all-packages fallback. The
-  snapshot projects temporary `PackageInfo` closure/hash fields for the remaining
+  unavailable states without closure fallback hashing. The JavaScript adapter
+  owns package-manager configuration, previous-lockfile parsing, and resolution
+  through the same producer used at graph construction. Core compares the
+  resulting normalized package identities without parser or ecosystem knowledge;
+  unavailable, parse, and comparison failures retain the conservative
+  all-packages fallback. The snapshot projects temporary `PackageInfo`
+  closure/hash fields for the remaining
   global-hash and summary migrations. Framework inference and boundaries
   validation consume the package-scoped declaration projection directly;
   aliases, duplicate

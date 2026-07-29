@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -17,8 +17,7 @@ use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
         ExternalDeclarations, ExternalResolutionData, ExternalResolutionGeneration,
-        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolution,
-        PackageResolutionState, ResolutionCompleteness,
+        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolutionState,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -27,9 +26,11 @@ use crate::{
 
 pub mod builder;
 mod dep_splitter;
+mod javascript;
 mod projections;
 
 pub use builder::{Error, PackageGraphBuilder};
+pub use javascript::ChangedPackagesError;
 pub use projections::{
     AffectedRelationships, FilteringRelationships, HashRelationships, OrderingRelationships,
     PruneDependencyMode, PruneRelationships, RelationshipProjectionError,
@@ -39,77 +40,17 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
-/// One JavaScript resolution snapshot and its temporary compatibility
-/// projection. Both inline and deferred production create this exact shape.
-pub(crate) struct JavaScriptResolutionSnapshot {
-    pub generation: Arc<ExternalResolutionGeneration>,
-    pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
-    pub warning: Option<String>,
-}
-
-impl JavaScriptResolutionSnapshot {
-    pub(crate) fn project_legacy(
-        &mut self,
-        package_payloads: &mut HashMap<PackageName, PackageInfo>,
-        knowledge: &RepositoryKnowledge,
-    ) {
-        let fingerprints = self
-            .generation
-            .domains()
-            .iter()
-            .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)
-            .and_then(|domain| match domain.data() {
-                crate::external_resolution::ExternalResolutionData::Resolved {
-                    packages, ..
-                } => Some(
-                    packages
-                        .iter()
-                        .filter_map(|package| {
-                            package
-                                .fingerprint()
-                                .map(|fingerprint| (package.package(), fingerprint.as_str()))
-                        })
-                        .collect::<HashMap<_, _>>(),
-                ),
-                crate::external_resolution::ExternalResolutionData::Unavailable(_) => None,
-            })
-            .unwrap_or_default();
-        for (name, info) in package_payloads {
-            let facts = match name {
-                PackageName::Root => knowledge
-                    .root_javascript_scope()
-                    .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
-                PackageName::Other(name) => knowledge
-                    .scope(name)
-                    .map(|scope| (scope.directory(), scope.toolchain())),
-            };
-            let Some((directory, toolchain)) = facts else {
-                continue;
-            };
-            if toolchain != &crate::toolchain::ToolchainId::JAVASCRIPT {
-                continue;
-            }
-            let directory = directory.to_unix();
-            info.transitive_dependencies = self.closures.remove(directory.as_str());
-            info.external_deps_hash = fingerprints
-                .get(name.as_str())
-                .map(|fingerprint| (*fingerprint).to_string());
-        }
-    }
-}
-
-pub(crate) type DeferredResolutionReceiver =
-    std::sync::mpsc::Receiver<Result<JavaScriptResolutionSnapshot, String>>;
+type DeferredResolutionReceiver = javascript::DeferredResolutionReceiver;
 
 #[derive(Debug)]
-pub(crate) struct ExternalResolutionKnowledge {
+struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
     receiver: Option<DeferredResolutionReceiver>,
 }
 
 impl ExternalResolutionKnowledge {
-    pub(crate) fn absent() -> Self {
+    fn absent() -> Self {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: None,
@@ -117,7 +58,7 @@ impl ExternalResolutionKnowledge {
         }
     }
 
-    pub(crate) fn complete(generation: Arc<ExternalResolutionGeneration>) -> Self {
+    fn complete(generation: Arc<ExternalResolutionGeneration>) -> Self {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: Some(generation),
@@ -125,7 +66,7 @@ impl ExternalResolutionKnowledge {
         }
     }
 
-    pub(crate) fn resolving(receiver: DeferredResolutionReceiver) -> Self {
+    fn resolving(receiver: DeferredResolutionReceiver) -> Self {
         Self {
             status: ExternalResolutionStatus::Resolving,
             generation: None,
@@ -389,30 +330,6 @@ pub struct ExternalDependencyChange {
     pub added: Vec<turborepo_lockfiles::Package>,
     /// Dependencies that were removed from the package
     pub removed: Vec<turborepo_lockfiles::Package>,
-}
-
-fn resolved_javascript_packages(
-    generation: &ExternalResolutionGeneration,
-) -> Result<&[PackageResolution], ChangedPackagesError> {
-    let domain = generation
-        .domains()
-        .iter()
-        .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)
-        .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
-    match domain.data() {
-        ExternalResolutionData::Resolved {
-            completeness: ResolutionCompleteness::Complete,
-            packages,
-            ..
-        } => Ok(packages),
-        ExternalResolutionData::Resolved {
-            completeness: ResolutionCompleteness::Partial(_),
-            ..
-        }
-        | ExternalResolutionData::Unavailable(_) => {
-            Err(ChangedPackagesError::ResolutionUnavailable)
-        }
-    }
 }
 
 impl PackageGraph {
@@ -1323,124 +1240,6 @@ impl PackageGraph {
             .collect()
     }
 
-    pub fn changed_packages_from_lockfile_contents(
-        &self,
-        previous_lockfile_contents: &[u8],
-    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
-        let package_manager = self
-            .package_manager()
-            .ok_or(ChangedPackagesError::NoLockfile)?;
-        let root_package_json = self
-            .root_package_json()
-            .ok_or(ChangedPackagesError::NoLockfile)?;
-        let yarnrc = matches!(package_manager, PackageManager::Berry)
-            .then(|| crate::package_manager::yarnrc::YarnRc::from_file(self.repo_root()))
-            .transpose()?;
-        let previous = package_manager.parse_lockfile(
-            root_package_json,
-            previous_lockfile_contents,
-            yarnrc,
-        )?;
-        self.changed_packages_from_lockfile(previous.as_ref())
-    }
-
-    /// Returns packages whose normalized external resolution changed from the
-    /// provided previous lockfile. Callers remain responsible for detecting
-    /// descriptor changes independently.
-    pub fn changed_packages_from_lockfile(
-        &self,
-        previous_lockfile: &dyn Lockfile,
-    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
-        let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
-        let package_manager = self
-            .package_manager()
-            .ok_or(ChangedPackagesError::NoLockfile)?;
-        let definition_source = AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name())?;
-        let previous_resolution = builder::resolve_javascript_dependencies(
-            &self.knowledge,
-            Vec::new(),
-            previous_lockfile,
-            builder::javascript_external_dependencies(
-                &self.knowledge,
-                &self.relationship_knowledge,
-            ),
-            true,
-            definition_source,
-            None,
-        )
-        .map_err(ChangedPackagesError::Resolution)?;
-        let current_resolution = self
-            .external_resolution
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let current_packages = resolved_javascript_packages(
-            current_resolution
-                .generation
-                .as_deref()
-                .ok_or(ChangedPackagesError::ResolutionUnavailable)?,
-        )?;
-        let previous_packages = resolved_javascript_packages(&previous_resolution.generation)?;
-
-        let all_changes = || {
-            self.package_task_contexts()
-                .map(|context| ExternalDependencyChange {
-                    package: WorkspacePackage {
-                        name: context.package().clone(),
-                        path: context.directory().to_owned(),
-                    },
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                })
-                .collect()
-        };
-        if current.global_change(previous_lockfile) {
-            return Ok(all_changes());
-        }
-
-        let previous_by_package: HashMap<_, _> = previous_packages
-            .iter()
-            .map(|package| (package.package(), package))
-            .collect();
-        let mut changed = Vec::new();
-        for package in current_packages {
-            let previous = previous_by_package
-                .get(package.package())
-                .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
-            if package.identities() == previous.identities() {
-                continue;
-            }
-            if package.package() == ROOT_PKG_NAME {
-                return Ok(all_changes());
-            }
-
-            let previous: BTreeSet<_> = previous.identities().iter().collect();
-            let current: BTreeSet<_> = package.identities().iter().collect();
-            let to_lockfile_package =
-                |identity: &&crate::external_resolution::ExternalPackageIdentity| {
-                    turborepo_lockfiles::Package::new(identity.key(), identity.version())
-                };
-            let name = PackageName::from(package.package());
-            let context = self
-                .package_task_context(&name)
-                .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
-            changed.push(ExternalDependencyChange {
-                package: WorkspacePackage {
-                    name,
-                    path: context.directory().to_owned(),
-                },
-                added: current
-                    .difference(&previous)
-                    .map(to_lockfile_package)
-                    .collect(),
-                removed: previous
-                    .difference(&current)
-                    .map(to_lockfile_package)
-                    .collect(),
-            });
-        }
-        Ok(changed)
-    }
-
     pub fn internal_dependencies_for_external_dependency(
         &self,
         external_package: &turborepo_lockfiles::Package,
@@ -1508,24 +1307,6 @@ impl PackageGraph {
         let entry = self.package_payloads.get(package)?;
         entry.unresolved_external_dependencies.as_ref()
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ChangedPackagesError {
-    #[error("No lockfile")]
-    NoLockfile,
-    #[error("External resolution unavailable")]
-    ResolutionUnavailable,
-    #[error("External resolution failed: {0}")]
-    Resolution(String),
-    #[error(transparent)]
-    Path(#[from] turbopath::PathError),
-    #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
-    #[error("Yarn config error: {0}")]
-    Yarnrc(#[from] crate::package_manager::yarnrc::Error),
-    #[error("Lockfile error")]
-    Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
 impl fmt::Display for PackageName {

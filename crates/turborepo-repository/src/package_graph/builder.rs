@@ -12,9 +12,9 @@ use turbopath::{
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    ExternalResolutionKnowledge, JavaScriptResolutionSnapshot, PackageGraph, PackageInfo,
-    PackageName, PackageNode,
+    ExternalResolutionKnowledge, PackageGraph, PackageInfo, PackageName, PackageNode,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
+    javascript,
 };
 use crate::{
     discovery::{
@@ -22,9 +22,8 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     external_resolution::{
-        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
-        ExternalResolutionDomain, ExternalResolutionGeneration, PackageResolution,
-        ResolutionCompleteness, ResolutionFingerprint, ResolutionUnavailableReason,
+        ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
+        ResolutionFingerprint,
     },
     knowledge::{
         PackageScopeObservation, RelationshipGroup, RelationshipKnowledge, RepositoryKnowledge,
@@ -1163,7 +1162,7 @@ pub type ClosureHasher = Arc<
         + Sync,
 >;
 
-fn apply_resolution_fingerprints(
+pub(super) fn apply_resolution_fingerprints(
     domains: &mut [ExternalResolutionDomain],
     hasher: Option<&ClosureHasher>,
 ) {
@@ -1199,20 +1198,6 @@ fn apply_resolution_fingerprints(
     }
 }
 
-fn scope_directory_and_toolchain<'a>(
-    knowledge: &'a RepositoryKnowledge,
-    name: &PackageName,
-) -> Option<(&'a AnchoredSystemPath, &'a ToolchainId)> {
-    match name {
-        PackageName::Root => knowledge
-            .root_javascript_scope()
-            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
-        PackageName::Other(name) => knowledge
-            .scope(name)
-            .map(|scope| (scope.directory(), scope.toolchain())),
-    }
-}
-
 fn scope_definition_path<'a>(
     knowledge: &'a RepositoryKnowledge,
     name: &PackageName,
@@ -1229,144 +1214,6 @@ fn build_failure(error: Error) -> discovery::Error {
     discovery::Error::Failed(Box::new(error))
 }
 
-fn javascript_resolution_packages(
-    knowledge: &RepositoryKnowledge,
-) -> Vec<(&str, &AnchoredSystemPath)> {
-    let mut packages = Vec::new();
-    if knowledge.root_javascript_scope().is_some() {
-        packages.push((super::ROOT_PKG_NAME, knowledge.repository_directory()));
-    }
-    packages.extend(
-        knowledge
-            .scopes()
-            .filter(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT)
-            .map(|scope| (scope.identity(), scope.directory())),
-    );
-    packages.sort_unstable_by_key(|(identity, _)| *identity);
-    packages
-}
-
-pub(super) fn javascript_external_dependencies(
-    knowledge: &RepositoryKnowledge,
-    relationships: &RelationshipKnowledge,
-) -> HashMap<String, BTreeMap<String, String>> {
-    let mut by_source: BTreeMap<String, BTreeMap<String, String>> =
-        javascript_resolution_packages(knowledge)
-            .into_iter()
-            .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
-            .collect();
-    for declaration in ExternalDeclarations::build(relationships).declarations() {
-        if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
-            continue;
-        }
-        let Some(dependencies) = by_source.get_mut(declaration.source()) else {
-            continue;
-        };
-        dependencies
-            .entry(declaration.package_name().to_string())
-            .or_insert_with(|| declaration.specifier().to_string());
-    }
-
-    by_source
-        .into_iter()
-        .filter_map(|(identity, dependencies)| {
-            let name = package_name_from_identity(&identity);
-            let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
-            (toolchain == &ToolchainId::JAVASCRIPT)
-                .then(|| (directory.to_unix().to_string(), dependencies))
-        })
-        .collect()
-}
-
-fn unavailable_javascript_resolution(
-    knowledge: &RepositoryKnowledge,
-    mut domains: Vec<ExternalResolutionDomain>,
-    definition_source: AnchoredSystemPathBuf,
-    code: &str,
-    message: String,
-    warning: Option<String>,
-    closure_hasher: Option<&ClosureHasher>,
-) -> Result<JavaScriptResolutionSnapshot, String> {
-    let domain = ExternalResolutionDomain::new(
-        ToolchainId::JAVASCRIPT,
-        AnchoredSystemPathBuf::default(),
-        [definition_source],
-        ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
-    );
-    domains.push(domain);
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
-    let generation = ExternalResolutionGeneration::build(knowledge, domains)
-        .map_err(|error| error.to_string())?;
-    Ok(JavaScriptResolutionSnapshot {
-        generation: Arc::new(generation),
-        closures: HashMap::new(),
-        warning,
-    })
-}
-
-pub(super) fn resolve_javascript_dependencies(
-    knowledge: &RepositoryKnowledge,
-    mut domains: Vec<ExternalResolutionDomain>,
-    lockfile: &dyn Lockfile,
-    external_dependencies: HashMap<String, BTreeMap<String, String>>,
-    ignore_missing_packages: bool,
-    definition_source: AnchoredSystemPathBuf,
-    closure_hasher: Option<&ClosureHasher>,
-) -> Result<JavaScriptResolutionSnapshot, String> {
-    let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
-        lockfile,
-        external_dependencies,
-        ignore_missing_packages,
-    ) {
-        Ok(closures) => closures,
-        Err(error) => {
-            let message = error.to_string();
-            return unavailable_javascript_resolution(
-                knowledge,
-                domains,
-                definition_source,
-                "closure-unavailable",
-                message.clone(),
-                Some(message),
-                closure_hasher,
-            );
-        }
-    };
-    let packages = javascript_resolution_packages(knowledge)
-        .into_iter()
-        .map(|(identity, directory)| {
-            let exact_identities = closures
-                .get(directory.to_unix().as_str())
-                .into_iter()
-                .flatten()
-                .map(|package| {
-                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone())
-                });
-            PackageResolution::new(identity, exact_identities)
-        })
-        .collect::<Vec<_>>();
-    let fingerprint = ResolutionFingerprint::from_packages(&packages);
-    let domain = ExternalResolutionDomain::new(
-        ToolchainId::JAVASCRIPT,
-        AnchoredSystemPathBuf::default(),
-        [definition_source],
-        ExternalResolutionData::Resolved {
-            completeness: ResolutionCompleteness::Complete,
-            fingerprint,
-            packages,
-        },
-    );
-    domains.push(domain);
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
-    let generation = ExternalResolutionGeneration::build(knowledge, domains)
-        .map_err(|error| error.to_string())?;
-    Ok(JavaScriptResolutionSnapshot {
-        generation: Arc::new(generation),
-        closures,
-        warning: None,
-    })
-}
-
 impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
@@ -1379,7 +1226,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .relationship_knowledge
             .as_deref()
             .ok_or(Error::MissingRelationshipKnowledge)?;
-        Ok(javascript_external_dependencies(knowledge, relationships))
+        Ok(javascript::external_dependencies(knowledge, relationships))
     }
 
     #[tracing::instrument(skip(self))]
@@ -1428,7 +1275,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                         .lock()
                                         .unwrap_or_else(|poisoned| poisoned.into_inner()),
                                 );
-                                let result = resolve_javascript_dependencies(
+                                let result = javascript::resolve_dependencies(
                                     &resolution_knowledge,
                                     native_resolutions,
                                     lockfile.as_ref(),
@@ -1445,7 +1292,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                             }
                             Err(error) => {
                                 warn!("Unable to spawn transitive closure thread: {}", error);
-                                let snapshot = unavailable_javascript_resolution(
+                                let snapshot = javascript::unavailable_resolution(
                                     &knowledge,
                                     std::mem::take(
                                         &mut *deferred_native_resolutions
@@ -1468,7 +1315,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     }
                     Ok(external_dependencies) => {
                         let mut snapshot = turborepo_rayon_compat::block_in_place(|| {
-                            resolve_javascript_dependencies(
+                            javascript::resolve_dependencies(
                                 &knowledge,
                                 std::mem::take(&mut native_external_resolutions),
                                 lockfile.as_ref(),
@@ -1488,7 +1335,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     }
                     Err(error) => {
                         warn!("Unable to calculate transitive closures: {}", error);
-                        let snapshot = unavailable_javascript_resolution(
+                        let snapshot = javascript::unavailable_resolution(
                             &knowledge,
                             std::mem::take(&mut native_external_resolutions),
                             definition_source,
@@ -1503,7 +1350,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     }
                 }
             } else {
-                let snapshot = unavailable_javascript_resolution(
+                let snapshot = javascript::unavailable_resolution(
                     &knowledge,
                     std::mem::take(&mut native_external_resolutions),
                     definition_source,
