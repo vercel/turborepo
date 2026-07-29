@@ -50,7 +50,6 @@ pub struct PackageGraphBuilder<'a, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_discovery: T,
     package_manager: Option<PackageManager>,
-    defer_closures: bool,
     closure_hasher: Option<ClosureHasher>,
     /// Toolchains registered in addition to JavaScript (e.g. Cargo when
     /// `futureFlags.experimentalCargoWorkspaces` is enabled). Their packages
@@ -244,7 +243,6 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             package_jsons: None,
             lockfile: None,
             package_manager: None,
-            defer_closures: false,
             closure_hasher: None,
             extra_toolchains: Vec::new(),
         }
@@ -275,15 +273,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     ) -> Self {
         self.package_jsons = package_jsons;
-        self
-    }
-
-    /// Defer transitive-closure computation to a background thread. The
-    /// resulting graph's `transitive_dependencies` are absent until
-    /// [`PackageGraph::ensure_transitive_closures`] is called; callers that
-    /// enable this own calling it before any closure consumer runs.
-    pub fn defer_transitive_closures(mut self, defer: bool) -> Self {
-        self.defer_closures = defer;
         self
     }
 
@@ -322,7 +311,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             lockfile: self.lockfile,
             package_discovery: discovery,
             package_manager: self.package_manager,
-            defer_closures: self.defer_closures,
             closure_hasher: self.closure_hasher,
             extra_toolchains: self.extra_toolchains,
         }
@@ -400,7 +388,6 @@ struct BuildState<'a, S, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
-    defer_closures: bool,
     closure_hasher: Option<ClosureHasher>,
     state: std::marker::PhantomData<S>,
     /// The JavaScript toolchain, typed. Package-manager resolution for
@@ -523,14 +510,13 @@ impl PackageGraphAssembler {
         for group in relationships.groups() {
             let identity = group.source();
             let name = package_name_from_identity(identity);
-            let entry = self.package_payloads.get_mut(&name).ok_or_else(|| {
-                Error::MissingCompatibilityPayload {
+            if !self.package_payloads.contains_key(&name) {
+                return Err(Error::MissingCompatibilityPayload {
                     name: identity.to_string(),
-                }
-            })?;
+                });
+            }
             let mut seen = HashSet::new();
             let mut internal = HashMap::<&str, DependencyKind>::new();
-            let mut external = BTreeMap::new();
             for relationship in group.relationships() {
                 if !seen.insert(relationship.declaration_name()) {
                     continue;
@@ -553,12 +539,8 @@ impl PackageGraphAssembler {
                         DependencyKind::Production
                         | DependencyKind::Optional
                         | DependencyKind::Development,
-                        RelationshipTarget::UnresolvedExternal { name, specifier },
-                    ) => {
-                        external
-                            .entry(name.clone())
-                            .or_insert_with(|| specifier.clone());
-                    }
+                        RelationshipTarget::UnresolvedExternal { .. },
+                    ) => {}
                 }
             }
             let node_idx = self
@@ -588,7 +570,6 @@ impl PackageGraphAssembler {
                 self.workspace_graph
                     .add_edge(node_idx, dependency_idx, kind);
             }
-            entry.unresolved_external_dependencies = Some(external);
         }
         Ok(())
     }
@@ -626,7 +607,6 @@ where
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
-            defer_closures,
             closure_hasher,
             is_single_package: single,
 
@@ -641,10 +621,9 @@ where
         // registered nor queried for a package manager. The graph is built
         // entirely from the extra toolchains (Cargo).
         let no_javascript = root_package_json.is_none();
-        let root_package_info = root_package_json.clone().map(|package_json| PackageInfo {
-            package_json,
-            ..Default::default()
-        });
+        let root_package_info = root_package_json
+            .clone()
+            .map(|package_json| PackageInfo { package_json });
         let assembler = PackageGraphAssembler::new(root_package_info);
 
         // The discovery strategy is shared (via the JavaScript toolchain)
@@ -684,7 +663,6 @@ where
             package_manager: None,
             package_jsons,
             root_package_json,
-            defer_closures,
             closure_hasher,
             state: std::marker::PhantomData,
             javascript,
@@ -704,25 +682,13 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             scope_kind,
             descriptor: json,
             manifest_path,
-            external_dependencies,
+            external_dependencies: _,
             native_relationships,
         } = package.into_parts();
-        // Toolchain-resolved external identities (e.g. Cargo's per-crate
-        // lockfile closures), in the sorted representation the JS lockfile
-        // phase produces. That phase later fills this for JavaScript
-        // packages and never touches non-JS ones; the external-dependency
-        // hash is computed on demand from the sorted closure.
-        let transitive_dependencies = external_dependencies.map(|externals| {
-            let mut sorted: Vec<std::sync::Arc<turborepo_lockfiles::Package>> =
-                externals.into_iter().map(std::sync::Arc::new).collect();
-            sorted.sort_by(|a, b| (&a.key, &a.version).cmp(&(&b.key, &b.version)));
-            sorted
-        });
-        let entry = PackageInfo {
-            package_json: json,
-            transitive_dependencies,
-            ..Default::default()
-        };
+        // Toolchain-resolved external identities are contributed to the
+        // resolution generation separately; PackageInfo no longer carries
+        // closure/hash compatibility projections.
+        let entry = PackageInfo { package_json: json };
         let observation = PackageScopeObservation {
             identity: name.clone(),
             definition_path: manifest_path.clone(),
@@ -841,7 +807,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             toolchains,
-            defer_closures,
             closure_hasher,
             ..
         } = self;
@@ -858,7 +823,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             toolchains,
-            defer_closures,
             closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -1129,7 +1093,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             javascript,
             toolchains,
-            defer_closures,
             closure_hasher,
             ..
         } = self;
@@ -1145,7 +1108,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             lockfile,
             package_manager,
-            defer_closures,
             closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -1231,12 +1193,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
 
     #[tracing::instrument(skip(self))]
     async fn build_inner(mut self) -> Result<PackageGraph, discovery::Error> {
-        // Transitive closures are only consumed by task hashing and
-        // change-detection, well after graph construction. When deferral is
-        // requested, compute them on a background thread so package-list
-        // consumers (microfrontends config, turbo.json preloading, engine
-        // construction) overlap with the closure work instead of waiting
-        // behind it. `PackageGraph::ensure_transitive_closures` joins.
+        // External resolution is produced during repository construction and
+        // retained as an immutable generation. Readiness belongs to build().
         let knowledge = self
             .knowledge
             .clone()
@@ -1258,61 +1216,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
         if let Some(definition_source) = definition_source {
             if let Some(lockfile) = arc_lockfile.clone() {
                 match self.all_external_dependencies() {
-                    Ok(external_dependencies) if self.defer_closures => {
-                        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-                        let hasher = self.closure_hasher.clone();
-                        let resolution_knowledge = Arc::clone(&knowledge);
-                        let deferred_source = definition_source.clone();
-                        let deferred_native_resolutions = Arc::new(std::sync::Mutex::new(
-                            std::mem::take(&mut native_external_resolutions),
-                        ));
-                        let thread_native_resolutions = Arc::clone(&deferred_native_resolutions);
-                        let spawned = std::thread::Builder::new()
-                            .name("turbo-closures".into())
-                            .spawn(move || {
-                                let native_resolutions = std::mem::take(
-                                    &mut *thread_native_resolutions
-                                        .lock()
-                                        .unwrap_or_else(|poisoned| poisoned.into_inner()),
-                                );
-                                let result = javascript::resolve_dependencies(
-                                    &resolution_knowledge,
-                                    native_resolutions,
-                                    lockfile.as_ref(),
-                                    external_dependencies,
-                                    false,
-                                    deferred_source,
-                                    hasher.as_ref(),
-                                );
-                                let _ = tx.send(result);
-                            });
-                        match spawned {
-                            Ok(_) => {
-                                external_resolution = ExternalResolutionKnowledge::resolving(rx);
-                            }
-                            Err(error) => {
-                                warn!("Unable to spawn transitive closure thread: {}", error);
-                                let snapshot = javascript::unavailable_resolution(
-                                    &knowledge,
-                                    std::mem::take(
-                                        &mut *deferred_native_resolutions
-                                            .lock()
-                                            .unwrap_or_else(|poisoned| poisoned.into_inner()),
-                                    ),
-                                    definition_source,
-                                    "worker-unavailable",
-                                    error.to_string(),
-                                    None,
-                                    self.closure_hasher.as_ref(),
-                                )
-                                .map_err(|message| {
-                                    build_failure(Error::ExternalResolution(message))
-                                })?;
-                                external_resolution =
-                                    ExternalResolutionKnowledge::complete(snapshot.generation);
-                            }
-                        }
-                    }
                     Ok(external_dependencies) => {
                         let mut snapshot = turborepo_rayon_compat::block_in_place(|| {
                             javascript::resolve_dependencies(
@@ -1329,9 +1232,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                         if let Some(warning) = snapshot.warning.take() {
                             warn!("Unable to calculate transitive closures: {}", warning);
                         }
-                        let generation = Arc::clone(&snapshot.generation);
-                        snapshot.project_legacy(&mut self.assembler.package_payloads, &knowledge);
-                        external_resolution = ExternalResolutionKnowledge::complete(generation);
+                        external_resolution =
+                            ExternalResolutionKnowledge::complete(snapshot.generation);
                     }
                     Err(error) => {
                         warn!("Unable to calculate transitive closures: {}", error);
@@ -2211,31 +2113,60 @@ mod test {
         );
 
         // Verify external deps are recorded correctly
-        let web_info = graph.package_info(&web_name).unwrap();
-        let web_ext = web_info.unresolved_external_dependencies.as_ref().unwrap();
+        let web_ext: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&web_name)
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
         assert_eq!(web_ext.get("react").map(|v| v.as_str()), Some("^18.0.0"));
         assert!(
             !web_ext.contains_key("ui"),
             "ui should be internal, not external"
         );
 
-        let api_info = graph.package_info(&api_name).unwrap();
-        let api_ext = api_info.unresolved_external_dependencies.as_ref().unwrap();
+        let api_ext: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&api_name)
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
         assert_eq!(api_ext.get("express").map(|v| v.as_str()), Some("^4.0.0"));
         assert!(
             !api_ext.contains_key("utils"),
             "utils should be internal, not external"
         );
 
-        let ui_info = graph.package_info(&ui_name).unwrap();
-        let ui_ext = ui_info.unresolved_external_dependencies.as_ref().unwrap();
+        let ui_ext: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&ui_name)
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
         assert_eq!(ui_ext.get("csstype").map(|v| v.as_str()), Some("^3.0.0"));
 
-        let utils_info = graph.package_info(&utils_name).unwrap();
-        let utils_ext = utils_info
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let utils_ext: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&utils_name)
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
         assert!(
             utils_ext.is_empty(),
             "utils should have no external deps, got: {:?}",
@@ -2472,12 +2403,14 @@ mod test {
             b_deps
         );
 
-        let b_external = graph
-            .package_info(&b)
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let b_external = {
+            let decls: std::collections::BTreeMap<_, _> = graph
+                .external_declarations(&b)
+                .iter()
+                .map(|d| (d.package_name().to_string(), d.specifier().to_string()))
+                .collect();
+            decls
+        };
         assert_eq!(
             b_external.get("buffer").map(|v| v.as_str()),
             Some("npm:buffer@6.0.3")
@@ -2595,12 +2528,14 @@ mod test {
         .unwrap();
 
         let a = PackageName::from("a");
-        let a_external = graph
-            .package_info(&a)
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let a_external = {
+            let decls: std::collections::BTreeMap<_, _> = graph
+                .external_declarations(&a)
+                .iter()
+                .map(|d| (d.package_name().to_string(), d.specifier().to_string()))
+                .collect();
+            decls
+        };
         assert!(
             !a_external.contains_key("react"),
             "external peer dependency should not be retained as an external dep, got: {:?}",
@@ -2646,12 +2581,14 @@ mod test {
         .unwrap();
 
         let a = PackageName::from("a");
-        let a_external = graph
-            .package_info(&a)
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let a_external = {
+            let decls: std::collections::BTreeMap<_, _> = graph
+                .external_declarations(&a)
+                .iter()
+                .map(|d| (d.package_name().to_string(), d.specifier().to_string()))
+                .collect();
+            decls
+        };
         assert!(
             !a_external.contains_key("react"),
             "optional peer should not be retained, got: {:?}",
@@ -2729,12 +2666,16 @@ mod test {
             "prune closure for app should include its regular dependency lib"
         );
 
-        let lib_external = graph
-            .package_info(&PackageName::from("lib"))
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let lib_external: std::collections::BTreeMap<_, _> = graph
+            .external_declarations(&PackageName::from("lib"))
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
         assert!(
             !lib_external.contains_key("react"),
             "external peer should not be retained by package graph, got: {:?}",

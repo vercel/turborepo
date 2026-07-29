@@ -451,9 +451,6 @@ mod tests {
                 turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}")).unwrap(),
                 PackageInfo {
                     package_json: PackageJson::default(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
                 },
             ));
         }
