@@ -18,6 +18,7 @@ pub mod external_resolution;
 pub mod inference;
 mod knowledge;
 mod manifest_parser;
+pub mod native_tasks;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;

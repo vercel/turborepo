@@ -136,6 +136,10 @@ pub struct DiscoveredPackage {
     /// preserves compatibility by asking core to classify `descriptor`,
     /// regardless of the producer's toolchain id.
     native_relationships: Option<Vec<Relationship>>,
+    /// Native task facts contributed at discovery time. `None` means the
+    /// graph builder should derive tasks from `descriptor.scripts` when
+    /// present (JavaScript). Cargo fills this with verb-table facts.
+    native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,6 +156,7 @@ pub(crate) struct DiscoveredPackageParts {
     #[allow(dead_code)]
     pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
     pub native_relationships: Option<Vec<Relationship>>,
+    pub native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
 }
 
 /// Parser-neutral observation of one contributed native workspace root.
@@ -242,6 +247,7 @@ impl DiscoveredPackage {
             manifest_path,
             external_dependencies,
             native_relationships: None,
+            native_tasks: None,
         }
     }
 
@@ -261,6 +267,7 @@ impl DiscoveredPackage {
             manifest_path,
             external_dependencies,
             native_relationships: None,
+            native_tasks: None,
         }
     }
 
@@ -272,6 +279,12 @@ impl DiscoveredPackage {
         self
     }
 
+    /// Supply native task facts observed at discovery time.
+    pub fn with_native_tasks(mut self, tasks: Vec<crate::native_tasks::NativeTask>) -> Self {
+        self.native_tasks = Some(tasks);
+        self
+    }
+
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
@@ -280,6 +293,7 @@ impl DiscoveredPackage {
             manifest_path,
             external_dependencies,
             native_relationships,
+            native_tasks,
         } = self;
         DiscoveredPackageParts {
             name,
@@ -288,6 +302,7 @@ impl DiscoveredPackage {
             manifest_path,
             external_dependencies,
             native_relationships,
+            native_tasks,
         }
     }
 }
@@ -908,7 +923,7 @@ fn npm_direct_command(
 }
 
 #[cfg(windows)]
-fn package_manager_command(
+pub(crate) fn package_manager_command(
     package_manager: &PackageManager,
     package_manager_binary: &std::path::Path,
 ) -> (OsString, Vec<OsString>) {
@@ -922,7 +937,7 @@ fn package_manager_command(
 }
 
 #[cfg(not(windows))]
-fn package_manager_command(
+pub(crate) fn package_manager_command(
     _package_manager: &PackageManager,
     package_manager_binary: &std::path::Path,
 ) -> (OsString, Vec<OsString>) {
@@ -941,9 +956,8 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
     ) -> Result<Option<TaskCommand>, Error> {
-        // An override replaces the whole package-manager indirection: the
-        // argv is executed directly from the package directory. Note this
-        // bypasses `<pm> run`, so `node_modules/.bin` is not added to PATH.
+        // An override replaces the whole package-manager indirection even when
+        // the catalog has no authored script for this task name.
         if let Some(override_command) = override_command {
             return Ok(override_task_command(
                 context,
@@ -952,46 +966,31 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                 None,
             ));
         }
-        // No script (or an empty one) means the task is a no-op.
-        let Some(package) = context.package_info() else {
+        let Some(native_task) = context.native_tasks().get(task) else {
             return Ok(None);
         };
-        if package
-            .package_json
-            .scripts
-            .get(task)
-            .is_none_or(|script| script.is_empty())
-        {
-            return Ok(None);
-        }
-        let Some(package_manager) = self.resolved_package_manager.get() else {
-            // The graph was not built through this toolchain instance;
-            // without a package manager there is no way to run a script.
-            return Ok(None);
+        let package_manager = self.resolved_package_manager.get();
+        let package_manager_binary = package_manager.map(|package_manager| {
+            self.package_manager_binary
+                .get_or_init(|| which::which(package_manager.command()))
+        });
+        let package_manager_binary = match package_manager_binary {
+            Some(Ok(path)) => Some(path.as_path()),
+            Some(Err(err)) => {
+                return Err(Error::Failed(Box::new(JavaScriptCommandError::Which(*err))));
+            }
+            None => None,
         };
-
-        let package_manager_binary = self
-            .package_manager_binary
-            .get_or_init(|| which::which(package_manager.command()))
-            .as_deref()
-            .map_err(|err| Error::Failed(Box::new(JavaScriptCommandError::Which(*err))))?;
-        let (program, mut args) = package_manager_command(package_manager, package_manager_binary);
-        args.extend([OsString::from("run"), OsString::from(task)]);
-        if let Some(pass_through_args) = pass_through_args {
-            args.extend(
-                package_manager
-                    .arg_separator(pass_through_args)
-                    .map(OsString::from),
-            );
-            args.extend(pass_through_args.iter().map(OsString::from));
-        }
-
-        Ok(Some(TaskCommand {
-            program,
-            args,
-            cwd: context.repository_root().resolve(context.directory()),
-            serial_group: None,
-        }))
+        crate::native_tasks::resolve_task_command(
+            context,
+            native_task,
+            package_manager,
+            package_manager_binary,
+            None,
+            pass_through_args,
+            None,
+        )
+        .map_err(|error| Error::Failed(Box::new(error)))
     }
 
     fn task_display_command(
@@ -999,14 +998,10 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> Option<String> {
-        // Summaries show the script text itself, matching historical
-        // behavior.
         context
-            .package_info()?
-            .package_json
-            .scripts
+            .native_tasks()
             .get(task)
-            .map(|script| script.as_inner().clone())
+            .and_then(|native_task| native_task.display().map(str::to_string))
     }
 
     fn defines_task(
@@ -1014,13 +1009,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
-        context.package_info().is_some_and(|package| {
-            package
-                .package_json
-                .scripts
-                .get(task)
-                .is_some_and(|script| !script.is_empty())
-        })
+        context.native_tasks().defines(task)
     }
 
     /// package.json scripts are authored by the package: they shadow
@@ -1030,7 +1019,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
-        self.defines_task(context, task)
+        context.native_tasks().authors(task)
     }
 
     fn derived_task_io(
