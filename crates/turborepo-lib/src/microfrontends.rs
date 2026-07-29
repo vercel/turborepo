@@ -380,16 +380,9 @@ fn javascript_packages(
 }
 
 /// Whether a package declares a dependency on `@vercel/microfrontends`, using
-/// external-declaration knowledge rather than `PackageInfo` / PackageJson.
+/// relationship knowledge rather than `PackageInfo` / PackageJson.
 fn has_mfe_dependency(package_graph: &PackageGraph, package: &PackageName) -> bool {
-    package_graph
-        .package_task_context(package)
-        .is_some_and(|context| {
-            context
-                .external_declarations()
-                .iter()
-                .any(|declaration| declaration.package_name() == MICROFRONTENDS_PACKAGE)
-        })
+    package_graph.has_dependency_declaration(package, MICROFRONTENDS_PACKAGE)
 }
 
 impl MfeConfigProvider for MicrofrontendsConfigs {
@@ -583,12 +576,15 @@ impl ConfigInfo {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use serde_json::json;
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
     use turborepo_repository::{
         cargo::CargoToolchain, package_graph::PackageGraph, package_json::PackageJson,
+        package_manager::PackageManager,
     };
 
     use super::*;
@@ -669,6 +665,85 @@ mod test {
         assert!(MicrofrontendsConfigs::from_disk(&root, &graph)
             .unwrap()
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn mfe_dependency_detection_uses_declaration_names() {
+        for (manifest, expected) in [
+            (
+                json!({ "dependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "devDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "optionalDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "peerDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({
+                    "dependencies": {
+                        "mfe-alias": "npm:@vercel/microfrontends@1.0.0"
+                    }
+                }),
+                false,
+            ),
+            (json!({}), false),
+        ] {
+            let tmp = TempDir::new().unwrap();
+            let root = temp_root(&tmp);
+            let mut root_manifest = json!({
+                "name": "root-app",
+                "packageManager": "npm@10.0.0",
+            });
+            root_manifest
+                .as_object_mut()
+                .unwrap()
+                .extend(manifest.as_object().unwrap().clone());
+            let root_package_json = PackageJson::from_value(root_manifest).unwrap();
+            let graph = PackageGraph::builder(&root, root_package_json)
+                .with_single_package_mode(true)
+                .build()
+                .await
+                .unwrap();
+
+            assert_eq!(has_mfe_dependency(&graph, &PackageName::Root), expected);
+            assert!(!graph
+                .has_dependency_declaration(&PackageName::from("missing"), MICROFRONTENDS_PACKAGE));
+        }
+    }
+
+    #[tokio::test]
+    async fn mfe_dependency_detection_includes_internal_workspaces() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        let root_package_json = PackageJson::from_value(json!({
+            "name": "root-app",
+            "packageManager": "npm@10.0.0",
+            "workspaces": ["packages/*"],
+            "dependencies": { (MICROFRONTENDS_PACKAGE): "workspace:*" },
+        }))
+        .unwrap();
+        let mfe_package_json = PackageJson::from_value(json!({
+            "name": MICROFRONTENDS_PACKAGE,
+            "version": "1.0.0",
+        }))
+        .unwrap();
+        let package_path = root.join_components(&["packages", "mfe", "package.json"]);
+        let graph = PackageGraph::builder(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::from([(package_path, mfe_package_json)])))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(has_mfe_dependency(&graph, &PackageName::Root));
     }
 
     struct PackageUpdateTest {
