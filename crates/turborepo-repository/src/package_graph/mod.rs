@@ -103,6 +103,8 @@ pub struct PackageGraph {
     native_task_knowledge: Arc<crate::native_tasks::NativeTaskKnowledge>,
     /// Immutable task-contract catalog produced during repository construction.
     task_contract_knowledge: Arc<crate::task_contracts::TaskContractKnowledge>,
+    /// Immutable change knowledge for watch/affectedness classification.
+    change_knowledge: Arc<crate::change_knowledge::ChangeKnowledge>,
 }
 
 /// The WorkspacePackage.
@@ -623,6 +625,11 @@ impl PackageGraph {
     /// Root `engines` captured into task-contract knowledge at construction.
     pub fn root_engines(&self) -> &std::collections::BTreeMap<String, String> {
         self.task_contract_knowledge.root_engines()
+    }
+
+    /// Foundational change knowledge for watch classification.
+    pub fn change_knowledge(&self) -> &crate::change_knowledge::ChangeKnowledge {
+        &self.change_knowledge
     }
 
     /// Toolchains registered during graph construction.
