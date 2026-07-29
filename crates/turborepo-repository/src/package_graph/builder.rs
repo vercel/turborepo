@@ -972,8 +972,21 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                     crate::task_contracts::ScopeTaskContract::javascript(),
                 ));
             }
-            crate::task_contracts::TaskContractKnowledge::build(observations)
-                .map_err(|error| Error::TaskContracts(error.to_string()))?
+            let root_engines = root_package_json
+                .as_ref()
+                .and_then(|package_json| package_json.engines())
+                .map(|engines| {
+                    engines
+                        .into_iter()
+                        .map(|(key, value)| (key.to_string(), value.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            crate::task_contracts::TaskContractKnowledge::build_with_engines(
+                observations,
+                root_engines,
+            )
+            .map_err(|error| Error::TaskContracts(error.to_string()))?
         });
 
         Ok(PackageGraph {
@@ -1389,7 +1402,21 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     crate::task_contracts::ScopeTaskContract::javascript(),
                 ));
             }
-            crate::task_contracts::TaskContractKnowledge::build(observations).map_err(|error| {
+            let root_engines = root_package_json
+                .as_ref()
+                .and_then(|package_json| package_json.engines())
+                .map(|engines| {
+                    engines
+                        .into_iter()
+                        .map(|(key, value)| (key.to_string(), value.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            crate::task_contracts::TaskContractKnowledge::build_with_engines(
+                observations,
+                root_engines,
+            )
+            .map_err(|error| {
                 discovery::Error::Failed(Box::new(Error::TaskContracts(error.to_string())))
             })?
         });

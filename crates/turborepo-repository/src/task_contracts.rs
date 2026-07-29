@@ -69,11 +69,21 @@ impl ScopeTaskContract {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskContractKnowledge {
     by_scope: BTreeMap<String, ScopeTaskContract>,
+    /// Root `package.json` `engines` captured at observation time for global
+    /// hashing. Empty when there is no root JavaScript package.json.
+    root_engines: BTreeMap<String, String>,
 }
 
 impl TaskContractKnowledge {
     pub fn build(
         observations: impl IntoIterator<Item = (String, ScopeTaskContract)>,
+    ) -> Result<Self, TaskContractError> {
+        Self::build_with_engines(observations, BTreeMap::new())
+    }
+
+    pub fn build_with_engines(
+        observations: impl IntoIterator<Item = (String, ScopeTaskContract)>,
+        root_engines: BTreeMap<String, String>,
     ) -> Result<Self, TaskContractError> {
         let mut by_scope = BTreeMap::new();
         for (scope, contract) in observations {
@@ -81,7 +91,10 @@ impl TaskContractKnowledge {
                 return Err(TaskContractError::DuplicateScope { scope });
             }
         }
-        Ok(Self { by_scope })
+        Ok(Self {
+            by_scope,
+            root_engines,
+        })
     }
 
     pub fn for_scope(&self, scope: &str) -> ScopeTaskContract {
@@ -89,6 +102,10 @@ impl TaskContractKnowledge {
             .get(scope)
             .cloned()
             .unwrap_or_else(ScopeTaskContract::empty)
+    }
+
+    pub fn root_engines(&self) -> &BTreeMap<String, String> {
+        &self.root_engines
     }
 
     pub fn scopes(&self) -> impl Iterator<Item = (&str, &ScopeTaskContract)> {
