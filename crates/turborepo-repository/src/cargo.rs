@@ -3772,7 +3772,10 @@ release: 1.96.0-nightly\n",
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
     ) -> Option<crate::toolchain::TaskCommand> {
-        let cargo_binary = which::which("cargo").ok();
+        let cargo_binary = override_command
+            .is_none()
+            .then(|| which::which("cargo").ok())
+            .flatten();
         if let Some(native_task) = context.native_tasks().get(task) {
             return crate::native_tasks::resolve_task_command(
                 context,
@@ -3996,10 +3999,6 @@ release: 1.96.0-nightly\n",
         // A non-cargo argv drops the group; pass-through args append
         // verbatim (no separator injection). Overrides must not require the
         // cargo binary, even for tasks present in the native catalog.
-        toolchain
-            .cargo_binary
-            .set(Err(which::Error::CannotFindBinaryPath))
-            .unwrap();
         let override_argv = vec!["./scripts/test.sh".to_string()];
         let cmd = resolve_cargo_cmd(
             &workspace_context,
