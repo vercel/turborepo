@@ -210,19 +210,18 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let implicit_tasks = if let Some(context) =
-                    self.package_graph.package_task_context(workspace)
-                    && let Some(toolchain_id) = context.toolchain()
-                    && let Some(toolchain) = self.package_graph.toolchains().get(toolchain_id)
-                {
-                    toolchain
-                        .registered_tasks(&context)
-                        .into_iter()
-                        .map(TaskName::from)
-                        .collect()
-                } else {
-                    HashSet::new()
-                };
+                let implicit_tasks =
+                    if let Some(context) = self.package_graph.package_task_context(workspace) {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.registered())
+                            .map(|task| TaskName::from(task.name().to_string()))
+                            .collect()
+                    } else {
+                        HashSet::new()
+                    };
                 let workspace_tasks = TaskInheritanceResolver::new(turbo_json_loader)
                     .with_implicit_tasks(implicit_tasks)
                     .resolve(workspace)?;
