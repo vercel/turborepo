@@ -885,11 +885,10 @@ jobs:
             echo "First release - no previous tag." >> pr-body.md
           fi
 
-      - name: Create PR with auto-merge
+      - name: Create release PR
         id: create-pr
         env:
           TURBOBOT_TOKEN: ${{ secrets.TURBOBOT }}
-          WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
@@ -909,9 +908,6 @@ jobs:
           echo "url=$PR_URL" >> $GITHUB_OUTPUT
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "number=$PR_NUM" >> $GITHUB_OUTPUT
-
-          GH_TOKEN="$WORKFLOW_TOKEN" gh pr review "$PR_NUM" --approve
-          GH_TOKEN="$WORKFLOW_TOKEN" gh pr merge "$PR_NUM" --auto --squash
 
   cleanup-on-failure:
     name: "Cleanup Failed Release"

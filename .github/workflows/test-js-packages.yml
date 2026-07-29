@@ -66,7 +66,7 @@ jobs:
           echo "Changed files in release PR:"
           printf '%s\n' "$CHANGED_FILES"
 
-          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/SKILL\.md|skills/turborepo/references/best-practices/structure\.md|skills/turborepo/references/configuration/RULE\.md|skills/turborepo/references/environment/RULE\.md|skills/turborepo/references/environment/gotchas\.md)$"
+          ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
           INVALID_FILES=""
           while IFS= read -r file; do
             if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
@@ -77,7 +77,7 @@ jobs:
           if [[ -n "$INVALID_FILES" ]]; then
             echo "::error::Release PR contains unexpected files that are not generated release updates:"
             printf '%s\n' "$INVALID_FILES"
-            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or generated Turborepo skill files"
+            echo "::error::Release PRs should only modify known release package manifests, version.txt, or generated Turborepo skill files"
             exit 1
           fi
 

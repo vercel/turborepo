@@ -406,7 +406,7 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-For stable, custom, and canary releases, the workflow uses the `TURBOBOT` secret to create a PR as `turbobot` with the title `chore: Release Turborepo <version>`. The workflow's `GITHUB_TOKEN` approves the PR and enables squash auto-merge. GitHub merges the PR after the required `Test Summary` and `JS Test Summary` checks pass.
+For stable, custom, and canary releases, the release workflow uses the `TURBOBOT` secret to create a PR as `turbobot` with the title `chore: Release Turborepo <version>`. A separate trusted-base workflow validates the exact generated manifest, skill, and version changes, waits for the required `Test Summary` and `JS Test Summary` checks, and then approves and squash-merges the validated head SHA. A new commit dismisses the automation approval and requires validation to restart.
 
 The PR includes:
 
@@ -530,7 +530,7 @@ packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.t
 | `GH_TOKEN`                  | GitHub API token for commit and workflow-owned PR operations | `${{ secrets.GITHUB_TOKEN }}` |
 | `TURBOBOT_TOKEN`            | Creates release PRs as `turbobot` so PR checks are triggered | `${{ secrets.TURBOBOT }}`     |
 
-`TURBOBOT` must authenticate as the `turbobot` account. Repository settings must allow auto-merge and permit GitHub Actions to approve pull requests; the workflow token supplies the approval and enables auto-merge after the bot-created PR triggers its required checks.
+`TURBOBOT` must authenticate as the `turbobot` account. Repository settings must permit GitHub Actions to approve pull requests. The trusted-base auto-merge workflow does not execute code from the release branch; it validates files through the GitHub API using immutable base and head SHAs.
 
 #### API Commit Helper
 
@@ -663,12 +663,13 @@ If a canary release fails after some packages were published but before others:
 If a canary release PR is created but fails to auto-merge:
 
 1. **Check authentication**: Ensure `TURBOBOT` authenticates as `turbobot`.
-2. **Check repository settings**: Ensure auto-merge is enabled and GitHub Actions may approve pull requests.
-3. **Check the PR state**: Confirm the `github-actions` approval is present and auto-merge is enabled.
+2. **Check repository settings**: Ensure GitHub Actions may approve pull requests.
+3. **Check semantic validation**: Inspect the `Auto-merge release PR` workflow for unexpected files or manifest fields.
 4. **Check branch protection**: Ensure `Test Summary` and `JS Test Summary` are passing.
-5. **Check for conflicts**: The staging branch may have diverged from `main`.
-6. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
-7. **Cleanup if abandoned**: If you need to abandon the release:
+5. **Check the PR head**: A new commit invalidates the previous automation approval and restarts validation.
+6. **Check for conflicts**: The staging branch may have diverged from `main`.
+7. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
+8. **Cleanup if abandoned**: If you need to abandon the release:
 
    ```bash
    # Delete the staging branch

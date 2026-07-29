@@ -279,7 +279,6 @@ jobs:
       - name: Create PR
         env:
           TURBOBOT_TOKEN: ${{ secrets.TURBOBOT }}
-          WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.package.outputs.version }}"
           BRANCH="${{ needs.package.outputs.branch }}"
@@ -305,8 +304,7 @@ jobs:
               --base main)
           fi
           PR_NUM=$(GH_TOKEN="$TURBOBOT_TOKEN" gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
-          GH_TOKEN="$WORKFLOW_TOKEN" gh pr review "$PR_NUM" --repo "${{ github.repository }}" --approve
-          GH_TOKEN="$WORKFLOW_TOKEN" gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --auto --squash
+          echo "Created release PR #${PR_NUM}"
 
   cleanup-on-failure:
     name: Cleanup Failed Release
