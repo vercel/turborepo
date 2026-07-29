@@ -159,17 +159,18 @@ Represents the workspace structure and package dependencies:
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
   identities, definition sources, completeness, and stable fingerprints. A
-  single resolution owner tracks lifecycle status. Task hashing consumes the
-  stored byte-compatible package resolution fingerprint and preserves explicit
-  unavailable states without closure fallback hashing. The JavaScript adapter
-  owns package-manager configuration, previous-lockfile parsing, and resolution
-  through the same producer used at graph construction. Core compares the
-  resulting normalized package identities without parser or ecosystem knowledge;
-  unavailable, parse, and comparison failures retain the conservative
-  all-packages fallback. The snapshot projects temporary `PackageInfo`
-  closure/hash fields for the remaining
-  global-hash and summary migrations. Framework inference and boundaries
-  validation consume the package-scoped declaration projection directly;
+  single resolution owner tracks lifecycle status. Task hashing and run/task
+  summaries (including OpenTelemetry external-input attributes) consume the
+  same stored byte-compatible package resolution fingerprint and preserve
+  explicit unavailable states without closure fallback hashing. The JavaScript
+  adapter owns package-manager configuration, previous-lockfile parsing, and
+  resolution through the same producer used at graph construction. Core
+  compares the resulting normalized package identities without parser or
+  ecosystem knowledge; unavailable, parse, and comparison failures retain the
+  conservative all-packages fallback. The snapshot projects temporary
+  `PackageInfo` closure/hash fields for the remaining global-hash migration.
+  Framework inference and boundaries validation consume the package-scoped
+  declaration projection directly;
   aliases, duplicate
   precedence, optional declarations, and peers remain explicit normalized
   facts rather than raw manifest reads.

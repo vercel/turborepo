@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_lockfiles::Package;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_task_id::TaskId;
 use turborepo_types::{
@@ -21,9 +20,9 @@ pub struct TaskSummaryFactory<'a, E, H, R> {
     env_at_start: &'a EnvironmentVariableMap,
     run_opts: &'a R,
     global_env_mode: EnvMode,
-    /// Per-package external dependency hashes computed during task hashing.
-    /// When present, summaries reuse these instead of re-sorting and
-    /// re-hashing each package's transitive closure per task.
+    /// Per-package external resolution fingerprints computed for task hashing.
+    /// Summaries reuse this exact cache so serialized and OpenTelemetry values
+    /// cannot drift from task-hash inputs.
     external_deps_hashes: Option<&'a HashMap<String, String>>,
 }
 
@@ -33,6 +32,8 @@ pub enum Error {
     MissingWorkspace(String),
     #[error("No compatibility package payload found for {0}")]
     MissingPackagePayload(PackageName),
+    #[error("No external dependency hash found for {0}")]
+    MissingExternalDependencyHash(PackageName),
     #[error("No task definition found for {0}")]
     MissingTask(TaskId<'static>),
     #[error("No task hash found for {0}")]
@@ -173,26 +174,14 @@ where
             })
             .unwrap_or_default();
 
-        // The hash is precomputed where the closure is computed; the
-        // per-run cache and the recompute below only apply to graphs built
-        // without a closure hasher. All three produce identical output.
-        let package_info = package_context.package_info();
-        if package_context.requires_compatibility_payload() && package_info.is_none() {
+        if package_context.requires_compatibility_payload()
+            && package_context.package_info().is_none()
+        {
             return Err(Error::MissingPackagePayload(
                 package_context.package().clone(),
             ));
         }
-        let hash_of_external_dependencies = package_info
-            .and_then(|info| info.external_deps_hash.clone())
-            .or_else(|| {
-                self.external_deps_hashes
-                    .and_then(|hashes| hashes.get(task_id.package()).cloned())
-            })
-            .unwrap_or_else(|| {
-                package_info
-                    .map(|info| get_external_deps_hash(&info.transitive_dependencies))
-                    .unwrap_or_default()
-            });
+        let hash_of_external_dependencies = self.hash_of_external_dependencies(task_id)?;
 
         Ok(SharedTaskSummary {
             hash,
@@ -254,6 +243,33 @@ where
         let dependents = collect_nodes(self.engine.dependents(task_id));
         (dependencies, dependents)
     }
+
+    /// Resolve the same stored fingerprint task hashing uses.
+    ///
+    /// Prefer the per-run cache produced for hashing. When that cache is absent
+    /// (tests or callers that did not precompute), read package resolution
+    /// knowledge directly. Never rehash closures or read
+    /// `PackageInfo::external_deps_hash`.
+    fn hash_of_external_dependencies(&self, task_id: &TaskId) -> Result<String, Error> {
+        let package = PackageName::from(task_id.package());
+        if let Some(hashes) = self.external_deps_hashes {
+            if let Some(hash) = hashes.get(task_id.package()) {
+                return Ok(hash.clone());
+            }
+            // Single-package hashing leaves the cache empty; preserve the empty
+            // serialized fingerprint used by dry-run/summary output.
+            if hashes.is_empty() {
+                return Ok(String::new());
+            }
+            return Err(Error::MissingExternalDependencyHash(package));
+        }
+
+        self.package_graph
+            .package_resolution_states()
+            .get(task_id.package())
+            .and_then(|state| state.task_hash().map(str::to_string))
+            .ok_or(Error::MissingExternalDependencyHash(package))
+    }
 }
 
 fn summary_command(
@@ -279,23 +295,6 @@ fn workspace_relative_log_file(
 ) -> Result<turbopath::AnchoredSystemPathBuf, turbopath::PathError> {
     let log_dir = AnchoredSystemPath::new(LOG_DIR)?;
     Ok(log_dir.join_component(&task_log_filename(task_name)))
-}
-
-/// Computes a hash of external dependencies from a workspace's sorted
-/// transitive dependency closure. The closure is already sorted by
-/// `Package`'s `(key, version)` ordering, so no re-sort is needed.
-pub fn get_external_deps_hash(
-    transitive_dependencies: &Option<Vec<std::sync::Arc<Package>>>,
-) -> String {
-    use turborepo_hash::{LockFilePackagesRef, TurboHash};
-
-    let Some(transitive_dependencies) = transitive_dependencies else {
-        return "".into();
-    };
-
-    let transitive_deps: Vec<&Package> = transitive_dependencies.iter().map(|pkg| &**pkg).collect();
-
-    LockFilePackagesRef(transitive_deps).hash()
 }
 
 #[cfg(test)]
@@ -488,5 +487,89 @@ mod tests {
             factory.task_summary(task_id, None),
             Err(Error::MissingPackagePayload(name)) if name == app
         ));
+    }
+
+    #[tokio::test]
+    async fn summary_uses_resolution_fingerprint_without_hash_cache() {
+        let (_tempdir, graph) = summary_graph().await;
+        let app = PackageName::from("app");
+        let expected = graph
+            .package_resolution_states()
+            .get(app.as_str())
+            .and_then(|state| state.task_hash())
+            .expect("resolution knowledge must expose a task-hash fingerprint")
+            .to_string();
+        let task_id = TaskId::new("app", "build").into_owned();
+        let engine = TestEngine {
+            definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
+            edges: Vec::new(),
+        };
+        let environment = EnvironmentVariableMap::default();
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &TestHashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            None,
+        );
+
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.shared.hash_of_external_dependencies, expected);
+        // No-lockfile JavaScript graphs remain explicitly unavailable/empty,
+        // never missing, so summaries preserve the empty serialized fingerprint.
+        assert_eq!(summary.shared.hash_of_external_dependencies, "");
+    }
+
+    #[tokio::test]
+    async fn summary_fails_closed_when_hash_cache_misses_package() {
+        let (_tempdir, graph) = summary_graph().await;
+        let app = PackageName::from("app");
+        let task_id = TaskId::new("app", "build").into_owned();
+        let engine = TestEngine {
+            definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
+            edges: Vec::new(),
+        };
+        let environment = EnvironmentVariableMap::default();
+        let external_hashes = HashMap::from([("util".to_string(), "deadbeef".to_string())]);
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &TestHashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            Some(&external_hashes),
+        );
+
+        assert!(matches!(
+            factory.task_summary(task_id, None),
+            Err(Error::MissingExternalDependencyHash(name)) if name == app
+        ));
+    }
+
+    #[tokio::test]
+    async fn summary_single_package_empty_cache_serializes_empty_fingerprint() {
+        let (_tempdir, graph) = summary_graph().await;
+        let task_id = TaskId::new("app", "build").into_owned();
+        let engine = TestEngine {
+            definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
+            edges: Vec::new(),
+        };
+        let environment = EnvironmentVariableMap::default();
+        let external_hashes = HashMap::new();
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &TestHashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            Some(&external_hashes),
+        );
+
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.shared.hash_of_external_dependencies, "");
     }
 }
