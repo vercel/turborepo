@@ -88,28 +88,27 @@ impl Package {
 
     pub fn get_task_names(&self) -> BTreeSet<String> {
         let packages = HashSet::from([self.name.clone()]);
-        let catalog_tasks: HashSet<_> = self
+        let registered_tasks: HashSet<_> = self
             .run
             .pkg_dep_graph()
             .package_task_context(&self.name)
             .map(|context| {
                 context
                     .native_tasks()
-                    .tasks()
-                    .iter()
-                    .filter(|task| task.script().is_some())
-                    .map(|task| task.name().to_string())
+                    .registered_names()
+                    .into_iter()
                     .collect()
             })
             .unwrap_or_default();
-        catalog_tasks
-            .into_iter()
+        self.get_tasks()
+            .into_keys()
             .chain(
                 self.run
                     .engine()
                     .task_ids_for_packages(&packages)
                     .into_iter()
-                    .map(|task| task.task().to_string()),
+                    .map(|task| task.task().to_string())
+                    .filter(|task| registered_tasks.contains(task)),
             )
             .collect()
     }
