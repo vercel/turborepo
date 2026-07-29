@@ -17,8 +17,8 @@ use turborepo_lockfiles::Lockfile;
 use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
-        ExternalDeclarations, ExternalResolutionGeneration, ExternalResolutionStatus,
-        PackageExternalDeclarations,
+        ExternalDeclarations, ExternalResolutionData, ExternalResolutionGeneration,
+        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolutionState,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -44,7 +44,6 @@ pub const ROOT_PKG_NAME: &str = "//";
 pub(crate) struct JavaScriptResolutionSnapshot {
     pub generation: Arc<ExternalResolutionGeneration>,
     pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
-    pub hashes: HashMap<String, String>,
     pub warning: Option<String>,
 }
 
@@ -54,6 +53,27 @@ impl JavaScriptResolutionSnapshot {
         package_payloads: &mut HashMap<PackageName, PackageInfo>,
         knowledge: &RepositoryKnowledge,
     ) {
+        let fingerprints = self
+            .generation
+            .domains()
+            .iter()
+            .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)
+            .and_then(|domain| match domain.data() {
+                crate::external_resolution::ExternalResolutionData::Resolved {
+                    packages, ..
+                } => Some(
+                    packages
+                        .iter()
+                        .filter_map(|package| {
+                            package
+                                .fingerprint()
+                                .map(|fingerprint| (package.package(), fingerprint.as_str()))
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
+                crate::external_resolution::ExternalResolutionData::Unavailable(_) => None,
+            })
+            .unwrap_or_default();
         for (name, info) in package_payloads {
             let facts = match name {
                 PackageName::Root => knowledge
@@ -71,7 +91,9 @@ impl JavaScriptResolutionSnapshot {
             }
             let directory = directory.to_unix();
             info.transitive_dependencies = self.closures.remove(directory.as_str());
-            info.external_deps_hash = self.hashes.remove(directory.as_str());
+            info.external_deps_hash = fingerprints
+                .get(name.as_str())
+                .map(|fingerprint| (*fingerprint).to_string());
         }
     }
 }
@@ -913,6 +935,51 @@ impl PackageGraph {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .status
+    }
+
+    pub fn package_resolution_states(&self) -> HashMap<String, PackageResolutionState> {
+        let resolution = self
+            .external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.package_task_contexts()
+            .map(|context| {
+                let state = match context.toolchain() {
+                    None => PackageResolutionState::NotApplicable,
+                    Some(toolchain) => resolution
+                        .generation
+                        .as_deref()
+                        .and_then(|generation| {
+                            generation
+                                .domains()
+                                .iter()
+                                .find(|domain| domain.toolchain() == toolchain)
+                        })
+                        .map_or(PackageResolutionState::Missing, |domain| {
+                            match domain.data() {
+                                ExternalResolutionData::Resolved {
+                                    completeness,
+                                    packages,
+                                    ..
+                                } => packages
+                                    .iter()
+                                    .find(|package| package.package() == context.package().as_str())
+                                    .and_then(|package| package.fingerprint())
+                                    .map_or(PackageResolutionState::Missing, |fingerprint| {
+                                        PackageResolutionState::Resolved {
+                                            completeness: completeness.clone(),
+                                            fingerprint: fingerprint.clone(),
+                                        }
+                                    }),
+                                ExternalResolutionData::Unavailable(reason) => {
+                                    PackageResolutionState::Unavailable(reason.clone())
+                                }
+                            }
+                        }),
+                };
+                (context.package().as_str().to_string(), state)
+            })
+            .collect()
     }
 
     #[cfg(test)]
@@ -1991,20 +2058,16 @@ mod test {
             );
             map
         };
-
-        // Stub hasher: enough to prove the hash is computed and delivered on
-        // both paths. The production hasher's byte-identity with the legacy
-        // sort-then-hash path is proven in `turborepo-task-hash` tests.
         let hasher: crate::package_graph::builder::ClosureHasher = Arc::new(|closures| {
             closures
                 .iter()
-                .map(|(ws, closure)| {
-                    let rendered = closure
+                .map(|(package, identities)| {
+                    let fingerprint = identities
                         .iter()
-                        .map(|pkg| format!("{}@{}", pkg.key, pkg.version))
+                        .map(|identity| format!("{}@{}", identity.key, identity.version))
                         .collect::<Vec<_>>()
                         .join(",");
-                    (ws.clone(), rendered)
+                    (package.clone(), fingerprint)
                 })
                 .collect()
         });

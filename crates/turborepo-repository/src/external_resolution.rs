@@ -255,6 +255,7 @@ impl ResolutionFingerprint {
 pub struct PackageResolution {
     package: String,
     identities: Vec<ExternalPackageIdentity>,
+    fingerprint: Option<ResolutionFingerprint>,
 }
 
 impl PackageResolution {
@@ -262,9 +263,13 @@ impl PackageResolution {
         package: impl Into<String>,
         identities: impl IntoIterator<Item = ExternalPackageIdentity>,
     ) -> Self {
+        let mut identities: Vec<_> = identities.into_iter().collect();
+        identities.sort_unstable();
+        identities.dedup();
         Self {
             package: package.into(),
-            identities: identities.into_iter().collect(),
+            identities,
+            fingerprint: None,
         }
     }
 
@@ -274,6 +279,14 @@ impl PackageResolution {
 
     pub fn identities(&self) -> &[ExternalPackageIdentity] {
         &self.identities
+    }
+
+    pub fn fingerprint(&self) -> Option<&ResolutionFingerprint> {
+        self.fingerprint.as_ref()
+    }
+
+    pub(crate) fn set_fingerprint(&mut self, fingerprint: ResolutionFingerprint) {
+        self.fingerprint = Some(fingerprint);
     }
 }
 
@@ -289,6 +302,40 @@ pub enum ExternalResolutionData {
         packages: Vec<PackageResolution>,
     },
     Unavailable(ResolutionUnavailableReason),
+}
+
+/// Resolution knowledge available to package-scoped consumers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackageResolutionState {
+    Resolved {
+        completeness: ResolutionCompleteness,
+        fingerprint: ResolutionFingerprint,
+    },
+    Unavailable(ResolutionUnavailableReason),
+    Missing,
+    NotApplicable,
+}
+
+impl PackageResolutionState {
+    /// Existing unavailable and non-applicable states remain cache-eligible.
+    /// Partial resolution is explicit and cannot safely participate in caching.
+    pub fn cache_eligible(&self) -> bool {
+        !matches!(
+            self,
+            Self::Resolved {
+                completeness: ResolutionCompleteness::Partial(_),
+                ..
+            }
+        )
+    }
+
+    pub fn task_hash(&self) -> Option<&str> {
+        match self {
+            Self::Resolved { fingerprint, .. } => Some(fingerprint.as_str()),
+            Self::Unavailable(_) | Self::NotApplicable => Some(""),
+            Self::Missing => None,
+        }
+    }
 }
 
 /// One parser-neutral external resolution domain contributed by a toolchain.
@@ -329,6 +376,10 @@ impl ExternalResolutionDomain {
 
     pub fn data(&self) -> &ExternalResolutionData {
         &self.data
+    }
+
+    pub(crate) fn data_mut(&mut self) -> &mut ExternalResolutionData {
+        &mut self.data
     }
 }
 
@@ -417,7 +468,6 @@ impl ExternalResolutionGeneration {
         })
     }
 
-    #[cfg(test)]
     pub(crate) fn domains(&self) -> &[ExternalResolutionDomain] {
         &self.domains
     }
@@ -573,6 +623,26 @@ mod tests {
         .unwrap();
 
         assert_ne!(complete_empty, unavailable);
+    }
+
+    #[test]
+    fn package_resolution_state_preserves_hash_and_cache_semantics() {
+        let unavailable = PackageResolutionState::Unavailable(ResolutionUnavailableReason::new(
+            "missing",
+            "missing lockfile",
+        ));
+        let partial = PackageResolutionState::Resolved {
+            completeness: ResolutionCompleteness::Partial(ResolutionIncompleteReason::new(
+                "partial",
+                "partial resolution",
+            )),
+            fingerprint: ResolutionFingerprint::new("partial-hash"),
+        };
+
+        assert_eq!(unavailable.task_hash(), Some(""));
+        assert!(unavailable.cache_eligible());
+        assert_eq!(PackageResolutionState::Missing.task_hash(), None);
+        assert!(!partial.cache_eligible());
     }
 
     #[test]

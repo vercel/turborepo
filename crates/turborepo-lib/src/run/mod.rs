@@ -1231,9 +1231,8 @@ impl Run {
                     s.spawn(|_| {
                         let _span =
                             tracing::info_span!("compute_external_deps_hashes_task").entered();
-                        external_deps_hashes = Some(compute_external_deps_hashes(
-                            self.pkg_dep_graph.package_task_contexts(),
-                        ));
+                        external_deps_hashes =
+                            Some(compute_external_deps_hashes(&self.pkg_dep_graph));
                     });
                 }
             });

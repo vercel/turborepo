@@ -288,11 +288,8 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    /// Provide a function that hashes each workspace's sorted external
-    /// dependency closure. When set, `PackageInfo::external_deps_hash` is
-    /// populated wherever closures are computed (inline or deferred).
-    /// Injected because the capnp-based hasher lives in `turborepo-hash`,
-    /// which transitively depends on this crate.
+    /// Provide the byte-compatible hasher used to fingerprint normalized
+    /// package resolutions once, alongside closure production.
     pub fn with_closure_hasher(mut self, hasher: ClosureHasher) -> Self {
         self.closure_hasher = Some(hasher);
         self
@@ -1159,14 +1156,48 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
     }
 }
 
-/// Computes per-workspace external dependency hashes from sorted closures,
-/// keyed by workspace unix directory. See
-/// [`PackageGraphBuilder::with_closure_hasher`].
+/// Computes byte-compatible fingerprints from normalized package identities.
 pub type ClosureHasher = Arc<
     dyn Fn(&HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>) -> HashMap<String, String>
         + Send
         + Sync,
 >;
+
+fn apply_resolution_fingerprints(
+    domains: &mut [ExternalResolutionDomain],
+    hasher: Option<&ClosureHasher>,
+) {
+    let Some(hasher) = hasher else {
+        return;
+    };
+    for domain in domains {
+        let ExternalResolutionData::Resolved { packages, .. } = domain.data_mut() else {
+            continue;
+        };
+        let identities = packages
+            .iter()
+            .map(|package| {
+                let identities = package
+                    .identities()
+                    .iter()
+                    .map(|identity| {
+                        Arc::new(turborepo_lockfiles::Package::new(
+                            identity.key(),
+                            identity.version(),
+                        ))
+                    })
+                    .collect();
+                (package.package().to_string(), identities)
+            })
+            .collect();
+        let fingerprints = hasher(&identities);
+        for package in packages {
+            if let Some(fingerprint) = fingerprints.get(package.package()) {
+                package.set_fingerprint(ResolutionFingerprint::new(fingerprint));
+            }
+        }
+    }
+}
 
 fn scope_directory_and_toolchain<'a>(
     knowledge: &'a RepositoryKnowledge,
@@ -1222,6 +1253,7 @@ fn unavailable_javascript_resolution(
     code: &str,
     message: String,
     warning: Option<String>,
+    closure_hasher: Option<&ClosureHasher>,
 ) -> Result<JavaScriptResolutionSnapshot, String> {
     let domain = ExternalResolutionDomain::new(
         ToolchainId::JAVASCRIPT,
@@ -1230,12 +1262,12 @@ fn unavailable_javascript_resolution(
         ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
     );
     domains.push(domain);
+    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(JavaScriptResolutionSnapshot {
         generation: Arc::new(generation),
         closures: HashMap::new(),
-        hashes: HashMap::new(),
         warning,
     })
 }
@@ -1263,12 +1295,10 @@ fn resolve_javascript_dependencies(
                 "closure-unavailable",
                 message.clone(),
                 Some(message),
+                closure_hasher,
             );
         }
     };
-    let hashes = closure_hasher
-        .map(|hasher| hasher(&closures))
-        .unwrap_or_default();
     let packages = javascript_resolution_packages(knowledge)
         .into_iter()
         .map(|(identity, directory)| {
@@ -1294,12 +1324,12 @@ fn resolve_javascript_dependencies(
         },
     );
     domains.push(domain);
+    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(JavaScriptResolutionSnapshot {
         generation: Arc::new(generation),
         closures,
-        hashes,
         warning: None,
     })
 }
@@ -1417,6 +1447,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                     "worker-unavailable",
                                     error.to_string(),
                                     None,
+                                    self.closure_hasher.as_ref(),
                                 )
                                 .map_err(|message| {
                                     build_failure(Error::ExternalResolution(message))
@@ -1454,6 +1485,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                             "declarations-unavailable",
                             error.to_string(),
                             None,
+                            self.closure_hasher.as_ref(),
                         )
                         .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
                         external_resolution =
@@ -1468,11 +1500,16 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     "lockfile-unavailable",
                     "JavaScript lockfile could not be read or parsed".to_string(),
                     None,
+                    self.closure_hasher.as_ref(),
                 )
                 .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
                 external_resolution = ExternalResolutionKnowledge::complete(snapshot.generation);
             }
         } else if !native_external_resolutions.is_empty() {
+            apply_resolution_fingerprints(
+                &mut native_external_resolutions,
+                self.closure_hasher.as_ref(),
+            );
             let generation =
                 ExternalResolutionGeneration::build(&knowledge, native_external_resolutions)
                     .map_err(|error| build_failure(Error::ExternalResolution(error.to_string())))?;
