@@ -29,15 +29,7 @@ pub fn package_graph_to_data(pkg_graph: &PackageGraph) -> PackageGraphData {
         // read).
         let scripts: Vec<String> = pkg_graph
             .package_task_context(&name)
-            .map(|context| {
-                context
-                    .native_tasks()
-                    .tasks()
-                    .iter()
-                    .filter(|task| task.authored() || task.executable() || task.registered())
-                    .map(|task| task.name().to_string())
-                    .collect()
-            })
+            .map(|context| context.native_tasks().script_names())
             .unwrap_or_default();
 
         nodes.push(PackageNode {
@@ -111,7 +103,7 @@ mod tests {
         let package_path = root.join_components(&["packages", "web", "package.json"]);
         let web_manifest = package_json(json!({
             "name": "web",
-            "scripts": { "dev": "next dev" }
+            "scripts": { "dev": "next dev", "empty": "" }
         }));
         let graph = PackageGraph::builder(&root, root_manifest)
             .with_package_manager(PackageManager::Npm)
@@ -150,7 +142,7 @@ mod tests {
             .find(|node| node.id == "web")
             .expect("workspace is visible");
         assert_eq!(web.path, "packages/web");
-        assert_eq!(web.scripts, ["dev"]);
+        assert_eq!(web.scripts, ["dev", "empty"]);
         assert!(!web.is_root);
 
         assert_eq!(
@@ -159,7 +151,7 @@ mod tests {
                 "id": "web",
                 "name": "web",
                 "path": "packages/web",
-                "scripts": ["dev"],
+                "scripts": ["dev", "empty"],
                 "isRoot": false
             })
         );
