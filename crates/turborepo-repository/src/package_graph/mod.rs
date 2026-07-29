@@ -620,6 +620,11 @@ impl PackageGraph {
         self.package_manager.as_ref()
     }
 
+    /// Root `engines` captured into task-contract knowledge at construction.
+    pub fn root_engines(&self) -> &std::collections::BTreeMap<String, String> {
+        self.task_contract_knowledge.root_engines()
+    }
+
     /// Toolchains registered during graph construction.
     pub fn toolchains(&self) -> &crate::toolchain::ToolchainRegistry {
         &self.toolchains
