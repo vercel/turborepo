@@ -81,6 +81,14 @@ impl RelationshipKnowledge {
     pub(crate) fn groups(&self) -> &[RelationshipGroup] {
         &self.groups
     }
+
+    pub(crate) fn relationships_for_source(&self, source: &str) -> &[Relationship] {
+        self.groups
+            .binary_search_by(|group| group.source().cmp(source))
+            .ok()
+            .map(|index| self.groups[index].relationships())
+            .unwrap_or_default()
+    }
 }
 
 /// A workspace root paired by core with the registry entry that produced its
