@@ -60,8 +60,6 @@ pub enum Error {
     NoWorkspaceSpecified,
     #[error("Invalid scope. Package with name {0} in `package.json` not found.")]
     MissingWorkspace(PackageName),
-    #[error("Missing compatibility package payload for {0}")]
-    MissingPackagePayload(PackageName),
     #[error("Missing native package definition for {0}")]
     MissingPackageDefinition(PackageName),
     #[error("Missing toolchain provenance for {0}")]
@@ -279,6 +277,7 @@ pub async fn prune(
                 continue;
             }
             prune.copy_workspace(
+                context.package(),
                 context.directory(),
                 definition_path,
                 &excluded_dev_workspaces,
@@ -843,6 +842,7 @@ impl<'a> Prune<'a> {
 
     fn copy_workspace(
         &self,
+        workspace: &PackageName,
         workspace_directory: &AnchoredSystemPath,
         definition_path: &AnchoredSystemPath,
         excluded_dev_workspaces: &HashSet<String>,
@@ -850,9 +850,7 @@ impl<'a> Prune<'a> {
         let package_json_path = self.root.resolve(definition_path);
         let original_dir = self.root.resolve(workspace_directory);
         if !original_dir.contains(&package_json_path) {
-            return Err(Error::MissingPackageDefinition(PackageName::Other(
-                workspace_directory.to_string(),
-            )));
+            return Err(Error::MissingPackageDefinition(workspace.clone()));
         }
         let definition_name = package_json_path
             .file_name()
@@ -863,9 +861,7 @@ impl<'a> Prune<'a> {
                 turborepo_repository::package_json::Error::Io(io)
                     if io.kind() == ErrorKind::NotFound =>
                 {
-                    Error::MissingPackageDefinition(PackageName::Other(
-                        workspace_directory.to_string(),
-                    ))
+                    Error::MissingPackageDefinition(workspace.clone())
                 }
                 other => Error::PackageJson(other),
             })?;
@@ -1198,7 +1194,7 @@ mod tests {
     use super::{
         bin_paths, finalized_path_is_contained,
         prune_js::{merge_preserving_key_order, prune_package_json_workspaces},
-        sync_prune_finalize_files, Prune, ADDITIONAL_FILES,
+        sync_prune_finalize_files, Error, Prune, ADDITIONAL_FILES,
     };
 
     struct MockDiscovery;
@@ -1476,7 +1472,7 @@ mod tests {
         workspace_dir.create_dir_all().unwrap();
         workspace_dir
             .join_component("package.json")
-            .create_with_contents("{\n  \"name\": \"web\"\n}\n")
+            .create_with_contents("{\n  \"name\": \"web\",\n  \"bin\": \"bin/cli.js\"\n}\n")
             .unwrap();
         workspace_dir
             .join_component("index.js")
@@ -1527,7 +1523,7 @@ mod tests {
             "packages/web/package.json"
         );
         prune
-            .copy_workspace(context.directory(), definition_path, &HashSet::new())
+            .copy_workspace(&web, context.directory(), definition_path, &HashSet::new())
             .unwrap();
 
         assert_eq!(
@@ -1544,8 +1540,12 @@ mod tests {
                 .join_components(&["packages", "web", "package.json"])
                 .read_to_string()
                 .unwrap(),
-            "{\n  \"name\": \"web\"\n}\n"
+            "{\n  \"name\": \"web\",\n  \"bin\": \"bin/cli.js\"\n}\n"
         );
+        assert!(prune
+            .docker_directory()
+            .join_components(&["packages", "web", "bin", "cli.js"])
+            .exists());
         assert!(!prune.full_directory.join_component("stale").exists());
 
         // Closure/copy no longer require PackageInfo; definition-path IO is
@@ -1558,8 +1558,27 @@ mod tests {
         let context = prune.package_context(&web).unwrap();
         let definition_path = prune.package_definition_path(&context).unwrap();
         assert!(prune
-            .copy_workspace(context.directory(), definition_path, &HashSet::new())
+            .copy_workspace(&web, context.directory(), definition_path, &HashSet::new())
             .is_ok());
+
+        let package_json_path = root.resolve(definition_path);
+        package_json_path.create_with_contents("not json").unwrap();
+        assert!(matches!(
+            prune.copy_workspace(&web, context.directory(), definition_path, &HashSet::new()),
+            Err(Error::PackageJson(_))
+        ));
+
+        std::fs::remove_file(package_json_path.as_std_path()).unwrap();
+        assert!(matches!(
+            prune.copy_workspace(&web, context.directory(), definition_path, &HashSet::new()),
+            Err(Error::MissingPackageDefinition(package)) if package == web
+        ));
+
+        package_json_path.create_dir_all().unwrap();
+        let result =
+            prune.copy_workspace(&web, context.directory(), definition_path, &HashSet::new());
+        std::fs::remove_dir(package_json_path.as_std_path()).unwrap();
+        assert!(matches!(result, Err(Error::PackageJson(_))));
     }
 
     #[tokio::test]
