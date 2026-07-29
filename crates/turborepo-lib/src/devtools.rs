@@ -138,7 +138,7 @@ impl ProperTaskGraphBuilder {
         // when not listed in turbo.json.
         if let Some(context) = pkg_graph.package_task_context(&PackageName::Root) {
             for native_task in context.native_tasks().tasks() {
-                if !(native_task.executable() || native_task.authored()) {
+                if native_task.script().is_none() {
                     continue;
                 }
                 let task_name = TaskName::from(format!("//#{}", native_task.name())).into_owned();
@@ -182,11 +182,7 @@ impl ProperTaskGraphBuilder {
                     let script = pkg_graph
                         .package_task_context(&PackageName::from(task_id.package()))
                         .and_then(|context| context.native_tasks().get(task_id.task()))
-                        .and_then(|task| {
-                            task.script()
-                                .map(|script| script.as_inner().clone())
-                                .or_else(|| task.display().map(str::to_string))
-                        })
+                        .and_then(|task| task.script().map(|script| script.as_inner().clone()))
                         .unwrap_or_default();
 
                     nodes.push(TaskNode {

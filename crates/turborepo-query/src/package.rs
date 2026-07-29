@@ -79,10 +79,6 @@ impl Package {
                     .filter_map(|task| {
                         task.script()
                             .cloned()
-                            .or_else(|| {
-                                task.display()
-                                    .map(|display| Spanned::new(display.to_string()))
-                            })
                             .map(|script| (task.name().to_string(), script))
                     })
                     .collect()
@@ -101,7 +97,7 @@ impl Package {
                     .native_tasks()
                     .tasks()
                     .iter()
-                    .filter(|task| task.executable() || task.registered() || task.authored())
+                    .filter(|task| task.script().is_some())
                     .map(|task| task.name().to_string())
                     .collect()
             })

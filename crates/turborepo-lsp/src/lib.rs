@@ -166,7 +166,7 @@ impl LspPackages {
         observation_from_package_json(scope, &package.package_json)
             .tasks
             .into_iter()
-            .filter(|task| task.authored() || task.executable())
+            .filter(|task| task.script().is_some())
             .map(|task| task.name().to_string())
             .collect()
     }
