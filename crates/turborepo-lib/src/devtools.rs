@@ -87,16 +87,27 @@ impl ProperTaskGraphBuilder {
         // Create turbo json loader
         let reader =
             TurboJsonReader::new(self.repo_root.clone()).with_future_flags(opts.future_flags);
-        let loader = match (
-            opts.run_opts.single_package,
-            pkg_graph.package_json(&PackageName::Root).cloned(),
-        ) {
-            (true, Some(root_package_json)) => UnifiedTurboJsonLoader::single_package(
-                reader,
-                opts.repo_opts.root_turbo_json_path.clone(),
-                root_package_json,
-            ),
-            _ => UnifiedTurboJsonLoader::workspace(
+        let loader = match opts.run_opts.single_package {
+            true => {
+                let root_scripts = pkg_graph
+                    .package_task_context(&PackageName::Root)
+                    .map(|context| {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    opts.repo_opts.root_turbo_json_path.clone(),
+                    root_scripts,
+                )
+            }
+            false => UnifiedTurboJsonLoader::workspace(
                 reader,
                 opts.repo_opts.root_turbo_json_path.clone(),
                 pkg_graph.package_scope_directories(),
