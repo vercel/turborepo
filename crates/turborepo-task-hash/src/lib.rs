@@ -54,8 +54,8 @@ pub enum Error {
         task_id: TaskId<'static>,
         package: PackageName,
     },
-    #[error("Missing compatibility package payload for {0}.")]
-    MissingPackagePayload(PackageName),
+    #[error("Missing external dependency fingerprint for {0}.")]
+    MissingExternalDependencyHash(PackageName),
     #[error(
         "Package context repository root {context_root} does not match hashing repository root \
          {repo_root}."
@@ -288,28 +288,19 @@ impl PackageInputsHashes {
     }
 }
 
-/// Collect the external dependency hash for every workspace, keyed by
-/// package name. Hashes are precomputed where closures are computed (see
-/// [`hash_sorted_closures`]); the per-package fallback only runs for graphs
-/// built without a closure hasher.
+/// Collect the stored external resolution fingerprint for every task namespace.
 #[tracing::instrument(skip_all)]
-pub fn compute_external_deps_hashes<'b>(
-    workspaces: impl Iterator<Item = PackageTaskContext<'b>>,
+pub fn compute_external_deps_hashes(
+    package_graph: &PackageGraph,
 ) -> Result<HashMap<String, String>, Error> {
-    workspaces
-        .map(|context| {
-            let info = context.package_info();
-            if context.requires_compatibility_payload() && info.is_none() {
-                return Err(Error::MissingPackagePayload(context.package().clone()));
-            }
-            let hash = info
-                .map(|info| {
-                    info.external_deps_hash
-                        .clone()
-                        .unwrap_or_else(|| get_external_deps_hash(&info.transitive_dependencies))
-                })
-                .unwrap_or_default();
-            Ok((context.package().as_str().to_owned(), hash))
+    package_graph
+        .package_resolution_states()
+        .into_iter()
+        .map(|(package, resolution)| {
+            let hash = resolution.task_hash().ok_or_else(|| {
+                Error::MissingExternalDependencyHash(PackageName::from(package.as_str()))
+            })?;
+            Ok((package, hash.to_string()))
         })
         .collect()
 }
@@ -360,15 +351,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_id: &TaskId<'static>,
         package_context: &PackageTaskContext<'_>,
     ) -> Result<(), Error> {
-        validate_task_context(task_id, package_context, self.repository_root)?;
-        if package_context.package_info().is_none()
-            && package_context.requires_compatibility_payload()
-        {
-            return Err(Error::MissingPackagePayload(
-                package_context.package().clone(),
-            ));
-        }
-        Ok(())
+        validate_task_context(task_id, package_context, self.repository_root)
     }
 
     pub fn new(
@@ -405,18 +388,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         }
     }
 
-    /// Pre-compute and cache external dependency hashes for all packages.
-    /// Many tasks share the same package, so this avoids re-sorting
-    /// transitive dependencies for every task.
+    /// Cache stored external resolution fingerprints for all task namespaces.
     #[tracing::instrument(skip_all)]
-    pub fn precompute_external_deps_hashes<'b>(
+    pub fn precompute_external_deps_hashes(
         &mut self,
-        workspaces: impl Iterator<Item = PackageTaskContext<'b>>,
+        package_graph: &PackageGraph,
     ) -> Result<(), Error> {
         if self.run_opts.single_package() {
             return Ok(());
         }
-        self.external_deps_hash_cache = compute_external_deps_hashes(workspaces)?;
+        self.external_deps_hash_cache = compute_external_deps_hashes(package_graph)?;
         Ok(())
     }
 
@@ -571,7 +552,6 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         hash_of_files: &str,
         excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
     ) -> Result<String, Error> {
-        let workspace = package_context.package_info();
         let do_framework_inference = self.run_opts.framework_inference();
         let is_monorepo = !self.run_opts.single_package();
 
@@ -595,16 +575,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes =
             self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
-        let ext_hash_fallback;
         let external_deps_hash: Option<&str> = if !is_monorepo {
             None
-        } else if let Some(cached) = self.external_deps_hash_cache.get(task_id.package()) {
-            Some(cached.as_str())
         } else {
-            ext_hash_fallback = workspace
-                .map(|workspace| get_external_deps_hash(&workspace.transitive_dependencies))
-                .unwrap_or_default();
-            Some(ext_hash_fallback.as_str())
+            Some(
+                self.external_deps_hash_cache
+                    .get(task_id.package())
+                    .ok_or_else(|| {
+                        Error::MissingExternalDependencyHash(package_context.package().clone())
+                    })?,
+            )
         };
 
         if !env_vars.all.is_empty() {
@@ -836,20 +816,15 @@ pub fn get_external_deps_hash(
     LockFilePackagesRef(transitive_deps).hash()
 }
 
-/// Hash every workspace's sorted external dependency closure, keyed by the
-/// closure map's own keys. Intended as the `PackageGraphBuilder`
-/// closure-hasher, so hashes are computed where closures are computed
-/// (on the deferred-closure background thread) instead of after graph
-/// construction.
+/// Produce byte-compatible fingerprints once from normalized resolution sets.
 pub fn hash_sorted_closures(
     closures: &HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
 ) -> HashMap<String, String> {
     closures
         .par_iter()
-        .map(|(ws, closure)| {
-            let refs: Vec<&turborepo_lockfiles::Package> =
-                closure.iter().map(|pkg| &**pkg).collect();
-            (ws.clone(), LockFilePackagesRef(refs).hash())
+        .map(|(package, closure)| {
+            let identities = closure.iter().map(|identity| &**identity).collect();
+            (package.clone(), LockFilePackagesRef(identities).hash())
         })
         .collect()
 }
@@ -1173,6 +1148,7 @@ mod test {
             .unwrap();
 
         PackageGraph::builder(repo_root, PackageJson::from_value(root_json).unwrap())
+            .with_closure_hasher(Arc::new(hash_sorted_closures))
             .build()
             .await
             .unwrap()
@@ -1213,6 +1189,7 @@ mod test {
 
         PackageGraph::builder_optional(repo_root, None)
             .with_toolchain(CargoToolchain::new(repo_root.clone()))
+            .with_closure_hasher(Arc::new(hash_sorted_closures))
             .build()
             .await
             .unwrap()
@@ -1245,7 +1222,11 @@ mod test {
         let definition = TaskDefinition::default();
         let opts = TestRunOpts { single_package };
         let env = EnvironmentVariableMap::default();
-        task_hasher(&task_id, &opts, &env, graph.repo_root())
+        let mut hasher = task_hasher(&task_id, &opts, &env, graph.repo_root());
+        if !single_package {
+            hasher.precompute_external_deps_hashes(graph).unwrap();
+        }
+        hasher
             .calculate_task_hash(
                 &task_id,
                 &definition,
@@ -1257,11 +1238,7 @@ mod test {
             .unwrap()
     }
 
-    fn monorepo_context_hash(
-        graph: &PackageGraph,
-        package: PackageName,
-        precompute_external: bool,
-    ) -> String {
+    fn monorepo_context_hash(graph: &PackageGraph, package: PackageName) -> String {
         let task_id = TaskId::new(package.as_str(), "build").into_owned();
         let definition = TaskDefinition::default();
         let opts = TestRunOpts {
@@ -1269,11 +1246,7 @@ mod test {
         };
         let env = EnvironmentVariableMap::default();
         let mut hasher = task_hasher(&task_id, &opts, &env, graph.repo_root());
-        if precompute_external {
-            hasher
-                .precompute_external_deps_hashes(graph.package_task_contexts())
-                .unwrap();
-        }
+        hasher.precompute_external_deps_hashes(graph).unwrap();
         hasher
             .calculate_task_hash(
                 &task_id,
@@ -1330,10 +1303,27 @@ mod test {
             )
             .unwrap_err();
         assert!(matches!(mismatch, Error::TaskPackageMismatch { .. }));
+
+        let monorepo_opts = TestRunOpts {
+            single_package: false,
+        };
+        let error = task_hasher(&task_id, &monorepo_opts, &env, &repo_root)
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &package_context,
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, Error::MissingExternalDependencyHash(name) if name == package_name)
+        );
     }
 
     #[tokio::test]
-    async fn task_hash_requires_payload_but_context_and_paths_do_not() {
+    async fn task_hash_uses_resolution_knowledge_without_compatibility_payload() {
         let tmp = tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
@@ -1352,7 +1342,7 @@ mod test {
         };
         let env = EnvironmentVariableMap::default();
         let hasher = task_hasher(&task_id, &opts, &env, &repo_root);
-        let error = hasher
+        let hash = hasher
             .calculate_task_hash(
                 &task_id,
                 &definition,
@@ -1361,17 +1351,19 @@ mod test {
                 &[],
                 PackageTaskEventBuilder::new("app", "build"),
             )
-            .unwrap_err();
+            .unwrap();
 
-        assert!(matches!(error, Error::MissingPackagePayload(name) if name == package));
-        assert!(matches!(
-            hasher.insert_deferred_hash(&task_id, &definition, EnvMode::Strict, &context),
-            Err(Error::MissingPackagePayload(name)) if name == package
-        ));
-        assert!(matches!(
-            compute_external_deps_hashes(graph.package_task_contexts()),
-            Err(Error::MissingPackagePayload(name)) if name == package
-        ));
+        assert!(!hash.is_empty());
+        hasher
+            .insert_deferred_hash(&task_id, &definition, EnvMode::Strict, &context)
+            .unwrap();
+        assert_eq!(
+            compute_external_deps_hashes(&graph)
+                .unwrap()
+                .get(package.as_str())
+                .map(String::as_str),
+            Some("")
+        );
     }
 
     #[tokio::test]
@@ -1606,7 +1598,7 @@ mod test {
         let js_root =
             AbsoluteSystemPathBuf::new(js_tmp.path().to_string_lossy().to_string()).unwrap();
         let js_graph = javascript_graph(&js_root).await;
-        let js_cache = compute_external_deps_hashes(js_graph.package_task_contexts()).unwrap();
+        let js_cache = compute_external_deps_hashes(&js_graph).unwrap();
         assert_eq!(
             js_cache,
             HashMap::from([
@@ -1627,8 +1619,7 @@ mod test {
         )
         .unwrap();
         let cargo_graph = cargo_graph(&cargo_root).await;
-        let cargo_cache =
-            compute_external_deps_hashes(cargo_graph.package_task_contexts()).unwrap();
+        let cargo_cache = compute_external_deps_hashes(&cargo_graph).unwrap();
         let (external_hash, app_task_hash, workspace_task_hash) = match std::env::consts::OS {
             "macos" => ("2ccf3983a6195c83", "16148055db78eed5", "3adbee17ca01f306"),
             "linux" => ("9fae73876995db4d", "bed5df30b6563a22", "a5d3d2445a0e2df2"),
@@ -1649,23 +1640,17 @@ mod test {
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
             (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
         ] {
-            assert_eq!(
-                monorepo_context_hash(graph, package.clone(), false),
-                expected
-            );
-            assert_eq!(monorepo_context_hash(graph, package, true), expected);
+            assert_eq!(monorepo_context_hash(graph, package), expected);
         }
 
         for (package, expected) in [
             ("cargo-app", app_task_hash),
             ("cargo-workspace", workspace_task_hash),
         ] {
-            let package = PackageName::from(package);
             assert_eq!(
-                monorepo_context_hash(&cargo_graph, package.clone(), false),
+                monorepo_context_hash(&cargo_graph, PackageName::from(package)),
                 expected
             );
-            assert_eq!(monorepo_context_hash(&cargo_graph, package, true), expected);
         }
     }
 
@@ -1911,10 +1896,7 @@ mod test {
         assert_eq!(hash_none, "", "None deps should produce empty hash");
 
         let hash_empty = get_external_deps_hash(&Some(Vec::new()));
-        assert!(
-            !hash_empty.is_empty(),
-            "empty closure should produce non-empty hash"
-        );
+        assert_eq!(hash_empty, "459c029558afe716");
     }
 
     /// The linear hash of a pre-sorted closure must be byte-identical to the

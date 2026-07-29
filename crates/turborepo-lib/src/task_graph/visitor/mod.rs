@@ -250,8 +250,7 @@ impl<'a> Visitor<'a> {
             match external_deps_hashes {
                 Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
                 None => crate::rayon_compat::block_in_place(|| {
-                    task_hasher
-                        .precompute_external_deps_hashes(package_graph.package_task_contexts())
+                    task_hasher.precompute_external_deps_hashes(&package_graph)
                 })?,
             }
 
