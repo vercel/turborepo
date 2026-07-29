@@ -483,7 +483,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 package_name: package_context.package().clone(),
             }
         })?;
-        let has_custom_proxy = package_info.package_json.scripts.contains_key("proxy");
+        let has_custom_proxy = package_context.native_tasks().defines("proxy");
 
         // Check if package depends on @vercel/microfrontends
         const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
