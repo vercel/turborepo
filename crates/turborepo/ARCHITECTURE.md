@@ -291,15 +291,18 @@ membership/workspace/resolution triggers) combined with active toolchain
 Native discovery output contributes package/scope observations to repository
 knowledge, while a
 `Toolchain` continues to answer ecosystem-specific behavioral questions such as
-what command a task runs and what hash wiring a task derives. All lookups go through the
+entrypoint selection, derived task I/O, affectedness, and prune rendering. Native
+task availability and commands come from immutable repository catalogs. Remaining
+behavioral lookups go through the
 `ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
 open string identifier, not a closed enum; and trait methods are
 coarse-grained and data-in/data-out, keeping the door open to out-of-process
 plugin adapters. JavaScript is the first, production implementation: its
-discovery, script command construction, and phantom-task detection flow
-through the trait. Machinery that predates the abstraction and has no trait
-surface yet (package-manager resolution for dependency splitting, the JS
-lockfile closure phase) is documented as known debt in the module.
+discovery produces package, relationship, task, contract, change, and prune
+knowledge without runtime task-command callbacks. Machinery that predates the
+abstraction and has no trait surface yet (package-manager resolution for
+dependency splitting and the JS lockfile closure phase) is documented as known
+debt in the module.
 
 Toolchain-derived I/O receives the same task-scoped arguments as execution plus
 a narrow, platform-aware startup-environment projection keyed by toolchain.
@@ -347,19 +350,21 @@ whether anything changed; Cargo decides how and in what order to build.**
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
   filtered build and verification tasks. Unfiltered builds prefer entrypoints
-  because Cargo builds their library dependency closures implicitly. A synthetic
-  *workspace* scope — named by the user via `[workspace.metadata] name` in
+  because Cargo builds their library dependency closures implicitly. A
+  user-named *workspace* scope — declared via `[workspace.metadata] name` in
   the root Cargo.toml, a hard requirement — is an aggregate in repository
-  knowledge. Its compatibility package depends on every crate and hosts
+  knowledge. Its normalized relationships point to every crate, and it hosts
   workspace-scoped verification verbs.
-- **Execution and entrypoint selection** (`Toolchain::task_command` and
+- **Execution and entrypoint selection** (`NativeTaskKnowledge`, native command
+  resolution in `turborepo-task-executor`, and
   `Toolchain::select_task_entrypoints`): crate-scoped build and verification
   tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
   `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
-  when the workspace has no entrypoints. Unfiltered verification uses the synthetic workspace package:
+  when the workspace has no entrypoints. Unfiltered verification uses the Cargo
+  workspace aggregate:
   `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
   `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
-  crates; selecting only the workspace package uses its workspace command.
+  crates; selecting only the workspace aggregate uses its workspace command.
   `RunBuilder` combines filter mode with the resolved package scope to derive
   task-specific exclusions. `EngineBuilder` applies package-level exclusions
   before traversal; task-level filtering defers selection until after matching
@@ -370,11 +375,11 @@ whether anything changed; Cargo decides how and in what order to build.**
   (except `cargo run`) share a mutually-exclusive serial group: concurrent
   cargo processes serialize on the build-directory lock anyway, so the
   executor runs one at a time without the "waiting for file lock" noise. Run
-  summaries derive display commands from the same verb tables via
-  `Toolchain::task_display_command`, so display cannot drift from execution.
-- **Task registration** (`Toolchain::registered_tasks`): every crate implicitly
+  summaries read the same resolved native command catalog as execution, so
+  display cannot drift from execution.
+- **Task registration** (`NativeTaskKnowledge`): every crate implicitly
   registers `build`; entrypoints with exactly one binary also register `run`
-  and its `dev` alias. Every crate and the workspace package register `test`, `check`,
+  and its `dev` alias. Every crate and the workspace aggregate register `test`, `check`,
   `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
   at the lowest precedence, so normal
   `tasks` entries configure or override them and package configuration can
@@ -397,15 +402,15 @@ whether anything changed; Cargo decides how and in what order to build.**
   configuration, native compiler and
   archiver settings (including target-qualified forms), and platform SDK
   selection. Arbitrary variables consumed by project-specific build scripts
-  remain explicit task `env` configuration. The workspace package hashes all
+  remain explicit task `env` configuration. The workspace aggregate hashes all
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
   `include_str!` from outside any crate directory) are additive.
 - **External dependencies** (`turborepo-lockfiles/src/cargo.rs`): locked
   registry/git packages and the compiler itself flow through the same
-  external-dependency hash JS packages use
-  (`PackageInfo.transitive_dependencies`). Each crate's closure is computed
+  `ExternalResolutionGeneration` and resolution fingerprint used by JavaScript
+  packages. Each crate's closure is computed
   from `Cargo.lock` (identity = version + source + checksum, so git rev
   bumps count). Source-qualified lockfile edges distinguish identical
   name/version packages from different registries or git references, so each
@@ -492,7 +497,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   synchronization failures are warnings. In docker layout,
   the json layer carries the root manifest, each kept crate's `Cargo.toml`, and
   finalized lock; sources go to the full layer. A
-  package anchored at the repo root (the synthetic workspace package) is not
+  aggregate anchored at the repo root (the Cargo workspace scope) is not
   a pruneable target.
 
 - **Compile cache** (`Toolchain::compile_cache_env`, consumed by
@@ -564,9 +569,9 @@ The core task graph consists of:
   (`futureFlags.experimentalTaskCommand`) in one place
   (`resolve_command_override`, `turborepo-engine`'s
   `builder/definitions.rs`), across five precedence levels: Package
-  Configuration `command` → root `pkg#task` `command` → package-authored
-  script (`Toolchain::authors_task`) → unscoped root default (per-toolchain
-  maps fan out by toolchain id) → the toolchain's own resolution. The
+  Configuration `command` → root `pkg#task` `command` → authored native task
+  from `NativeTaskKnowledge` → unscoped root default (per-toolchain maps fan out
+  by toolchain id) → the catalog's synthesized native command. The
   resolved override is authoritative in both directions — an argv executes
   even where the toolchain defines nothing, an opt-out never executes even
   where it does — and feeds global-deps hashing, the TUI task list, the

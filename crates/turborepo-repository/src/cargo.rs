@@ -346,7 +346,7 @@ pub enum CargoPackageKind {
     /// Build, run, and verification tasks execute
     /// `cargo <verb> --package=<crate>`.
     Entrypoint,
-    /// The synthetic user-named workspace package hosting workspace-scoped
+    /// The user-named workspace aggregate hosting workspace-scoped
     /// verification tasks (`cargo test --workspace`, ...).
     Workspace,
 }
@@ -358,11 +358,11 @@ pub enum CargoPackageKind {
 pub struct CargoPackageDetails {
     pub kind: CargoPackageKind,
     /// The crate's deliverable targets (empty for libraries and the
-    /// workspace package).
+    /// workspace aggregate).
     pub deliverables: Vec<Deliverable>,
     pub manifest_alters_output_layout: bool,
     /// The crate's directory, repo-root-relative in unix form (empty for
-    /// the synthetic workspace package).
+    /// the workspace aggregate).
     pub dir: String,
     /// A conservative transitive closure of declared local dependencies. This
     /// is separate from the package graph because Cargo permits dev-dependency
