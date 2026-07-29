@@ -11,10 +11,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
 use turborepo_hash::{GlobalHashable, TurboHash};
-use turborepo_repository::{
-    package_graph::PackageInfo,
-    package_manager::{self, PackageManager},
-};
+use turborepo_repository::package_manager::{self, PackageManager};
 use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
 use turborepo_types::{EnvMode, GlobalHashInputs as GlobalHashInputsTrait};
@@ -64,7 +61,7 @@ pub struct GlobalHashableInputs<'a> {
 pub fn get_global_hash_inputs<'a>(
     root_external_dependencies_hash: Option<&'a str>,
     root_internal_dependencies_hash: Option<&'a str>,
-    root_package: &'a PackageInfo,
+    root_engines: Option<&'a std::collections::BTreeMap<String, String>>,
     root_path: &AbsoluteSystemPath,
     package_manager: Option<&PackageManager>,
     resolution_file_fallback: &[AbsoluteSystemPathBuf],
@@ -82,7 +79,7 @@ pub fn get_global_hash_inputs<'a>(
         global_hashable_env_vars,
         engines,
     } = collect_global_file_hash_inputs(
-        root_package,
+        root_engines,
         root_path,
         package_manager,
         resolution_file_fallback,
@@ -129,7 +126,8 @@ pub struct GlobalFileHashInputs<'a> {
 /// hashing since it has no dependencies on those results.
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
 pub fn collect_global_file_hash_inputs<'a>(
-    root_package: &'a PackageInfo,
+    // Root `engines` from task-contract knowledge (not a live PackageJson read).
+    root_engines: Option<&'a std::collections::BTreeMap<String, String>>,
     root_path: &AbsoluteSystemPath,
     // Absent for a pure Cargo workspace: there is no JavaScript package
     // manager to enumerate workspace exclusions for `globalDependencies`.
@@ -143,7 +141,12 @@ pub fn collect_global_file_hash_inputs<'a>(
     global_env: &'a [String],
     hasher: &SCM,
 ) -> Result<GlobalFileHashInputs<'a>, Error> {
-    let engines = root_package.package_json.engines();
+    let engines = root_engines.map(|engines| {
+        engines
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect()
+    });
 
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -386,7 +389,7 @@ impl<'a> GlobalHashInputsTrait for GlobalHashableInputs<'a> {
 mod tests {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
-    use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
+    use turborepo_repository::package_manager::PackageManager;
     use turborepo_scm::SCM;
     use turborepo_types::EnvMode;
 
@@ -408,7 +411,6 @@ mod tests {
             .unwrap();
 
         let env_var_map = EnvironmentVariableMap::default();
-        let package_info = PackageInfo::default();
         let fallback = [root.join_component("package.json")];
         #[cfg(windows)]
         let file_deps = ["C:\\some\\path".to_string()];
@@ -417,7 +419,7 @@ mod tests {
         let result = get_global_hash_inputs(
             None,
             None,
-            &package_info,
+            None,
             &root,
             Some(&PackageManager::Pnpm),
             &fallback,
