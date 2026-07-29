@@ -178,9 +178,11 @@ Represents the workspace structure and package dependencies:
   Global hashing consumes the same root resolution fingerprint as task hashing
   and, when JavaScript resolution is unavailable, hashes resolution definition
   sources plus the root package.json instead of reading the singleton lockfile
-  object. Phase 3 deletion removed `PackageInfo` closure/hash compatibility
+  object.   Phase 3 deletion removed `PackageInfo` closure/hash compatibility
   fields and deferred resolution installation; readiness belongs to repository
-  construction.
+  construction. External declaration consumers (frameworks, boundaries, task
+  hashing) read the authoritative `ExternalDeclarations` projection built from
+  relationship knowledge rather than raw manifests or PackageInfo maps.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate
