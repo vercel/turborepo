@@ -10,6 +10,7 @@ use turbopath::{PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
+    native_tasks::NativeCommandTemplate,
     package_graph::{PackageGraph, PackageName, PackageTaskContext},
     toolchain::CompileCacheEndpoint,
 };
@@ -274,15 +275,22 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             return Ok(Some(cmd));
         };
 
-        let package_manager = self.package_graph.package_manager();
-        let package_manager_binary = self.package_manager_binary()?;
-        let cargo_binary = self.cargo_binary()?;
-
         let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
+            let (package_manager_binary, cargo_binary) = if override_command.is_some() {
+                (None, None)
+            } else {
+                match native_task.command() {
+                    Some(NativeCommandTemplate::JavaScriptPackageManagerRun { .. }) => {
+                        (self.package_manager_binary()?, None)
+                    }
+                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?),
+                    None => (None, None),
+                }
+            };
             turborepo_repository::native_tasks::resolve_task_command(
                 &package_context,
                 native_task,
-                package_manager,
+                self.package_graph.package_manager(),
                 package_manager_binary,
                 cargo_binary,
                 self.task_args.args_for_task(task_id),
@@ -662,6 +670,43 @@ mod tests {
         assert!(!should_inject_toolchain_compile_cache(Some(
             &TaskCommandOverride::OptOut
         )));
+    }
+
+    #[tokio::test]
+    async fn command_override_does_not_resolve_package_manager_binary() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson::from_value(serde_json::json!({
+                "scripts": { "build": "next build" }
+            }))
+            .unwrap(),
+        )
+        .await;
+        let task_id = TaskId::new("web", "build").into_owned();
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &package_graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+        provider
+            .package_manager_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(command.is_some(), "override should bypass binary lookup");
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
