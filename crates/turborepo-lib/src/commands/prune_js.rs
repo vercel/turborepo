@@ -230,7 +230,9 @@ pub(crate) struct JavaScriptPruneRenderResult {
     /// `None` means copy the original root package.json unchanged.
     pub root_package_json_contents: Option<String>,
     pub pruned_patches: Vec<RelativeUnixPathBuf>,
-    pub prune_pnpm_workspace_patches: bool,
+    /// Repo-relative workspace config whose `patchedDependencies` must be
+    /// trimmed to `pruned_patches` after layout (e.g. `pnpm-workspace.yaml`).
+    pub workspace_patch_config_path: Option<&'static str>,
 }
 
 /// Render JavaScript lockfile/manifest/patch artifacts for a pruned repository.
@@ -299,6 +301,9 @@ pub(crate) fn render_javascript_prune(
         lockfile,
         root_package_json_contents,
         pruned_patches,
-        prune_pnpm_workspace_patches: input.package_manager.is_pnpm_family(),
+        workspace_patch_config_path: input
+            .package_manager
+            .is_pnpm_family()
+            .then_some(turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH),
     })
 }
