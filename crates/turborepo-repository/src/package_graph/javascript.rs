@@ -198,7 +198,12 @@ pub(super) fn resolve_dependencies(
                 .into_iter()
                 .flatten()
                 .map(|package| {
-                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone())
+                    let mut identity =
+                        ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
+                    if let Some(human_name) = lockfile.human_name(package) {
+                        identity = identity.with_human_name(human_name);
+                    }
+                    identity
                 });
             PackageResolution::new(identity, exact_identities)
         })
