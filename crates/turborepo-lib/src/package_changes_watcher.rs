@@ -474,18 +474,29 @@ impl Subscriber {
         };
 
         let reader = TurboJsonReader::new(self.repo_root.clone());
-        let root_turbo_json = match (self.single_package, root_package_json) {
-            (true, Some(root_package_json)) => {
-                UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
-            }
+        let root_turbo_json = if self.single_package {
+            let root_scripts = pkg_dep_graph
+                .package_task_context(&PackageName::Root)
+                .map(|context| {
+                    context
+                        .native_tasks()
+                        .tasks()
+                        .iter()
+                        .filter(|task| task.executable() || task.authored())
+                        .map(|task| task.name().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            UnifiedTurboJsonLoader::single_package(reader, config_path, root_scripts)
+        } else {
             // A native-only graph still has Turbo's root task namespace, but
             // it does not have a root JavaScript scope to synthesize config
             // from. Workspace loading preserves that distinction.
-            _ => UnifiedTurboJsonLoader::workspace(
+            UnifiedTurboJsonLoader::workspace(
                 reader,
                 config_path,
                 pkg_dep_graph.package_scope_directories(),
-            ),
+            )
         }
         .load(&PackageName::Root)
         .ok()

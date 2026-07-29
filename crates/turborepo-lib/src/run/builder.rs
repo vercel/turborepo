@@ -712,13 +712,23 @@ impl RunBuilder {
                     root_turbo_json_path.clone(),
                     root_package_json.clone(),
                 )
-            } else if let (Some(root_package_json), true) =
-                (root_package_json.as_ref(), is_single_package)
-            {
+            } else if is_single_package {
+                let root_scripts = pkg_dep_graph
+                    .package_task_context(&PackageName::Root)
+                    .map(|context| {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
                 UnifiedTurboJsonLoader::single_package(
                     reader,
                     root_turbo_json_path.clone(),
-                    root_package_json.clone(),
+                    root_scripts,
                 )
             } else if !root_turbo_json_path.exists() &&
             // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
@@ -728,16 +738,14 @@ impl RunBuilder {
                     .package_task_contexts()
                     .map(|context| {
                         let package = context.package().clone();
-                        let info = context.package_info();
-                        if context.requires_compatibility_payload() && info.is_none() {
-                            return Err(Error::MissingPackagePayload(package));
-                        }
-                        Ok((
-                            package,
-                            info.into_iter()
-                                .flat_map(|info| info.package_json.scripts.keys().cloned())
-                                .collect(),
-                        ))
+                        let scripts = context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect();
+                        Ok((package, scripts))
                     })
                     .collect::<Result<_, Error>>()?;
                 UnifiedTurboJsonLoader::workspace_no_turbo_json(
