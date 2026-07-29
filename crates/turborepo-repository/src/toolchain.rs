@@ -380,86 +380,6 @@ pub trait Toolchain: Send + Sync {
     /// one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 
-    /// Resolve the command that implements `task` for `package`, or `None`
-    /// when the toolchain defines no command for it — the task is then a
-    /// no-op, like a missing package.json script.
-    ///
-    /// `pass_through_args` are user-supplied arguments (`turbo run task --
-    /// <args>`); the toolchain owns how they are attached, since separator
-    /// conventions differ per tool.
-    ///
-    /// `override_command`, when present, replaces the argv the toolchain
-    /// would have constructed — element 0 is the program, nothing is
-    /// prepended. The toolchain still owns the frame (working directory,
-    /// serial grouping); the shared placement lives in
-    /// [`override_task_command`]. Pass-through args append verbatim: turbo
-    /// cannot know an arbitrary command's separator convention.
-    fn task_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        pass_through_args: Option<&[String]>,
-        override_command: Option<&[String]>,
-    ) -> Result<Option<TaskCommand>, Error>;
-
-    /// A one-line description of what `task` runs for `package`, for
-    /// dry-run output and run summaries. Derived from the same tables as
-    /// [`Toolchain::task_command`] so display cannot drift from execution.
-    fn task_display_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> Option<String>;
-
-    /// Whether the package itself *authors* a definition for `task` — a
-    /// package.json script, written by the package's owner. Distinct from
-    /// [`Toolchain::defines_task`]: toolchain-synthesized fallbacks (Cargo's
-    /// verb tables) define tasks without the package authoring anything.
-    ///
-    /// Authored definitions shadow unscoped `command` defaults from the
-    /// root turbo.json; synthesized ones sit below them.
-    fn authors_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        let _ = (context, task);
-        false
-    }
-
-    /// Task names this toolchain makes available without an explicit
-    /// turbo.json definition. These act as lowest-precedence empty task
-    /// definitions; normal task configuration still overrides them.
-    fn registered_tasks(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-    ) -> Vec<String> {
-        let _ = context;
-        Vec::new()
-    }
-
-    /// Whether [`Toolchain::registered_tasks`] contains `task`.
-    fn registers_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        self.registered_tasks(context)
-            .iter()
-            .any(|registered| registered == task)
-    }
-
-    /// Whether this toolchain defines an executable command for `task` in
-    /// `package`. Tasks without one are phantom/transit tasks (they exist
-    /// solely for dependency ordering via `dependsOn: ["^task"]`): they do
-    /// not execute, so hashing concerns like global input files must not
-    /// apply to them.
-    fn defines_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool;
-
     /// Defaults this toolchain supplies for `task` when turbo.json does not
     /// configure the corresponding field. Explicit user configuration always
     /// wins.
@@ -847,16 +767,6 @@ pub struct JavaScriptToolchain<P> {
     /// by the builder so synchronous concerns (command resolution) can use
     /// it without re-running discovery.
     resolved_package_manager: std::sync::OnceLock<PackageManager>,
-    /// The package manager binary, resolved lazily on first command.
-    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
-}
-
-#[derive(Debug, thiserror::Error)]
-enum JavaScriptCommandError {
-    // Message kept identical to the pre-toolchain provider error for
-    // output compatibility.
-    #[error("Unable to find package manager binary: {0}")]
-    Which(#[from] which::Error),
 }
 
 impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
@@ -870,7 +780,6 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
             repo_root,
             known_package_manager,
             resolved_package_manager: std::sync::OnceLock::new(),
-            package_manager_binary: std::sync::OnceLock::new(),
         }
     }
 
@@ -947,79 +856,6 @@ pub(crate) fn package_manager_command(
 impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     fn id(&self) -> ToolchainId {
         ToolchainId::JAVASCRIPT
-    }
-
-    fn task_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        pass_through_args: Option<&[String]>,
-        override_command: Option<&[String]>,
-    ) -> Result<Option<TaskCommand>, Error> {
-        // An override replaces the whole package-manager indirection even when
-        // the catalog has no authored script for this task name.
-        if let Some(override_command) = override_command {
-            return Ok(override_task_command(
-                context,
-                override_command,
-                pass_through_args,
-                None,
-            ));
-        }
-        let Some(native_task) = context.native_tasks().get(task) else {
-            return Ok(None);
-        };
-        let package_manager = self.resolved_package_manager.get();
-        let package_manager_binary = package_manager.map(|package_manager| {
-            self.package_manager_binary
-                .get_or_init(|| which::which(package_manager.command()))
-        });
-        let package_manager_binary = match package_manager_binary {
-            Some(Ok(path)) => Some(path.as_path()),
-            Some(Err(err)) => {
-                return Err(Error::Failed(Box::new(JavaScriptCommandError::Which(*err))));
-            }
-            None => None,
-        };
-        crate::native_tasks::resolve_task_command(
-            context,
-            native_task,
-            package_manager,
-            package_manager_binary,
-            None,
-            pass_through_args,
-            None,
-        )
-        .map_err(|error| Error::Failed(Box::new(error)))
-    }
-
-    fn task_display_command(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> Option<String> {
-        context
-            .native_tasks()
-            .get(task)
-            .and_then(|native_task| native_task.display().map(str::to_string))
-    }
-
-    fn defines_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        context.native_tasks().defines(task)
-    }
-
-    /// package.json scripts are authored by the package: they shadow
-    /// unscoped `command` defaults.
-    fn authors_task(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        context.native_tasks().authors(task)
     }
 
     fn derived_task_io(
@@ -1292,10 +1128,17 @@ mod tests {
             Some(&ToolchainId::JAVASCRIPT),
         );
 
-        let command = toolchain
-            .task_command(&context, "build", None, None)
-            .unwrap()
-            .expect("script exists, command resolves");
+        let command = crate::native_tasks::resolve_task_command(
+            &context,
+            context.native_tasks().get("build").expect("build task"),
+            Some(&PackageManager::Npm),
+            which::which("npm").ok().as_deref(),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .expect("script exists, command resolves");
         // The program is the resolved npm binary (or node.exe on Windows);
         // the invocation shape is what matters.
         assert!(
@@ -1313,40 +1156,37 @@ mod tests {
         assert_eq!(command.serial_group, None);
 
         // Missing and empty scripts are no-ops.
-        assert!(
-            toolchain
-                .task_command(&context, "lint", None, None)
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            toolchain
-                .task_command(&context, "empty", None, None)
-                .unwrap()
-                .is_none()
-        );
+        assert!(!context.native_tasks().defines("lint"));
+        assert!(!context.native_tasks().defines("empty"));
 
         // Display shows the script text itself.
         assert_eq!(
-            toolchain.task_display_command(&context, "build").as_deref(),
+            context
+                .native_tasks()
+                .get("build")
+                .and_then(|task| task.display()),
             Some("next build")
         );
-        assert_eq!(toolchain.task_display_command(&context, "lint"), None);
+        assert_eq!(
+            context
+                .native_tasks()
+                .get("lint")
+                .and_then(|task| task.display()),
+            None
+        );
 
         // A `command` override replaces the whole package-manager
         // indirection: argv[0] is the program, nothing is prepended, cwd is
         // the package directory. It also defines tasks no script does, and
         // pass-through args append verbatim.
         let override_argv = vec!["vitest".to_string(), "run".to_string()];
-        let cmd = toolchain
-            .task_command(
-                &context,
-                "lint",
-                Some(&["--bail".to_string()]),
-                Some(&override_argv),
-            )
-            .unwrap()
-            .expect("override defines the task");
+        let cmd = override_task_command(
+            &context,
+            &override_argv,
+            Some(&["--bail".to_string()]),
+            None,
+        )
+        .expect("override defines the task");
         assert_eq!(cmd.program, OsString::from("vitest"));
         assert_eq!(
             cmd.args,
@@ -1414,32 +1254,6 @@ mod tests {
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
                 Box::pin(async { Ok(DiscoveredPackages::default()) })
-            }
-
-            fn task_command(
-                &self,
-                _context: &crate::package_graph::PackageTaskContext<'_>,
-                _task: &str,
-                _pass_through_args: Option<&[String]>,
-                _override_command: Option<&[String]>,
-            ) -> Result<Option<TaskCommand>, Error> {
-                Ok(None)
-            }
-
-            fn task_display_command(
-                &self,
-                _context: &crate::package_graph::PackageTaskContext<'_>,
-                _task: &str,
-            ) -> Option<String> {
-                None
-            }
-
-            fn defines_task(
-                &self,
-                _context: &crate::package_graph::PackageTaskContext<'_>,
-                _task: &str,
-            ) -> bool {
-                false
             }
 
             fn watch_spec(&self) -> WatchSpec {

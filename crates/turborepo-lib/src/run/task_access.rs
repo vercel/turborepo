@@ -70,19 +70,23 @@ fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, 
         return Ok(false);
     }
 
-    // read package.json at root
+    // read package.json at root through the same observation vocabulary as
+    // the native-task catalog — do not read scripts for task identity directly.
     let package_json_path = repo_root.join_components(&["package.json"]);
     let package_json_content = fs::read_to_string(package_json_path)?;
     let package: PackageJson = serde_json::from_str(&package_json_content)?;
-
-    if let Some(scripts) = package.scripts {
-        return match scripts.get("build") {
-            Some(script) => Ok(script == "next build"),
-            _ => Ok(false),
-        };
-    }
-
-    Ok(false)
+    let scripts = package.scripts.unwrap_or_default();
+    let scripts: std::collections::BTreeMap<_, _> = scripts
+        .into_iter()
+        .map(|(name, value)| (name, turborepo_errors::Spanned::new(value)))
+        .collect();
+    let observation = turborepo_repository::native_tasks::observation_from_scripts("//", &scripts);
+    Ok(observation.tasks.iter().any(|task| {
+        task.name() == "build"
+            && task
+                .script()
+                .is_some_and(|script| script.as_inner() == "next build")
+    }))
 }
 
 impl TaskAccessTraceFile {

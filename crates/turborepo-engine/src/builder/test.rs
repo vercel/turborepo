@@ -143,35 +143,6 @@ impl Toolchain for AggregateToolchain {
         })
     }
 
-    fn task_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-        _pass_through_args: Option<&[String]>,
-        _override_command: Option<&[String]>,
-    ) -> Result<
-        Option<turborepo_repository::toolchain::TaskCommand>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
-
-    fn task_display_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> Option<String> {
-        None
-    }
-
-    fn defines_task(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> bool {
-        false
-    }
-
     fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
         turborepo_repository::toolchain::WatchSpec::default()
     }
@@ -241,35 +212,6 @@ impl Toolchain for StubIOToolchain {
         })
     }
 
-    fn task_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-        _pass_through_args: Option<&[String]>,
-        _override_command: Option<&[String]>,
-    ) -> Result<
-        Option<turborepo_repository::toolchain::TaskCommand>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
-
-    fn task_display_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> Option<String> {
-        None
-    }
-
-    fn defines_task(
-        &self,
-        _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        matches!(task, "build" | "test")
-    }
-
     fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
         turborepo_repository::toolchain::WatchSpec::default()
     }
@@ -286,10 +228,10 @@ impl Toolchain for StubIOToolchain {
 
     fn derives_task_io(
         &self,
-        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
+        _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
     ) -> bool {
-        self.defines_task(package, task)
+        true
     }
 
     fn task_io_env_vars(&self) -> &[&str] {
