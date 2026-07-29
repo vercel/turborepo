@@ -145,11 +145,6 @@ pub enum CommandProviderError {
     MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
-    MissingToolchain {
-        toolchain: turborepo_repository::toolchain::ToolchainId,
-        package_name: PackageName,
-    },
     #[error(transparent)]
     Toolchain(#[from] turborepo_repository::toolchain::Error),
 }
@@ -174,6 +169,10 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
+    /// Lazily resolved package-manager binary path for JS framing.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved cargo binary path for Cargo framing.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -190,6 +189,28 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             mfe_configs,
             compile_cache,
             command_overrides,
+            package_manager_binary: std::sync::OnceLock::new(),
+            cargo_binary: std::sync::OnceLock::new(),
+        }
+    }
+
+    fn package_manager_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        let Some(package_manager) = self.package_graph.package_manager() else {
+            return Ok(None);
+        };
+        match self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+        {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(error) => Err(CommandProviderError::Which(*error)),
+        }
+    }
+
+    fn cargo_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.cargo_binary.get_or_init(|| which::which("cargo")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
         }
     }
 
@@ -253,11 +274,17 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             return Ok(Some(cmd));
         };
 
-        let spec = self
-            .package_graph
-            .resolve_native_task_command(
+        let package_manager = self.package_graph.package_manager();
+        let package_manager_binary = self.package_manager_binary()?;
+        let cargo_binary = self.cargo_binary()?;
+
+        let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
+            turborepo_repository::native_tasks::resolve_task_command(
                 &package_context,
-                task_id.task(),
+                native_task,
+                package_manager,
+                package_manager_binary,
+                cargo_binary,
                 self.task_args.args_for_task(task_id),
                 override_command,
             )
@@ -265,7 +292,21 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 CommandProviderError::Toolchain(turborepo_repository::toolchain::Error::Failed(
                     Box::new(error),
                 ))
-            })?;
+            })?
+        } else if let Some(override_command) = override_command {
+            let serial_group = (toolchain_id
+                == &turborepo_repository::toolchain::ToolchainId::RUST
+                && override_command.first().map(String::as_str) == Some("cargo"))
+            .then(|| "cargo".to_string());
+            turborepo_repository::toolchain::override_task_command(
+                &package_context,
+                override_command,
+                self.task_args.args_for_task(task_id),
+                serial_group,
+            )
+        } else {
+            None
+        };
         let Some(spec) = spec else {
             return Ok(None);
         };
