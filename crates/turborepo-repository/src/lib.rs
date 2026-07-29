@@ -14,6 +14,7 @@
 pub mod cargo;
 pub mod change_mapper;
 pub mod discovery;
+pub mod external_resolution;
 pub mod inference;
 mod knowledge;
 mod manifest_parser;

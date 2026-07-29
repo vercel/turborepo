@@ -151,6 +151,14 @@ Represents the workspace structure and package dependencies:
   consumers pay no construction cost. They expose only authoritative package
   identities plus the always-present root Turbo task namespace, never the
   package graph's structural root sentinel.
+- Defines parser-neutral external declaration and resolution contracts for the
+  next migration phase. Resolution domains retain their native definition
+  sources, exact opaque package identities, completeness, stable fingerprint,
+  and explicit unavailable reason. Validation rejects unknown package
+  identities and multiple domains from one toolchain, and normalizes retained
+  ordering. Resolved-empty terminal data remains distinct from unavailable
+  data, while pending/resolving/complete lifecycle status is modeled
+  separately. Producers and consumers are not wired to these contracts yet.
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
