@@ -220,11 +220,11 @@ The remaining payload deletion phases are explicit:
   relationship knowledge now owns graph assembly, while JavaScript declarations
   remain a temporary classification input.
 - **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
-- **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. `Toolchain::task_command` / `task_display_command` / `authors_task` / `registered_tasks` / `registers_task` / `defines_task` have been deleted — only the JavaScript producer and the LSP unsaved-source adapter parse scripts.
+- **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. Behavioral task-command callbacks have been deleted; only the JavaScript contributor and the LSP unsaved-source adapter parse scripts.
 - **Phase 5 (complete for JavaScript and Cargo):** Task-contract knowledge catalogs are produced for every scope. Engine composition, task hashing, entrypoint selection, derived I/O, and execution-only compile-cache decoration consume those immutable contracts without live toolchain dispatch.
 - **Phase 6 (complete for JavaScript and Cargo):** Change knowledge is produced at repository construction. Cargo discovery contributes `Cargo.toml` rediscovery names, the `Cargo.lock` resolution/rediscovery path, and the effective in-repository target-directory ignore prefix. `PackageGraph::active_watch_spec` is now a projection of only the immutable facts retained by that graph generation; it never calls live toolchains. Before the first generation is published, the watcher conservatively retains all in-repository events, closing the subscription/bootstrap race without mutable toolchain callbacks. Single-package generations retain no inactive Cargo facts.
 - **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Cargo discovery captures an immutable, generation-owned prune domain containing lockfile, root-manifest, package-directory, and post-write finalization authority. Cargo lock pruning, extra-member selection, manifest rewriting, root/config file planning, and final lockfile canonicalization run through that graph-owned domain without live toolchain dispatch. Golden inventories cover standard and Docker layouts.
-- **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, and package-manager detection — tracked for deletion under TURBO-5787 (`PackageInfo` / `JavaScriptToolchain` removal), not deferred silently. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
+- **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, and package-manager detection. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,
@@ -264,9 +264,9 @@ Repository knowledge accepts at most one physical workspace root for each open
 `ToolchainId`, so a repository cannot combine multiple package managers for one
 language. Repeated observations from one producer of the same kind and
 canonical root deduplicate, while observations from different producers may
-coexist. Public toolchain output supplies only root kind and path; core binds
-each root to the `ToolchainId` of the registry entry whose discovery envelope
-contained it. Every toolchain that contributes packages must own an accepted
+coexist. Public contributor output supplies only root kind and path; core binds
+each root to the `ToolchainId` of the contributor whose discovery envelope
+contained it. Every contributor that supplies packages must own an accepted
 root, and contributed roots must remain physically within the repository.
 JavaScript reports only the repository root for its authoritative package-manager
 command family; if discovery reports a different family than an explicitly
@@ -290,21 +290,21 @@ cycles. Cargo path, development, optional, build, target-specific, and automatic
 member relationships are emitted directly from `cargo metadata`; no synthetic
 JavaScript dependency maps or behavioral affectedness callback remain.
 
-#### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
+#### Repository Contributors (`crates/turborepo-repository/src/toolchain.rs`)
 
-`Toolchain` is a construction-time discovery abstraction. Its discovery method
+`RepositoryContributor` is a construction-time discovery abstraction. Its method
 returns one envelope containing packages/scopes, workspace roots, and
-ecosystem observations. A construction-scoped `ToolchainRegistry` combines
-those envelopes; core validates them, builds immutable relationship, task,
-contract, resolution, change, and prune knowledge, then drops the registry.
+ecosystem observations. The builder combines those envelopes in a local vector;
+core validates them, builds immutable relationship, task,
+contract, resolution, change, and prune knowledge, then drops the collection.
 Runtime consumers query those retained catalogs and never dispatch through live
-toolchains. `ToolchainId` remains open provenance data rather than a closed
+contributors. `ToolchainId` remains open provenance data rather than a closed
 enum, keeping discovery extensible to future out-of-process plugin adapters.
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
 
-Toolchain-derived I/O receives the same task-scoped arguments as execution plus
+Contract-derived I/O receives the same task-scoped arguments as execution plus
 a narrow, platform-aware startup-environment projection keyed by toolchain.
 Dependency tasks do not inherit arguments for a different requested task, each
 toolchain can observe only the variables it declares, Windows lookup remains
@@ -325,7 +325,7 @@ root and adds them to the package graph. Cargo workspaces can stand alone or
 coexist with JavaScript workspaces; a root `package.json` and JavaScript package
 manager are only required when JavaScript packages participate. Cargo-only
 repositories may omit `package.json`; when one exists, it must still be valid.
-`CargoToolchain` is the second `Toolchain` implementation.
+`CargoContributor` is the second `RepositoryContributor` implementation.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the
@@ -485,7 +485,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   manifests reference them), the lockfile is subset to that closure, and
   the root `Cargo.toml` is rewritten with `toml_edit` (explicit `members`,
   filtered `default-members`, `[workspace.dependencies]` path entries to
-  removed crates dropped — comments and formatting preserved). Toolchain
+  removed crates dropped — comments and formatting preserved). Ecosystem
   and Cargo config files are carried over. Reachability pruning cannot see
   Cargo's feature unification, so the retained Cargo domain runs `cargo metadata`
   once in the complete output (offline first, then networked) to let Cargo

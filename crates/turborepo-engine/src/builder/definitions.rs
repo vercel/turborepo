@@ -785,7 +785,7 @@ fn resolve_command_override(
     }
 
     // Level 3: a package-authored definition shadows unscoped defaults —
-    // lean into what the toolchain does natively. Toolchain-synthesized
+    // lean into what the ecosystem does natively. Catalog-synthesized
     // fallbacks (Cargo verb tables) are authored by nobody and sit below
     // the defaults instead.
     if package_toolchain.is_some_and(|(_, authors)| authors) {

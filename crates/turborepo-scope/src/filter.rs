@@ -926,8 +926,8 @@ mod test {
         package_json::PackageJson,
         package_manager::PackageManager,
         toolchain::{
-            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain, ToolchainId,
-            WorkspaceRoot,
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
         },
     };
 
@@ -976,11 +976,11 @@ mod test {
         }
     }
 
-    struct AggregateToolchain {
+    struct AggregateContributor {
         definition_path: AbsoluteSystemPathBuf,
     }
 
-    impl Toolchain for AggregateToolchain {
+    impl RepositoryContributor for AggregateContributor {
         fn id(&self) -> ToolchainId {
             ToolchainId::new("aggregate-test")
         }
@@ -1710,7 +1710,7 @@ mod test {
         let turbo_root = Box::leak(Box::new(
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
         ));
-        let aggregate = Arc::new(AggregateToolchain {
+        let aggregate = Arc::new(AggregateContributor {
             definition_path: turbo_root.join_component("Cargo.toml"),
         });
         let graph = tokio::runtime::Builder::new_current_thread()
@@ -1721,7 +1721,7 @@ mod test {
                 PackageGraph::builder_optional(turbo_root, root_package_json)
                     .with_package_discovery(MockDiscovery)
                     .with_package_jsons(Some(HashMap::new()))
-                    .with_toolchain(aggregate)
+                    .with_contributor(aggregate)
                     .build(),
             )
             .unwrap();

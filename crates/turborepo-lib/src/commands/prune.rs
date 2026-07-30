@@ -84,7 +84,7 @@ pub enum Error {
     )]
     PackageNotPruneable(String),
     #[error(transparent)]
-    Toolchain(#[from] turborepo_repository::toolchain::Error),
+    Contribution(#[from] turborepo_repository::toolchain::Error),
     #[error(transparent)]
     PruneKnowledge(#[from] turborepo_repository::prune_knowledge::Error),
 }
@@ -532,8 +532,8 @@ impl<'a> Prune<'a> {
         let mut graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)
             .with_allow_no_package_manager(allow_missing_package_manager);
         if cargo_enabled {
-            graph_builder = graph_builder.with_toolchain(
-                turborepo_repository::cargo::CargoToolchain::new(base.repo_root.clone()),
+            graph_builder = graph_builder.with_contributor(
+                turborepo_repository::cargo::CargoContributor::new(base.repo_root.clone()),
             );
         }
         let package_graph = graph_builder.build().await?;

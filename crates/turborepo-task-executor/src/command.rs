@@ -146,7 +146,7 @@ pub enum CommandProviderError {
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(transparent)]
-    Toolchain(#[from] turborepo_repository::toolchain::Error),
+    NativeTask(#[from] turborepo_repository::toolchain::Error),
 }
 
 /// Command provider that resolves commands through the native-task catalog.
@@ -295,7 +295,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 override_command,
             )
             .map_err(|error| {
-                CommandProviderError::Toolchain(turborepo_repository::toolchain::Error::Failed(
+                CommandProviderError::NativeTask(turborepo_repository::toolchain::Error::Failed(
                     Box::new(error),
                 ))
             })?

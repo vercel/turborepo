@@ -17,7 +17,7 @@ use turborepo_repository::{
     package_manager::PackageManager,
     toolchain::{
         DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
-        DiscoveredPackage, DiscoveredPackages, Toolchain, ToolchainId, WorkspaceRoot,
+        DiscoveredPackage, DiscoveredPackages, RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -119,11 +119,11 @@ impl PackageDiscovery for MockDiscovery {
     }
 }
 
-struct AggregateToolchain {
+struct AggregateContributor {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-impl Toolchain for AggregateToolchain {
+impl RepositoryContributor for AggregateContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::new("aggregate-test")
     }
@@ -144,14 +144,14 @@ impl Toolchain for AggregateToolchain {
 
 type StubIOEngineResult = Engine<Built, TaskDefinition>;
 
-struct StubIOToolchain {
+struct StubIOContributor {
     repo_root: AbsoluteSystemPathBuf,
     outputs: DerivedOutputs,
     input_safety: DerivedInputSafety,
     environment: Vec<&'static str>,
 }
 
-impl Toolchain for StubIOToolchain {
+impl RepositoryContributor for StubIOContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::new("stub-io")
     }
@@ -208,7 +208,7 @@ impl Toolchain for StubIOToolchain {
 
 fn stub_io_package_graph(
     repo_root: &turbopath::AbsoluteSystemPath,
-    toolchain: Arc<StubIOToolchain>,
+    toolchain: Arc<StubIOContributor>,
 ) -> PackageGraph {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -219,7 +219,7 @@ fn stub_io_package_graph(
             .with_package_discovery(MockDiscovery)
             .with_lockfile(Some(Box::new(MockLockfile)))
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(toolchain)
+            .with_contributor(toolchain)
             .build(),
     )
     .unwrap()
@@ -238,7 +238,7 @@ fn task_definition_repo_enumeration_uses_authoritative_scopes() {
             PackageGraph::builder_optional(&repo_root, None)
                 .with_package_discovery(MockDiscovery)
                 .with_package_jsons(Some(HashMap::new()))
-                .with_toolchain(Arc::new(AggregateToolchain {
+                .with_contributor(Arc::new(AggregateContributor {
                     repo_root: repo_root.clone(),
                 }))
                 .build(),
@@ -288,7 +288,7 @@ fn task_definition_repo_enumeration_uses_authoritative_scopes() {
                 .with_package_discovery(MockDiscovery)
                 .with_lockfile(Some(Box::new(MockLockfile)))
                 .with_package_jsons(Some(HashMap::new()))
-                .with_toolchain(Arc::new(AggregateToolchain {
+                .with_contributor(Arc::new(AggregateContributor {
                     repo_root: repo_root.clone(),
                 }))
                 .build(),

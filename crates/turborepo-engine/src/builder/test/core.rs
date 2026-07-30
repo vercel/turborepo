@@ -975,7 +975,7 @@ fn stub_io_engine_with_safety(
 ) -> StubIOEngineResult {
     let repo_root_dir = TempDir::with_prefix("stub-io").unwrap();
     let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
-    let toolchain = Arc::new(StubIOToolchain {
+    let toolchain = Arc::new(StubIOContributor {
         repo_root: repo_root.clone(),
         outputs,
         input_safety,

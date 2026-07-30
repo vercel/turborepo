@@ -985,7 +985,7 @@ impl PackageGraph {
         self.package_view(package)?.definition_path()
     }
 
-    /// Toolchain provenance for a package or execution scope.
+    /// Ecosystem provenance for a package or execution scope.
     pub fn package_toolchain(
         &self,
         package: &PackageName,
@@ -2840,7 +2840,7 @@ version = "0.1.0"
                 map
             }))
             .with_lockfile(Some(Box::new(MockLockfile {})))
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .with_contributor(crate::cargo::CargoContributor::new(root.clone()))
             .build()
             .await
             .unwrap();
@@ -3044,7 +3044,7 @@ version = "0.1.0"
         write_cargo_workspace_fixture(&root);
 
         let mut pkg_graph = PackageGraph::builder_optional(&root, None)
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .with_contributor(crate::cargo::CargoContributor::new(root.clone()))
             .build()
             .await
             .unwrap();
@@ -3287,7 +3287,7 @@ version = "0.1.0"
             map
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
-        .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+        .with_contributor(crate::cargo::CargoContributor::new(root.clone()))
         .build()
         .await;
 
