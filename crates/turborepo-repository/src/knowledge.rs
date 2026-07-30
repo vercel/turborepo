@@ -158,6 +158,11 @@ impl ScopeKnowledge {
     pub(crate) fn kind(&self) -> ScopeKind {
         self.kind
     }
+
+    fn is_package_json_package(&self) -> bool {
+        self.kind == ScopeKind::Package
+            && self.definition_path.as_path().file_name() == Some("package.json".as_ref())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,6 +224,27 @@ impl RepositoryKnowledge {
             || self.scope_lookup.contains_key(identity)
     }
 
+    /// Real package scopes whose authoritative definition is package.json.
+    /// Contributor identity remains provenance and does not select membership.
+    pub(crate) fn package_json_packages(
+        &self,
+    ) -> impl Iterator<Item = (&str, &AnchoredSystemPath)> {
+        let root = self.root_javascript_scope.as_ref().and_then(|scope| {
+            (scope.definition_path.as_path().file_name() == Some("package.json".as_ref()))
+                .then_some(("//", self.repository_directory.as_ref()))
+        });
+        root.into_iter().chain(
+            self.scopes
+                .iter()
+                .filter(|scope| {
+                    scope.is_package_json_package()
+                        && !(self.root_javascript_scope.is_some()
+                            && scope.directory().as_str().is_empty())
+                })
+                .map(|scope| (scope.identity(), scope.directory())),
+        )
+    }
+
     pub(crate) fn repository_root(&self) -> &AbsoluteSystemPath {
         &self.repository_root
     }
@@ -270,10 +296,14 @@ impl RepositoryKnowledge {
                 definition_path: root_definition_path,
                 toolchain: ToolchainId::JAVASCRIPT,
             });
+        let root_physical_definition = root_javascript_scope.as_ref().and_then(|_| {
+            canonical_physical_path(repository_root.join_component("package.json").as_std_path())
+        });
 
         let mut scopes = Vec::with_capacity(observations.len());
         let mut scope_lookup = HashMap::with_capacity(observations.len());
         let mut definitions = HashMap::<String, AnchoredSystemPathBuf>::new();
+        let mut definition_owners = HashMap::<std::path::PathBuf, String>::new();
         let workspace_roots =
             validate_workspace_roots(repository_root, workspace_root_observations)?;
 
@@ -302,6 +332,9 @@ impl RepositoryKnowledge {
                 repository_root,
                 &observation.definition_path,
             );
+            let physical_definition_path =
+                canonical_physical_path(observation.definition_path.as_std_path())
+                    .unwrap_or_else(|| observation.definition_path.as_std_path().to_owned());
             if identity == "//" {
                 return Err(Error::ReservedRootIdentity {
                     path: definition_path,
@@ -314,6 +347,24 @@ impl RepositoryKnowledge {
                     name: identity.clone(),
                     path: definition_path,
                     existing_path,
+                });
+            }
+            if root_physical_definition.as_ref() == Some(&physical_definition_path)
+                && definition_path.as_str() != "package.json"
+            {
+                return Err(Error::DuplicateDefinitionPath {
+                    path: definition_path,
+                    identity: identity.clone(),
+                    existing_identity: "//".to_string(),
+                });
+            }
+            if let Some(existing_identity) =
+                definition_owners.insert(physical_definition_path, identity.clone())
+            {
+                return Err(Error::DuplicateDefinitionPath {
+                    path: definition_path,
+                    identity: identity.clone(),
+                    existing_identity,
                 });
             }
             let directory = definition_path
@@ -447,6 +498,12 @@ pub(crate) enum Error {
         name: String,
         path: AnchoredSystemPathBuf,
         existing_path: AnchoredSystemPathBuf,
+    },
+    #[error("package definition {path} is claimed by both {existing_identity} and {identity}")]
+    DuplicateDefinitionPath {
+        path: AnchoredSystemPathBuf,
+        identity: String,
+        existing_identity: String,
     },
     #[error("package definition {path} is outside repository root {repository_root}")]
     DefinitionOutsideRepository {
@@ -591,6 +648,118 @@ mod tests {
             repository.scope("app").unwrap().name_source(),
             Some(&source)
         );
+    }
+
+    #[test]
+    fn package_json_projection_uses_definition_and_scope_kind_not_provenance() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let custom = ToolchainId::new("custom");
+        let repository = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[
+                PackageScopeObservation {
+                    identity: Some("custom-web".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["apps", "custom-web", "package.json"]),
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("spoofed-js".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["crates", "spoofed-js", "Cargo.toml"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("aggregate".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["aggregate", "package.json"]),
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Aggregate,
+                },
+            ],
+            &[
+                WorkspaceRootObservation::new(WorkspaceRoot::new("custom", root.clone()), custom),
+                WorkspaceRootObservation::new(
+                    WorkspaceRoot::new("javascript", root.clone()),
+                    ToolchainId::JAVASCRIPT,
+                ),
+            ],
+        )
+        .unwrap();
+
+        let packages = repository
+            .package_json_packages()
+            .map(|(identity, _)| identity)
+            .collect::<Vec<_>>();
+        assert_eq!(packages, ["custom-web"]);
+    }
+
+    #[test]
+    fn repository_knowledge_rejects_duplicate_definition_owners() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let definition_path = root.join_components(&["apps", "shared", "package.json"]);
+        let custom = ToolchainId::new("custom");
+        let result = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[
+                PackageScopeObservation {
+                    identity: Some("first".to_string()),
+                    name_source: None,
+                    definition_path: definition_path.clone(),
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("second".to_string()),
+                    name_source: None,
+                    definition_path,
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Package,
+                },
+            ],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("custom", root.clone()),
+                custom,
+            )],
+        );
+
+        assert!(matches!(result, Err(Error::DuplicateDefinitionPath { .. })));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repository_knowledge_rejects_root_definition_symlink_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(temp.path().to_string_lossy().to_string()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        let alias = root.join_component("alias");
+        std::os::unix::fs::symlink(root.as_std_path(), alias.as_std_path()).unwrap();
+
+        let result = RepositoryKnowledge::build(
+            &root,
+            Some(Some("root".to_string())),
+            &[PackageScopeObservation {
+                identity: Some("alias".to_string()),
+                name_source: None,
+                definition_path: alias.join_component("package.json"),
+                toolchain: ToolchainId::JAVASCRIPT,
+                scope_kind: ScopeKind::Package,
+            }],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("npm", root.clone()),
+                ToolchainId::JAVASCRIPT,
+            )],
+        );
+
+        assert!(matches!(result, Err(Error::DuplicateDefinitionPath { .. })));
     }
 
     #[test]

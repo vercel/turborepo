@@ -11,37 +11,19 @@ use crate::{knowledge::RepositoryKnowledge, package_manager::pnpm::PnpmCatalogs}
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
 ///
-/// Non-JavaScript packages are excluded: JS `workspace:`/`file:` path
-/// specifiers can never target them, and the synthetic Cargo workspace
-/// package lives at the repo root, which would otherwise collide with the
-/// Root package's path.
+/// Non-package.json scopes are excluded: JS `workspace:`/`file:` path
+/// specifiers can never target them, and a Cargo aggregate at the repo root
+/// would otherwise collide with the Root package's path.
 pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
-    /// Builds the production index from authoritative package/scope paths and
-    /// provenance rather than compatibility `PackageInfo` fields.
+    /// Builds the production index from authoritative package definitions
+    /// rather than compatibility `PackageInfo` fields or contributor identity.
     pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
-        let root = knowledge.root_javascript_scope().map(|scope| {
-            (
-                knowledge.repository_directory(),
-                PackageName::Root,
-                scope.toolchain(),
-            )
-        });
-        let scopes = knowledge.scopes().map(|scope| {
-            (
-                scope.directory(),
-                PackageName::Other(scope.identity().to_string()),
-                scope.toolchain(),
-            )
-        });
         Self(
-            root.into_iter()
-                .chain(scopes)
-                .filter(|(_, _, toolchain)| {
-                    *toolchain == &crate::toolchain::ToolchainId::JAVASCRIPT
-                })
-                .map(|(directory, name, _)| (directory, name))
+            knowledge
+                .package_json_packages()
+                .map(|(identity, directory)| (directory, PackageName::from(identity)))
                 .collect(),
         )
     }
@@ -294,7 +276,13 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::package_json::PackageJson;
+    use crate::{
+        knowledge::{
+            PackageScopeObservation, RepositoryKnowledge, ScopeKind, WorkspaceRootObservation,
+        },
+        package_json::PackageJson,
+        toolchain::{ToolchainId, WorkspaceRoot},
+    };
 
     fn path_index() -> WorkspacePathIndex<'static> {
         let foo = if cfg!(windows) {
@@ -317,6 +305,52 @@ mod test {
                 PackageName::from("baz"),
             ),
         ]))
+    }
+
+    #[test]
+    fn workspace_path_index_uses_authoritative_package_json_definitions() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let custom = ToolchainId::new("custom");
+        let knowledge = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[
+                PackageScopeObservation {
+                    identity: Some("web".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["apps", "web", "package.json"]),
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("rust".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["crates", "rust", "Cargo.toml"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+            ],
+            &[
+                WorkspaceRootObservation::new(WorkspaceRoot::new("custom", root.clone()), custom),
+                WorkspaceRootObservation::new(
+                    WorkspaceRoot::new("javascript", root.clone()),
+                    ToolchainId::JAVASCRIPT,
+                ),
+            ],
+        )
+        .unwrap();
+
+        let index = WorkspacePathIndex::from_knowledge(&knowledge);
+        assert_eq!(
+            index.0.get(AnchoredSystemPath::new("apps/web").unwrap()),
+            Some(&PackageName::from("web"))
+        );
+        assert!(
+            !index
+                .0
+                .contains_key(AnchoredSystemPath::new("crates/rust").unwrap())
+        );
     }
 
     #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo"), true ; "handles exact match")]

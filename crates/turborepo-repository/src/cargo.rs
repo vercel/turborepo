@@ -1188,7 +1188,7 @@ fn cargo_change_observation(
     repo_root: &AbsoluteSystemPath,
     target_directory: Option<&AbsoluteSystemPath>,
 ) -> ChangeObservation {
-    let mut observation = ChangeObservation::new(ToolchainId::RUST)
+    let mut observation = ChangeObservation::new()
         .with_rediscovery_file_name(CARGO_TOML)
         .with_resolution_path(CARGO_LOCK);
     if let Some(prefix) = target_directory

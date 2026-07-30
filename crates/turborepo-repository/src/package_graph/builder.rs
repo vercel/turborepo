@@ -100,6 +100,14 @@ pub enum Error {
     TaskContracts(String),
     #[error("Prune knowledge error: {0}")]
     PruneKnowledge(String),
+    #[error("change knowledge is invalid: {0}")]
+    ChangeKnowledge(String),
+    #[error("package definition {path} is claimed by both {existing_identity} and {identity}")]
+    DuplicateDefinitionPath {
+        path: AnchoredSystemPathBuf,
+        identity: String,
+        existing_identity: String,
+    },
     #[error("package or aggregate scope at {path} uses reserved root identity //")]
     ReservedRootIdentity { path: AnchoredSystemPathBuf },
     #[error("relationship source {identity} has no authoritative repository scope")]
@@ -167,6 +175,15 @@ impl From<crate::knowledge::Error> for Error {
             } => Error::DefinitionOutsideRepository {
                 path,
                 repository_root,
+            },
+            crate::knowledge::Error::DuplicateDefinitionPath {
+                path,
+                identity,
+                existing_identity,
+            } => Error::DuplicateDefinitionPath {
+                path,
+                identity,
+                existing_identity,
             },
             crate::knowledge::Error::MultipleWorkspaceRoots {
                 toolchain,
@@ -1019,11 +1036,14 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             )
             .map_err(|error| Error::TaskContracts(error.to_string()))?
         });
-        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::build(
-            &knowledge,
-            package_manager.as_ref(),
-            Vec::new(),
-        ));
+        let change_knowledge = Arc::new(
+            crate::change_knowledge::ChangeKnowledge::build(
+                &knowledge,
+                package_manager.as_ref(),
+                Vec::new(),
+            )
+            .map_err(|error| Error::ChangeKnowledge(error.to_string()))?,
+        );
         let prune_knowledge = Arc::new(crate::prune_knowledge::PruneKnowledge::default());
 
         Ok(PackageGraph {
@@ -1449,11 +1469,16 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 discovery::Error::Failed(Box::new(Error::TaskContracts(error.to_string())))
             })?
         });
-        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::build(
-            &knowledge,
-            package_manager.as_ref(),
-            native_change_observations,
-        ));
+        let change_knowledge = Arc::new(
+            crate::change_knowledge::ChangeKnowledge::build(
+                &knowledge,
+                package_manager.as_ref(),
+                native_change_observations,
+            )
+            .map_err(|error| {
+                discovery::Error::Failed(Box::new(Error::ChangeKnowledge(error.to_string())))
+            })?,
+        );
         let referenced_prune_domains =
             task_contract_knowledge
                 .scopes()
