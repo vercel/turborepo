@@ -114,8 +114,6 @@ pub enum CommandProviderError {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
-    #[error("Missing compatibility payload for package {package_name}.")]
-    MissingPackagePayload { package_name: PackageName },
     #[error("Package {package_name} is not a JavaScript package execution scope.")]
     InvalidMfePackageContext { package_name: PackageName },
     #[error("Package directory {directory} is outside repository root {repository_root}.")]
@@ -449,11 +447,6 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
                 package_name: context.package().clone(),
             });
         }
-        if context.package_info().is_none() {
-            return Err(CommandProviderError::MissingPackagePayload {
-                package_name: context.package().clone(),
-            });
-        }
         Ok(context)
     }
 }
@@ -486,19 +479,13 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         );
 
         let package_context = self.validated_package_context(task_id)?;
-        let package_info = package_context.package_info().ok_or_else(|| {
-            CommandProviderError::MissingPackagePayload {
-                package_name: package_context.package().clone(),
-            }
-        })?;
         let has_custom_proxy = package_context.native_tasks().defines("proxy");
 
-        // Check if package depends on @vercel/microfrontends
+        // Check if package depends on @vercel/microfrontends via declarations.
         const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
-        let has_mfe_dependency = package_info
-            .package_json
-            .all_dependencies()
-            .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+        let has_mfe_dependency = self
+            .package_graph
+            .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE);
 
         debug!(
             "MicroFrontendProxyProvider::command - has_custom_proxy: {}, has_mfe_dependency: {}",
@@ -959,7 +946,7 @@ mod tests {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         let inherited_env = inherited_env_name();
         write_custom_proxy_package(&package_dir, inherited_env);
-        let package_graph = package_graph(
+        let mut package_graph = package_graph(
             &repo_root,
             &package_dir,
             PackageJson {
@@ -971,6 +958,7 @@ mod tests {
             },
         )
         .await;
+        package_graph.remove_package_info_for_test(&PackageName::from("web"));
         let cmd = proxy_command(&package_graph, &filtered_environment());
         assert!(
             cmd.label()
@@ -1033,25 +1021,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_microfrontend_proxy_requires_compatibility_payload() {
+    async fn test_microfrontend_proxy_does_not_require_package_info_payload() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
-        let mut graph = package_graph(&repo_root, &package_dir, PackageJson::default()).await;
+        write_microfrontends_binary(&package_dir, inherited_env_name());
+        let mut graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                dependencies: Some(BTreeMap::from([(
+                    "@vercel/microfrontends".to_owned(),
+                    "1.0.0".to_owned(),
+                )])),
+                ..Default::default()
+            },
+        )
+        .await;
         graph.remove_package_info_for_test(&PackageName::from("web"));
         let mfe_config = MockMfeConfig("configs/microfrontends.json");
         let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
         let command_provider = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &mfe_config);
 
-        let error = CommandProvider::<CommandProviderError>::command(
+        let command = CommandProvider::<CommandProviderError>::command(
             &command_provider,
             &TaskId::new("web", "proxy"),
             &EnvironmentVariableMap::default(),
         )
-        .unwrap_err();
-
-        assert!(matches!(
-            error,
-            CommandProviderError::MissingPackagePayload { .. }
-        ));
+        .unwrap()
+        .expect("declaration knowledge should select the package binary");
+        assert!(
+            command
+                .program()
+                .to_string_lossy()
+                .contains("microfrontends")
+        );
     }
 
     #[tokio::test]
