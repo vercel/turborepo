@@ -720,15 +720,27 @@ impl PackageGraph {
                     TaskEntrypointPreference::WhenSingleCandidate => classified.len() == 1,
                 };
                 let has_preferred = classified.iter().any(|(_, entrypoint)| {
-                    *entrypoint == crate::task_contracts::TaskEntrypoint::Preferred
+                    matches!(
+                        entrypoint,
+                        crate::task_contracts::TaskEntrypoint::Preferred
+                            | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                    )
                 });
                 classified
                     .into_iter()
                     .filter_map(move |(name, entrypoint)| {
                         let selected = if prefer && has_preferred {
-                            entrypoint == crate::task_contracts::TaskEntrypoint::Preferred
+                            matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Preferred
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
                         } else {
-                            entrypoint != crate::task_contracts::TaskEntrypoint::Excluded
+                            !matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Excluded
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
                         };
                         selected.then_some(name)
                     })
