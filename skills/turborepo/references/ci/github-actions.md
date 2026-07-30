@@ -72,26 +72,16 @@ jobs:
 
 ## Remote Cache Setup
 
-Two options for authenticating to [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching):
+There are two ways to authenticate to [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) from GitHub Actions:
 
-- **OIDC (recommended)**: GitHub OIDC token exchanged for a short-lived Turborepo access token. No long-lived secrets in your workflow.
-- **Personal Access Token (PAT)**: Long-lived token stored as a GitHub secret.
+- **OpenID Connect (OIDC)**: configure a policy that allows exchanging the CI/CD provider's OIDC tokens for short-lived Turborepo access tokens that grant access to Remote Cache (recommended).
+- **Personal Access Token (PAT)**: configure a long-lived, team-scoped PAT as a secret in your CI/CD provider (use when OIDC is not an option).
+
+For the full setup, see [Use Remote Caching from external CI/CD](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd). The GitHub Actions workflow configuration is shown below.
 
 ### Option A: OpenID Connect (recommended)
 
-#### 1. Create a Turborepo CLI OIDC Policy
-
-On vercel.com, go to your team's **Settings → Build and Deployment → OIDC Policies for CLI Access**. Click **Add** next to **Turborepo CLI Policies** and fill out the form (policy name, GitHub account, repository). You can optionally restrict to a specific workflow or branch and customize the audience.
-
-#### 2. Add `TURBO_TEAM` Repository Variable
-
-Settings > Secrets and variables > Actions > Variables:
-
-- `TURBO_TEAM`: Your Vercel team slug
-
-Use a repository variable rather than a secret so GitHub Actions doesn't censor your team name in logs.
-
-#### 3. Add the Action to Your Workflow
+Follow [these instructions](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#openid-connect-oidc) to create an OIDC policy on your Vercel team and configure your `TURBO_TEAM` variable. Then add [`vercel/setup-turborepo-remote-cache-action`](https://github.com/vercel/setup-turborepo-remote-cache-action) before any step that runs `turbo`. It requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` environment variables for later steps that run `turbo`:
 
 ```yaml
 jobs:
@@ -106,36 +96,14 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: vercel/setup-turborepo-remote-cache-action@v1
+      - uses: vercel/setup-turborepo-remote-cache-action@v1.0.0
         with:
           team: ${{ vars.TURBO_TEAM }}
 ```
 
-The action requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` for subsequent steps. Must run before any step that invokes `turbo`.
-
-If more than one of your team's OIDC policies could match the workflow, pass the policy ID via the optional `policy` input to disambiguate. Most setups won't need it.
-
 ### Option B: Personal Access Token
 
-#### 1. Create Vercel Access Token
-
-1. Go to [Vercel Dashboard](https://vercel.com/account/tokens)
-2. Create a new token with appropriate scope
-3. Copy the token value
-
-#### 2. Add Secrets and Variables
-
-In your GitHub repository settings:
-
-**Secrets** (Settings > Secrets and variables > Actions > Secrets):
-
-- `TURBO_TOKEN`: Your Vercel access token
-
-**Variables** (Settings > Secrets and variables > Actions > Variables):
-
-- `TURBO_TEAM`: Your Vercel team slug
-
-#### 3. Add to Workflow
+Follow [these instructions](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#personal-access-token-pat) to create a Personal Access Token, configure your `TURBO_TOKEN` secret, and configure your `TURBO_TEAM` variable. Then provide them to jobs that run `turbo`:
 
 ```yaml
 jobs:
@@ -193,7 +161,7 @@ jobs:
           node-version: 20
           cache: "pnpm"
 
-      - uses: vercel/setup-turborepo-remote-cache-action@v1
+      - uses: vercel/setup-turborepo-remote-cache-action@v1.0.0
         with:
           team: ${{ vars.TURBO_TEAM }}
 
