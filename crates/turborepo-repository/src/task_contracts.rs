@@ -6,6 +6,8 @@
 //!
 //! JavaScript packages contribute empty contract observations: turbo.json is
 //! the whole story. Cargo contributes immutable derivation plans.
+//! Execution-only decorations such as compile-cache variables are also
+//! projected here, but deliberately do not participate in task hashes.
 
 use std::collections::BTreeMap;
 
@@ -153,6 +155,18 @@ impl ScopeTaskContract {
 
     pub fn task_entrypoint(&self, task: &str) -> Option<TaskEntrypoint> {
         self.cargo.as_ref()?.task_entrypoint(task)
+    }
+
+    /// Environment decorations for a compiler cache served by Turborepo.
+    /// These are output-transparent execution settings, not hash inputs.
+    pub fn compile_cache_env(
+        &self,
+        endpoint: &crate::toolchain::CompileCacheEndpoint,
+        task_env: &std::collections::HashMap<String, String>,
+    ) -> Vec<(String, String)> {
+        self.cargo.as_ref().map_or_else(Vec::new, |cargo| {
+            cargo.compile_cache_env(endpoint, task_env)
+        })
     }
 }
 

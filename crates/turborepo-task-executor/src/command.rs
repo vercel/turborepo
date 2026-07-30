@@ -36,8 +36,9 @@ fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
 /// - `E`: The error type returned when command creation fails
 ///
 /// # Implementors
-/// - `ToolchainCommandProvider` (resolves commands through the package's
-///   toolchain: package.json scripts for JavaScript, cargo verbs for Cargo)
+/// - `ToolchainCommandProvider` (resolves commands from the package's immutable
+///   native-task catalog: package.json scripts for JavaScript, Cargo verbs for
+///   Rust)
 /// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
 pub trait CommandProvider<E> {
     /// Create a command for the given task.
@@ -160,9 +161,8 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
-    /// A Turborepo-served compile cache endpoint (see
-    /// [`turborepo_repository::toolchain::Toolchain::compile_cache_env`]), when
-    /// one is running for this run.
+    /// A Turborepo-served compile cache endpoint, when one is running for this
+    /// run. Immutable task contracts determine whether and how to use it.
     compile_cache: Option<&'a CompileCacheEndpoint>,
     /// Resolved `command` overrides by task, from the engine's task
     /// definitions. An argv replaces the native catalog resolution; an
@@ -226,7 +226,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     }
 }
 
-fn should_inject_toolchain_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
+fn should_inject_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
     command_override.is_none()
 }
 
@@ -242,8 +242,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
 
         // A resolved `command` override is authoritative in both
         // directions: an opt-out is an explicit no-op (same outcome as a
-        // missing script), and an argv replaces the toolchain's own
-        // resolution while the toolchain keeps framing it.
+        // missing script), and an argv replaces native-catalog resolution
+        // while retaining ecosystem framing.
         let command_override = self.command_overrides.get(task_id);
         let override_command = match command_override {
             Some(TaskCommandOverride::OptOut) => return Ok(None),
@@ -254,7 +254,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         // A pure-native repository still has Turbo's root task namespace, but
         // no root language toolchain. Explicit root command overrides are
         // generic argv and execute directly at the knowledge-backed repo root.
-        let Some(toolchain_id) = package_context.toolchain() else {
+        if package_context.toolchain().is_none() {
             let Some(override_command) = override_command else {
                 return Ok(None);
             };
@@ -271,7 +271,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             apply_environment(&mut cmd, environment);
             cmd.open_stdin();
             return Ok(Some(cmd));
-        };
+        }
 
         let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
             let (package_manager_binary, cargo_binary) = if override_command.is_some() {
@@ -350,13 +350,14 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_MFE_PORT", port.to_string());
         }
 
-        // Compile-cache injection remains toolchain-owned until environment
-        // contracts move; look up the toolchain only for that decoration.
-        if should_inject_toolchain_compile_cache(command_override)
+        // Compile-cache injection is execution-only: it deliberately does not
+        // participate in the task hash represented by this contract.
+        if should_inject_compile_cache(command_override)
             && let Some(endpoint) = self.compile_cache
-            && let Some(toolchain) = self.package_graph.toolchains().get(toolchain_id)
         {
-            let vars = toolchain.compile_cache_env(endpoint, environment);
+            let vars = package_context
+                .task_contract()
+                .compile_cache_env(endpoint, environment);
             if vars.is_empty() {
                 debug!("no compile cache env to inject for {task_id}");
             }
@@ -648,12 +649,12 @@ mod tests {
     }
 
     #[test]
-    fn command_override_suppresses_toolchain_compile_cache() {
-        assert!(should_inject_toolchain_compile_cache(None));
-        assert!(!should_inject_toolchain_compile_cache(Some(
+    fn command_override_suppresses_compile_cache() {
+        assert!(should_inject_compile_cache(None));
+        assert!(!should_inject_compile_cache(Some(
             &TaskCommandOverride::Argv(vec!["node".to_string()])
         )));
-        assert!(!should_inject_toolchain_compile_cache(Some(
+        assert!(!should_inject_compile_cache(Some(
             &TaskCommandOverride::OptOut
         )));
     }

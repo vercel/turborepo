@@ -374,13 +374,12 @@ pub async fn prune(
         prune.materialize_javascript_render(root_definition, &rendered)?;
     }
 
-    // The pruned output is complete; let each toolchain polish its own
-    // files in place (e.g. Cargo canonicalizes the pruned lockfile).
-    for toolchain in prune.package_graph.toolchains().iter() {
-        if !planned_toolchains.contains(&toolchain.id()) {
-            continue;
-        }
-        let finalized_files = toolchain.prune_finalize(&prune.full_directory);
+    // The pruned output is complete; let each planned generation-owned domain
+    // polish its own files in place (e.g. Cargo canonicalizes its lockfile).
+    for toolchain in planned_toolchains {
+        let finalized_files = prune
+            .package_graph
+            .finalize_prune(&toolchain, &prune.full_directory);
         if prune.docker {
             sync_prune_finalize_files(
                 &prune.full_directory,

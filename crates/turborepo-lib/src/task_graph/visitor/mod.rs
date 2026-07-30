@@ -73,7 +73,7 @@ pub struct Visitor<'a> {
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     /// The compile cache proxy endpoint for this run, when one is being
     /// served (`futureFlags.experimentalCargoSccache`). Toolchains translate
-    /// it into task env vars via `Toolchain::compile_cache_env`.
+    /// task-contract knowledge projects it into execution-only task env vars.
     compile_cache_endpoint: Option<CompileCacheEndpoint>,
 }
 
