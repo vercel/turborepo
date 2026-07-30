@@ -466,7 +466,7 @@ pub fn globwalk_with_settings(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let compiled = {
         let _span = tracing::info_span!("globwalk_compile").entered();
-        compile_globs(base_path, include, exclude)?
+        compile_globs(base_path, include, exclude, settings)?
     };
     let _span = tracing::info_span!("globwalk_walk").entered();
     retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
@@ -478,8 +478,9 @@ pub fn globwalk(
     exclude: &[ValidatedGlob],
     walk_type: WalkType,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    let compiled = compile_globs(base_path, include, exclude)?;
-    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, Default::default()))
+    let settings = Settings::default();
+    let compiled = compile_globs(base_path, include, exclude, settings)?;
+    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
 }
 
 fn is_too_many_open_files(err: &WalkError) -> bool {
@@ -642,11 +643,12 @@ fn is_plain_windows_drive(segment: &str) -> bool {
     bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
 }
 
-#[tracing::instrument(skip(include, exclude))]
+#[tracing::instrument(skip(include, exclude, settings))]
 fn compile_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
     include: &[S],
     exclude: &[S],
+    settings: Settings,
 ) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
@@ -670,7 +672,14 @@ fn compile_globs<S: AsRef<str>>(
         match classify_simple_pattern(&path) {
             SimplePattern::Literal(path) => literal_paths.push(path),
             SimplePattern::Shallow(prefix, suffix) => shallow_wildcards.push((prefix, suffix)),
-            SimplePattern::RecursiveAll(prefix) => recursive_all.push(prefix),
+            // The manual RecursiveAll walker implements wax's default
+            // no-follow link behavior only. When a caller asks to follow
+            // symlinks, send the pattern through wax, which handles
+            // ReadTarget semantics including symlink-cycle detection.
+            SimplePattern::RecursiveAll(prefix) if !settings.follow_links => {
+                recursive_all.push(prefix)
+            }
+            SimplePattern::RecursiveAll(_) => complex_paths.push(path),
             SimplePattern::Complex => complex_paths.push(path),
         }
     }
@@ -888,7 +897,8 @@ fn walk_compiled_globs(
 /// - the prefix itself matches (a tree wildcard matches zero components);
 /// - symlinks are yielded as files and never followed (wax's default
 ///   `LinkBehavior::ReadFile`), except at the walk root, which walkdir follows
-///   by default;
+///   by default — patterns compiled with [`Settings::follow_links`] never reach
+///   this function, `compile_globs` routes them through wax instead;
 /// - exclusions are matched per entry against the absolute slash path;
 /// - with `ignore_nested_packages`, any non-base directory containing a
 ///   `package.json` is discarded along with its subtree;
@@ -2467,6 +2477,80 @@ mod test {
                         .replace('/', std::path::MAIN_SEPARATOR_STR)
                 ),
                 "default globwalk should NOT follow symlinks into dirs, got: {paths:?}"
+            );
+        }
+
+        #[test]
+        fn trailing_doublestar_with_follow_links_finds_symlinked_files() {
+            // Pattern: packages/** — the RecursiveAll shape. With
+            // follow_links requested, it must NOT take the manual fast path
+            // (which never descends into symlinked dirs) and instead go
+            // through wax so files behind symlinked dirs are found.
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["packages/**"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            )
+            .unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            assert!(
+                paths.contains(
+                    &"packages/nested/deep-pkg/package.json"
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                ),
+                "packages/** with follow_links should find files behind symlinked dirs, got: \
+                 {paths:?}"
+            );
+        }
+
+        #[test]
+        fn trailing_doublestar_without_follow_links_yields_symlink_as_file() {
+            // Pattern: packages/** via the RecursiveAll fast path: the
+            // symlinked dir itself is yielded as a file and not descended.
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["packages/**"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            let symlink_entry = "packages/nested".replace('/', std::path::MAIN_SEPARATOR_STR);
+            let behind_symlink =
+                "packages/nested/deep-pkg/package.json".replace('/', std::path::MAIN_SEPARATOR_STR);
+            assert!(
+                paths.contains(&symlink_entry),
+                "symlink itself should be yielded as a file, got: {paths:?}"
+            );
+            assert!(
+                !paths.contains(&behind_symlink),
+                "fast path must not descend into symlinked dirs by default, got: {paths:?}"
             );
         }
 
