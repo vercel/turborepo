@@ -97,9 +97,6 @@ pub struct PackageGraph {
     /// `dependencies` and `ancestors` consult them on every call; the set is
     /// invariant once the graph is built.
     root_internal_dependencies: OnceLock<HashSet<PackageNode>>,
-    /// Toolchains registered during graph construction. Authoritative contexts
-    /// determine which registrations were active for a particular concern.
-    toolchains: crate::toolchain::ToolchainRegistry,
     /// Immutable native-task catalog produced during repository construction.
     native_task_knowledge: Arc<crate::native_tasks::NativeTaskKnowledge>,
     /// Immutable task-contract catalog produced during repository construction.
@@ -743,11 +740,6 @@ impl PackageGraph {
         &self.change_knowledge
     }
 
-    /// Toolchains registered during graph construction.
-    pub fn toolchains(&self) -> &crate::toolchain::ToolchainRegistry {
-        &self.toolchains
-    }
-
     /// Watch classification facts retained by this graph generation.
     pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
         self.change_knowledge.to_watch_spec()
@@ -763,6 +755,14 @@ impl PackageGraph {
         kept_packages: &[String],
     ) -> Result<Option<crate::prune_knowledge::PrunePlan>, crate::prune_knowledge::Error> {
         self.prune_knowledge.plan(toolchain, kept_packages)
+    }
+
+    pub fn finalize_prune(
+        &self,
+        toolchain: &crate::toolchain::ToolchainId,
+        pruned_root: &AbsoluteSystemPath,
+    ) -> Vec<String> {
+        self.prune_knowledge.finalize(toolchain, pruned_root)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {

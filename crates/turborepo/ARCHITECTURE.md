@@ -221,9 +221,9 @@ The remaining payload deletion phases are explicit:
   remain a temporary classification input.
 - **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
 - **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. `Toolchain::task_command` / `task_display_command` / `authors_task` / `registered_tasks` / `registers_task` / `defines_task` have been deleted — only the JavaScript producer and the LSP unsaved-source adapter parse scripts.
-- **Phase 5 (in progress):** Task-contract knowledge catalog is produced for JavaScript scopes; engine composition and global `engines` hashing consume it; JS packages are excluded from Toolchain task-I/O environment dispatch. Remaining: fuller hash/framework contract production and final Phase 5 gate. Later: Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
+- **Phase 5 (complete for JavaScript and Cargo):** Task-contract knowledge catalogs are produced for every scope. Engine composition, task hashing, entrypoint selection, derived I/O, and execution-only compile-cache decoration consume those immutable contracts without live toolchain dispatch.
 - **Phase 6 (complete for JavaScript and Cargo):** Change knowledge is produced at repository construction. Cargo discovery contributes `Cargo.toml` rediscovery names, the `Cargo.lock` resolution/rediscovery path, and the effective in-repository target-directory ignore prefix. `PackageGraph::active_watch_spec` is now a projection of only the immutable facts retained by that graph generation; it never calls live toolchains. Before the first generation is published, the watcher conservatively retains all in-repository events, closing the subscription/bootstrap race without mutable toolchain callbacks. Single-package generations retain no inactive Cargo facts.
-- **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Cargo discovery captures an immutable, generation-owned prune domain containing lockfile, root-manifest, and package-directory facts. Cargo lock pruning, extra-member selection, manifest rewriting, and root/config file planning are projected from that graph-owned domain rather than mutable `CargoToolchain` state. Live toolchains remain involved only in post-write finalization pending TURBO-5798. Golden inventories cover standard and Docker layouts.
+- **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Cargo discovery captures an immutable, generation-owned prune domain containing lockfile, root-manifest, package-directory, and post-write finalization authority. Cargo lock pruning, extra-member selection, manifest rewriting, root/config file planning, and final lockfile canonicalization run through that graph-owned domain without live toolchain dispatch. Golden inventories cover standard and Docker layouts.
 - **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, and package-manager detection — tracked for deletion under TURBO-5787 (`PackageInfo` / `JavaScriptToolchain` removal), not deferred silently. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
 
 Task hashing, run-cache path construction, and run-summary task directories use
@@ -292,27 +292,17 @@ JavaScript dependency maps or behavioral affectedness callback remain.
 
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
-The package graph is generic over language toolchains. The existing discovery
-method returns one envelope containing packages/scopes and workspace-root
-observations. Core validates the combined contributed roots
-without adding another behavioral toolchain method. Watch classification consumes foundational change knowledge (JavaScript
-membership/workspace/resolution triggers) combined with active toolchain
-`WatchSpec`s; remaining marker-only edge cases stay follow-up work.
-Native discovery output contributes package/scope observations to repository
-knowledge, while a
-`Toolchain` continues to answer ecosystem-specific behavioral questions such as
-entrypoint selection, derived task I/O, affectedness, and prune rendering. Native
-task availability and commands come from immutable repository catalogs. Remaining
-behavioral lookups go through the
-`ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
-open string identifier, not a closed enum; and trait methods are
-coarse-grained and data-in/data-out, keeping the door open to out-of-process
-plugin adapters. JavaScript is the first, production implementation: its
-discovery produces package, relationship, task, contract, change, and prune
-knowledge without runtime task-command callbacks. Machinery that predates the
-abstraction and has no trait surface yet (package-manager resolution for
-dependency splitting and the JS lockfile closure phase) is documented as known
-debt in the module.
+`Toolchain` is a construction-time discovery abstraction. Its discovery method
+returns one envelope containing packages/scopes, workspace roots, and
+ecosystem observations. A construction-scoped `ToolchainRegistry` combines
+those envelopes; core validates them, builds immutable relationship, task,
+contract, resolution, change, and prune knowledge, then drops the registry.
+Runtime consumers query those retained catalogs and never dispatch through live
+toolchains. `ToolchainId` remains open provenance data rather than a closed
+enum, keeping discovery extensible to future out-of-process plugin adapters.
+JavaScript is the first production producer. Machinery that predates the
+abstraction (package-manager resolution for dependency splitting and the JS
+lockfile closure phase) remains documented debt.
 
 Toolchain-derived I/O receives the same task-scoped arguments as execution plus
 a narrow, platform-aware startup-environment projection keyed by toolchain.
@@ -469,25 +459,26 @@ whether anything changed; Cargo decides how and in what order to build.**
   requested process, and library artifacts have no stable final path to restore.
   An explicit turbo.json `cache` setting overrides the toolchain default.
 
-- **Watch mode** (`Toolchain::watch_spec`, consumed by
-  `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares
-  its workspace-definition files and build-byproduct directories. For
+- **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
+  consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery
+  observations declare workspace-definition files and build-byproduct
+  directories, and the current graph generation projects one active spec. For
   Cargo, any `Cargo.toml` or the root `Cargo.lock` triggers full
   rediscovery (the crate set or its edges may have changed), while events
   under the root `target/` directory are dropped — Cargo writes there
   continuously during builds, and the feedback loop must not depend on a
   `.gitignore` entry (`Cargo.toml` files under `target/` are build
   byproducts, not workspace definition). The watcher builds its package
-  graph with the same toolchains a run would register, so watch sees the
-  same package set. JavaScript declares nothing extra: workspace
+  graph through the same construction path as a run, so watch sees the same
+  package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
   all-packages fallback. Known gap: the hash watcher's content-hash dedup
   is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
   fast cache hit rather than being suppressed.
 
-- **Prune** (`Toolchain::prune_plan` / `prune_finalize`, consumed by
-  `turborepo-lib/src/commands/prune.rs`): each toolchain reports what a
-  self-contained pruned repository needs beyond the copied packages. For
+- **Prune** (`PruneKnowledge` and `PruneDomain::{plan, finalize}`, consumed by
+  `turborepo-lib/src/commands/prune.rs`): each generation-owned domain reports
+  what a self-contained pruned repository needs beyond copied packages. For
   Cargo: the kept-member set comes from a `Cargo.lock` reachability walk
   (not the package graph — the lockfile merges dev-dependency edges, so
   members reachable only through dev-deps are retained, since kept crates'
@@ -496,7 +487,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   filtered `default-members`, `[workspace.dependencies]` path entries to
   removed crates dropped — comments and formatting preserved). Toolchain
   and Cargo config files are carried over. Reachability pruning cannot see
-  Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
+  Cargo's feature unification, so the retained Cargo domain runs `cargo metadata`
   once in the complete output (offline first, then networked) to let Cargo
   minimally sync its own lockfile; failure downgrades to a warning.
   Only toolchains that contributed a prune plan are finalized. Finalizers
@@ -510,7 +501,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   aggregate anchored at the repo root (the Cargo workspace scope) is not
   a pruneable target.
 
-- **Compile cache** (`Toolchain::compile_cache_env`, consumed by
+- **Compile cache** (`ScopeTaskContract::compile_cache_env`, consumed by
   `ToolchainCommandProvider`; gated by `futureFlags.experimentalCargoSccache`):
   when enabled alongside `experimentalCargoWorkspaces` in a CI environment
   with a linked Remote Cache, the run serves a local HTTP proxy
@@ -533,7 +524,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   is derived from the repo root and the bearer token is persisted at
   `.turbo/sccache-proxy-token`. Injection is execution-only and does not
   participate in task hashes (a compile cache is output-transparent). The
-  toolchain decides how injection composes with the task environment: a
+  Cargo task contract decides how injection composes with the task environment: a
   user-supplied `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
   competing compiler-cache configuration and suppresses the whole injected
   set, while an ambient `CARGO_INCREMENTAL` (CI images commonly export
@@ -592,9 +583,9 @@ The core task graph consists of:
   Because an argv override is otherwise arbitrary, it does not inherit the
   native command's contract-derived inputs, outputs, default-input behavior,
   or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
-  authoritative task-level I/O configuration. Toolchain task defaults and
+  authoritative task-level I/O configuration. Contract-derived task defaults and
   execution-only compile-cache environment injection likewise apply only to
-  native toolchain-resolved commands.
+  native-catalog-resolved commands.
 
 #### Run Entrypoint Selection (`crates/turborepo-lib/src/run/builder.rs`)
 
@@ -605,7 +596,7 @@ The core task graph consists of:
   only in scoped packages where that task resolves a command. A missing task is
   therefore not allowed to pull its configured dependencies into a run merely
   because another package implements the requested task.
-- When no package resolves a command for a configured or toolchain-registered
+- When no package resolves a command for a configured or native-catalog task,
   task, its scoped package nodes remain entrypoints so graph-only orchestration
   tasks continue to fan out to their configured dependencies. If any branch
   reaches a runnable command, only paths to runnable work are retained; when no
@@ -619,8 +610,8 @@ The core task graph consists of:
   Missing requested nodes are dropped after selector expansion: a plain filter
   runs nothing for a missing command, while trailing or leading `...` may retain
   executable tasks reached through that node in the Task Graph.
-- Native package scripts, resolved `command` overrides, and toolchain-provided
-  commands all count as executable definitions. Toolchain-specific entrypoint
+- Native package scripts, resolved `command` overrides, and native-catalog
+  commands all count as executable definitions. Contract-derived entrypoint
   selection, including Cargo workspace/crate selection, remains authoritative
   and is composed with this generic command-aware pruning.
 
@@ -667,8 +658,8 @@ The core task graph consists of:
   interpret ripgrep `.ignore` files. On macOS, a global excludes file on a
   different device is conservatively not applied because one FSEvents stream
   cannot monitor both devices. The package scope
-  refreshes the merged toolchain `WatchSpec` whenever the package graph is
-  initialized or rediscovered. Turbo config and toolchain definition changes
+  refreshes the active `WatchSpec` from the current graph generation whenever
+  the package graph is initialized or rediscovered. Turbo config and ecosystem definition changes
   trigger full rediscovery after routing.
 - Git index and `.git/info/exclude` control paths are watched separately so
   tracked-file and exclude state stays current without exposing `.git` events

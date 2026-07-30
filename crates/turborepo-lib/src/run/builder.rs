@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -1312,8 +1312,11 @@ impl RunBuilder {
         filter_mode: &FilterMode,
     ) -> HashSet<TaskId<'static>> {
         let mut exclusions = HashSet::new();
-        for toolchain in pkg_dep_graph.toolchains().iter() {
-            let toolchain_id = toolchain.id();
+        let toolchains: BTreeSet<_> = candidates
+            .iter()
+            .filter_map(|name| pkg_dep_graph.package_toolchain(name).cloned())
+            .collect();
+        for toolchain_id in toolchains {
             let candidate_names: Vec<_> = candidates
                 .iter()
                 .filter(|name| {

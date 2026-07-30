@@ -1,17 +1,10 @@
 //! Toolchains: the abstraction that makes Turborepo generic over language
 //! ecosystems.
 //!
-//! A [`Toolchain`] answers ecosystem-specific questions about packages —
-//! starting with "which packages exist?" — so that the package graph and the
-//! rest of the system never branch on a specific ecosystem. JavaScript is the
-//! first implementation ([`JavaScriptToolchain`]); additional toolchains
-//! (e.g. Cargo) register alongside it in the [`ToolchainRegistry`].
-//!
-//! The trait grows one concern at a time (discovery today; command
-//! resolution, derived task inputs/outputs, and external-dependency hashing
-//! as they are needed), and every
-//! concern must ship with real implementations for every registered
-//! toolchain.
+//! A [`Toolchain`] discovers ecosystem packages and contributes immutable
+//! observations. JavaScript is the first implementation
+//! ([`JavaScriptToolchain`]); additional producers (e.g. Cargo) register
+//! alongside it during package-graph construction.
 //!
 //! # Design rules
 //!
@@ -24,8 +17,8 @@
 //!    internal graph types, no lifetime-carrying views, no callbacks.
 //! 2. [`ToolchainId`] is an open identifier, never a closed enum. A future
 //!    toolchain (or plugin) mints a new id without touching existing code.
-//! 3. All toolchain lookups go through the [`ToolchainRegistry`]. Scattered
-//!    per-toolchain branch points (`if id == "rust"`) are a design defect.
+//! 3. The [`ToolchainRegistry`] is construction-scoped. Runtime consumers use
+//!    immutable knowledge retained by the completed package graph.
 //!
 //! # Known debt
 //!
@@ -351,7 +344,7 @@ pub enum Error {
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
 
-/// A command resolved by a toolchain for a task, as plain data. The executor
+/// A command resolved from native-task knowledge, as plain data. The executor
 /// turns it into a process, applying the task's environment, stdin policy,
 /// and any decorations that are not toolchain concerns (e.g.
 /// microfrontends proxy variables).
@@ -405,45 +398,9 @@ pub trait Toolchain: Send + Sync {
     /// Discover this toolchain's packages/scopes and native workspace roots in
     /// one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
-
-    /// Called after the pruned output is fully written, with its root
-    /// directory. Toolchains may polish their own files in place (e.g.
-    /// Cargo canonicalizes the pruned lockfile through `cargo metadata`) and
-    /// return their repo-relative paths so alternate output layers can be
-    /// synchronized without repeating finalization. Failures must be
-    /// non-fatal: log and continue.
-    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
-        let _ = pruned_root;
-        Vec::new()
-    }
-
-    /// Environment variables to inject into this toolchain's task processes
-    /// when Turborepo is serving a compile cache endpoint (a local proxy in
-    /// front of the remote cache that a compiler wrapper like sccache can
-    /// use as its storage backend).
-    ///
-    /// `task_env` is the environment the task process will receive; the
-    /// toolchain decides how its injection composes with it. Only the
-    /// toolchain knows which pre-existing variables signal a *competing*
-    /// configuration that must win (e.g. a user-supplied `RUSTC_WRAPPER`)
-    /// versus ones that are merely common ambient settings (e.g. CI images
-    /// exporting `CARGO_INCREMENTAL=0`, which is exactly what the compile
-    /// cache wants anyway). The executor injects the returned variables
-    /// verbatim; an empty result means inject nothing — either no
-    /// integration exists (the JavaScript default) or the toolchain chose
-    /// to stand down.
-    fn compile_cache_env(
-        &self,
-        endpoint: &CompileCacheEndpoint,
-        task_env: &std::collections::HashMap<String, String>,
-    ) -> Vec<(String, String)> {
-        let _ = (endpoint, task_env);
-        Vec::new()
-    }
 }
 
-/// A Turborepo-served compile cache endpoint, as plain data. See
-/// [`Toolchain::compile_cache_env`].
+/// A Turborepo-served compile cache endpoint, as plain data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileCacheEndpoint {
     /// HTTP endpoint of the local compile-cache proxy.
@@ -584,12 +541,12 @@ pub struct DerivedTaskIO {
     pub outputs: DerivedOutputs,
 }
 
-/// The set of toolchains contributing packages to the repository.
+/// The construction-scoped set of producers contributing repository knowledge.
 ///
-/// All toolchain lookups go through the registry; it is the single place
-/// that knows which toolchains exist. Today entries are registered
-/// statically during package graph construction. A future plugin system
-/// would construct entries from a manifest instead — an additive change.
+/// Entries are registered statically during package graph construction and the
+/// registry is dropped after immutable knowledge is built. A future plugin
+/// system could construct entries from a manifest without changing runtime
+/// consumers.
 #[derive(Default)]
 pub struct ToolchainRegistry {
     toolchains: Vec<Arc<dyn Toolchain>>,

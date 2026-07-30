@@ -898,7 +898,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_package_json,
             lockfile,
             javascript,
-            toolchains,
             repo_root,
             ..
         } = self;
@@ -1031,7 +1030,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             external_resolution: std::sync::Mutex::new(ExternalResolutionKnowledge::absent()),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
-            toolchains,
             native_task_knowledge,
             task_contract_knowledge,
             change_knowledge,
@@ -1386,7 +1384,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             native_change_observations,
             native_prune_domains,
             root_package_json,
-            toolchains,
             ..
         } = self;
         let knowledge = knowledge.ok_or(discovery::Error::Failed(Box::new(
@@ -1465,7 +1462,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             external_resolution: std::sync::Mutex::new(external_resolution),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
-            toolchains,
             native_task_knowledge,
             task_contract_knowledge,
             change_knowledge,

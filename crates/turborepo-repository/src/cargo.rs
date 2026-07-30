@@ -755,6 +755,14 @@ impl CargoTaskContract {
         toolchain::TaskDefaults { cache }
     }
 
+    pub(crate) fn compile_cache_env(
+        &self,
+        endpoint: &toolchain::CompileCacheEndpoint,
+        task_env: &std::collections::HashMap<String, String>,
+    ) -> Vec<(String, String)> {
+        cargo_compile_cache_env(endpoint, task_env)
+    }
+
     pub(crate) fn derives_task_io(&self, task: &str) -> bool {
         registered_tasks(&self.package)
             .into_iter()
@@ -1280,6 +1288,10 @@ impl PruneDomain for CargoPruneKnowledge {
             .collect(),
         }))
     }
+
+    fn finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
+        finalize_cargo_prune(pruned_root)
+    }
 }
 
 /// The Cargo toolchain. Registered in the
@@ -1296,126 +1308,81 @@ impl CargoToolchain {
     }
 }
 
+/// Project execution-only compiler-cache settings from Cargo task knowledge.
+/// User-managed wrappers and sccache settings remain authoritative.
+fn cargo_compile_cache_env(
+    endpoint: &toolchain::CompileCacheEndpoint,
+    task_env: &std::collections::HashMap<String, String>,
+) -> Vec<(String, String)> {
+    if task_env.contains_key("RUSTC_WRAPPER")
+        || task_env.keys().any(|key| key.starts_with("SCCACHE_"))
+    {
+        return Vec::new();
+    }
+    let ambient_incremental = task_env.get("CARGO_INCREMENTAL").map(String::as_str);
+    if ambient_incremental.is_some_and(|value| value != "0") {
+        return Vec::new();
+    }
+
+    let mut vars = vec![
+        ("RUSTC_WRAPPER".to_string(), endpoint.wrapper.clone()),
+        (
+            toolchain::COMPILE_CACHE_WRAPPER_ENV.to_string(),
+            "1".to_string(),
+        ),
+        ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
+        ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
+        (
+            "SCCACHE_SERVER_PORT".to_string(),
+            endpoint.server_port.to_string(),
+        ),
+        (
+            "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
+            "1".to_string(),
+        ),
+    ];
+    if ambient_incremental.is_none() {
+        vars.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
+    }
+    vars
+}
+
+/// Let Cargo remove feature-dead entries after the reachability-based lockfile
+/// projection. Failure is non-fatal: the superset lock remains buildable.
+fn finalize_cargo_prune(pruned_root: &AbsoluteSystemPath) -> Vec<String> {
+    let sync = |offline: bool| {
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.args(["metadata", "--format-version", "1"]);
+        if offline {
+            cmd.arg("--offline");
+        }
+        cmd.current_dir(pruned_root.as_std_path()).output()
+    };
+    match sync(true).and_then(|offline| {
+        if offline.status.success() {
+            Ok(offline)
+        } else {
+            sync(false)
+        }
+    }) {
+        Ok(output) if output.status.success() => {}
+        Ok(output) => {
+            tracing::warn!(
+                "unable to canonicalize the pruned Cargo.lock; `cargo build --locked` may require \
+                 a lockfile refresh: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Err(error) => {
+            tracing::warn!("unable to run cargo to canonicalize the pruned Cargo.lock: {error}");
+        }
+    }
+    vec![CARGO_LOCK.to_string()]
+}
+
 impl Toolchain for CargoToolchain {
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
-    }
-
-    /// Route rustc invocations through the embedded sccache, with the
-    /// Turborepo-served endpoint as its webdav storage backend. The wrapper
-    /// is the running turbo binary itself (which dispatches invocations
-    /// marked by [`toolchain::COMPILE_CACHE_WRAPPER_ENV`] to the sccache it
-    /// embeds), so nothing needs to be installed. sccache fetches per
-    /// compilation-unit objects lazily at rustc invocation time, so no
-    /// state needs restoring before the task starts.
-    ///
-    /// `CARGO_INCREMENTAL=0` accompanies the wrapper because sccache cannot
-    /// cache incrementally-compiled crates and would fall back to plain
-    /// compilation for them.
-    ///
-    /// These are injected at execution time only and deliberately do not
-    /// participate in the task hash: a compile cache is output-transparent,
-    /// so enabling it must not invalidate existing task artifacts.
-    ///
-    /// Composition with the task environment:
-    ///
-    /// - A pre-existing `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
-    ///   competing compiler-cache configuration; injecting on top of it could
-    ///   hijack that setup's backend, so the whole set stands down.
-    ///   (`RUSTC_WRAPPER` participates in task hashes via [`HASHED_ENV_VARS`],
-    ///   so a user wrapper also invalidates caches — the injected one
-    ///   deliberately does not.)
-    /// - A pre-existing `CARGO_INCREMENTAL=0` is common CI hygiene, not a
-    ///   competing cache: the rest is injected and the explicit value is left
-    ///   alone. (When absent, `CARGO_INCREMENTAL=0` is injected because sccache
-    ///   cannot cache incrementally-compiled crates.) Any *other* explicit
-    ///   `CARGO_INCREMENTAL` value stands the set down: incremental compilation
-    ///   was deliberately requested, and sccache's wrapper hard-exits when it
-    ///   sees `CARGO_INCREMENTAL=1`, which would fail the build.
-    fn compile_cache_env(
-        &self,
-        endpoint: &toolchain::CompileCacheEndpoint,
-        task_env: &std::collections::HashMap<String, String>,
-    ) -> Vec<(String, String)> {
-        if task_env.contains_key("RUSTC_WRAPPER")
-            || task_env.keys().any(|key| key.starts_with("SCCACHE_"))
-        {
-            return Vec::new();
-        }
-        let ambient_incremental = task_env.get("CARGO_INCREMENTAL").map(String::as_str);
-        if ambient_incremental.is_some_and(|value| value != "0") {
-            return Vec::new();
-        }
-
-        let mut vars = vec![
-            ("RUSTC_WRAPPER".to_string(), endpoint.wrapper.clone()),
-            (
-                toolchain::COMPILE_CACHE_WRAPPER_ENV.to_string(),
-                "1".to_string(),
-            ),
-            ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
-            ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
-            (
-                "SCCACHE_SERVER_PORT".to_string(),
-                endpoint.server_port.to_string(),
-            ),
-            // The compile cache is an optimization: if the server cannot be
-            // reached or started (storage outage mid-run, port trouble),
-            // the wrapper warns and runs the compiler directly instead of
-            // failing the build.
-            (
-                "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
-                "1".to_string(),
-            ),
-        ];
-        if ambient_incremental.is_none() {
-            vars.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
-        }
-        vars
-    }
-
-    /// Our lock subset is reachability-based, but Cargo's real resolution
-    /// is feature-aware: shrinking the workspace can deactivate features
-    /// that were the only reason some packages were in the closure. Rather
-    /// than reimplement feature unification, let Cargo minimally sync its
-    /// own lockfile (every retained pin is preserved; only feature-dead
-    /// entries are dropped) so `cargo build --locked` passes in the pruned
-    /// output. Try `--offline` first — removals need no network — but
-    /// workspaces with git patches need their git databases, which a cold
-    /// machine won't have cached, so fall back to a networked sync. Failure
-    /// is not fatal: the superset lock still builds correctly, it just
-    /// isn't `--locked`-clean.
-    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
-        let sync = |offline: bool| {
-            let mut cmd = std::process::Command::new("cargo");
-            cmd.args(["metadata", "--format-version", "1"]);
-            if offline {
-                cmd.arg("--offline");
-            }
-            cmd.current_dir(pruned_root.as_std_path()).output()
-        };
-        match sync(true).and_then(|offline| {
-            if offline.status.success() {
-                Ok(offline)
-            } else {
-                sync(false)
-            }
-        }) {
-            Ok(output) if output.status.success() => {}
-            Ok(output) => {
-                tracing::warn!(
-                    "unable to canonicalize the pruned Cargo.lock; `cargo build --locked` may \
-                     require a lockfile refresh: {}",
-                    String::from_utf8_lossy(&output.stderr).trim()
-                );
-            }
-            Err(error) => {
-                tracing::warn!(
-                    "unable to run cargo to canonicalize the pruned Cargo.lock: {error}"
-                );
-            }
-        }
-        vec![CARGO_LOCK.to_string()]
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -3406,8 +3373,6 @@ release: 1.96.0-nightly\n",
 
     #[test]
     fn test_compile_cache_env_routes_rustc_through_sccache() {
-        let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3415,7 +3380,7 @@ release: 1.96.0-nightly\n",
             server_port: 46123,
         };
         assert_eq!(
-            toolchain.compile_cache_env(&endpoint, &std::collections::HashMap::new()),
+            cargo_compile_cache_env(&endpoint, &std::collections::HashMap::new()),
             vec![
                 ("RUSTC_WRAPPER".to_string(), "/path/to/turbo".to_string()),
                 ("TURBO_SCCACHE_WRAPPER".to_string(), "1".to_string()),
@@ -3443,8 +3408,6 @@ release: 1.96.0-nightly\n",
 
     #[test]
     fn test_compile_cache_env_stands_down_for_competing_configuration() {
-        let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3458,14 +3421,14 @@ release: 1.96.0-nightly\n",
             "RUSTC_WRAPPER".to_string(),
             "/home/user/bin/my-wrapper".to_string(),
         )]);
-        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
+        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
 
         // Any SCCACHE_* variable signals a user-managed sccache setup.
         let env = std::collections::HashMap::from([(
             "SCCACHE_GHA_ENABLED".to_string(),
             "true".to_string(),
         )]);
-        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
+        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
     }
 
     #[test]
@@ -3474,8 +3437,6 @@ release: 1.96.0-nightly\n",
         // own setup-environment action does). That is ambient hygiene, not
         // a competing compiler cache: the injection proceeds and the
         // explicit value is left alone.
-        let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3485,7 +3446,7 @@ release: 1.96.0-nightly\n",
         let env =
             std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "0".to_string())]);
 
-        let vars = toolchain.compile_cache_env(&endpoint, &env);
+        let vars = cargo_compile_cache_env(&endpoint, &env);
         assert!(
             vars.iter().any(|(key, _)| key == "RUSTC_WRAPPER"),
             "injection must proceed despite ambient CARGO_INCREMENTAL=0"
@@ -3500,7 +3461,7 @@ release: 1.96.0-nightly\n",
         // hard-exits on CARGO_INCREMENTAL=1. Stand down entirely.
         let env =
             std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "1".to_string())]);
-        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
+        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3577,6 +3538,24 @@ release: 1.96.0-nightly\n",
         let app = &packages[0];
         assert!(app.descriptor.dependencies.is_none());
         assert!(app.descriptor.dev_dependencies.is_none());
+        let compile_cache_env = app
+            .task_contract
+            .as_ref()
+            .expect("Cargo discovery contributes a task contract")
+            .compile_cache_env(
+                &toolchain::CompileCacheEndpoint {
+                    url: "http://127.0.0.1:42123".to_string(),
+                    token: "proxy-token".to_string(),
+                    wrapper: "/path/to/turbo".to_string(),
+                    server_port: 46123,
+                },
+                &std::collections::HashMap::new(),
+            );
+        assert!(
+            compile_cache_env
+                .iter()
+                .any(|(key, _)| key == "RUSTC_WRAPPER")
+        );
         assert_eq!(
             app.native_relationships.as_deref(),
             Some(&[Relationship::internal("lib-a", DependencyKind::Production)][..])
