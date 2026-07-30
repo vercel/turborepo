@@ -532,9 +532,7 @@ impl<'a> Prune<'a> {
         let mut graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)
             .with_allow_no_package_manager(allow_missing_package_manager);
         if cargo_enabled {
-            graph_builder = graph_builder.with_contributor(
-                turborepo_repository::cargo::CargoContributor::new(base.repo_root.clone()),
-            );
+            graph_builder = graph_builder.with_cargo();
         }
         let package_graph = graph_builder.build().await?;
 

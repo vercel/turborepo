@@ -957,7 +957,6 @@ mod test {
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
     use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
     use turborepo_repository::{
-        cargo::CargoContributor,
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
     };
@@ -1038,7 +1037,7 @@ mod test {
             )
             .unwrap();
         PackageGraph::builder_optional(repo_root, None)
-            .with_contributor(CargoContributor::new(repo_root.clone()))
+            .with_cargo()
             .build()
             .await
             .unwrap()

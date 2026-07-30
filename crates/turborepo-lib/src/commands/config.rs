@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{cargo::CargoContributor, package_graph::PackageGraph};
+use turborepo_repository::package_graph::PackageGraph;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{
@@ -46,7 +46,7 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
     let mut builder = PackageGraph::builder_optional(&repo_root, root_package_json)
         .with_allow_no_package_manager(config.allow_no_package_manager());
     if cargo_enabled {
-        builder = builder.with_contributor(CargoContributor::new(repo_root.clone()));
+        builder = builder.with_cargo();
     }
     let package_graph = builder.build().await?;
 

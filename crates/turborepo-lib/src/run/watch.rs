@@ -300,16 +300,8 @@ impl WatchClient {
             source,
             scm,
         ));
-        // The watcher builds its own package graph; register the same
-        // toolchains a run would so it watches the same package set.
-        let mut extra_contributors: Vec<
-            std::sync::Arc<dyn turborepo_repository::toolchain::RepositoryContributor>,
-        > = Vec::new();
-        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
-            extra_contributors.push(turborepo_repository::cargo::CargoContributor::new(
-                base.repo_root.clone(),
-            ));
-        }
+        // The watcher builds its own graph and must enable the same ecosystems.
+        let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
@@ -317,7 +309,7 @@ impl WatchClient {
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
-            extra_contributors,
+            cargo_enabled,
         );
 
         // Subscribe before building the Run so we don't miss the initial

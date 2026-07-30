@@ -380,9 +380,7 @@ mod test {
             .with_package_discovery(DummyDiscovery(
                 turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
             ))
-            .with_contributor(turborepo_repository::cargo::CargoContributor::new(
-                root.to_owned(),
-            ))
+            .with_cargo()
             .build()
             .await
             .unwrap();

@@ -11,10 +11,7 @@ use turborepo_devtools::{
     package_graph_to_data, GraphData, GraphEdge, RepositoryGraphBuilder, TaskGraphData,
     TaskGraphError, TaskNode,
 };
-use turborepo_repository::{
-    cargo::CargoContributor,
-    package_graph::{PackageGraph, PackageGraphBuilder, PackageName},
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageGraphBuilder, PackageName};
 use turborepo_task_id::TaskName;
 
 use crate::{
@@ -69,7 +66,7 @@ impl ProperTaskGraphBuilder {
             .with_single_package_mode(opts.run_opts.single_package)
             .with_allow_no_package_manager(opts.repo_opts.allow_no_package_manager);
         if cargo_enabled(&opts.future_flags) {
-            builder = builder.with_contributor(CargoContributor::new(self.repo_root.clone()));
+            builder = builder.with_cargo();
         }
 
         builder

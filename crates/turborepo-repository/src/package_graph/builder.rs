@@ -300,6 +300,12 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Enable Cargo repository contribution for this graph generation.
+    pub fn with_cargo(self) -> Self {
+        let repo_root = self.repo_root.to_owned();
+        self.with_contributor(crate::cargo::CargoContributor::new(repo_root))
+    }
+
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.

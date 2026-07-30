@@ -571,9 +571,7 @@ impl RunBuilder {
                         turborepo_task_hash::hash_sorted_closures,
                     ));
             if cargo_enabled(&self.opts.future_flags) {
-                builder = builder.with_contributor(
-                    turborepo_repository::cargo::CargoContributor::new(self.repo_root.to_owned()),
-                );
+                builder = builder.with_cargo();
             }
 
             let graph = builder
