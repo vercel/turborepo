@@ -300,10 +300,9 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 ))
             })?
         } else if let Some(override_command) = override_command {
-            let serial_group = (toolchain_id
-                == &turborepo_repository::toolchain::ToolchainId::RUST
-                && override_command.first().map(String::as_str) == Some("cargo"))
-            .then(|| "cargo".to_string());
+            let serial_group = package_context
+                .native_tasks()
+                .override_serial_group(override_command);
             turborepo_repository::toolchain::override_task_command(
                 &package_context,
                 override_command,

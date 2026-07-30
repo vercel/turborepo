@@ -289,11 +289,7 @@ impl<'a> PackageTaskContext<'a> {
         };
         let requires_compatibility_payload = package != PackageName::Root
             || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
-        let task_contract = if toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT) {
-            crate::task_contracts::ScopeTaskContract::javascript()
-        } else {
-            crate::task_contracts::ScopeTaskContract::empty()
-        };
+        let task_contract = crate::task_contracts::ScopeTaskContract::empty();
         Self {
             package,
             repository_root,
@@ -678,6 +674,68 @@ impl PackageGraph {
         self.task_contract_knowledge.root_engines()
     }
 
+    pub fn task_io_env_vars_by_toolchain(
+        &self,
+    ) -> std::collections::BTreeMap<crate::toolchain::ToolchainId, Vec<&'static str>> {
+        self.task_contract_knowledge.env_vars_by_toolchain()
+    }
+
+    pub fn select_task_entrypoints(
+        &self,
+        toolchain: &crate::toolchain::ToolchainId,
+        task: &str,
+        candidates: &[String],
+        prefer: bool,
+    ) -> Option<Vec<String>> {
+        let classified = candidates
+            .iter()
+            .filter_map(|candidate| {
+                let context = self.package_task_context(&PackageName::from(candidate.as_str()))?;
+                (context.toolchain() == Some(toolchain))
+                    .then(|| (candidate, context.task_contract().task_entrypoint(task)))
+            })
+            .collect::<Vec<_>>();
+        if !classified
+            .iter()
+            .any(|(_, entrypoint)| entrypoint.is_some())
+        {
+            return None;
+        }
+        if prefer {
+            let preferred = classified
+                .iter()
+                .filter(|(_, entrypoint)| {
+                    matches!(
+                        entrypoint,
+                        Some(
+                            crate::task_contracts::TaskEntrypoint::Preferred
+                                | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                        )
+                    )
+                })
+                .map(|(name, _)| (*name).clone())
+                .collect::<Vec<_>>();
+            if !preferred.is_empty() {
+                return Some(preferred);
+            }
+        }
+        Some(
+            classified
+                .into_iter()
+                .filter(|(_, entrypoint)| {
+                    !matches!(
+                        entrypoint,
+                        Some(
+                            crate::task_contracts::TaskEntrypoint::Excluded
+                                | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                        )
+                    )
+                })
+                .map(|(name, _)| name.clone())
+                .collect(),
+        )
+    }
+
     /// Foundational change knowledge for watch classification.
     pub fn change_knowledge(&self) -> &crate::change_knowledge::ChangeKnowledge {
         &self.change_knowledge
@@ -1022,50 +1080,6 @@ impl PackageGraph {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .generation = None;
-    }
-
-    /// Resolve a native or override command plan from the catalog.
-    ///
-    /// Binary lookup (`which`) is performed here so callers receive a concrete
-    /// [`TaskCommand`]. Package-manager / cargo framing comes from the
-    /// catalog templates, not from `Toolchain::task_command`.
-    pub fn resolve_native_task_command(
-        &self,
-        context: &PackageTaskContext<'_>,
-        task: &str,
-        pass_through_args: Option<&[String]>,
-        override_command: Option<&[String]>,
-    ) -> Result<Option<crate::toolchain::TaskCommand>, crate::native_tasks::ResolveNativeCommandError>
-    {
-        let package_manager = self.package_manager();
-        let package_manager_binary = package_manager
-            .and_then(|package_manager| which::which(package_manager.command()).ok());
-        let cargo_binary = which::which("cargo").ok();
-
-        if let Some(native_task) = context.native_tasks().get(task) {
-            return crate::native_tasks::resolve_task_command(
-                context,
-                native_task,
-                package_manager,
-                package_manager_binary.as_deref(),
-                cargo_binary.as_deref(),
-                pass_through_args,
-                override_command,
-            );
-        }
-
-        let Some(override_command) = override_command else {
-            return Ok(None);
-        };
-        let serial_group = (context.toolchain() == Some(&crate::toolchain::ToolchainId::RUST)
-            && override_command.first().map(String::as_str) == Some("cargo"))
-        .then(|| "cargo".to_string());
-        Ok(crate::toolchain::override_task_command(
-            context,
-            override_command,
-            pass_through_args,
-            serial_group,
-        ))
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
@@ -3161,7 +3175,7 @@ version = "0.1.0"
             "a pure Cargo workspace has no root package.json"
         );
 
-        // The Cargo crates and synthetic workspace package populate the graph.
+        // The Cargo crates and workspace aggregate populate the graph.
         assert_eq!(
             pkg_graph.package_toolchain(&PackageName::from("app")),
             Some(&crate::toolchain::ToolchainId::RUST)
@@ -3175,8 +3189,6 @@ version = "0.1.0"
             Some(&crate::toolchain::ToolchainId::RUST)
         );
 
-        // Command resolution receives identity, path, and provenance from the
-        // graph-created context.
         let app_name = PackageName::from("app");
         let app_context = pkg_graph.package_task_context(&app_name).unwrap();
         assert_eq!(app_context.package(), &app_name);
@@ -3188,20 +3200,6 @@ version = "0.1.0"
             app_context.toolchain(),
             Some(&crate::toolchain::ToolchainId::RUST)
         );
-        let command = pkg_graph
-            .resolve_native_task_command(&app_context, "build", None, None)
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            command.args,
-            vec![
-                std::ffi::OsString::from("build"),
-                std::ffi::OsString::from("--package=app"),
-                std::ffi::OsString::from("--locked"),
-            ]
-        );
-        assert_eq!(command.cwd, root);
-
         // Crate path dependencies still become graph edges without a package
         // manager: the `workspace:*` protocol resolves internally regardless.
         let app_deps = pkg_graph

@@ -1,7 +1,6 @@
 //! Parser-neutral native task and command knowledge.
 //!
 //! Ecosystems contribute observations once; core consumes an immutable catalog.
-//! Toolchain task callbacks are compatibility adapters over this catalog.
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -173,6 +172,19 @@ impl ScopeNativeTasks {
             .map(|task| task.name().to_string())
             .collect()
     }
+
+    /// Resource group retained when an override uses this scope's native
+    /// command family. This also applies to override-only task names that have
+    /// no catalog entry.
+    pub fn override_serial_group(&self, override_command: &[String]) -> Option<String> {
+        let invokes_cargo = override_command.first().map(String::as_str) == Some("cargo");
+        (invokes_cargo
+            && self
+                .tasks()
+                .iter()
+                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Cargo { .. }))))
+        .then(|| "cargo".to_string())
+    }
 }
 
 /// Producer-supplied native task facts for one scope, before catalog
@@ -181,6 +193,7 @@ impl ScopeNativeTasks {
 pub struct NativeTaskObservation {
     pub scope: String,
     pub tasks: Vec<NativeTask>,
+    pub task_contract: crate::task_contracts::ScopeTaskContract,
 }
 
 /// Immutable native-task catalog for one repository generation.
@@ -282,7 +295,11 @@ pub fn observation_from_scripts(
             cwd_policy: WorkingDirectoryPolicy::PackageDirectory,
         });
     }
-    NativeTaskObservation { scope, tasks }
+    NativeTaskObservation {
+        scope,
+        tasks,
+        task_contract: crate::task_contracts::ScopeTaskContract::javascript(),
+    }
 }
 
 /// Convert a package.json descriptor into a native-task observation.
@@ -304,13 +321,9 @@ pub fn resolve_task_command(
     override_command: Option<&[String]>,
 ) -> Result<Option<TaskCommand>, ResolveNativeCommandError> {
     if let Some(override_command) = override_command {
-        let serial_group = match task.command() {
-            Some(NativeCommandTemplate::Cargo { .. }) => {
-                (override_command.first().map(String::as_str) == Some("cargo"))
-                    .then(|| "cargo".to_string())
-            }
-            _ => None,
-        };
+        let serial_group = context
+            .native_tasks()
+            .override_serial_group(override_command);
         return Ok(override_task_command(
             context,
             override_command,

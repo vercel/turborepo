@@ -975,13 +975,11 @@ fn stub_io_engine_with_safety(
 ) -> StubIOEngineResult {
     let repo_root_dir = TempDir::with_prefix("stub-io").unwrap();
     let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
-    let seen = Arc::new(Mutex::new(HashMap::new()));
     let toolchain = Arc::new(StubIOToolchain {
         repo_root: repo_root.clone(),
         outputs,
         input_safety,
         environment: vec!["STUB_LAYOUT"],
-        seen: seen.clone(),
     });
     let package_graph = stub_io_package_graph(&repo_root, toolchain);
     let loader = TestTurboJsonLoader::new(
@@ -1002,44 +1000,13 @@ fn stub_io_engine_with_safety(
             "layout-value".to_string(),
         )])),
     )]);
-    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+    EngineBuilder::new(&repo_root, &package_graph, &loader, false)
         .with_tasks(Some(Spanned::new(TaskName::from(task).into_owned())))
         .with_workspaces(vec![PackageName::from("app")])
         .with_global_env(global_env)
         .with_task_io_context(pass_through_args, requested_tasks, environments)
         .build()
-        .unwrap();
-    (engine, seen)
-}
-
-#[test]
-fn test_task_io_args_align_with_execution_for_dependencies() {
-    let (_engine, seen) = stub_io_engine(
-        json!({
-            "test": { "dependsOn": ["^build"] },
-            "build": {}
-        }),
-        DerivedOutputs::Resolved(Vec::new()),
-        "test",
-        vec!["--requested".to_string()],
-        vec!["test".to_string()],
-        Vec::new(),
-    );
-    let seen = seen.lock().unwrap();
-    assert_eq!(
-        seen.get("app#test"),
-        Some(&SeenTaskIO {
-            args: Some(vec!["--requested".to_string()]),
-            layout_env: Some("layout-value".to_string()),
-        })
-    );
-    assert_eq!(
-        seen.get("lib#build"),
-        Some(&SeenTaskIO {
-            args: None,
-            layout_env: Some("layout-value".to_string()),
-        })
-    );
+        .unwrap()
 }
 
 #[test]
@@ -1055,7 +1022,7 @@ fn test_unavailable_outputs_respect_merged_task_configuration() {
         ),
         (json!({ "build": { "outputs": [] } }), true, Vec::new()),
     ] {
-        let (engine, _) = stub_io_engine(
+        let engine = stub_io_engine(
             definition,
             DerivedOutputs::Unavailable,
             "build",
@@ -1089,7 +1056,7 @@ fn test_untracked_inputs_respect_only_explicit_cache_configuration() {
             vec!["configured/**".to_string()],
         ),
     ] {
-        let (engine, _) = stub_io_engine_with_safety(
+        let engine = stub_io_engine_with_safety(
             definition,
             DerivedOutputs::Resolved(Vec::new()),
             DerivedInputSafety::Untracked,
@@ -1110,7 +1077,7 @@ fn test_untracked_inputs_respect_only_explicit_cache_configuration() {
 fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
     for env_mode in ["strict", "loose"] {
         for exclusion in ["!STUB_LAYOUT", "!STUB_*"] {
-            let (engine, seen) = stub_io_engine(
+            let engine = stub_io_engine(
                 json!({
                     "build": {
                         "env": [exclusion],
@@ -1130,14 +1097,10 @@ fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
             assert!(task.outputs.inclusions.is_empty());
             assert!(task.env.contains(&exclusion.to_string()));
             assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
-            assert_eq!(
-                seen.lock().unwrap().get("app#build").unwrap().layout_env,
-                Some("layout-value".to_string())
-            );
         }
     }
 
-    let (engine, _) = stub_io_engine(
+    let engine = stub_io_engine(
         json!({ "build": { "envMode": "loose" } }),
         DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
         "build",
@@ -1155,7 +1118,7 @@ fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
 #[test]
 fn test_nonconflicting_env_exclusions_keep_resolved_outputs() {
     for env_mode in ["strict", "loose"] {
-        let (engine, _) = stub_io_engine(
+        let engine = stub_io_engine(
             json!({
                 "build": {
                     "env": ["!UNRELATED_*"],

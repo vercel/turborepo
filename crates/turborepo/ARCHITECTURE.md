@@ -367,7 +367,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   workspace-scoped verification verbs.
 - **Execution and entrypoint selection** (`NativeTaskKnowledge`, native command
   resolution in `turborepo-task-executor`, and
-  `Toolchain::select_task_entrypoints`): crate-scoped build and verification
+  `PackageGraph::select_task_entrypoints`): crate-scoped build and verification
   tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
   `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
   when the workspace has no entrypoints. Unfiltered verification uses the Cargo
@@ -399,7 +399,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   definition. The names come from the same verb tables as command resolution
   and participate in task suggestions and add-all/query graph construction.
 - **Hashing and affectedness** (`HashRelationships`, `AffectedRelationships`,
-  and `Toolchain::derived_task_io`): crate-scoped tasks hash their own
+  and `TaskContractKnowledge`): crate-scoped tasks hash their own
   sources plus a conservative transitive closure of declared local Cargo
   dependencies (flattened, so invalidation doesn't depend on `dependsOn`
   wiring). The closure may include optional or target-specific dependencies not
@@ -590,7 +590,7 @@ The core task graph consists of:
   argv in their frame: cwd is the package directory, nothing is prepended,
   and Cargo keeps its serial group when the override still invokes cargo.
   Because an argv override is otherwise arbitrary, it does not inherit the
-  native command's toolchain-derived inputs, outputs, default-input behavior,
+  native command's contract-derived inputs, outputs, default-input behavior,
   or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
   authoritative task-level I/O configuration. Toolchain task defaults and
   execution-only compile-cache environment injection likewise apply only to

@@ -130,6 +130,7 @@ pub struct DiscoveredPackage {
     /// graph builder should derive tasks from `descriptor.scripts` when
     /// present (JavaScript). Cargo fills this with verb-table facts.
     native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
+    task_contract: Option<crate::task_contracts::ScopeTaskContract>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +147,7 @@ pub(crate) struct DiscoveredPackageParts {
     pub manifest_path: AbsoluteSystemPathBuf,
     pub native_relationships: Option<Vec<Relationship>>,
     pub native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
+    pub task_contract: Option<crate::task_contracts::ScopeTaskContract>,
 }
 
 /// Parser-neutral observation of one contributed native workspace root.
@@ -241,6 +243,7 @@ impl DiscoveredPackage {
             manifest_path,
             native_relationships: None,
             native_tasks: None,
+            task_contract: None,
         }
     }
 
@@ -260,6 +263,7 @@ impl DiscoveredPackage {
             manifest_path,
             native_relationships: None,
             native_tasks: None,
+            task_contract: None,
         }
     }
 
@@ -277,6 +281,14 @@ impl DiscoveredPackage {
         self
     }
 
+    pub fn with_task_contract(
+        mut self,
+        contract: crate::task_contracts::ScopeTaskContract,
+    ) -> Self {
+        self.task_contract = Some(contract);
+        self
+    }
+
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
@@ -286,6 +298,7 @@ impl DiscoveredPackage {
             manifest_path,
             native_relationships,
             native_tasks,
+            task_contract,
         } = self;
         DiscoveredPackageParts {
             name,
@@ -295,6 +308,7 @@ impl DiscoveredPackage {
             manifest_path,
             native_relationships,
             native_tasks,
+            task_contract,
         }
     }
 }
@@ -371,87 +385,6 @@ pub trait Toolchain: Send + Sync {
     /// Discover this toolchain's packages/scopes and native workspace roots in
     /// one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
-
-    /// Defaults this toolchain supplies for `task` when turbo.json does not
-    /// configure the corresponding field. Explicit user configuration always
-    /// wins.
-    fn task_defaults(
-        &self,
-        context: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> TaskDefaults {
-        let _ = (context, task);
-        TaskDefaults::default()
-    }
-
-    /// Startup environment patterns this toolchain needs to derive task I/O.
-    /// The run retains only matching keys, and the engine automatically adds
-    /// every declared pattern to the task's hashed environment when derived I/O
-    /// applies.
-    fn task_io_env_vars(&self) -> &[&str] {
-        &[]
-    }
-
-    /// Hash wiring this toolchain derives for `task` in `package`, beyond
-    /// what turbo.json declares: extra input globs and env vars that
-    /// participate in the task hash, output globs to cache, and whether the
-    /// package's own default (git-index based) file hashing applies.
-    ///
-    /// `path_to_root` is the unix path from the package directory to the
-    /// repo root (empty for a package at the root); returned globs are
-    /// relative to the package directory. `dependencies` are the package's
-    /// transitive internal dependencies. `wants_automatic_inputs` reflects
-    /// the task's `inputs` configuration: `true` unless explicit inputs
-    /// omitted `$TURBO_DEFAULT$` — for toolchains that derive inputs,
-    /// `$TURBO_DEFAULT$` means "everything the toolchain derives", so users
-    /// can append inputs without forfeiting automatic invalidation.
-    ///
-    /// `None` means the toolchain derives nothing and turbo.json is the
-    /// whole story.
-    fn derived_task_io(
-        &self,
-        package: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        path_to_root: &str,
-        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
-        wants_automatic_inputs: bool,
-        context: &TaskIOContext<'_>,
-    ) -> Option<DerivedTaskIO> {
-        let _ = (
-            package,
-            task,
-            path_to_root,
-            dependencies,
-            wants_automatic_inputs,
-            context,
-        );
-        None
-    }
-
-    /// Whether [`Toolchain::derived_task_io`] can return `Some` for this
-    /// package/task. Callers use this to skip assembling the (expensive)
-    /// dependency-closure argument when the answer is knowably `None` —
-    /// notably engine construction, which resolves a definition per task.
-    fn derives_task_io(
-        &self,
-        package: &crate::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        let _ = (package, task);
-        false
-    }
-
-    /// Select package entrypoints for an unqualified task from the packages in
-    /// scope. `None` leaves the normal package × task expansion unchanged.
-    fn select_task_entrypoints(
-        &self,
-        task: &str,
-        candidates: &[String],
-        prefer_workspace: bool,
-    ) -> Option<Vec<String>> {
-        let _ = (task, candidates, prefer_workspace);
-        None
-    }
 
     /// How filesystem events relate to this toolchain in watch mode:
     /// workspace-definition files whose change requires rediscovery, and
@@ -560,8 +493,7 @@ pub struct WatchSpec {
     pub ignore_prefixes: Vec<String>,
 }
 
-/// Default task behavior supplied by a toolchain. See
-/// [`Toolchain::task_defaults`].
+/// Default task behavior supplied by task-contract knowledge.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskDefaults {
     /// Whether task logs and outputs are cacheable.
@@ -657,8 +589,7 @@ pub enum DerivedInputSafety {
     Untracked,
 }
 
-/// Hash wiring derived by a toolchain for one task. See
-/// [`Toolchain::derived_task_io`].
+/// Hash wiring derived by task-contract knowledge for one task.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DerivedTaskIO {
     /// Extra input globs, relative to the package directory.
@@ -747,10 +678,6 @@ pub struct JavaScriptToolchain<P> {
     discovery: P,
     repo_root: AbsoluteSystemPathBuf,
     known_package_manager: Option<PackageManager>,
-    /// The package manager as resolved during graph construction, recorded
-    /// by the builder so synchronous concerns (command resolution) can use
-    /// it without re-running discovery.
-    resolved_package_manager: std::sync::OnceLock<PackageManager>,
 }
 
 impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
@@ -763,7 +690,6 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
             discovery,
             repo_root,
             known_package_manager,
-            resolved_package_manager: std::sync::OnceLock::new(),
         }
     }
 
@@ -777,12 +703,6 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
             Some(package_manager) => Ok(package_manager.clone()),
             None => Ok(self.discovery.discover_packages().await?.package_manager),
         }
-    }
-
-    /// Record the package manager resolved during graph construction. Called
-    /// by the package graph builder; later calls are no-ops.
-    pub fn set_resolved_package_manager(&self, package_manager: PackageManager) {
-        let _ = self.resolved_package_manager.set(package_manager);
     }
 
     pub(crate) async fn workspace_root(&self) -> Result<WorkspaceRoot, Error> {
@@ -841,9 +761,6 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     fn id(&self) -> ToolchainId {
         ToolchainId::JAVASCRIPT
     }
-
-    // Task-contract derived I/O for JavaScript is foundational knowledge
-    // (empty / turbo.json-owned). Do not override Toolchain::derived_task_io.
 
     fn watch_spec(&self) -> WatchSpec {
         // Deliberately nothing: JavaScript workspace redefinition (a new or
@@ -1068,34 +985,9 @@ mod tests {
 
     #[test]
     fn test_javascript_task_command() {
-        struct StubDiscovery;
-        impl PackageDiscovery for StubDiscovery {
-            async fn discover_packages(
-                &self,
-            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-                Ok(discovery::DiscoveryResponse {
-                    package_manager: PackageManager::Npm,
-                    workspaces: vec![],
-                })
-            }
-            async fn discover_packages_blocking(
-                &self,
-            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-                self.discover_packages().await
-            }
-        }
-
         let repo_root_buf =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let repo_root = repo_root_buf.as_ref() as &AbsoluteSystemPath;
-
-        let toolchain = JavaScriptToolchain::new(
-            StubDiscovery,
-            repo_root_buf.clone(),
-            Some(PackageManager::Npm),
-        );
-        toolchain.set_resolved_package_manager(PackageManager::Npm);
-
         let package = crate::package_graph::PackageInfo {
             package_json: PackageJson::from_value(serde_json::json!({
                 "name": "stale-web",

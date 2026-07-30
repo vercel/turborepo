@@ -695,19 +695,37 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             manifest_path,
             native_relationships,
             native_tasks,
+            task_contract,
         } = package.into_parts();
         // Toolchain-resolved external identities are contributed to the
         // resolution generation separately; PackageInfo no longer carries
         // closure/hash compatibility projections.
+        let task_contract = task_contract.unwrap_or_else(|| {
+            if toolchain == ToolchainId::JAVASCRIPT {
+                crate::task_contracts::ScopeTaskContract::javascript()
+            } else {
+                crate::task_contracts::ScopeTaskContract::empty()
+            }
+        });
+        if let Some(contract_toolchain) = task_contract.toolchain()
+            && contract_toolchain != &toolchain
+        {
+            return Err(Error::TaskContracts(format!(
+                "scope task contract belongs to {contract_toolchain}, not {toolchain}"
+            )));
+        }
         let native_task_observation = match (name.as_ref(), native_tasks) {
             (Some(identity), Some(tasks)) => Some(crate::native_tasks::NativeTaskObservation {
                 scope: identity.clone(),
                 tasks,
+                task_contract,
             }),
-            (Some(identity), None) => Some(crate::native_tasks::observation_from_package_json(
-                identity.clone(),
-                &json,
-            )),
+            (Some(identity), None) => {
+                let mut observation =
+                    crate::native_tasks::observation_from_package_json(identity.clone(), &json);
+                observation.task_contract = task_contract;
+                Some(observation)
+            }
             (None, _) => None,
         };
         let entry = PackageInfo { package_json: json };
@@ -940,7 +958,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 // Command resolution is synchronous; record the resolved
                 // package manager on the toolchain so it does not re-run
                 // discovery.
-                javascript.set_resolved_package_manager(package_manager.clone());
                 Some(package_manager)
             }
             None => None,
@@ -954,27 +971,16 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 root_package_json,
             ));
         }
+        let task_contract_observations = native_task_observations
+            .iter()
+            .map(|observation| (observation.scope.clone(), observation.task_contract.clone()))
+            .collect::<Vec<_>>();
         let native_task_knowledge = Arc::new(
             crate::native_tasks::NativeTaskKnowledge::build(&knowledge, native_task_observations)
                 .map_err(|error| Error::NativeTasks(error.to_string()))?,
         );
 
         let task_contract_knowledge = Arc::new({
-            let observations = knowledge.scopes().map(|scope| {
-                let contract = if scope.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT {
-                    crate::task_contracts::ScopeTaskContract::javascript()
-                } else {
-                    crate::task_contracts::ScopeTaskContract::empty()
-                };
-                (scope.identity().to_owned(), contract)
-            });
-            let mut observations: Vec<_> = observations.collect();
-            if knowledge.root_javascript_scope().is_some() {
-                observations.push((
-                    "//".to_string(),
-                    crate::task_contracts::ScopeTaskContract::javascript(),
-                ));
-            }
             let root_engines = root_package_json
                 .as_ref()
                 .and_then(|package_json| package_json.engines())
@@ -986,7 +992,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 })
                 .unwrap_or_default();
             crate::task_contracts::TaskContractKnowledge::build_with_engines(
-                observations,
+                task_contract_observations,
                 root_engines,
             )
             .map_err(|error| Error::TaskContracts(error.to_string()))?
@@ -1283,9 +1289,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .clone()
             .ok_or_else(|| build_failure(Error::MissingRepositoryKnowledge))?;
         let package_manager = self.package_manager.clone();
-        if let (Some(javascript), Some(package_manager)) = (&self.javascript, &package_manager) {
-            javascript.set_resolved_package_manager(package_manager.clone());
-        }
         let definition_source = package_manager
             .as_ref()
             .map(|package_manager| AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name()))
@@ -1388,6 +1391,10 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 root_package_json,
             ));
         }
+        let task_contract_observations = native_task_observations
+            .iter()
+            .map(|observation| (observation.scope.clone(), observation.task_contract.clone()))
+            .collect::<Vec<_>>();
         let native_task_knowledge = Arc::new(
             crate::native_tasks::NativeTaskKnowledge::build(&knowledge, native_task_observations)
                 .map_err(|error| {
@@ -1395,21 +1402,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             })?,
         );
         let task_contract_knowledge = Arc::new({
-            let observations = knowledge.scopes().map(|scope| {
-                let contract = if scope.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT {
-                    crate::task_contracts::ScopeTaskContract::javascript()
-                } else {
-                    crate::task_contracts::ScopeTaskContract::empty()
-                };
-                (scope.identity().to_owned(), contract)
-            });
-            let mut observations: Vec<_> = observations.collect();
-            if knowledge.root_javascript_scope().is_some() {
-                observations.push((
-                    "//".to_string(),
-                    crate::task_contracts::ScopeTaskContract::javascript(),
-                ));
-            }
             let root_engines = root_package_json
                 .as_ref()
                 .and_then(|package_json| package_json.engines())
@@ -1421,7 +1413,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 })
                 .unwrap_or_default();
             crate::task_contracts::TaskContractKnowledge::build_with_engines(
-                observations,
+                task_contract_observations,
                 root_engines,
             )
             .map_err(|error| {
