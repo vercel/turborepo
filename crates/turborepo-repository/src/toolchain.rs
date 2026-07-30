@@ -101,11 +101,11 @@ impl fmt::Display for ToolchainId {
 ///
 /// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].
 /// `descriptor` remains temporary compatibility input for relationship
-/// classification, JavaScript lockfile state, and task consumers. JavaScript
-/// packages retain their parsed manifest; native producers can contribute
-/// normalized relationships separately without synthesizing JavaScript
-/// dependency maps. Cargo still supplies an empty descriptor until task
-/// compatibility payloads are removed.
+/// classification and JavaScript construction paths. JavaScript packages retain
+/// their parsed manifest; native producers can contribute normalized
+/// relationships and tasks separately without synthesizing JavaScript
+/// dependency maps. Cargo still supplies an empty descriptor only because graph
+/// assembly currently requires a compatibility payload for every scope.
 #[derive(Debug, Clone)]
 pub struct DiscoveredPackage {
     /// Real user-facing identity, extracted by the native producer. `None`
