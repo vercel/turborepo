@@ -1,7 +1,9 @@
 //! Parser-neutral external dependency declarations and exact resolutions.
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt,
     ops::Range,
 };
 
@@ -385,28 +387,74 @@ impl PackageResolutionState {
     }
 }
 
-/// One parser-neutral external resolution domain contributed by a toolchain.
+/// Open, stable identity for one external-resolution behavior domain.
+///
+/// IDs are unique within a generation. Built-in IDs are reserved to their
+/// canonical producers; custom producers may define other IDs.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExternalResolutionDomainId(Cow<'static, str>);
+
+impl ExternalResolutionDomainId {
+    /// Creates an open domain ID from borrowed static or owned text.
+    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
+        Self(value.into())
+    }
+
+    /// Stable text used to identify the domain during composition and lookup.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ExternalResolutionDomainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Built-in JavaScript package-manager lockfile domain.
+pub const JAVASCRIPT_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("javascript"));
+/// Built-in Cargo lockfile and compiler-identity domain.
+pub const CARGO_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("cargo"));
+
+/// One parser-neutral external resolution domain contributed by a producer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalResolutionDomain {
+    id: ExternalResolutionDomainId,
     toolchain: ToolchainId,
     root: AnchoredSystemPathBuf,
+    members: Vec<String>,
     definition_sources: Vec<AnchoredSystemPathBuf>,
     data: ExternalResolutionData,
 }
 
 impl ExternalResolutionDomain {
+    /// Creates a domain with explicit identity, provenance, root, and exclusive
+    /// package membership. Complete resolved data must contain exactly one row
+    /// for every member; member names use authoritative repository identities.
     pub fn new(
+        id: ExternalResolutionDomainId,
         toolchain: ToolchainId,
         root: AnchoredSystemPathBuf,
+        members: impl IntoIterator<Item = String>,
         definition_sources: impl IntoIterator<Item = AnchoredSystemPathBuf>,
         data: ExternalResolutionData,
     ) -> Self {
         Self {
+            id,
             toolchain,
             root,
+            members: members.into_iter().collect(),
             definition_sources: definition_sources.into_iter().collect(),
             data,
         }
+    }
+
+    /// Behavioral domain identity, independent from retained provenance.
+    pub fn id(&self) -> &ExternalResolutionDomainId {
+        &self.id
     }
 
     pub fn toolchain(&self) -> &ToolchainId {
@@ -415,6 +463,11 @@ impl ExternalResolutionDomain {
 
     pub fn root(&self) -> &AnchoredSystemPath {
         &self.root
+    }
+
+    /// Authoritative package identities exclusively claimed by this domain.
+    pub fn members(&self) -> &[String] {
+        &self.members
     }
 
     pub fn definition_sources(&self) -> &[AnchoredSystemPathBuf] {
@@ -450,6 +503,8 @@ impl ExternalResolutionGeneration {
         mut domains: Vec<ExternalResolutionDomain>,
     ) -> Result<Self, ExternalResolutionError> {
         for domain in &mut domains {
+            domain.members.sort();
+            domain.members.dedup();
             domain.definition_sources.sort();
             domain.definition_sources.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
@@ -460,29 +515,58 @@ impl ExternalResolutionGeneration {
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }
         }
-        domains.sort_by(|left, right| {
-            left.toolchain
-                .cmp(&right.toolchain)
-                .then_with(|| left.root.cmp(&right.root))
-        });
+        domains.sort_by(|left, right| left.id.cmp(&right.id));
 
-        if let Some(duplicate) = domains
-            .windows(2)
-            .find(|pair| pair[0].toolchain == pair[1].toolchain)
-        {
+        if let Some(duplicate) = domains.windows(2).find(|pair| pair[0].id == pair[1].id) {
             return Err(ExternalResolutionError::DuplicateDomain {
-                toolchain: duplicate[0].toolchain.clone(),
+                id: duplicate[0].id.clone(),
             });
         }
 
+        let mut claimed = HashMap::<String, ExternalResolutionDomainId>::new();
         for domain in &mut domains {
+            let valid_builtin = if domain.id == JAVASCRIPT_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::JAVASCRIPT
+                    && domain.root.as_str().is_empty()
+                    && repository.root_javascript_scope().is_some()
+            } else if domain.id == CARGO_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::RUST && domain.root.as_str().is_empty()
+            } else {
+                true
+            };
+            if !valid_builtin {
+                return Err(ExternalResolutionError::InvalidBuiltinDomain {
+                    id: domain.id.clone(),
+                    toolchain: domain.toolchain.clone(),
+                    root: domain.root.clone(),
+                });
+            }
             if !repository.workspace_roots().any(|root| {
                 root.toolchain() == &domain.toolchain && root.path() == domain.root.as_ref()
             }) {
                 return Err(ExternalResolutionError::UnknownDomain {
-                    toolchain: domain.toolchain.clone(),
+                    id: domain.id.clone(),
                     root: domain.root.clone(),
                 });
+            }
+
+            for member in &domain.members {
+                let is_authoritative = (member == "//"
+                    && repository.root_javascript_scope().is_some())
+                    || repository.scope(member).is_some();
+                if !is_authoritative {
+                    return Err(ExternalResolutionError::UnknownPackage {
+                        id: domain.id.clone(),
+                        identity: member.clone(),
+                    });
+                }
+                if let Some(existing) = claimed.insert(member.clone(), domain.id.clone()) {
+                    return Err(ExternalResolutionError::DuplicateMembership {
+                        identity: member.clone(),
+                        first: existing,
+                        second: domain.id.clone(),
+                    });
+                }
             }
 
             let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data else {
@@ -493,18 +577,40 @@ impl ExternalResolutionGeneration {
                 .find(|pair| pair[0].package == pair[1].package)
             {
                 return Err(ExternalResolutionError::DuplicatePackage {
-                    toolchain: domain.toolchain.clone(),
+                    id: domain.id.clone(),
                     identity: duplicate[0].package.clone(),
                 });
             }
             for package in packages {
-                let is_authoritative = (package.package() == "//"
-                    && repository.root_javascript_scope().is_some())
-                    || repository.scope(package.package()).is_some();
-                if !is_authoritative {
-                    return Err(ExternalResolutionError::UnknownPackage {
-                        toolchain: domain.toolchain.clone(),
+                if domain
+                    .members
+                    .binary_search_by(|member| member.as_str().cmp(package.package()))
+                    .is_err()
+                {
+                    return Err(ExternalResolutionError::PackageOutsideDomain {
+                        id: domain.id.clone(),
                         identity: package.package.clone(),
+                    });
+                }
+            }
+            if let ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Complete,
+                packages,
+                ..
+            } = &domain.data
+            {
+                let package_names = packages
+                    .iter()
+                    .map(|package| package.package())
+                    .collect::<Vec<_>>();
+                let members = domain
+                    .members
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                if package_names != members {
+                    return Err(ExternalResolutionError::IncompleteDomain {
+                        id: domain.id.clone(),
                     });
                 }
             }
@@ -517,27 +623,56 @@ impl ExternalResolutionGeneration {
     pub(crate) fn domains(&self) -> &[ExternalResolutionDomain] {
         &self.domains
     }
+
+    pub(crate) fn domain(
+        &self,
+        id: &ExternalResolutionDomainId,
+    ) -> Option<&ExternalResolutionDomain> {
+        self.domains
+            .binary_search_by(|domain| domain.id.cmp(id))
+            .ok()
+            .map(|index| &self.domains[index])
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum ExternalResolutionError {
-    #[error("toolchain {toolchain} contributed multiple external resolution domains")]
-    DuplicateDomain { toolchain: ToolchainId },
-    #[error("toolchain {toolchain} contributed unknown resolution domain root {root}")]
+    #[error("external resolution domain {id} was contributed more than once")]
+    DuplicateDomain { id: ExternalResolutionDomainId },
+    #[error("external resolution domain {id} has unknown root {root}")]
     UnknownDomain {
+        id: ExternalResolutionDomainId,
+        root: AnchoredSystemPathBuf,
+    },
+    #[error("built-in resolution domain {id} has invalid producer {toolchain} or root {root}")]
+    InvalidBuiltinDomain {
+        id: ExternalResolutionDomainId,
         toolchain: ToolchainId,
         root: AnchoredSystemPathBuf,
     },
-    #[error("toolchain {toolchain} resolved unknown package {identity}")]
+    #[error("external resolution domain {id} claims unknown package {identity}")]
     UnknownPackage {
-        toolchain: ToolchainId,
+        id: ExternalResolutionDomainId,
         identity: String,
     },
-    #[error("toolchain {toolchain} resolved package {identity} more than once")]
+    #[error("external resolution domain {id} resolved package {identity} outside its membership")]
+    PackageOutsideDomain {
+        id: ExternalResolutionDomainId,
+        identity: String,
+    },
+    #[error("package {identity} is claimed by both resolution domains {first} and {second}")]
+    DuplicateMembership {
+        identity: String,
+        first: ExternalResolutionDomainId,
+        second: ExternalResolutionDomainId,
+    },
+    #[error("external resolution domain {id} resolved package {identity} more than once")]
     DuplicatePackage {
-        toolchain: ToolchainId,
+        id: ExternalResolutionDomainId,
         identity: String,
     },
+    #[error("complete external resolution domain {id} does not contain exactly one row per member")]
+    IncompleteDomain { id: ExternalResolutionDomainId },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -735,8 +870,10 @@ mod tests {
         let complete_empty = ExternalResolutionGeneration::build(
             &repository(),
             vec![ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::JAVASCRIPT,
                 AnchoredSystemPathBuf::default(),
+                Vec::new(),
                 [AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap()],
                 resolved(Vec::new()),
             )],
@@ -745,8 +882,10 @@ mod tests {
         let unavailable = ExternalResolutionGeneration::build(
             &repository(),
             vec![ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::JAVASCRIPT,
                 AnchoredSystemPathBuf::default(),
+                Vec::new(),
                 [AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap()],
                 ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(
                     "missing-definition",
@@ -780,6 +919,13 @@ mod tests {
     }
 
     #[test]
+    fn resolution_domain_id_is_open_and_constants_are_distinct() {
+        let custom = ExternalResolutionDomainId::new("custom");
+        assert_eq!(custom.as_str(), "custom");
+        assert_ne!(JAVASCRIPT_RESOLUTION_DOMAIN, CARGO_RESOLUTION_DOMAIN);
+    }
+
+    #[test]
     fn generation_normalizes_all_ordering() {
         let source_a = AnchoredSystemPathBuf::from_raw("a.lock").unwrap();
         let source_z = AnchoredSystemPathBuf::from_raw("z.lock").unwrap();
@@ -798,14 +944,18 @@ mod tests {
                 )
             };
             let javascript = ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::JAVASCRIPT,
                 AnchoredSystemPathBuf::default(),
+                vec!["app".to_string()],
                 sources,
                 resolved(vec![PackageResolution::new("app", identities)]),
             );
             let rust = ExternalResolutionDomain::new(
+                CARGO_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::RUST,
                 AnchoredSystemPathBuf::default(),
+                vec!["crate".to_string()],
                 [AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap()],
                 resolved(vec![PackageResolution::new("crate", Vec::new())]),
             );
@@ -820,8 +970,9 @@ mod tests {
         let ordered = make(false);
         let reversed = make(true);
         assert_eq!(ordered, reversed);
-        assert_eq!(ordered.domains()[0].toolchain(), &ToolchainId::JAVASCRIPT);
-        let ExternalResolutionData::Resolved { packages, .. } = ordered.domains()[0].data() else {
+        assert_eq!(ordered.domains()[0].id(), &CARGO_RESOLUTION_DOMAIN);
+        let javascript = ordered.domain(&JAVASCRIPT_RESOLUTION_DOMAIN).unwrap();
+        let ExternalResolutionData::Resolved { packages, .. } = javascript.data() else {
             panic!("expected resolved data")
         };
         assert_eq!(packages[0].identities(), &[identity_a, identity_z]);
@@ -831,21 +982,87 @@ mod tests {
     fn generation_rejects_duplicate_domains_and_unknown_packages() {
         let domain = || {
             ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::JAVASCRIPT,
                 AnchoredSystemPathBuf::default(),
+                Vec::new(),
                 Vec::new(),
                 resolved(Vec::new()),
             )
         };
         assert!(matches!(
             ExternalResolutionGeneration::build(&repository(), vec![domain(), domain()]),
-            Err(ExternalResolutionError::DuplicateDomain { toolchain })
-                if toolchain == ToolchainId::JAVASCRIPT
+            Err(ExternalResolutionError::DuplicateDomain { id })
+                if id == JAVASCRIPT_RESOLUTION_DOMAIN
+        ));
+
+        let outside = ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("crate", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![outside]),
+            Err(ExternalResolutionError::PackageOutsideDomain { identity, .. })
+                if identity == "crate"
+        ));
+
+        let first = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("first"),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("app", Vec::new())]),
+        );
+        let second = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("second"),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("app", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![first, second]),
+            Err(ExternalResolutionError::DuplicateMembership { identity, .. })
+                if identity == "app"
+        ));
+
+        let spoofed_builtin = ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            vec!["crate".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("crate", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![spoofed_builtin]),
+            Err(ExternalResolutionError::InvalidBuiltinDomain { .. })
+        ));
+
+        let incomplete = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("custom"),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(Vec::new()),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![incomplete]),
+            Err(ExternalResolutionError::IncompleteDomain { .. })
         ));
 
         let unknown = ExternalResolutionDomain::new(
+            CARGO_RESOLUTION_DOMAIN.clone(),
             ToolchainId::RUST,
             AnchoredSystemPathBuf::default(),
+            vec!["missing".to_string()],
             Vec::new(),
             resolved(vec![PackageResolution::new("missing", Vec::new())]),
         );

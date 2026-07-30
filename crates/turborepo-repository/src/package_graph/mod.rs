@@ -19,8 +19,8 @@ use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
-        ExternalResolutionGeneration, ExternalResolutionStatus, PackageExternalDeclarations,
-        PackageResolutionState,
+        ExternalResolutionDomainId, ExternalResolutionGeneration, ExternalResolutionStatus,
+        JAVASCRIPT_RESOLUTION_DOMAIN, PackageExternalDeclarations, PackageResolutionState,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -48,6 +48,7 @@ pub const ROOT_PKG_NAME: &str = "//";
 struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
+    claims: HashMap<String, ExternalResolutionDomainId>,
 }
 
 impl ExternalResolutionKnowledge {
@@ -55,13 +56,26 @@ impl ExternalResolutionKnowledge {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: None,
+            claims: HashMap::new(),
         }
     }
 
     fn complete(generation: Arc<ExternalResolutionGeneration>) -> Self {
+        let claims = generation
+            .domains()
+            .iter()
+            .flat_map(|domain| {
+                domain
+                    .members()
+                    .iter()
+                    .cloned()
+                    .map(|member| (member, domain.id().clone()))
+            })
+            .collect();
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: Some(generation),
+            claims,
         }
     }
 }
@@ -1094,17 +1108,12 @@ impl PackageGraph {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.package_task_contexts()
             .map(|context| {
-                let state = match context.toolchain() {
+                let state = match resolution.claims.get(context.package().as_str()) {
                     None => PackageResolutionState::NotApplicable,
-                    Some(toolchain) => resolution
+                    Some(domain_id) => resolution
                         .generation
                         .as_deref()
-                        .and_then(|generation| {
-                            generation
-                                .domains()
-                                .iter()
-                                .find(|domain| domain.toolchain() == toolchain)
-                        })
+                        .and_then(|generation| generation.domain(domain_id))
                         .map_or(PackageResolutionState::Missing, |domain| {
                             match domain.data() {
                                 ExternalResolutionData::Resolved {
@@ -1503,10 +1512,7 @@ impl PackageGraph {
             }
             return Some(paths);
         };
-        let domain = generation
-            .domains()
-            .iter()
-            .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::JAVASCRIPT)?;
+        let domain = generation.domain(&JAVASCRIPT_RESOLUTION_DOMAIN)?;
         match domain.data() {
             ExternalResolutionData::Resolved { .. } => None,
             ExternalResolutionData::Unavailable(_) => {
@@ -1545,7 +1551,7 @@ impl PackageGraph {
         let mut seen = HashSet::new();
         let mut identities = Vec::new();
         for domain in generation.domains() {
-            if domain.toolchain() != &crate::toolchain::ToolchainId::JAVASCRIPT {
+            if domain.id() != &JAVASCRIPT_RESOLUTION_DOMAIN {
                 continue;
             }
             let ExternalResolutionData::Resolved { packages, .. } = domain.data() else {
@@ -3084,10 +3090,15 @@ version = "0.1.0"
                 .expect("mixed repository should retain external resolution knowledge");
             assert_eq!(resolution.domains().len(), 2);
             let cargo_domain = resolution
-                .domains()
-                .iter()
-                .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::RUST)
+                .domain(&crate::external_resolution::CARGO_RESOLUTION_DOMAIN)
                 .expect("Cargo should contribute one resolution domain");
+            assert_eq!(
+                resolution
+                    .domain(&crate::external_resolution::JAVASCRIPT_RESOLUTION_DOMAIN)
+                    .unwrap()
+                    .id(),
+                &crate::external_resolution::JAVASCRIPT_RESOLUTION_DOMAIN
+            );
             assert_eq!(cargo_domain.definition_sources()[0].as_str(), "Cargo.lock");
             let crate::external_resolution::ExternalResolutionData::Resolved {
                 completeness,
@@ -3149,13 +3160,23 @@ version = "0.1.0"
             .expect("pure Cargo repository should retain external resolution knowledge");
         assert_eq!(resolution.domains().len(), 1);
         assert_eq!(
-            resolution.domains()[0].toolchain(),
-            &crate::toolchain::ToolchainId::RUST
+            resolution.domains()[0].id(),
+            &crate::external_resolution::CARGO_RESOLUTION_DOMAIN
         );
+        let states = pkg_graph.package_resolution_states();
+        assert_eq!(states["//"], PackageResolutionState::NotApplicable);
+        // This fixture has no closure hasher, so the claimed package fails
+        // closed as Missing rather than being normalized to NotApplicable.
+        assert_eq!(states["app"], PackageResolutionState::Missing);
         assert!(
             pkg_graph.relationship_projections.get().is_none(),
             "relationship projections must remain lazy for current consumers"
         );
+
+        pkg_graph.remove_external_resolution_for_test();
+        let missing_states = pkg_graph.package_resolution_states();
+        assert_eq!(missing_states["//"], PackageResolutionState::NotApplicable);
+        assert_eq!(missing_states["app"], PackageResolutionState::Missing);
 
         assert_eq!(
             pkg_graph

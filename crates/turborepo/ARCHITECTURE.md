@@ -158,7 +158,13 @@ Represents the workspace structure and package dependencies:
   `rustc -vV` identity directly through its external-resolution domain. Cargo
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
-  identities, definition sources, completeness, and stable fingerprints. A
+  identities, definition sources, completeness, and stable fingerprints.
+  Open resolution-domain IDs select behavior after construction independently
+  of retained `ToolchainId` provenance, and each domain explicitly claims its
+  package members. Built-in JavaScript and Cargo IDs are reserved to their
+  canonical producers and repository roots. Core rejects duplicate IDs, package
+  ownership, unknown members, resolution rows outside declared membership, and
+  complete domains without exactly one row per member. A
   single resolution owner tracks lifecycle status. Task hashing and run/task
   summaries (including OpenTelemetry external-input attributes) consume the
   same stored byte-compatible package resolution fingerprint and preserve
@@ -275,8 +281,8 @@ JavaScript reports only the repository root for its authoritative package-manage
 command family; if discovery reports a different family than an explicitly
 resolved manager, the response is rejected. Pnpm versions and Yarn/Berry share
 their respective canonical families. Cargo reports the current workspace root.
-Resolution domains are validated against these authoritative roots during
-generation construction.
+External-resolution generation validates domain roots against these authoritative
+workspace roots before publishing terminal knowledge.
 
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
