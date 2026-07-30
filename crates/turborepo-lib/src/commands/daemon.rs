@@ -343,15 +343,19 @@ pub async fn daemon_server(
         exit_signal,
         custom_turbo_json_path,
         allow_no_package_manager,
-        |args| {
-            PackageChangesWatcher::new(
-                args.repo_root,
-                args.file_events,
-                args.hash_watcher,
-                args.custom_turbo_json_path,
-                false,
-                args.allow_no_package_manager,
-            )
+        {
+            let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+            move |args| {
+                PackageChangesWatcher::new(
+                    args.repo_root,
+                    args.file_events,
+                    args.hash_watcher,
+                    args.custom_turbo_json_path,
+                    false,
+                    args.allow_no_package_manager,
+                    cargo_enabled,
+                )
+            }
         },
     );
 

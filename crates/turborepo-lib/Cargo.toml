@@ -23,10 +23,14 @@ itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = "3.0"
+temp-env = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -127,6 +131,7 @@ turborepo-rayon-compat = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-run-summary = { workspace = true }
+turborepo-sccache-proxy = { workspace = true }
 turborepo-scm = { workspace = true }
 turborepo-scope = { path = "../turborepo-scope" }
 turborepo-shim = { workspace = true }
@@ -137,7 +142,7 @@ turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
-turborepo-ui = { workspace = true }
+turborepo-ui = { workspace = true, features = ["tui"] }
 turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 unrs_resolver = { workspace = true }

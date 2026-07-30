@@ -1,6 +1,6 @@
-use std::{io::Write, mem};
+use std::io::Write;
 
-use turborepo_vt100 as vt100;
+use turborepo_ghostty as ghostty;
 
 use super::{
     Error,
@@ -9,7 +9,7 @@ use super::{
 
 pub struct TerminalOutput<W> {
     output: Vec<u8>,
-    pub parser: vt100::Parser,
+    pub parser: ghostty::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
     pub output_logs: Option<OutputLogs>,
@@ -29,10 +29,10 @@ enum LogBehavior {
 }
 
 impl<W> TerminalOutput<W> {
-    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Self {
-        Self {
+    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Result<Self, Error> {
+        Ok(Self {
             output: Vec::new(),
-            parser: vt100::Parser::new(rows, cols, scrollback_len as usize),
+            parser: ghostty::Parser::try_new(rows, cols, scrollback_len as usize)?,
             stdin,
             status: None,
             output_logs: None,
@@ -40,7 +40,14 @@ impl<W> TerminalOutput<W> {
             cache_result: None,
             scrollback_len,
             selection_start: None,
-        }
+        })
+    }
+
+    /// The raw (newline-normalized) byte stream this task has produced so
+    /// far. Used to backfill streamed logs when the user switches from the
+    /// TUI to streaming mid-run.
+    pub fn raw_output(&self) -> &[u8] {
+        &self.output
     }
 
     pub fn title(&self, task_name: &str) -> String {
@@ -51,7 +58,7 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn size(&self) -> (u16, u16) {
-        self.parser.screen().size()
+        self.parser.size().unwrap_or((0, 0))
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
@@ -61,14 +68,8 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        if self.parser.screen().size() != (rows, cols) {
-            let scrollback = self.parser.screen().scrollback();
-            let scrollback_len = self.scrollback_len as usize;
-            let mut new_parser = vt100::Parser::new(rows, cols, scrollback_len);
-            new_parser.process(&self.output);
-            new_parser.screen_mut().set_scrollback(scrollback);
-            // Completely swap out the old vterm with a new correctly sized one
-            mem::swap(&mut self.parser, &mut new_parser);
+        if self.size() != (rows, cols) {
+            let _ = self.parser.resize(rows, cols);
         }
     }
 
@@ -77,12 +78,18 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn scroll_by(&mut self, direction: Direction, magnitude: usize) -> Result<(), Error> {
-        let scrollback = self.parser.screen().scrollback();
-        let new_scrollback = match direction {
-            Direction::Up => scrollback.saturating_add(magnitude),
-            Direction::Down => scrollback.saturating_sub(magnitude),
-        };
-        self.parser.screen_mut().set_scrollback(new_scrollback);
+        let up = matches!(direction, Direction::Up);
+        self.parser.scroll_by(up, magnitude)?;
+        Ok(())
+    }
+
+    pub fn scroll_to_top(&mut self) -> Result<(), Error> {
+        self.parser.scroll_to_top()?;
+        Ok(())
+    }
+
+    pub fn scroll_to_bottom(&mut self) -> Result<(), Error> {
+        self.parser.scroll_to_bottom()?;
         Ok(())
     }
 
@@ -114,13 +121,15 @@ impl<W> TerminalOutput<W> {
         let title = self.title(task_name);
         match self.persist_behavior() {
             LogBehavior::Full => {
-                let screen = self.parser.entire_screen();
-                let (_, cols) = screen.size();
+                let screen = self
+                    .parser
+                    .format_screen_vt()
+                    .map_err(std::io::Error::other)?;
                 stdout.write_all("┌─".as_bytes())?;
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
-                for row in screen.rows_formatted(0, cols) {
-                    stdout.write_all(&row)?;
+                stdout.write_all(&screen)?;
+                if !screen.ends_with(b"\n") && !screen.ends_with(b"\r\n") {
                     stdout.write_all(b"\r\n")?;
                 }
                 stdout.write_all("└─ ".as_bytes())?;
@@ -137,57 +146,106 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn has_selection(&self) -> bool {
-        self.parser
-            .screen()
-            .selected_text()
-            .is_some_and(|s| !s.is_empty())
+        self.parser.has_selection()
+    }
+
+    /// Whether a mouse-driven selection is in progress (the button is still
+    /// held down).
+    pub fn is_selecting(&self) -> bool {
+        self.selection_start.is_some()
+    }
+
+    /// Clears the selection highlight and any pending selection anchor.
+    pub fn clear_selection(&mut self) -> Result<(), Error> {
+        self.parser.clear_selection()?;
+        self.selection_start = None;
+        Ok(())
     }
 
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        self.handle_mouse_with_scroll(event, None)
+    }
+
+    pub fn handle_mouse_with_scroll(
+        &mut self,
+        event: crossterm::event::MouseEvent,
+        selection_scroll: Option<Direction>,
+    ) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                // Clear any existing selection and store the click position for potential drag
-                self.parser.screen_mut().clear_selection();
-                self.selection_start = Some((event.row, event.column));
+                // Shift held at click time means the user is preventing the
+                // copy before it starts, so don't anchor a selection. Most
+                // terminals never deliver shifted mouse events (shift
+                // bypasses mouse capture for native selection), but honor
+                // them when they do arrive.
+                let selection_start = (!event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT))
+                .then_some((event.row, event.column));
+                if let Some((row, column)) = selection_start {
+                    self.parser.begin_selection(row, column)?;
+                } else {
+                    self.parser.clear_selection()?;
+                }
+                self.selection_start = selection_start;
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                // On first drag, start selection from the initial click position
-                if let Some((start_row, start_col)) = self.selection_start.take() {
-                    self.parser
-                        .screen_mut()
-                        .update_selection(start_row, start_col);
+                if self.selection_start.is_some() {
+                    if let Some(direction) = selection_scroll {
+                        self.scroll(direction)?;
+                    }
+                    self.parser.update_selection_end(event.row, event.column)?;
                 }
-                // Update selection end point to current drag position
-                self.parser
-                    .screen_mut()
-                    .update_selection(event.row, event.column);
             }
-            // Scrolling is handled elsewhere
             crossterm::event::MouseEventKind::ScrollDown => (),
             crossterm::event::MouseEventKind::ScrollUp => (),
-            // I think we can ignore this?
-            crossterm::event::MouseEventKind::Moved => (),
-            // Don't care about other mouse buttons
+            // Hover means the button is up; drop any stale drag anchor from
+            // a release that the terminal never delivered to us.
+            crossterm::event::MouseEventKind::Moved => {
+                self.cancel_selection_drag();
+            }
             crossterm::event::MouseEventKind::Down(_) => (),
             crossterm::event::MouseEventKind::Drag(_) => (),
-            // We don't support horizontal scroll
             crossterm::event::MouseEventKind::ScrollLeft
             | crossterm::event::MouseEventKind::ScrollRight => (),
-            // Cool, person stopped holding down mouse
-            crossterm::event::MouseEventKind::Up(_) => (),
+            crossterm::event::MouseEventKind::Up(_) => {
+                self.cancel_selection_drag();
+            }
         }
         Ok(())
     }
 
-    pub fn copy_selection(&self) -> Option<String> {
-        self.parser.screen().selected_text()
+    pub fn continue_selection_drag(
+        &mut self,
+        direction: Direction,
+        row: u16,
+        column: u16,
+    ) -> Result<(), Error> {
+        if self.selection_start.is_none() {
+            return Ok(());
+        }
+        self.scroll(direction)?;
+        self.parser.update_selection_end(row, column)?;
+        Ok(())
+    }
+
+    pub fn cancel_selection_drag(&mut self) {
+        self.selection_start = None;
+        self.parser.cancel_incomplete_selection();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_pending_selection_anchor(&self) -> bool {
+        self.selection_start.is_some()
+    }
+
+    pub fn copy_selection(&mut self) -> Option<String> {
+        self.parser.selected_text().ok().flatten()
     }
 
     pub fn clear_logs(&mut self) {
         self.output.clear();
-
-        // clear screen and reset cursor
-        self.process(b"\x1bc");
+        self.parser.reset();
     }
 }
 
@@ -195,10 +253,8 @@ impl<W> TerminalOutput<W> {
 ///
 /// Child processes running in a PTY may disable the kernel's ONLCR flag
 /// (e.g. Node.js calling `setRawMode(true)`), which means their output
-/// contains bare `\n` without `\r`. The vt100 parser treats `\n` as a
-/// line feed only (cursor moves down, column unchanged), so without `\r`
-/// subsequent lines start at whatever column the cursor was at, producing
-/// garbled overlapping text.
+/// contains bare `\n` without `\r`. Without `\r`, subsequent lines start at
+/// whatever column the cursor was at, producing garbled overlapping text.
 fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
     let has_bare_lf =
         bytes.windows(2).any(|w| w[0] != b'\r' && w[1] == b'\n') || bytes.first() == Some(&b'\n');
@@ -250,48 +306,177 @@ mod newline_tests {
     }
 
     #[test]
-    fn bare_lf_causes_garbled_output_without_normalize() {
-        // Simulate the exact scenario: a child process writes two lines
-        // with bare \n. Without normalization, the second line starts at
-        // the column where the first line ended.
-        let mut parser = turborepo_vt100::Parser::new(5, 20, 0);
+    fn mouse_drag_selection_can_be_copied() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-        // Write "hello" then bare \n then "world"
-        parser.process(b"hello\nworld");
-        let screen = parser.screen();
+        let mut output: TerminalOutput<()> =
+            TerminalOutput::new(10, 40, None, 100).expect("terminal output");
+        output.process(b"hello world\r\n");
 
-        // Without CR, "world" starts at column 5 (where "hello" ended)
-        let row0 = (0..20)
-            .map(|c| screen.cell(0, c).unwrap().contents())
-            .collect::<String>();
-        let row1 = (0..20)
-            .map(|c| screen.cell(1, c).unwrap().contents())
-            .collect::<String>();
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
 
-        assert_eq!(row0.trim(), "hello");
-        // Without normalize, "world" starts at col 5
-        assert_eq!(row1.trim(), "world");
-        assert_eq!(screen.cell(1, 5).unwrap().contents(), "w");
+        assert!(output.has_selection());
+        assert!(output.is_selecting());
+        assert_eq!(output.copy_selection().as_deref(), Some("hello"));
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        // Release ends the drag. The selection itself survives at this
+        // layer so `App` can copy it before clearing the highlight.
+        assert!(!output.is_selecting());
+        assert!(output.has_selection());
+        Ok(())
     }
 
     #[test]
-    fn normalize_fixes_garbled_output() {
-        let mut parser = turborepo_vt100::Parser::new(5, 20, 0);
+    fn click_without_drag_has_no_selection() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-        let normalized = normalize_newlines(b"hello\nworld");
-        parser.process(&normalized);
-        let screen = parser.screen();
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
 
-        let row0 = (0..20)
-            .map(|c| screen.cell(0, c).unwrap().contents())
-            .collect::<String>();
-        let row1 = (0..20)
-            .map(|c| screen.cell(1, c).unwrap().contents())
-            .collect::<String>();
+        assert!(!output.has_selection());
+        assert_eq!(output.copy_selection(), None);
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        assert_eq!(output.parser.selection_start(), None);
+        Ok(())
+    }
 
-        assert_eq!(row0.trim(), "hello");
-        assert_eq!(row1.trim(), "world");
-        // After normalize, "world" starts at col 0
-        assert_eq!(screen.cell(1, 0).unwrap().contents(), "w");
+    #[test]
+    fn mouse_down_pins_anchor_before_output_arrives() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"anchor\r\nnext");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        output.process(b"\r\nnew");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 2,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(
+            output
+                .copy_selection()
+                .is_some_and(|text| text.starts_with("anchor"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_tick_without_anchor_does_not_scroll() -> Result<(), Error> {
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"zero\r\none\r\ntwo\r\nthree");
+        output.scroll_to_top()?;
+        let before = output
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar")
+            .offset;
+
+        output.continue_selection_drag(Direction::Down, 1, 0)?;
+
+        assert_eq!(
+            output
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar")
+                .offset,
+            before
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shift_on_click_does_not_start_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.is_selecting());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(!output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn release_with_shift_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(output.has_selection());
+
+        // The drag ends but the selection stays for a later `c` copy.
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(output.has_selection());
+        assert!(!output.is_selecting());
+        Ok(())
     }
 }

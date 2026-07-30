@@ -82,7 +82,7 @@
       ]
     },
     "dangerouslyDisablePackageManagerCheck": {
-      "description": "Disable check for `packageManager` in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
+      "description": "Disable package manager declaration checks in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -300,6 +300,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalCargoWorkspaces": {
+          "description": "Treat the crates of a Cargo workspace as Turborepo packages.\n\nWhen enabled, Rust crates are discovered via `cargo metadata` and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. Filtered builds execute each selected crate. Unfiltered builds prefer entrypoints, falling back to libraries when no entrypoints exist. Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are selectable per crate with `--filter`. An unfiltered run executes one workspace-wide Cargo verification command; filtered runs use the selected crates, or the workspace command when the workspace package is selected directly.\n\nAll crates implicitly register `build` and the verification tasks; entrypoints with one binary also register `run` and `dev`. The workspace package registers the verification tasks. Normal task definitions configure or override these defaults, and package configuration can exclude them with `extends: false`.\n\nTask caching uses Cargo-derived inputs and caches entrypoint build deliverables. Library builds default to uncached. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalObservability": {
           "description": "Enable experimental OpenTelemetry exporter support.\n\nWhen enabled, Turborepo will honor the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.",
           "default": false,
@@ -322,6 +327,16 @@
         },
         "pruneIncludesGlobalFiles": {
           "description": "Include files matching `globalDependencies` globs in the `turbo prune` output. Without this flag, `globalDependencies` entries are preserved in the pruned `turbo.json` but the actual files are not copied.",
+          "default": false,
+          "type": "boolean"
+        },
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
+          "default": false,
+          "type": "boolean"
+        },
+        "strictTaskEntrypointSelection": {
+          "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are not used as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration, and missing tasks reached as dependencies remain in the Task Graph.",
           "default": false,
           "type": "boolean"
         },
@@ -392,7 +407,7 @@
           ]
         },
         "dangerouslyDisablePackageManagerCheck": {
-          "description": "Disable check for `packageManager` in root `package.json`.",
+          "description": "Disable package manager declaration checks in root `package.json`.",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"

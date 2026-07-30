@@ -6,12 +6,9 @@
 
 use std::collections::HashMap;
 
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_engine::BuilderError;
-use turborepo_repository::{
-    package_graph::{PackageInfo, PackageName},
-    package_json::PackageJson,
-};
+use turborepo_repository::package_graph::PackageName;
 // Re-export TurboJsonLoader and related types from turborepo-turbo-json
 pub use turborepo_turbo_json::{
     LoaderError, NoOpUpdater, TurboJsonLoader, TurboJsonReader, TurboJsonUpdater,
@@ -61,12 +58,12 @@ impl UnifiedTurboJsonLoader {
     pub fn workspace<'a>(
         reader: TurboJsonReader,
         root_turbo_json_path: AbsoluteSystemPathBuf,
-        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+        package_directories: impl Iterator<Item = (PackageName, &'a AnchoredSystemPath)>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::workspace(
             reader,
             root_turbo_json_path,
-            packages,
+            package_directories,
         ))
     }
 
@@ -75,13 +72,13 @@ impl UnifiedTurboJsonLoader {
     pub fn workspace_with_microfrontends<'a>(
         reader: TurboJsonReader,
         root_turbo_json_path: AbsoluteSystemPathBuf,
-        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+        package_directories: impl Iterator<Item = (PackageName, &'a AnchoredSystemPath)>,
         micro_frontends_configs: MicrofrontendsConfigs,
     ) -> Self {
         Self::WithMfe(TurboJsonLoader::workspace_with_updater(
             reader,
             root_turbo_json_path,
-            packages,
+            package_directories,
             micro_frontends_configs,
         ))
     }
@@ -90,17 +87,23 @@ impl UnifiedTurboJsonLoader {
     /// workspace `package.json`s, with optional microfrontends support.
     pub fn workspace_no_turbo_json<'a>(
         reader: TurboJsonReader,
-        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+        package_directories: impl Iterator<Item = (PackageName, &'a AnchoredSystemPath)>,
+        package_scripts: HashMap<PackageName, Vec<String>>,
         microfrontends_configs: Option<MicrofrontendsConfigs>,
     ) -> Self {
         if let Some(mfe) = microfrontends_configs {
             Self::WithMfe(TurboJsonLoader::workspace_no_turbo_json_with_updater(
                 reader,
-                packages,
+                package_directories,
+                package_scripts,
                 Some(mfe),
             ))
         } else {
-            Self::Standard(TurboJsonLoader::workspace_no_turbo_json(reader, packages))
+            Self::Standard(TurboJsonLoader::workspace_no_turbo_json(
+                reader,
+                package_directories,
+                package_scripts,
+            ))
         }
     }
 
@@ -109,12 +112,12 @@ impl UnifiedTurboJsonLoader {
     pub fn single_package(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::single_package(
             reader,
             root_turbo_json,
-            package_json,
+            root_scripts,
         ))
     }
 
@@ -122,12 +125,12 @@ impl UnifiedTurboJsonLoader {
     pub fn task_access(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::task_access(
             reader,
             root_turbo_json,
-            package_json,
+            root_scripts,
         ))
     }
 
@@ -167,14 +170,12 @@ impl turborepo_engine::TurboJsonLoader for UnifiedTurboJsonLoader {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::HashSet;
 
     use tempfile::tempdir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
     use turborepo_engine::TaskDefinitionFromProcessed;
-    use turborepo_errors::Spanned;
-    use turborepo_repository::package_json::PackageJson;
     use turborepo_task_id::TaskName;
     use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
     use turborepo_types::TaskDefinition;
@@ -222,16 +223,9 @@ mod test {
             trace_path.create_with_contents(content.as_bytes()).unwrap();
         }
 
-        let mut scripts = BTreeMap::new();
-        scripts.insert("build".into(), Spanned::new("echo building".into()));
-        let root_package_json = PackageJson {
-            scripts,
-            ..Default::default()
-        };
-
         let reader = TurboJsonReader::new(repo_root.to_owned());
         let loader =
-            UnifiedTurboJsonLoader::task_access(reader, root_turbo_json, root_package_json);
+            UnifiedTurboJsonLoader::task_access(reader, root_turbo_json, vec!["build".into()]);
         let turbo_json = loader.load(&PackageName::Root).unwrap();
         let root_build = turbo_json
             .tasks
@@ -251,36 +245,19 @@ mod test {
         let root_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
 
-        // Create stub package info with scripts
-        let root_pkg_json = PackageJson::default();
-        let root_info = turborepo_repository::package_graph::PackageInfo {
-            package_json: root_pkg_json,
-            ..turborepo_repository::package_graph::PackageInfo::default()
-        };
-
-        let web_pkg_json = PackageJson {
-            scripts: BTreeMap::from([
-                ("dev".to_string(), Spanned::new("echo dev".to_string())),
-                ("build".to_string(), Spanned::new("echo build".to_string())),
-            ]),
-            ..PackageJson::default()
-        };
-        let web_info = turborepo_repository::package_graph::PackageInfo {
-            package_json: web_pkg_json,
-            ..turborepo_repository::package_graph::PackageInfo::default()
-        };
-
-        let docs_pkg_json = PackageJson {
-            scripts: BTreeMap::from([
-                ("dev".to_string(), Spanned::new("echo dev".to_string())),
-                ("build".to_string(), Spanned::new("echo build".to_string())),
-            ]),
-            ..PackageJson::default()
-        };
-        let docs_info = turborepo_repository::package_graph::PackageInfo {
-            package_json: docs_pkg_json,
-            ..turborepo_repository::package_graph::PackageInfo::default()
-        };
+        let package_scripts = HashMap::from([
+            (PackageName::Root, Vec::new()),
+            (
+                PackageName::from("web"),
+                vec!["dev".to_owned(), "build".to_owned()],
+            ),
+            (
+                PackageName::from("docs"),
+                vec!["dev".to_owned(), "build".to_owned()],
+            ),
+        ]);
+        let web_dir = AnchoredSystemPath::new("apps/web").unwrap();
+        let docs_dir = AnchoredSystemPath::new("apps/docs").unwrap();
 
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
             HashSet::from_iter(["web", "docs"].iter().copied()),
@@ -313,11 +290,11 @@ mod test {
         let loader = UnifiedTurboJsonLoader::workspace_no_turbo_json(
             reader,
             vec![
-                (&PackageName::Root, &root_info),
-                (&PackageName::from("web"), &web_info),
-                (&PackageName::from("docs"), &docs_info),
+                (PackageName::from("web"), web_dir),
+                (PackageName::from("docs"), docs_dir),
             ]
             .into_iter(),
+            package_scripts,
             microfrontends_configs,
         );
 

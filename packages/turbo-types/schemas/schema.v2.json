@@ -84,7 +84,7 @@
       ]
     },
     "dangerouslyDisablePackageManagerCheck": {
-      "description": "Disable check for `packageManager` in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
+      "description": "Disable package manager declaration checks in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -286,6 +286,11 @@
           "default": false,
           "type": "boolean"
         },
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
+          "default": false,
+          "type": "boolean"
+        },
         "errorsOnlyShowHash": {
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false,
@@ -308,6 +313,11 @@
         },
         "filterUsingTasks": {
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
+          "default": false,
+          "type": "boolean"
+        },
+        "strictTaskEntrypointSelection": {
+          "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are skipped as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration.",
           "default": false,
           "type": "boolean"
         }

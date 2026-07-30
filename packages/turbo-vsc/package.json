@@ -27,10 +27,6 @@
   "scripts": {
     "vscode:prepublish": "npm run esbuild-base -- --minify",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
-    "esbuild": "npm run esbuild-base -- --sourcemap",
-    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
-    "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
-    "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
     "copy-darwin-arm64": "cp out/artifacts/turborepo-lsp-aarch64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-arm64 && chmod +x out/turborepo-lsp-darwin-arm64",
     "copy-darwin-x64": "cp out/artifacts/turborepo-lsp-x86_64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-x64 && chmod +x out/turborepo-lsp-darwin-x64",
     "copy-win32-x64": "cp out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-x64.exe",
@@ -38,18 +34,17 @@
     "copy-linux-x64": "cp out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-x64 && chmod +x out/turborepo-lsp-linux-x64",
     "copy-win32-arm64": "cp out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-arm64.exe",
     "copy": "pnpm run copy-darwin-arm64 && pnpm run copy-darwin-x64 && pnpm run copy-win32-arm64 && pnpm run copy-win32-x64 && pnpm run copy-linux-arm64 && pnpm run copy-linux-x64",
-    "test": "node --import tsx --test src/*.test.ts",
-    "test-compile": "tsc -p ./ --noEmit"
+    "check-types": "tsc -p ./ --noEmit"
   },
   "dependencies": {
-    "brace-expansion": "2.0.3",
+    "brace-expansion": "5.0.8",
     "vscode-languageclient": "9.0.1"
   },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.10.8",
     "@types/vscode": "1.84.2",
-    "@vscode/vsce": "3.9.1",
+    "@vscode/vsce": "3.9.2",
     "esbuild": "0.28.1",
     "tsx": "4.22.4"
   },

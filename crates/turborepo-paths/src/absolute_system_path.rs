@@ -271,6 +271,24 @@ impl AbsoluteSystemPath {
         })
     }
 
+    /// Joins a normalized relative Unix path without resolving `.` or `..`.
+    /// Use `join_unix_path` unless the caller knows the path is normalized.
+    pub fn join_unix_path_unchecked(
+        &self,
+        unix_path: impl AsRef<RelativeUnixPath>,
+    ) -> AbsoluteSystemPathBuf {
+        #[cfg(unix)]
+        {
+            AbsoluteSystemPathBuf(self.0.join(unix_path.as_ref().as_str()))
+        }
+
+        #[cfg(windows)]
+        {
+            let tail = unix_path.as_ref().to_system_path_buf();
+            AbsoluteSystemPathBuf(self.0.join(tail))
+        }
+    }
+
     /// Note: This does not handle resolutions, so `../` in a path won't
     /// resolve.
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {

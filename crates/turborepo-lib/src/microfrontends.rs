@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use tracing::warn;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_executor::MfeConfigProvider;
@@ -43,29 +43,50 @@ impl MicrofrontendsConfigs {
             configs: Vec<(&'a str, Result<Option<MfeConfig>, Error>)>,
         }
 
-        let any_has_mfe_dep = package_graph.packages().any(|(_, info)| {
-            info.package_json
-                .all_dependencies()
-                .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE)
-        });
+        let packages = microfrontend_packages(package_graph).collect::<Vec<_>>();
+
+        let any_has_mfe_dep = packages
+            .iter()
+            .any(|(_, package_name, _)| has_mfe_dependency(package_graph, package_name));
         tracing::debug!(
             "from_disk - any package has @vercel/microfrontends dep: {}",
             any_has_mfe_dep
         );
 
-        let metadata = package_graph.packages().fold(
+        type LoadedConfig<'a> = (
+            &'a str,
+            PackageName,
+            &'a AnchoredSystemPath,
+            Result<Option<MfeConfig>, Error>,
+        );
+        // Probing every package directory for a config is two file reads per
+        // package; do them in parallel. Package order is preserved (rayon's
+        // indexed collect), so downstream config processing is unaffected.
+        let loaded: Vec<LoadedConfig> = crate::rayon_compat::block_in_place(|| {
+            use rayon::prelude::*;
+            packages
+                .into_par_iter()
+                .map(|(name, package_name, directory)| {
+                    let config_result = MfeConfig::load_from_dir_with_mfe_dep(
+                        repo_root,
+                        directory,
+                        any_has_mfe_dep,
+                    );
+                    (name, package_name, directory, config_result)
+                })
+                .collect()
+        });
+
+        let metadata = loaded.into_iter().fold(
             PackageMetadata {
                 names: HashSet::new(),
                 has_mfe_dep: HashMap::new(),
                 configs: Vec::new(),
             },
-            |mut acc, (name, info)| {
-                let name_str = name.as_str();
+            |mut acc, (name, package_name, directory, config_result)| {
+                let name_str = name;
                 acc.names.insert(name_str);
-                let has_dep = info
-                    .package_json
-                    .all_dependencies()
-                    .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE);
+                let has_dep = has_mfe_dependency(package_graph, &package_name);
                 tracing::debug!(
                     "from_disk - package: {}, has @vercel/microfrontends dep: {}",
                     name_str,
@@ -73,16 +94,11 @@ impl MicrofrontendsConfigs {
                 );
                 acc.has_mfe_dep.insert(name_str, has_dep);
 
-                let config_result = MfeConfig::load_from_dir_with_mfe_dep(
-                    repo_root,
-                    info.package_path(),
-                    any_has_mfe_dep,
-                );
                 if let Ok(Some(ref _config)) = config_result {
                     tracing::debug!(
                         "from_disk - found config in package: {}, path: {:?}",
                         name_str,
-                        info.package_path()
+                        directory
                     );
                 } else if let Err(ref e) = config_result {
                     tracing::debug!(
@@ -329,6 +345,39 @@ impl MicrofrontendsConfigs {
     }
 }
 
+/// Real package scopes backed by an authoritative package.json definition.
+/// Non-package.json scopes, such as Cargo crates, and aggregate execution
+/// scopes must not be probed for MFE configuration.
+fn microfrontend_packages(
+    package_graph: &PackageGraph,
+) -> impl Iterator<Item = (&str, PackageName, &turbopath::AnchoredSystemPath)> {
+    package_graph.node_views().filter_map(|(node, view)| {
+        if !view.is_package_json_scope() {
+            return None;
+        }
+        let name = match node {
+            turborepo_repository::package_graph::PackageNode::Root => return None,
+            turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Root) => "//",
+            turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Other(
+                name,
+            )) => package_graph
+                .real_package_names()
+                .find(|candidate| **candidate == name)?,
+        };
+        let package_name = match name {
+            "//" => PackageName::Root,
+            name => PackageName::Other(name.to_owned()),
+        };
+        Some((name, package_name, view.directory()?))
+    })
+}
+
+/// Whether a package declares a dependency on `@vercel/microfrontends`, using
+/// relationship knowledge rather than `PackageInfo` / PackageJson.
+fn has_mfe_dependency(package_graph: &PackageGraph, package: &PackageName) -> bool {
+    package_graph.has_dependency_declaration(package, MICROFRONTENDS_PACKAGE)
+}
+
 impl MfeConfigProvider for MicrofrontendsConfigs {
     fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         MicrofrontendsConfigs::task_has_mfe_proxy(self, task_id)
@@ -520,10 +569,175 @@ impl ConfigInfo {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use serde_json::json;
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
+    use turborepo_repository::{
+        package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
+    };
 
     use super::*;
+
+    fn temp_root(tmp: &TempDir) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap()
+    }
+
+    fn write_mfe_config(root: &AbsoluteSystemPath, package: &str) {
+        root.join_component("microfrontends.json")
+            .create_with_contents(format!(
+                r#"{{"version":"1","applications":{{"{package}":{{"development":{{"local":3000}}}}}}}}"#
+            ))
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn from_disk_probes_the_authoritative_javascript_root() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        let root_package_json = PackageJson::from_value(json!({
+            "name": "root-app",
+            "packageManager": "pnpm@9.0.0"
+        }))
+        .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root-app","packageManager":"pnpm@9.0.0"}"#)
+            .unwrap();
+        write_mfe_config(&root, "root-app");
+        let graph = PackageGraph::builder(&root, root_package_json)
+            .with_single_package_mode(true)
+            .build()
+            .await
+            .unwrap();
+
+        let configs = MicrofrontendsConfigs::from_disk(&root, &graph)
+            .unwrap()
+            .expect("root config should be loaded");
+        assert!(configs
+            .config_filename(PackageName::Root.as_str())
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn from_disk_does_not_probe_cargo_scopes_as_packages() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"member\"]\n\n[workspace.metadata]\nname = \
+                 \"aggregate\"\n",
+            )
+            .unwrap();
+        root.join_components(&["member", "src"])
+            .create_dir_all()
+            .unwrap();
+        root.join_components(&["member", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        root.join_components(&["member", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"member\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+        write_mfe_config(&root, "aggregate");
+        write_mfe_config(&root.join_component("member"), "member");
+
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_cargo()
+            .build()
+            .await
+            .unwrap();
+
+        assert!(MicrofrontendsConfigs::from_disk(&root, &graph)
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn mfe_dependency_detection_uses_declaration_names() {
+        for (manifest, expected) in [
+            (
+                json!({ "dependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "devDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "optionalDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({ "peerDependencies": { (MICROFRONTENDS_PACKAGE): "1.0.0" } }),
+                true,
+            ),
+            (
+                json!({
+                    "dependencies": {
+                        "mfe-alias": "npm:@vercel/microfrontends@1.0.0"
+                    }
+                }),
+                false,
+            ),
+            (json!({}), false),
+        ] {
+            let tmp = TempDir::new().unwrap();
+            let root = temp_root(&tmp);
+            let mut root_manifest = json!({
+                "name": "root-app",
+                "packageManager": "npm@10.0.0",
+            });
+            root_manifest
+                .as_object_mut()
+                .unwrap()
+                .extend(manifest.as_object().unwrap().clone());
+            let root_package_json = PackageJson::from_value(root_manifest).unwrap();
+            let graph = PackageGraph::builder(&root, root_package_json)
+                .with_single_package_mode(true)
+                .build()
+                .await
+                .unwrap();
+
+            assert_eq!(has_mfe_dependency(&graph, &PackageName::Root), expected);
+            assert!(!graph
+                .has_dependency_declaration(&PackageName::from("missing"), MICROFRONTENDS_PACKAGE));
+        }
+    }
+
+    #[tokio::test]
+    async fn mfe_dependency_detection_includes_internal_workspaces() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        let root_package_json = PackageJson::from_value(json!({
+            "name": "root-app",
+            "packageManager": "npm@10.0.0",
+            "workspaces": ["packages/*"],
+            "dependencies": { (MICROFRONTENDS_PACKAGE): "workspace:*" },
+        }))
+        .unwrap();
+        let mfe_package_json = PackageJson::from_value(json!({
+            "name": MICROFRONTENDS_PACKAGE,
+            "version": "1.0.0",
+        }))
+        .unwrap();
+        let package_path = root.join_components(&["packages", "mfe", "package.json"]);
+        let graph = PackageGraph::builder(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::from([(package_path, mfe_package_json)])))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(has_mfe_dependency(&graph, &PackageName::Root));
+    }
 
     struct PackageUpdateTest {
         package_name: &'static str,

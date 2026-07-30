@@ -430,10 +430,14 @@ async fn exchange_auth_tokens(
                 if let Some(refresh_error) = refresh_error {
                     warn!(
                         "Failed to refresh or exchange {source_label} after a forbidden response: \
-                         refresh error: {refresh_error}; exchange error: {e}"
+                         refresh error: {refresh_error}; exchange error: {e}. Run `turbo login` \
+                         to create a new local session."
                     );
                 } else {
-                    warn!("Failed to exchange {source_label} after a forbidden response: {e}");
+                    warn!(
+                        "Failed to exchange {source_label} after a forbidden response: {e}. Run \
+                         `turbo login` to create a new local session."
+                    );
                 }
                 Ok(None)
             }

@@ -56,9 +56,7 @@ pub trait PackageChangesWatcher: Send + Sync {
 /// Arguments passed to a PackageChangesWatcher factory
 pub struct PackageChangesWatcherArgs {
     pub repo_root: AbsoluteSystemPathBuf,
-    pub file_events: turborepo_filewatch::OptionalWatch<
-        broadcast::Receiver<Result<notify::Event, turborepo_filewatch::NotifyError>>,
-    >,
+    pub file_events: turborepo_filewatch::WatchSource,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub allow_no_package_manager: bool,
@@ -222,6 +220,15 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
+                // The wire format does not carry nub's underlying lockfile
+                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
+                // after deserializing to re-resolve from disk.
+                PackageManager::Nub => Self::Nub {
+                    lockfile: Box::new(Self::Npm),
+                },
+                PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -236,6 +243,8 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
+                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
+                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
             }
         }
     }

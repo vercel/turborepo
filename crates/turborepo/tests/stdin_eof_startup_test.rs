@@ -22,9 +22,11 @@ fn setup_stdin_eof_fixture() -> tempfile::TempDir {
 fn spawn_turbo_run_dev(test_dir: &Path, config_dir: &Path) -> Child {
     let turbo_bin = assert_cmd::cargo::cargo_bin("turbo");
     let mut cmd = Command::new(turbo_bin);
-    cmd.arg("run")
-        .arg("dev")
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+    cmd.arg("run").arg("dev");
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
+    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir)

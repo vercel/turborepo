@@ -3,16 +3,20 @@ use turborepo_daemon::{
     proto::{DiscoverPackagesResponse, PackageFiles, PackageManager as ProtoPackageManager},
     DaemonClient,
 };
-use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData};
+use turborepo_repository::{
+    discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData},
+    package_manager::PackageManager,
+};
 
 #[derive(Debug)]
 pub struct DaemonPackageDiscovery<C> {
     daemon: DaemonClient<C>,
+    repo_root: AbsoluteSystemPathBuf,
 }
 
 impl<C> DaemonPackageDiscovery<C> {
-    pub fn new(daemon: DaemonClient<C>) -> Self {
-        Self { daemon }
+    pub fn new(daemon: DaemonClient<C>, repo_root: AbsoluteSystemPathBuf) -> Self {
+        Self { daemon, repo_root }
     }
 }
 
@@ -37,8 +41,9 @@ fn workspace_data_from_proto(package_files: PackageFiles) -> Result<WorkspaceDat
 
 fn discovery_response_from_proto(
     response: DiscoverPackagesResponse,
+    repo_root: &turbopath::AbsoluteSystemPath,
 ) -> Result<DiscoveryResponse, Error> {
-    let package_manager = ProtoPackageManager::try_from(response.package_manager)
+    let package_manager: PackageManager = ProtoPackageManager::try_from(response.package_manager)
         .map_err(|_| {
             Error::InvalidResponse(format!(
                 "daemon returned invalid package manager: {}",
@@ -54,7 +59,7 @@ fn discovery_response_from_proto(
 
     Ok(DiscoveryResponse {
         workspaces,
-        package_manager,
+        package_manager: package_manager.with_resolved_nub_lockfile(repo_root),
     })
 }
 
@@ -70,7 +75,7 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
             .await
             .map_err(|e| Error::Failed(Box::new(e)))?;
 
-        discovery_response_from_proto(response)
+        discovery_response_from_proto(response, &self.repo_root)
     }
 
     async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
@@ -84,6 +89,6 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
             .await
             .map_err(|e| Error::Failed(Box::new(e)))?;
 
-        discovery_response_from_proto(response)
+        discovery_response_from_proto(response, &self.repo_root)
     }
 }

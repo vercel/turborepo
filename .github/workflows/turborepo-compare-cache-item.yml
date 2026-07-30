@@ -1,5 +1,8 @@
 name: Compare Cache Item
 
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   workflow_dispatch:
     inputs:

@@ -14,11 +14,8 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::{
-    package_graph::{
-        ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
-    },
-    package_manager::{PackageManager, yarnrc},
+use crate::package_graph::{
+    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
 };
 
 mod package;
@@ -193,6 +190,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             }),
                         );
 
+                        self.add_relationship_affected_packages(&mut changed_pkgs);
+
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
 
@@ -211,6 +210,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     // We don't know if the lockfile changed or not, so we can't assume anything
                     LockfileContents::Unchanged => {
                         debug!("the lockfile did not change");
+                        self.add_relationship_affected_packages(&mut changed_pkgs);
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
                 }
@@ -265,26 +265,49 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         PackageChanges::Some(changed_packages)
     }
 
+    fn add_relationship_affected_packages(
+        &self,
+        changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
+    ) {
+        let mut directly_changed: Vec<_> = changed_packages
+            .keys()
+            .map(|package| package.name.clone())
+            .collect();
+        directly_changed.sort();
+        for dependency in directly_changed {
+            let Some(affected_packages) = self
+                .pkg_graph
+                .affected_relationships()
+                .additional_affected_by(&dependency)
+            else {
+                continue;
+            };
+            for name in affected_packages {
+                if name == dependency {
+                    continue;
+                }
+                let Some(context) = self.pkg_graph.package_task_context(&name) else {
+                    continue;
+                };
+                changed_packages
+                    .entry(WorkspacePackage {
+                        name,
+                        path: context.directory().to_owned(),
+                    })
+                    .or_insert_with(|| PackageInclusionReason::DependencyChanged {
+                        dependency: dependency.clone(),
+                    });
+            }
+        }
+    }
+
     fn get_changed_packages_from_lockfile(
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let yarnrc = if matches!(self.pkg_graph.package_manager(), PackageManager::Berry) {
-            Some(yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())?)
-        } else {
-            None
-        };
-        let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
-            self.pkg_graph.root_package_json(),
-            lockfile_content,
-            yarnrc,
-        )?;
-
-        let additional_packages = self
-            .pkg_graph
-            .changed_packages_from_lockfile(previous_lockfile.as_ref())?;
-
-        Ok(additional_packages)
+        self.pkg_graph
+            .changed_packages_from_lockfile_contents(lockfile_content)
+            .map_err(Into::into)
     }
 
     pub fn lockfile_changed(
@@ -304,23 +327,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 pub enum ChangeMapError {
     #[error(transparent)]
     Wax(#[from] wax::BuildError),
-    #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
-    #[error("Yarn config error: {0}")]
-    Yarnrc(#[from] yarnrc::Error),
-    #[error("No lockfile")]
-    NoLockfile,
-    #[error("Lockfile error: {0}")]
-    Lockfile(turborepo_lockfiles::Error),
-}
-
-impl From<ChangedPackagesError> for ChangeMapError {
-    fn from(value: ChangedPackagesError) -> Self {
-        match value {
-            ChangedPackagesError::NoLockfile => Self::NoLockfile,
-            ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
-        }
-    }
+    #[error(transparent)]
+    ChangedPackages(#[from] ChangedPackagesError),
 }
 
 #[cfg(test)]

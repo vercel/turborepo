@@ -1,5 +1,8 @@
 name: Library Release
 
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   workflow_dispatch:
     inputs:
@@ -11,7 +14,18 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Validate release source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require protected main
+        if: github.ref_name != github.event.repository.default_branch
+        run: |
+          echo "::error::Library releases must run from the default branch."
+          exit 1
+
   build:
+    needs: [preflight]
     defaults:
       run:
         shell: bash -leo pipefail {0}
@@ -49,7 +63,7 @@ jobs:
               chmod +x rustup-init
               ./rustup-init -y
               rm rustup-init
-              npm i -g pnpm@10.28.0
+              npm i -g --force pnpm@10.28.0
               mkdir ../zig
               curl --fail --show-error --silent --location --output zig.tar.xz https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
               echo "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982  zig.tar.xz" | sha256sum --check --strict
@@ -66,6 +80,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
+              npm i -g --force pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
@@ -80,6 +95,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
+              npm i -g --force pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
@@ -112,23 +128,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.settings.target }}
-          github-token: ${{ github.token }}
-        if: ${{ !matrix.settings.install }}
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-        if: ${{ !matrix.settings.install }}
+      - parallel:
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              targets: ${{ matrix.settings.target }}
+              github-token: ${{ github.token }}
+            if: ${{ !matrix.settings.install }}
 
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
-        with:
-          use-cache: ${{ !matrix.settings.install }}
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+            if: ${{ !matrix.settings.install }}
+
+          - name: Setup capnproto
+            if: runner.os != 'macOS'
+            uses: ./.github/actions/setup-capnproto
+            with:
+              use-cache: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
@@ -166,11 +188,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-          package-install: false
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+              package-install: false
+
+          - name: Download Artifacts
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              path: ${{ runner.temp }}/native-packages
 
       - name: Configure npm
         run: |
@@ -201,21 +229,16 @@ jobs:
             --all-tracked \
             --include-untracked
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: native-packages
-
       - name: Move artifacts into place
         run: |
-          mv native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node packages/turbo-repository/npm/darwin-arm64/
-          mv native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node packages/turbo-repository/npm/darwin-x64/
-          mv native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node packages/turbo-repository/npm/linux-arm64-gnu/
-          mv native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node packages/turbo-repository/npm/linux-arm64-musl/
-          mv native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node packages/turbo-repository/npm/linux-x64-gnu/
-          mv native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node packages/turbo-repository/npm/linux-x64-musl/
-          mv native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node packages/turbo-repository/npm/win32-arm64-msvc/
-          mv native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node packages/turbo-repository/npm/win32-x64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node" packages/turbo-repository/npm/darwin-arm64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node" packages/turbo-repository/npm/darwin-x64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node" packages/turbo-repository/npm/linux-arm64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node" packages/turbo-repository/npm/linux-arm64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node" packages/turbo-repository/npm/linux-x64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node" packages/turbo-repository/npm/linux-x64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node" packages/turbo-repository/npm/win32-arm64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node" packages/turbo-repository/npm/win32-x64-msvc/
 
       - name: Build Meta Package
         run: |
@@ -264,17 +287,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     needs: [package]
     if: ${{ !inputs.dry_run }}
     steps:
-      - name: Create PR
+      - name: Checkout trusted release validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Create, validate, and merge release PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.package.outputs.version }}"
           BRANCH="${{ needs.package.outputs.branch }}"
+
           PR_URL=$(gh pr list \
             --repo "${{ github.repository }}" \
             --head "${BRANCH}" \
@@ -285,13 +316,64 @@ jobs:
           if [ -z "$PR_URL" ]; then
             PR_URL=$(gh pr create \
               --repo "${{ github.repository }}" \
-              --title "release(library): ${VERSION}" \
+              --title "chore: Release Turbo repository packages ${VERSION}" \
               --body "Bumps \`@turbo/repository\` packages to \`${VERSION}\`." \
               --head "${BRANCH}" \
               --base main)
           fi
           PR_NUM=$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
-          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --auto --squash
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
+          HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_BASE_SHA="$BASE_SHA" \
+          PR_HEAD_SHA="$HEAD_SHA" \
+          PR_HEAD_REF="$BRANCH" \
+          PR_TITLE="chore: Release Turbo repository packages ${VERSION}" \
+            node scripts/validate-release-pr.mjs
+
+          DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
+          gh workflow run release-pr-checks.yml \
+            --ref "$BRANCH" \
+            -f pr-number="$PR_NUM" \
+            -f expected-head-sha="$HEAD_SHA" \
+            -f run-id="$DISPATCH_ID"
+
+          CHECK_RUN_ID=""
+          for _ in $(seq 1 30); do
+            CHECK_RUN_ID=$(gh run list \
+              --workflow release-pr-checks.yml \
+              --branch "$BRANCH" \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,displayTitle,headSha \
+              --jq "[.[] | select(.displayTitle == \"Release PR checks ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
+            if [ -n "$CHECK_RUN_ID" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$CHECK_RUN_ID" ]; then
+            echo "::error::Unable to find dispatched release PR checks run"
+            exit 1
+          fi
+
+          gh run watch "$CHECK_RUN_ID" --exit-status
+          CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
+                "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \
+                "$(jq -r '.title' <<< "$CURRENT_PR")" != "chore: Release Turbo repository packages ${VERSION}" || \
+                "$(jq -r '.base.ref' <<< "$CURRENT_PR")" != "main" || \
+                "$(jq -r '.base.sha' <<< "$CURRENT_PR")" != "$BASE_SHA" || \
+                "$(jq -r '.base.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.head.ref' <<< "$CURRENT_PR")" != "$BRANCH" || \
+                "$(jq -r '.head.sha' <<< "$CURRENT_PR")" != "$HEAD_SHA" || \
+                "$(jq -r '.head.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.state' <<< "$CURRENT_PR")" != "open" || \
+                "$(jq -r '.draft' <<< "$CURRENT_PR")" != "false" ]]; then
+            echo "::error::Release PR metadata changed after validation"
+            exit 1
+          fi
+          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --match-head-commit "$HEAD_SHA"
 
   cleanup-on-failure:
     name: Cleanup Failed Release

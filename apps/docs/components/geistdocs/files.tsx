@@ -13,7 +13,7 @@ type FileProps = ComponentProps<typeof FumaFile> & {
 
 export const File = ({ green, className, ...props }: FileProps) => (
   <FumaFile
-    className={cn(green ? "text-green-700 dark:text-green-400" : "", className)}
+    className={cn(green ? "text-green-900" : "", className)}
     {...props}
   />
 );
@@ -24,7 +24,7 @@ type FolderProps = ComponentProps<typeof FumaFolder> & {
 
 export const Folder = ({ green, className, ...props }: FolderProps) => (
   <FumaFolder
-    className={cn(green ? "text-green-700 dark:text-green-400" : "", className)}
+    className={cn(green ? "text-green-900" : "", className)}
     {...props}
   />
 );

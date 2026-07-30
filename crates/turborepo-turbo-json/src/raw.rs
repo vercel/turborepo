@@ -15,7 +15,7 @@ use turborepo_boundaries::BoundariesConfig;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_task_id::TaskName;
-use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
+use turborepo_types::{EnvMode, ExperimentalCIConfig, OutputLogsMode, UIMode};
 use turborepo_unescape::UnescapedString;
 
 use crate::{error::Error, future_flags::FutureFlags};
@@ -104,13 +104,6 @@ impl IntoIterator for Pipeline {
 /// empty marker.
 pub trait HasConfigBeyondExtends {
     fn has_config_beyond_extends(&self) -> bool;
-}
-
-#[derive(Serialize, Debug, PartialEq, Clone)]
-#[serde(untagged)]
-pub enum RawExperimentalCIConfig {
-    Enabled(bool),
-    Options(serde_json::Map<String, serde_json::Value>),
 }
 
 /// Configuration options that control how turbo interfaces with the remote
@@ -314,7 +307,7 @@ pub struct RawGlobalConfig {
     #[ts(optional)]
     pub ui: Option<Spanned<UIMode>>,
 
-    /// Disable check for `packageManager` in root `package.json`.
+    /// Disable package manager declaration checks in root `package.json`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
@@ -538,7 +531,7 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub ui: Option<Spanned<UIMode>>,
 
-    /// Disable check for `packageManager` in root `package.json`.
+    /// Disable package manager declaration checks in root `package.json`.
     ///
     /// This is highly discouraged as it leaves `turbo` dependent on system
     /// configuration to infer the correct package manager. Some turbo features
@@ -711,6 +704,47 @@ pub enum RawTaskInput {
     Structured(RawStructuredInput),
 }
 
+/// The command a task runs, replacing the toolchain's own resolution
+/// (package.json scripts, Cargo verb tables). Gated behind
+/// `futureFlags.experimentalTaskCommand`.
+///
+/// Three JSON shapes, dispatched in the `Deserializable` impl (parser.rs):
+///
+/// - an argv array — executed directly, no shell: `["cargo", "nextest",
+///   "run"]`. An empty array is an explicit opt-out, like `null`.
+/// - `null` — explicitly no command; the task is a no-op for this package. Only
+///   meaningful in package-scoped positions.
+/// - a per-toolchain map — only meaningful on unscoped root tasks: `{ "rust":
+///   [...], "javascript": [...] }`.
+#[derive(Debug, PartialEq, Clone)]
+pub enum RawCommand {
+    /// `null` or `[]`: explicitly no command.
+    OptOut,
+    /// The argv to execute: program first, arguments after.
+    Argv(Vec<Spanned<UnescapedString>>),
+    /// Per-toolchain argv defaults, keyed by toolchain id. Entries keep
+    /// their source order and key spans for diagnostics; duplicate and
+    /// alias-conflicting keys are rejected during processing.
+    PerToolchain(Vec<(Spanned<String>, Vec<Spanned<UnescapedString>>)>),
+}
+
+impl Serialize for RawCommand {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            RawCommand::OptOut => serializer.serialize_none(),
+            RawCommand::Argv(items) => items.serialize(serializer),
+            RawCommand::PerToolchain(entries) => {
+                let mut map = serializer.serialize_map(Some(entries.len()))?;
+                for (key, argv) in entries {
+                    map.serialize_entry(key.as_inner(), argv)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
+
 /// Configuration for a pipeline task.
 ///
 /// The name of a task that can be executed by turbo. If turbo finds a
@@ -866,7 +900,7 @@ pub struct RawTaskDefinition {
     #[deserializable(rename = "experimentalCI")]
     #[schemars(skip)]
     #[ts(skip)]
-    pub experimental_ci: Option<Spanned<RawExperimentalCIConfig>>,
+    pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
 
     /// Incremental cache partitions for tool-specific incremental artifacts.
     ///
@@ -880,6 +914,15 @@ pub struct RawTaskDefinition {
     #[schemars(skip)]
     #[ts(skip)]
     pub incremental: Option<Vec<RawIncrementalPartition>>,
+
+    /// The command this task runs, replacing the toolchain's own resolution
+    /// (package.json scripts, Cargo verb tables). See [`RawCommand`].
+    ///
+    /// Experimental, gated behind `futureFlags.experimentalTaskCommand`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub command: Option<Spanned<RawCommand>>,
 }
 
 impl HasConfigBeyondExtends for RawTaskDefinition {
@@ -896,6 +939,8 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
             || self.interactive.is_some()
             || self.with.is_some()
             || self.incremental.is_some()
+            || self.experimental_ci.is_some()
+            || self.command.is_some()
     }
 }
 

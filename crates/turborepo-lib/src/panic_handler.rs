@@ -21,7 +21,7 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
     // If the TUI was active, restore terminal to a sane state before printing
     // anything. This function checks a global flag and only runs restoration
     // if the TUI actually modified terminal state.
-    turborepo_ui::restore_terminal_on_panic();
+    turborepo_ui::restore_terminal_best_effort();
 
     let cause = panic_info.to_string();
 
@@ -79,9 +79,9 @@ mod test {
     /// restoration.
     ///
     /// This test verifies that:
-    /// 1. When the TUI is inactive, restore_terminal_on_panic returns false
-    /// 2. When the TUI is active, restore_terminal_on_panic returns true
-    /// 3. The panic handler correctly calls restore_terminal_on_panic
+    /// 1. When the TUI is inactive, restore_terminal_best_effort returns false
+    /// 2. When the TUI is active, restore_terminal_best_effort returns true
+    /// 3. The panic handler correctly calls restore_terminal_best_effort
     ///
     /// Note: We can't easily test actual panic behavior without spawning a
     /// subprocess, so we test the individual components that make up the flow.
@@ -93,10 +93,10 @@ mod test {
         assert!(!is_tui_active(), "TUI should start inactive");
 
         // When TUI is inactive, restoration should be skipped
-        let restored = turborepo_ui::restore_terminal_on_panic();
+        let restored = turborepo_ui::restore_terminal_best_effort();
         assert!(
             !restored,
-            "restore_terminal_on_panic should return false when TUI inactive"
+            "restore_terminal_best_effort should return false when TUI inactive"
         );
 
         // Simulate TUI becoming active (as would happen in startup())
@@ -104,10 +104,10 @@ mod test {
         assert!(is_tui_active(), "TUI should be active after set_tui_active");
 
         // When TUI is active, restoration should run
-        let restored = turborepo_ui::restore_terminal_on_panic();
+        let restored = turborepo_ui::restore_terminal_best_effort();
         assert!(
             restored,
-            "restore_terminal_on_panic should return true when TUI active"
+            "restore_terminal_best_effort should return true when TUI active"
         );
 
         // Clean up - simulate cleanup() completing
@@ -118,10 +118,10 @@ mod test {
         );
 
         // After cleanup, restoration should be skipped again
-        let restored = turborepo_ui::restore_terminal_on_panic();
+        let restored = turborepo_ui::restore_terminal_best_effort();
         assert!(
             !restored,
-            "restore_terminal_on_panic should return false after cleanup"
+            "restore_terminal_best_effort should return false after cleanup"
         );
     }
 

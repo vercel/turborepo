@@ -12,7 +12,6 @@ use turborepo_repository::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
         LockfileContents, PackageChangeMapper, PackageChanges,
     },
-    inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME, WorkspacePackage},
 };
 use turborepo_scm::SCM;
@@ -53,7 +52,6 @@ pub struct PackageManager {
 
 #[napi]
 pub struct Workspace {
-    workspace_state: WorkspaceState,
     /// The absolute path to the workspace root.
     #[napi(readonly)]
     pub absolute_path: String,
@@ -95,12 +93,9 @@ impl Package {
 
         pkgs.iter()
             .filter_map(|node| {
-                let info = graph.package_info(node.as_package_name())?;
-                // If we don't get a package name back, we'll just skip it.
-                let name = info.package_name()?;
-                let anchored_package_path = info.package_path();
-                let package_path = workspace_path.resolve(anchored_package_path);
-                Package::new(name, workspace_path, &package_path).ok()
+                let context = graph.package_task_context(node.as_package_name())?;
+                let package_path = workspace_path.resolve(context.directory());
+                Package::new(context.package().to_string(), workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -119,12 +114,9 @@ impl Package {
         pkgs.iter()
             .filter(|node| !matches!(node, PackageNode::Root))
             .filter_map(|node| {
-                let info = graph.package_info(node.as_package_name())?;
-                // If we don't get a package name back, we'll just skip it.
-                let name = info.package_name()?;
-                let anchored_package_path = info.package_path();
-                let package_path = workspace_path.resolve(anchored_package_path);
-                Package::new(name, workspace_path, &package_path).ok()
+                let context = graph.package_task_context(node.as_package_name())?;
+                let package_path = workspace_path.resolve(context.directory());
+                Package::new(context.package().to_string(), workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -185,25 +177,22 @@ impl Workspace {
         Ok(map)
     }
 
-    /// Returns all external packages from the lockfile as
-    /// `npm/<name>@<version>` strings. Collects the transitive external
-    /// dependencies of every workspace package and formats them using the
-    /// lockfile's human-readable name.
+    /// Returns all external packages from the JavaScript resolution domain as
+    /// `npm/<name>@<version>` strings. Names come from producer-supplied
+    /// human names on the resolution generation; Cargo identities are
+    /// excluded to preserve the historical lockfile-only listing.
     #[napi]
     pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
-        let lockfile = self
-            .graph
-            .lockfile()
-            .ok_or_else(|| napi::Error::from_reason("No lockfile found"))?;
+        let identities = self.graph.javascript_external_package_identities();
+        if identities.is_empty() && self.graph.lockfile().is_none() {
+            return Err(napi::Error::from_reason("No lockfile found"));
+        }
 
-        let mut seen = HashSet::new();
-        let mut result: Vec<String> = self
-            .graph
-            .packages()
-            .filter_map(|(_name, info)| info.transitive_dependencies.as_ref())
-            .flatten()
-            .filter(|pkg| seen.insert(&pkg.key))
-            .filter_map(|pkg| lockfile.human_name(pkg).map(|name| format!("npm/{name}")))
+        let mut seen_keys = HashSet::new();
+        let mut result: Vec<String> = identities
+            .into_iter()
+            .filter(|identity| seen_keys.insert(identity.key().to_string()))
+            .filter_map(|identity| identity.human_name().map(|name| format!("npm/{name}")))
             .collect();
 
         result.sort();
@@ -216,7 +205,10 @@ impl Workspace {
         workspace_root: &AbsoluteSystemPath,
         from_commit: &str,
     ) -> LockfileContents {
-        let lockfile_name = self.graph.package_manager().lockfile_name();
+        let Some(package_manager) = self.graph.package_manager() else {
+            return LockfileContents::Unchanged;
+        };
+        let lockfile_name = package_manager.lockfile_name();
         let Ok(lockfile_path) = AnchoredSystemPath::new(&lockfile_name) else {
             return LockfileContents::Unchanged;
         };
@@ -278,8 +270,10 @@ impl Workspace {
         let lockfile_contents = if let Some(base) = base {
             self.get_lockfile_contents(&changed_files, workspace_root, base)
         } else if matches!(
-            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name()),
-            Ok(path) if changed_files.contains(path)
+            self.graph
+                .package_manager()
+                .map(|pm| AnchoredSystemPath::new(pm.lockfile_name())),
+            Some(Ok(path)) if changed_files.contains(path)
         ) {
             LockfileContents::UnknownChange
         } else {
@@ -294,10 +288,10 @@ impl Workspace {
         let packages = match package_changes {
             PackageChanges::All(_) => self
                 .graph
-                .packages()
-                .map(|(name, info)| WorkspacePackage {
-                    name: name.to_owned(),
-                    path: info.package_path().to_owned(),
+                .package_task_contexts()
+                .map(|context| WorkspacePackage {
+                    name: context.package().clone(),
+                    path: context.directory().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
             PackageChanges::Some(packages) => packages.into_keys().collect(),

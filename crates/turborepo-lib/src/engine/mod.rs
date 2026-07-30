@@ -10,6 +10,7 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 use turborepo_types::{TaskDefinition, UIMode};
 
 /// Type alias for Engine specialized with TaskDefinition.
@@ -70,6 +71,29 @@ pub trait EngineExt {
     ) -> Result<(), Vec<ValidateError>>;
 }
 
+pub(crate) fn task_has_command(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    if task.task() == "proxy" {
+        return true;
+    }
+
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context.native_tasks().defines(task.task()),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -77,14 +101,15 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Root => None,
                 TaskNode::Task(task) => Some(task),
             })
-            .filter_map(|task| {
-                let pkg_name = PackageName::from(task.package());
-                let json = pkg_graph.package_json(&pkg_name)?;
-                // TODO: delegate to command factory to filter down tasks to those that will
-                // have a runnable command.
-                (task.task() == "proxy" || json.command(task.task()).is_some())
-                    .then(|| task.to_string())
+            .filter(|task| {
+                // Ask the native-task catalog whether the task resolves to a
+                // runnable command — the same authority execution uses. A
+                // resolved `command` override is authoritative in both
+                // directions: an argv executes even where the catalog defines
+                // nothing, and an opt-out never executes even where it does.
+                task_has_command(self, pkg_graph, task)
             })
+            .map(ToString::to_string)
             .collect()
     }
 
@@ -131,13 +156,15 @@ impl EngineExt for Engine<Built> {
                                 package_name: dep_id.package().to_string(),
                             })?;
 
-                    let package_json = package_graph
-                        .package_json(&PackageName::from(dep_id.package()))
-                        .ok_or_else(|| ValidateError::MissingPackageJson {
+                    let package_name = PackageName::from(dep_id.package());
+                    let Some(dep_context) = package_graph.package_task_context(&package_name)
+                    else {
+                        return Err(ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
-                        })?;
+                        });
+                    };
                     if task_definition.persistent
-                        && package_json.scripts.contains_key(dep_id.task())
+                        && dep_context.native_tasks().defines(dep_id.task())
                     {
                         let (span, text) = self
                             .task_locations()
@@ -154,20 +181,15 @@ impl EngineExt for Engine<Built> {
                     }
                 }
 
-                // check if the package for the task has that task in its package.json
+                // check if the package for the task defines an executable native task
                 let package_name = PackageName::from(task_id.package().to_string());
-                let info = package_graph.package_info(&package_name).ok_or_else(|| {
-                    ValidateError::MissingPackageJson {
+                let Some(context) = package_graph.package_task_context(&package_name) else {
+                    return Err(ValidateError::MissingPackageJson {
                         package: task_id.package().to_string(),
-                    }
-                })?;
+                    });
+                };
 
-                let package_has_task = info
-                    .package_json
-                    .scripts
-                    .get(task_id.task())
-                    // handle legacy behaviour from go where an empty string may appear
-                    .is_some_and(|script| !script.is_empty());
+                let package_has_task = context.native_tasks().defines(task_id.task());
 
                 let task_is_persistent = self
                     .task_definition(task_id)
@@ -233,7 +255,6 @@ mod test {
 
     use std::collections::{BTreeMap, HashSet};
 
-    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_errors::Spanned;
     use turborepo_repository::{
@@ -244,9 +265,9 @@ mod test {
 
     use super::*;
 
-    struct DummyDiscovery<'a>(&'a TempDir);
+    struct DummyDiscovery(turbopath::AbsoluteSystemPathBuf);
 
-    impl<'a> PackageDiscovery for DummyDiscovery<'a> {
+    impl PackageDiscovery for DummyDiscovery {
         async fn discover_packages(
             &self,
         ) -> Result<
@@ -257,7 +278,7 @@ mod test {
             let workspaces = [("a", true), ("b", true), ("c", false)]
                 .into_iter()
                 .map(|(name, had_build)| {
-                    let path = AbsoluteSystemPath::from_std_path(self.0.path()).unwrap();
+                    let path = &self.0;
                     let package_json = path.join_component(&format!("{}.json", name));
 
                     let scripts = if had_build {
@@ -304,6 +325,73 @@ mod test {
         }
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_tasks_with_command_asks_toolchains() {
+        // The TUI task list must come from the same authority execution
+        // uses: the package's toolchain. JS packages resolve via
+        // package.json scripts; Cargo packages resolve via the toolchain's
+        // verb tables — no scripts anywhere.
+        let tmp = tempfile::TempDir::with_prefix("tasks_with_command").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+
+        // A minimal Cargo workspace with one binary crate.
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+            )
+            .unwrap();
+        let crate_dir = root.join_components(&["crates", "my-crate"]);
+        crate_dir.join_component("src").create_dir_all().unwrap();
+        crate_dir
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        crate_dir
+            .join_components(&["src", "main.rs"])
+            .create_with_contents("fn main() {}\n")
+            .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"my-crate\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        let mut engine: Engine<Building> = Engine::new();
+        for (package, task) in [
+            // JS package with a build script (DummyDiscovery gives "a" one).
+            ("a", "build"),
+            // JS package without any scripts.
+            ("c", "build"),
+            // The synthetic Cargo workspace package.
+            ("acme", "test"),
+            // A binary crate.
+            ("my-crate", "build"),
+        ] {
+            let task_id = TaskId::new(package, task);
+            engine.get_index(&task_id);
+            engine.add_definition(task_id, TaskDefinition::default());
+        }
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(DummyDiscovery(
+                turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+            ))
+            .with_cargo()
+            .build()
+            .await
+            .unwrap();
+
+        let mut tasks = engine.tasks_with_command(&graph);
+        tasks.sort();
+        // "c#build" is absent: no script defines it. Both Cargo tasks are
+        // present without any package.json involvement.
+        assert_eq!(tasks, vec!["a#build", "acme#test", "my-crate#build"]);
+    }
+
     #[tokio::test]
     async fn issue_4291() {
         // we had an issue where our engine validation would reject running persistent
@@ -335,7 +423,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -387,7 +477,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -420,7 +512,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -453,7 +547,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp))
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
         .build()
         .await
         .unwrap();
@@ -494,7 +590,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp))
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
         .build()
         .await
         .unwrap();

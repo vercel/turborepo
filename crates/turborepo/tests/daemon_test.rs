@@ -7,6 +7,9 @@ use common::setup;
 fn run_daemon_status(dir: &std::path::Path, env_val: &str, extra_args: &[&str]) -> String {
     let config_dir = tempfile::tempdir().unwrap();
     let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")

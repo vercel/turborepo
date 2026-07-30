@@ -275,6 +275,15 @@ mod tests {
                 .join_unix_path(tail),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
+
+        let normalized_tail = RelativeUnixPathBuf::new("workspace/package.json").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("/some/dir")
+                .unwrap()
+                .join_unix_path_unchecked(normalized_tail),
+            AbsoluteSystemPathBuf::new("/some/dir/workspace/package.json").unwrap(),
+        );
     }
 
     #[cfg(windows)]
@@ -301,6 +310,15 @@ mod tests {
                 .unwrap()
                 .join_unix_path(&tail),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
+        );
+
+        let normalized_tail = RelativeUnixPathBuf::new("workspace/package.json").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("C:\\some\\dir")
+                .unwrap()
+                .join_unix_path_unchecked(&normalized_tail),
+            AbsoluteSystemPathBuf::new("C:\\some\\dir\\workspace\\package.json").unwrap(),
         );
     }
 }

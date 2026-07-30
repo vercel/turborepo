@@ -28,7 +28,11 @@ turborepo-scm = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-types = { workspace = true }
-turborepo-ui = { workspace = true }
+turborepo-ui = { workspace = true, features = ["tui"] }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }

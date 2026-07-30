@@ -5,17 +5,18 @@
     "test": "turbo run test",
     "test:projects": "vitest run",
     "test:projects:watch": "vitest --watch",
-    "view-report": "turbo run view-report"
+    "report": "turbo run test && turbo run report",
+    "view-report": "turbo run test && turbo run view-report"
   },
   "devDependencies": {
     "@repo/vitest-config": "workspace:*",
     "prettier": "^3.5.0",
     "turbo": "^2.9.6",
     "typescript": "5.7.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.9"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

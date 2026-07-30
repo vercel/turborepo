@@ -8,7 +8,9 @@
 //! - Result types (`ExecOutcome`, `SuccessOutcome`, `InternalError`)
 
 use std::{
+    collections::HashMap,
     io::Write,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -27,6 +29,18 @@ use turborepo_types::{ContinueMode, StopExecution, UIMode};
 use turborepo_ui::ColorConfig;
 
 use crate::{TaskAccessProvider, TaskOutput};
+
+/// Per-group mutexes for commands marked with a serial group (see
+/// [`Command::serial_group`]). At most one command per group runs at a time,
+/// process-wide.
+fn serial_group_lock(group: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GROUPS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let mut groups = GROUPS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    groups.entry(group.to_string()).or_default().clone()
+}
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -349,8 +363,6 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        task_output.start(self.task_cache.output_logs().into());
-
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -406,6 +418,21 @@ where
                 ));
             }
         }
+
+        // Commands in a serial group run one at a time: their tools hold
+        // global locks (e.g. Cargo's build directory), so concurrent
+        // processes cannot make progress and just emit "waiting for file
+        // lock" noise. The guard is held until the process exits.
+        let _serial_group_guard = match self.cmd.serial_group_name() {
+            Some(group) => Some(serial_group_lock(group).lock_owned().await),
+            None => None,
+        };
+
+        // The task is only presented as running once its process is about
+        // to exist. Everything before this point — cache restore, waiting
+        // on the serial group — happens while the task is still pending,
+        // and cache hits finish without ever starting.
+        task_output.start(self.task_cache.output_logs().into());
 
         // Spawn the process
         let cmd = self.cmd.clone();

@@ -57,6 +57,11 @@ pub struct FutureFlags {
     /// selecting all tasks in changed packages.
     #[serde(default)]
     pub affected_using_task_inputs: bool,
+    /// When GitHub Actions reports a base branch that is not available as a
+    /// local ref, fall back to `origin/<branch>`. This supports detached
+    /// checkouts where only remote-tracking refs are present.
+    #[serde(default)]
+    pub github_actions_remote_base_ref_fallback: bool,
     /// Use task-level `inputs` globs to determine which tasks to re-run when
     /// files change in `turbo watch`. When enabled, only tasks whose declared
     /// inputs match the changed files are re-executed, rather than re-running
@@ -74,6 +79,13 @@ pub struct FutureFlags {
     /// traverse the task graph in addition to the package graph.
     #[serde(default)]
     pub filter_using_tasks: bool,
+    /// Select requested task entrypoints according to whether the task resolves
+    /// a command in the repository. When any package can run a requested task,
+    /// packages without a command are not used as entrypoints. Tasks with no
+    /// command anywhere remain available for graph-only orchestration, and
+    /// missing tasks reached as dependencies remain in the Task Graph.
+    #[serde(default)]
+    pub strict_task_entrypoint_selection: bool,
     /// Move global configuration keys (like `globalDependencies`, `ui`,
     /// `envMode`, etc.) under a top-level `global` key for clarity.
     ///
@@ -89,6 +101,53 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub incremental_tasks: bool,
+    /// Treat the crates of a Cargo workspace as Turborepo packages.
+    ///
+    /// When enabled, Rust crates are discovered via `cargo metadata` and
+    /// participate in the package graph: they resolve in `--filter`
+    /// expressions, propagate `--affected`, and appear in `turbo query`.
+    /// Filtered builds execute each selected crate. Unfiltered builds prefer
+    /// entrypoints, falling back to libraries when no entrypoints exist.
+    /// Entrypoints also expose `run` and `dev`. The `test`, `check`,
+    /// `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are selectable per
+    /// crate with `--filter`. An unfiltered run executes one workspace-wide
+    /// Cargo verification command; filtered runs use the selected crates,
+    /// or the workspace command when the workspace package is selected
+    /// directly.
+    ///
+    /// All crates implicitly register `build` and the verification tasks;
+    /// entrypoints with one binary also register `run` and `dev`. The workspace
+    /// package registers the verification tasks. Normal task definitions
+    /// configure or override these defaults, and package configuration can
+    /// exclude them with `extends: false`.
+    ///
+    /// Task caching uses Cargo-derived inputs and caches entrypoint build
+    /// deliverables. Library builds default to uncached. This feature is
+    /// experimental.
+    #[serde(default)]
+    pub experimental_cargo_workspaces: bool,
+    /// Serve the Remote Cache as an sccache storage backend for Cargo crate
+    /// tasks. When enabled (together with `experimentalCargoWorkspaces` and
+    /// a linked Remote Cache), `turbo` starts a local proxy and routes
+    /// rustc invocations through `sccache`, caching individual compilation
+    /// units in the Remote Cache.
+    ///
+    /// Only engages in CI: cold environments are where a compile cache
+    /// pays off, while local development is better served by cargo's own
+    /// incremental compilation (which sccache would disable). Nothing needs
+    /// to be installed: `turbo` embeds sccache and acts as the compiler
+    /// wrapper itself.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub experimental_cargo_sccache: bool,
+    /// Allow task definitions to declare the command they run via the
+    /// `command` field, replacing the toolchain's own resolution
+    /// (package.json scripts, Cargo verb tables). Using `command` without
+    /// this flag is a hard error — silently ignoring it would change what
+    /// executes.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub experimental_task_command: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -104,33 +163,39 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 

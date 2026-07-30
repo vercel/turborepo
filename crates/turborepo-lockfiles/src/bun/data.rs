@@ -135,6 +135,13 @@ pub enum Error {
 pub(crate) enum LockfileVersion {
     V0 = 0,
     V1 = 1,
+    // V2 (Bun 1.4+) adds `configVersion` as a sibling top-level key (already
+    // parsed for V1) and keeps the rest of the schema — workspaces, packages,
+    // catalogs, overrides, patched dependencies — byte-compatible with V1.
+    // No version-specific branches downstream need to fork on V2 vs V1; only
+    // `resolve_package`'s workspace-direct optimization checks
+    // `lockfile_version >= 1`, which V2 satisfies.
+    V2 = 2,
 }
 
 impl LockfileVersion {
@@ -143,6 +150,7 @@ impl LockfileVersion {
         match value {
             0 => Some(Self::V0),
             1 => Some(Self::V1),
+            2 => Some(Self::V2),
             _ => None,
         }
     }

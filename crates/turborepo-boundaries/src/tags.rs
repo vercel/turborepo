@@ -3,10 +3,7 @@ use std::collections::{HashMap, HashSet};
 use miette::NamedSource;
 use tracing::info_span;
 use turborepo_errors::Spanned;
-use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
-    package_json::PackageJson,
-};
+use turborepo_repository::package_graph::{PackageName, PackageNode};
 
 use crate::{
     BoundariesContext, BoundariesDiagnostic, Error, PackageGraphProvider, SecondaryDiagnostic,
@@ -61,7 +58,7 @@ impl From<Permissions> for ProcessedPermissions {
 fn validate_relation<G, T>(
     _ctx: &BoundariesContext<'_, G, T>,
     package_name: &PackageName,
-    package_json: &PackageJson,
+    package_name_source: Option<&Spanned<()>>,
     relation_package_name: &PackageName,
     tags: Option<&Spanned<Vec<Spanned<String>>>>,
     allow_list: Option<&Spanned<HashSet<String>>>,
@@ -81,10 +78,8 @@ where
     if let Some(deny_list) = deny_list
         && deny_list.contains(relation_package_name.as_str())
     {
-        let (span, text) = package_json
-            .name
-            .as_ref()
-            .map(|name| name.span_and_text("turbo.json"))
+        let (span, text) = package_name_source
+            .map(|name| name.span_and_text("package.json"))
             .unwrap_or_else(|| (None, NamedSource::new("package.json", String::new())));
         let deny_list_spanned = deny_list.to(());
         let (deny_list_span, deny_list_text) = deny_list_spanned.span_and_text("turbo.json");
@@ -169,7 +164,7 @@ pub(crate) fn check_tag_with_cache<G, T>(
     dependencies: Option<&ProcessedPermissions>,
     dependents: Option<&ProcessedPermissions>,
     pkg: &PackageNode,
-    package_json: &PackageJson,
+    package_name_source: Option<&Spanned<()>>,
     cached_deps: &[&PackageNode],
     cached_ancestors: &[&PackageNode],
 ) -> Result<(), Error>
@@ -190,7 +185,7 @@ where
             diagnostics.extend(validate_relation(
                 ctx,
                 pkg.as_package_name(),
-                package_json,
+                package_name_source,
                 dependency.as_package_name(),
                 dependency_tags,
                 dependency_permissions.allow.as_ref(),
@@ -210,7 +205,7 @@ where
             diagnostics.extend(validate_relation(
                 ctx,
                 pkg.as_package_name(),
-                package_json,
+                package_name_source,
                 dependent.as_package_name(),
                 dependent_tags,
                 dependent_permissions.allow.as_ref(),
@@ -225,13 +220,11 @@ where
 fn check_if_package_name_is_tag(
     tags_rules: &ProcessedRulesMap,
     pkg: &PackageNode,
-    package_json: &PackageJson,
+    package_name_source: Option<&Spanned<()>>,
 ) -> Option<BoundariesDiagnostic> {
     let rule = tags_rules.get(pkg.as_package_name().as_str())?;
     let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
-    let (package_span, package_text) = package_json
-        .name
-        .as_ref()
+    let (package_span, package_text) = package_name_source
         .map(|name| name.span_and_text("package.json"))
         .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
     Some(BoundariesDiagnostic::TagSharesPackageName {
@@ -330,7 +323,7 @@ where
 pub(crate) fn check_package_tags<G, T>(
     ctx: &BoundariesContext<'_, G, T>,
     pkg: PackageNode,
-    package_json: &PackageJson,
+    package_name_source: Option<&Spanned<()>>,
     current_package_tags: Option<&Spanned<Vec<Spanned<String>>>>,
     tags_rules: Option<&ProcessedRulesMap>,
 ) -> Result<Vec<BoundariesDiagnostic>, Error>
@@ -387,7 +380,7 @@ where
             dependencies.as_ref(),
             dependents.as_ref(),
             &pkg,
-            package_json,
+            package_name_source,
             &cached_deps,
             &cached_ancestors,
         )?;
@@ -396,7 +389,11 @@ where
     if let Some(tags_rules) = tags_rules {
         // We don't allow tags to share the same name as the package
         // because we allow package names to be used as a tag
-        diagnostics.extend(check_if_package_name_is_tag(tags_rules, &pkg, package_json));
+        diagnostics.extend(check_if_package_name_is_tag(
+            tags_rules,
+            &pkg,
+            package_name_source,
+        ));
 
         for tag in current_package_tags.into_iter().flatten().flatten() {
             if let Some(rule) = tags_rules.get(tag.as_inner()) {
@@ -406,7 +403,7 @@ where
                     rule.dependencies.as_ref(),
                     rule.dependents.as_ref(),
                     &pkg,
-                    package_json,
+                    package_name_source,
                     &cached_deps,
                     &cached_ancestors,
                 )?;
@@ -419,17 +416,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use turborepo_repository::{
-        package_graph::{PackageInfo, PackageName, PackageNode},
-        package_json::PackageJson,
-    };
+    use turborepo_repository::package_graph::{PackageGraphNodeKind, PackageName, PackageNode};
 
     use super::*;
     use crate::{BoundariesConfig, BoundariesContext, PackageGraphProvider, TurboJsonProvider};
 
     // Minimal mock graph that tracks packages, dependencies, and ancestors.
     struct MockGraph {
-        packages: Vec<(PackageName, PackageInfo)>,
+        packages: Vec<(
+            PackageName,
+            turbopath::AnchoredSystemPathBuf,
+            turbopath::AnchoredSystemPathBuf,
+        )>,
         deps: HashMap<PackageNode, Vec<PackageNode>>,
         ancestors: HashMap<PackageNode, Vec<PackageNode>>,
     }
@@ -447,15 +445,9 @@ mod tests {
             let pkg_name = PackageName::Other(name.into());
             self.packages.push((
                 pkg_name,
-                PackageInfo {
-                    package_json: PackageJson::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(format!(
-                        "packages/{name}/package.json"
-                    ))
+                turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}")).unwrap(),
+                turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}/package.json"))
                     .unwrap(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                },
             ));
         }
 
@@ -471,8 +463,18 @@ mod tests {
     }
 
     impl PackageGraphProvider for MockGraph {
-        fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_> {
-            Box::new(self.packages.iter().map(|(n, i)| (n, i)))
+        fn package_scopes(&self) -> Box<dyn Iterator<Item = crate::PackageScope<'_>> + '_> {
+            Box::new(
+                self.packages
+                    .iter()
+                    .map(|(name, directory, definition_path)| crate::PackageScope {
+                        name: name.clone(),
+                        name_source: None,
+                        directory,
+                        definition_path,
+                        kind: PackageGraphNodeKind::Package,
+                    }),
+            )
         }
 
         fn immediate_dependencies(&self, _node: &PackageNode) -> Option<HashSet<&PackageNode>> {
@@ -561,6 +563,81 @@ mod tests {
         {
             turbopath::AbsoluteSystemPathBuf::new("C:\\tmp\\test-repo").unwrap()
         }
+    }
+
+    fn package_name_source() -> Spanned<()> {
+        Spanned::new(())
+            .with_range(9..16)
+            .with_text(r#"{"name": "pkg-a"}"#)
+            .with_path("packages/pkg-a/package.json".into())
+    }
+
+    #[test]
+    fn package_name_collision_uses_authoritative_provenance() {
+        let rules = [(
+            "pkg-a".to_string(),
+            ProcessedRule {
+                span: Spanned::new(()),
+                dependencies: None,
+                dependents: None,
+            },
+        )]
+        .into();
+        let pkg = PackageNode::Workspace(PackageName::Other("pkg-a".into()));
+        let source = package_name_source();
+
+        let diagnostic = check_if_package_name_is_tag(&rules, &pkg, Some(&source)).unwrap();
+        let BoundariesDiagnostic::TagSharesPackageName { secondary, .. } = diagnostic else {
+            panic!("expected package-name collision diagnostic");
+        };
+        let SecondaryDiagnostic::PackageDefinedHere {
+            package_span,
+            package_text,
+            ..
+        } = &secondary[0]
+        else {
+            panic!("expected package definition provenance");
+        };
+
+        assert_eq!(package_span.unwrap().offset(), 9);
+        assert_eq!(package_span.unwrap().len(), 7);
+        assert_eq!(package_text.name(), "packages/pkg-a/package.json");
+    }
+
+    #[test]
+    fn denied_package_name_uses_authoritative_provenance() {
+        let graph = MockGraph::new();
+        let turbo_json = MockTurboJson::new();
+        let repo_root = make_repo_root();
+        let filtered = HashSet::new();
+        let ctx = BoundariesContext {
+            repo_root: &repo_root,
+            pkg_dep_graph: &graph,
+            turbo_json_provider: &turbo_json,
+            root_boundaries_config: None,
+            filtered_pkgs: &filtered,
+        };
+        let source = package_name_source();
+        let deny = Spanned::new(HashSet::from(["pkg-b".to_string()]));
+
+        let diagnostic = validate_relation(
+            &ctx,
+            &PackageName::Other("pkg-a".into()),
+            Some(&source),
+            &PackageName::Other("pkg-b".into()),
+            None,
+            None,
+            Some(&deny),
+        )
+        .unwrap()
+        .unwrap();
+        let BoundariesDiagnostic::DeniedTag { span, text, .. } = diagnostic else {
+            panic!("expected denied-tag diagnostic");
+        };
+
+        assert_eq!(span.unwrap().offset(), 9);
+        assert_eq!(span.unwrap().len(), 7);
+        assert_eq!(text.name(), "packages/pkg-a/package.json");
     }
 
     // -- needs_dependencies / needs_ancestors tests --
@@ -752,10 +829,9 @@ mod tests {
         .into();
 
         let pkg = PackageNode::Workspace(PackageName::Other("pkg-a".into()));
-        let pkg_json = PackageJson::default();
         let tags = turbo_json.package_tags(&PackageName::Other("pkg-a".into()));
 
-        let diagnostics = check_package_tags(&ctx, pkg, &pkg_json, tags, Some(&tag_rules)).unwrap();
+        let diagnostics = check_package_tags(&ctx, pkg, None, tags, Some(&tag_rules)).unwrap();
 
         // tag1 allows "lib": pkg-b has "lib" (ok), pkg-c has "util" (violation)
         // tag2 allows "util": pkg-c has "util" (ok), pkg-b has "lib" (violation)
@@ -807,10 +883,9 @@ mod tests {
         .into();
 
         let pkg = PackageNode::Workspace(PackageName::Other("pkg-a".into()));
-        let pkg_json = PackageJson::default();
         let tags = turbo_json.package_tags(&PackageName::Other("pkg-a".into()));
 
-        let diagnostics = check_package_tags(&ctx, pkg, &pkg_json, tags, Some(&tag_rules)).unwrap();
+        let diagnostics = check_package_tags(&ctx, pkg, None, tags, Some(&tag_rules)).unwrap();
 
         // No dependency/dependent rules → no violations possible from tag checking
         let tag_violations: Vec<_> = diagnostics
@@ -844,8 +919,6 @@ mod tests {
         };
 
         let pkg = PackageNode::Workspace(PackageName::Other("pkg-a".into()));
-        let pkg_json = PackageJson::default();
-
         let perms = ProcessedPermissions {
             allow: Some(Spanned::new(["allowed-tag".into()].into())),
             deny: None,
@@ -862,7 +935,7 @@ mod tests {
             Some(&perms),
             None,
             &pkg,
-            &pkg_json,
+            None,
             &cached_deps,
             &[],
         )

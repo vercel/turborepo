@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use common::{combined_output, run_turbo, setup};
 
@@ -13,6 +13,124 @@ fn ls_dir(dir: &Path) -> Vec<String> {
         .collect();
     entries.sort();
     entries
+}
+
+/// Golden inventory of a pruned tree: relative path, content hash, and kind.
+///
+/// Directories are recorded as `dir`; files include a sha256 of their bytes
+/// and a portable permission class (`ro` / `rw`). Paths use forward slashes.
+fn inventory_tree(root: &Path) -> String {
+    fn walk(base: &Path, current: &Path, out: &mut BTreeMap<String, String>) {
+        let mut entries: Vec<_> = fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read_dir {}: {error}", current.display()))
+            .map(|entry| entry.expect("dir entry"))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let rel = path
+                .strip_prefix(base)
+                .expect("path under base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let meta = entry.metadata().expect("metadata");
+            if meta.is_dir() {
+                out.insert(rel, "dir".to_string());
+                walk(base, &path, out);
+            } else if meta.is_file() {
+                let bytes = fs::read(&path).expect("read file");
+                // Stable FNV-1a fingerprint — good enough for golden inventories
+                // without pulling a crypto hash into the turbo test crate.
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for byte in &bytes {
+                    hash ^= u64::from(*byte);
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                let perms = if meta.permissions().readonly() {
+                    "ro"
+                } else {
+                    "rw"
+                };
+                out.insert(rel, format!("file\t{hash:016x}\t{perms}"));
+            }
+        }
+    }
+
+    let mut inventory = BTreeMap::new();
+    walk(root, root, &mut inventory);
+    inventory
+        .into_iter()
+        .map(|(path, kind)| format!("{path}\t{kind}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn prune_retained_packages(stdout: &str) -> Vec<String> {
+    let mut packages: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix(" - Added ").map(str::to_string))
+        .collect();
+    packages.sort();
+    packages
+}
+
+#[test]
+fn test_prune_production_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
+    assert!(
+        output.status.success(),
+        "prune --production failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added shared"));
+    assert!(!stdout.contains("Added util"));
+
+    let packages_dir = tempdir.path().join("out/packages");
+    let package_entries = ls_dir(&packages_dir);
+    assert_eq!(package_entries, vec!["shared".to_string()]);
+    assert!(!packages_dir.join("util").exists());
+}
+
+#[test]
+fn test_prune_production_docker_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--production", "--docker"],
+    );
+    assert!(
+        output.status.success(),
+        "prune --production --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let full_packages = ls_dir(&tempdir.path().join("out/full/packages"));
+    assert_eq!(full_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/full/packages/util").exists());
+
+    let json_packages = ls_dir(&tempdir.path().join("out/json/packages"));
+    assert_eq!(json_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/json/packages/util").exists());
 }
 
 // --- docker.t ---
@@ -138,6 +256,60 @@ patchedDependencies:
             "{workspace_yaml} should drop out-of-closure patch:\n{contents}"
         );
     }
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/13301
+///
+/// pnpm supports semver ranges in `patchedDependencies` keys (e.g.
+/// `is-number@<=7.0.0`). Prune must keep patches whose range matches a
+/// package in the pruned closure.
+#[test]
+fn test_prune_docker_keeps_version_range_patches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    // Rewrite the exact patch key to a semver range everywhere it's declared.
+    for file in ["pnpm-lock.yaml", "package.json"] {
+        let path = tempdir.path().join(file);
+        let contents = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            contents
+                .replace("is-number@7.0.0:", "is-number@<=7.0.0:")
+                .replace("\"is-number@7.0.0\"", "\"is-number@<=7.0.0\""),
+        )
+        .unwrap();
+    }
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        pruned_lockfile.contains("is-number@<=7.0.0"),
+        "pruned lockfile should retain range patch key:\n{pruned_lockfile}"
+    );
+
+    let pkg_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/json/package.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        pkg_json["pnpm"]["patchedDependencies"]["is-number@<=7.0.0"],
+        "patches/is-number@7.0.0.patch"
+    );
+
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/patches/is-number@7.0.0.patch")
+            .exists(),
+        "patch file should be copied into pruned output"
+    );
 }
 
 #[test]
@@ -1051,5 +1223,73 @@ fn test_prune_pnpm_v11_multi_document_lockfile() {
     assert!(
         !root_lockfile.contains("apps/docs:"),
         "pruned lockfile should still trim workspaces from the dependency document"
+    );
+}
+
+/// Golden fixture covering retained packages, relative file set, content
+/// hashes, and standard/Docker layer placement for the separated JS render +
+/// layout path.
+#[test]
+fn test_prune_docker_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_docker_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+
+    let out = tempdir.path().join("out");
+    insta::assert_snapshot!("prune_docker_out_top_level", ls_dir(&out).join("\n"));
+    insta::assert_snapshot!(
+        "prune_docker_full_inventory",
+        inventory_tree(&out.join("full"))
+    );
+    insta::assert_snapshot!(
+        "prune_docker_json_inventory",
+        inventory_tree(&out.join("json"))
+    );
+}
+
+#[test]
+fn test_prune_standard_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_standard_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+    insta::assert_snapshot!(
+        "prune_standard_out_inventory",
+        inventory_tree(&tempdir.path().join("out"))
     );
 }

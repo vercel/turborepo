@@ -108,6 +108,10 @@ pub struct Args {
     // DO NOT MAKE THIS VISIBLE
     // Instead use the getter method execution_args()
     pub(super) execution_args: Option<ExecutionArgs>,
+    /// The legacy flag is stripped before clap parsing. Non-run commands use
+    /// this field because they have no command-local `ExecutionArgs`.
+    #[clap(skip)]
+    pub(crate) single_package: bool,
     #[clap(subcommand)]
     pub command: Option<Command>,
 }
@@ -390,10 +394,11 @@ impl Args {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut args = Args::try_parse_from(single_package_free)?;
         // --single-package is stripped before clap parsing, so we need to
-        // propagate it back. The value can appear in two places in the struct.
-        // We defensively attempt to set both.
+        // propagate it back. Preserve clap's optional global execution args;
+        // creating them here conflicts with explicit run/watch arguments.
+        args.single_package = is_single_package;
         if let Some(ref mut execution_args) = args.execution_args {
-            execution_args.single_package = is_single_package
+            execution_args.single_package = is_single_package;
         }
 
         if let Some(
@@ -704,6 +709,10 @@ pub enum Command {
         scope_arg: Option<Vec<String>>,
         #[clap(long)]
         docker: bool,
+        /// Exclude in-workspace devDependencies when selecting packages to
+        /// include
+        #[clap(long)]
+        production: bool,
         #[clap(long = "out-dir", default_value_t = String::from(prune::DEFAULT_OUTPUT_DIR), value_parser)]
         output_dir: String,
         /// Respect `.gitignore` when copying files to <OUT-DIR>

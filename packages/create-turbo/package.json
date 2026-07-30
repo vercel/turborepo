@@ -1,6 +1,6 @@
 {
   "name": "create-turbo",
-  "version": "2.9.19-canary.9",
+  "version": "2.10.8-canary.4",
   "description": "Create a new Turborepo",
   "homepage": "https://turborepo.dev",
   "bugs": {
@@ -18,12 +18,6 @@
   "files": [
     "dist"
   ],
-  "scripts": {
-    "build": "tsdown",
-    "test": "jest",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
-  },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "commander": "11.0.0",
@@ -43,8 +37,8 @@
     "@types/node": "18.17.4",
     "@types/semver": "7.3.12",
     "jest": "30.3.0",
-    "ts-jest": "29.4.9",
     "tsdown": "0.12.0",
-    "typescript": "5.5.4"
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc"
   }
 }

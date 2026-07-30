@@ -1,0 +1,211 @@
+---
+title: Rust (Experimental)
+description: Use experimental native Cargo workspace support with Turborepo.
+product: turborepo
+type: integration
+summary: Discover Cargo workspace crates as Turborepo packages and run native Cargo tasks.
+prerequisites:
+  - /docs/crafting-your-repository/structuring-a-repository
+  - /docs/crafting-your-repository/configuring-tasks
+related:
+  - /docs/guides/multi-language
+  - /docs/crafting-your-repository/caching
+  - /docs/crafting-your-repository/running-tasks
+---
+
+Turborepo can discover packages across languages and toolchains. It can discover the crates in [a Cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to Cargo commands. Cargo remains responsible for compiling crates and scheduling their internal build graph.
+
+<Callout type="warn">
+  Cargo workspace support is experimental and may change. Use a version of
+  `turbo` that recognizes `experimentalCargoWorkspaces` everywhere the
+  repository runs, including local hooks and CI. Older versions reject unknown
+  future flags.
+</Callout>
+
+## Enable Cargo workspaces
+
+Set the future flag in the root `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true
+  },
+  "tasks": {}
+}
+```
+
+## Prerequisites
+
+To work with Rust, the repository root must contain:
+
+- `turbo`, `cargo`, and `rustc` available on `PATH`
+- A root `Cargo.toml` containing a virtual Cargo workspace
+- A valid, unique `[workspace.metadata] name`, used for a synthetic Turborepo package that represents the Cargo workspace
+- A root `Cargo.lock`
+
+```toml title="./Cargo.toml"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.metadata]
+name = "acme-rust"
+```
+
+<Callout type="info">
+  The root `Cargo.toml` cannot also define a `[package]`. Move a root crate into
+  a subdirectory and include it in `[workspace].members`.
+</Callout>
+
+### Repository structure
+
+In the example above, members are defined as `crates/*`. Cargo then uses every `crates/*/Cargo.toml` as a package in the workspace. Each package is added to Turborepo's understanding of your repository.
+
+Cargo packages come in three types:
+
+- **Entrypoint crates** have a `bin`, `cdylib`, or `staticlib` target. They expose build, run, and verification tasks.
+- **Library crates** remain Package Graph nodes so filtering and affectedness calculations follow Rust dependency relationships. They expose filtered build and verification tasks. Unfiltered builds prefer entrypoints because Cargo builds their library dependency closures implicitly.
+- **The root workspace package** uses `[workspace.metadata] name`, depends on every member crate, and runs verification tasks across the whole Cargo workspace.
+
+All three package types can be used as targets for [`--filter`](/docs/reference/run#--filter-string) and [`affected`](/docs/reference/run#--affected) calculations.
+
+## Built-in tasks
+
+Turborepo implicitly registers these task mappings, since they are common to all Cargo workspaces.
+
+| Package                                  | Turbo task       | Cargo command                              |
+| ---------------------------------------- | ---------------- | ------------------------------------------ |
+| Any crate                                | `build`          | `cargo build --package=<crate> --locked`   |
+| Entrypoint crate with exactly one binary | `run`, `dev`     | `cargo run --package=<crate> --locked`     |
+| Any crate                                | `test`           | `cargo test --package=<crate> --locked`    |
+| Any crate                                | `check`          | `cargo check --package=<crate> --locked`   |
+| Any crate                                | `lint`, `clippy` | `cargo clippy --package=<crate> --locked`  |
+| Any crate                                | `bench`          | `cargo bench --package=<crate> --locked`   |
+| Any crate                                | `doc`, `docs`    | `cargo doc --package=<crate> --locked`     |
+| Workspace package                        | `test`           | `cargo test --workspace --locked`          |
+| Workspace package                        | `check`          | `cargo check --workspace --locked`         |
+| Workspace package                        | `lint`, `clippy` | `cargo clippy --workspace --locked`        |
+| Workspace package                        | `bench`          | `cargo bench --workspace --locked`         |
+| Workspace package                        | `doc`, `docs`    | `cargo doc --workspace --locked`           |
+
+Without a filter, Turborepo uses one workspace-wide command instead of creating one verification task per crate. Filtered runs use crate-scoped commands; filtering directly to the workspace package uses its workspace-wide command.
+
+A filtered `build` runs for any selected crate, including a library. Unfiltered builds prefer entrypoint crates to avoid redundant Cargo processes; a workspace containing only libraries builds those libraries directly.
+
+### Pass Cargo flags
+
+Arguments after Turborepo's `--` are passed to the mapped command. Build flags that select a supported output layout participate in hashing and automatic output detection:
+
+```bash title="Terminal"
+turbo run build --filter=rust-api -- --release
+turbo run build --filter=rust-api -- --profile=ci
+turbo run build --filter=rust-api -- --target=aarch64-unknown-linux-gnu
+turbo run build --filter=rust-api -- --target-dir=target-ci
+```
+
+`check` and `doc` also accept Cargo flags directly after `--`. For `run`, `test`, `bench`, and `lint`/`clippy`, Turborepo inserts Cargo's second `--`, so the arguments go to the binary, test or bench harness, or Clippy rather than Cargo itself. For example:
+
+```bash title="Terminal"
+turbo run run --filter=rust-api -- --port 8080
+turbo run test --filter=rust-library -- --nocapture
+turbo run test --filter=acme-rust -- --nocapture
+```
+
+## Custom tasks
+
+To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `format` task and make its workspace-wide `lint` task reject warnings:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "acme-rust#format": {
+      "command": ["cargo", "fmt", "--all", "--", "--check"]
+    },
+    "acme-rust#lint": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    }
+  }
+}
+```
+
+## Filtering, affected packages, and queries
+
+You can use the Cargo workspace or packages as entrypoints for [filters](/docs/reference/run#--filter-string):
+
+```bash title="Terminal"
+# Execute builds for all toolchains
+turbo run build
+
+# Build one entrypoint crate
+turbo run build --filter=my-cargo-binary
+
+# Build every Rust crate in the workspace dependency closure
+turbo run build --filter=my-cargo-workspace...
+
+# Test one library crate
+turbo run test --filter=my-rust-library
+
+# Test the entire Cargo workspace once
+turbo run test --filter=my-cargo-workspace
+
+# Test affected crates
+turbo run test --affected
+```
+
+Additionally, [`turbo query`](/docs/reference/query) can be used to understand your repository's graphs and more.
+
+## Caching behavior
+
+With zero configuration, Turborepo creates task hashes using:
+
+- The selected crate and a conservative transitive closure of declared local dependency source files, including cycle-closing dev-dependencies
+- Every member crate when verification runs through the workspace package
+- Root Cargo files
+- Relevant Cargo and compiler environment
+- The resolved external dependency closure from `Cargo.lock`
+- The complete `rustc -vV` identity.
+
+Project-specific hashing inputs must be accounted for manually. This includes:
+
+- Environment variables must read by build scripts still need to be declared in the task's [`env`](/docs/reference/configuration#env) configuration
+- File inputs that are not included by default. Use [`inputs`](/docs/reference/configuration#inputs) to define your own file inputs and [`$TURBO_DEFAULT$`](/docs/reference/configuration#turbo_default) to preserve zero-configuration file inputs
+
+### Output caching
+
+Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
+
+Turborepo resolves exact outputs for these layouts:
+
+- The default `debug` profile, `--release`, built-in profile aliases, and ordinary custom `--profile=<name>` directories
+- The host target, a supported `--target=<triple>`, or a supported `CARGO_BUILD_TARGET`
+- An in-repository target directory selected, in order, by `--target-dir`, `CARGO_TARGET_DIR`, or Cargo metadata, including repository `.cargo/config` `target-dir`
+
+Target-specific builds include the target triple in the artifact path. A target directory must stay within the repository after resolving existing path components.
+
+When Turborepo cannot prove the exact output layout, it disables implicit task caching rather than creating a log-only cache hit that could skip compilation. Examples include unknown output-affecting flags, repository `build.target`, unsupported or custom target triples, escaping target directories, compiler overrides, artifact directory overrides, custom profile directory names, and output-altering unstable manifest features. Explicit `outputs` or an explicit `cache` setting represent user authority and override this output-unavailability fallback. Only opt in when your configuration fully describes the outputs.
+
+Untracked inputs are more strict. External, included, or symlinked Cargo configuration can affect a build without participating safely in its hash, so Turborepo disables caching unless `cache` itself is explicitly configured. Explicit `outputs` alone do not make untracked inputs safe.
+
+## Limitations
+
+- Only the root virtual Cargo workspace is discovered. Root crates are rejected, nested workspaces are not independently discovered, and resolved external or non-member local path dependencies fail closed.
+- `cdylib`/`staticlib`-only entrypoints are build-only. Multi-bin crates require both `package.default-run` and an authored task definition for native `run` and `dev`; pass-through arguments cannot supply Cargo's `--bin` option.
+- Automatic artifact caching is deliberately disabled for unresolved output layouts and untracked inputs. Explicit outputs can authorize an unresolved output layout, but untracked inputs require an explicit `cache` setting. Cargo's full `target/` directory is never a task output.
+- The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune an entrypoint crate instead.
+- In watch mode, a no-op save in a crate may rerun a fast cache check because content-hash deduplication is still based on JavaScript workspace globs.
+- Build-script-specific environment and files outside crate directories are not inferred. Declare them with `env` and additive `inputs` as needed.

@@ -3,11 +3,15 @@
 //! concurrent resources get an assigned color.
 
 mod color_selector;
+#[cfg(feature = "tui")]
 mod log_sinks;
 mod logs;
+#[cfg(feature = "tui")]
 pub mod sender;
 mod terminal_sink;
+#[cfg(feature = "tui")]
 pub mod tui;
+#[cfg(feature = "tui")]
 mod tui_sink;
 
 use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
@@ -18,10 +22,13 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
-    log_sinks::LogSinks,
     logs::{LogWriter, replay_logs},
     terminal_sink::TerminalSink,
-    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
+};
+#[cfg(feature = "tui")]
+pub use crate::{
+    log_sinks::LogSinks,
+    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_best_effort},
     tui_sink::TuiSink,
 };
 
@@ -29,23 +36,24 @@ pub use crate::{
 //
 // ## Panic Recovery
 //
-// The [`restore_terminal_on_panic`] function should be called from your panic
-// handler if using the TUI. It will restore terminal state (raw mode, alternate
-// screen, mouse capture) only if the TUI was active, making panic messages
-// visible. This is a best-effort operation that ignores all errors since we're
-// already in a panic context.
+// The [`restore_terminal_best_effort`] function should be called from your
+// panic handler if using the TUI. It will restore terminal state (raw mode,
+// alternate screen, mouse capture) only if the TUI was active, making panic
+// messages visible. This is a best-effort operation that ignores all errors
+// since we're already in a panic context.
 //
 // Example usage in a panic handler:
 // ```ignore
 // pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
 //     // Restore terminal first so panic message is visible
-//     turborepo_ui::restore_terminal_on_panic();
+//     turborepo_ui::restore_terminal_best_effort();
 //     // ... rest of panic handling
 // }
 // ```
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[cfg(feature = "tui")]
     #[error(transparent)]
     Tui(#[from] tui::Error),
     #[error("Cannot read logs: {0}")]
@@ -234,7 +242,6 @@ pub static BOLD_YELLOW_REVERSE: LazyLock<Style> =
     LazyLock::new(|| Style::new().yellow().bold().reverse());
 pub static UNDERLINE: LazyLock<Style> = LazyLock::new(|| Style::new().underlined());
 pub static BOLD_CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan().bold());
-pub static BOLD_GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim().bold());
 pub static BOLD_GREEN: LazyLock<Style> = LazyLock::new(|| Style::new().green().bold());
 pub static BOLD_RED: LazyLock<Style> = LazyLock::new(|| Style::new().red().bold());
 

@@ -70,6 +70,12 @@ pub struct TaskHashable<'a> {
     pub resolved_env_vars: EnvVarPairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
+
+    // The task's resolved `command` override: the argv when one applies
+    // (empty otherwise), plus whether the task is an explicit opt-out.
+    // Changing what a task runs must invalidate its cached results.
+    pub command_override: &'a [String],
+    pub command_opt_out: bool,
 }
 
 impl TaskHashable<'_> {
@@ -396,6 +402,24 @@ impl HashableMessage for TaskHashable<'_> {
             }
         }
 
+        // Only written when set: an explicitly initialized empty list is a
+        // non-null pointer in capnp, encoded differently from the default
+        // null pointer. Canonical form truncates trailing default-valued
+        // fields, so guarding here keeps every existing task hash stable —
+        // only tasks that actually use a `command` override hash
+        // differently.
+        if !task_hashable.command_override.is_empty() {
+            let mut command_override_builder = builder
+                .reborrow()
+                .init_command_override(task_hashable.command_override.len() as u32);
+            for (i, arg) in task_hashable.command_override.iter().enumerate() {
+                command_override_builder.set(i as u32, arg);
+            }
+        }
+        if task_hashable.command_opt_out {
+            builder.set_command_opt_out(true);
+        }
+
         canonical_builder::<proto_capnp::task_hashable::Owned>(
             builder.total_size(),
             builder.reborrow_as_reader(),
@@ -528,6 +552,8 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Loose,
+            command_override: &[],
+            command_opt_out: false,
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
@@ -555,12 +581,43 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
         };
 
         let hash = task_hashable.hash();
         assert!(!hash.is_empty());
         // Pin the hash so any serialization change is caught
         assert_eq!(hash, "7676d7bb7c86d257");
+    }
+
+    #[test]
+    fn loose_mode_ignores_pass_through_env() {
+        let calculate = |pass_through_env: &[String]| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env,
+                env_mode: EnvMode::Loose,
+                command_override: &[],
+                command_opt_out: false,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        assert_eq!(
+            calculate(&[]),
+            calculate(&["SHOULD_NOT_AFFECT_HASH".to_string()])
+        );
     }
 
     #[test]

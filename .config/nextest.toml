@@ -5,6 +5,16 @@
 failure-output = "immediate-final"
 
 [[profile.default.overrides]]
+# Windows runners intermittently fail process spawns en masse with DLL
+# initialization error 0xc0000142 (STATUS_DLL_INIT_FAILED, os error 1114) when
+# session resources are momentarily exhausted under nextest's process churn.
+# The condition clears within seconds, so retry with a delay instead of capping
+# concurrency. See the removal of the previous caps in #12999 and the failure
+# mode analysis in #12991.
+platform = 'cfg(windows)'
+retries = { backoff = "fixed", count = 2, delay = "2s" }
+
+[[profile.default.overrides]]
 # These tests run package installs from the network during setup, which can
 # take 20-60s+ on cold CI runners. Give them extra time instead of retries.
 filter = 'package(turbo) and (test(prune_test::test_prune_composable_config) or test(lockfile-aware-caching/new-package))'

@@ -21,7 +21,7 @@ impl<'a> YarnDetector<'a> {
         }
     }
 
-    fn detect_from_lockfile(&self) -> Result<PackageManager, Error> {
+    pub(crate) fn detect_from_lockfile(&self) -> Result<PackageManager, Error> {
         let yarn_lockfile = self.repo_root.join_component(LOCKFILE);
         let contents = String::from_utf8(yarn_lockfile.read()?)?;
         Self::detect_from_lockfile_contents(&contents)

@@ -121,7 +121,7 @@ function processDotEnv(
     const hash = crypto.createHash("sha1");
     try {
       const fileContents = fs.readFileSync(path.join(workspacePath, filePath));
-      hash.update(fileContents);
+      hash.update(Uint8Array.from(fileContents));
       accumulator.push([filePath, hash.digest("hex")]);
     } catch (_) {
       // ignore

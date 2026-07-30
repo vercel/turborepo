@@ -29,12 +29,19 @@ impl SizeInfo {
         self.rows
             // Account for header and footer in layout
             .saturating_sub(2)
-            // Always allocate at least one row as vt100 crashes if emulating a zero area terminal
+            // Always allocate at least one row as the terminal backend requires
+            // a non-zero render area.
             .max(1)
     }
 
     pub fn task_list_width(&self) -> u16 {
         self.cols.saturating_sub(self.rendered_pane_cols())
+    }
+
+    /// Number of task rows visible in the task list, accounting for the
+    /// header row and the two key-bind footer rows rendered by the table.
+    pub fn task_list_visible_task_rows(&self) -> u16 {
+        self.rows.saturating_sub(3)
     }
 
     pub fn pane_cols(&self) -> u16 {

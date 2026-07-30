@@ -1,15 +1,18 @@
+import type { DetectionMethod } from "@vercel/agent-readability";
 import { siteId } from "@/geistdocs";
 
 const PLATFORM_URL = "https://geistdocs.com/md-tracking";
 
-type TrackMdRequestParams = {
-  path: string;
-  userAgent: string | null;
-  referer: string | null;
+interface TrackMdRequestParams {
   acceptHeader: string | null;
-  /** How the markdown was requested: 'md-url' for direct .md URLs, 'header-negotiated' for Accept header */
+  /** Detection method used to identify the agent (only for agent-rewrite requests) */
+  detectionMethod?: DetectionMethod | null;
+  path: string;
+  referer: string | null;
+  /** How the markdown was requested: 'md-url' for direct .md URLs, 'header-negotiated' for Accept header, 'agent-rewrite' for detected AI agents */
   requestType?: "md-url" | "header-negotiated" | "agent-rewrite";
-};
+  userAgent: string | null;
+}
 
 /**
  * Track a markdown page request via the geistdocs platform.
@@ -20,7 +23,8 @@ export async function trackMdRequest({
   userAgent,
   referer,
   acceptHeader,
-  requestType
+  requestType,
+  detectionMethod
 }: TrackMdRequestParams): Promise<void> {
   try {
     const response = await fetch(PLATFORM_URL, {
@@ -34,7 +38,8 @@ export async function trackMdRequest({
         userAgent,
         referer,
         acceptHeader,
-        requestType
+        requestType,
+        detectionMethod
       })
     });
 

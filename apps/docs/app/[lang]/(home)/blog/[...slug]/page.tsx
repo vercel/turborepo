@@ -67,7 +67,7 @@ export default async function Page(props: {
     <article className="prose dark:prose-invert mx-auto mb-10 w-full min-w-0 max-w-4xl px-6 pt-4 md:px-12">
       <div className="my-4">
         <Link
-          className="hover:text-foreground mb-16 flex flex-row gap-2 text-sm text-gray-600 dark:text-gray-400 no-underline transition-all"
+          className="hover:text-gray-1000 mb-16 flex flex-row gap-2 text-sm text-gray-900 no-underline transition-all"
           href="/blog"
         >
           <ArrowLeft className="w-3" />

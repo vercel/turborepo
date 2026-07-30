@@ -149,14 +149,26 @@ fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {
 }
 
 fn apply_patch(dir: &Path, target: &str, patch_file: &str) {
-    let status = std::process::Command::new("patch")
-        .args([target, patch_file])
+    let patch = fs::read_to_string(dir.join(patch_file))
+        .unwrap()
+        .lines()
+        .map(|line| {
+            line.strip_prefix("+++ ")
+                .map_or_else(|| line.to_string(), |_| format!("+++ {target}"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let rewritten = tempfile::NamedTempFile::new().unwrap();
+    fs::write(rewritten.path(), patch).unwrap();
+    let status = std::process::Command::new("git")
+        .args(["apply", "--unsafe-paths"])
+        .arg(rewritten.path())
         .current_dir(dir)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .status()
         .unwrap();
-    assert!(status.success(), "patch {target} {patch_file} failed");
+    assert!(status.success(), "git apply {patch_file} failed");
 }
 
 #[test]
@@ -426,49 +438,46 @@ fn framework_inference_hashes() {
     insta::assert_snapshot!("framework_inference_task_hashes", contract);
 }
 
-#[test]
-fn lockfile_aware_hashes() {
+fn lockfile_aware_contract(pm_name: &str) -> String {
     let tempdir = tempfile::tempdir().unwrap();
-    setup_lockfile_fixture(tempdir.path(), "npm");
+    setup_lockfile_fixture(tempdir.path(), pm_name);
+    let (lockfile, dependency_patch) = match pm_name {
+        "npm" => ("package-lock.json", "package-lock.patch"),
+        "pnpm" => ("pnpm-lock.yaml", "pnpm-lock.patch"),
+        "yarn" | "berry" => ("yarn.lock", "yarn-lock.patch"),
+        "bun" => ("bun.lock", "bun-lock.patch"),
+        _ => unreachable!("unsupported package manager fixture"),
+    };
 
-    let a_initial = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_initial = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
+    let run = |package| {
+        dry_json(
+            tempdir.path(),
+            &["run", "build", &format!("--filter={package}"), "--dry=json"],
+        )
+    };
+    let a_initial = run("a");
+    let b_initial = run("b");
+    apply_patch(tempdir.path(), lockfile, dependency_patch);
+    let a_dep_bump = run("a");
+    let b_dep_bump = run("b");
+    apply_patch(tempdir.path(), lockfile, "turbo-bump.patch");
+    let a_root_bump = run("a");
+    let b_root_bump = run("b");
 
-    apply_patch(tempdir.path(), "package-lock.json", "package-lock.patch");
-
-    let a_dep_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_dep_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
-
-    apply_patch(tempdir.path(), "package-lock.json", "turbo-bump.patch");
-
-    let a_root_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_root_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
-
-    let contract = labeled_contracts(&[
+    labeled_contracts(&[
         ("a-initial", task_hash_contract(&a_initial)),
         ("b-initial", task_hash_contract(&b_initial)),
         ("a-after-b-dep-bump", task_hash_contract(&a_dep_bump)),
         ("b-after-b-dep-bump", task_hash_contract(&b_dep_bump)),
         ("a-after-root-bump", task_hash_contract(&a_root_bump)),
         ("b-after-root-bump", task_hash_contract(&b_root_bump)),
-    ]);
-    insta::assert_snapshot!("lockfile_aware_npm_task_hashes", contract);
+    ])
+}
+
+#[test]
+fn lockfile_aware_hashes() {
+    let contract = ["npm", "pnpm", "yarn", "berry", "bun"]
+        .map(|pm_name| format!("[{pm_name}]\n{}", lockfile_aware_contract(pm_name)))
+        .join("\n\n");
+    insta::assert_snapshot!("lockfile_aware_task_hashes", contract);
 }

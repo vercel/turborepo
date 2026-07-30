@@ -1,4 +1,8 @@
 name: Cleanup branch caches
+
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
     types: [opened, closed, reopened, synchronize]

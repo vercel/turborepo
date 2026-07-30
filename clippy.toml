@@ -6,6 +6,14 @@ disallowed-methods = [
   # We forbid the use of VecDeque::new as it allocates, which is kind of unexpected
   # Instead use VecDeque::with_capacity to make it explicit or opt-out of that.
   "std::collections::VecDeque::new",
+  # biome's deserialization entry points run even when the source failed to
+  # parse, and deserializing a broken syntax tree can panic (e.g. unterminated
+  # string literals, vercel/turborepo#13197). Use
+  # turborepo_errors::json::deserialize_from_json_str, which reports parse
+  # errors instead of deserializing a broken tree.
+  "biome_deserialize::json::deserialize_from_json_str",
+  "biome_deserialize::json::deserialize_from_str",
+  "biome_deserialize::json::deserialize_from_json_ast",
 ]
 
 # Tests can use panic-extraction helpers freely. The cargo lint alias skips

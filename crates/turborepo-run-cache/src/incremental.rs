@@ -823,11 +823,37 @@ mod tests {
     }
 
     #[test]
+    fn collect_partition_files_allows_paths_outside_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_path = tmp.path().join("repo");
+        let pkg_path = repo_path.join("packages/pkg");
+        let shared_path = repo_path.join("packages/shared");
+        std::fs::create_dir_all(&pkg_path).unwrap();
+        std::fs::create_dir_all(&shared_path).unwrap();
+        std::fs::write(shared_path.join("output.txt"), b"output").unwrap();
+
+        let repo = AbsoluteSystemPathBuf::try_from(repo_path.to_str().unwrap()).unwrap();
+        let pkg_dir = AbsoluteSystemPathBuf::try_from(pkg_path.to_str().unwrap()).unwrap();
+        let outputs = TaskOutputs {
+            inclusions: vec!["../shared/**".into()],
+            exclusions: vec![],
+        };
+
+        let files = collect_partition_files(&repo, &pkg_dir, &outputs).unwrap();
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "packages{}shared{}output.txt",
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR
+        ))
+        .unwrap();
+
+        assert!(files.contains(&expected));
+    }
+
+    #[test]
     fn collect_partition_files_paths_resolve_to_package_dir() {
-        // Verifies the critical invariant: repo-relative paths from
-        // collect_partition_files, when joined with repo_root, point to
-        // files inside the package directory. This is what makes cache
-        // extraction (anchored at repo_root) restore files to the right place.
+        // Cache entries are repo-relative so extraction restores files to their
+        // original locations.
         let tmp = tempfile::tempdir().unwrap();
         let repo = AbsoluteSystemPathBuf::try_from(tmp.path().to_str().unwrap()).unwrap();
 

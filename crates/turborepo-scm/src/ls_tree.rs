@@ -85,13 +85,6 @@ impl GitRepo {
         Ok(hashes)
     }
 
-    /// Run `git ls-tree` once at the git repo root, returning all committed
-    /// file hashes keyed by git-root-relative paths.
-    #[tracing::instrument(skip(self))]
-    pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
-        self.git_ls_tree(&self.root)
-    }
-
     /// Run `git ls-tree -r HEAD -z` at the repo root, returning a sorted Vec
     /// suitable for binary-search range queries in `RepoGitIndex`.
     #[cfg(test)]
@@ -295,9 +288,11 @@ fn read_diff_index_with_unsupported<R: Read>(
         let is_delete = status_byte == b'D';
 
         match path {
-            Ok(path) => state
-                .entries
-                .push(crate::status::RepoStatusEntry { path, is_delete }),
+            Ok(path) => state.entries.push(crate::status::RepoStatusEntry {
+                path,
+                is_delete,
+                is_untracked: false,
+            }),
             Err(path) => state.unsupported_paths.push(path),
         }
     }

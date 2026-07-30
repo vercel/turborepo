@@ -277,7 +277,20 @@ pub fn run(
         .build()
         .map_err(Error::Runtime)?;
 
-    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+    let result = runtime.block_on(run_main(repo_state, logger, color_config, query_server));
+
+    // `Runtime::drop` joins blocking-pool threads with no deadline. Detached
+    // best-effort work — most notably a telemetry flush whose DNS lookup
+    // (`getaddrinfo`) runs on the blocking pool and cannot be cancelled — can
+    // hold the process open for seconds on a slow network after the run has
+    // already finished. Everything owed to the user is awaited inside
+    // `run_main` (telemetry and analytics handles get a bounded close there);
+    // anything still running here is strictly best-effort, so release the
+    // runtime without waiting at all. The orphaned threads die with the
+    // process.
+    runtime.shutdown_background();
+
+    result
 }
 
 #[tracing::instrument(skip_all)]
@@ -415,7 +428,7 @@ async fn run_main(
             let event = CommandEventBuilder::new("devtools").with_parent(&root_telemetry);
             event.track_call();
 
-            crate::commands::devtools::run(repo_root, *port, *no_open).await?;
+            crate::commands::devtools::run(repo_root, cli_args.clone(), *port, *no_open).await?;
             Ok(0)
         }
         Command::Docs {
@@ -697,6 +710,7 @@ async fn run_main(
             scope,
             scope_arg,
             docker,
+            production,
             output_dir,
             use_gitignore,
         } => {
@@ -708,6 +722,7 @@ async fn run_main(
                 .cloned()
                 .unwrap_or_default();
             let docker = *docker;
+            let production = *production;
             let output_dir = output_dir.clone();
             let use_gitignore = use_gitignore.unwrap_or(true);
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
@@ -717,6 +732,7 @@ async fn run_main(
                 &base,
                 &scope,
                 docker,
+                production,
                 &output_dir,
                 use_gitignore,
                 event_child,

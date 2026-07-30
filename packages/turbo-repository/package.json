@@ -1,6 +1,7 @@
 {
-  "name": "turborepo-repository",
+  "name": "@turbo/repository",
   "version": "0.0.1",
+  "private": true,
   "description": "",
   "keywords": [],
   "homepage": "https://turborepo.dev",
@@ -9,10 +10,7 @@
   "author": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "bash scripts/build.sh --dts ../js/index.d.ts",
-    "build:release": "bash scripts/build.sh --release",
-    "package": "node scripts/publish.mjs",
-    "test": "node --import tsx --test __tests__/*.test.ts"
+    "build:release": "bash scripts/build.sh --release"
   },
   "devDependencies": {
     "@napi-rs/cli": "2.16.3",

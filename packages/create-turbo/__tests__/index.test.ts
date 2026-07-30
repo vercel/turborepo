@@ -47,7 +47,8 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" }
   ])(
     "outputs expected console messages when using $packageManager (option)",
     async ({ packageManager }) => {
@@ -61,7 +62,9 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1"
+          bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -141,7 +144,9 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" },
+    { packageManager: "aube" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
@@ -155,7 +160,9 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1"
+          bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -239,7 +246,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -302,7 +311,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -363,7 +374,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest

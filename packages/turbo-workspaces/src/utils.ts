@@ -9,6 +9,7 @@ import {
 } from "fs-extra";
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
+import semver from "semver";
 import type {
   PackageManager,
   Project,
@@ -23,6 +24,9 @@ interface PackageJson {
   version: string;
   description?: string;
   packageManager?: string;
+  devEngines?: {
+    packageManager?: unknown;
+  };
   workspaces?: Array<string> | { packages?: Array<string> };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -30,8 +34,23 @@ interface PackageJson {
   optionalDependencies?: Record<string, string>;
 }
 
+interface DevEnginesPackageManagerDeclaration {
+  name: PackageManager;
+  version: string;
+}
+
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
 const PACKAGE_MANAGER_REGEX = /^(?!_)(?<manager>.+)@(?<version>.+)$/;
+const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
+  "npm",
+  "pnpm",
+  "yarn",
+  "bun",
+  "nub",
+  "aube"
+]);
+const DEV_ENGINES_VERSION_REGEX =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function getPackageJson({
   workspaceRoot
@@ -67,20 +86,210 @@ function getWorkspacePackageManager({
   workspaceRoot
 }: {
   workspaceRoot: string;
-}): string | undefined {
-  const { packageManager } = getPackageJson({ workspaceRoot });
+}): PackageManager | undefined {
+  const packageJson = getPackageJson({ workspaceRoot });
+  const { packageManager, devEngines } = packageJson;
   if (packageManager) {
     try {
       const match = PACKAGE_MANAGER_REGEX.exec(packageManager);
       if (match) {
-        const [_, manager] = match;
-        return manager;
+        const manager = match.groups?.manager;
+        return isPackageManager(manager) ? manager : undefined;
       }
     } catch (err) {
       // this won't always exist.
     }
+    return undefined;
   }
-  return undefined;
+
+  const hasDevEngines = Object.hasOwn(packageJson, "devEngines");
+  if (
+    hasDevEngines &&
+    (!devEngines || typeof devEngines !== "object" || Array.isArray(devEngines))
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines` must be an object containing `packageManager`"
+    );
+  }
+
+  if (!devEngines || !("packageManager" in devEngines)) {
+    return undefined;
+  }
+
+  const devEnginesPackageManager = devEngines.packageManager;
+  if (
+    !devEnginesPackageManager ||
+    typeof devEnginesPackageManager !== "object" ||
+    Array.isArray(devEnginesPackageManager)
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager` must be an object"
+    );
+  }
+
+  if (Object.keys(devEnginesPackageManager).length === 0) {
+    throw invalidDevEnginesPackageManager(
+      'expected `{ "name": "pnpm", "version": "9.12.3" }`'
+    );
+  }
+
+  if (!("name" in devEnginesPackageManager)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` is required"
+    );
+  }
+
+  const { name } = devEnginesPackageManager;
+  if (typeof name !== "string") {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must be a string"
+    );
+  }
+
+  if (name.length === 0) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must not be empty"
+    );
+  }
+
+  if (name.trim() !== name) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must not contain leading or trailing whitespace"
+    );
+  }
+
+  if (!isPackageManager(name)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, `nub`, or `aube`"
+    );
+  }
+
+  if (!("version" in devEnginesPackageManager)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` is required"
+    );
+  }
+
+  const { version } = devEnginesPackageManager;
+  if (typeof version !== "string") {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must be a string"
+    );
+  }
+
+  if (version.length === 0) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must not be empty"
+    );
+  }
+
+  if (version.trim() !== version) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must not contain leading or trailing whitespace"
+    );
+  }
+
+  if (
+    !DEV_ENGINES_VERSION_REGEX.test(version) ||
+    semver.valid(version) === null
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must be an exact semantic version"
+    );
+  }
+
+  return name;
+}
+
+function isPackageManager(value: unknown): value is PackageManager {
+  return (
+    typeof value === "string" &&
+    SUPPORTED_PACKAGE_MANAGERS.has(value as PackageManager)
+  );
+}
+
+function invalidDevEnginesPackageManager(message: string): ConvertError {
+  return new ConvertError(
+    `Invalid \`devEngines.packageManager\` field in package.json: ${message}`,
+    {
+      type: "package_manager-unable_to_detect"
+    }
+  );
+}
+
+function getPackageManagerFromPackageManagerField(
+  packageManager: string | undefined
+): PackageManager | undefined {
+  if (!packageManager) {
+    return undefined;
+  }
+
+  const match = PACKAGE_MANAGER_REGEX.exec(packageManager);
+  const manager = match?.groups?.manager;
+  return isPackageManager(manager) ? manager : undefined;
+}
+
+function setPackageManagerDeclaration({
+  packageJson,
+  packageManager,
+  version
+}: {
+  packageJson: PackageJson;
+  packageManager: PackageManager;
+  version: string;
+}): void {
+  const normalizedVersion = semver.valid(version) ?? version;
+  delete packageJson.packageManager;
+  const devEngines =
+    packageJson.devEngines &&
+    typeof packageJson.devEngines === "object" &&
+    !Array.isArray(packageJson.devEngines)
+      ? packageJson.devEngines
+      : {};
+  packageJson.devEngines = {
+    ...devEngines,
+    packageManager: {
+      name: packageManager,
+      version: normalizedVersion
+    }
+  };
+}
+
+function removePackageManagerDeclaration({
+  packageJson,
+  packageManager
+}: {
+  packageJson: PackageJson;
+  packageManager: PackageManager;
+}): void {
+  if (
+    getPackageManagerFromPackageManagerField(packageJson.packageManager) ===
+    packageManager
+  ) {
+    delete packageJson.packageManager;
+  }
+
+  const devEnginesPackageManager = packageJson.devEngines?.packageManager;
+  if (
+    isDevEnginesPackageManagerDeclaration(devEnginesPackageManager) &&
+    devEnginesPackageManager.name === packageManager
+  ) {
+    delete packageJson.devEngines?.packageManager;
+  }
+}
+
+function isDevEnginesPackageManagerDeclaration(
+  value: unknown
+): value is DevEnginesPackageManagerDeclaration {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "name" in value &&
+    isPackageManager(value.name) &&
+    "version" in value &&
+    typeof value.version === "string"
+  );
 }
 
 function getWorkspaceInfo({
@@ -104,7 +313,31 @@ function getPnpmWorkspaces({
 }: {
   workspaceRoot: string;
 }): Array<string> {
-  const workspaceFile = path.join(workspaceRoot, "pnpm-workspace.yaml");
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "pnpm-workspace.yaml"
+  });
+}
+
+function getAubeWorkspaces({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "aube-workspace.yaml"
+  });
+}
+
+function getYamlWorkspaces({
+  workspaceRoot,
+  workspaceFileName
+}: {
+  workspaceRoot: string;
+  workspaceFileName: string;
+}): Array<string> {
+  const workspaceFile = path.join(workspaceRoot, workspaceFileName);
   if (existsSync(workspaceFile)) {
     try {
       const workspaceConfig = yaml.load(readFileSync(workspaceFile, "utf8"));
@@ -210,6 +443,65 @@ function expandWorkspaces({
     });
 }
 
+type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
+
+const LOCKFILE_PROBE_ORDER: Array<{
+  manager: LockfilePackageManager;
+  lockfiles: Array<string>;
+}> = [
+  { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
+  { manager: "pnpm", lockfiles: ["aube-lock.yaml", "pnpm-lock.yaml"] },
+  { manager: "yarn", lockfiles: ["yarn.lock"] },
+  { manager: "npm", lockfiles: ["package-lock.json"] }
+];
+
+function getUnderlyingLockfileManager({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): LockfilePackageManager {
+  for (const { manager, lockfiles } of LOCKFILE_PROBE_ORDER) {
+    if (
+      lockfiles.some((lockfile) =>
+        existsSync(path.join(workspaceRoot, lockfile))
+      )
+    ) {
+      return manager;
+    }
+  }
+
+  return "npm";
+}
+
+function getUnderlyingLockfileName({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): string {
+  const manager = getUnderlyingLockfileManager({ workspaceRoot });
+
+  switch (manager) {
+    case "bun": {
+      if (existsSync(path.join(workspaceRoot, "bun.lock"))) {
+        return "bun.lock";
+      }
+      return "bun.lockb";
+    }
+    case "pnpm": {
+      if (existsSync(path.join(workspaceRoot, "aube-lock.yaml"))) {
+        return "aube-lock.yaml";
+      }
+      return "pnpm-lock.yaml";
+    }
+    case "yarn": {
+      return "yarn.lock";
+    }
+    case "npm": {
+      return "package-lock.json";
+    }
+  }
+}
+
 function directoryInfo({ directory }: { directory: string }) {
   const dir = path.resolve(process.cwd(), directory);
   return { exists: existsSync(dir), absolute: dir };
@@ -310,11 +602,16 @@ async function bunLockToYarnLock({
 export {
   getPackageJson,
   getWorkspacePackageManager,
+  setPackageManagerDeclaration,
+  removePackageManagerDeclaration,
   getWorkspaceInfo,
   expandPaths,
   expandWorkspaces,
   parseWorkspacePackages,
+  getAubeWorkspaces,
   getPnpmWorkspaces,
+  getUnderlyingLockfileManager,
+  getUnderlyingLockfileName,
   directoryInfo,
   getMainStep,
   isCompatibleWithBunWorkspaces,

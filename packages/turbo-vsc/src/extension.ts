@@ -299,10 +299,6 @@ function updateStatusBarItem(running: boolean) {
   toolbar.show();
 }
 
-function quoteCommand(command: string) {
-  return command.includes(" ") ? `"${command.replace(/"/g, '\\"')}"` : command;
-}
-
 function executableNames(name: string) {
   return process.platform === "win32"
     ? [`${name}.exe`, `${name}.cmd`, `${name}`]

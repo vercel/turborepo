@@ -11,14 +11,13 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 
 use itertools::Itertools;
 use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
-use regex::Regex;
+use regex::regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{
@@ -59,17 +58,8 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn glob_literals() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").ok())
-        .as_ref()
-}
-
 fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
-    let Some(glob_literals) = glob_literals() else {
-        return Cow::Borrowed(literal_glob);
-    };
-    glob_literals.replace_all(literal_glob, "\\$literal")
+    regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -121,24 +111,6 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     Ok((base_path, include_paths, exclude_paths))
 }
 
-fn double_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").ok())
-        .as_ref()
-}
-
-fn leading_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").ok())
-        .as_ref()
-}
-
-fn trailing_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").ok())
-        .as_ref()
-}
-
 pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
     // On Unix, Path::new(pattern).to_slash() is a no-op that returns Cow::Borrowed.
     // Skip the roundtrip entirely on Unix to avoid the overhead.
@@ -164,18 +136,9 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
     // - If no match, replace() returns Cow::Borrowed pointing to the input
     // - If match, replace() returns Cow::Owned with the replacement
     // This avoids allocations when patterns don't need modification.
-    let p1 = match double_doublestar() {
-        Some(regex) => regex.replace(&p0, "**"),
-        None => Cow::Borrowed(p0.as_ref()),
-    };
-    let p2 = match leading_doublestar() {
-        Some(regex) => regex.replace(&p1, "**/*$suffix"),
-        None => Cow::Borrowed(p1.as_ref()),
-    };
-    let p3 = match trailing_doublestar() {
-        Some(regex) => regex.replace(&p2, "$prefix*/**"),
-        None => Cow::Borrowed(p2.as_ref()),
-    };
+    let p1 = regex!(r"\*\*(?:/\*\*)+").replace(&p0, "**");
+    let p2 = regex!(r"\*\*(?P<suffix>[^*/]+)").replace(&p1, "**/*$suffix");
+    let p3 = regex!(r"(?P<prefix>[^*/]+)\*\*").replace(&p2, "$prefix*/**");
 
     // Determine if we can return a borrowed reference to the original pattern.
     // On Unix, if no regex matched, all Cows in the chain are Borrowed and
@@ -267,7 +230,7 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     // If the glob has a glob literal in it e.g. *
     // then skip trying to read it as a file path.
-    if glob_literals().is_some_and(|glob_literals| glob_literals.is_match(&*glob)) {
+    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(&*glob) {
         return;
     }
 
@@ -324,8 +287,6 @@ pub struct Settings {
     /// directories are traversed into (their targets are read). Cycles are
     /// detected and handled gracefully by the underlying walkdir layer.
     follow_links: bool,
-    /// Skip symlink cycle errors and continue walking other entries.
-    ignore_link_cycles: bool,
 }
 
 impl Settings {
@@ -336,11 +297,6 @@ impl Settings {
 
     pub fn follow_links(mut self) -> Self {
         self.follow_links = true;
-        self
-    }
-
-    pub fn ignore_link_cycles(mut self) -> Self {
-        self.ignore_link_cycles = true;
         self
     }
 }
@@ -508,7 +464,11 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    let compiled = compile_globs(base_path, include, exclude)?;
+    let compiled = {
+        let _span = tracing::info_span!("globwalk_compile").entered();
+        compile_globs(base_path, include, exclude)?
+    };
+    let _span = tracing::info_span!("globwalk_walk").entered();
     retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
 }
 
@@ -574,8 +534,84 @@ where
 struct CompiledGlobs {
     base_path: PathBuf,
     include_patterns: Vec<Glob<'static>>,
+    /// Include patterns classified from their raw strings as literal paths;
+    /// they never went through wax compilation. Absolute, like the strings
+    /// `preprocess_paths_and_globs` produces.
+    literal_paths: Vec<PathBuf>,
+    /// Include patterns classified from their raw strings as
+    /// `<prefix>/*/<suffix>` shapes; they never went through wax
+    /// compilation.
+    shallow_wildcards: Vec<(PathBuf, PathBuf)>,
     ex_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
+}
+
+/// A preprocessed include pattern classified from its raw string, without
+/// wax compilation. Compiling a wax glob costs 1-2ms of regex
+/// construction, and workspace discovery hands us ~20 patterns during the
+/// most CPU-contended window of startup — while the overwhelmingly common
+/// shapes (`packages/foo/package.json`, `packages/*/package.json`) need no
+/// pattern matching at all to evaluate.
+enum SimplePattern {
+    /// No metacharacters anywhere: a concrete path, resolvable by one stat.
+    Literal(PathBuf),
+    /// Exactly one bare `*` segment with a non-empty literal suffix:
+    /// resolvable by one readdir plus a stat per child.
+    Shallow(PathBuf, PathBuf),
+    /// Anything else — compile with wax as before.
+    Complex,
+}
+
+/// Classify a preprocessed (absolute) glob pattern string. Deliberately
+/// conservative: every byte outside a small known-plain set (or a segment
+/// that is anything other than exactly `*`) sends the pattern to wax, so
+/// escapes, character classes, alternations, and wax's extended syntax are
+/// never reinterpreted here.
+fn classify_simple_pattern(pattern: &str) -> SimplePattern {
+    fn plain_segment(segment: &str) -> bool {
+        !segment.is_empty()
+            && segment.bytes().all(|b| {
+                b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'@' | b'+' | b' ')
+            })
+    }
+
+    // Windows drive prefixes (`C:`) contain a colon; the leading empty
+    // segment from the root `/` is skipped.
+    let segments: Vec<&str> = pattern.split('/').skip_while(|s| s.is_empty()).collect();
+    if segments.is_empty() {
+        return SimplePattern::Complex;
+    }
+    let mut star_index = None;
+    for (index, segment) in segments.iter().enumerate() {
+        if *segment == "*" {
+            if star_index.is_some() {
+                return SimplePattern::Complex;
+            }
+            star_index = Some(index);
+        } else if index == 0 && is_plain_windows_drive(segment) {
+            // Allowed: `C:`-style prefix opening a Windows absolute pattern.
+        } else if !plain_segment(segment) {
+            return SimplePattern::Complex;
+        }
+    }
+
+    let root = if pattern.starts_with('/') { "/" } else { "" };
+    match star_index {
+        None => SimplePattern::Literal(PathBuf::from(format!("{root}{}", segments.join("/")))),
+        // Require at least one suffix segment after the star — `dir/*`
+        // matches files directly and keeps the full walker.
+        Some(index) if index + 1 < segments.len() && index > 0 => SimplePattern::Shallow(
+            PathBuf::from(format!("{root}{}", segments[..index].join("/"))),
+            segments[index + 1..].iter().collect(),
+        ),
+        Some(_) => SimplePattern::Complex,
+    }
+}
+
+/// `C:`-style drive segment at the start of a Windows absolute pattern.
+fn is_plain_windows_drive(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -595,7 +631,21 @@ fn compile_globs<S: AsRef<str>>(
     let ex_filter = FilterAny::any(ex_patterns.clone())
         .map_err(|e| WalkError::BadPattern("exclusion".into(), Box::new(e)))?;
 
-    let include_patterns = include_paths
+    // Evaluate simple shapes without wax: compiling a glob costs 1-2ms of
+    // regex construction each, which dwarfs the walk itself for the common
+    // literal and `<prefix>/*/<suffix>` workspace patterns.
+    let mut literal_paths = Vec::new();
+    let mut shallow_wildcards = Vec::new();
+    let mut complex_paths = Vec::new();
+    for path in include_paths {
+        match classify_simple_pattern(&path) {
+            SimplePattern::Literal(path) => literal_paths.push(path),
+            SimplePattern::Shallow(prefix, suffix) => shallow_wildcards.push((prefix, suffix)),
+            SimplePattern::Complex => complex_paths.push(path),
+        }
+    }
+
+    let include_patterns = complex_paths
         .into_par_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
@@ -603,6 +653,8 @@ fn compile_globs<S: AsRef<str>>(
     Ok(CompiledGlobs {
         base_path: base_path_new,
         include_patterns,
+        literal_paths,
+        shallow_wildcards,
         ex_patterns,
         ex_filter,
     })
@@ -691,24 +743,31 @@ fn walk_compiled_globs(
     //    single glob walker would sequentially traverse hundreds of entries.
     // 3. General variant — full wax directory walk (one rayon task per pattern).
     let mut literal_results: Vec<AbsoluteSystemPathBuf> = Vec::new();
-    let mut shallow_wildcards: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut shallow_wildcards: Vec<(PathBuf, PathBuf)> = compiled.shallow_wildcards.clone();
     let mut variant_globs: Vec<&Glob<'static>> = Vec::new();
+
+    let mut check_literal = |full_path: PathBuf| {
+        let dominated = full_path
+            .symlink_metadata()
+            .ok()
+            .is_some_and(|m| match walk_type {
+                WalkType::Files => m.is_file() || m.is_symlink(),
+                WalkType::Folders => m.is_dir(),
+                WalkType::All => true,
+            });
+        if dominated && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path()) {
+            literal_results.push(abs);
+        }
+    };
+
+    for path in &compiled.literal_paths {
+        check_literal(compiled.base_path.join(path));
+    }
 
     for glob in &compiled.include_patterns {
         if let Some(path) = glob.variance().path() {
             // Invariant: no wildcards at all — single stat.
-            let full_path = compiled.base_path.join(path);
-            let dominated = full_path
-                .symlink_metadata()
-                .ok()
-                .is_some_and(|m| match walk_type {
-                    WalkType::Files => m.is_file() || m.is_symlink(),
-                    WalkType::Folders => m.is_dir(),
-                    WalkType::All => true,
-                });
-            if dominated && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path()) {
-                literal_results.push(abs);
-            }
+            check_literal(compiled.base_path.join(path));
         } else if let Some(decomposed) = try_decompose_shallow_wildcard(&compiled.base_path, glob) {
             shallow_wildcards.push(decomposed);
         } else {
@@ -809,10 +868,10 @@ fn walk_glob(
 
             None
         })
-        .filter_map(|entry| visit_file(walk_type, entry, settings))
+        .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
     } else {
-        iter.filter_map(|entry| visit_file(walk_type, entry, settings))
+        iter.filter_map(|entry| visit_file(walk_type, entry))
             .collect::<Vec<_>>()
     }
 }
@@ -820,7 +879,6 @@ fn walk_glob(
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
-    settings: Settings,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
         Ok(entry)
@@ -832,16 +890,86 @@ fn visit_file(
         }
         Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
         Err(e) => {
-            if settings.ignore_link_cycles && e.is_link_cycle() {
-                return None;
-            }
-
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
                 // Ignore missing file and permission errors
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
                 _ => Some(Err(io_err.into())),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod classify_test {
+    use std::path::PathBuf;
+
+    use super::{SimplePattern, classify_simple_pattern};
+
+    fn classify(pattern: &str) -> SimplePattern {
+        classify_simple_pattern(pattern)
+    }
+
+    #[test]
+    fn test_literals() {
+        for pattern in [
+            "/repo/package.json",
+            "/repo/apps/docs 2.0/package.json",
+            "/repo/.github/actions/package.json",
+            "C:/repo/pkg/package.json",
+            "/repo/a+b/x@y/pkg_1.tgz",
+        ] {
+            match classify(pattern) {
+                SimplePattern::Literal(path) => assert_eq!(path, PathBuf::from(pattern)),
+                _ => panic!("{pattern} should classify as literal"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_shallow() {
+        match classify("/repo/packages/*/package.json") {
+            SimplePattern::Shallow(prefix, suffix) => {
+                assert_eq!(prefix, PathBuf::from("/repo/packages"));
+                assert_eq!(suffix, PathBuf::from("package.json"));
+            }
+            _ => panic!("should classify as shallow"),
+        }
+        match classify("/repo/platform/kinds/*/hooks/package.json") {
+            SimplePattern::Shallow(prefix, suffix) => {
+                assert_eq!(prefix, PathBuf::from("/repo/platform/kinds"));
+                assert_eq!(suffix, PathBuf::from("hooks/package.json"));
+            }
+            _ => panic!("should classify as shallow"),
+        }
+    }
+
+    #[test]
+    fn test_complex_falls_through_to_wax() {
+        for pattern in [
+            // Star without a suffix matches files directly.
+            "/repo/packages/*",
+            // Multiple or embedded stars.
+            "/repo/*/x/*/package.json",
+            "/repo/pkg-*/package.json",
+            "/repo/packages/**/package.json",
+            // Star as the first segment has no readdir prefix.
+            "*/package.json",
+            // Metacharacters, escapes, and wax extended syntax.
+            "/repo/p?g/package.json",
+            "/repo/p[ab]g/package.json",
+            "/repo/{a,b}/package.json",
+            "/repo/a\\*b/package.json",
+            "/repo/<a:1,2>/package.json",
+            "/repo/a!b/package.json",
+            // Trailing slash and empty input.
+            "/repo/pkg/",
+            "",
+        ] {
+            assert!(
+                matches!(classify(pattern), SimplePattern::Complex),
+                "{pattern} should classify as complex"
+            );
         }
     }
 }

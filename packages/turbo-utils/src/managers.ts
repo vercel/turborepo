@@ -7,6 +7,7 @@ import type { PackageManager } from "./types";
 
 const EXEC_TIMEOUT = 5000;
 const SEMVER_VERSION = "\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?";
+const PACKAGE_MANAGER_VERSION = new RegExp(`(?<version>${SEMVER_VERSION})`);
 const YARN_PACKAGE_MANAGER_VERSION = new RegExp(
   `^yarn@(?<version>${SEMVER_VERSION})(?:\\+[0-9A-Za-z.-]+)?$`
 );
@@ -39,6 +40,10 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
   } catch {
     return undefined;
   }
+}
+
+function parsePackageManagerVersion(output: string | undefined) {
+  return output?.match(PACKAGE_MANAGER_VERSION)?.groups?.version;
 }
 
 function readFile(filePath: string): string | undefined {
@@ -162,22 +167,44 @@ async function getYarnBinPath(projectRoot: string) {
   }
 }
 
+async function getNubBinPath() {
+  const nubBinaryPath = await exec("which", ["nub"]);
+  if (!nubBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(nubBinaryPath);
+}
+
+async function getAubeBinPath() {
+  const aubeBinaryPath = await exec("which", ["aube"]);
+  if (!aubeBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(aubeBinaryPath);
+}
+
 export async function getAvailablePackageManagers(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
     getYarnVersion(projectRoot),
     exec("npm", ["--version"]),
     exec("pnpm", ["--version"]),
-    exec("bun", ["--version"])
+    exec("bun", ["--version"]),
+    exec("nub", ["--version"]),
+    exec("aube", ["--version"])
   ]);
 
   return {
-    yarn,
-    pnpm,
-    npm,
-    bun
+    yarn: parsePackageManagerVersion(yarn),
+    pnpm: parsePackageManagerVersion(pnpm),
+    npm: parsePackageManagerVersion(npm),
+    bun: parsePackageManagerVersion(bun),
+    nub: parsePackageManagerVersion(nub),
+    aube: parsePackageManagerVersion(aube)
   };
 }
 
@@ -185,17 +212,21 @@ export async function getPackageManagersBinPaths(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
     getYarnBinPath(projectRoot),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
-    exec("bun", ["pm", "--g", "bin"])
+    exec("bun", ["pm", "--g", "bin"]),
+    getNubBinPath(),
+    getAubeBinPath()
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun
+    bun,
+    nub,
+    aube
   };
 }

@@ -632,10 +632,13 @@ fn test_integration_complex_subgraph_filtering() {
     assert!(subgraph_data.workspaces.contains_key("packages/shared"));
     assert!(!subgraph_data.workspaces.contains_key("apps/api"));
 
-    // Verify package filtering
-    assert_eq!(subgraph_data.packages.len(), 2);
-    assert!(subgraph_data.packages.contains_key("react-19"));
-    assert!(subgraph_data.packages.contains_key("lodash-override"));
+    // Verify package filtering. The requested react@19.0.0 and lodash@4.17.21
+    // resolutions only exist under alias-style keys ("react-19",
+    // "lodash-override") that no surviving package references by name, so the
+    // final sweep drops them the same way bun's clean pass would. In a real
+    // bun lockfile, overridden dependencies are keyed under the dependency
+    // name and survive pruning.
+    assert_eq!(subgraph_data.packages.len(), 0);
     assert!(!subgraph_data.packages.contains_key("express"));
 
     // All overrides are preserved to stay in sync with root package.json
@@ -2185,4 +2188,299 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
         pruned.data.packages.contains_key("pkg-old/is-odd"),
         "nested is-odd@2.0.0 should remain under pkg-old"
     );
+}
+
+#[test]
+fn test_parses_v2_lockfile_and_resolves_workspace_and_external() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 2,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "root",
+                "devDependencies": { "is-odd": "3.0.1" },
+            },
+            "packages/a": {
+                "name": "a",
+                "version": "0.0.0",
+                "dependencies": { "is-number": "^6.0.0" },
+            },
+        },
+        "packages": {
+            "a": ["a@workspace:packages/a"],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-stub"],
+            "is-odd": [
+                "is-odd@3.0.1",
+                "",
+                { "dependencies": { "is-number": "^6.0.0" } },
+                "sha512-stub",
+            ],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("Bun lockfileVersion 2 should parse");
+    assert_eq!(lockfile.data.lockfile_version, 2);
+    assert_eq!(lockfile.data.config_version, Some(1));
+
+    // Workspace-direct resolution (the V1 optimization path) is gated on
+    // `lockfile_version >= 1`, so it must keep firing for V2.
+    // `VersionSpec::Workspace` is parsed from a bare workspace path; matches
+    // how every other test exercises it.
+    let workspace_dep = lockfile
+        .resolve_package("", "a", "packages/a")
+        .unwrap()
+        .expect("workspace dep resolves on V2");
+    assert_eq!(workspace_dep.key, "a@0.0.0");
+
+    // Hoisted external resolution is shared with V1; spot-check one entry.
+    let external = lockfile
+        .resolve_package("packages/a", "is-number", "^6.0.0")
+        .unwrap()
+        .expect("hoisted external resolves on V2");
+    assert_eq!(external.version, "6.0.0");
+}
+
+/// Regression for a 3-level nested version split that `turbo prune` drops.
+///
+/// `@vite-pwa/nuxt@1` depends on `pathe@^1` (direct) AND `@nuxt/kit@^3`, while
+/// the workspace also depends on `@nuxt/kit@^4`. The hoisted `@nuxt/kit@4`
+/// keeps `@nuxt/kit@3` nested under `@vite-pwa/nuxt`, and that nested
+/// `@nuxt/kit@3` needs `pathe@^2` — recorded at the 3-level key
+/// `@vite-pwa/nuxt/@nuxt/kit/pathe`. Prune must preserve that key, otherwise
+/// bun resolves the nested `@nuxt/kit@3`'s pathe to the nearest ancestor
+/// `@vite-pwa/nuxt/pathe@1.1.2` (wrong major).
+#[test]
+fn test_prune_preserves_three_level_nested_version() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": {
+                    "@nuxt/kit": "^4.4.8",
+                    "@vite-pwa/nuxt": "1.1.1"
+                }
+            }
+        },
+        "packages": {
+            "@nuxt/kit": ["@nuxt/kit@4.4.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-a"],
+            "@vite-pwa/nuxt": ["@vite-pwa/nuxt@1.1.1", "", { "dependencies": { "@nuxt/kit": "^3.9.0", "pathe": "^1.1.1" } }, "sha512-b"],
+            "pathe": ["pathe@2.0.3", "", {}, "sha512-c"],
+            "@vite-pwa/nuxt/@nuxt/kit": ["@nuxt/kit@3.21.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-d"],
+            "@vite-pwa/nuxt/pathe": ["pathe@1.1.2", "", {}, "sha512-e"],
+            "@vite-pwa/nuxt/@nuxt/kit/pathe": ["pathe@2.0.3", "", {}, "sha512-c"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> = [
+        ("@nuxt/kit".to_string(), "^4.4.8".to_string()),
+        ("@vite-pwa/nuxt".to_string(), "1.1.1".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let closure = crate::transitive_closure(&lockfile, "apps/web", unresolved_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+    let subgraph = lockfile
+        .subgraph(&["apps/web".into()], &package_idents)
+        .unwrap();
+    let pruned = subgraph.lockfile().unwrap();
+
+    assert!(
+        pruned
+            .packages
+            .contains_key("@vite-pwa/nuxt/@nuxt/kit/pathe"),
+        "3-level nested pathe@2.0.3 must be preserved so the nested @nuxt/kit@3 resolves pathe@2, \
+         not the sibling @vite-pwa/nuxt/pathe@1.1.2. pruned pathe keys: {:?}",
+        pruned
+            .packages
+            .keys()
+            .filter(|k| k.ends_with("pathe"))
+            .collect::<Vec<_>>()
+    );
+}
+
+// https://github.com/vercel/turborepo/issues/13204
+// A scoped package like "@types/webpack" whose unscoped name matches one of
+// its own dependencies ("webpack") must not be treated as a nested entry for
+// that dependency. The parent-chain walk previously split "@types/webpack" at
+// the scope separator, found the "@types/webpack" entry under the bogus
+// ancestor key "@types" + "/webpack", and pinned the webpack dependency to
+// @types/webpack's version, dropping webpack from the pruned lockfile.
+#[test]
+fn test_scoped_package_name_not_mistaken_for_nested_entry() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "test-root"
+            },
+            "packages/app": {
+                "name": "app",
+                "version": "0.0.0",
+                "dependencies": {
+                    "@types/webpack": "5.28.5"
+                }
+            }
+        },
+        "packages": {
+            "@types/webpack": ["@types/webpack@5.28.5", "", {
+                "dependencies": {
+                    "tapable": "^2.2.0",
+                    "webpack": "^5"
+                }
+            }, "sha512-types-webpack"],
+            "tapable": ["tapable@2.3.3", "", {}, "sha512-tapable"],
+            "webpack": ["webpack@5.108.3", "", {
+                "dependencies": {
+                    "tapable": "^2.3.0"
+                }
+            }, "sha512-webpack"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // The webpack dependency of @types/webpack must keep its original spec
+    // instead of being pinned to @types/webpack's own version.
+    let deps = lockfile
+        .all_dependencies("@types/webpack@5.28.5")
+        .unwrap()
+        .expect("@types/webpack should have dependencies");
+    assert_eq!(deps.get("webpack"), Some(&"^5".to_string()));
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> =
+        [("@types/webpack".to_string(), "5.28.5".to_string())]
+            .into_iter()
+            .collect();
+    let closure =
+        crate::transitive_closure(&lockfile, "packages/app", unresolved_deps, false).unwrap();
+
+    assert!(
+        closure.iter().any(|pkg| pkg.key == "webpack@5.108.3"),
+        "webpack should be in the transitive closure of @types/webpack"
+    );
+
+    let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+        &lockfile,
+        &["packages/app".into()],
+        &closure
+            .iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let encoded = subgraph.encode().unwrap();
+    let encoded_str = String::from_utf8(encoded).unwrap();
+    let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+    assert!(
+        pruned.data.packages.contains_key("webpack"),
+        "webpack must remain in the pruned lockfile"
+    );
+}
+
+// Regression test for https://github.com/vercel/turborepo/issues/13233
+// When a dependency is resolved from an ancestor scope of its source key
+// (e.g. `@headlessui/react/@floating-ui/react/@floating-ui/utils` providing
+// `@floating-ui/utils` for a deeply nested `@floating-ui/dom`), the entry must
+// not be copied into the pruned lockfile under that stale ancestor key once
+// the dependent has been renamed by promotion/de-aliasing. Bun rejects the
+// resulting lockfile because the dependent can no longer resolve the
+// dependency.
+#[test]
+fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
+    let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "packages/app": {
+                    "name": "app",
+                    "dependencies": {
+                        "@radix-ui/react-popper": "1.2.8"
+                    }
+                },
+                "packages/other": {
+                    "name": "other",
+                    "dependencies": {
+                        "@floating-ui/core": "1.7.5",
+                        "@floating-ui/dom": "1.7.6",
+                        "@floating-ui/react": "0.27.19",
+                        "@floating-ui/react-dom": "2.1.8",
+                        "@floating-ui/utils": "0.2.11",
+                        "@headlessui/react": "2.2.0"
+                    }
+                }
+            },
+            "packages": {
+                "@floating-ui/core": ["@floating-ui/core@1.7.5", "", { "dependencies": { "@floating-ui/utils": "^0.2.11" } }, "sha512-core175"],
+                "@floating-ui/dom": ["@floating-ui/dom@1.7.6", "", { "dependencies": { "@floating-ui/core": "^1.7.5", "@floating-ui/utils": "^0.2.11" } }, "sha512-dom176"],
+                "@floating-ui/react": ["@floating-ui/react@0.27.19", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.8", "@floating-ui/utils": "^0.2.11" } }, "sha512-react02719"],
+                "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" } }, "sha512-reactdom218"],
+                "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-utils0211"],
+                "@headlessui/react": ["@headlessui/react@2.2.0", "", { "dependencies": { "@floating-ui/react": "^0.26.16" } }, "sha512-headlessui"],
+                "@radix-ui/react-popper": ["@radix-ui/react-popper@1.2.8", "", { "dependencies": { "@floating-ui/react-dom": "^2.0.0" } }, "sha512-popper"],
+                "app": ["app@workspace:packages/app"],
+                "other": ["other@workspace:packages/other"],
+                "@headlessui/react/@floating-ui/react": ["@floating-ui/react@0.26.16", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.0", "@floating-ui/utils": "^0.2.0" } }, "sha512-react02616"],
+                "@radix-ui/react-popper/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"]
+            }
+        }))
+        .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let mut app_deps = std::collections::BTreeMap::new();
+    app_deps.insert("@radix-ui/react-popper".to_string(), "1.2.8".to_string());
+
+    let closure = crate::transitive_closure(&lockfile, "packages/app", app_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph = lockfile
+        .subgraph(&["packages/app".into()], &package_idents)
+        .unwrap();
+    let data = subgraph.lockfile().unwrap();
+
+    // Every nested key must still have its parent chain in the lockfile.
+    for key in data.packages.keys() {
+        if let Some(parent) = PackageKey::parse(key).parent() {
+            assert!(
+                data.packages.contains_key(&parent),
+                "nested key {key} is unreachable: parent {parent} is missing"
+            );
+        }
+    }
+
+    // Every declared dependency must resolve the way bun does: direct nested
+    // entry, then ancestor scopes, then top-level.
+    for (key, entry) in &data.packages {
+        let Some(info) = &entry.info else { continue };
+        for dep_name in info.dependencies.keys() {
+            let mut resolved = data.packages.contains_key(&format!("{key}/{dep_name}"));
+            let mut scope = PackageKey::parse(key).parent();
+            while !resolved && let Some(parent) = scope {
+                resolved = data.packages.contains_key(&format!("{parent}/{dep_name}"));
+                scope = PackageKey::parse(&parent).parent();
+            }
+            resolved = resolved || data.packages.contains_key(dep_name.as_str());
+            assert!(
+                resolved,
+                "package {key} cannot resolve dependency {dep_name}"
+            );
+        }
+    }
 }

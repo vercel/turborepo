@@ -64,7 +64,51 @@ pub fn get_version() -> &'static str {
 pub fn main(
     query_server: Option<std::sync::Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, shim::Error> {
+    raise_open_file_limit();
     shim::run(query_server)
+}
+
+/// Raise the process's soft `RLIMIT_NOFILE` to its hard limit.
+///
+/// Task execution costs several descriptors per live child (pipes or pty),
+/// and default concurrency is ten times the core count, so a large run
+/// needs hundreds of descriptors at once. macOS defaults the soft limit to
+/// 256, which `turbo run` on a many-core machine exhausts at the first
+/// spawn burst (`Too many open files`). Raising the soft limit at startup
+/// is the same remedy Node.js and the Go runtime apply.
+#[cfg(unix)]
+fn raise_open_file_limit() {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: getrlimit/setrlimit are passed a valid, initialized rlimit.
+    unsafe {
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) != 0 || limit.rlim_cur >= limit.rlim_max
+        {
+            return;
+        }
+        let mut raised = limit;
+        // Clamp below the hard limit: tools spawned by tasks may iterate
+        // file descriptors up to the soft limit (the classic `closefrom`
+        // loop), which a million-entry table makes pathological. 65536
+        // covers any realistic spawn burst.
+        raised.rlim_cur = limit.rlim_max.min(65536);
+        if libc::setrlimit(libc::RLIMIT_NOFILE, &raised) != 0 {
+            // macOS reports RLIM_INFINITY as the hard limit but rejects
+            // raising the soft limit past `kern.maxfilesperproc`; its
+            // documented ceiling for unprivileged processes is OPEN_MAX
+            // (10240).
+            raised.rlim_cur = limit.rlim_max.min(10240);
+            let _ = libc::setrlimit(libc::RLIMIT_NOFILE, &raised);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn raise_open_file_limit() {
+    // Windows has no RLIMIT_NOFILE equivalent; handle limits are already
+    // in the tens of thousands.
 }
 
 #[cfg(all(feature = "native-tls", feature = "rustls-tls"))]

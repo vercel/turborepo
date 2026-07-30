@@ -59,7 +59,7 @@ describe("affectedPackages", () => {
     });
   }
 
-  it("does not require packageManager for npm", async () => {
+  it("supports devEngines.packageManager for npm", async () => {
     const dir = path.resolve(__dirname, "./fixtures/npm-monorepo");
     const workspace = await Workspace.find(dir);
 

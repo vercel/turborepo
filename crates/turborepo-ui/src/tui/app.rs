@@ -8,7 +8,7 @@ use std::{
 
 use ratatui::{
     Frame, Terminal,
-    backend::{Backend, CrosstermBackend},
+    backend::CrosstermBackend,
     layout::{Constraint, Layout},
     widgets::{Clear, TableState},
 };
@@ -18,21 +18,25 @@ use tokio::{
 };
 use tracing::{debug, trace};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_log::LogSink;
 
 use crate::tui::popup::{popup, popup_area};
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
+const SELECTION_AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
+/// How long the pane footer shows "Copied to clipboard" after a copy.
+const CLIPBOARD_NOTICE_DURATION: Duration = Duration::from_secs(2);
 
 use super::{
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
-    event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
+    event::{CacheResult, Direction, OutputLogs, PaneSize, StreamScope, TaskResult},
     input,
     preferences::PreferenceLoader,
     search::SearchResults,
 };
 use crate::{
-    ColorConfig,
+    ColorConfig, TerminalSink,
     tui::{
         scroll::ScrollMomentum,
         task::{Task, TasksByStatus},
@@ -59,15 +63,35 @@ pub struct App<W> {
     tasks_by_status: TasksByStatus,
     section_focus: LayoutSections,
     task_list_scroll: TableState,
+    task_list_scroll_detached: bool,
     selected_task_index: usize,
     is_task_selection_pinned: bool,
     showing_help_popup: bool,
     done: bool,
     preferences: PreferenceLoader,
     scrollback_len: u64,
-    scroll_momentum: ScrollMomentum,
+    log_scroll_momentum: ScrollMomentum,
+    task_list_scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
     showing_log_panel: bool,
+    /// While set, the pane footer shows "Copied to clipboard". Cleared once
+    /// the deadline passes.
+    clipboard_notice_expiry: Option<Instant>,
+    /// How many bytes of each task's output have already been emitted to the
+    /// stream sink. Lets repeated TUI<->stream toggles backfill only the new
+    /// output instead of re-printing the whole history each time.
+    replayed_offsets: BTreeMap<String, usize>,
+    selection_drag_task: Option<String>,
+    selection_autoscroll: Option<SelectionAutoscroll>,
+}
+
+#[derive(Clone)]
+struct SelectionAutoscroll {
+    task: String,
+    direction: Direction,
+    row: u16,
+    column: u16,
+    next_scroll_at: Instant,
 }
 
 impl<W> App<W> {
@@ -77,7 +101,7 @@ impl<W> App<W> {
         tasks: Vec<String>,
         preferences: PreferenceLoader,
         scrollback_len: u64,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -103,30 +127,47 @@ impl<W> App<W> {
             .and_then(|active_task| tasks_by_status.active_index(active_task))
             .unwrap_or(0);
 
-        Self {
+        let tasks = tasks_by_status
+            .task_names_in_displayed_order()
+            .map(|task_name| {
+                TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len)
+                    .map(|output| (task_name.to_owned(), output))
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
             size,
             done: false,
             section_focus: LayoutSections::TaskList,
-            tasks: tasks_by_status
-                .task_names_in_displayed_order()
-                .map(|task_name| {
-                    (
-                        task_name.to_owned(),
-                        TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len),
-                    )
-                })
-                .collect(),
+            tasks,
             selected_task_index,
             tasks_by_status,
             task_list_scroll: TableState::default().with_selected(selected_task_index),
+            task_list_scroll_detached: false,
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
             scrollback_len,
-            scroll_momentum: ScrollMomentum::new(),
+            log_scroll_momentum: ScrollMomentum::new(),
+            task_list_scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
             showing_log_panel: false,
-        }
+            clipboard_notice_expiry: None,
+            replayed_offsets: BTreeMap::new(),
+            selection_drag_task: None,
+            selection_autoscroll: None,
+        })
+    }
+
+    #[cfg(test)]
+    fn new_for_test(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        preferences: PreferenceLoader,
+        scrollback_len: u64,
+    ) -> Self {
+        Self::new(rows, cols, tasks, preferences, scrollback_len).expect("failed to initialize app")
     }
 
     #[cfg(test)]
@@ -144,16 +185,18 @@ impl<W> App<W> {
     }
 
     fn input_options(&self) -> Result<InputOptions<'_>, Error> {
-        let has_selection = self.get_full_task()?.has_selection();
+        let task = self.get_full_task()?;
         Ok(InputOptions {
             focus: &self.section_focus,
-            has_selection,
+            has_selection: task.has_selection(),
+            is_selecting: task.is_selecting(),
             is_help_popup_open: self.showing_help_popup,
             is_log_panel_open: self.showing_log_panel,
         })
     }
 
     fn update_sidebar_toggle(&mut self) {
+        self.cancel_selection_drag();
         let value = !self.preferences.is_task_list_visible();
         self.preferences.set_is_task_list_visible(Some(value));
         // Resize terminal outputs to match new pane width
@@ -187,6 +230,25 @@ impl<W> App<W> {
         self.tasks
             .get_mut(&active_task)
             .ok_or(Error::TaskNotFound { name: active_task })
+    }
+
+    fn cancel_selection_drag(&mut self) {
+        self.selection_autoscroll = None;
+        if let Some(task_name) = self.selection_drag_task.take()
+            && let Some(task) = self.tasks.get_mut(&task_name)
+        {
+            task.cancel_selection_drag();
+        }
+    }
+
+    fn cancel_selection_drag_if_task_changed(&mut self) {
+        let task_changed = self
+            .selection_drag_task
+            .as_deref()
+            .is_some_and(|task_name| self.active_task().ok() != Some(task_name));
+        if task_changed {
+            self.cancel_selection_drag();
+        }
     }
 
     fn persist_active_task(&mut self) -> Result<(), Error> {
@@ -254,8 +316,10 @@ impl<W> App<W> {
         } else {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
+            self.reattach_task_list_scroll();
         }
 
+        self.cancel_selection_drag_if_task_changed();
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
     }
@@ -275,10 +339,37 @@ impl<W> App<W> {
                 .checked_sub(1)
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
+            self.reattach_task_list_scroll();
         }
 
+        self.cancel_selection_drag_if_task_changed();
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
+    }
+
+    fn scroll_task_list(&mut self, direction: Direction) -> Result<(), Error> {
+        let lines = self.task_list_scroll_momentum.on_scroll_event(direction);
+        let visible_rows = usize::from(self.size.task_list_visible_task_rows());
+        let max_offset = self
+            .tasks_by_status
+            .count_all()
+            .saturating_sub(visible_rows);
+        let offset = match direction {
+            Direction::Down => self
+                .task_list_scroll
+                .offset()
+                .saturating_add(lines)
+                .min(max_offset),
+            Direction::Up => self.task_list_scroll.offset().saturating_sub(lines),
+        };
+        *self.task_list_scroll.offset_mut() = offset;
+        self.task_list_scroll_detached = true;
+        Ok(())
+    }
+
+    fn reattach_task_list_scroll(&mut self) {
+        self.task_list_scroll_detached = false;
+        self.task_list_scroll_momentum.reset();
     }
 
     #[tracing::instrument(skip_all)]
@@ -288,9 +379,9 @@ impl<W> App<W> {
         use_momentum: bool,
     ) -> Result<(), Error> {
         let lines = if use_momentum {
-            self.scroll_momentum.on_scroll_event(direction)
+            self.log_scroll_momentum.on_scroll_event(direction)
         } else {
-            self.scroll_momentum.reset();
+            self.log_scroll_momentum.reset();
             1
         };
 
@@ -310,6 +401,7 @@ impl<W> App<W> {
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         // Ensure task list is visible when searching
         if !self.preferences.is_task_list_visible() {
             self.preferences.set_is_task_list_visible(Some(true));
@@ -325,6 +417,7 @@ impl<W> App<W> {
     }
 
     pub fn exit_search(&mut self, restore_scroll: bool) {
+        self.cancel_selection_drag();
         let mut prev_focus = LayoutSections::TaskList;
         mem::swap(&mut self.section_focus, &mut prev_focus);
         match prev_focus {
@@ -341,6 +434,7 @@ impl<W> App<W> {
     }
 
     pub fn lock_search(&mut self) {
+        self.cancel_selection_drag();
         if let LayoutSections::Search { results, .. } = &self.section_focus {
             self.section_focus = LayoutSections::SearchLocked {
                 results: results.clone(),
@@ -349,6 +443,7 @@ impl<W> App<W> {
     }
 
     pub fn search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &self.section_focus else {
             debug!("scrolling search while not searching");
             return Ok(());
@@ -364,6 +459,7 @@ impl<W> App<W> {
     }
 
     pub fn search_enter_char(&mut self, c: char) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modifying search query while not searching");
             return Ok(());
@@ -374,6 +470,7 @@ impl<W> App<W> {
     }
 
     pub fn search_remove_char(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modified search query while not searching");
             return Ok(());
@@ -482,8 +579,11 @@ impl<W> App<W> {
         Ok(())
     }
 
-    /// Mark the given running task as finished
-    /// Errors if given task wasn't a running task
+    /// Mark the given running or planned task as finished.
+    ///
+    /// A task is only marked as started once its process actually spawns,
+    /// so cache hits legitimately finish straight from the planned state —
+    /// they never ran. Errors if the task is unknown or already finished.
     #[tracing::instrument(skip(self, result))]
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         debug!("finishing task {task}");
@@ -494,16 +594,32 @@ impl<W> App<W> {
             .task_name(self.selected_task_index)?
             .to_string();
 
-        let running_idx = self
+        let finished = if let Some(running_idx) = self
             .tasks_by_status
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
-
-        let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status
-            .insert_finished_task(running.finish(result));
+        {
+            self.tasks_by_status
+                .running
+                .remove(running_idx)
+                .finish(result)
+        } else {
+            let planned_idx = self
+                .tasks_by_status
+                .planned
+                .iter()
+                .position(|planned| planned.name() == task)
+                .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
+            // start().finish() back to back: a task that never ran has a
+            // (truthful) zero duration.
+            self.tasks_by_status
+                .planned
+                .remove(planned_idx)
+                .start()
+                .finish(result)
+        };
+        self.tasks_by_status.insert_finished_task(finished);
 
         self.tasks
             .get_mut(task)
@@ -546,9 +662,17 @@ impl<W> App<W> {
             .size
             .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
-            self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
-            });
+            if !self.tasks.contains_key(task) {
+                self.tasks.insert(
+                    task.clone(),
+                    TerminalOutput::new(
+                        self.size.pane_rows(),
+                        pane_cols,
+                        None,
+                        self.scrollback_len,
+                    )?,
+                );
+            }
         }
         // Trim the terminal output to only tasks that exist in new list
         self.tasks.retain(|name, _| tasks.contains(name));
@@ -589,9 +713,17 @@ impl<W> App<W> {
             .size
             .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
-            self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
-            });
+            if !self.tasks.contains_key(task) {
+                self.tasks.insert(
+                    task.clone(),
+                    TerminalOutput::new(
+                        self.size.pane_rows(),
+                        pane_cols,
+                        None,
+                        self.scrollback_len,
+                    )?,
+                );
+            }
         }
 
         self.tasks_by_status
@@ -640,12 +772,52 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Replay each started task's buffered output through the sink so that
+    /// switching from the TUI to streamed logs shows the history that was
+    /// printed while the TUI owned the screen, not just output from the
+    /// moment of the switch onward.
+    ///
+    /// Tasks are replayed in displayed order. When `filter` is `Some`, only
+    /// that task is replayed; other tasks are skipped entirely so their
+    /// watermarks don't advance for output that never reached the screen.
+    /// `filter` must match the sink's active stream filter, otherwise the
+    /// sink would drop bytes the watermark records as emitted.
+    ///
+    /// A per-task watermark tracks how many bytes have already been emitted to
+    /// the sink, so repeated TUI<->stream toggles only backfill the output
+    /// produced since the previous excursion rather than re-printing the whole
+    /// history each time. If a task's buffer shrinks (e.g. logs were cleared)
+    /// the watermark resets and the remaining output is replayed in full.
+    pub fn replay_to_sink(&mut self, sink: &TerminalSink, filter: Option<&str>) {
+        for task_name in self.tasks_by_status.tasks_started() {
+            if filter.is_some_and(|selected| selected != task_name) {
+                continue;
+            }
+            let Some(task) = self.tasks.get(&task_name) else {
+                continue;
+            };
+            let output = task.raw_output();
+            let already =
+                replay_offset(self.replayed_offsets.get(&task_name).copied(), output.len());
+
+            let pending = &output[already..];
+            self.replayed_offsets
+                .insert(task_name.clone(), output.len());
+
+            if pending.is_empty() {
+                continue;
+            }
+            sink.task_output(&task_name, turborepo_log::OutputChannel::Stdout, pending);
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn set_status(
         &mut self,
         task: String,
         status: String,
         result: CacheResult,
+        output_logs: OutputLogs,
     ) -> Result<(), Error> {
         let task = self
             .tasks
@@ -655,48 +827,244 @@ impl<W> App<W> {
             })?;
         task.status = Some(status);
         task.cache_result = Some(result);
+        // Cache hits finish without ever starting, so `StartTask` cannot be
+        // relied on to deliver the output verbosity before persistence.
+        task.output_logs = Some(output_logs);
         Ok(())
     }
 
-    pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
-        // Only offset by table width if the sidebar is visible
+    pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        self.handle_mouse_at(event, Instant::now())
+    }
+
+    fn handle_mouse_at(
+        &mut self,
+        mut event: crossterm::event::MouseEvent,
+        now: Instant,
+    ) -> Result<(), Error> {
         let has_sidebar = self.preferences.is_task_list_visible();
         let table_width = if has_sidebar {
             self.size.task_list_width()
         } else {
             0
         };
+        let scroll_direction = match event.kind {
+            crossterm::event::MouseEventKind::ScrollDown => Some(Direction::Down),
+            crossterm::event::MouseEventKind::ScrollUp => Some(Direction::Up),
+            _ => None,
+        };
+        if let Some(direction) = scroll_direction {
+            if event.column < table_width {
+                self.scroll_task_list(direction)?;
+            } else {
+                self.is_task_selection_pinned = true;
+                self.scroll_terminal_output(direction, true)?;
+            }
+            return Ok(());
+        }
+
+        let is_selection_down = matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        );
+        let is_selection_drag = matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
+        );
+
+        if is_selection_down {
+            self.cancel_selection_drag();
+        }
+
+        // Releasing the left button ends a selection wherever the cursor is,
+        // so handle it before any hit-testing. Whatever was selected gets
+        // copied to the clipboard automatically.
+        if matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left)
+        ) {
+            let shift_held = event
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::SHIFT);
+            let drag_task_is_active = self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name));
+            if !drag_task_is_active {
+                self.cancel_selection_drag();
+                return Ok(());
+            }
+            let should_copy = {
+                let task = self.get_full_task_mut()?;
+                let was_selecting = task.is_selecting();
+                task.handle_mouse(event)?;
+                was_selecting && task.has_selection() && !shift_held
+            };
+            self.selection_drag_task = None;
+            self.selection_autoscroll = None;
+            // Shift prevents the automatic copy, leaving the selection in
+            // place so the user can still copy it with `c` or dismiss it by
+            // clicking.
+            if should_copy {
+                self.copy_selection()?;
+            }
+            return Ok(());
+        }
+
+        // A hover event can only arrive while the button is up, so if a drag
+        // is still live we missed the release (the terminal swallowed the
+        // shifted mouse events). End the drag and keep the selection, the
+        // same outcome as an observed shift-release.
+        if matches!(event.kind, crossterm::event::MouseEventKind::Moved) {
+            if self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name))
+            {
+                self.get_full_task_mut()?.handle_mouse(event)?;
+            }
+            self.cancel_selection_drag();
+            return Ok(());
+        }
+
+        if is_selection_drag {
+            let drag_task_is_active = self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name));
+            if !drag_task_is_active {
+                self.cancel_selection_drag();
+                return Ok(());
+            }
+        }
+
         let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
+        let pane_rows = self.size.pane_rows();
         debug!("original mouse event: {event:?}, table_width: {table_width}");
-        // Only handle mouse event if it happens inside of pane
-        // We give a 1 cell buffer to make it easier to select the first column of a row
-        if event.row > 0 && event.column >= table_width {
-            // Subtract 1 from the y axis due to the title of the pane
-            event.row -= 1;
+        // Mouse-down events must start in the content. Drags may reach the pane titles
+        // to scroll.
+        if event.column >= table_width && (event.row > 0 || is_selection_drag) {
+            let selection_scroll = if is_selection_drag && event.row == 0 {
+                Some(Direction::Up)
+            } else if is_selection_drag && event.row > pane_rows {
+                Some(Direction::Down)
+            } else {
+                None
+            };
+            event.row = event.row.saturating_sub(1).min(pane_rows.saturating_sub(1));
             // Subtract the width of the table and the pane's link-safe left padding.
             event.column = event
                 .column
                 .saturating_sub(table_width.saturating_add(pane_left_padding));
             debug!("translated mouse event: {event:?}");
 
+            let task_name = self.active_task()?.to_owned();
             let task = self.get_full_task_mut()?;
-            task.handle_mouse(event)?;
+            task.handle_mouse_with_scroll(event, selection_scroll)?;
+            if is_selection_down && task.is_selecting() {
+                self.selection_drag_task = Some(task_name.clone());
+            }
+            self.selection_autoscroll = selection_scroll.map(|direction| SelectionAutoscroll {
+                task: task_name,
+                direction,
+                row: event.row,
+                column: event.column,
+                next_scroll_at: now + SELECTION_AUTOSCROLL_INTERVAL,
+            });
+        } else if is_selection_drag {
+            self.selection_autoscroll = None;
+        } else if event.column < table_width
+            && matches!(
+                event.kind,
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+            )
+        {
+            self.handle_task_list_click(event.row);
         }
 
         Ok(())
     }
 
-    pub fn copy_selection(&self) -> Result<(), Error> {
-        let task = self.get_full_task()?;
+    fn tick_selection_autoscroll(&mut self, now: Instant) -> Result<bool, Error> {
+        let Some(mut selection_autoscroll) = self.selection_autoscroll.take() else {
+            return Ok(false);
+        };
+        let is_active_task = self.active_task()? == selection_autoscroll.task;
+
+        if !is_active_task {
+            self.cancel_selection_drag();
+            return Ok(false);
+        }
+
+        if now < selection_autoscroll.next_scroll_at {
+            self.selection_autoscroll = Some(selection_autoscroll);
+            return Ok(false);
+        }
+
+        self.get_full_task_mut()?.continue_selection_drag(
+            selection_autoscroll.direction,
+            selection_autoscroll.row,
+            selection_autoscroll.column,
+        )?;
+        selection_autoscroll.next_scroll_at = now + SELECTION_AUTOSCROLL_INTERVAL;
+        self.selection_autoscroll = Some(selection_autoscroll);
+        Ok(true)
+    }
+
+    /// Selects the task whose row in the task list was clicked. Clicks on the
+    /// header, the key-binds footer, or empty space below the last task leave
+    /// the selection unchanged.
+    fn handle_task_list_click(&mut self, clicked_row: u16) {
+        // Row 0 is the table header.
+        let Some(row_in_list) = clicked_row.checked_sub(1) else {
+            return;
+        };
+        if row_in_list >= self.size.task_list_visible_task_rows() {
+            return;
+        }
+        // The table scrolls when tasks overflow the screen, so translate the
+        // clicked row into an index in the full task list.
+        let index = self.task_list_scroll.offset() + usize::from(row_in_list);
+        if index >= self.tasks_by_status.count_all() {
+            return;
+        }
+        self.selected_task_index = index;
+        self.task_list_scroll.select(Some(index));
+        self.reattach_task_list_scroll();
+        self.is_task_selection_pinned = true;
+        self.persist_active_task().ok();
+    }
+
+    pub fn copy_selection(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
+        let task = self.get_full_task_mut()?;
         let Some(text) = task.copy_selection() else {
             return Ok(());
         };
         super::copy_to_clipboard(&text);
+        // The selection has served its purpose; drop the highlight.
+        task.clear_selection()?;
+        self.clipboard_notice_expiry = Some(Instant::now() + CLIPBOARD_NOTICE_DURATION);
         Ok(())
+    }
+
+    /// Clears the "Copied to clipboard" notice once it has been shown long
+    /// enough. Returns true if the notice was just cleared, meaning the
+    /// footer needs a rerender.
+    fn clear_expired_clipboard_notice(&mut self) -> bool {
+        if self
+            .clipboard_notice_expiry
+            .is_some_and(|deadline| deadline <= Instant::now())
+        {
+            self.clipboard_notice_expiry = None;
+            return true;
+        }
+        false
     }
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
         if !self.is_task_selection_pinned {
+            self.cancel_selection_drag_if_task_changed();
             return Ok(());
         }
 
@@ -711,6 +1079,8 @@ impl<W> App<W> {
         };
         self.selected_task_index = new_index_to_highlight;
         self.task_list_scroll.select(Some(new_index_to_highlight));
+        self.reattach_task_list_scroll();
+        self.cancel_selection_drag_if_task_changed();
 
         Ok(())
     }
@@ -719,10 +1089,13 @@ impl<W> App<W> {
     pub fn reset_scroll(&mut self) {
         self.is_task_selection_pinned = false;
         self.task_list_scroll.select(Some(0));
+        self.reattach_task_list_scroll();
         self.selected_task_index = 0;
+        self.cancel_selection_drag_if_task_changed();
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.cancel_selection_drag();
         self.size.resize(rows, cols);
         let pane_rows = self.size.pane_rows();
         let pane_cols = self
@@ -735,17 +1108,18 @@ impl<W> App<W> {
 
     pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(usize::MAX);
+        task.scroll_to_top()?;
         Ok(())
     }
 
     pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(0);
+        task.scroll_to_bottom()?;
         Ok(())
     }
 
     pub fn clear_task_logs(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let task = self.get_full_task_mut()?;
         task.clear_logs();
         Ok(())
@@ -797,6 +1171,24 @@ impl<W: Write> App<W> {
     }
 }
 
+/// Logical display state of the render loop.
+///
+/// The user can switch between the interactive TUI (alternate screen) and
+/// streamed plain logs (main screen) repeatedly within one invocation. The
+/// allocated ratatui `Terminal` is kept alive across stream excursions; only
+/// the alternate-screen escape sequences are toggled. Raw mode stays enabled
+/// the whole time (decoupled from this state) so the toggle hotkey is always
+/// catchable.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum DisplayState {
+    /// Nothing rendered yet (before the first non-cached task starts).
+    Inactive,
+    /// TUI is active and owns the alternate screen.
+    Tui,
+    /// Streaming plain logs to the main screen via `TerminalSink`.
+    Streaming,
+}
+
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
 pub async fn run_app(
@@ -806,26 +1198,34 @@ pub async fn run_app(
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
     interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+    terminal_sink: Arc<TerminalSink>,
 ) -> Result<(), Error> {
     // Get terminal size before potentially entering alternate screen
     let size = crossterm::terminal::size()?;
     let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.1, size.0, tasks, preferences, scrollback_len);
+        App::new(size.1, size.0, tasks, preferences, scrollback_len)?;
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
-    // Terminal is lazily initialized - only started when a non-cached task runs
+    // Terminal is lazily initialized - only started when a non-cached task runs.
+    // Once allocated it is kept alive across TUI<->stream toggles.
     let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
+    let mut display = DisplayState::Inactive;
+    // Raw mode is enabled once on first activation and disabled once at the end.
+    let mut raw_mode_enabled = false;
 
     let (result, callback) = match run_app_inner(
         &mut terminal,
+        &mut display,
+        &mut raw_mode_enabled,
         &mut app,
         receiver,
         crossterm_rx,
         color_config,
         interrupt.as_deref(),
+        &terminal_sink,
     )
     .await
     {
@@ -836,22 +1236,78 @@ pub async fn run_app(
         }
     };
 
-    // Only cleanup terminal if we actually started it
-    if let Some(terminal) = terminal {
-        cleanup(terminal, app, callback)?;
-    } else {
-        // Even if TUI never started, still persist task output and flush preferences
-        let tasks_started = app.tasks_by_status.tasks_started();
-        app.persist_tasks(tasks_started)?;
-        app.persist_summary()?;
-        app.preferences.flush_to_disk().ok();
-        if let Some(callback) = callback {
-            // Signal completion even if we never started the terminal
-            callback.send(()).ok();
-        }
-    }
+    let cleanup_result = final_cleanup(
+        terminal,
+        display,
+        raw_mode_enabled,
+        app,
+        callback,
+        &terminal_sink,
+    );
 
+    // Safety net for racy shutdowns: if any restore step failed (or startup
+    // failed partway), fall back to raw escape sequences so we never exit
+    // leaving the user's terminal in the alternate screen or raw mode. This is
+    // a flag-gated no-op when cleanup fully succeeded.
+    super::panic_handler::restore_terminal_best_effort();
+
+    cleanup_result?;
     result
+}
+
+/// Spawn the TUI on a dedicated thread.
+///
+/// Ghostty's terminal types are `!Send`, so the TUI must not run on the main
+/// Tokio worker pool. This helper owns a single-threaded runtime on a dedicated
+/// OS thread and returns a `JoinHandle` that can be awaited from any task.
+pub fn spawn_run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: crate::ColorConfig,
+    repo_root: AbsoluteSystemPathBuf,
+    scrollback_len: u64,
+    interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+    terminal_sink: Arc<TerminalSink>,
+) -> Result<tokio::task::JoinHandle<Result<(), crate::Error>>, Error> {
+    let (done_tx, done_rx) = oneshot::channel();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    std::thread::Builder::new()
+        .name("turbo-tui".into())
+        .spawn(move || {
+            let result = runtime.block_on(run_app(
+                tasks,
+                receiver,
+                color_config,
+                &repo_root,
+                scrollback_len,
+                interrupt,
+                terminal_sink,
+            ));
+            done_tx.send(result).ok();
+        })
+        .map_err(Error::ThreadSpawn)?;
+
+    Ok(tokio::spawn(async move {
+        done_rx
+            .await
+            .map_err(|_| Error::ThreadJoin)?
+            .map_err(crate::Error::Tui)
+    }))
+}
+
+/// Determine where to resume replaying a task's buffered output, given the
+/// byte count emitted on a previous excursion (`previous`) and the task's
+/// current buffer length (`len`).
+///
+/// Returns `previous` when the buffer has only grown, so repeated toggles
+/// backfill only the new output. Returns `0` when the buffer shrank below the
+/// watermark (e.g. logs were cleared), so the remaining output replays in
+/// full.
+fn replay_offset(previous: Option<usize>, len: usize) -> usize {
+    previous.filter(|&offset| offset <= len).unwrap_or(0)
 }
 
 /// Check if an event indicates we need to start rendering the TUI.
@@ -870,13 +1326,17 @@ fn should_start_terminal(event: &Event) -> bool {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
+#[allow(clippy::too_many_arguments)]
 async fn run_app_inner(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: &mut DisplayState,
+    raw_mode_enabled: &mut bool,
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
     color_config: ColorConfig,
     interrupt: Option<&(dyn Fn() + Send + Sync)>,
+    terminal_sink: &TerminalSink,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
@@ -884,10 +1344,15 @@ async fn run_app_inner(
     let mut needs_rerender = true;
 
     while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
-        // Check if we need to start the terminal (on first cache miss)
-        if terminal.is_none() && should_start_terminal(&event) {
-            let term = startup(color_config)?;
-            *terminal = Some(term);
+        // Check if we need to start the terminal (on first cache miss). The
+        // first activation always enters the TUI (the default mode).
+        if *display == DisplayState::Inactive && should_start_terminal(&event) {
+            if !*raw_mode_enabled {
+                enable_input(color_config, terminal_sink)?;
+                *raw_mode_enabled = true;
+            }
+            enter_alt_screen(terminal)?;
+            *display = DisplayState::Tui;
             // Render initial state to paint the screen
             if let Some(terminal) = terminal.as_mut() {
                 terminal.draw(|f| view(app, f))?;
@@ -895,9 +1360,27 @@ async fn run_app_inner(
             last_render = Instant::now();
         }
 
+        // Toggling between TUI and streamed logs has terminal/sink side effects
+        // that must happen here (not in `update`, which only mutates `App`).
+        if let Event::ToggleStream { scope } = &event {
+            handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
+            last_render = Instant::now();
+            continue;
+        }
+
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
+            needs_rerender = true;
+        }
+
+        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
+            needs_rerender = true;
+        }
+
+        // The "Copied to clipboard" notice expires on its own, so ticks must
+        // trigger a rerender when it does.
+        if app.clear_expired_clipboard_notice() {
             needs_rerender = true;
         }
 
@@ -909,7 +1392,8 @@ async fn run_app_inner(
             resize_event = resize_debouncer.update(event);
         }
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
-            // If we got a resize event, make sure to update ratatui backend.
+            // If we got a resize event, make sure to update ratatui backend even
+            // while streaming, so the view is correct when we return to the TUI.
             if let Some(term) = terminal.as_mut() {
                 term.autoresize()?;
             }
@@ -918,14 +1402,16 @@ async fn run_app_inner(
         if let Some(event) = event {
             callback = update(app, event, interrupt)?;
             if callback.is_some() {
-                drain_after_stop(terminal, app, &mut receiver, &mut last_render).await?;
+                drain_after_stop(terminal, *display, app, &mut receiver, &mut last_render).await?;
                 break;
             }
             if app.done {
                 break;
             }
-            // Only render if the terminal has been started
-            if let Some(term) = terminal.as_mut()
+            // Only render the TUI when it owns the screen. While streaming, the
+            // `TerminalSink` produces output directly and we must not draw.
+            if *display == DisplayState::Tui
+                && let Some(term) = terminal.as_mut()
                 && FRAMERATE <= last_render.elapsed()
                 && needs_rerender
             {
@@ -939,22 +1425,90 @@ async fn run_app_inner(
     Ok(callback)
 }
 
+/// Switch between the TUI and streamed logs. The allocated `Terminal` is kept
+/// alive; only the alternate screen and the stream sink's mode are toggled.
+fn handle_toggle_stream(
+    terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: &mut DisplayState,
+    app: &mut App<Box<dyn io::Write + Send>>,
+    terminal_sink: &TerminalSink,
+    scope: &StreamScope,
+    color_config: ColorConfig,
+) -> Result<(), Error> {
+    app.cancel_selection_drag();
+    match *display {
+        DisplayState::Tui => {
+            let Some(term) = terminal.as_mut() else {
+                return Ok(());
+            };
+            // Capture the selected task before leaving the TUI.
+            let filter = match scope {
+                StreamScope::All => None,
+                StreamScope::SelectedTask => app.active_task().ok().map(|task| task.to_owned()),
+            };
+            leave_alt_screen(term)?;
+            terminal_sink.set_stream_filter(filter.clone());
+            terminal_sink.enable();
+            print_stream_banner(color_config, filter.as_deref());
+            // Backfill the history printed while the TUI owned the screen so
+            // the user sees the full log, not just output from this moment on.
+            app.replay_to_sink(terminal_sink, filter.as_deref());
+            *display = DisplayState::Streaming;
+        }
+        DisplayState::Streaming => {
+            // Stop streaming before re-entering the alternate screen so the two
+            // writers never contend for stdout.
+            terminal_sink.disable();
+            terminal_sink.set_stream_filter(None);
+            enter_alt_screen(terminal)?;
+            if let Some(term) = terminal.as_mut() {
+                term.draw(|f| view(app, f))?;
+            }
+            *display = DisplayState::Tui;
+        }
+        // Nothing is rendering yet; ignore until the first task runs.
+        DisplayState::Inactive => {}
+    }
+    Ok(())
+}
+
+/// Print a light-grey line marking the boundary where streamed logs begin.
+/// Always uses `\r\n` because raw mode is enabled whenever we stream.
+fn print_stream_banner(color_config: ColorConfig, task: Option<&str>) {
+    let label = match task {
+        Some(task) => format!("Streaming logs for {task}. Press h to return to the TUI."),
+        None => "Streaming logs for all tasks. Press s to return to the TUI.".to_string(),
+    };
+    let styled = color_config.apply(crate::GREY.apply_to(label));
+    let mut stdout = io::stdout();
+    let _ = write!(stdout, "\r\n{styled}\r\n");
+    let _ = stdout.flush();
+}
+
 async fn drain_after_stop(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: DisplayState,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: &mut AppReceiver,
     last_render: &mut Instant,
 ) -> Result<(), Error> {
     receiver.close();
     let mut needs_rerender = false;
+    // Only draw if the TUI currently owns the screen; while streaming the
+    // `TerminalSink` has already emitted everything.
+    let drawing = display == DisplayState::Tui;
 
     while let Some(event) = receiver.recv().await {
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
+        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
+            needs_rerender = true;
+        }
         update(app, event, None)?;
 
-        if let Some(term) = terminal.as_mut()
+        if drawing
+            && let Some(term) = terminal.as_mut()
             && FRAMERATE <= last_render.elapsed()
             && needs_rerender
         {
@@ -964,7 +1518,8 @@ async fn drain_after_stop(
         }
     }
 
-    if let Some(term) = terminal.as_mut()
+    if drawing
+        && let Some(term) = terminal.as_mut()
         && needs_rerender
     {
         term.draw(|f| view(app, f))?;
@@ -1015,49 +1570,91 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
     Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
-/// Configures terminal for rendering App
-#[tracing::instrument]
-fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+/// Enable raw mode and configure color output. Called once, lazily, the first
+/// time the render loop takes ownership of terminal input. Raw mode then stays
+/// on for the rest of the run (across TUI<->stream toggles) so the toggle
+/// hotkey is always catchable.
+#[tracing::instrument(skip(terminal_sink))]
+fn enable_input(color_config: ColorConfig, terminal_sink: &TerminalSink) -> io::Result<()> {
     if color_config.should_strip_ansi {
         crossterm::style::force_color_output(false);
     }
     crossterm::terminal::enable_raw_mode()?;
+    // Stream output must be `\r\n`-normalized while raw mode is on.
+    terminal_sink.set_raw_terminal(true);
+    super::panic_handler::set_raw_mode_enabled();
+    Ok(())
+}
+
+/// Enter the alternate screen, building the ratatui `Terminal` on first use and
+/// reusing it (forcing a full repaint) on subsequent re-entries. Does not touch
+/// raw mode.
+fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -> io::Result<()> {
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
 
+    // Track terminal-state modification before issuing the commands: if the
+    // execute partially applies (e.g. mouse capture enabled but the flush
+    // fails), cleanup must still attempt restoration. Best-effort cleanup
+    // tolerates disabling state that was never enabled.
+    super::panic_handler::set_mouse_capture_enabled();
+    super::panic_handler::set_tui_active();
     crossterm::execute!(
         stdout,
         crossterm::event::EnableMouseCapture,
         crossterm::terminal::EnterAlternateScreen
     )?;
-    // Track that mouse capture was enabled (important for Windows cleanup)
-    super::panic_handler::set_mouse_capture_enabled();
 
-    // Mark TUI as active so panic handler knows to restore terminal state
-    super::panic_handler::set_tui_active();
+    match terminal.as_mut() {
+        // Re-entering after a stream excursion: force a full repaint.
+        Some(term) => {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        None => {
+            let backend = CrosstermBackend::new(stdout);
+            let mut term = Terminal::with_options(
+                backend,
+                ratatui::TerminalOptions {
+                    viewport: ratatui::Viewport::Fullscreen,
+                },
+            )?;
+            term.hide_cursor()?;
+            *terminal = Some(term);
+        }
+    }
 
-    let backend = CrosstermBackend::new(stdout);
-
-    let mut terminal = Terminal::with_options(
-        backend,
-        ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Fullscreen,
-        },
-    )?;
-    terminal.hide_cursor()?;
-
-    Ok(terminal)
+    Ok(())
 }
 
-/// Restores terminal to expected state
-#[tracing::instrument(skip_all)]
-fn cleanup<B: Backend<Error = io::Error> + io::Write>(
-    mut terminal: Terminal<B>,
-    mut app: App<Box<dyn io::Write + Send>>,
-    callback: Option<oneshot::Sender<()>>,
-) -> io::Result<()> {
-    terminal.clear()?;
+/// Record `result` into `first_error`, keeping the earliest failure.
+///
+/// Terminal restoration must be best-effort: aborting a restore sequence
+/// halfway (e.g. because the terminal went away during a racy shutdown) would
+/// leave the user's terminal stuck in the alternate screen, raw mode, or with
+/// mouse capture enabled. Each step is attempted regardless of earlier
+/// failures and the first error is surfaced at the end.
+fn record_restore_error(first_error: &mut Option<io::Error>, result: io::Result<()>) {
+    if let Err(err) = result
+        && first_error.is_none()
+    {
+        *first_error = Some(err);
+    }
+}
+
+/// Leave the alternate screen, returning to the main screen with the cursor
+/// visible and mouse capture off (so native terminal scrollback/selection
+/// works while streaming). Does not touch raw mode.
+///
+/// Restoration is best-effort: every step runs even if an earlier one fails,
+/// and the first error is returned. State-tracking flags are only cleared when
+/// the corresponding step succeeds, so the panic handler or the caller's
+/// fallback can re-attempt restoration.
+fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
+    let mut first_error = None;
+
+    record_restore_error(&mut first_error, terminal.clear());
 
     // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
     // was called first, because crossterm requires the original console mode
@@ -1067,47 +1664,98 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     //
     // On Unix, we can safely always disable mouse capture as it uses escape
     // sequences that are idempotent.
+    //
+    // Mouse capture and the alternate screen are restored in separate steps so
+    // a failure in one cannot prevent the other.
     #[cfg(windows)]
-    {
-        if super::panic_handler::is_mouse_capture_enabled() {
-            crossterm::execute!(
-                terminal.backend_mut(),
-                crossterm::event::DisableMouseCapture,
-                crossterm::terminal::LeaveAlternateScreen,
-            )?;
-            super::panic_handler::set_mouse_capture_disabled();
-        } else {
-            crossterm::execute!(
-                terminal.backend_mut(),
-                crossterm::terminal::LeaveAlternateScreen,
-            )?;
-        }
-    }
+    let disable_mouse_capture = super::panic_handler::is_mouse_capture_enabled();
     #[cfg(not(windows))]
-    {
-        // On Unix, always disable mouse capture - it's safe and handles child
-        // processes that may have enabled mouse capture (especially in VSCode).
-        crossterm::execute!(
+    let disable_mouse_capture = true;
+
+    if disable_mouse_capture {
+        let result = crossterm::execute!(
             terminal.backend_mut(),
-            crossterm::event::DisableMouseCapture,
-            crossterm::terminal::LeaveAlternateScreen,
-        )?;
-        super::panic_handler::set_mouse_capture_disabled();
+            crossterm::event::DisableMouseCapture
+        );
+        if result.is_ok() {
+            super::panic_handler::set_mouse_capture_disabled();
+        }
+        record_restore_error(&mut first_error, result);
     }
+
+    let leave_result = crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen
+    );
+    if leave_result.is_ok() {
+        // TUI no longer owns the screen; a panic now should not try to leave
+        // the alternate screen.
+        super::panic_handler::set_tui_inactive();
+    }
+    record_restore_error(&mut first_error, leave_result);
+
+    record_restore_error(&mut first_error, terminal.show_cursor());
+    record_restore_error(&mut first_error, terminal.backend_mut().flush());
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}
+
+/// Restores terminal to expected state at the end of the run, handling both the
+/// case where we exit from the TUI (must leave the alternate screen) and from
+/// streamed logs (already on the main screen).
+///
+/// Cleanup is best-effort: every step runs even if an earlier one fails, and
+/// the first error is returned. State-tracking flags are only cleared when the
+/// corresponding restore step succeeds, so `restore_terminal_best_effort` can
+/// re-attempt whatever is still outstanding.
+#[tracing::instrument(skip_all)]
+fn final_cleanup(
+    terminal: Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: DisplayState,
+    raw_mode_enabled: bool,
+    mut app: App<Box<dyn io::Write + Send>>,
+    callback: Option<oneshot::Sender<()>>,
+    terminal_sink: &TerminalSink,
+) -> io::Result<()> {
+    let mut first_error = None;
+
+    if let Some(mut terminal) = terminal
+        && display == DisplayState::Tui
+    {
+        // Only leave the alternate screen if we're currently in it. When
+        // streaming we're already on the main screen with the cursor shown.
+        record_restore_error(&mut first_error, leave_alt_screen(&mut terminal));
+    }
+
+    // Return the stream sink to a quiescent state.
+    terminal_sink.set_stream_filter(None);
 
     let tasks_started = app.tasks_by_status.tasks_started();
-    app.persist_tasks(tasks_started)?;
-    app.persist_summary()?;
+    record_restore_error(&mut first_error, app.persist_tasks(tasks_started));
+    record_restore_error(&mut first_error, app.persist_summary());
     app.preferences.flush_to_disk().ok();
-    crossterm::terminal::disable_raw_mode()?;
-    terminal.show_cursor()?;
 
-    // Mark TUI as inactive - cleanup is complete
-    super::panic_handler::set_tui_inactive();
+    if raw_mode_enabled {
+        terminal_sink.set_raw_terminal(false);
+        let raw_result = crossterm::terminal::disable_raw_mode();
+        if raw_result.is_ok() {
+            super::panic_handler::set_raw_mode_disabled();
+        }
+        record_restore_error(&mut first_error, raw_result);
+    }
 
-    // We can close the channel now that terminal is back restored to a normal state
+    // We can close the channel now that terminal restoration has been
+    // attempted. Note that on failure the panic-handler flags stay set so the
+    // caller can fall back to restoring with raw escape sequences.
     drop(callback);
-    Ok(())
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
 }
 
 fn update(
@@ -1129,8 +1777,9 @@ fn update(
             task,
             status,
             result,
+            output_logs,
         } => {
-            app.set_status(task, status, result)?;
+            app.set_status(task, status, result, output_logs)?;
         }
         Event::InternalStop => {
             debug!("shutting down due to internal failure");
@@ -1162,36 +1811,32 @@ fn update(
         }
         Event::ScrollUp => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Up, false)?
         }
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Down, false)?;
-        }
-        Event::ScrollWithMomentum(direction) => {
-            app.is_task_selection_pinned = true;
-            app.scroll_terminal_output(direction, true)?;
         }
         Event::PageUp => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Up)?;
         }
         Event::PageDown => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Down)?;
         }
         Event::JumpToLogsTop => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.jump_to_logs_top()?;
         }
         Event::JumpToLogsBottom => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
         }
         Event::ClearLogs => {
@@ -1211,6 +1856,9 @@ fn update(
         Event::ToggleSidebar => {
             app.update_sidebar_toggle();
         }
+        // Stream toggles are handled in the render loop (they have terminal
+        // and sink side effects); nothing to do at the `App` level.
+        Event::ToggleStream { .. } => {}
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
@@ -1282,18 +1930,32 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let [table, pane] = horizontal.areas(f.area());
 
     let table_to_render = TaskTable::new(&app.tasks_by_status, &app.section_focus);
-    f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
+    if app.task_list_scroll_detached {
+        let offset = app.task_list_scroll.offset();
+        let visible_rows = usize::from(app.size.task_list_visible_task_rows());
+        let selected = app
+            .task_list_scroll
+            .selected()
+            .filter(|selected| (offset..offset.saturating_add(visible_rows)).contains(selected));
+        let mut render_state = app.task_list_scroll.with_selected(selected);
+        f.render_stateful_widget(&table_to_render, table, &mut render_state);
+        *app.task_list_scroll.offset_mut() = render_state.offset();
+    } else {
+        f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
+    }
 
     if let Ok(active_task) = app.active_task() {
         let active_task = active_task.to_string();
-        if let Some(output_logs) = app.tasks.get(&active_task) {
-            let pane_to_render: TerminalPane<W> = TerminalPane::new(
+        let show_copied_notice = app.clipboard_notice_expiry.is_some();
+        if let Some(output_logs) = app.tasks.get_mut(&active_task) {
+            let mut pane_to_render = TerminalPane::new(
                 output_logs,
                 &active_task,
                 &app.section_focus,
                 app.preferences.is_task_list_visible(),
+                show_copied_notice,
             );
-            f.render_widget(&pane_to_render, pane);
+            f.render_widget(&mut pane_to_render, pane);
         }
     }
 
@@ -1316,7 +1978,120 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::tui::event::CacheResult;
+    use crate::{ColorConfig, tui::event::CacheResult};
+
+    fn mouse_event(
+        kind: crossterm::event::MouseEventKind,
+        row: u16,
+        column: u16,
+    ) -> crossterm::event::MouseEvent {
+        crossterm::event::MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        }
+    }
+
+    #[test]
+    fn record_restore_error_keeps_first_error_and_continues() {
+        let mut first_error = None;
+        record_restore_error(&mut first_error, Ok(()));
+        assert!(first_error.is_none());
+
+        record_restore_error(&mut first_error, Err(io::Error::other("first")));
+        record_restore_error(&mut first_error, Err(io::Error::other("second")));
+        record_restore_error(&mut first_error, Ok(()));
+
+        let err = first_error.expect("error should be recorded");
+        assert_eq!(err.to_string(), "first");
+    }
+
+    #[test]
+    fn replay_offset_resumes_from_watermark_when_buffer_grows() {
+        // No prior excursion: start from the beginning.
+        assert_eq!(replay_offset(None, 10), 0);
+        // Buffer grew past the watermark: resume from the watermark.
+        assert_eq!(replay_offset(Some(4), 10), 4);
+        // Buffer unchanged: nothing new to replay.
+        assert_eq!(replay_offset(Some(10), 10), 10);
+        // Buffer shrank (logs cleared): replay everything remaining.
+        assert_eq!(replay_offset(Some(10), 3), 0);
+    }
+
+    #[test]
+    fn replay_to_sink_advances_watermark_for_started_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello\r\n")?;
+
+        // First excursion replays all of task "a"'s output and records the
+        // watermark. Task "b" hasn't started, so it gets no watermark.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&7));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // More output arrives; the next excursion advances the watermark by
+        // exactly the new bytes (no re-replay of the earlier history).
+        app.process_output("a", b"world\r\n")?;
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        // No new output: the watermark holds steady.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        Ok(())
+    }
+
+    #[test]
+    fn single_task_replay_preserves_other_tasks_backlog() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
+        app.process_output("a", b"a-history\r\n")?;
+        app.process_output("b", b"b-history\r\n")?;
+
+        // Streaming only task "a" must not advance task "b"'s watermark:
+        // "b"'s bytes never reached the screen.
+        app.replay_to_sink(&sink, Some("a"));
+        assert_eq!(app.replayed_offsets.get("a"), Some(&11));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // A later stream-all excursion still replays task "b"'s full backlog.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("b"), Some(&11));
+
+        Ok(())
+    }
 
     #[test]
     fn test_scroll() -> Result<(), Error> {
@@ -1324,7 +2099,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
@@ -1372,7 +2147,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1400,7 +2175,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1472,7 +2247,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1524,7 +2299,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1567,7 +2342,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1599,7 +2374,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1610,7 +2385,12 @@ mod test {
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // set status for a
-        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)?;
+        app.set_status(
+            "a".to_string(),
+            "building".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
 
         assert_eq!(
             app.tasks.get("a").unwrap().status.as_deref(),
@@ -1621,12 +2401,83 @@ mod test {
     }
 
     #[test]
+    fn test_finish_task_from_planned_state() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Cache hits finish without ever starting: planned -> finished.
+        app.finish_task("a", TaskResult::CacheHit)?;
+        assert!(
+            app.tasks_by_status
+                .finished
+                .iter()
+                .any(|task| task.name() == "a"),
+            "task should be finished"
+        );
+        assert!(
+            !app.tasks_by_status
+                .planned
+                .iter()
+                .any(|task| task.name() == "a"),
+            "task should no longer be planned"
+        );
+        // Persistence on TUI exit covers finished tasks, so the replayed
+        // logs of a never-started cache hit still land in the terminal.
+        assert!(
+            app.tasks_by_status
+                .tasks_started()
+                .contains(&"a".to_string())
+        );
+
+        // Unknown tasks remain a hard error.
+        assert!(app.finish_task("missing", TaskResult::Success).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_status_carries_output_logs() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        app.set_status(
+            "a".to_string(),
+            "cache hit, replaying logs".to_string(),
+            CacheResult::Hit,
+            OutputLogs::HashOnly,
+        )?;
+        assert_eq!(
+            app.tasks.get("a").unwrap().output_logs,
+            Some(OutputLogs::HashOnly),
+            "status must deliver output verbosity for tasks that never start"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_restarting_task_no_scroll() -> Result<(), Error> {
         let repo_root_tmp = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1662,7 +2513,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1699,7 +2550,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             20,
             24,
             vec!["a".to_string(), "b".to_string()],
@@ -1740,7 +2591,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1760,7 +2611,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1782,7 +2633,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1809,7 +2660,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -1838,7 +2689,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -1871,7 +2722,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
@@ -1896,7 +2747,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
@@ -1921,7 +2772,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -1943,7 +2794,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -1967,7 +2818,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2006,7 +2857,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2064,7 +2915,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2113,7 +2964,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2159,7 +3010,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2197,7 +3048,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2237,7 +3088,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2271,7 +3122,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2303,6 +3154,7 @@ mod test {
     fn test_should_start_terminal_on_cache_miss() {
         // Cache miss should trigger terminal start
         let miss_event = Event::Status {
+            output_logs: OutputLogs::Full,
             task: "task-a".to_string(),
             status: "building".to_string(),
             // This includes cache bypasses via `--force`
@@ -2318,6 +3170,7 @@ mod test {
     fn test_should_not_start_terminal_on_cache_hit() {
         // Cache hit should NOT trigger terminal start
         let hit_event = Event::Status {
+            output_logs: OutputLogs::Full,
             task: "task-a".to_string(),
             status: "cached".to_string(),
             result: CacheResult::Hit,
@@ -2378,7 +3231,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -2388,8 +3241,18 @@ mod test {
 
         // Simulate a full cache hit scenario:
         // 1. Set status as cache hit (this doesn't start the task in running state)
-        app.set_status("a".to_string(), "cached".to_string(), CacheResult::Hit)?;
-        app.set_status("b".to_string(), "cached".to_string(), CacheResult::Hit)?;
+        app.set_status(
+            "a".to_string(),
+            "cached".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
+        app.set_status(
+            "b".to_string(),
+            "cached".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
 
         // 2. Start and finish tasks with CacheHit result
         app.start_task("a", OutputLogs::Full)?;
@@ -2421,7 +3284,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["app-a".to_string(), "app-b".to_string()],
@@ -2516,12 +3379,661 @@ mod test {
     }
 
     #[test]
+    fn test_click_task_list_row_selects_task() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        assert!(app.size.task_list_width() > 0);
+        assert_eq!(app.active_task()?, "a");
+        assert!(!app.is_task_selection_pinned);
+
+        let click = |row| MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        // Row 0 is the header; clicking it leaves the selection alone.
+        app.handle_mouse(click(0))?;
+        assert_eq!(app.active_task()?, "a");
+        assert!(!app.is_task_selection_pinned);
+
+        // Rows 1..=3 map to the three tasks.
+        app.handle_mouse(click(2))?;
+        assert_eq!(app.active_task()?, "b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1));
+        assert!(app.is_task_selection_pinned);
+        assert_eq!(app.preferences.active_task(), Some("b"));
+
+        app.handle_mouse(click(1))?;
+        assert_eq!(app.active_task()?, "a");
+
+        app.handle_mouse(click(3))?;
+        assert_eq!(app.active_task()?, "c");
+
+        // Clicking empty space below the last task leaves the selection alone.
+        app.handle_mouse(click(4))?;
+        assert_eq!(app.active_task()?, "c");
+
+        // Clicks at or right of the table edge belong to the pane, not the
+        // task list.
+        app.start_task("a", OutputLogs::Full)?;
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: app.size.task_list_width(),
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert_eq!(app.active_task()?, "c");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_click_task_list_accounts_for_scroll_and_footer() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        // 6 rows on screen: header, 3 task rows, 2 footer rows.
+        let mut app: App<()> = App::new_for_test(
+            6,
+            100,
+            (0..10).map(|i| format!("task-{i}")).collect(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        assert_eq!(app.size.task_list_visible_task_rows(), 3);
+
+        let click = |row| MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        // Scrolled down two rows, so the first visible task row is task-2.
+        *app.task_list_scroll.offset_mut() = 2;
+        app.handle_mouse(click(1))?;
+        assert_eq!(app.active_task()?, "task-2");
+        app.handle_mouse(click(3))?;
+        assert_eq!(app.active_task()?, "task-4");
+
+        // Rows 4 and 5 are the key-binds footer; clicking there leaves the
+        // selection alone even though more tasks exist below the fold.
+        app.handle_mouse(click(4))?;
+        assert_eq!(app.active_task()?, "task-4");
+        app.handle_mouse(click(5))?;
+        assert_eq!(app.active_task()?, "task-4");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_wheel_over_task_list_scrolls_viewport_without_selecting() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            6,
+            100,
+            (0..10).map(|i| format!("task-{i}")).collect(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let scroll = |kind| MouseEvent {
+            kind,
+            column: 0,
+            row: 2,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        for _ in 0..12 {
+            app.handle_mouse(scroll(MouseEventKind::ScrollDown))?;
+        }
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.selected(), Some(0));
+        let scrolled_offset = app.task_list_scroll.offset();
+        assert!((1..=7).contains(&scrolled_offset));
+        assert!(!app.is_task_selection_pinned);
+        assert_eq!(app.preferences.active_task(), None);
+
+        std::thread::sleep(Duration::from_millis(60));
+        app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.offset(), scrolled_offset - 1);
+
+        let mut pane_scroll = scroll(MouseEventKind::ScrollDown);
+        pane_scroll.column = app.size.task_list_width();
+        app.handle_mouse(pane_scroll)?;
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.offset(), scrolled_offset - 1);
+
+        app.next();
+        assert_eq!(app.active_task()?, "task-1");
+        assert!(!app.task_list_scroll_detached);
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_release_copies_selection_and_shows_notice() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column, modifiers| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers,
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            pane_column,
+            KeyModifiers::empty(),
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        assert!(app.get_full_task()?.has_selection());
+        assert!(app.clipboard_notice_expiry.is_none());
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        // Releasing the button copies the selection, clears the highlight,
+        // and shows the notice.
+        assert!(app.clipboard_notice_expiry.is_some());
+        assert!(!app.get_full_task()?.has_selection());
+        assert!(!app.get_full_task()?.is_selecting());
+        assert!(!app.clear_expired_clipboard_notice());
+
+        // Once the deadline passes the notice clears and requests a rerender.
+        app.clipboard_notice_expiry = Some(Instant::now() - Duration::from_millis(1));
+        assert!(app.clear_expired_clipboard_notice());
+        assert!(app.clipboard_notice_expiry.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_release_with_shift_keeps_selection_for_manual_copy() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column, modifiers| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers,
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            pane_column,
+            KeyModifiers::empty(),
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        assert!(app.get_full_task()?.has_selection());
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::SHIFT,
+        ))?;
+        // No automatic copy, but the selection is kept so it can still be
+        // copied with `c`.
+        assert!(app.clipboard_notice_expiry.is_none());
+        assert!(app.get_full_task()?.has_selection());
+
+        // `c` copies the held selection, then drops the highlight.
+        app.copy_selection()?;
+        assert!(app.clipboard_notice_expiry.is_some());
+        assert!(!app.get_full_task()?.has_selection());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_after_swallowed_release_ends_drag_and_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+            pane_column + 4,
+        ))?;
+        assert!(app.get_full_task()?.is_selecting());
+
+        // The user held shift and released: the terminal swallowed the
+        // shifted release, so the next thing we see is a hover event.
+        app.handle_mouse(mouse(MouseEventKind::Moved, pane_column + 4))?;
+        assert!(!app.get_full_task()?.is_selecting());
+        assert!(app.get_full_task()?.has_selection());
+        assert!(app.clipboard_notice_expiry.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn selection_autoscroll_continues_on_ticks_and_stops_away_from_boundary() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output(
+            "app-a",
+            b"zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven",
+        )?;
+        app.get_full_task_mut()?.scroll_to_top()?;
+        let pane_column = app.size.task_list_width();
+        let footer_row = app.size.pane_rows() + 1;
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(
+                MouseEventKind::Drag(MouseButton::Left),
+                footer_row,
+                pane_column,
+            ),
+            start,
+        )?;
+        let first_offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+        assert!(first_offset > 0);
+        let first_selection = app
+            .get_full_task_mut()?
+            .copy_selection()
+            .expect("drag should select text");
+
+        assert!(!app.tick_selection_autoscroll(
+            start + SELECTION_AUTOSCROLL_INTERVAL - Duration::from_millis(1)
+        )?);
+        assert!(app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL)?);
+        let second_offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+        assert!(second_offset > first_offset);
+        let second_selection = app
+            .get_full_task_mut()?
+            .copy_selection()
+            .expect("autoscroll should preserve the selection");
+        assert!(second_selection.len() > first_selection.len());
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 2, pane_column),
+            start + SELECTION_AUTOSCROLL_INTERVAL,
+        )?;
+        assert!(!app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL * 2)?);
+        assert_eq!(
+            app.get_full_task()?
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar should be available")
+                .offset,
+            second_offset
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_autoscroll_stops_on_release() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output("app-a", b"zero\none\ntwo\nthree\nfour\nfive\nsix\nseven")?;
+        let pane_column = app.size.task_list_width();
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 0, pane_column),
+            start,
+        )?;
+        let mut release = mouse_event(MouseEventKind::Up(MouseButton::Left), 0, pane_column);
+        release.modifiers = KeyModifiers::SHIFT;
+        app.handle_mouse_at(release, start)?;
+        let offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+
+        assert!(!app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL)?);
+        assert_eq!(
+            app.get_full_task()?
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar should be available")
+                .offset,
+            offset
+        );
+        assert!(app.get_full_task()?.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn selection_drag_is_cancelled_on_task_navigation_and_reordering() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "app-c".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.next();
+        assert!(!app.tasks["app-a"].has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        app.reset_scroll();
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.start_task("app-c", OutputLogs::Full)?;
+        assert_eq!(app.active_task()?, "app-c");
+        assert!(!app.tasks["app-a"].has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn parser_reconstruction_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.resize(11, 81);
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        let pane_column = app.size.task_list_width();
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 0, pane_column),
+            start,
+        )?;
+        assert!(app.selection_autoscroll.is_some());
+        app.update_sidebar_toggle();
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn search_and_clear_logs_cancel_selection_drag() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.enter_search()?;
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.clear_task_logs()?;
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn manual_copy_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output("app-a", b"zero\none\ntwo\nthree\nfour\nfive")?;
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        app.copy_selection()?;
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
+        Ok(())
+    }
+
+    #[test]
+    fn stream_toggle_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        let mut terminal = None;
+        let mut display = DisplayState::Inactive;
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        handle_toggle_stream(
+            &mut terminal,
+            &mut display,
+            &mut app,
+            &sink,
+            &StreamScope::All,
+            ColorConfig::new(true),
+        )?;
+
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
+        Ok(())
+    }
+
+    #[test]
     fn test_start_task_idempotent_when_already_running() -> Result<(), Error> {
         let repo_root_tmp = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -2553,7 +4065,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -2607,7 +4119,7 @@ mod test {
 
         let tasks = vec!["build#app-a".to_string(), "build#app-b".to_string()];
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             tasks.clone(),
@@ -2628,7 +4140,12 @@ mod test {
         // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
         for task in &tasks {
             app.start_task(task, OutputLogs::Full)?;
-            app.set_status(task.clone(), "cached".to_string(), CacheResult::Hit)?;
+            app.set_status(
+                task.clone(),
+                "cached".to_string(),
+                CacheResult::Hit,
+                OutputLogs::Full,
+            )?;
             app.finish_task(task, TaskResult::CacheHit)?;
         }
 
@@ -2652,7 +4169,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string()],
@@ -2682,7 +4199,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
             100,
             100,
             vec!["app-a#dev".to_string()],
@@ -2704,16 +4221,25 @@ mod test {
         update(&mut app, Event::Stop(callback_tx), None)?;
         let mut terminal = None;
         let mut last_render = Instant::now();
-        drain_after_stop(&mut terminal, &mut app, &mut receiver, &mut last_render).await?;
+        drain_after_stop(
+            &mut terminal,
+            DisplayState::Inactive,
+            &mut app,
+            &mut receiver,
+            &mut last_render,
+        )
+        .await?;
 
         assert!(app.done);
         assert!(app.tasks_by_status.running.is_empty());
         assert_eq!(app.tasks_by_status.finished.len(), 1);
-        let screen = app.tasks["app-a#dev"].parser.entire_screen();
-        let (_, cols) = screen.size();
-        let output =
-            String::from_utf8(screen.rows_formatted(0, cols).flatten().collect::<Vec<_>>())
-                .unwrap();
+        let output = String::from_utf8(
+            app.tasks["app-a#dev"]
+                .parser
+                .format_screen_vt()
+                .expect("format screen"),
+        )
+        .unwrap();
         assert!(output.contains("before stop"));
         assert!(output.contains("after stop"));
 

@@ -3,25 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "build:turbo": "pnpm run --filter=@turbo/cli build",
-    "build:ts": "tsc -b tsconfig.project.json",
-    "lint": "pnpm exec oxlint --deny-warnings .",
-    "lint:fix": "pnpm exec oxlint --fix .",
-    "format": "oxfmt --check",
-    "format:fix": "oxfmt .",
-    "check:toml": "taplo format --check",
-    "fix:toml": "taplo format",
-    "docs:dev": "turbo run dev --filter=./apps/docs",
+    "build:turbo": "cargo build --package turbo",
     "turbo": "pnpm run build:turbo && ./target/debug/turbo",
-    "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
-    "test": "turbo run test",
-    "tbx": "pnpm --filter @turbo/tbx tbx",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
-    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
   },
   "devDependencies": {
     "@taplo/cli": "0.5.2",
@@ -31,7 +17,8 @@
     "oxfmt": "^0.34.0",
     "oxlint": "^1.49.0",
     "semver": "7.5.2",
-    "typescript": "5.5.4",
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc",
     "ultracite": "7.4.3"
   },
   "lint-staged": {
@@ -39,7 +26,7 @@
     "*.toml": "taplo format"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "packageManager": "pnpm@10.28.0",
   "pnpm": {

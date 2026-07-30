@@ -410,6 +410,11 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             env_mode,
             with: _,
             incremental,
+            // Not surfaced in the run summary; queryable via `turbo query`.
+            experimental_ci: _,
+            // Surfaced through the summary's `command` display string
+            // instead (see the task factory).
+            command: _,
         } = value;
 
         let mut outputs = inclusions;

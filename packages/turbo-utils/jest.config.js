@@ -1,6 +1,6 @@
 /** @type {import('jest').Config} */
 const config = {
-  preset: "ts-jest/presets/js-with-ts",
+  preset: "@turbo/test-utils",
   testEnvironment: "node",
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],

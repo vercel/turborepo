@@ -2,6 +2,10 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
@@ -34,29 +38,104 @@
       // actually need to build before running tests.
       "dependsOn": ["^build"]
     },
+    // The Rust workspace tests run through nextest with per-test process
+    // isolation. Some tests read root-level config and integration fixtures
+    // outside the Cargo workspace, so declare them explicitly.
+    // Excludes mirror the CI invocations: turborepo-lsp, schema-gen, and
+    // napi need extra build environments.
+    "turborepo-crates#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/.config/nextest.toml",
+        "$TURBO_ROOT$/.config/insta.yaml",
+        "$TURBO_ROOT$/turborepo-tests/integration/**"
+      ],
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--workspace",
+        "--exclude",
+        "turborepo-lsp",
+        "--exclude",
+        "turborepo-schema-gen",
+        "--exclude",
+        "turborepo-napi",
+        "--no-fail-fast"
+      ]
+    },
+    "turborepo-crates#format": {
+      "command": ["cargo", "fmt", "--check"]
+    },
+    // Match the stricter cargo alias used by the Rust lint CI job.
+    "turborepo-crates#lint": {
+      "cache": false,
+      "command": ["cargo", "lint"]
+    },
 
-    // docs lint task runs fumadocs-mdx to generate types before oxlint
+    // docs lint task runs fumadocs-mdx
     "docs#lint": {},
     "//#quality": {
-      "dependsOn": ["//#lint", "//#format", "//#check:toml", "docs#lint"]
+      "dependsOn": [
+        "//#lint",
+        "//#format",
+        "//#check:toml",
+        "docs#lint",
+        "docs#check-types",
+        "docs#check-links",
+        "docs#check-openapi"
+      ]
     },
     "//#lint": {
-      "inputs": ["!pnpm-lock.yaml"]
+      "inputs": ["!pnpm-lock.yaml"],
+      "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."]
     },
-    "//#lint:fix": {},
-    "//#format": {},
-    "//#format:fix": {},
-    "//#check:toml": {},
-    "//#fix:toml": {},
+    "//#lint:fix": {
+      "command": ["pnpm", "exec", "oxlint", "--fix", "."]
+    },
+    "//#format": {
+      "command": ["pnpm", "exec", "oxfmt", "--check"]
+    },
+    "//#format:fix": {
+      "command": ["pnpm", "exec", "oxfmt", "."]
+    },
+    "//#check:toml": {
+      "command": ["pnpm", "exec", "taplo", "format", "--check"]
+    },
+    "//#fix:toml": {
+      "command": ["pnpm", "exec", "taplo", "format"]
+    },
     "//#quality:fix": {
       "dependsOn": ["//#lint:fix", "//#format:fix", "//#fix:toml"]
     },
     "check-types": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "command": {
+        "javascript": ["pnpm", "exec", "tsc", "--noEmit"]
+      }
+    },
+    "@turbo/tsconfig#check-types": {
+      "command": null
+    },
+    "@repo/docs-link-checker#check-types": {
+      "command": null
+    },
+    "eslint-config-turbo#check-types": {
+      "command": null
     },
     "check-openapi": {},
     "//#build:ts": {
-      "outputs": ["packages/**/dist"]
+      "outputs": ["packages/**/dist"],
+      "command": ["pnpm", "exec", "tsc", "-b", "tsconfig.project.json"]
+    },
+    "//#check": {
+      "command": ["pnpm", "exec", "ultracite", "check"]
+    },
+    "//#fix": {
+      "cache": false,
+      "command": ["pnpm", "exec", "ultracite", "fix"]
     },
     "build:ts": {
       "outputs": ["dist/**/*"]
@@ -70,6 +149,27 @@
         "!README.md"
       ],
       "dependsOn": ["^build"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": ["AI_GATEWAY_API_KEY"]
+    },
+    // These entrypoints embed files outside every crate directory, so the
+    // automatic crate-closure hashing cannot see them. $TURBO_DEFAULT$ keeps
+    // the automatic inputs and appends the external files.
+    "turbo#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
+    },
+    "turborepo-lsp#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
     },
     "package-checks": {
       "dependsOn": ["package:types"]

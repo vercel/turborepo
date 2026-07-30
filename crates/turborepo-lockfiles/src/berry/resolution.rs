@@ -1,18 +1,12 @@
-use std::{fmt, sync::OnceLock};
+use std::fmt;
 
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
-use regex::Regex;
+use regex::regex;
 use semver::Version;
 use thiserror::Error;
 
 use super::identifiers::{Descriptor, Ident, Locator};
-
-fn tag_regex() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^[^v][a-z0-9._-]*$").ok())
-        .as_ref()
-}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -142,8 +136,7 @@ impl Resolution {
         // We have a match an we now override the dependency
         let mut dependency_override = dependency.clone();
         dependency_override.range = reference.to_string().into();
-        if Version::parse(reference).is_ok() || tag_regex().is_some_and(|re| re.is_match(reference))
-        {
+        if Version::parse(reference).is_ok() || regex!(r"^[^v][a-z0-9._-]*$").is_match(reference) {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
@@ -173,7 +166,7 @@ impl Resolution {
         default_protocol: &str,
     ) -> bool {
         match Version::parse(incomplete_reference).is_ok()
-            || tag_regex().is_some_and(|re| re.is_match(incomplete_reference))
+            || regex!(r"^[^v][a-z0-9._-]*$").is_match(incomplete_reference)
         {
             // We need to inject a protocol
             true => {

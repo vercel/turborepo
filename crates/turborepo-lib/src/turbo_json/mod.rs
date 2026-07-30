@@ -78,13 +78,12 @@ impl RawTurboJsonExt for RawTurboJson {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_engine::TaskDefinitionFromProcessed;
-    use turborepo_errors::Spanned;
+    use turborepo_errors::{json::deserialize_from_json_str, Spanned};
     use turborepo_turbo_json::raw::RawTaskInput;
     use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
 
@@ -141,6 +140,7 @@ mod tests {
             with: None,
             experimental_ci: None,
             incremental: None,
+            command: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -160,6 +160,8 @@ mod tests {
           env_mode: None,
           with: None,
           incremental: None,
+          experimental_ci: None,
+          command: None,
         }
       ; "full"
     )]
@@ -192,6 +194,7 @@ mod tests {
             with: None,
             experimental_ci: None,
             incremental: None,
+            command: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -211,6 +214,8 @@ mod tests {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
+            command: None,
         }
       ; "full (windows)"
     )]
@@ -258,13 +263,12 @@ mod tests {
         expected_raw_task_definition: RawTaskDefinition,
         expected_task_definition: TaskDefinition,
     ) -> Result<()> {
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             task_definition_content,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_task_definition: RawTaskDefinition =
-            deserialized_result.into_deserialized().unwrap();
+        let raw_task_definition: RawTaskDefinition = deserialized.unwrap();
         assert_eq!(raw_task_definition, expected_raw_task_definition);
 
         let task_definition =

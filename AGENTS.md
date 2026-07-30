@@ -38,6 +38,14 @@ When making changes to the codebase, check if the following docs need updates:
 - Crates with existing implementation-code violations may temporarily allow `clippy::unwrap_used` and `clippy::expect_used` at the crate root; remove those allows as each crate is cleaned up.
 - Tests are exempt from this panic-extraction policy, but still linted by `cargo lint` with panic-extraction lints allowed under `cfg(test)`.
 
+### CI task scheduling
+
+- Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
+- Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
+- Rust CI restores full Cargo target state on Ubuntu, macOS, and Windows from trusted `main` snapshots; only `main` writes. Repository sccache dogfooding is disabled.
+- Linux Rust shards include `terminal-control` black-box TUI integration tests; known regressions remain explicitly ignored.
+- Example validation remains push-only because it requires Vercel credentials and project state.
+
 ### PR Title Format
 
 PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). See [`.github/workflows/lint-pr-title.yml`](./.github/workflows/lint-pr-title.yml) for the enforced constraints.
@@ -61,5 +69,8 @@ docs: Update installation instructions
 
 - The `LSP` workflow packages `packages/turbo-vsc` VSIX artifacts for release. Stable and canary Turborepo versions are mapped to Marketplace-safe `major.minor.patch` versions before packaging.
 - Canary VS Code extension packages use `--pre-release`.
-- Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. This publish path must not block release PR creation or cleanup published npm release state.
+- Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. This publish path must not block release PR creation. Once npm publishing starts, preserve the staging branch and release tag so partial releases can be resumed safely.
+- npm publishing is resumable per package: existing versions are skipped only when registry integrity and the requested dist-tag match the local release and provenance is present, and `turbo` publishes last after the native and supporting packages.
+- Release PRs are created by `github-actions[bot]` using the ephemeral workflow token and squash-merged automatically after the required release review gate passes. The gate validates exact generated release changes from immutable SHAs and pins the merge to the validated head SHA. Turborepo release PR titles use `chore: Release Turborepo <version>`; the author and title are part of the trusted release-PR validation contract.
 - The `Release` workflow signs and notarizes macOS `turbo` binaries during `build-rust` using static GitHub secrets and `apple-codesign`/`rcodesign`.
+- The `Release` and `LSP` workflows install Zig during `build-rust` because `turbo` and `turborepo-lsp` link `libghostty-vt` through `libghostty-vt-sys`.

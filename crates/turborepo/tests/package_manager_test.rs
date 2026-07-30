@@ -4,7 +4,7 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo_with_env, setup};
+use common::{combined_output, run_turbo_with_env, setup};
 
 fn get_package_manager(dir: &std::path::Path) -> String {
     let output = run_turbo_with_env(dir, &["config"], &[("TURBO_LOG_VERBOSITY", "off")]);
@@ -20,11 +20,67 @@ fn set_package_manager(dir: &std::path::Path, pm: &str) {
     fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
 }
 
+fn remove_package_manager(dir: &std::path::Path) {
+    let pkg_path = dir.join("package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg.as_object_mut().unwrap().remove("packageManager");
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+}
+
+fn set_dev_engines_package_manager(dir: &std::path::Path, name: &str, version: &str) {
+    let pkg_path = dir.join("package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg.as_object_mut().unwrap().remove("packageManager");
+    pkg["devEngines"]["packageManager"] = serde_json::json!({
+        "name": name,
+        "version": version,
+    });
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+}
+
 #[test]
 fn test_detect_npm() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
     assert_eq!(get_package_manager(tempdir.path()), "npm");
+}
+
+#[test]
+fn test_detect_npm_from_dev_engines_package_manager() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "npm", "8.19.4");
+    assert_eq!(get_package_manager(tempdir.path()), "npm");
+}
+
+#[test]
+fn test_detect_aube_from_dev_engines_package_manager() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "aube", "0.1.0");
+    assert_eq!(get_package_manager(tempdir.path()), "aube");
+}
+
+#[test]
+fn test_errors_without_package_manager_declaration() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    remove_package_manager(tempdir.path());
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["config"],
+        &[("TURBO_LOG_VERBOSITY", "off")],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        combined_output(&output).contains("devEngines.packageManager"),
+        "expected missing declaration error, got {}",
+        combined_output(&output)
+    );
 }
 
 #[test]

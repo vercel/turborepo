@@ -1,29 +1,56 @@
+import { createSource } from "@vercel/geistdocs/source";
 import {
-  type InferPageType,
-  type Source,
-  type PageData,
   type MetaData,
+  type PageData,
+  type Source,
   loader
 } from "fumadocs-core/source";
-import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
 import { openapiPlugin } from "fumadocs-openapi/server";
 import {
-  docs,
   blogDocs,
   blogMeta,
+  docs,
   externalBlogDocs,
   externalBlogMeta,
-  openapiDocs,
-  openapiMeta,
   extraDocs,
-  extraMeta
+  extraMeta,
+  openapiDocs,
+  openapiMeta
 } from "@/.source/server";
 import { basePath } from "@/geistdocs";
 import { createSignedDocsOgUrl } from "@/lib/og/sign";
-import { i18n } from "./i18n";
+import { config } from "./config";
+
+export const geistdocsSource = createSource({
+  docs,
+  config,
+  id: "docs",
+  label: "Docs"
+});
+
+export const source = geistdocsSource.source;
+
+/**
+ * Full LLM-ready markdown for a docs page (frontmatter + processed body +
+ * footer links to /sitemap.md, /llms.txt and /agents.md).
+ */
+export const getLLMText = geistdocsSource.getPageMarkdown;
+
+/**
+ * Signed OG image URL for a docs page. The site keeps HMAC-signed OG URLs
+ * (see lib/og/sign.ts) instead of the package's unsigned `getPageImage`.
+ */
+export const getPageImage = (page: { slugs: string[] }) => {
+  const segments = [...page.slugs, "image.png"];
+
+  return {
+    segments,
+    url: createSignedDocsOgUrl(segments, basePath)
+  };
+};
 
 // Helper function to create source from doc and meta arrays with proper typing
-function createSource<
+function createLocalSource<
   TPage extends PageData & { info: { path: string; fullPath: string } },
   TMeta extends MetaData & { info: { path: string; fullPath: string } }
 >(
@@ -56,90 +83,26 @@ function createSource<
   return { files };
 }
 
-// See https://fumadocs.dev/docs/headless/source-api for more info
-export const source = loader({
-  i18n,
-  baseUrl: "/docs",
-  source: docs.toFumadocsSource(),
-  plugins: [lucideIconsPlugin()]
-});
-
-export const getPageImage = (page: InferPageType<typeof source>) => {
-  const segments = [...page.slugs, "image.png"];
-
-  return {
-    segments,
-    url: createSignedDocsOgUrl(segments, basePath)
-  };
-};
-
-export const getLLMText = async (page: InferPageType<typeof source>) => {
-  const processed = await page.data.getText("processed");
-
-  // Clean up the markdown for LLM consumption
-  const cleaned = processed
-    // Remove import statements
-    .replace(/^import\s+.*?from\s+["'].*?["'];?\s*$/gm, "")
-    // Collapse multiple consecutive blank lines into a single blank line
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  const { title, description, product, type, summary, prerequisites, related } =
-    page.data;
-
-  const frontmatter = [
-    "---",
-    `title: ${title}`,
-    description && `description: ${description}`,
-    product && `product: ${product}`,
-    type && `type: ${type}`,
-    summary && `summary: ${summary}`,
-    prerequisites?.length &&
-      `prerequisites:\n${prerequisites.map((p) => `  - ${p}`).join("\n")}`,
-    related?.length && `related:\n${related.map((r) => `  - ${r}`).join("\n")}`,
-    "---"
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return `${frontmatter}
-
-# ${title}
-
-${cleaned}
-
----
-
-[View full sitemap](/sitemap.md)`;
-};
-
 // Blog loaders
 export const blog = loader({
   baseUrl: "/blog",
-  source: createSource(blogDocs, blogMeta)
+  source: createLocalSource(blogDocs, blogMeta)
 });
 
 export const externalBlog = loader({
   baseUrl: "/blog",
-  source: createSource(externalBlogDocs, externalBlogMeta)
+  source: createLocalSource(externalBlogDocs, externalBlogMeta)
 });
 
 // OpenAPI loaders
 export const openapiPages = loader({
   baseUrl: "/docs/openapi",
-  source: createSource(openapiDocs, openapiMeta),
+  source: createLocalSource(openapiDocs, openapiMeta),
   plugins: [openapiPlugin()]
 });
 
 // Extra pages (terms, governance, etc.)
 export const extraPages = loader({
   baseUrl: "/",
-  source: createSource(extraDocs ?? [], extraMeta ?? [])
+  source: createLocalSource(extraDocs ?? [], extraMeta ?? [])
 });
-
-// Export inferred page types for type-safe usage in components
-export type BlogPage = InferPageType<typeof blog>;
-export type ExternalBlogPage = InferPageType<typeof externalBlog>;
-export type OpenAPIPage = InferPageType<typeof openapiPages>;
-export type ExtraPage = InferPageType<typeof extraPages>;
-export type DocsPage = InferPageType<typeof source>;

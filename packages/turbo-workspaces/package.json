@@ -1,6 +1,6 @@
 {
   "name": "@turbo/workspaces",
-  "version": "2.9.19-canary.9",
+  "version": "2.10.8-canary.4",
   "description": "Tools for working with package managers",
   "homepage": "https://turborepo.dev",
   "bugs": {
@@ -22,13 +22,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "scripts": {
-    "build": "tsdown && tsc -p tsconfig.build.json",
-    "dev": "tsdown --watch",
-    "test": "jest",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
-  },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "commander": "10.0.0",
@@ -36,7 +29,7 @@
     "fast-glob": "3.2.12",
     "fs-extra": "10.1.0",
     "gradient-string": "2.0.1",
-    "js-yaml": "4.1.1",
+    "js-yaml": "4.3.0",
     "ora": "4.1.1",
     "picocolors": "1.0.1",
     "semver": "7.6.2",
@@ -53,8 +46,8 @@
     "@types/node": "18.17.4",
     "@types/semver": "7.5.8",
     "jest": "30.3.0",
-    "ts-jest": "29.4.9",
     "tsdown": "0.12.0",
-    "typescript": "5.5.4"
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc"
   }
 }

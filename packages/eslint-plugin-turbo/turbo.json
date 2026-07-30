@@ -2,9 +2,30 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build": {
+      "dependsOn": ["build:bundle"],
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.build.json"]
+    },
+    "build:bundle": {
+      "cache": false,
+      "dependsOn": ["^build"],
+      "command": ["pnpm", "exec", "tsdown"]
+    },
     "test": {
       "dependsOn": ["build"],
-      "passThroughEnv": ["!CI"]
+      "passThroughEnv": ["!CI"],
+      "command": ["pnpm", "exec", "jest"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
     }
   }
 }

@@ -201,17 +201,6 @@ impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
     }
-
-    /// Returns true if the UI mode has a sender,
-    /// i.e. tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui)
-    }
-
-    /// Returns true if this UI mode should include timestamps in the prefix
-    pub fn should_include_timestamps(&self) -> bool {
-        matches!(self, Self::StreamWithTimestamps)
-    }
 }
 
 /// Log ordering mode for task output.
@@ -807,6 +796,85 @@ mod tests {
     }
 }
 
+/// Configuration for the experimental `experimentalCI` task key.
+///
+/// The key accepts either a boolean toggle or an object with arbitrary
+/// options. Turborepo does not interpret the contents; the value is parsed
+/// and carried through task resolution so that external tooling can read
+/// the fully resolved configuration (e.g. via `turbo query`).
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ExperimentalCIConfig {
+    Enabled(bool),
+    Options(serde_json::Map<String, serde_json::Value>),
+}
+
+// `serde_json::Value` is not `Eq` because JSON numbers may be floats, but
+// values parsed from JSON text are never NaN, so equality is reflexive in
+// practice.
+impl Eq for ExperimentalCIConfig {}
+
+impl biome_deserialize::Deserializable for ExperimentalCIConfig {
+    fn deserialize(
+        value: &impl biome_deserialize::DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(ExperimentalCIConfigVisitor, name, diagnostics)
+    }
+}
+
+struct ExperimentalCIConfigVisitor;
+
+impl biome_deserialize::DeserializationVisitor for ExperimentalCIConfigVisitor {
+    type Output = ExperimentalCIConfig;
+
+    const EXPECTED_TYPE: biome_deserialize::VisitableType =
+        biome_deserialize::VisitableType::BOOL.union(biome_deserialize::VisitableType::MAP);
+
+    fn visit_bool(
+        self,
+        value: bool,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        _diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        Some(ExperimentalCIConfig::Enabled(value))
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<
+            Item = Option<(
+                impl biome_deserialize::DeserializableValue,
+                impl biome_deserialize::DeserializableValue,
+            )>,
+        >,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let entries = members
+            .filter_map(|entry| {
+                let (key, value) = entry?;
+                let key = <String as biome_deserialize::Deserializable>::deserialize(
+                    &key,
+                    "",
+                    diagnostics,
+                )?;
+                let value = <serde_json::Value as biome_deserialize::Deserializable>::deserialize(
+                    &value,
+                    "",
+                    diagnostics,
+                )?;
+                Some((key, value))
+            })
+            .collect();
+
+        Some(ExperimentalCIConfig::Options(entries))
+    }
+}
+
 /// Constructed from a RawTaskDefinition, this represents the fully resolved
 /// configuration for a task.
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -864,6 +932,29 @@ pub struct TaskDefinition {
     // tool-managed incremental artifacts to persist across runs via remote
     // cache, enabling faster re-execution on cache misses.
     pub incremental: Option<Vec<IncrementalPartition>>,
+
+    // Experimental CI configuration. Not interpreted by turborepo; carried
+    // through resolution so tooling can read it (e.g. via `turbo query`).
+    pub experimental_ci: Option<ExperimentalCIConfig>,
+
+    // The task's resolved `command` override, when one applies to this
+    // package. `None` means the toolchain resolves the command as usual;
+    // per-toolchain map defaults have already been fanned out to their
+    // packages by the engine builder.
+    pub command: Option<TaskCommandOverride>,
+}
+
+/// A task's resolved `command` override.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskCommandOverride {
+    /// Explicitly no command: the task is a no-op for this package.
+    OptOut,
+    /// Replaces the process argv the toolchain would have constructed: program
+    /// first, arguments after, executed directly with no shell. The toolchain
+    /// still owns the working directory and serial grouping, but its derived
+    /// inputs, outputs, and hash environment do not apply; turbo.json is
+    /// authoritative for the arbitrary command's task-level hash wiring.
+    Argv(Vec<String>),
 }
 
 impl Default for TaskDefinition {
@@ -883,6 +974,8 @@ impl Default for TaskDefinition {
             env_mode: Default::default(),
             with: Default::default(),
             incremental: Default::default(),
+            experimental_ci: Default::default(),
+            command: Default::default(),
         }
     }
 }
@@ -996,6 +1089,9 @@ impl TaskDefinitionExt for TaskDefinition {
         workspace_dir: &AnchoredSystemPath,
     ) -> TaskOutputs {
         let make_glob_repo_relative = |glob: &str| -> String {
+            if workspace_dir.as_str().is_empty() {
+                return glob.to_owned();
+            }
             let mut repo_relative_glob = workspace_dir.to_string();
             repo_relative_glob.push(std::path::MAIN_SEPARATOR);
             repo_relative_glob.push_str(glob);
@@ -1185,6 +1281,10 @@ pub struct HashTrackerCacheHitMetadata {
 pub trait TaskDefinitionHashInfo {
     /// Returns the list of environment variable patterns for this task
     fn env(&self) -> &[String];
+    /// Returns the task's resolved `command` override, if any. Participates
+    /// in the task hash: changing what a task runs must invalidate its
+    /// cached results.
+    fn command(&self) -> Option<&TaskCommandOverride>;
     /// Returns the pass-through environment variables
     fn pass_through_env(&self) -> Option<&[String]>;
     /// Returns the task inputs configuration
@@ -1198,6 +1298,10 @@ pub trait TaskDefinitionHashInfo {
 impl TaskDefinitionHashInfo for TaskDefinition {
     fn env(&self) -> &[String] {
         &self.env
+    }
+
+    fn command(&self) -> Option<&TaskCommandOverride> {
+        self.command.as_ref()
     }
 
     fn pass_through_env(&self) -> Option<&[String]> {

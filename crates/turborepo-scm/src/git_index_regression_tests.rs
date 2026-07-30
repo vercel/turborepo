@@ -34,6 +34,17 @@ impl TestRepo {
         let full = self.root.join_unix_path(path(rel_path));
         full.ensure_dir().unwrap();
         full.create_with_contents(content).unwrap();
+        // Backdate the mtime so it is strictly older than any subsequently
+        // written git index. Tests here run fast enough that a fresh mtime
+        // can collide with the index timestamp, tripping gix's racy-git
+        // heuristic and conservatively classifying clean files as modified,
+        // which makes assertions like `to_hash.is_empty()` flaky.
+        let backdated = std::time::SystemTime::now() - std::time::Duration::from_secs(10);
+        let file = std::fs::File::options()
+            .write(true)
+            .open(full.as_std_path())
+            .unwrap();
+        file.set_modified(backdated).unwrap();
     }
 
     fn delete_file(&self, rel_path: &str) {
@@ -104,6 +115,7 @@ impl TestRepo {
             status.push(crate::status::RepoStatusEntry {
                 path: p,
                 is_delete: false,
+                is_untracked: true,
             });
         }
         status.sort_by(|a, b| a.path.cmp(&b.path));
@@ -126,6 +138,7 @@ impl TestRepo {
             status.push(crate::status::RepoStatusEntry {
                 path: p,
                 is_delete: false,
+                is_untracked: true,
             });
         }
         status.sort_by(|a, b| a.path.cmp(&b.path));

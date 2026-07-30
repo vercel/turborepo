@@ -14,7 +14,7 @@ use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
 
 use super::{
-    command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
+    command::{CommandFactory, MicroFrontendProxyProvider, ToolchainCommandProvider},
     Visitor,
 };
 use crate::{
@@ -53,16 +53,26 @@ impl<'a> ExecContextFactory<'a> {
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
     ) -> Result<Self, super::Error> {
-        let pkg_graph_provider = PackageGraphCommandProvider::new(
-            visitor.repo_root,
+        // Resolved `command` overrides travel from the engine's task
+        // definitions into the provider: an argv replaces the toolchain's
+        // own resolution, an opt-out is an explicit no-op.
+        let command_overrides = engine
+            .task_ids()
+            .filter_map(|task_id| {
+                let command = engine.task_definition(task_id)?.command.clone()?;
+                Some((task_id.clone(), command))
+            })
+            .collect();
+        let pkg_graph_provider = ToolchainCommandProvider::new(
             &visitor.package_graph,
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,
+            visitor.compile_cache_endpoint.as_ref(),
+            command_overrides,
         );
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
             command_factory.add_provider(MicroFrontendProxyProvider::new(
-                visitor.repo_root,
                 visitor.package_graph.as_ref(),
                 engine.task_ids(),
                 micro_frontends_configs,

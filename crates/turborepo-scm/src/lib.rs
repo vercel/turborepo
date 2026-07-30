@@ -27,6 +27,7 @@ mod ls_tree;
 pub mod manual;
 pub mod package_deps;
 mod repo_index;
+pub mod slowest_files;
 mod status;
 pub mod worktree;
 
@@ -37,6 +38,7 @@ mod git_path;
 mod test_utils;
 
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
+pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -229,6 +231,10 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
+    github_actions_remote_base_ref_fallback: bool,
+    /// Optional recorder for the slowest-to-hash files. Set by long-running
+    /// consumers (the file watcher) so they can diagnose a stalled startup.
+    slowest_files: Option<std::sync::Arc<SlowestFiles>>,
 }
 
 impl GitRepo {
@@ -245,6 +251,8 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
+            slowest_files: self.slowest_files.clone(),
         }
     }
 }
@@ -278,6 +286,8 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
+            slowest_files: None,
         })
     }
 
@@ -348,6 +358,8 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
+                github_actions_remote_base_ref_fallback: false,
+                slowest_files: None,
             }),
             Err(e) => {
                 debug!(
@@ -357,6 +369,23 @@ impl SCM {
                 SCM::Manual
             }
         }
+    }
+
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.github_actions_remote_base_ref_fallback = enabled;
+        }
+        self
+    }
+
+    /// Attach a recorder that tracks the slowest-to-hash files. Long-running
+    /// consumers (the file watcher) use this to diagnose a stalled startup
+    /// caused by hashing a very large file. No-op for `SCM::Manual`.
+    pub fn with_slowest_files_recorder(mut self, recorder: std::sync::Arc<SlowestFiles>) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.slowest_files = Some(recorder);
+        }
+        self
     }
 
     pub fn is_manual(&self) -> bool {

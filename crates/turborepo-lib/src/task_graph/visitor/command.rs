@@ -4,31 +4,29 @@ use crate::microfrontends::MicrofrontendsConfigs;
 // Re-export CommandFactory from turborepo-task-executor with our Error type
 pub type CommandFactory<'a> = turborepo_task_executor::CommandFactory<'a, Error>;
 
-// Re-export PackageGraphCommandProvider from turborepo-task-executor with our
+// Re-export ToolchainCommandProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
-pub type PackageGraphCommandProvider<'a> =
-    turborepo_task_executor::PackageGraphCommandProvider<'a, MicrofrontendsConfigs>;
+pub type ToolchainCommandProvider<'a> =
+    turborepo_task_executor::ToolchainCommandProvider<'a, MicrofrontendsConfigs>;
 
 // Re-export MicroFrontendProxyProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
-pub type MicroFrontendProxyProvider<'a, T> =
-    turborepo_task_executor::MicroFrontendProxyProvider<'a, T, MicrofrontendsConfigs>;
+pub type MicroFrontendProxyProvider<'a> =
+    turborepo_task_executor::MicroFrontendProxyProvider<'a, MicrofrontendsConfigs>;
 
 #[cfg(test)]
 mod test {
     use std::ffi::OsStr;
 
     use insta::assert_snapshot;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_microfrontends::{TurborepoMfeConfig as Config, MICROFRONTENDS_PACKAGE};
     use turborepo_process::Command;
     use turborepo_repository::{
-        package_graph::{PackageInfo, PackageName},
-        package_json::PackageJson,
-        package_manager::PackageManager,
+        package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
     };
-    use turborepo_task_executor::{CommandProvider, PackageInfoProvider};
+    use turborepo_task_executor::CommandProvider;
     use turborepo_task_id::TaskId;
 
     use super::*;
@@ -120,30 +118,10 @@ mod test {
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
     }
 
-    #[test]
-    fn test_mfe_application_passed() {
-        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
-            "C:\\repo-root"
-        } else {
-            "/tmp/repo-root"
-        })
-        .unwrap();
-        struct MockPackageInfo(PackageInfo);
-        impl PackageInfoProvider for MockPackageInfo {
-            fn package_manager(&self) -> &PackageManager {
-                &PackageManager::Npm
-            }
-
-            fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
-                match name {
-                    PackageName::Root => unimplemented!(),
-                    PackageName::Other(name) => match name.as_str() {
-                        "web" | "docs" => Some(&self.0),
-                        _ => None,
-                    },
-                }
-            }
-        }
+    #[tokio::test]
+    async fn test_mfe_application_passed() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         let mut config = Config::from_str(
             r#"
         {
@@ -170,23 +148,28 @@ mod test {
         .unwrap()
         .unwrap();
 
-        let mock_package_info = MockPackageInfo(PackageInfo {
-            package_json: PackageJson {
-                dependencies: Some(
-                    vec![(MICROFRONTENDS_PACKAGE.to_owned(), "1.0.0".to_owned())]
-                        .into_iter()
-                        .collect(),
-                ),
-                ..Default::default()
-            },
-            package_json_path: AnchoredSystemPath::new("package.json").unwrap().to_owned(),
-            unresolved_external_dependencies: None,
-            transitive_dependencies: None,
-        });
+        let package_json = PackageJson {
+            name: Some(turborepo_errors::Spanned::new("web".to_owned())),
+            dependencies: Some(
+                vec![(MICROFRONTENDS_PACKAGE.to_owned(), "1.0.0".to_owned())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+        let package_graph = PackageGraph::builder(&repo_root, PackageJson::default())
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(std::collections::HashMap::from([(
+                repo_root.join_components(&["web", "package.json"]),
+                package_json,
+            )])))
+            .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap();
         let mut factory = CommandFactory::new();
         factory.add_provider(MicroFrontendProxyProvider::new(
-            repo_root,
-            &mock_package_info,
+            &package_graph,
             [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")].iter(),
             &microfrontends_configs,
         ));
