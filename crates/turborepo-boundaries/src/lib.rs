@@ -30,7 +30,6 @@ use turborepo_log::Subsystem;
 use turborepo_repository::{
     external_resolution::PackageExternalDeclarations,
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
-    toolchain::ToolchainId,
 };
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 use unrs_resolver::Resolver;
@@ -42,8 +41,18 @@ pub struct PackageScope<'a> {
     pub name: PackageName,
     pub name_source: Option<&'a Spanned<()>>,
     pub directory: &'a turbopath::AnchoredSystemPath,
+    pub definition_path: &'a turbopath::AnchoredSystemPath,
     pub kind: PackageGraphNodeKind,
-    pub toolchain: &'a ToolchainId,
+}
+
+impl PackageScope<'_> {
+    fn is_boundary_checkable(&self) -> bool {
+        // Boundary analysis consumes package.json import semantics. The
+        // authoritative definition identifies that format independently of
+        // contributor provenance.
+        self.kind == PackageGraphNodeKind::Package
+            && self.definition_path.as_path().file_name() == Some("package.json".as_ref())
+    }
 }
 
 pub trait PackageGraphProvider: Send + Sync {
@@ -72,8 +81,8 @@ impl PackageGraphProvider for PackageGraph {
                 name,
                 name_source: view.name_source(),
                 directory: view.directory()?,
+                definition_path: view.definition_path()?,
                 kind: view.kind(),
-                toolchain: view.toolchain()?,
             }),
             PackageNode::Root => None,
         }))
@@ -504,7 +513,7 @@ impl BoundariesChecker {
         Ok(())
     }
 
-    /// Check boundaries for all packages
+    /// Check boundaries for all filtered package.json scopes.
     pub fn check_boundaries<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         show_progress: bool,
@@ -542,8 +551,7 @@ impl BoundariesChecker {
             .filter(|scope| {
                 matches!(scope.name, PackageName::Other(_))
                     && ctx.filtered_pkgs.contains(&scope.name)
-                    && scope.kind == PackageGraphNodeKind::Package
-                    && scope.toolchain == &ToolchainId::JAVASCRIPT
+                    && scope.is_boundary_checkable()
             })
             .map(|scope| (scope.name, scope.name_source, scope.directory))
             .collect();
@@ -898,6 +906,7 @@ mod tests {
         packages: Vec<PackageName>,
         aggregates: HashSet<PackageName>,
         authoritative_directories: HashMap<PackageName, turbopath::AnchoredSystemPathBuf>,
+        definition_paths: HashMap<PackageName, turbopath::AnchoredSystemPathBuf>,
     }
 
     impl MockGraph {
@@ -915,10 +924,24 @@ mod tests {
                     )
                 })
                 .collect();
+            let definition_paths = packages
+                .iter()
+                .map(|name| {
+                    (
+                        name.clone(),
+                        turbopath::AnchoredSystemPathBuf::from_raw(format!(
+                            "packages/{}/package.json",
+                            name.as_str()
+                        ))
+                        .unwrap(),
+                    )
+                })
+                .collect();
             Self {
                 packages,
                 aggregates: HashSet::new(),
                 authoritative_directories,
+                definition_paths,
             }
         }
 
@@ -931,6 +954,14 @@ mod tests {
             self.authoritative_directories.insert(
                 name,
                 turbopath::AnchoredSystemPathBuf::from_raw(directory).unwrap(),
+            );
+            self
+        }
+
+        fn with_definition_path(mut self, name: PackageName, definition_path: &str) -> Self {
+            self.definition_paths.insert(
+                name,
+                turbopath::AnchoredSystemPathBuf::from_raw(definition_path).unwrap(),
             );
             self
         }
@@ -947,12 +978,16 @@ mod tests {
                         .get(name)
                         .map(|path| path.as_ref())
                         .expect("mock package must have an authoritative directory"),
+                    definition_path: self
+                        .definition_paths
+                        .get(name)
+                        .map(|path| path.as_ref())
+                        .expect("mock package must have an authoritative definition"),
                     kind: if self.aggregates.contains(name) {
                         PackageGraphNodeKind::Aggregate
                     } else {
                         PackageGraphNodeKind::Package
                     },
-                    toolchain: &ToolchainId::JAVASCRIPT,
                 }
             }))
         }
@@ -1082,6 +1117,64 @@ mod tests {
 
         assert_eq!(result.packages_checked, 0);
         assert_eq!(result.files_checked, 0);
+    }
+
+    #[test]
+    fn check_boundaries_excludes_non_package_json_definitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("rust-crate".into());
+        let graph = MockGraph::new(vec![package_name.clone()])
+            .with_definition_path(package_name.clone(), "crates/rust-crate/Cargo.toml");
+        let filtered = HashSet::from([package_name]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 0);
+        assert_eq!(result.files_checked, 0);
+    }
+
+    #[test]
+    fn check_boundaries_selects_package_json_in_mixed_definitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let web_name = PackageName::Other("web".into());
+        let rust_name = PackageName::Other("rust-crate".into());
+        let web_directory = repo_root.join_components(&["packages", "web"]);
+        web_directory.create_dir_all().unwrap();
+        web_directory
+            .join_component("index.ts")
+            .create_with_contents("export {};\n")
+            .unwrap();
+
+        let graph = MockGraph::new(vec![web_name.clone(), rust_name.clone()])
+            .with_definition_path(rust_name.clone(), "crates/rust-crate/Cargo.toml");
+        let filtered = HashSet::from([web_name, rust_name]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 1);
+        assert_eq!(result.files_checked, 1);
     }
 
     #[test]
