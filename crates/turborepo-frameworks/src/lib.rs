@@ -152,7 +152,6 @@ mod tests {
     use test_case::test_case;
     use turborepo_repository::{
         external_resolution::{ExternalDeclaration, PackageExternalDeclarations},
-        package_graph::PackageInfo,
         package_json::PackageJson,
     };
 
@@ -175,76 +174,63 @@ mod tests {
         )
     }
 
-    #[test_case(PackageInfo::default(), None, true; "empty dependencies")]
+    #[test_case(PackageJson::default(), None, true; "empty dependencies")]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("blitz", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("blitzjs")),
         true;
         "blitz"
     )]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("blitz", "*"), ("next", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("blitzjs")),
         true;
         "Order is preserved (returns blitz, not next)"
     )]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("next", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("nextjs")),
         true;
         "Finds next without blitz"
     )]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("solid-js", "*"), ("solid-start", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("solidstart")),
         true;
         "match all strategy works (solid)"
     )]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("nuxt", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("nuxtjs")),
         true;
         "match some strategy works (nuxt)"
     )]
     #[test_case(
-        PackageInfo {
-            package_json: PackageJson {
+        PackageJson {
                 dependencies: deps(&[("react-scripts", "*")]),
                 ..Default::default()
-            },
         },
         Some(get_framework_by_slug("create-react-app")),
         true;
         "match some strategy works (create-react-app)"
     )]
     #[test_case(
-        PackageInfo {
-              package_json: PackageJson {
+        PackageJson {
                             dependencies: Some(
                 vec![("next", "*")]
                     .into_iter()
@@ -252,15 +238,13 @@ mod tests {
                     .collect()
               ),
                             ..Default::default()
-              },
         },
         Some(get_framework_by_slug("nextjs")),
         false;
         "Finds next in non-monorepo"
     )]
     #[test_case(
-        PackageInfo {
-              package_json: PackageJson {
+        PackageJson {
                             dev_dependencies: Some(
                 vec![("vite", "*")]
                     .into_iter()
@@ -268,88 +252,77 @@ mod tests {
                     .collect()
               ),
                             ..Default::default()
-              },
         },
         Some(get_framework_by_slug("vite")),
         false;
         "Finds vite in devDependencies in non-monorepo"
     )]
-    #[test_case(PackageInfo::default(), None, false; "empty dependencies in non-monorepo")]
+    #[test_case(PackageJson::default(), None, false; "empty dependencies in non-monorepo")]
     #[test_case(
-        PackageInfo {
-                package_json: PackageJson {
+        PackageJson {
                                 dev_dependencies: deps(&[("vite", "*")]),
                                 ..Default::default()
-                },
         },
         None,
         true;
         "devDependencies in package_json ignored in monorepo mode"
     )]
     #[test_case(
-        PackageInfo {
-                package_json: PackageJson {
+        PackageJson {
                                 dependencies: deps(&[("solid-js", "*")]),
                 dev_dependencies: deps(&[("solid-start", "*")]),
                                 ..Default::default()
-                },
         },
         Some(get_framework_by_slug("solidstart")),
         false;
         "Strategy::All matches deps split across dependencies and devDependencies"
     )]
     #[test_case(
-        PackageInfo {
-                package_json: PackageJson {
+        PackageJson {
                                 dev_dependencies: deps(&[("react-scripts", "*")]),
                                 ..Default::default()
-                },
         },
         Some(get_framework_by_slug("create-react-app")),
         false;
         "Strategy::Some matches devDependency in non-monorepo"
     )]
     fn test_infer_framework(
-        workspace_info: PackageInfo,
+        workspace_info: PackageJson,
         expected: Option<&Framework>,
         is_monorepo: bool,
     ) {
-        let declarations = if is_monorepo {
-            workspace_info
-                .package_json
-                .dependencies
-                .iter()
-                .flatten()
-                .map(|(name, specifier)| {
-                    ExternalDeclaration::new(
-                        "workspace",
-                        name,
-                        name,
-                        specifier,
-                        DependencyKind::Production,
+        let declarations =
+            if is_monorepo {
+                workspace_info
+                    .dependencies
+                    .iter()
+                    .flatten()
+                    .map(|(name, specifier)| {
+                        ExternalDeclaration::new(
+                            "workspace",
+                            name,
+                            name,
+                            specifier,
+                            DependencyKind::Production,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                workspace_info
+                    .dependencies
+                    .iter()
+                    .flatten()
+                    .map(|(name, specifier)| (name, specifier, DependencyKind::Production))
+                    .chain(
+                        workspace_info.dev_dependencies.iter().flatten().map(
+                            |(name, specifier)| (name, specifier, DependencyKind::Development),
+                        ),
                     )
-                })
-                .collect::<Vec<_>>()
-        } else {
-            workspace_info
-                .package_json
-                .dependencies
-                .iter()
-                .flatten()
-                .map(|(name, specifier)| (name, specifier, DependencyKind::Production))
-                .chain(
-                    workspace_info
-                        .package_json
-                        .dev_dependencies
-                        .iter()
-                        .flatten()
-                        .map(|(name, specifier)| (name, specifier, DependencyKind::Development)),
-                )
-                .map(|(name, specifier, kind)| {
-                    ExternalDeclaration::new("workspace", name, name, specifier, kind)
-                })
-                .collect::<Vec<_>>()
-        };
+                    .map(|(name, specifier, kind)| {
+                        ExternalDeclaration::new("workspace", name, name, specifier, kind)
+                    })
+                    .collect::<Vec<_>>()
+            };
         let framework = infer_framework(
             PackageExternalDeclarations::new(&declarations, "workspace"),
             is_monorepo,

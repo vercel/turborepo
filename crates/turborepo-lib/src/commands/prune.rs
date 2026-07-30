@@ -357,10 +357,7 @@ pub async fn prune(
     // Distinct JavaScript rendering + materialization: core already selected
     // closures and laid out packages. Format rewriting lives entirely in
     // `render_javascript_prune`; orchestration only writes the artifacts.
-    if let (Some(package_manager), Some(root_package_json)) = (
-        prune.package_graph.package_manager(),
-        prune.package_graph.root_package_json(),
-    ) {
+    if let Some(package_manager) = prune.package_graph.package_manager() {
         let original_lockfile = prune
             .package_graph
             .lockfile()
@@ -369,10 +366,11 @@ pub async fn prune(
             .package_graph
             .package_definition_path(&PackageName::Root)
             .ok_or_else(|| Error::MissingPackageDefinition(PackageName::Root))?;
+        let root_package_json = PackageJson::load(&prune.root.resolve(root_definition))?;
         let original_root_contents = prune.root.resolve(root_definition).read_to_string()?;
         let rendered = render_javascript_prune(JavaScriptPruneRenderInput {
             package_manager,
-            root_package_json,
+            root_package_json: &root_package_json,
             original_lockfile,
             workspace_paths: &workspace_paths,
             lockfile_keys: &lockfile_keys,
@@ -862,7 +860,7 @@ impl<'a> Prune<'a> {
         let definition_name = package_json_path
             .file_name()
             .ok_or(Error::WorkspaceAtFilesystemRoot)?;
-        // Load from the authoritative definition path — not PackageInfo.
+        // Load from the authoritative definition path, not retained graph data.
         let workspace_package_json =
             PackageJson::load(&package_json_path).map_err(|error| match error {
                 turborepo_repository::package_json::Error::Io(io)
@@ -1509,7 +1507,7 @@ mod tests {
         full_directory.create_dir_all().unwrap();
         json_directory.create_dir_all().unwrap();
         let scope = vec!["web".to_string()];
-        let mut prune = Prune {
+        let prune = Prune {
             package_graph,
             root: root.clone(),
             out_directory,
@@ -1555,12 +1553,8 @@ mod tests {
             .exists());
         assert!(!prune.full_directory.join_component("stale").exists());
 
-        // Closure/copy no longer require PackageInfo; definition-path IO is
-        // the fail-closed source for package.json during workspace copy.
-        assert!(prune
-            .package_graph
-            .remove_package_info_for_test(&web)
-            .is_some());
+        // Definition-path IO is the fail-closed source for package.json during
+        // workspace copy.
         assert!(prune.internal_dependencies().is_ok());
         let context = prune.package_context(&web).unwrap();
         let definition_path = prune.package_definition_path(&context).unwrap();

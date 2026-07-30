@@ -87,7 +87,7 @@ pub struct PackageGraph {
     root_workspace_index: NodeIndex,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    package_payloads: HashMap<PackageName, PackageInfo>,
+    /// Immutable root package-manager configuration captured at construction.
     root_package_json: Option<PackageJson>,
     package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
@@ -103,8 +103,7 @@ pub struct PackageGraph {
     /// from construction.
     external_resolution: Mutex<ExternalResolutionKnowledge>,
     /// Lazy reverse index from exact external identities to internal
-    /// dependents. Built once from the resolution generation, not from
-    /// `PackageInfo` compatibility payloads.
+    /// dependents. Built once from the resolution generation.
     external_dep_to_internal_dependents: OnceLock<ExternalDependencyIndex>,
     /// Lazily computed internal dependencies of the root package. They are
     /// implied dependencies of every package, so per-package operations like
@@ -142,21 +141,6 @@ impl WorkspacePackage {
             path: AnchoredSystemPathBuf::default(),
         }
     }
-}
-
-/// Compatibility data retained for descriptor relationship classification
-/// and task consumers.
-///
-/// Package identity, directory ownership, definition source, provenance, and
-/// external-resolution state are authoritative in repository knowledge, not in
-/// this projection.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct PackageInfo {
-    /// A temporary compatibility descriptor for relationship classification
-    /// and tasks.
-    /// Its native `name` may be retained for later payload semantics, but must
-    /// never be used as package identity or to derive paths or provenance.
-    pub package_json: PackageJson,
 }
 
 // PackageName refers to a real package's name or the root package.
@@ -213,11 +197,11 @@ pub enum PackageGraphNodeKind {
     GraphSentinel,
 }
 
-/// Compatibility-payload-independent facts about a package graph node.
+/// Manifest-independent facts about a package graph node.
 ///
 /// Paths and provenance come from the graph's immutable repository knowledge,
-/// not from the [`PackageInfo`] compatibility projection. The graph sentinel
-/// has no directory, native definition, or toolchain provenance.
+/// The graph sentinel has no directory, native definition, or toolchain
+/// provenance.
 #[derive(Debug, Clone, Copy)]
 pub struct PackageGraphNodeView<'a> {
     kind: PackageGraphNodeKind,
@@ -230,8 +214,8 @@ pub struct PackageGraphNodeView<'a> {
 /// Identity-bearing execution context for a Turbo task namespace.
 ///
 /// Only [`PackageGraph::package_task_context`] can construct this value, so
-/// its identity, authoritative directory, and optional compatibility payload
-/// cannot be assembled from unrelated graph entries. The root Turbo namespace
+/// its identity and authoritative directory cannot be assembled from unrelated
+/// graph entries. The root Turbo namespace
 /// exists at the repository directory even when the repository has no root
 /// JavaScript scope (for example, a pure Cargo workspace).
 #[derive(Debug, Clone)]
@@ -240,13 +224,11 @@ pub struct PackageTaskContext<'a> {
     repository_root: &'a AbsoluteSystemPath,
     directory: &'a AnchoredSystemPath,
     definition_path: Option<&'a AnchoredSystemPath>,
-    package_info: Option<&'a PackageInfo>,
     external_declarations: &'a ExternalDeclarations,
     native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
     task_contract: crate::task_contracts::ScopeTaskContract,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
-    requires_compatibility_payload: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,8 +248,8 @@ pub enum TaskEntrypointPreference {
 impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
-    pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
-        Self::new_for_test_with_native_tasks(package, repository_root, directory, package_info, kind, toolchain, None, None)
+    pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+        Self::new_for_test_with_native_tasks(package, repository_root, directory, kind, toolchain, None, None)
     }
 
     #[cfg(test)]
@@ -275,7 +257,6 @@ impl<'a> PackageTaskContext<'a> {
         package: PackageName,
         repository_root: &'a AbsoluteSystemPath,
         directory: &'a AnchoredSystemPath,
-        package_info: Option<&'a PackageInfo>,
         kind: PackageTaskContextKind,
         toolchain: Option<&'a crate::toolchain::ToolchainId>,
         native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
@@ -293,24 +274,9 @@ impl<'a> PackageTaskContext<'a> {
                 crate::native_tasks::ScopeNativeTasks::Available(tasks.into_boxed_slice())
             };
             Box::leak(Box::new(scope)) as &'static _
-        } else if let Some(info) = package_info {
-            let observation = crate::native_tasks::observation_from_package_json(
-                package.as_str(),
-                &info.package_json,
-            );
-            let scope = if observation.tasks.is_empty() {
-                crate::native_tasks::ScopeNativeTasks::Empty
-            } else {
-                crate::native_tasks::ScopeNativeTasks::Available(
-                    observation.tasks.into_boxed_slice(),
-                )
-            };
-            Box::leak(Box::new(scope)) as &'static _
         } else {
             &UNKNOWN_NATIVE_TASKS
         };
-        let requires_compatibility_payload = package != PackageName::Root
-            || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
         let task_contract =
             task_contract.unwrap_or_else(crate::task_contracts::ScopeTaskContract::empty);
         Self {
@@ -318,13 +284,11 @@ impl<'a> PackageTaskContext<'a> {
             repository_root,
             directory,
             definition_path: None,
-            package_info,
             external_declarations,
             native_tasks,
             task_contract,
             kind,
             toolchain,
-            requires_compatibility_payload,
         }
     }
 
@@ -351,10 +315,6 @@ impl<'a> PackageTaskContext<'a> {
         )
     }
 
-    pub fn package_info(&self) -> Option<&'a PackageInfo> {
-        self.package_info
-    }
-
     pub fn external_declarations(&self) -> PackageExternalDeclarations<'_> {
         self.external_declarations
             .for_package(self.package.as_str())
@@ -374,10 +334,6 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
         self.toolchain
-    }
-
-    pub fn requires_compatibility_payload(&self) -> bool {
-        self.requires_compatibility_payload
     }
 }
 
@@ -884,7 +840,7 @@ impl PackageGraph {
         }
     }
 
-    /// Looks up manifest-independent facts for a compatibility package
+    /// Looks up manifest-independent facts for a package
     /// identity. Unlike [`Self::package_dir`], this returns `None` for the
     /// synthetic root workspace when no root JavaScript scope exists.
     pub fn package_view(&self, package: &PackageName) -> Option<PackageGraphNodeView<'_>> {
@@ -918,41 +874,36 @@ impl PackageGraph {
 
     /// Resolves the complete context for tasks in `package`.
     ///
-    /// Non-root identities must exist in repository knowledge. Compatibility
-    /// payload is associated when present, but is not authoritative and is not
-    /// required to construct a context. The root identity denotes Turbo's root
-    /// task namespace and is always anchored at the repository directory.
+    /// Non-root identities must exist in repository knowledge. The root
+    /// identity denotes Turbo's root task namespace and is always anchored at
+    /// the repository directory.
     pub fn package_task_context(&self, package: &PackageName) -> Option<PackageTaskContext<'_>> {
-        let (package, directory, definition_path, kind, toolchain, requires_compatibility_payload) =
-            match package {
-                PackageName::Root => {
-                    let scope = self.knowledge.root_javascript_scope();
-                    (
-                        PackageName::Root,
-                        self.knowledge.repository_directory(),
-                        scope.map(|scope| scope.definition_path()),
-                        PackageTaskContextKind::Root,
-                        scope.map(|scope| scope.toolchain()),
-                        scope.is_some(),
-                    )
-                }
-                PackageName::Other(name) => {
-                    let scope = self.knowledge.scope(name)?;
-                    let kind = match scope.kind() {
-                        crate::knowledge::ScopeKind::Package => PackageTaskContextKind::Package,
-                        crate::knowledge::ScopeKind::Aggregate => PackageTaskContextKind::Aggregate,
-                    };
-                    (
-                        PackageName::Other(scope.identity().to_owned()),
-                        scope.directory(),
-                        Some(scope.definition_path()),
-                        kind,
-                        Some(scope.toolchain()),
-                        true,
-                    )
-                }
-            };
-        let package_info = self.package_payloads.get(&package);
+        let (package, directory, definition_path, kind, toolchain) = match package {
+            PackageName::Root => {
+                let scope = self.knowledge.root_javascript_scope();
+                (
+                    PackageName::Root,
+                    self.knowledge.repository_directory(),
+                    scope.map(|scope| scope.definition_path()),
+                    PackageTaskContextKind::Root,
+                    scope.map(|scope| scope.toolchain()),
+                )
+            }
+            PackageName::Other(name) => {
+                let scope = self.knowledge.scope(name)?;
+                let kind = match scope.kind() {
+                    crate::knowledge::ScopeKind::Package => PackageTaskContextKind::Package,
+                    crate::knowledge::ScopeKind::Aggregate => PackageTaskContextKind::Aggregate,
+                };
+                (
+                    PackageName::Other(scope.identity().to_owned()),
+                    scope.directory(),
+                    Some(scope.definition_path()),
+                    kind,
+                    Some(scope.toolchain()),
+                )
+            }
+        };
         let native_tasks = self.native_task_knowledge.for_scope(package.as_str());
         let task_contract = self.task_contract_knowledge.for_scope(package.as_str());
 
@@ -961,13 +912,11 @@ impl PackageGraph {
             repository_root: self.knowledge.repository_root(),
             directory,
             definition_path,
-            package_info,
             external_declarations: self.external_declaration_view(),
             native_tasks,
             task_contract,
             kind,
             toolchain,
-            requires_compatibility_payload,
         })
     }
 
@@ -975,8 +924,7 @@ impl PackageGraph {
     ///
     /// The root namespace is always first and present exactly once, including
     /// in repositories without a root JavaScript scope. All other identities
-    /// follow authoritative repository observation order; compatibility
-    /// payload entries cannot add or remove namespaces from this iterator.
+    /// follow authoritative repository observation order.
     pub fn package_task_contexts(&self) -> impl Iterator<Item = PackageTaskContext<'_>> + '_ {
         std::iter::once(PackageName::Root)
             .chain(
@@ -988,26 +936,6 @@ impl PackageGraph {
                 Some(context) => context,
                 None => unreachable!("authoritative package name must resolve to a task context"),
             })
-    }
-
-    /// Test hook for exercising knowledge-backed consumers without a
-    /// compatibility projection.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn remove_package_info_for_test(&mut self, package: &PackageName) -> Option<PackageInfo> {
-        self.package_payloads.remove(package)
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn set_compatibility_manifest_name_for_test(
-        &mut self,
-        package: &PackageName,
-        compatibility_manifest_name: Option<String>,
-    ) -> bool {
-        let Some(payload) = self.package_payloads.get_mut(package) else {
-            return false;
-        };
-        payload.package_json.name = compatibility_manifest_name.map(turborepo_errors::Spanned::new);
-        true
     }
 
     /// Iterates the structural graph sentinel followed by every authoritative
@@ -1160,11 +1088,6 @@ impl PackageGraph {
             .generation = None;
     }
 
-    pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
-        let entry = self.package_payloads.get(package)?;
-        Some(&entry.package_json)
-    }
-
     pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
         match package {
             // Compatibility: the synthetic root workspace has historically
@@ -1173,10 +1096,6 @@ impl PackageGraph {
             PackageName::Root => Some(self.knowledge.repository_directory()),
             PackageName::Other(_) => self.package_view(package)?.directory(),
         }
-    }
-
-    pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
-        self.package_payloads.get(package)
     }
 
     fn package_dir_for_node(&self, node: &PackageNode) -> Option<&AnchoredSystemPath> {
@@ -1207,10 +1126,6 @@ impl PackageGraph {
             .edges_connecting(*from_index, *to_index)
             .next()
             .map(|edge| *edge.weight())
-    }
-
-    pub fn root_package_json(&self) -> Option<&PackageJson> {
-        self.root_package_json.as_ref()
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
@@ -1935,8 +1850,7 @@ mod test {
                 );
             }
 
-            let missing = PackageName::from("b");
-            assert!(dep_graph.remove_package_info_for_test(&missing).is_some());
+            let changed = PackageName::from("b");
             assert_eq!(
                 dep_graph
                     .changed_packages_from_lockfile(previous.as_ref())
@@ -1944,7 +1858,7 @@ mod test {
                     .into_iter()
                     .map(|change| change.package.name)
                     .collect::<Vec<_>>(),
-                vec![missing]
+                vec![changed]
             );
 
             dep_graph.remove_external_resolution_for_test();
@@ -2924,7 +2838,7 @@ version = "0.1.0"
         let mut expected_cargo_fingerprints = None;
         for iteration in 0..8 {
             let _defer_resolution = iteration % 2 == 1;
-            let mut pkg_graph = PackageGraph::builder(
+            let pkg_graph = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
                     .unwrap(),
@@ -2945,23 +2859,16 @@ version = "0.1.0"
             .unwrap();
 
             assert!(pkg_graph.validate().is_ok());
-            assert!(pkg_graph.package_task_contexts().all(|context| {
-                context.requires_compatibility_payload() && context.package_info().is_some()
-            }));
+            assert!(
+                pkg_graph
+                    .package_task_contexts()
+                    .all(|context| { pkg_graph.package_task_context(context.package()).is_some() })
+            );
 
             let app_name = PackageName::from("app");
-            assert!(pkg_graph.set_compatibility_manifest_name_for_test(
-                &app_name,
-                Some("stale-payload-name".into())
-            ));
             assert_eq!(
                 pkg_graph.package_task_context(&app_name).unwrap().package(),
                 &app_name
-            );
-            assert!(
-                pkg_graph
-                    .package_task_context(&PackageName::from("stale-payload-name"))
-                    .is_none()
             );
 
             // All packages are present with knowledge-backed provenance.
@@ -2973,7 +2880,6 @@ version = "0.1.0"
                 pkg_graph.package_toolchain(&PackageName::from("js-pkg")),
                 Some(&crate::toolchain::ToolchainId::JAVASCRIPT)
             );
-            let _workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
             assert_eq!(
                 pkg_graph.package_toolchain(&PackageName::from("acme")),
                 Some(&crate::toolchain::ToolchainId::RUST)
@@ -3144,7 +3050,7 @@ version = "0.1.0"
 
     /// A pure Cargo workspace has no root package.json and no JavaScript
     /// package manager: the graph is built entirely from the Cargo toolchain,
-    /// and both `package_manager()` and `root_package_json()` report `None`.
+    /// and `package_manager()` reports `None`.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_pure_cargo_workspace_has_no_javascript() {
         let (_tmp, root) = canonical_tempdir();
@@ -3244,8 +3150,7 @@ version = "0.1.0"
         );
         assert_eq!(root_context.kind(), PackageTaskContextKind::Root);
         assert_eq!(root_context.toolchain(), None);
-        assert!(root_context.package_info().is_none());
-        assert!(pkg_graph.package_info(&PackageName::Root).is_none());
+        assert!(!root_context.is_package_json_scope());
         assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
         assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
         assert!(
@@ -3282,15 +3187,12 @@ version = "0.1.0"
             "existing workspace-scoped Cargo behavior is represented as an aggregate"
         );
 
-        // No JavaScript project: no package manager, no root manifest.
+        // No JavaScript project: no package manager or root JavaScript scope.
         assert!(
             pkg_graph.package_manager().is_none(),
             "a pure Cargo workspace has no JavaScript package manager"
         );
-        assert!(
-            pkg_graph.root_package_json().is_none(),
-            "a pure Cargo workspace has no root package.json"
-        );
+        assert!(!pkg_graph.has_root_javascript_scope());
 
         // The Cargo crates and workspace aggregate populate the graph.
         assert_eq!(
@@ -3338,12 +3240,6 @@ version = "0.1.0"
             "app should depend on lib-a, got {app_deps:?}"
         );
 
-        assert!(
-            pkg_graph
-                .remove_package_info_for_test(&PackageName::Root)
-                .is_none()
-        );
-        assert!(pkg_graph.remove_package_info_for_test(&app_name).is_some());
         let contexts = pkg_graph.package_task_contexts().collect::<Vec<_>>();
         assert_eq!(
             contexts.first().map(|context| context.package()),
@@ -3372,27 +3268,11 @@ version = "0.1.0"
             assert_eq!(enumerated.directory(), point.directory());
             assert_eq!(enumerated.kind(), point.kind());
             assert_eq!(enumerated.toolchain(), point.toolchain());
-            assert_eq!(
-                enumerated.requires_compatibility_payload(),
-                point.requires_compatibility_payload()
-            );
-            assert_eq!(
-                enumerated.package_info().map(std::ptr::from_ref),
-                point.package_info().map(std::ptr::from_ref)
-            );
         }
-        assert!(
-            contexts
-                .iter()
-                .find(|context| context.package() == &app_name)
-                .is_some_and(|context| context.package_info().is_none()),
-            "removing compatibility payload must not remove the package namespace"
-        );
-        let root_without_payload = pkg_graph
+        let root_context = pkg_graph
             .package_task_context(&PackageName::Root)
-            .expect("root context is independent of compatibility payload");
-        assert!(root_without_payload.package_info().is_none());
-        assert_eq!(root_without_payload.repository_root(), root.as_ref());
+            .expect("root Turbo namespace always has a context");
+        assert_eq!(root_context.repository_root(), root.as_ref());
     }
 
     /// A crate and a JS package sharing a name is a hard error, like any

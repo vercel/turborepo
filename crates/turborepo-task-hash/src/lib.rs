@@ -1292,17 +1292,15 @@ mod test {
     }
 
     #[tokio::test]
-    async fn task_hash_uses_resolution_knowledge_without_compatibility_payload() {
+    async fn task_hash_uses_resolution_knowledge() {
         let tmp = tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
-        let mut graph = javascript_graph(&repo_root).await;
+        let graph = javascript_graph(&repo_root).await;
         let package = PackageName::from("app");
-        assert!(graph.remove_package_info_for_test(&package).is_some());
         let context = graph
             .package_task_context(&package)
-            .expect("knowledge scope remains authoritative");
-        assert!(context.package_info().is_none());
+            .expect("authoritative scope has a task context");
 
         let task_id = TaskId::new("app", "build");
         let definition = TaskDefinition::default();
@@ -1476,7 +1474,7 @@ mod test {
             !graph
                 .package_task_context(&PackageName::Root)
                 .unwrap()
-                .requires_compatibility_payload()
+                .is_package_json_scope()
         );
         let task_id = TaskId::new("//", "build");
         let tasks = [TaskNode::Task(task_id.clone())];

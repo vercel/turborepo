@@ -2354,7 +2354,6 @@ struct MetadataTarget {
 #[cfg(test)]
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, IntoUnix};
-    use turborepo_errors::Spanned;
 
     use super::*;
 
@@ -3777,22 +3776,12 @@ release: 1.96.0-nightly\n",
         assert!(prune_domains.is_empty());
     }
 
-    fn package_info(name: &str) -> crate::package_graph::PackageInfo {
-        crate::package_graph::PackageInfo {
-            package_json: PackageJson {
-                name: Some(Spanned::new(name.to_string())),
-                ..Default::default()
-            },
-        }
-    }
-
     #[rustfmt::skip]
     fn task_context<'a>(
         _toolchain: &CargoContributor,
         root: &'a AbsoluteSystemPath,
         name: &str,
         directory: &'a str,
-        package: Option<&'a crate::package_graph::PackageInfo>,
     ) -> crate::package_graph::PackageTaskContext<'a> {
         let kind = if directory.is_empty() {
             crate::package_graph::PackageTaskContextKind::Aggregate
@@ -3835,7 +3824,6 @@ release: 1.96.0-nightly\n",
             name.into(),
             root,
             turbopath::AnchoredSystemPath::new(directory).unwrap(),
-            package,
             kind,
             Some(&ToolchainId::RUST),
             native_tasks,
@@ -3898,10 +3886,9 @@ release: 1.96.0-nightly\n",
             })
             .collect();
 
-        let stale_package = package_info("stale-name");
-        let app_context = task_context(&toolchain, &root, "app", "crates/app", Some(&stale_package));
-        let lib_a_context = task_context(&toolchain, &root, "lib-a", "crates/lib-a", None);
-        let workspace_context = task_context(&toolchain, &root, "fixture-ws", "", Some(&stale_package));
+        let app_context = task_context(&toolchain, &root, "app", "crates/app");
+        let lib_a_context = task_context(&toolchain, &root, "lib-a", "crates/lib-a");
+        let workspace_context = task_context(&toolchain, &root, "fixture-ws", "");
 
         // Entrypoint build: scoped to the crate, serialized on the cargo
         // group, run from the workspace root.
@@ -4025,16 +4012,8 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoContributor::new(root.clone());
         toolchain.discover_packages().await.unwrap();
 
-        let stale_package = package_info("stale-name");
-        let lib_a_context = task_context(
-            &toolchain,
-            &root,
-            "lib-a",
-            "crates/lib-a",
-            Some(&stale_package),
-        );
-        let workspace_context =
-            task_context(&toolchain, &root, "fixture-ws", "", Some(&stale_package));
+        let lib_a_context = task_context(&toolchain, &root, "lib-a", "crates/lib-a");
+        let workspace_context = task_context(&toolchain, &root, "fixture-ws", "");
 
         // An override applies to any crate and any task. cwd is the package's
         // directory, and an argv still invoking cargo keeps the serial group
@@ -4086,20 +4065,15 @@ release: 1.96.0-nightly\n",
         let library_contract = &contracts["lib-a"];
         let workspace_contract = &contracts["fixture-ws"];
 
-        let app = package_info("app");
-        let lib_a = package_info("lib-a");
-        let test_util = package_info("lib-a-test-util");
-        let workspace = package_info("fixture-ws");
-        let app_ctx = task_context(&toolchain, &root, "app", "crates/app", Some(&app));
-        let lib_ctx = task_context(&toolchain, &root, "lib-a", "crates/lib-a", Some(&lib_a));
+        let app_ctx = task_context(&toolchain, &root, "app", "crates/app");
+        let lib_ctx = task_context(&toolchain, &root, "lib-a", "crates/lib-a");
         let test_util_ctx = task_context(
             &toolchain,
             &root,
             "lib-a-test-util",
             "crates/lib-a-test-util",
-            Some(&test_util),
         );
-        let workspace_ctx = task_context(&toolchain, &root, "fixture-ws", "", Some(&workspace));
+        let workspace_ctx = task_context(&toolchain, &root, "fixture-ws", "");
         let environment = toolchain::TaskIOEnvironment::default();
         let context = toolchain::TaskIOContext {
             task_args: None,
@@ -4159,7 +4133,6 @@ release: 1.96.0-nightly\n",
                 "custom-dep".into(),
                 &root,
                 turbopath::AnchoredSystemPath::new("crates/custom-dep").unwrap(),
-                None,
                 crate::package_graph::PackageTaskContextKind::Package,
                 Some(&custom_toolchain),
                 None,
@@ -4180,7 +4153,6 @@ release: 1.96.0-nightly\n",
                 "rust-by-id-only".into(),
                 &root,
                 turbopath::AnchoredSystemPath::new("crates/rust-by-id-only").unwrap(),
-                None,
                 crate::package_graph::PackageTaskContextKind::Package,
                 Some(&ToolchainId::RUST),
                 None,
@@ -4216,7 +4188,6 @@ release: 1.96.0-nightly\n",
                 "generated-scope".into(),
                 &root,
                 turbopath::AnchoredSystemPath::new("generated/scope").unwrap(),
-                None,
                 crate::package_graph::PackageTaskContextKind::Package,
                 Some(&custom_toolchain),
                 None,

@@ -20,7 +20,6 @@ Repository root
 Key types:
 - `PackageGraph` - Graph of workspace packages and their dependencies
 - `RepositoryKnowledge` - Immutable authority for package and aggregate identities, paths, kinds, and toolchain provenance
-- `PackageInfo` - Temporary JavaScript-shaped manifest compatibility payload; not package identity or path authority
 - `PackageManager` - Abstraction over npm/pnpm/yarn/bun
 - `ExternalResolutionDomain` - Immutable domain identity, membership, and resolution data
 

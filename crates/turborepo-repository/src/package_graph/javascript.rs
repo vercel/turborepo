@@ -21,8 +21,7 @@ use crate::{
 };
 
 /// One JavaScript resolution snapshot. Both production paths create this
-/// exact generation-backed shape; compatibility projections onto `PackageInfo`
-/// have been deleted.
+/// exact generation-backed shape.
 pub(super) struct ResolutionSnapshot {
     pub generation: Arc<ExternalResolutionGeneration>,
     pub warning: Option<String>,
@@ -181,7 +180,8 @@ impl PackageGraph {
             .package_manager()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let root_package_json = self
-            .root_package_json()
+            .root_package_json
+            .as_ref()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let yarnrc = matches!(package_manager, PackageManager::Berry)
             .then(|| crate::package_manager::yarnrc::YarnRc::from_file(self.repo_root()))

@@ -5,8 +5,10 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{PackageInfo, PackageName};
-use crate::{knowledge::RepositoryKnowledge, package_manager::pnpm::PnpmCatalogs};
+use super::PackageName;
+use crate::{
+    knowledge::RepositoryKnowledge, package_json::PackageJson, package_manager::pnpm::PnpmCatalogs,
+};
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
@@ -18,7 +20,7 @@ pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
     /// Builds the production index from authoritative package definitions
-    /// rather than compatibility `PackageInfo` fields or contributor identity.
+    /// rather than transient descriptors or contributor identity.
     pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
         Self(
             knowledge
@@ -32,7 +34,7 @@ impl<'a> WorkspacePathIndex<'a> {
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'a AbsoluteSystemPath,
-    workspaces: &'a HashMap<PackageName, PackageInfo>,
+    workspaces: &'a HashMap<PackageName, PackageJson>,
     path_index: &'a WorkspacePathIndex<'a>,
     link_workspace_packages: bool,
     catalogs: Option<&'a PnpmCatalogs>,
@@ -42,7 +44,7 @@ impl<'a> DependencySplitter<'a> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
-        workspaces: &'a HashMap<PackageName, PackageInfo>,
+        workspaces: &'a HashMap<PackageName, PackageJson>,
         link_workspace_packages: bool,
         path_index: &'a WorkspacePathIndex<'a>,
         catalogs: Option<&'a PnpmCatalogs>,
@@ -82,7 +84,7 @@ impl<'a> DependencySplitter<'a> {
         let is_internal = DependencyVersion::new(version).matches_workspace_package(
             // This is the current Go behavior, in the future we might not want to paper over a
             // missing version
-            info.package_json.version.as_deref().unwrap_or_default(),
+            info.version.as_deref().unwrap_or_default(),
             self.workspace_dir,
             self.repo_root,
         );
@@ -97,7 +99,7 @@ impl<'a> DependencySplitter<'a> {
     fn find_package(
         &self,
         specifier: WorkspacePackageSpecifier,
-    ) -> Option<(PackageName, &PackageInfo)> {
+    ) -> Option<(PackageName, &PackageJson)> {
         match specifier {
             WorkspacePackageSpecifier::Alias(name) => {
                 // TODO implement borrowing for workspaces to allow for zero copy queries
@@ -124,7 +126,7 @@ impl<'a> DependencySplitter<'a> {
         }
     }
 
-    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageInfo)> {
+    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageJson)> {
         let name = self.path_index.0.get(path)?;
         let info = self.workspaces.get(name)?;
         Some((name, info))
@@ -400,38 +402,30 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("@scope/foo".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some(package_version.to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some(package_version.to_string()),
+                    ..Default::default()
                 },
             );
             map.insert(
                 PackageName::Other("bar".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map.insert(
                 PackageName::Other("baz".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map.insert(
                 PackageName::Other("buffer".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("6.0.3".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("6.0.3".to_string()),
+                    ..Default::default()
                 },
             );
             map
@@ -512,11 +506,9 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("pkg-b".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map
@@ -550,11 +542,9 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("pkg-b".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map
@@ -588,11 +578,9 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("pkg-b".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.2.3".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.2.3".to_string()),
+                    ..Default::default()
                 },
             );
             map
@@ -651,11 +639,9 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("pkg-b".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map
@@ -686,11 +672,9 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("pkg-b".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map

@@ -12,7 +12,7 @@ use turbopath::{
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    ExternalResolutionKnowledge, PackageGraph, PackageInfo, PackageName, PackageNode,
+    ExternalResolutionKnowledge, PackageGraph, PackageName, PackageNode,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
     javascript,
 };
@@ -80,10 +80,10 @@ pub enum Error {
         path: AbsoluteSystemPathBuf,
         repository_root: AbsoluteSystemPathBuf,
     },
-    #[error("missing compatibility payload for discovered scope {name}")]
-    MissingCompatibilityPayload { name: String },
-    #[error("compatibility payload {name} has no authoritative discovered scope")]
-    UnexpectedCompatibilityPayload { name: String },
+    #[error("missing construction descriptor for discovered scope {name}")]
+    MissingDescriptor { name: String },
+    #[error("construction descriptor {name} has no authoritative discovered scope")]
+    UnexpectedDescriptor { name: String },
     #[error("repository package knowledge was not constructed")]
     MissingRepositoryKnowledge,
     #[error("repository relationship knowledge was not constructed")]
@@ -420,7 +420,7 @@ struct BuildState<'a, S, T> {
 }
 
 struct PackageGraphAssembler {
-    package_payloads: HashMap<PackageName, PackageInfo>,
+    package_jsons: HashMap<PackageName, PackageJson>,
     workspace_graph: Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
@@ -428,7 +428,6 @@ struct PackageGraphAssembler {
 }
 
 struct PackageGraphAssembly {
-    package_payloads: HashMap<PackageName, PackageInfo>,
     workspace_graph: Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
@@ -437,16 +436,16 @@ struct PackageGraphAssembly {
 
 struct ObservedPackage {
     scope: PackageScopeObservation,
-    compatibility: Option<(String, PackageInfo)>,
+    descriptor: Option<(String, PackageJson)>,
     native_relationships: Option<(String, Vec<Relationship>)>,
     native_tasks: Option<crate::native_tasks::NativeTaskObservation>,
 }
 
 impl PackageGraphAssembler {
-    fn new(root_package_info: Option<PackageInfo>) -> Self {
-        let mut package_payloads = HashMap::new();
-        if let Some(root_package_info) = root_package_info {
-            package_payloads.insert(PackageName::Root, root_package_info);
+    fn new(root_package_json: Option<PackageJson>) -> Self {
+        let mut package_jsons = HashMap::new();
+        if let Some(root_package_json) = root_package_json {
+            package_jsons.insert(PackageName::Root, root_package_json);
         }
 
         let mut workspace_graph = Graph::new();
@@ -464,7 +463,7 @@ impl PackageGraphAssembler {
         node_lookup.insert(root_workspace, root_workspace_index);
 
         Self {
-            package_payloads,
+            package_jsons,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -473,13 +472,13 @@ impl PackageGraphAssembler {
     }
 
     fn reserve(&mut self, additional: usize) {
-        self.package_payloads.reserve(additional);
+        self.package_jsons.reserve(additional);
         self.node_lookup.reserve(additional);
     }
 
-    fn add_scope(&mut self, name: PackageName, info: Option<PackageInfo>) {
-        if let Some(info) = info {
-            self.package_payloads.insert(name.clone(), info);
+    fn add_scope(&mut self, name: PackageName, descriptor: Option<PackageJson>) {
+        if let Some(descriptor) = descriptor {
+            self.package_jsons.insert(name.clone(), descriptor);
         }
         let node = PackageNode::Workspace(name);
         let idx = self.workspace_graph.add_node(node.clone());
@@ -489,35 +488,39 @@ impl PackageGraphAssembler {
     fn add_knowledge(
         &mut self,
         knowledge: &RepositoryKnowledge,
-        compatibility: Vec<(String, PackageInfo)>,
+        descriptors: Vec<(String, PackageJson)>,
     ) -> Result<(), Error> {
-        let mut compatibility: HashMap<_, _> = compatibility.into_iter().collect();
+        let mut descriptors: HashMap<_, _> = descriptors.into_iter().collect();
         self.reserve(knowledge.packages().count() + knowledge.aggregate_scopes().count());
 
         for package in knowledge.packages() {
             let name = package.identity();
             self.add_scope(
                 PackageName::Other(name.to_string()),
-                Some(compatibility.remove(name).ok_or_else(|| {
-                    Error::MissingCompatibilityPayload {
-                        name: name.to_string(),
-                    }
-                })?),
+                Some(
+                    descriptors
+                        .remove(name)
+                        .ok_or_else(|| Error::MissingDescriptor {
+                            name: name.to_string(),
+                        })?,
+                ),
             );
         }
         for aggregate in knowledge.aggregate_scopes() {
             let name = aggregate.identity();
             self.add_scope(
                 PackageName::Other(name.to_string()),
-                Some(compatibility.remove(name).ok_or_else(|| {
-                    Error::MissingCompatibilityPayload {
-                        name: name.to_string(),
-                    }
-                })?),
+                Some(
+                    descriptors
+                        .remove(name)
+                        .ok_or_else(|| Error::MissingDescriptor {
+                            name: name.to_string(),
+                        })?,
+                ),
             );
         }
-        if let Some(name) = compatibility.keys().next() {
-            return Err(Error::UnexpectedCompatibilityPayload { name: name.clone() });
+        if let Some(name) = descriptors.keys().next() {
+            return Err(Error::UnexpectedDescriptor { name: name.clone() });
         }
         Ok(())
     }
@@ -529,8 +532,8 @@ impl PackageGraphAssembler {
         for group in relationships.groups() {
             let identity = group.source();
             let name = package_name_from_identity(identity);
-            if !self.package_payloads.contains_key(&name) {
-                return Err(Error::MissingCompatibilityPayload {
+            if !self.package_jsons.contains_key(&name) {
+                return Err(Error::MissingDescriptor {
                     name: identity.to_string(),
                 });
             }
@@ -569,7 +572,7 @@ impl PackageGraphAssembler {
                 .node_lookup
                 .get(&PackageNode::Workspace(name.clone()))
                 .copied()
-                .ok_or_else(|| Error::MissingCompatibilityPayload {
+                .ok_or_else(|| Error::MissingDescriptor {
                     name: identity.to_string(),
                 })?;
             if internal.is_empty() {
@@ -598,7 +601,6 @@ impl PackageGraphAssembler {
 
     fn finish(self) -> PackageGraphAssembly {
         PackageGraphAssembly {
-            package_payloads: self.package_payloads,
             workspace_graph: self.workspace_graph,
             root_node_index: self.root_node_index,
             root_workspace_index: self.root_workspace_index,
@@ -642,10 +644,7 @@ where
         // constructed nor queried for a package manager. The graph is built
         // entirely from the extra contributors (Cargo).
         let no_javascript = root_package_json.is_none();
-        let root_package_info = root_package_json
-            .clone()
-            .map(|package_json| PackageInfo { package_json });
-        let assembler = PackageGraphAssembler::new(root_package_info);
+        let assembler = PackageGraphAssembler::new(root_package_json.clone());
 
         // The discovery strategy is shared (via the JavaScript contributor)
         // between package discovery and package-manager resolution; the
@@ -715,8 +714,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             task_contract,
         } = package.into_parts();
         // Producer-resolved external identities are contributed to the
-        // resolution generation separately; PackageInfo no longer carries
-        // closure/hash compatibility projections.
+        // resolution generation separately.
         let task_contract =
             task_contract.unwrap_or_else(crate::task_contracts::ScopeTaskContract::empty);
         if let Some(contract_toolchain) = task_contract.toolchain()
@@ -740,7 +738,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             }
             (None, _) => None,
         };
-        let entry = PackageInfo { package_json: json };
         let observation = PackageScopeObservation {
             identity: name.clone(),
             name_source,
@@ -752,8 +749,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             },
         };
         let native_relationships = name.clone().zip(native_relationships);
-        let compatibility = name.map(|name| (name, entry));
-        if compatibility.is_none() {
+        let descriptor = name.map(|name| (name, json));
+        if descriptor.is_none() {
             tracing::debug!(
                 "ignoring package definition at {} since it has no name",
                 manifest_path
@@ -761,7 +758,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         }
         Ok(ObservedPackage {
             scope: observation,
-            compatibility,
+            descriptor,
             native_relationships,
             native_tasks: native_task_observation,
         })
@@ -809,12 +806,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
 
         let _span = tracing::info_span!("add_packages").entered();
         let mut observations = Vec::with_capacity(discovered.len());
-        let mut compatibility = Vec::with_capacity(discovered.len());
+        let mut descriptors = Vec::with_capacity(discovered.len());
         for (toolchain, package) in discovered {
             let observed = self.observe_package(toolchain, package)?;
             observations.push(observed.scope);
-            if let Some(projection) = observed.compatibility {
-                compatibility.push(projection);
+            if let Some(descriptor) = observed.descriptor {
+                descriptors.push(descriptor);
             }
             if let Some((source, relationships)) = observed.native_relationships {
                 self.native_relationships.insert(source, relationships);
@@ -843,7 +840,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 "observed native workspace root"
             );
         }
-        self.assembler.add_knowledge(&knowledge, compatibility)?;
+        self.assembler.add_knowledge(&knowledge, descriptors)?;
         self.knowledge = Some(knowledge);
 
         let Self {
@@ -951,7 +948,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             relationship_groups,
         )?);
         let PackageGraphAssembly {
-            package_payloads,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -1022,7 +1018,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_workspace_index,
             node_lookup,
             root_package_json,
-            package_payloads,
             lockfile: lockfile.map(Arc::from),
             package_manager,
             knowledge,
@@ -1052,7 +1047,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             .ok_or(Error::MissingRepositoryKnowledge)?;
         let path_index = WorkspacePathIndex::from_knowledge(knowledge);
         // Compute once — for pnpm/Berry this reads a config file from disk.
-        // Without hoisting, classifying each compatibility descriptor would
+        // Without hoisting, classifying each JavaScript descriptor would
         // redundantly read the same file. Cargo supplies classified internal
         // relationships, so its empty descriptors never reach this fallback.
         let link_workspace_packages =
@@ -1086,21 +1081,21 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                         None => {
                             let name = package_name_from_identity(identity);
                             let entry =
-                                self.assembler.package_payloads.get(&name).ok_or_else(|| {
-                                    Error::MissingCompatibilityPayload {
+                                self.assembler.package_jsons.get(&name).ok_or_else(|| {
+                                    Error::MissingDescriptor {
                                         name: identity.to_string(),
                                     }
                                 })?;
                             let definition_path = scope_definition_path(knowledge, &name)
-                                .ok_or_else(|| Error::MissingCompatibilityPayload {
+                                .ok_or_else(|| Error::MissingDescriptor {
                                     name: identity.to_string(),
                                 })?;
                             Relationships::classify(
                                 self.repo_root,
                                 definition_path,
-                                &self.assembler.package_payloads,
+                                &self.assembler.package_jsons,
                                 link_workspace_packages,
-                                entry.package_json.dependencies_with_kind(),
+                                entry.dependencies_with_kind(),
                                 &path_index,
                                 catalogs.as_ref(),
                             )
@@ -1343,7 +1338,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             Box::new(Error::MissingRelationshipKnowledge),
         ))?;
         let PackageGraphAssembly {
-            package_payloads,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -1422,7 +1416,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_workspace_index,
             node_lookup,
             root_package_json,
-            package_payloads,
             package_manager,
             lockfile: arc_lockfile,
             knowledge,
@@ -1446,7 +1439,7 @@ impl Relationships {
     fn classify<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPath,
-        workspaces: &HashMap<PackageName, PackageInfo>,
+        workspaces: &HashMap<PackageName, PackageJson>,
         link_workspace_packages: bool,
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
