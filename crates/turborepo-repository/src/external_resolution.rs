@@ -7,7 +7,6 @@ use std::{
     ops::Range,
 };
 
-use sha2::{Digest, Sha256};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
@@ -264,7 +263,7 @@ impl ResolutionUnavailableReason {
     }
 }
 
-/// Stable producer-supplied identity for one resolved domain generation.
+/// Generation-owned, byte-compatible fingerprint for one package resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolutionFingerprint(String);
 
@@ -275,27 +274,6 @@ impl ResolutionFingerprint {
 
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-
-    pub(crate) fn from_packages(packages: &[PackageResolution]) -> Self {
-        fn update(hasher: &mut Sha256, value: &str) {
-            hasher.update((value.len() as u64).to_le_bytes());
-            hasher.update(value.as_bytes());
-        }
-
-        let mut packages: Vec<_> = packages.iter().collect();
-        packages.sort_unstable_by_key(|package| package.package());
-        let mut hasher = Sha256::new();
-        for package in packages {
-            update(&mut hasher, package.package());
-            let mut identities: Vec<_> = package.identities().iter().collect();
-            identities.sort_unstable();
-            for identity in identities {
-                update(&mut hasher, identity.key());
-                update(&mut hasher, identity.version());
-            }
-        }
-        Self::new(format!("{:x}", hasher.finalize()))
     }
 }
 
@@ -347,7 +325,6 @@ impl PackageResolution {
 pub enum ExternalResolutionData {
     Resolved {
         completeness: ResolutionCompleteness,
-        fingerprint: ResolutionFingerprint,
         packages: Vec<PackageResolution>,
     },
     Unavailable(ResolutionUnavailableReason),
@@ -477,10 +454,6 @@ impl ExternalResolutionDomain {
     pub fn data(&self) -> &ExternalResolutionData {
         &self.data
     }
-
-    pub(crate) fn data_mut(&mut self) -> &mut ExternalResolutionData {
-        &mut self.data
-    }
 }
 
 /// Lifecycle state for resolution production, kept separate from terminal
@@ -511,6 +484,15 @@ impl ExternalResolutionGeneration {
                 for package in packages.iter_mut() {
                     package.identities.sort();
                     package.identities.dedup();
+                    package.set_fingerprint(ResolutionFingerprint::new(
+                        turborepo_lockfile_hash::hash(
+                            package
+                                .identities
+                                .iter()
+                                .map(|identity| (identity.key(), identity.version())),
+                        )
+                        .map_err(ExternalResolutionError::Fingerprint)?,
+                    ));
                 }
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }
@@ -635,8 +617,10 @@ impl ExternalResolutionGeneration {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum ExternalResolutionError {
+    #[error("failed to fingerprint normalized package resolution")]
+    Fingerprint(#[source] turborepo_lockfile_hash::Error),
     #[error("external resolution domain {id} was contributed more than once")]
     DuplicateDomain { id: ExternalResolutionDomainId },
     #[error("external resolution domain {id} has unknown root {root}")]
@@ -813,7 +797,6 @@ mod tests {
     fn resolved(packages: Vec<PackageResolution>) -> ExternalResolutionData {
         ExternalResolutionData::Resolved {
             completeness: ResolutionCompleteness::Complete,
-            fingerprint: ResolutionFingerprint::new("fingerprint"),
             packages,
         }
     }

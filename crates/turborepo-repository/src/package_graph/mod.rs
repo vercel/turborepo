@@ -2380,7 +2380,6 @@ mod test {
         );
         let crate::external_resolution::ExternalResolutionData::Resolved {
             completeness,
-            fingerprint,
             packages,
         } = resolved_domain.data()
         else {
@@ -2390,10 +2389,10 @@ mod test {
             completeness,
             &crate::external_resolution::ResolutionCompleteness::Complete
         );
-        assert!(!fingerprint.as_str().is_empty());
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].package(), ROOT_PKG_NAME);
         assert!(packages[0].identities().is_empty());
+        assert!(packages[0].fingerprint().is_some());
         assert!(
             resolved
                 .external_package_identities_for_packages([&PackageName::Root])
@@ -2922,7 +2921,7 @@ version = "0.1.0"
         // Several iterations: the closure-attribution regression this guards
         // was decided by HashMap iteration order, roughly a coin flip per
         // process/build.
-        let mut expected_cargo_fingerprint = None;
+        let mut expected_cargo_fingerprints = None;
         for iteration in 0..8 {
             let _defer_resolution = iteration % 2 == 1;
             let mut pkg_graph = PackageGraph::builder(
@@ -3102,7 +3101,6 @@ version = "0.1.0"
             assert_eq!(cargo_domain.definition_sources()[0].as_str(), "Cargo.lock");
             let crate::external_resolution::ExternalResolutionData::Resolved {
                 completeness,
-                fingerprint,
                 packages,
             } = cargo_domain.data()
             else {
@@ -3112,10 +3110,14 @@ version = "0.1.0"
                 completeness,
                 &crate::external_resolution::ResolutionCompleteness::Complete
             );
-            if let Some(expected) = &expected_cargo_fingerprint {
-                assert_eq!(fingerprint, expected);
+            let fingerprints = packages
+                .iter()
+                .map(|package| package.fingerprint().unwrap().clone())
+                .collect::<Vec<_>>();
+            if let Some(expected) = &expected_cargo_fingerprints {
+                assert_eq!(&fingerprints, expected);
             } else {
-                expected_cargo_fingerprint = Some(fingerprint.clone());
+                expected_cargo_fingerprints = Some(fingerprints);
             }
             assert_eq!(packages.len(), 4);
             for package in packages {
@@ -3165,9 +3167,10 @@ version = "0.1.0"
         );
         let states = pkg_graph.package_resolution_states();
         assert_eq!(states["//"], PackageResolutionState::NotApplicable);
-        // This fixture has no closure hasher, so the claimed package fails
-        // closed as Missing rather than being normalized to NotApplicable.
-        assert_eq!(states["app"], PackageResolutionState::Missing);
+        assert!(matches!(
+            states["app"],
+            PackageResolutionState::Resolved { .. }
+        ));
         assert!(
             pkg_graph.relationship_projections.get().is_none(),
             "relationship projections must remain lazy for current consumers"
