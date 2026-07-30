@@ -41,7 +41,6 @@ use turborepo_repository::{
     native_tasks::observation_from_package_json,
     package_graph::{self, PackageGraph, PackageName},
     package_json::PackageJson,
-    toolchain::ToolchainId,
 };
 
 const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
@@ -110,9 +109,10 @@ impl LspPackages {
             let Some(source) = sources.remove(&definition_path) else {
                 continue;
             };
-            if graph.package_toolchain(&identity) != Some(&ToolchainId::JAVASCRIPT)
-                || graph.is_aggregate_scope(&identity)
-            {
+            // Presence in `sources` proves this authoritative definition was
+            // parsed as package.json; provenance does not determine LSP
+            // package capabilities.
+            if graph.is_aggregate_scope(&identity) {
                 continue;
             }
             packages.push(LspPackage {

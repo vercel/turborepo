@@ -416,17 +416,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use turborepo_repository::{
-        package_graph::{PackageGraphNodeKind, PackageName, PackageNode},
-        toolchain::ToolchainId,
-    };
+    use turborepo_repository::package_graph::{PackageGraphNodeKind, PackageName, PackageNode};
 
     use super::*;
     use crate::{BoundariesConfig, BoundariesContext, PackageGraphProvider, TurboJsonProvider};
 
     // Minimal mock graph that tracks packages, dependencies, and ancestors.
     struct MockGraph {
-        packages: Vec<(PackageName, turbopath::AnchoredSystemPathBuf)>,
+        packages: Vec<(
+            PackageName,
+            turbopath::AnchoredSystemPathBuf,
+            turbopath::AnchoredSystemPathBuf,
+        )>,
         deps: HashMap<PackageNode, Vec<PackageNode>>,
         ancestors: HashMap<PackageNode, Vec<PackageNode>>,
     }
@@ -445,6 +446,8 @@ mod tests {
             self.packages.push((
                 pkg_name,
                 turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}")).unwrap(),
+                turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}/package.json"))
+                    .unwrap(),
             ));
         }
 
@@ -464,12 +467,12 @@ mod tests {
             Box::new(
                 self.packages
                     .iter()
-                    .map(|(name, directory)| crate::PackageScope {
+                    .map(|(name, directory, definition_path)| crate::PackageScope {
                         name: name.clone(),
                         name_source: None,
                         directory,
+                        definition_path,
                         kind: PackageGraphNodeKind::Package,
-                        toolchain: &ToolchainId::JAVASCRIPT,
                     }),
             )
         }
