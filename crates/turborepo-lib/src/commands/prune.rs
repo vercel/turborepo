@@ -121,7 +121,7 @@ static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<C
 mod prune_js;
 use prune_js::{
     bin_paths, prune_package_json_dev_dependencies, render_javascript_prune,
-    JavaScriptPruneLockfileArtifact, JavaScriptPruneRenderInput,
+    JavaScriptPruneLockfileArtifact, JavaScriptPruneRenderInput, JavaScriptPruneRenderResult,
 };
 
 fn relative_unix_path(path: &'static str) -> &'static RelativeUnixPath {
@@ -345,10 +345,9 @@ pub async fn prune(
     prune.copy_turbo_json(&workspace_names)?;
     prune.copy_global_dependencies()?;
 
-    // Distinct JavaScript rendering step: core already selected the package
-    // closure and laid out packages; JS lockfile/manifest/patch rewriting is
-    // produced as an explicit artifact set and then materialized with the
-    // same path-safe copy helpers used for layout.
+    // Distinct JavaScript rendering + materialization: core already selected
+    // closures and laid out packages. Format rewriting lives entirely in
+    // `render_javascript_prune`; orchestration only writes the artifacts.
     if let (Some(package_manager), Some(root_package_json)) = (
         prune.package_graph.package_manager(),
         prune.package_graph.root_package_json(),
@@ -373,83 +372,7 @@ pub async fn prune(
             original_root_package_json_contents: &original_root_contents,
             uses_per_workspace_lockfiles: prune.uses_per_workspace_lockfiles,
         })?;
-
-        match &rendered.lockfile {
-            JavaScriptPruneLockfileArtifact::CopyOriginalRoot => {
-                // Per-workspace lockfiles are already in the pruned output from
-                // recursive_copy in copy_workspace. Copy the original root
-                // lockfile as-is (it only contains root-level dependencies).
-                let original_root_lockfile = prune.root.join_component(rendered.lockfile_name);
-                let out_lockfile = prune.out_directory.join_component(rendered.lockfile_name);
-                turborepo_fs::copy_file(&original_root_lockfile, &out_lockfile)?;
-                if prune.docker {
-                    turborepo_fs::copy_file(
-                        &original_root_lockfile,
-                        prune
-                            .docker_directory()
-                            .join_component(rendered.lockfile_name),
-                    )?;
-                }
-            }
-            JavaScriptPruneLockfileArtifact::Encoded(lockfile_contents) => {
-                let lockfile_path = prune.out_directory.join_component(rendered.lockfile_name);
-                lockfile_path.create_with_contents(lockfile_contents)?;
-                if prune.docker {
-                    prune
-                        .docker_directory()
-                        .join_component(rendered.lockfile_name)
-                        .create_with_contents(lockfile_contents)?;
-                }
-            }
-        }
-
-        if let Some(pruned_json_contents) = &rendered.root_package_json_contents {
-            let original = prune.root.resolve(root_definition);
-            let permissions = original.symlink_metadata()?.permissions();
-            let new_package_json_path = prune.full_directory.resolve(root_definition);
-            new_package_json_path.create_with_contents(pruned_json_contents)?;
-            #[cfg(unix)]
-            new_package_json_path.set_mode(permissions.mode())?;
-            #[cfg(windows)]
-            if permissions.readonly() {
-                new_package_json_path.set_readonly()?
-            }
-            if prune.docker {
-                turborepo_fs::copy_file(
-                    new_package_json_path,
-                    prune.docker_directory().resolve(root_definition),
-                )?;
-            }
-        } else {
-            prune.copy_file(root_definition, Some(CopyDestination::Docker))?;
-        }
-
-        for patch in &rendered.pruned_patches {
-            prune.copy_patch_file(patch)?;
-        }
-
-        if rendered.prune_pnpm_workspace_patches {
-            let ws_config =
-                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
-            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
-            let out_ws = prune.out_directory.resolve(&ws_path);
-            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &out_ws,
-                &rendered.pruned_patches,
-            )?;
-            let full_ws = prune.full_directory.resolve(&ws_path);
-            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &full_ws,
-                &rendered.pruned_patches,
-            )?;
-            if prune.docker {
-                let docker_ws = prune.docker_directory().resolve(&ws_path);
-                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                    &docker_ws,
-                    &rendered.pruned_patches,
-                )?;
-            }
-        }
+        prune.materialize_javascript_render(root_definition, &rendered)?;
     }
 
     // The pruned output is complete; let each toolchain polish its own
@@ -776,6 +699,80 @@ impl<'a> Prune<'a> {
                     return Err(Error::InvalidPatchPath(patch.clone()));
                 }
                 break;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Materialize a rendered JavaScript prune artifact set with path-safe
+    /// writes. Contains no lockfile/manifest/patch format interpretation.
+    fn materialize_javascript_render(
+        &self,
+        root_definition: &AnchoredSystemPath,
+        rendered: &JavaScriptPruneRenderResult,
+    ) -> Result<(), Error> {
+        match &rendered.lockfile {
+            JavaScriptPruneLockfileArtifact::CopyOriginalRoot => {
+                // Per-workspace lockfiles are already in the pruned output from
+                // recursive_copy in copy_workspace. Copy the original root
+                // lockfile as-is (it only contains root-level dependencies).
+                let original_root_lockfile = self.root.join_component(rendered.lockfile_name);
+                let out_lockfile = self.out_directory.join_component(rendered.lockfile_name);
+                turborepo_fs::copy_file(&original_root_lockfile, &out_lockfile)?;
+                if self.docker {
+                    turborepo_fs::copy_file(
+                        &original_root_lockfile,
+                        self.docker_directory()
+                            .join_component(rendered.lockfile_name),
+                    )?;
+                }
+            }
+            JavaScriptPruneLockfileArtifact::Encoded(lockfile_contents) => {
+                let lockfile_path = self.out_directory.join_component(rendered.lockfile_name);
+                lockfile_path.create_with_contents(lockfile_contents)?;
+                if self.docker {
+                    self.docker_directory()
+                        .join_component(rendered.lockfile_name)
+                        .create_with_contents(lockfile_contents)?;
+                }
+            }
+        }
+
+        if let Some(pruned_json_contents) = &rendered.root_package_json_contents {
+            let original = self.root.resolve(root_definition);
+            let permissions = original.symlink_metadata()?.permissions();
+            let new_package_json_path = self.full_directory.resolve(root_definition);
+            new_package_json_path.create_with_contents(pruned_json_contents)?;
+            #[cfg(unix)]
+            new_package_json_path.set_mode(permissions.mode())?;
+            #[cfg(windows)]
+            if permissions.readonly() {
+                new_package_json_path.set_readonly()?
+            }
+            if self.docker {
+                turborepo_fs::copy_file(
+                    new_package_json_path,
+                    self.docker_directory().resolve(root_definition),
+                )?;
+            }
+        } else {
+            self.copy_file(root_definition, Some(CopyDestination::Docker))?;
+        }
+
+        for patch in &rendered.pruned_patches {
+            self.copy_patch_file(patch)?;
+        }
+
+        if let Some(workspace_config) = &rendered.workspace_config {
+            let ws_path = AnchoredSystemPathBuf::from_raw(workspace_config.path)?;
+            let out_ws = self.out_directory.resolve(&ws_path);
+            out_ws.create_with_contents(&workspace_config.contents)?;
+            let full_ws = self.full_directory.resolve(&ws_path);
+            full_ws.create_with_contents(&workspace_config.contents)?;
+            if self.docker {
+                let docker_ws = self.docker_directory().resolve(&ws_path);
+                docker_ws.create_with_contents(&workspace_config.contents)?;
             }
         }
 

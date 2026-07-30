@@ -222,6 +222,12 @@ pub(crate) enum JavaScriptPruneLockfileArtifact {
     Encoded(Vec<u8>),
 }
 
+#[derive(Debug)]
+pub(crate) struct JavaScriptPruneFileArtifact {
+    pub path: &'static str,
+    pub contents: String,
+}
+
 /// Outputs of the JavaScript prune rendering step.
 #[derive(Debug)]
 pub(crate) struct JavaScriptPruneRenderResult {
@@ -230,7 +236,7 @@ pub(crate) struct JavaScriptPruneRenderResult {
     /// `None` means copy the original root package.json unchanged.
     pub root_package_json_contents: Option<String>,
     pub pruned_patches: Vec<RelativeUnixPathBuf>,
-    pub prune_pnpm_workspace_patches: bool,
+    pub workspace_config: Option<JavaScriptPruneFileArtifact>,
 }
 
 /// Render JavaScript lockfile/manifest/patch artifacts for a pruned repository.
@@ -294,11 +300,30 @@ pub(crate) fn render_javascript_prune(
         None
     };
 
+    let workspace_config = if input.package_manager.is_pnpm_family() {
+        let path = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+        let source = input.repo_root.join_component(path);
+        source
+            .try_exists()?
+            .then(|| {
+                let contents = source.read_to_string()?;
+                let contents =
+                    turborepo_repository::package_manager::pnpm::prune_workspace_patches_contents(
+                        &contents,
+                        &pruned_patches,
+                    )?;
+                Ok::<_, std::io::Error>(JavaScriptPruneFileArtifact { path, contents })
+            })
+            .transpose()?
+    } else {
+        None
+    };
+
     Ok(JavaScriptPruneRenderResult {
         lockfile_name,
         lockfile,
         root_package_json_contents,
         pruned_patches,
-        prune_pnpm_workspace_patches: input.package_manager.is_pnpm_family(),
+        workspace_config,
     })
 }
