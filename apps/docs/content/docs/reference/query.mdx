@@ -147,7 +147,7 @@ turbo query affected
 }
 ```
 
-Task-level detection is normally more precise than package-level. A task is reported as affected if its configured [`inputs`](/docs/reference/configuration#inputs) match a changed file or if an upstream task dependency is affected. Conservative fallbacks can report every task instead.
+Task-level detection is more precise than package-level. A task is only reported as affected if its configured [`inputs`](/docs/reference/configuration#inputs) match a changed file, or if an upstream task dependency is affected.
 
 #### `--tasks`
 
@@ -191,25 +191,6 @@ turbo query affected --packages web docs
   }
 }
 ```
-
-If repository relationship knowledge cannot be projected, Turborepo
-conservatively includes every package and reports the generic
-`AllPackagesChanged` reason:
-
-```json title="Conservative affectedness reason"
-{
-  "reason": {
-    "__typename": "AllPackagesChanged"
-  }
-}
-```
-
-When querying tasks, package relationship projection or task input matching
-failures include every task and report the generic `TaskAllChanged` reason.
-Internal failure details are logged rather than included in query output. If a
-task cannot be represented after affectedness is calculated, the query instead
-returns the opaque `Failed to determine affected tasks.` error and exits with
-code `2`.
 
 #### `--base`
 
