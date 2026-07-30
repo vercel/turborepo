@@ -32,12 +32,42 @@ impl TaskEntrypointDomain {
     }
 }
 
+/// Groups scopes that share one declared startup-environment projection.
+/// Deliberately independent from ecosystem provenance.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TaskEnvironmentDomain(Cow<'static, str>);
+
+impl TaskEnvironmentDomain {
+    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
+        Self(value.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskEnvironmentRequirement {
+    domain: TaskEnvironmentDomain,
+    vars: Vec<&'static str>,
+}
+
+impl TaskEnvironmentRequirement {
+    pub fn new(domain: TaskEnvironmentDomain, vars: Vec<&'static str>) -> Self {
+        Self { domain, vars }
+    }
+}
+
 /// A public `command` map key supported by this scope's native command model.
 /// This is explicit behavior, separate from open-ended ecosystem provenance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandMapTarget {
     JavaScript,
     Rust,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrunePackageMode {
+    JavaScript,
+    NativeCopy,
+    NativeDomain(crate::prune_knowledge::PruneDomainId),
 }
 
 impl CommandMapTarget {
@@ -58,11 +88,12 @@ pub struct ScopeTaskContract {
     derives_io: bool,
     defaults: TaskDefaults,
     /// Startup environment patterns this scope needs for derived I/O.
-    env_vars: Vec<&'static str>,
+    environment: Option<TaskEnvironmentRequirement>,
     /// Ecosystem provenance when the observation came from a known producer.
     toolchain: Option<ToolchainId>,
     command_map_target: Option<CommandMapTarget>,
     entrypoint_domain: Option<TaskEntrypointDomain>,
+    prune_package_mode: Option<PrunePackageMode>,
     cargo: Option<crate::cargo::CargoTaskContract>,
     static_defaults: BTreeMap<String, TaskDefaults>,
     static_io: BTreeMap<String, crate::toolchain::DerivedTaskIO>,
@@ -75,10 +106,11 @@ impl ScopeTaskContract {
         Self {
             derives_io: false,
             defaults: TaskDefaults::default(),
-            env_vars: Vec::new(),
+            environment: None,
             toolchain: Some(ToolchainId::JAVASCRIPT),
             command_map_target: Some(CommandMapTarget::JavaScript),
             entrypoint_domain: None,
+            prune_package_mode: Some(PrunePackageMode::JavaScript),
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -91,10 +123,11 @@ impl ScopeTaskContract {
         Self {
             derives_io: false,
             defaults: TaskDefaults::default(),
-            env_vars: Vec::new(),
+            environment: None,
             toolchain: None,
             command_map_target: None,
             entrypoint_domain: None,
+            prune_package_mode: None,
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -106,10 +139,16 @@ impl ScopeTaskContract {
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
-            env_vars: crate::cargo::TASK_IO_ENV_VARS.to_vec(),
+            environment: Some(TaskEnvironmentRequirement::new(
+                TaskEnvironmentDomain(Cow::Borrowed("cargo-task-io")),
+                crate::cargo::TASK_IO_ENV_VARS.to_vec(),
+            )),
             toolchain: Some(ToolchainId::RUST),
             command_map_target: Some(CommandMapTarget::Rust),
             entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("cargo"))),
+            prune_package_mode: Some(PrunePackageMode::NativeDomain(
+                crate::prune_knowledge::CARGO_PRUNE_DOMAIN.clone(),
+            )),
             cargo: Some(contract),
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -120,17 +159,18 @@ impl ScopeTaskContract {
     /// Static derived contract for simple native producers and tests.
     pub fn derived(
         toolchain: ToolchainId,
+        environment: Option<TaskEnvironmentRequirement>,
         defaults: BTreeMap<String, TaskDefaults>,
-        env_vars: Vec<&'static str>,
         io: BTreeMap<String, crate::toolchain::DerivedTaskIO>,
     ) -> Self {
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
-            env_vars,
+            environment,
             toolchain: Some(toolchain),
             command_map_target: None,
             entrypoint_domain: None,
+            prune_package_mode: Some(PrunePackageMode::NativeCopy),
             cargo: None,
             static_defaults: defaults,
             static_io: io,
@@ -147,7 +187,24 @@ impl ScopeTaskContract {
     }
 
     pub fn env_vars(&self) -> &[&'static str] {
-        &self.env_vars
+        self.environment
+            .as_ref()
+            .map_or(&[], |requirement| requirement.vars.as_slice())
+    }
+
+    pub fn environment_domain(&self) -> Option<&TaskEnvironmentDomain> {
+        self.environment
+            .as_ref()
+            .map(|requirement| &requirement.domain)
+    }
+
+    pub fn prune_package_mode(&self) -> Option<&PrunePackageMode> {
+        self.prune_package_mode.as_ref()
+    }
+
+    pub fn with_prune_package_mode(mut self, mode: PrunePackageMode) -> Self {
+        self.prune_package_mode = Some(mode);
+        self
     }
 
     pub fn toolchain(&self) -> Option<&ToolchainId> {
@@ -292,19 +349,16 @@ impl TaskContractKnowledge {
             .map(|(scope, contract)| (scope.as_str(), contract))
     }
 
-    pub fn env_vars_by_toolchain(&self) -> BTreeMap<ToolchainId, Vec<&'static str>> {
-        let mut patterns = BTreeMap::<ToolchainId, Vec<&'static str>>::new();
+    pub fn env_vars_by_domain(&self) -> BTreeMap<TaskEnvironmentDomain, Vec<&'static str>> {
+        let mut patterns = BTreeMap::<TaskEnvironmentDomain, Vec<&'static str>>::new();
         for contract in self.by_scope.values() {
-            if contract.env_vars.is_empty() {
-                continue;
-            }
-            let Some(toolchain) = contract.toolchain.clone() else {
+            let Some(requirement) = contract.environment.as_ref() else {
                 continue;
             };
             patterns
-                .entry(toolchain)
+                .entry(requirement.domain.clone())
                 .or_default()
-                .extend(contract.env_vars.iter().copied());
+                .extend(requirement.vars.iter().copied());
         }
         for values in patterns.values_mut() {
             values.sort_unstable();
@@ -341,8 +395,8 @@ mod tests {
     fn command_map_behavior_is_independent_of_provenance() {
         let contract = ScopeTaskContract::derived(
             ToolchainId::new("custom-rust-producer"),
+            None,
             BTreeMap::new(),
-            Vec::new(),
             BTreeMap::new(),
         )
         .with_command_map_target(CommandMapTarget::Rust);

@@ -1203,7 +1203,7 @@ fn cargo_change_observation(
 /// Cargo prune inputs captured atomically with the discovery generation.
 #[derive(Debug)]
 struct CargoPruneKnowledge {
-    toolchain: ToolchainId,
+    domain: crate::prune_knowledge::PruneDomainId,
     lockfile: String,
     root_manifest: String,
     package_directories: HashMap<String, String>,
@@ -1231,7 +1231,7 @@ impl CargoPruneKnowledge {
             })
             .collect();
         Ok(Self {
-            toolchain: ToolchainId::RUST,
+            domain: crate::prune_knowledge::CARGO_PRUNE_DOMAIN.clone(),
             lockfile,
             root_manifest,
             package_directories,
@@ -1240,8 +1240,8 @@ impl CargoPruneKnowledge {
 }
 
 impl PruneDomain for CargoPruneKnowledge {
-    fn toolchain(&self) -> &ToolchainId {
-        &self.toolchain
+    fn id(&self) -> &crate::prune_knowledge::PruneDomainId {
+        &self.domain
     }
 
     fn plan(

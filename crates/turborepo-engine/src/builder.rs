@@ -19,7 +19,8 @@ use turborepo_errors::Spanned;
 use turborepo_graph_utils as graph;
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME},
-    toolchain::{TaskIOEnvironment, ToolchainId},
+    task_contracts::TaskEnvironmentDomain,
+    toolchain::TaskIOEnvironment,
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
@@ -62,8 +63,9 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     global_env: Vec<String>,
     pass_through_args: Vec<String>,
     requested_tasks: Vec<String>,
-    /// Each toolchain receives only the startup environment keys it declared.
-    environments: HashMap<ToolchainId, TaskIOEnvironment>,
+    /// Each contract domain receives only the startup environment keys it
+    /// declared.
+    environments: HashMap<TaskEnvironmentDomain, TaskIOEnvironment>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -115,7 +117,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         mut self,
         pass_through_args: Vec<String>,
         requested_tasks: Vec<String>,
-        environments: HashMap<ToolchainId, TaskIOEnvironment>,
+        environments: HashMap<TaskEnvironmentDomain, TaskIOEnvironment>,
     ) -> Self {
         self.pass_through_args = pass_through_args;
         self.requested_tasks = requested_tasks;

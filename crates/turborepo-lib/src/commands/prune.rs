@@ -18,7 +18,8 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
-    toolchain::ToolchainId,
+    prune_knowledge::PruneDomainId,
+    task_contracts::PrunePackageMode,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -62,8 +63,8 @@ pub enum Error {
     MissingWorkspace(PackageName),
     #[error("Missing native package definition for {0}")]
     MissingPackageDefinition(PackageName),
-    #[error("Missing toolchain provenance for {0}")]
-    MissingPackageToolchain(PackageName),
+    #[error("Missing prune package mode for {0}")]
+    MissingPrunePackageMode(PackageName),
     #[error(
         "Invalid patched dependency path `{0}`: path escapes the repository or output directory"
     )]
@@ -232,8 +233,10 @@ pub async fn prune(
             prune
                 .package_graph
                 .package_task_context(workspace)
-                .and_then(|context| context.toolchain().cloned())
-                .is_none_or(|toolchain| toolchain == ToolchainId::JAVASCRIPT)
+                .is_some_and(|context| {
+                    context.task_contract().prune_package_mode()
+                        == Some(&PrunePackageMode::JavaScript)
+                })
         })
         .cloned()
         .collect();
@@ -245,18 +248,23 @@ pub async fn prune(
     } else {
         Vec::new()
     };
-    let mut kept_by_toolchain: HashMap<ToolchainId, Vec<String>> = HashMap::new();
-    let mut planned_toolchains = HashSet::new();
+    let mut kept_by_domain: HashMap<PruneDomainId, Vec<String>> = HashMap::new();
+    let mut planned_domains = HashSet::new();
     for workspace in workspaces {
         let context = prune.package_context(&workspace)?;
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
-            let toolchain = context
-                .toolchain()
-                .ok_or_else(|| Error::MissingPackageToolchain(context.package().clone()))?;
+            let mode = context
+                .task_contract()
+                .prune_package_mode()
+                .cloned()
+                .ok_or_else(|| Error::MissingPrunePackageMode(context.package().clone()))?;
             let definition_path = prune.package_definition_path(&context)?;
-            if toolchain != &ToolchainId::JAVASCRIPT {
+            if matches!(
+                mode,
+                PrunePackageMode::NativeCopy | PrunePackageMode::NativeDomain(_)
+            ) {
                 // A package anchored at the repo root (the synthetic Cargo
                 // workspace package) has no directory of its own; its
                 // workspace-level files come from the toolchain's prune
@@ -268,10 +276,12 @@ pub async fn prune(
                 }
                 prune.copy_package_dir(context.directory(), definition_path)?;
                 println!(" - Added {workspace}");
-                kept_by_toolchain
-                    .entry(toolchain.clone())
-                    .or_default()
-                    .push(workspace.clone());
+                if let PrunePackageMode::NativeDomain(domain) = mode {
+                    kept_by_domain
+                        .entry(domain)
+                        .or_default()
+                        .push(workspace.clone());
+                }
                 // Non-JS packages participate in turbo.json task pruning,
                 // but not in the JS lockfile subgraph or package.json
                 // workspaces.
@@ -293,12 +303,12 @@ pub async fn prune(
 
     // Project plans from immutable knowledge captured by this graph's
     // discovery generation; live toolchains retain no prune authority.
-    for toolchain_id in prune.package_graph.prune_toolchains() {
-        let kept = kept_by_toolchain.remove(toolchain_id).unwrap_or_default();
-        let Some(plan) = prune.package_graph.prune_plan(toolchain_id, &kept)? else {
+    for domain in prune.package_graph.prune_domains() {
+        let kept = kept_by_domain.remove(domain).unwrap_or_default();
+        let Some(plan) = prune.package_graph.prune_plan(domain, &kept)? else {
             continue;
         };
-        planned_toolchains.insert(toolchain_id.clone());
+        planned_domains.insert(domain.clone());
         for extra in plan.extra_packages {
             let name = PackageName::Other(extra.clone());
             let context = prune.package_context(&name)?;
@@ -376,10 +386,10 @@ pub async fn prune(
 
     // The pruned output is complete; let each planned generation-owned domain
     // polish its own files in place (e.g. Cargo canonicalizes its lockfile).
-    for toolchain in planned_toolchains {
+    for domain in planned_domains {
         let finalized_files = prune
             .package_graph
-            .finalize_prune(&toolchain, &prune.full_directory);
+            .finalize_prune(&domain, &prune.full_directory);
         if prune.docker {
             sync_prune_finalize_files(
                 &prune.full_directory,

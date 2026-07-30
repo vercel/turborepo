@@ -680,10 +680,11 @@ impl PackageGraph {
         self.task_contract_knowledge.root_engines()
     }
 
-    pub fn task_io_env_vars_by_toolchain(
+    pub fn task_io_env_vars_by_domain(
         &self,
-    ) -> std::collections::BTreeMap<crate::toolchain::ToolchainId, Vec<&'static str>> {
-        self.task_contract_knowledge.env_vars_by_toolchain()
+    ) -> std::collections::BTreeMap<crate::task_contracts::TaskEnvironmentDomain, Vec<&'static str>>
+    {
+        self.task_contract_knowledge.env_vars_by_domain()
     }
 
     pub fn task_entrypoint_exclusions(
@@ -774,24 +775,24 @@ impl PackageGraph {
         self.change_knowledge.to_watch_spec()
     }
 
-    pub fn prune_toolchains(&self) -> impl Iterator<Item = &crate::toolchain::ToolchainId> {
-        self.prune_knowledge.toolchains()
+    pub fn prune_domains(&self) -> impl Iterator<Item = &crate::prune_knowledge::PruneDomainId> {
+        self.prune_knowledge.domains()
     }
 
     pub fn prune_plan(
         &self,
-        toolchain: &crate::toolchain::ToolchainId,
+        domain: &crate::prune_knowledge::PruneDomainId,
         kept_packages: &[String],
     ) -> Result<Option<crate::prune_knowledge::PrunePlan>, crate::prune_knowledge::Error> {
-        self.prune_knowledge.plan(toolchain, kept_packages)
+        self.prune_knowledge.plan(domain, kept_packages)
     }
 
     pub fn finalize_prune(
         &self,
-        toolchain: &crate::toolchain::ToolchainId,
+        domain: &crate::prune_knowledge::PruneDomainId,
         pruned_root: &AbsoluteSystemPath,
     ) -> Vec<String> {
-        self.prune_knowledge.finalize(toolchain, pruned_root)
+        self.prune_knowledge.finalize(domain, pruned_root)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {

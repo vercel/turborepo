@@ -994,7 +994,7 @@ fn stub_io_engine_with_safety(
         .collect(),
     );
     let environments = HashMap::from([(
-        ToolchainId::new("stub-io"),
+        turborepo_repository::task_contracts::TaskEnvironmentDomain::new("stub-io"),
         turborepo_repository::toolchain::TaskIOEnvironment::new(HashMap::from([(
             "STUB_LAYOUT".to_string(),
             "layout-value".to_string(),

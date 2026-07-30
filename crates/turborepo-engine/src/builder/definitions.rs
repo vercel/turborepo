@@ -401,8 +401,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let context = turborepo_repository::toolchain::TaskIOContext {
                 task_args: task_args.args_for_task(task_id.as_inner()),
                 environment: package_context
-                    .toolchain()
-                    .and_then(|toolchain| self.environments.get(toolchain))
+                    .task_contract()
+                    .environment_domain()
+                    .and_then(|domain| self.environments.get(domain))
                     .unwrap_or(&empty_environment),
             };
             if let Some(mut derived) = package_context.task_contract().derived_task_io(
