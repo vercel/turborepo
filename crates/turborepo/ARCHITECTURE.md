@@ -186,6 +186,9 @@ Represents the workspace structure and package dependencies:
   relationship knowledge rather than raw manifests or PackageInfo maps. MFE
   enablement checks exact declaration names in the same relationship generation
   so internal workspace declarations and alias-key behavior remain unchanged.
+  MFE configuration discovery, directory ownership, and proxy execution accept
+  package/root scopes backed by authoritative `package.json` definitions;
+  aggregate and Cargo-manifest scopes are excluded without provenance dispatch.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate

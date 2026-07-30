@@ -4,10 +4,7 @@ use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
-use turborepo_repository::{
-    package_graph::{PackageGraph, PackageGraphNodeKind, PackageName},
-    toolchain::ToolchainId,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_executor::MfeConfigProvider;
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -46,7 +43,7 @@ impl MicrofrontendsConfigs {
             configs: Vec<(&'a str, Result<Option<MfeConfig>, Error>)>,
         }
 
-        let packages = javascript_packages(package_graph).collect::<Vec<_>>();
+        let packages = microfrontend_packages(package_graph).collect::<Vec<_>>();
 
         let any_has_mfe_dep = packages
             .iter()
@@ -348,18 +345,14 @@ impl MicrofrontendsConfigs {
     }
 }
 
-/// The scopes historically probed by microfrontends: the JavaScript root and
-/// real JavaScript workspace packages. Native packages and aggregate execution
-/// scopes are not package directories and must not be interpreted as such.
-fn javascript_packages(
+/// Real package scopes backed by an authoritative package.json definition.
+/// Non-package.json scopes, such as Cargo crates, and aggregate execution
+/// scopes must not be probed for MFE configuration.
+fn microfrontend_packages(
     package_graph: &PackageGraph,
 ) -> impl Iterator<Item = (&str, PackageName, &turbopath::AnchoredSystemPath)> {
     package_graph.node_views().filter_map(|(node, view)| {
-        let is_historical_js_scope = matches!(
-            view.kind(),
-            PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
-        ) && view.toolchain() == Some(&ToolchainId::JAVASCRIPT);
-        if !is_historical_js_scope {
+        if !view.is_package_json_scope() {
             return None;
         }
         let name = match node {
@@ -628,7 +621,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn from_disk_does_not_probe_cargo_aggregate_as_a_package() {
+    async fn from_disk_does_not_probe_cargo_scopes_as_packages() {
         let tmp = TempDir::new().unwrap();
         let root = temp_root(&tmp);
         root.join_component("Cargo.toml")
@@ -654,6 +647,7 @@ mod test {
             )
             .unwrap();
         write_mfe_config(&root, "aggregate");
+        write_mfe_config(&root.join_component("member"), "member");
 
         let graph = PackageGraph::builder_optional(&root, None)
             .with_cargo()

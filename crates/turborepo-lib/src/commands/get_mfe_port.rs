@@ -7,7 +7,6 @@ use turborepo_repository::{
     cargo::CARGO_TOML,
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
     package_json::PackageJson,
-    toolchain::ToolchainId,
 };
 
 use crate::{
@@ -94,29 +93,22 @@ fn package_for_directory(
                 return None;
             }
             let component_count = directory.components().count();
-            let is_javascript_package = matches!(
-                view.kind(),
-                PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
-            ) && view.toolchain() == Some(&ToolchainId::JAVASCRIPT);
+            let is_package_json_scope = view.is_package_json_scope();
             cwd.strip_prefix(directory)
-                .map(|_| (component_count, is_javascript_package, node, view))
+                .map(|_| (component_count, is_package_json_scope, node, view))
         })
-        .max_by_key(|(component_count, is_javascript_package, _, _)| {
-            (*component_count, *is_javascript_package)
+        .max_by_key(|(component_count, is_package_json_scope, _, _)| {
+            (*component_count, *is_package_json_scope)
         })
         .ok_or(Error::NoPackageJson)?;
 
     match owner {
         (_, _, PackageNode::Workspace(PackageName::Other(name)), view)
-            if view.kind() == PackageGraphNodeKind::Package
-                && view.toolchain() == Some(&ToolchainId::JAVASCRIPT) =>
+            if view.is_package_json_scope() =>
         {
             Ok(name)
         }
-        (_, _, PackageNode::Workspace(PackageName::Root), view)
-            if view.kind() == PackageGraphNodeKind::RootJavaScript
-                && view.toolchain() == Some(&ToolchainId::JAVASCRIPT) =>
-        {
+        (_, _, PackageNode::Workspace(PackageName::Root), view) if view.is_package_json_scope() => {
             package_graph
                 .root_javascript_scope_name()
                 .flatten()
