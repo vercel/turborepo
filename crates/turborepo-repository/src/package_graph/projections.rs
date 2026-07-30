@@ -178,32 +178,36 @@ impl RelationshipIndex {
         }
     }
 
-    fn id(&self, package: &PackageName) -> Option<ScopeId> {
+    fn id(&self, package: &PackageName) -> Result<ScopeId, RelationshipProjectionError> {
         match package {
-            PackageName::Root => Some(self.root),
-            PackageName::Other(name) => self.non_root_lookup.get(name.as_str()).copied(),
+            PackageName::Root => Ok(self.root),
+            PackageName::Other(name) => self
+                .non_root_lookup
+                .get(name.as_str())
+                .copied()
+                .ok_or_else(|| RelationshipProjectionError::UnknownPackage(package.clone())),
         }
     }
 
     fn ids(&self, packages: &[PackageName]) -> Result<Vec<ScopeId>, RelationshipProjectionError> {
-        packages
-            .iter()
-            .map(|package| {
-                self.id(package)
-                    .ok_or_else(|| RelationshipProjectionError::UnknownPackage(package.clone()))
-            })
-            .collect()
+        packages.iter().map(|package| self.id(package)).collect()
     }
 
-    fn transitive_dependencies(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    fn transitive_dependencies(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = closure_members(&self.ordering, &[package]);
         include_ids(&mut members, &self.root_ordering_inputs);
         members[package.index()] = false;
-        Some(self.names_from_members(&members))
+        Ok(self.names_from_members(&members))
     }
 
-    fn transitive_dependents(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    fn transitive_dependents(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = if self.is_root_ordering_input[package.index()] {
             vec![true; self.names.len()]
@@ -211,15 +215,18 @@ impl RelationshipIndex {
             closure_members(&self.reverse_ordering, &[package])
         };
         members[package.index()] = false;
-        Some(self.names_from_members(&members))
+        Ok(self.names_from_members(&members))
     }
 
-    fn transitive_input_dependencies(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    fn transitive_input_dependencies(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = closure_members(&self.inputs, &[package]);
         include_ids(&mut members, &self.root_input_dependencies);
         members[package.index()] = false;
-        Some(self.names_from_members(&members))
+        Ok(self.names_from_members(&members))
     }
 
     fn names_from_members(&self, members: &[bool]) -> Vec<PackageName> {
@@ -319,7 +326,8 @@ fn member_ids(members: &[bool]) -> Box<[ScopeId]> {
 pub struct OrderingRelationships(Arc<RelationshipIndex>);
 
 impl OrderingRelationships {
-    /// Returns direct internal dependencies, or `None` for an unknown package.
+    /// Returns direct internal dependencies or an explicit unknown-package
+    /// error.
     ///
     /// The root Turbo namespace is always recognized. In a pure native
     /// repository it has no declared dependencies. The opaque iterator borrows
@@ -327,14 +335,14 @@ impl OrderingRelationships {
     pub fn direct_dependencies(
         &self,
         package: &PackageName,
-    ) -> Option<impl ExactSizeIterator<Item = &PackageName> + DoubleEndedIterator + Clone + '_>
-    {
+    ) -> Result<
+        impl ExactSizeIterator<Item = &PackageName> + DoubleEndedIterator + Clone + '_,
+        RelationshipProjectionError,
+    > {
         let id = self.0.id(package)?;
-        Some(
-            self.0.ordering[id.index()]
-                .iter()
-                .map(|dependency| &self.0.names[dependency.index()]),
-        )
+        Ok(self.0.ordering[id.index()]
+            .iter()
+            .map(|dependency| &self.0.names[dependency.index()]))
     }
 }
 
@@ -347,16 +355,21 @@ impl OrderingRelationships {
 pub struct FilteringRelationships(Arc<RelationshipIndex>);
 
 impl FilteringRelationships {
-    /// Returns sorted transitive dependencies excluding `package`, or `None`
-    /// when the package is unknown.
-    pub fn transitive_dependencies(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    /// Returns sorted transitive dependencies excluding `package`.
+    pub fn transitive_dependencies(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         self.0.transitive_dependencies(package)
     }
 
-    /// Returns sorted transitive dependents excluding `package`, or `None` when
-    /// the package is unknown. A root internal input has every other
-    /// authoritative identity as a dependent.
-    pub fn transitive_dependents(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    /// Returns sorted transitive dependents excluding `package`. A root
+    /// internal input has every other authoritative identity as a
+    /// dependent.
+    pub fn transitive_dependents(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         self.0.transitive_dependents(package)
     }
 
@@ -410,7 +423,10 @@ impl AffectedRelationships {
     /// Returns dependents reached only through non-ordering input
     /// relationships. Ordinary ordering dependents are excluded so callers can
     /// preserve their existing graph-expansion behavior.
-    pub fn additional_affected_by(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    pub fn additional_affected_by(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let seed = self.0.id(package)?;
         let input_members = if self.0.is_root_input_dependency[seed.index()] {
             vec![true; self.0.names.len()]
@@ -427,7 +443,7 @@ impl AffectedRelationships {
             .zip(ordering_members)
             .map(|(input, ordering)| *input && !ordering)
             .collect::<Vec<_>>();
-        Some(self.0.names_from_members(&additional))
+        Ok(self.0.names_from_members(&additional))
     }
 }
 
@@ -440,9 +456,12 @@ pub struct HashRelationships(Arc<RelationshipIndex>);
 
 impl HashRelationships {
     /// Returns the full transitive internal dependency inputs, including
-    /// implied root inputs and excluding `package`, or `None` if unknown.
+    /// implied root inputs and excluding `package`.
     /// Output is sorted and deduplicated.
-    pub fn dependency_inputs(&self, package: &PackageName) -> Option<Vec<PackageName>> {
+    pub fn dependency_inputs(
+        &self,
+        package: &PackageName,
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         self.0.transitive_input_dependencies(package)
     }
 
@@ -696,14 +715,14 @@ mod tests {
                 .ordering()
                 .direct_dependencies(&app)
                 .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-            Some(names(&["dev", "optional", "prod", "required-peer"]))
+            Ok(names(&["dev", "optional", "prod", "required-peer"]))
         );
         assert_eq!(
             projections
                 .ordering()
                 .direct_dependencies(&name("disconnected"))
                 .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-            Some(Vec::new())
+            Ok(Vec::new())
         );
         let transitive = names(&[
             "dev",
@@ -715,16 +734,13 @@ mod tests {
         ]);
         assert_eq!(
             projections.filtering().transitive_dependencies(&app),
-            Some(transitive.clone())
+            Ok(transitive.clone())
         );
         let mut hash_inputs = transitive;
         hash_inputs.push(name("input-only"));
         hash_inputs.push(name("optional-peer"));
         hash_inputs.sort();
-        assert_eq!(
-            projections.hash().dependency_inputs(&app),
-            Some(hash_inputs)
-        );
+        assert_eq!(projections.hash().dependency_inputs(&app), Ok(hash_inputs));
         assert_eq!(
             projections.hash().root_inputs(),
             names(&["optional-peer", "root-lib"])
@@ -755,19 +771,19 @@ mod tests {
             projections
                 .affected()
                 .additional_affected_by(&name("input-only")),
-            Some(names(&["app"]))
+            Ok(names(&["app"]))
         );
         assert_eq!(
             projections
                 .affected()
                 .additional_affected_by(&name("transitive")),
-            Some(Vec::new())
+            Ok(Vec::new())
         );
         assert_eq!(
             projections
                 .affected()
                 .additional_affected_by(&name("optional-peer")),
-            Some(with_root(names(&[
+            Ok(with_root(names(&[
                 "app",
                 "cycle-a",
                 "cycle-b",
@@ -824,7 +840,7 @@ mod tests {
         assert!(!all_but_root_lib.contains(&root_lib));
         assert_eq!(
             projections.filtering().transitive_dependencies(&cycle_a),
-            Some(names(&["cycle-b", "root-lib"]))
+            Ok(names(&["cycle-b", "root-lib"]))
         );
         assert_eq!(
             projections.prune().package_closure(
@@ -851,6 +867,26 @@ mod tests {
             ])))
         );
         let unknown = name("missing");
+        assert!(matches!(
+            projections.ordering().direct_dependencies(&unknown),
+            Err(RelationshipProjectionError::UnknownPackage(package)) if package == unknown
+        ));
+        assert_eq!(
+            projections.filtering().transitive_dependencies(&unknown),
+            Err(RelationshipProjectionError::UnknownPackage(unknown.clone()))
+        );
+        assert_eq!(
+            projections.filtering().transitive_dependents(&unknown),
+            Err(RelationshipProjectionError::UnknownPackage(unknown.clone()))
+        );
+        assert_eq!(
+            projections.affected().additional_affected_by(&unknown),
+            Err(RelationshipProjectionError::UnknownPackage(unknown.clone()))
+        );
+        assert_eq!(
+            projections.hash().dependency_inputs(&unknown),
+            Err(RelationshipProjectionError::UnknownPackage(unknown.clone()))
+        );
         assert_eq!(
             projections
                 .filtering()
@@ -880,7 +916,7 @@ mod tests {
                 .ordering()
                 .direct_dependencies(&PackageName::Root)
                 .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-            Some(Vec::new())
+            Ok(Vec::new())
         );
         assert!(projections.hash().root_inputs().is_empty());
         assert_eq!(

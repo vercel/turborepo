@@ -915,7 +915,8 @@ mod tests {
             .collect();
 
         let affected =
-            turborepo_engine::match_tasks_against_changed_files(&engine, &pkg_graph, &changed);
+            turborepo_engine::match_tasks_against_changed_files(&engine, &pkg_graph, &changed)
+                .unwrap();
         assert!(
             affected.contains_key(&a_build),
             "task with $TURBO_ROOT$ input should match root file change"

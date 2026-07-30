@@ -112,9 +112,14 @@ pub fn affected_task_ids(
         return engine.task_ids().cloned().collect();
     }
 
-    turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, changed_files)
-        .into_keys()
-        .collect()
+    match turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, changed_files)
+    {
+        Ok(matched) => matched.into_keys().collect(),
+        Err(error) => {
+            tracing::warn!(%error, "unable to project task affectedness; selecting all tasks");
+            engine.task_ids().cloned().collect()
+        }
+    }
 }
 
 /// Returns `true` if any changed file is a global dependency, meaning all
@@ -180,7 +185,7 @@ mod tests {
         package_manager::PackageManager,
     };
     use turborepo_task_id::TaskId;
-    use turborepo_types::TaskDefinition;
+    use turborepo_types::{TaskDefinition, TaskInputs};
 
     use super::*;
     use crate::engine::Building;
@@ -362,5 +367,43 @@ mod tests {
         );
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn unknown_task_package_conservatively_selects_all_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &[]).await;
+        let unknown = TaskId::new("missing", "build");
+        let engine = make_engine(&[(unknown.clone(), default_def())], &[]);
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["file.txt"]), &[]);
+        assert_eq!(result, HashSet::from([unknown]));
+    }
+
+    #[tokio::test]
+    async fn invalid_task_glob_conservatively_selects_all_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let task = TaskId::new("lib-a", "build");
+        let unaffected = TaskId::new("lib-a", "test");
+        let definition = TaskDefinition {
+            inputs: TaskInputs {
+                globs: vec!["[invalid".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let engine = make_engine(
+            &[
+                (task.clone(), definition),
+                (unaffected.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["file.txt"]), &[]);
+        assert_eq!(result, HashSet::from([task, unaffected]));
     }
 }

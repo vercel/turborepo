@@ -13,7 +13,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
-    package_graph::{self, PackageGraph, PackageName},
+    package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 use turborepo_types::FilterMode;
@@ -462,16 +462,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             for (package, reason) in selector_packages {
-                let node = package_graph::PackageNode::Workspace(package.clone());
-
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.dependencies(&node);
-                    let dependencies = dependencies
-                        .iter()
-                        .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                        .map(|i| {
+                    let dependencies = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependencies(&package)?
+                        .into_iter()
+                        .map(|dependency| {
                             (
-                                i.as_package_name().to_owned(),
+                                dependency,
                                 // While we're adding dependencies, from their
                                 // perspective, they were changed because
                                 // of a *dependent*
@@ -482,13 +481,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         })
                         .collect::<Vec<_>>();
 
-                    // flatmap through the option, the set, and then the optional package name
+                    // Merge the explicit, validated filtering projection.
                     merge_changed_packages(&mut walked_dependencies, dependencies);
                 }
 
                 if selector.include_dependents {
-                    let dependents = self.pkg_graph.ancestors(&node);
-                    for dependent in dependents.iter().map(|i| i.as_package_name()) {
+                    let dependents = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependents(&package)?;
+                    for dependent in &dependents {
                         walked_dependents.insert(
                             dependent.clone(),
                             // While we're adding dependents, from their
@@ -505,29 +507,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     // dependent. The closure includes the dependents
                     // themselves, but they already carry the same inclusion
                     // reason via `walked_dependents`, which takes precedence
-                    // in the merge below. Like `dependencies`, the root
+                    // in the merge below. Like the dependency projection, the root
                     // package's own dependencies count as implied
                     // dependencies of every dependent.
                     if selector.include_dependencies && !dependents.is_empty() {
-                        let dependent_nodes: Vec<package_graph::PackageNode> = dependents
-                            .iter()
-                            .map(|i| {
-                                package_graph::PackageNode::Workspace(i.as_package_name().clone())
-                            })
-                            .collect();
-
                         let dependent_dependencies = self
                             .pkg_graph
-                            .transitive_closure(dependent_nodes.iter())
+                            .filtering_relationships()
+                            .dependency_closure(&dependents)?
                             .into_iter()
-                            .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                            .map(|i| i.as_package_name().to_owned())
-                            .chain(
-                                self.pkg_graph
-                                    .root_internal_package_dependencies()
-                                    .into_iter()
-                                    .map(|workspace| workspace.name),
-                            )
                             .map(|name| {
                                 (
                                     name,
@@ -657,21 +645,20 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // latter with reverse traversals from the changed set is much cheaper
         // than computing a forward dependency closure for every candidate
         // package: the changed set is typically far smaller than the package
-        // count. `ancestors` also matches the semantics of `dependencies`
-        // here, including treating the root package's dependencies as implied
+        // count. The reverse filtering projection matches forward dependency
+        // semantics, including treating the root package's dependencies as implied
         // dependencies of every package.
         let mut dependent_on_changed = HashSet::new();
         for changed_package in changed_packages.keys() {
-            let changed_node = package_graph::PackageNode::Workspace(changed_package.to_owned());
-            for ancestor in self.pkg_graph.ancestors(&changed_node) {
-                // `dependencies` never includes the package itself, so a
+            for ancestor in self
+                .pkg_graph
+                .filtering_relationships()
+                .transitive_dependents(changed_package)?
+            {
+                // Filtering projections never include the package itself, so a
                 // package's own change must not mark it as depending on a
                 // changed package; self-selection is handled below.
-                if *ancestor != changed_node
-                    && !matches!(ancestor, package_graph::PackageNode::Root)
-                {
-                    dependent_on_changed.insert(ancestor.as_package_name().clone());
-                }
+                dependent_on_changed.insert(ancestor);
             }
         }
 
@@ -904,6 +891,10 @@ pub enum ResolutionError {
     DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
     GlobalDependenciesGlob(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    RelationshipProjection(
+        #[from] turborepo_repository::package_graph::RelationshipProjectionError,
+    ),
 }
 
 #[cfg(test)]

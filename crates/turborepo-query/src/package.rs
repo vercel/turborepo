@@ -32,6 +32,14 @@ impl Package {
         Ok(Self { run, name })
     }
 
+    pub fn for_task(run: Arc<dyn QueryRun>, name: PackageName) -> Result<Self, Error> {
+        run.pkg_dep_graph()
+            .package_task_context(&name)
+            .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
+
+        Ok(Self { run, name })
+    }
+
     pub fn run(&self) -> &Arc<dyn QueryRun> {
         &self.run
     }
@@ -178,10 +186,9 @@ impl Package {
         Ok(self
             .run
             .pkg_dep_graph()
-            .package_view(&self.name)
+            .package_task_context(&self.name)
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
             .directory()
-            .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
             .to_unix()
             .to_string())
     }

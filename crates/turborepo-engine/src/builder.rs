@@ -18,7 +18,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_graph_utils as graph;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     task_contracts::TaskEnvironmentDomain,
     toolchain::TaskIOEnvironment,
 };
@@ -459,37 +459,35 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let to_task_id = task_id.as_inner().clone().into_owned();
             let to_task_index = engine.get_index(&to_task_id);
 
+            let package = PackageName::from(to_task_id.package());
             let dep_pkgs = self
                 .package_graph
-                .immediate_dependencies_iter(&PackageNode::Workspace(to_task_id.package().into()));
+                .ordering_relationships()
+                .direct_dependencies(&package)?;
 
             let mut has_deps = false;
             let mut has_topo_deps = false;
 
-            topo_deps
-                .iter()
-                .cartesian_product(dep_pkgs.into_iter().flatten())
-                .for_each(|((from, span), dependency_workspace)| {
-                    // We don't need to add an edge from the root node if we're in this branch
-                    if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
-                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
-                        if self.entrypoint_exclusions.contains(&from_task_id) {
-                            return;
-                        }
-                        if let Some(allowed_tasks) = &allowed_tasks
-                            && !allowed_tasks.contains(&from_task_id)
-                        {
-                            return;
-                        }
-                        let from_task_index = engine.get_index(&from_task_id);
-                        has_topo_deps = true;
-                        engine
-                            .task_graph_mut()
-                            .add_edge(to_task_index, from_task_index, ());
-                        let from_task_id = span.to(from_task_id);
-                        traversal_queue.push_back(from_task_id);
+            topo_deps.iter().cartesian_product(dep_pkgs).for_each(
+                |((from, span), dependency_workspace)| {
+                    let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                    if self.entrypoint_exclusions.contains(&from_task_id) {
+                        return;
                     }
-                });
+                    if let Some(allowed_tasks) = &allowed_tasks
+                        && !allowed_tasks.contains(&from_task_id)
+                    {
+                        return;
+                    }
+                    let from_task_index = engine.get_index(&from_task_id);
+                    has_topo_deps = true;
+                    engine
+                        .task_graph_mut()
+                        .add_edge(to_task_index, from_task_index, ());
+                    let from_task_id = span.to(from_task_id);
+                    traversal_queue.push_back(from_task_id);
+                },
+            );
 
             for (sibling, span) in task_definition
                 .with

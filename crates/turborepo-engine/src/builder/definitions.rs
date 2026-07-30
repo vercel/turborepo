@@ -388,14 +388,22 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             // which is far too expensive to compute per task just to hand
             // to a toolchain that derives nothing (JavaScript).
             let package = PackageName::from(task_id.as_inner().package());
-            let dependencies: Vec<_> = self
+            let dependency_names = self
                 .package_graph
                 .hash_relationships()
-                .dependency_inputs(&package)
-                .unwrap_or_default()
+                .dependency_inputs(&package)?;
+            let dependencies: Vec<_> = dependency_names
                 .iter()
-                .filter_map(|dependency| self.package_graph.package_task_context(dependency))
-                .collect();
+                .map(|dependency| {
+                    self.package_graph
+                        .package_task_context(dependency)
+                        .ok_or_else(|| {
+                            turborepo_repository::package_graph::RelationshipProjectionError::UnknownPackage(
+                                dependency.clone(),
+                            )
+                        })
+                })
+                .collect::<Result<_, _>>()?;
             let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
             let empty_environment = turborepo_repository::toolchain::TaskIOEnvironment::default();
             let context = turborepo_repository::toolchain::TaskIOContext {

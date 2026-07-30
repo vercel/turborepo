@@ -3051,13 +3051,13 @@ version = "0.1.0"
                     .ordering_relationships()
                     .direct_dependencies(&PackageName::from("app"))
                     .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-                Some(vec![PackageName::from("lib-a")])
+                Ok(vec![PackageName::from("lib-a")])
             );
             assert_eq!(
                 pkg_graph
                     .hash_relationships()
                     .dependency_inputs(&PackageName::from("app")),
-                Some(vec![PackageName::from("lib-a"), PackageName::from("lib-b")]),
+                Ok(vec![PackageName::from("lib-a"), PackageName::from("lib-b")]),
                 "mixed repositories retain transitive native hash inputs"
             );
             let workspace_deps = pkg_graph
@@ -3186,7 +3186,7 @@ version = "0.1.0"
                 .ordering_relationships()
                 .direct_dependencies(&PackageName::Root)
                 .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-            Some(Vec::new()),
+            Ok(Vec::new()),
             "pure Cargo recognizes the root Turbo namespace without JS edges"
         );
         assert!(pkg_graph.relationship_projections.get().is_some());
@@ -3194,14 +3194,14 @@ version = "0.1.0"
         let expected_dependencies = vec![PackageName::from("lib-a"), PackageName::from("lib-b")];
         assert_eq!(
             pkg_graph.hash_relationships().dependency_inputs(&app),
-            Some(expected_dependencies.clone()),
+            Ok(expected_dependencies.clone()),
             "Cargo hash inputs include transitive path dependencies"
         );
         assert_eq!(
             pkg_graph
                 .filtering_relationships()
                 .transitive_dependencies(&app),
-            Some(expected_dependencies.clone())
+            Ok(expected_dependencies.clone())
         );
         let mut graph_dependencies: Vec<_> = pkg_graph
             .dependencies(&PackageNode::Workspace(app.clone()))
