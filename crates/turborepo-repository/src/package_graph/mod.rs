@@ -398,6 +398,20 @@ impl PackageGraph {
             .for_package(package.as_str())
     }
 
+    /// Whether a package declared a dependency under this exact manifest key.
+    /// This includes internal and unresolved-external relationships and does
+    /// not treat an alias target as a declaration under the target's name.
+    pub fn has_dependency_declaration(
+        &self,
+        package: &PackageName,
+        declaration_name: &str,
+    ) -> bool {
+        self.relationship_knowledge
+            .relationships_for_source(package.as_str())
+            .iter()
+            .any(|relationship| relationship.declaration_name() == declaration_name)
+    }
+
     fn relationship_projections(&self) -> &projections::RelationshipProjections {
         self.relationship_projections.get_or_init(|| {
             projections::RelationshipProjections::build(
