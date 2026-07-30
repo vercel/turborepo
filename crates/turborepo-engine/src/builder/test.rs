@@ -140,20 +140,6 @@ impl Toolchain for AggregateToolchain {
             ))
         })
     }
-
-    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-        turborepo_repository::toolchain::WatchSpec::default()
-    }
-
-    fn prune_plan(
-        &self,
-        _kept_packages: &[String],
-    ) -> Result<
-        Option<turborepo_repository::toolchain::PrunePlan>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
 }
 
 type StubIOEngineResult = Engine<Built, TaskDefinition>;
@@ -217,20 +203,6 @@ impl Toolchain for StubIOToolchain {
                 vec![WorkspaceRoot::new("stub-io", self.repo_root.clone())],
             ))
         })
-    }
-
-    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-        turborepo_repository::toolchain::WatchSpec::default()
-    }
-
-    fn prune_plan(
-        &self,
-        _kept_packages: &[String],
-    ) -> Result<
-        Option<turborepo_repository::toolchain::PrunePlan>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
     }
 }
 

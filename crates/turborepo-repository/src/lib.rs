@@ -23,6 +23,7 @@ pub mod native_tasks;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;
+pub mod prune_knowledge;
 pub mod relationships;
 pub mod task_contracts;
 pub mod toolchain;

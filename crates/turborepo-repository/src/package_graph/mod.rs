@@ -106,6 +106,8 @@ pub struct PackageGraph {
     task_contract_knowledge: Arc<crate::task_contracts::TaskContractKnowledge>,
     /// Immutable change knowledge for watch/affectedness classification.
     change_knowledge: Arc<crate::change_knowledge::ChangeKnowledge>,
+    /// Immutable native prune domains from the same discovery generation.
+    prune_knowledge: Arc<crate::prune_knowledge::PruneKnowledge>,
 }
 
 /// The WorkspacePackage.
@@ -746,24 +748,21 @@ impl PackageGraph {
         &self.toolchains
     }
 
-    /// Watch classification facts for this graph: foundational change knowledge
-    /// (JavaScript membership/workspace triggers and ignore prefixes) combined
-    /// with active toolchain `WatchSpec`s (Cargo until its Rust port).
-    ///
-    /// Registered toolchains that were inactive (notably extras in
-    /// single-package mode) are omitted from the toolchain contribution.
+    /// Watch classification facts retained by this graph generation.
     pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
-        let active: HashSet<_> = self
-            .package_task_contexts()
-            .filter_map(|context| context.toolchain().cloned())
-            .collect();
-        let mut toolchain_spec = crate::toolchain::WatchSpec::default();
-        for toolchain in self.toolchains.iter() {
-            if active.contains(&toolchain.id()) {
-                toolchain_spec.extend(toolchain.watch_spec());
-            }
-        }
-        self.change_knowledge.combined_watch_spec(toolchain_spec)
+        self.change_knowledge.to_watch_spec()
+    }
+
+    pub fn prune_toolchains(&self) -> impl Iterator<Item = &crate::toolchain::ToolchainId> {
+        self.prune_knowledge.toolchains()
+    }
+
+    pub fn prune_plan(
+        &self,
+        toolchain: &crate::toolchain::ToolchainId,
+        kept_packages: &[String],
+    ) -> Result<Option<crate::prune_knowledge::PrunePlan>, crate::prune_knowledge::Error> {
+        self.prune_knowledge.plan(toolchain, kept_packages)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {

@@ -1002,20 +1002,6 @@ mod test {
                 ))
             })
         }
-
-        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-            turborepo_repository::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<
-            Option<turborepo_repository::toolchain::PrunePlan>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
-        }
     }
 
     /// Make a project resolver with the provided dependencies. Extras is for
