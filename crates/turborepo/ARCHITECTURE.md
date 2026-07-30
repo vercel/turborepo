@@ -360,17 +360,19 @@ own dependency graph, scheduler, and incremental cache (`target/`), so the
 division of labor is: **Turborepo decides which crates are in scope and
 whether anything changed; Cargo decides how and in what order to build.**
 
-- **Discovery** (`discover_crates`) shells out to `cargo metadata --no-deps`
-  — Cargo is the only correct implementation of its own membership semantics
+- **Discovery** normally uses one `cargo metadata --locked --all-features`
+  snapshot — Cargo is the only correct implementation of its own membership
+  semantics
   (member globs, automatic path-dependency members, excludes, target-specific
   dependency tables, renames). Dev-dependency edges that would form a cycle
   are dropped (Cargo permits dev-dep cycles; crate edges must support
   topological `^` ordering). Crate names are validated, and a crate/JS package
   name collision hard-errors. Cargo contributes its already-classified native
   internal relationships directly, without JavaScript dependency descriptors
-  or package-manager policy. A second full `cargo metadata
-  --locked --all-features` pass validates resolution and every resolved local
-  package: automatic in-repository workspace members are supported, while
+  or package-manager policy. The same snapshot validates resolution and every
+  resolved local package. `--no-deps` is used only to preserve error precedence
+  and classify memberless workspaces when locked metadata cannot be obtained.
+  Automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages
   hard-error because Turborepo cannot hash, watch, or prune their sources
   safely. The Cargo contributor reports the current workspace root.
