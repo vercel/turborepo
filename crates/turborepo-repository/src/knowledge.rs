@@ -92,7 +92,7 @@ impl RelationshipKnowledge {
     }
 }
 
-/// A workspace root paired by core with the registry entry that produced its
+/// A workspace root paired by core with the contributor that produced its
 /// discovery envelope. The public adapter output cannot supply provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkspaceRootObservation {

@@ -51,7 +51,7 @@ use crate::{
     prune_knowledge::{PruneDomain, PrunePlan},
     relationships::Relationship,
     toolchain::{
-        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain,
+        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
         ToolchainId, WorkspaceRoot,
     },
 };
@@ -1294,15 +1294,14 @@ impl PruneDomain for CargoPruneKnowledge {
     }
 }
 
-/// The Cargo toolchain. Registered in the
-/// [`crate::toolchain::ToolchainRegistry`] when
+/// The Cargo repository contributor. Registered during graph construction when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
 /// root contains a `Cargo.toml`.
-pub struct CargoToolchain {
+pub struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-impl CargoToolchain {
+impl CargoContributor {
     pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
         Arc::new(Self { repo_root })
     }
@@ -1380,7 +1379,7 @@ fn finalize_cargo_prune(pruned_root: &AbsoluteSystemPath) -> Vec<String> {
     vec![CARGO_LOCK.to_string()]
 }
 
-impl Toolchain for CargoToolchain {
+impl RepositoryContributor for CargoContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
     }
@@ -1644,8 +1643,8 @@ pub struct DiscoveredWorkspace {
     /// The workspace's name from `[workspace.metadata] name`, validated
     /// against the crate set when present. Not required at this layer —
     /// it only becomes mandatory when the workspace package is actually
-    /// synthesized (see [`Toolchain::discover_packages`]), so manifests
-    /// without members don't demand a name for nothing.
+    /// synthesized (see [`RepositoryContributor::discover_packages`]), so
+    /// manifests without members don't demand a name for nothing.
     pub name: Option<String>,
     pub crates: Vec<CargoCrate>,
     /// Whether Cargo reported any workspace packages before Turborepo's
@@ -2530,7 +2529,7 @@ dependencies = ["lib-a"]
         write(&root, &["src", "lib.rs"], "");
         generate_lockfile(&root);
 
-        let error = CargoToolchain::new(root)
+        let error = CargoContributor::new(root)
             .discover_packages()
             .await
             .unwrap_err();
@@ -3287,7 +3286,7 @@ release: 1.96.0-nightly\n",
             "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
         );
 
-        let toolchain = CargoToolchain::new(root.clone());
+        let toolchain = CargoContributor::new(root.clone());
         let err = toolchain.discover_packages().await.unwrap_err();
         assert!(
             err.to_string().contains("[workspace.metadata]"),
@@ -3469,7 +3468,7 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
+        let toolchain = CargoContributor::new(root.clone());
         assert_eq!(toolchain.id(), ToolchainId::RUST);
 
         let (packages, roots, resolutions, changes, prune_domains) =
@@ -3585,7 +3584,7 @@ release: 1.96.0-nightly\n",
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
+        let toolchain = CargoContributor::new(root);
         let (packages, roots, resolutions, changes, prune_domains) =
             toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
@@ -3600,7 +3599,7 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
 
-        let toolchain = CargoToolchain::new(root);
+        let toolchain = CargoContributor::new(root);
         let (packages, roots, resolutions, changes, prune_domains) =
             toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
@@ -3621,7 +3620,7 @@ release: 1.96.0-nightly\n",
 
     #[rustfmt::skip]
     fn task_context<'a>(
-        _toolchain: &CargoToolchain,
+        _toolchain: &CargoContributor,
         root: &'a AbsoluteSystemPath,
         name: &str,
         directory: &'a str,
@@ -3707,7 +3706,7 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
+        let toolchain = CargoContributor::new(root.clone());
         let discovered = toolchain.discover_packages().await.unwrap();
         let contracts: HashMap<_, _> = discovered
             .packages()
@@ -3843,7 +3842,7 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
+        let toolchain = CargoContributor::new(root.clone());
         toolchain.discover_packages().await.unwrap();
 
         let stale_package = package_info("stale-name");
@@ -3892,7 +3891,7 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
+        let toolchain = CargoContributor::new(root.clone());
         let discovered = toolchain.discover_packages().await.unwrap();
         let contracts: HashMap<_, _> = discovered
             .packages()

@@ -583,7 +583,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
     use turborepo_repository::{
-        cargo::CargoToolchain, package_graph::PackageGraph, package_json::PackageJson,
+        cargo::CargoContributor, package_graph::PackageGraph, package_json::PackageJson,
         package_manager::PackageManager,
     };
 
@@ -657,7 +657,7 @@ mod test {
         write_mfe_config(&root, "aggregate");
 
         let graph = PackageGraph::builder_optional(&root, None)
-            .with_toolchain(CargoToolchain::new(root.clone()))
+            .with_contributor(CargoContributor::new(root.clone()))
             .build()
             .await
             .unwrap();

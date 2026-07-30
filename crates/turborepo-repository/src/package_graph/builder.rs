@@ -33,8 +33,8 @@ use crate::{
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     relationships::{Relationship, RelationshipTarget},
     toolchain::{
-        DiscoveredPackage, DiscoveredPackageParts, DiscoveredScopeKind, JavaScriptToolchain,
-        Toolchain, ToolchainId, ToolchainRegistry,
+        DiscoveredPackage, DiscoveredPackageParts, DiscoveredScopeKind, JavaScriptContributor,
+        RepositoryContributor, ToolchainId,
     },
 };
 
@@ -55,7 +55,7 @@ pub struct PackageGraphBuilder<'a, T> {
     /// `futureFlags.experimentalCargoWorkspaces` is enabled). Their packages
     /// are discovered alongside JavaScript packages; name collisions across
     /// toolchains are a hard error.
-    extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -104,8 +104,8 @@ pub enum Error {
     UnknownRelationshipSource { identity: String },
     #[error("internal relationship target {identity} has no authoritative repository scope")]
     UnknownRelationshipTarget { identity: String },
-    #[error(transparent)]
-    DuplicateToolchain(#[from] crate::toolchain::DuplicateToolchainError),
+    #[error("repository contributor {id} was registered more than once")]
+    DuplicateContributor { id: ToolchainId },
     #[error(
         "toolchain {toolchain} contributed multiple workspace roots: accepted {accepted_kind} \
          root {accepted_root}, conflicting {conflicting_kind} root {conflicting_root}"
@@ -123,26 +123,26 @@ pub enum Error {
         path: AbsoluteSystemPathBuf,
         repository_root: AbsoluteSystemPathBuf,
     },
-    #[error("toolchain {toolchain} contributed packages without a workspace root")]
+    #[error("ecosystem {toolchain} contributed packages without a workspace root")]
     MissingWorkspaceRoot { toolchain: ToolchainId },
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
     #[error(transparent)]
-    Toolchain(Box<dyn std::error::Error + Send + Sync>),
+    Contribution(Box<dyn std::error::Error + Send + Sync>),
 }
 
-// JavaScript toolchain errors map onto the pre-existing variants rather than
+// JavaScript contribution errors map onto the pre-existing variants rather than
 // new ones: consumers match on `Error::PackageJson` (diagnostic rendering,
 // io-NotFound telemetry in the run builder), and those contracts must not
-// depend on whether the error surfaced through a toolchain.
+// depend on whether the error surfaced through a contributor.
 impl From<crate::toolchain::Error> for Error {
     fn from(err: crate::toolchain::Error) -> Self {
         match err {
             crate::toolchain::Error::Discovery(err) => Error::Discovery(err),
             crate::toolchain::Error::Descriptor(err) => Error::PackageJson(err),
-            crate::toolchain::Error::Failed(err) => Error::Toolchain(err),
+            crate::toolchain::Error::Failed(err) => Error::Contribution(err),
         }
     }
 }
@@ -226,10 +226,10 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     }
 
     /// Build over a repository that may have no root `package.json`. When
-    /// `root_package_json` is `None`, the JavaScript toolchain contributes
+    /// `root_package_json` is `None`, the JavaScript contributor supplies
     /// nothing (no package manager, no lockfile); the graph is populated
-    /// entirely by the extra toolchains registered via
-    /// [`PackageGraphBuilder::with_toolchain`] (Cargo). When it is `Some`,
+    /// entirely by the extra contributors registered via
+    /// [`PackageGraphBuilder::with_contributor`] (Cargo). When it is `Some`,
     /// this behaves exactly like [`PackageGraphBuilder::new`].
     pub fn new_optional(
         repo_root: &'a AbsoluteSystemPath,
@@ -248,7 +248,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             lockfile: None,
             package_manager: None,
             closure_hasher: None,
-            extra_toolchains: Vec::new(),
+            extra_contributors: Vec::new(),
         }
     }
 
@@ -292,11 +292,11 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    /// Register a toolchain in addition to JavaScript. Its packages are
+    /// Register a contributor in addition to JavaScript. Its packages are
     /// discovered alongside JavaScript packages; a package name collision
-    /// across toolchains is a hard error, like any duplicate package name.
-    pub fn with_toolchain(mut self, toolchain: Arc<dyn Toolchain>) -> Self {
-        self.extra_toolchains.push(toolchain);
+    /// across ecosystems are a hard error, like any duplicate package name.
+    pub fn with_contributor(mut self, contributor: Arc<dyn RepositoryContributor>) -> Self {
+        self.extra_contributors.push(contributor);
         self
     }
 
@@ -316,7 +316,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_discovery: discovery,
             package_manager: self.package_manager,
             closure_hasher: self.closure_hasher,
-            extra_toolchains: self.extra_toolchains,
+            extra_contributors: self.extra_contributors,
         }
     }
 }
@@ -402,10 +402,10 @@ struct BuildState<'a, S, T> {
     /// documented debt, see `crate::toolchain` module docs. Absent for a
     /// pure Cargo workspace, where there is no JavaScript project to resolve
     /// a package manager or lockfile from.
-    javascript: Option<Arc<JavaScriptToolchain<T>>>,
+    javascript: Option<Arc<JavaScriptContributor<T>>>,
     /// Every toolchain contributing packages, JavaScript included. Package
     /// discovery goes through this and only this.
-    toolchains: ToolchainRegistry,
+    contributors: Vec<Arc<dyn RepositoryContributor>>,
 }
 
 struct PackageGraphAssembler {
@@ -625,7 +625,7 @@ where
             lockfile,
             package_discovery,
             package_manager,
-            extra_toolchains,
+            extra_contributors,
         } = builder;
         // Pure Cargo workspace: with no root package.json there is no
         // JavaScript project, so the JavaScript toolchain is neither
@@ -642,11 +642,11 @@ where
         // caching wrapper guarantees the underlying strategy runs once. For a
         // pure Cargo workspace there is no JavaScript project, so discovery is
         // not built and the toolchain is left unregistered.
-        let mut toolchains = ToolchainRegistry::new();
+        let mut contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
         let javascript = if no_javascript {
             None
         } else {
-            let javascript = Arc::new(JavaScriptToolchain::new(
+            let javascript = Arc::new(JavaScriptContributor::new(
                 CachingPackageDiscovery::new(package_discovery.build().map_err(Into::into)?),
                 repo_root.to_owned(),
                 package_manager,
@@ -654,11 +654,15 @@ where
             // JavaScript registers first: its packages claim names before any
             // other toolchain's, so a cross-toolchain collision surfaces as the
             // non-JS package failing to add.
-            toolchains.register(javascript.clone())?;
+            contributors.push(javascript.clone());
             Some(javascript)
         };
-        for toolchain in extra_toolchains {
-            toolchains.register(toolchain)?;
+        for contributor in extra_contributors {
+            let id = contributor.id();
+            if contributors.iter().any(|existing| existing.id() == id) {
+                return Err(Error::DuplicateContributor { id });
+            }
+            contributors.push(contributor);
         }
 
         Ok(BuildState {
@@ -680,7 +684,7 @@ where
             closure_hasher,
             state: std::marker::PhantomData,
             javascript,
-            toolchains,
+            contributors,
         })
     }
 }
@@ -701,7 +705,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_tasks,
             task_contract,
         } = package.into_parts();
-        // Toolchain-resolved external identities are contributed to the
+        // Producer-resolved external identities are contributed to the
         // resolution generation separately; PackageInfo no longer carries
         // closure/hash compatibility projections.
         let task_contract = task_contract.unwrap_or_else(|| {
@@ -768,8 +772,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         let mut pre_supplied = self.package_jsons.take();
         let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
         let mut workspace_roots = Vec::new();
-        for toolchain in self.toolchains.iter() {
-            let id = toolchain.id();
+        for contributor in &self.contributors {
+            let id = contributor.id();
             if id == ToolchainId::JAVASCRIPT
                 && let Some(jsons) = pre_supplied.take()
             {
@@ -791,7 +795,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 }));
                 continue;
             }
-            let output = toolchain.discover_packages().await?;
+            let output = contributor.discover_packages().await?;
             let (packages, roots, external_resolutions, changes, prune_domains) =
                 output.into_parts();
             self.native_external_resolutions
@@ -860,7 +864,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             package_manager,
             javascript,
-            toolchains,
+            contributors,
             closure_hasher,
             ..
         } = self;
@@ -879,7 +883,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             package_manager,
             javascript,
-            toolchains,
+            contributors,
             closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -1194,7 +1198,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_prune_domains,
             root_package_json,
             javascript,
-            toolchains,
+            contributors,
             closure_hasher,
             ..
         } = self;
@@ -1217,7 +1221,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             package_jsons: None,
             state: std::marker::PhantomData,
             javascript,
-            toolchains,
+            contributors,
         })
     }
 }
@@ -1565,12 +1569,12 @@ mod test {
         }
     }
 
-    struct RootObservingToolchain {
+    struct RootObservingContributor {
         id: ToolchainId,
         roots: Vec<WorkspaceRoot>,
     }
 
-    impl Toolchain for RootObservingToolchain {
+    impl RepositoryContributor for RootObservingContributor {
         fn id(&self) -> ToolchainId {
             self.id.clone()
         }
@@ -1580,11 +1584,11 @@ mod test {
         }
     }
 
-    struct PackageWithoutRootToolchain {
+    struct PackageWithoutRootContributor {
         root: AbsoluteSystemPathBuf,
     }
 
-    impl Toolchain for PackageWithoutRootToolchain {
+    impl RepositoryContributor for PackageWithoutRootContributor {
         fn id(&self) -> ToolchainId {
             ToolchainId::new("missing-root")
         }
@@ -1603,13 +1607,13 @@ mod test {
         }
     }
 
-    struct PackageContributingToolchain {
+    struct PackageContributor {
         id: ToolchainId,
         root: AbsoluteSystemPathBuf,
         packages: Vec<DiscoveredPackage>,
     }
 
-    impl Toolchain for PackageContributingToolchain {
+    impl RepositoryContributor for PackageContributor {
         fn id(&self) -> ToolchainId {
             self.id.clone()
         }
@@ -1653,7 +1657,7 @@ mod test {
         let native = custom_package(&root, "native-app", dependency_descriptor())
             .with_native_relationships(Vec::new());
         let library = custom_package(&root, "custom-lib", PackageJson::default());
-        let toolchain = PackageContributingToolchain {
+        let toolchain = PackageContributor {
             id: ToolchainId::new("custom-relationships"),
             root: root.clone(),
             packages: vec![legacy, native, library],
@@ -1661,7 +1665,7 @@ mod test {
 
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
-            .with_toolchain(Arc::new(toolchain))
+            .with_contributor(Arc::new(toolchain))
             .build()
             .await
             .unwrap();
@@ -1696,7 +1700,7 @@ mod test {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         for mixed in [false, true] {
-            let toolchain = PackageContributingToolchain {
+            let toolchain = PackageContributor {
                 id: ToolchainId::new("reserved-root"),
                 root: root.clone(),
                 packages: vec![
@@ -1706,7 +1710,7 @@ mod test {
             };
             let result = PackageGraphBuilder::new_optional(&root, mixed.then(PackageJson::default))
                 .with_package_discovery(MockDiscovery)
-                .with_toolchain(Arc::new(toolchain))
+                .with_contributor(Arc::new(toolchain))
                 .build()
                 .await;
 
@@ -2864,13 +2868,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn single_package_reports_only_javascript_root_without_running_extra_toolchains() {
+    async fn single_package_reports_only_javascript_root_without_running_extra_contributors() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_manager(PackageManager::Npm)
             .with_single_package_mode(true)
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("unused-extra"),
                 roots: vec![WorkspaceRoot::new(
                     "unused-extra",
@@ -2889,7 +2893,44 @@ mod test {
     }
 
     #[tokio::test]
-    async fn toolchain_cannot_contribute_multiple_workspace_root_kinds() {
+    async fn contributor_ids_are_unique() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let id = ToolchainId::new("duplicate");
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(RootObservingContributor {
+                id: id.clone(),
+                roots: Vec::new(),
+            }))
+            .with_contributor(Arc::new(RootObservingContributor {
+                id: id.clone(),
+                roots: Vec::new(),
+            }))
+            .build()
+            .await;
+
+        assert!(
+            matches!(result, Err(Error::DuplicateContributor { id: duplicate }) if duplicate == id)
+        );
+
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(RootObservingContributor {
+                id: ToolchainId::JAVASCRIPT,
+                roots: Vec::new(),
+            }))
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::DuplicateContributor { id }) if id == ToolchainId::JAVASCRIPT
+        ));
+    }
+
+    #[tokio::test]
+    async fn contributor_cannot_contribute_multiple_workspace_root_kinds() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let first = root.join_component("first");
@@ -2898,7 +2939,7 @@ mod test {
         let duplicate = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-one"),
                 roots: vec![
                     WorkspaceRoot::new("npm", first.clone()),
@@ -2922,11 +2963,11 @@ mod test {
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-two"),
                 roots: vec![WorkspaceRoot::new("future-a", first)],
             }))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-three"),
                 roots: vec![WorkspaceRoot::new("future-b", second)],
             }))
@@ -2945,11 +2986,11 @@ mod test {
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: first.clone(),
                 roots: vec![WorkspaceRoot::new("shared", root.clone())],
             }))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: second.clone(),
                 roots: vec![WorkspaceRoot::new("shared", root.clone())],
             }))
@@ -2973,7 +3014,9 @@ mod test {
         let result = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(PackageWithoutRootToolchain { root: root.clone() }))
+            .with_contributor(Arc::new(PackageWithoutRootContributor {
+                root: root.clone(),
+            }))
             .build()
             .await;
         assert!(matches!(
@@ -2988,11 +3031,13 @@ mod test {
         let cross_producer = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("spoof-attempt"),
                 roots: vec![WorkspaceRoot::new("claimed", root.clone())],
             }))
-            .with_toolchain(Arc::new(PackageWithoutRootToolchain { root: root.clone() }))
+            .with_contributor(Arc::new(PackageWithoutRootContributor {
+                root: root.clone(),
+            }))
             .build()
             .await;
         assert!(matches!(
@@ -3004,7 +3049,7 @@ mod test {
         PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("empty-no-op"),
                 roots: Vec::new(),
             }))
@@ -3056,7 +3101,7 @@ mod test {
         let result = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-cargo-adapter"),
                 roots: vec![
                     WorkspaceRoot::new("cargo", root.join_component("first")),
@@ -3085,7 +3130,7 @@ mod test {
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-symlink"),
                 roots: vec![
                     WorkspaceRoot::new("future-build", physical),
@@ -3119,7 +3164,7 @@ mod test {
         let result = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(Arc::new(RootObservingToolchain {
+            .with_contributor(Arc::new(RootObservingContributor {
                 id: ToolchainId::new("future-symlink-escape"),
                 roots: vec![WorkspaceRoot::new("future-build", unresolved_root.clone())],
             }))

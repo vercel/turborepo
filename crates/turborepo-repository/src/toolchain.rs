@@ -1,9 +1,8 @@
-//! Toolchains: the abstraction that makes Turborepo generic over language
-//! ecosystems.
+//! Repository contributors: construction-time adapters for language ecosystems.
 //!
-//! A [`Toolchain`] discovers ecosystem packages and contributes immutable
-//! observations. JavaScript is the first implementation
-//! ([`JavaScriptToolchain`]); additional producers (e.g. Cargo) register
+//! A [`RepositoryContributor`] discovers ecosystem packages and contributes
+//! immutable observations. JavaScript is the first implementation
+//! ([`JavaScriptContributor`]); additional producers (e.g. Cargo) register
 //! alongside it during package-graph construction.
 //!
 //! # Design rules
@@ -17,8 +16,8 @@
 //!    internal graph types, no lifetime-carrying views, no callbacks.
 //! 2. [`ToolchainId`] is an open identifier, never a closed enum. A future
 //!    toolchain (or plugin) mints a new id without touching existing code.
-//! 3. The [`ToolchainRegistry`] is construction-scoped. Runtime consumers use
-//!    immutable knowledge retained by the completed package graph.
+//! 3. Contributors are construction-scoped. Runtime consumers use immutable
+//!    knowledge retained by the completed package graph.
 //!
 //! # Known debt
 //!
@@ -29,10 +28,10 @@
 //! goes away. When the list is empty, JavaScript is fully behind the
 //! abstraction.
 //!
-//! - [`JavaScriptToolchain::package_manager`]: package-manager resolution feeds
-//!   dependency splitting and lockfile handling in the package graph builder.
-//!   Lockfile handling gains a trait surface with external dependency hashing;
-//!   dependency splitting remains JS-native for now.
+//! - [`JavaScriptContributor::package_manager`]: package-manager resolution
+//!   feeds dependency splitting and lockfile handling in the package graph
+//!   builder. Lockfile handling gains a trait surface with external dependency
+//!   hashing; dependency splitting remains JS-native for now.
 //! - The prune command's JavaScript machinery (lockfile subgraphing,
 //!   workspace-file rewriting, patches) remains on its native path rather than
 //!   the immutable prune-knowledge path.
@@ -169,7 +168,7 @@ impl WorkspaceRoot {
     }
 }
 
-/// One toolchain's package/scope and native workspace-root observations.
+/// One contributor's package/scope and native workspace-root observations.
 #[derive(Debug, Default)]
 pub struct DiscoveredPackages {
     packages: Vec<DiscoveredPackage>,
@@ -338,9 +337,8 @@ pub enum Error {
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
-/// The future returned by [`Toolchain::discover_packages`]. Boxed so the
-/// trait stays object-safe; toolchains live behind `dyn Toolchain` in the
-/// [`ToolchainRegistry`].
+/// The future returned by [`RepositoryContributor::discover_packages`]. Boxed
+/// so the contributor trait stays object-safe.
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
 
@@ -391,12 +389,12 @@ pub fn override_task_command(
 /// A language ecosystem that contributes packages to the repository.
 ///
 /// See the module docs for the design rules trait methods must follow.
-pub trait Toolchain: Send + Sync {
-    /// This toolchain's identifier.
+pub trait RepositoryContributor: Send + Sync {
+    /// This contributor's ecosystem identifier.
     fn id(&self) -> ToolchainId;
 
-    /// Discover this toolchain's packages/scopes and native workspace roots in
-    /// one observation envelope.
+    /// Discover this contributor's packages/scopes and native workspace roots
+    /// in one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 }
 
@@ -541,75 +539,20 @@ pub struct DerivedTaskIO {
     pub outputs: DerivedOutputs,
 }
 
-/// The construction-scoped set of producers contributing repository knowledge.
-///
-/// Entries are registered statically during package graph construction and the
-/// registry is dropped after immutable knowledge is built. A future plugin
-/// system could construct entries from a manifest without changing runtime
-/// consumers.
-#[derive(Default)]
-pub struct ToolchainRegistry {
-    toolchains: Vec<Arc<dyn Toolchain>>,
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("toolchain {id} was registered more than once")]
-pub struct DuplicateToolchainError {
-    pub id: ToolchainId,
-}
-
-impl ToolchainRegistry {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a toolchain. Registration order is discovery order.
-    pub fn register(
-        &mut self,
-        toolchain: Arc<dyn Toolchain>,
-    ) -> Result<(), DuplicateToolchainError> {
-        let id = toolchain.id();
-        if self.get(&id).is_some() {
-            return Err(DuplicateToolchainError { id });
-        }
-        self.toolchains.push(toolchain);
-        Ok(())
-    }
-
-    pub fn get(&self, id: &ToolchainId) -> Option<&dyn Toolchain> {
-        self.toolchains
-            .iter()
-            .find(|toolchain| toolchain.id() == *id)
-            .map(AsRef::as_ref)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &dyn Toolchain> {
-        self.toolchains.iter().map(AsRef::as_ref)
-    }
-}
-
-impl fmt::Debug for ToolchainRegistry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(self.toolchains.iter().map(|toolchain| toolchain.id()))
-            .finish()
-    }
-}
-
-/// The JavaScript toolchain: packages discovered from `package.json`
+/// The JavaScript contributor: packages discovered from `package.json`
 /// manifests.
 ///
 /// Wraps a [`PackageDiscovery`] strategy (local filesystem walk,
 /// daemon-backed, or a composition) — the strategy decides *how* manifests
-/// are found, the toolchain owns *what a JavaScript package is*: it loads
+/// are found, the contributor owns *what a JavaScript package is*: it loads
 /// and parses each manifest into the package descriptor.
-pub struct JavaScriptToolchain<P> {
+pub struct JavaScriptContributor<P> {
     discovery: P,
     repo_root: AbsoluteSystemPathBuf,
     known_package_manager: Option<PackageManager>,
 }
 
-impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
+impl<P: PackageDiscovery + Send + Sync> JavaScriptContributor<P> {
     pub fn new(
         discovery: P,
         repo_root: AbsoluteSystemPathBuf,
@@ -686,7 +629,7 @@ pub(crate) fn package_manager_command(
     (package_manager_binary.as_os_str().to_owned(), Vec::new())
 }
 
-impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
+impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptContributor<P> {
     fn id(&self) -> ToolchainId {
         ToolchainId::JAVASCRIPT
     }
@@ -873,7 +816,7 @@ mod tests {
         package_json
             .create_with_contents(r#"{"name":"app"}"#)
             .unwrap();
-        let toolchain = JavaScriptToolchain::new(
+        let toolchain = JavaScriptContributor::new(
             StubDiscovery(discovery::DiscoveryResponse {
                 workspaces: vec![discovery::WorkspaceData {
                     package_json,
@@ -1029,35 +972,5 @@ mod tests {
 
         assert_eq!(program, npm_cmd.into_os_string());
         assert!(args.is_empty());
-    }
-
-    #[test]
-    fn test_registry_lookup() {
-        struct Fake(ToolchainId);
-        impl Toolchain for Fake {
-            fn id(&self) -> ToolchainId {
-                self.0.clone()
-            }
-            fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
-                Box::pin(async { Ok(DiscoveredPackages::default()) })
-            }
-        }
-
-        let mut registry = ToolchainRegistry::new();
-        registry
-            .register(Arc::new(Fake(ToolchainId::JAVASCRIPT)))
-            .unwrap();
-        registry
-            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
-            .unwrap();
-        let duplicate = registry
-            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
-            .unwrap_err();
-        assert_eq!(duplicate.id, ToolchainId::new("gleam"));
-
-        assert!(registry.get(&ToolchainId::JAVASCRIPT).is_some());
-        assert!(registry.get(&ToolchainId::new("gleam")).is_some());
-        assert!(registry.get(&ToolchainId::new("zig")).is_none());
-        assert_eq!(registry.iter().count(), 2);
     }
 }

@@ -31,7 +31,7 @@ pub struct ScopeTaskContract {
     defaults: TaskDefaults,
     /// Startup environment patterns this scope needs for derived I/O.
     env_vars: Vec<&'static str>,
-    /// Toolchain provenance when the observation came from a known ecosystem.
+    /// Ecosystem provenance when the observation came from a known producer.
     toolchain: Option<ToolchainId>,
     cargo: Option<crate::cargo::CargoTaskContract>,
     static_defaults: BTreeMap<String, TaskDefaults>,

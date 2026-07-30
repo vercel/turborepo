@@ -47,7 +47,7 @@ pub struct ExecutionSummary<'a> {
 
 /// Totals for reuse below the task boundary: work units a tool running
 /// inside a task fetched from (hits) or had to rebuild (misses) via the
-/// incremental cache. Toolchain-agnostic — for Rust this is sccache
+/// incremental cache. Ecosystem-agnostic — for Rust this is sccache
 /// compile units served through the Remote Cache; other toolchains can
 /// contribute the same shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

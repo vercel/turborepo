@@ -348,11 +348,11 @@ pub async fn daemon_server(
             move |args| {
                 // Mirror the run builder: the daemon-side watcher must see
                 // the same package set a run would.
-                let mut extra_toolchains: Vec<
-                    std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
+                let mut extra_contributors: Vec<
+                    std::sync::Arc<dyn turborepo_repository::toolchain::RepositoryContributor>,
                 > = Vec::new();
                 if cargo_enabled {
-                    extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
+                    extra_contributors.push(turborepo_repository::cargo::CargoContributor::new(
                         args.repo_root.clone(),
                     ));
                 }
@@ -363,7 +363,7 @@ pub async fn daemon_server(
                     args.custom_turbo_json_path,
                     false,
                     args.allow_no_package_manager,
-                    extra_toolchains,
+                    extra_contributors,
                 )
             }
         },
