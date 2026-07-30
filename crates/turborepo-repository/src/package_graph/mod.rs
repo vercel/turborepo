@@ -225,6 +225,7 @@ pub struct PackageTaskContext<'a> {
     package: PackageName,
     repository_root: &'a AbsoluteSystemPath,
     directory: &'a AnchoredSystemPath,
+    definition_path: Option<&'a AnchoredSystemPath>,
     package_info: Option<&'a PackageInfo>,
     external_declarations: &'a ExternalDeclarations,
     native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
@@ -300,6 +301,7 @@ impl<'a> PackageTaskContext<'a> {
             package,
             repository_root,
             directory,
+            definition_path: None,
             package_info,
             external_declarations,
             native_tasks,
@@ -320,6 +322,17 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn directory(&self) -> &'a AnchoredSystemPath {
         self.directory
+    }
+
+    /// Whether this real package/root scope is defined by package.json.
+    pub fn is_package_json_scope(&self) -> bool {
+        is_package_json_definition(
+            matches!(
+                self.kind,
+                PackageTaskContextKind::Root | PackageTaskContextKind::Package
+            ),
+            self.definition_path,
+        )
     }
 
     pub fn package_info(&self) -> Option<&'a PackageInfo> {
@@ -369,9 +382,29 @@ impl<'a> PackageGraphNodeView<'a> {
         self.definition_path
     }
 
+    /// Whether this real package/root scope is defined by package.json.
+    pub fn is_package_json_scope(&self) -> bool {
+        is_package_json_definition(
+            matches!(
+                self.kind,
+                PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
+            ),
+            self.definition_path,
+        )
+    }
+
     pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
         self.toolchain
     }
+}
+
+fn is_package_json_definition(
+    is_package_scope: bool,
+    definition_path: Option<&AnchoredSystemPath>,
+) -> bool {
+    is_package_scope
+        && definition_path
+            .is_some_and(|path| path.as_path().file_name() == Some("package.json".as_ref()))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -874,31 +907,35 @@ impl PackageGraph {
     /// required to construct a context. The root identity denotes Turbo's root
     /// task namespace and is always anchored at the repository directory.
     pub fn package_task_context(&self, package: &PackageName) -> Option<PackageTaskContext<'_>> {
-        let (package, directory, kind, toolchain, requires_compatibility_payload) = match package {
-            PackageName::Root => (
-                PackageName::Root,
-                self.knowledge.repository_directory(),
-                PackageTaskContextKind::Root,
-                self.knowledge
-                    .root_javascript_scope()
-                    .map(|scope| scope.toolchain()),
-                self.knowledge.root_javascript_scope().is_some(),
-            ),
-            PackageName::Other(name) => {
-                let scope = self.knowledge.scope(name)?;
-                let kind = match scope.kind() {
-                    crate::knowledge::ScopeKind::Package => PackageTaskContextKind::Package,
-                    crate::knowledge::ScopeKind::Aggregate => PackageTaskContextKind::Aggregate,
-                };
-                (
-                    PackageName::Other(scope.identity().to_owned()),
-                    scope.directory(),
-                    kind,
-                    Some(scope.toolchain()),
-                    true,
-                )
-            }
-        };
+        let (package, directory, definition_path, kind, toolchain, requires_compatibility_payload) =
+            match package {
+                PackageName::Root => {
+                    let scope = self.knowledge.root_javascript_scope();
+                    (
+                        PackageName::Root,
+                        self.knowledge.repository_directory(),
+                        scope.map(|scope| scope.definition_path()),
+                        PackageTaskContextKind::Root,
+                        scope.map(|scope| scope.toolchain()),
+                        scope.is_some(),
+                    )
+                }
+                PackageName::Other(name) => {
+                    let scope = self.knowledge.scope(name)?;
+                    let kind = match scope.kind() {
+                        crate::knowledge::ScopeKind::Package => PackageTaskContextKind::Package,
+                        crate::knowledge::ScopeKind::Aggregate => PackageTaskContextKind::Aggregate,
+                    };
+                    (
+                        PackageName::Other(scope.identity().to_owned()),
+                        scope.directory(),
+                        Some(scope.definition_path()),
+                        kind,
+                        Some(scope.toolchain()),
+                        true,
+                    )
+                }
+            };
         let package_info = self.package_payloads.get(&package);
         let native_tasks = self.native_task_knowledge.for_scope(package.as_str());
         let task_contract = self.task_contract_knowledge.for_scope(package.as_str());
@@ -907,6 +944,7 @@ impl PackageGraph {
             package,
             repository_root: self.knowledge.repository_root(),
             directory,
+            definition_path,
             package_info,
             external_declarations: self.external_declaration_view(),
             native_tasks,
@@ -1674,6 +1712,30 @@ mod test {
         },
         discovery::PackageDiscovery,
     };
+
+    #[test]
+    fn package_json_scope_is_independent_of_toolchain_provenance() {
+        let custom_toolchain = crate::toolchain::ToolchainId::new("custom");
+        let package_json = AnchoredSystemPath::new("packages/app/package.json").unwrap();
+        let custom_view = PackageGraphNodeView {
+            kind: PackageGraphNodeKind::Package,
+            name_source: None,
+            directory: None,
+            definition_path: Some(package_json),
+            toolchain: Some(&custom_toolchain),
+        };
+        assert!(custom_view.is_package_json_scope());
+
+        let cargo_toml = AnchoredSystemPath::new("packages/app/Cargo.toml").unwrap();
+        let javascript_view = PackageGraphNodeView {
+            kind: PackageGraphNodeKind::Package,
+            name_source: None,
+            directory: None,
+            definition_path: Some(cargo_toml),
+            toolchain: Some(&crate::toolchain::ToolchainId::JAVASCRIPT),
+        };
+        assert!(!javascript_view.is_package_json_scope());
+    }
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {

@@ -115,7 +115,7 @@ pub enum CommandProviderError {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
-    #[error("Package {package_name} is not a JavaScript package execution scope.")]
+    #[error("Package {package_name} is not a package.json-backed package execution scope.")]
     InvalidMfePackageContext { package_name: PackageName },
     #[error("Package directory {directory} is outside repository root {repository_root}.")]
     PackageDirectoryOutsideRepository {
@@ -429,9 +429,9 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
         Self::validate_package_context(context)
     }
 
-    fn validate_package_context(
-        context: PackageTaskContext<'_>,
-    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
+    fn validate_package_context<'b>(
+        context: PackageTaskContext<'b>,
+    ) -> Result<PackageTaskContext<'b>, CommandProviderError> {
         let package_directory = context.repository_root().resolve(context.directory());
         if !context.repository_root().contains(&package_directory) {
             return Err(CommandProviderError::PackageDirectoryOutsideRepository {
@@ -439,10 +439,7 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
                 directory: package_directory.to_string(),
             });
         }
-        if context.toolchain() != Some(&turborepo_repository::toolchain::ToolchainId::JAVASCRIPT)
-            || context.kind()
-                == turborepo_repository::package_graph::PackageTaskContextKind::Aggregate
-        {
+        if !context.is_package_json_scope() {
             return Err(CommandProviderError::InvalidMfePackageContext {
                 package_name: context.package().clone(),
             });
@@ -752,6 +749,42 @@ mod tests {
             .with_package_manager(PackageManager::Npm)
             .with_package_jsons(Some(HashMap::new()))
             .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn cargo_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"member\"]\n\n[workspace.metadata]\nname = \
+                 \"workspace\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["member", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"member\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        PackageGraph::builder_optional(repo_root, None)
+            .with_cargo()
             .build()
             .await
             .unwrap()
@@ -1152,5 +1185,22 @@ mod tests {
                 .as_std_path()
                 .as_os_str()
         );
+    }
+
+    #[tokio::test]
+    async fn test_microfrontend_proxy_rejects_cargo_package_context() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = cargo_package_graph(&repo_root).await;
+        let error = MicroFrontendProxyProvider::<MockMfeConfig>::validate_package_context(
+            graph
+                .package_task_context(&PackageName::from("member"))
+                .expect("Cargo member context"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CommandProviderError::InvalidMfePackageContext { .. }
+        ));
     }
 }
