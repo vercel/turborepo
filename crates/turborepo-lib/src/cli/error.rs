@@ -145,7 +145,7 @@ mod tests {
         assert!(matches!(cli_err, Error::GetMfePort(_)));
         assert_eq!(
             cli_err.to_string(),
-            "No package.json found in current directory"
+            "Current directory does not belong to a named JavaScript package"
         );
 
         // Test NoPackageName error
