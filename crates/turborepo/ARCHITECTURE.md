@@ -155,7 +155,7 @@ Represents the workspace structure and package dependencies:
   consumes the normalized external declaration view; inline and deferred
   lockfile closure calculation create the same immutable snapshot. Cargo
   contributes per-crate closures, the aggregate workspace union, and the full
-  `rustc -vV` identity from the same sets used by compatibility payloads. Cargo
+  `rustc -vV` identity directly through its external-resolution domain. Cargo
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
   identities, definition sources, completeness, and stable fingerprints. A
@@ -281,6 +281,15 @@ detection is deferred to the task graph layer (engine builder), since
 package-level cycles only matter when they produce task-level cycles via
 topological (`^`) dependencies.
 
+Normalized relationship knowledge also records whether an internal relationship
+orders tasks. Named core projections keep ordering, filtering, and package prune
+closures acyclic while hash and affectedness projections include non-ordering
+inputs. Cargo uses this distinction for cycle-closing development dependencies:
+their sources still invalidate and affect consumers without creating task graph
+cycles. Cargo path, development, optional, build, target-specific, and automatic
+member relationships are emitted directly from `cargo metadata`; no synthetic
+JavaScript dependency maps or behavioral affectedness callback remain.
+
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
 The package graph is generic over language toolchains. The existing discovery
@@ -389,14 +398,14 @@ whether anything changed; Cargo decides how and in what order to build.**
   same-named JavaScript scripts runnable without their usual turbo.json
   definition. The names come from the same verb tables as command resolution
   and participate in task suggestions and add-all/query graph construction.
-- **Hashing and affectedness** (`Toolchain::derived_task_io` and
-  `Toolchain::additional_affected_packages`): crate-scoped tasks hash their own
+- **Hashing and affectedness** (`HashRelationships`, `AffectedRelationships`,
+  and `Toolchain::derived_task_io`): crate-scoped tasks hash their own
   sources plus a conservative transitive closure of declared local Cargo
   dependencies (flattened, so invalidation doesn't depend on `dependsOn`
   wiring). The closure may include optional or target-specific dependencies not
-  compiled by a particular invocation. It is retained separately from the
-  package graph so cycle-closing dev-dependency edges still invalidate and mark
-  their consumers affected. Tasks also hash the
+  compiled by a particular invocation. Non-ordering relationship inputs retain
+  cycle-closing development edges so they still invalidate and mark their
+  consumers affected. Tasks also hash the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
   and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
   compiler and rustdoc selection and flags, Cargo build/profile/target

@@ -997,7 +997,6 @@ mod test {
                         "cargo-workspace".to_string(),
                         PackageJson::default(),
                         self.definition_path.clone(),
-                        None,
                     )],
                     vec![WorkspaceRoot::new("cargo", root)],
                 ))

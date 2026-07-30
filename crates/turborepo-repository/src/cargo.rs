@@ -364,10 +364,6 @@ pub struct CargoPackageDetails {
     /// The crate's directory, repo-root-relative in unix form (empty for
     /// the workspace aggregate).
     pub dir: String,
-    /// A conservative transitive closure of declared local dependencies. This
-    /// is separate from the package graph because Cargo permits dev-dependency
-    /// cycles while Turborepo's package graph must remain acyclic.
-    pub compilation_dependencies: Vec<String>,
 }
 
 const VERIFICATION_SUBCOMMANDS: &[(&str, &str)] = &[
@@ -1193,26 +1189,6 @@ impl Toolchain for CargoToolchain {
         self.owns_context(package) && package.native_tasks().defines(task)
     }
 
-    fn additional_affected_packages(&self, package: &str) -> Vec<String> {
-        let details = self
-            .details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut affected: Vec<_> = details
-            .iter()
-            .filter(|(_, details)| details.kind != CargoPackageKind::Workspace)
-            .filter(|(_, details)| {
-                details
-                    .compilation_dependencies
-                    .iter()
-                    .any(|dependency| dependency == package)
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
-        affected.sort();
-        affected
-    }
-
     fn select_task_entrypoints(
         &self,
         task: &str,
@@ -1433,7 +1409,7 @@ impl Toolchain for CargoToolchain {
         }
 
         // Source globs for the crates whose code this task compiles,
-        // filtered to real crates (the synthetic workspace package has no
+        // filtered to real crates (the workspace aggregate has no
         // sources of its own).
         let dependency_globs = || {
             let mut globs: Vec<String> = dependencies
@@ -1447,11 +1423,6 @@ impl Toolchain for CargoToolchain {
                     crate_source_globs(path_to_root, dep.directory().to_unix().as_str())
                 })
                 .collect();
-            for dependency in &details.compilation_dependencies {
-                if let Some(dependency) = self.package_details(dependency) {
-                    globs.extend(crate_source_globs(path_to_root, &dependency.dir));
-                }
-            }
             globs.sort();
             globs.dedup();
             globs
@@ -1607,13 +1578,7 @@ impl Toolchain for CargoToolchain {
             let mut resolutions = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
             for cargo_crate in crates {
-                let relationships = cargo_crate
-                    .internal_dependencies
-                    .iter()
-                    .map(|dependency| {
-                        Relationship::internal(dependency, DependencyKind::Production)
-                    })
-                    .collect();
+                let relationships = cargo_crate.relationships.clone();
                 let kind = if cargo_crate.is_entrypoint() {
                     CargoPackageKind::Entrypoint
                 } else {
@@ -1632,7 +1597,6 @@ impl Toolchain for CargoToolchain {
                     deliverables: cargo_crate.deliverables,
                     manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
                     dir,
-                    compilation_dependencies: cargo_crate.compilation_dependencies,
                 };
                 let native_tasks = native_tasks_for_package(&details, &cargo_crate.name);
                 self.record_details(cargo_crate.name.clone(), details);
@@ -1652,14 +1616,13 @@ impl Toolchain for CargoToolchain {
                         Some(cargo_crate.name.clone()),
                         PackageJson::default(),
                         cargo_crate.manifest_path,
-                        Some(external_dependencies),
                     )
                     .with_native_relationships(relationships)
                     .with_native_tasks(native_tasks),
                 );
             }
 
-            // The synthetic workspace package, anchored at the root
+            // The workspace aggregate, anchored at the root
             // Cargo.toml and named by the user via `[workspace.metadata]
             // name`. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
@@ -1669,7 +1632,6 @@ impl Toolchain for CargoToolchain {
                     deliverables: Vec::new(),
                     manifest_alters_output_layout: false,
                     dir: String::new(),
-                    compilation_dependencies: Vec::new(),
                 };
                 let workspace_native_tasks =
                     native_tasks_for_package(&workspace_details, &workspace_name);
@@ -1688,9 +1650,6 @@ impl Toolchain for CargoToolchain {
                         workspace_name,
                         PackageJson::default(),
                         self.repo_root.join_component(CARGO_TOML),
-                        // Workspace-scoped verbs run every crate, so the union
-                        // of all closures is this package's external surface.
-                        Some(workspace_externals),
                     )
                     .with_native_relationships(relationships)
                     .with_native_tasks(workspace_native_tasks),
@@ -1777,14 +1736,10 @@ pub struct CargoCrate {
     pub name: String,
     /// Absolute path to the crate's `Cargo.toml`.
     pub manifest_path: AbsoluteSystemPathBuf,
-    /// Names of other workspace crates this crate depends on, resolved by
-    /// Cargo itself (`cargo metadata`). Dev-dependency edges that would form
-    /// a cycle are dropped, since Cargo permits dev-dep cycles but the
-    /// package graph must remain a DAG.
-    pub internal_dependencies: Vec<String>,
-    /// A conservative transitive closure of declared local dependencies,
-    /// including dev-dependency edges omitted from `internal_dependencies`.
-    pub compilation_dependencies: Vec<String>,
+    /// Direct relationships to other workspace crates, resolved by Cargo.
+    /// Development edges that would make task ordering cyclic remain as
+    /// hash/affectedness inputs without participating in ordering.
+    pub relationships: Vec<Relationship>,
     /// The crate's deliverable targets. Non-empty exactly when the crate is
     /// an entrypoint (has `bin`/`cdylib`/`staticlib` targets).
     pub deliverables: Vec<Deliverable>,
@@ -2105,7 +2060,7 @@ struct ParsedCrate {
 /// A path dependency resolved to the directory Cargo reports for it.
 struct ResolvedDep {
     dir: AbsoluteSystemPathBuf,
-    dev: bool,
+    kind: DependencyKind,
 }
 
 /// Normalize a path reported by `cargo metadata` into an
@@ -2217,7 +2172,13 @@ fn parse_members(
                 let dir = metadata_path(&path)?;
                 Some(ResolvedDep {
                     dir,
-                    dev: dep.kind.as_deref() == Some("dev"),
+                    kind: if dep.kind.as_deref() == Some("dev") {
+                        DependencyKind::Development
+                    } else if dep.optional {
+                        DependencyKind::Optional
+                    } else {
+                        DependencyKind::Production
+                    },
                 })
             })
             .collect();
@@ -2234,9 +2195,10 @@ fn parse_members(
     parsed
 }
 
-/// Resolve dependency edges to crate names by manifest directory and drop
-/// dev-dependency edges that would form a cycle (Cargo permits dev-dep
-/// cycles; the package graph is a DAG).
+/// Resolve dependency edges to crate names by manifest directory. Development
+/// edges that would form a cycle remain compilation inputs but do not order
+/// tasks, since Cargo permits dev-dependency cycles while the task graph is a
+/// DAG.
 fn connect_crates(parsed: Vec<ParsedCrate>) -> Vec<CargoCrate> {
     let dir_to_name: HashMap<&AbsoluteSystemPath, &str> = parsed
         .iter()
@@ -2244,12 +2206,12 @@ fn connect_crates(parsed: Vec<ParsedCrate>) -> Vec<CargoCrate> {
         .collect();
 
     let mut adjacency: HashMap<&str, BTreeSet<&str>> = HashMap::new();
-    let mut compilation_adjacency: HashMap<&str, BTreeSet<&str>> = HashMap::new();
-    let mut dev_edges: Vec<(&str, &str)> = Vec::new();
+    let mut relationships: HashMap<String, Vec<Relationship>> = HashMap::new();
+    let mut dev_edges: Vec<(&str, &str, DependencyKind)> = Vec::new();
     for parsed_crate in &parsed {
         let from = parsed_crate.name.as_str();
         adjacency.entry(from).or_default();
-        compilation_adjacency.entry(from).or_default();
+        relationships.entry(from.to_string()).or_default();
         for dep in &parsed_crate.dependencies {
             let Some(&to) = dir_to_name.get(&*dep.dir) else {
                 // Path dependency on a non-member (e.g. outside the repo).
@@ -2258,80 +2220,58 @@ fn connect_crates(parsed: Vec<ParsedCrate>) -> Vec<CargoCrate> {
             if to == from {
                 continue;
             }
-            compilation_adjacency.entry(from).or_default().insert(to);
-            if dep.dev {
-                dev_edges.push((from, to));
+            if dep.kind == DependencyKind::Development {
+                dev_edges.push((from, to, dep.kind));
             } else {
                 adjacency.entry(from).or_default().insert(to);
+                relationships
+                    .entry(from.to_string())
+                    .or_default()
+                    .push(Relationship::internal(to, dep.kind));
             }
         }
     }
     // Deterministic order so the same dev edge always wins when a cycle must
     // be broken.
-    dev_edges.sort_unstable();
+    dev_edges.sort_unstable_by(|left, right| (left.0, left.1).cmp(&(right.0, right.1)));
     dev_edges.dedup();
-    for (from, to) in dev_edges {
+    for (from, to, kind) in dev_edges {
         if reaches(&adjacency, to, from) {
             tracing::debug!(
                 "dropping dev-dependency edge {from} -> {to}: it would create a cycle in the \
                  package graph"
             );
+            relationships
+                .entry(from.to_string())
+                .or_default()
+                .push(Relationship::internal_input(to, kind));
         } else {
             adjacency.entry(from).or_default().insert(to);
+            relationships
+                .entry(from.to_string())
+                .or_default()
+                .push(Relationship::internal(to, kind));
         }
     }
-
-    let mut edges: HashMap<String, Vec<String>> = adjacency
-        .into_iter()
-        .map(|(name, deps)| {
-            (
-                name.to_string(),
-                deps.into_iter().map(String::from).collect(),
-            )
-        })
-        .collect();
-    let mut compilation_dependencies: HashMap<String, Vec<String>> = parsed
-        .iter()
-        .map(|parsed_crate| {
-            (
-                parsed_crate.name.clone(),
-                transitive_dependencies(&compilation_adjacency, &parsed_crate.name),
-            )
-        })
-        .collect();
 
     parsed
         .into_iter()
-        .map(|parsed_crate| CargoCrate {
-            internal_dependencies: edges.remove(parsed_crate.name.as_str()).unwrap_or_default(),
-            compilation_dependencies: compilation_dependencies
+        .map(|parsed_crate| {
+            let mut crate_relationships = relationships
                 .remove(parsed_crate.name.as_str())
-                .unwrap_or_default(),
-            name: parsed_crate.name,
-            manifest_path: parsed_crate.manifest_path,
-            deliverables: parsed_crate.deliverables,
-            manifest_alters_output_layout: parsed_crate.manifest_alters_output_layout,
+                .unwrap_or_default();
+            crate_relationships
+                .sort_by(|left, right| left.declaration_name().cmp(right.declaration_name()));
+            crate_relationships.dedup();
+            CargoCrate {
+                relationships: crate_relationships,
+                name: parsed_crate.name,
+                manifest_path: parsed_crate.manifest_path,
+                deliverables: parsed_crate.deliverables,
+                manifest_alters_output_layout: parsed_crate.manifest_alters_output_layout,
+            }
         })
         .collect()
-}
-
-fn transitive_dependencies(adjacency: &HashMap<&str, BTreeSet<&str>>, start: &str) -> Vec<String> {
-    let mut stack = vec![start];
-    let mut visited = HashSet::from([start]);
-    let mut dependencies = BTreeSet::new();
-    while let Some(node) = stack.pop() {
-        if let Some(next) = adjacency.get(node) {
-            for &dependency in next {
-                if visited.insert(dependency) {
-                    stack.push(dependency);
-                }
-                if dependency != start {
-                    dependencies.insert(dependency);
-                }
-            }
-        }
-    }
-    dependencies.into_iter().map(String::from).collect()
 }
 
 /// Whether `target` is reachable from `start` in the current adjacency map.
@@ -2386,6 +2326,8 @@ struct MetadataDependency {
     path: Option<String>,
     /// `null` for normal deps, `"dev"` or `"build"` otherwise.
     kind: Option<String>,
+    #[serde(default)]
+    optional: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2425,7 +2367,6 @@ mod test {
             deliverables,
             manifest_alters_output_layout: false,
             dir: "crate".to_string(),
-            compilation_dependencies: Vec::new(),
         };
         let deliverable = |name: &str, kind| Deliverable {
             name: name.to_string(),
@@ -2743,7 +2684,6 @@ dependencies = ["lib-a"]
             }],
             manifest_alters_output_layout: false,
             dir: "crates/app".to_string(),
-            compilation_dependencies: Vec::new(),
         }
     }
 
@@ -3326,7 +3266,10 @@ release: 1.96.0-nightly\n",
                 kind: DeliverableKind::Bin,
             }]
         );
-        assert_eq!(app.internal_dependencies, vec!["lib-a".to_string()]);
+        assert_eq!(
+            app.relationships,
+            vec![Relationship::internal("lib-a", DependencyKind::Production)]
+        );
 
         let lib_a = &crates[1];
         assert!(
@@ -3335,23 +3278,64 @@ release: 1.96.0-nightly\n",
         );
         assert!(lib_a.deliverables.is_empty());
         // The dev-dep edge lib-a -> lib-a-test-util closes a cycle with the
-        // normal edge lib-a-test-util -> lib-a, so it must be dropped.
-        assert!(
-            lib_a.internal_dependencies.is_empty(),
-            "cycle-closing dev edge should be dropped, got {:?}",
-            lib_a.internal_dependencies
-        );
+        // normal edge lib-a-test-util -> lib-a, so it remains an input without
+        // ordering tasks.
         assert_eq!(
-            lib_a.compilation_dependencies,
-            vec!["lib-a-test-util".to_string()],
-            "verification hashing must retain the dropped dev edge"
+            lib_a.relationships,
+            vec![Relationship::internal_input(
+                "lib-a-test-util",
+                DependencyKind::Development
+            )]
         );
 
         let test_util = &crates[2];
-        assert_eq!(test_util.internal_dependencies, vec!["lib-a".to_string()]);
         assert_eq!(
-            test_util.compilation_dependencies,
-            vec!["lib-a".to_string()]
+            test_util.relationships,
+            vec![Relationship::internal("lib-a", DependencyKind::Production)]
+        );
+    }
+
+    #[test]
+    fn test_discover_crates_preserves_relationship_kinds() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "Cargo.toml"],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\noptional-lib = { path = \"../optional-lib\", optional = \
+             true }\n\n[build-dependencies]\nbuild-lib = { path = \"../build-lib\" \
+             }\n\n[target.'cfg(target_os = \"none\")'.dependencies]\ntarget-lib = { path = \
+             \"../target-lib\" }\n",
+        );
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+        for name in ["optional-lib", "build-lib", "target-lib"] {
+            write(
+                &root,
+                &["crates", name, "Cargo.toml"],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+
+        let workspace = discover_crates(&root).unwrap();
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+
+        assert_eq!(
+            app.relationships,
+            vec![
+                Relationship::internal("build-lib", DependencyKind::Production),
+                Relationship::internal("optional-lib", DependencyKind::Optional),
+                Relationship::internal("target-lib", DependencyKind::Production),
+            ]
         );
     }
 
@@ -3500,7 +3484,10 @@ release: 1.96.0-nightly\n",
             crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
             vec!["app", "helper"]
         );
-        assert_eq!(crates[0].internal_dependencies, vec!["helper".to_string()]);
+        assert_eq!(
+            crates[0].relationships,
+            vec![Relationship::internal("helper", DependencyKind::Production)]
+        );
     }
 
     #[test]
@@ -3635,6 +3622,12 @@ release: 1.96.0-nightly\n",
                 .iter()
                 .any(|identity| identity.key() == "rustc")
         }));
+        assert!(
+            resolution_packages
+                .iter()
+                .all(|package| package.identities().len() == 1),
+            "the all-local fixture should expose only compiler identities"
+        );
         let mut packages: Vec<_> = packages
             .into_iter()
             .map(DiscoveredPackage::into_parts)
@@ -3646,23 +3639,6 @@ release: 1.96.0-nightly\n",
             .map(|package| package.name.as_deref().unwrap())
             .collect();
         assert_eq!(names, vec!["app", "fixture-ws", "lib-a", "lib-a-test-util"]);
-
-        for package in &packages {
-            let rustc = package
-                .external_dependencies
-                .as_ref()
-                .and_then(|dependencies| {
-                    dependencies
-                        .iter()
-                        .find(|dependency| dependency.key == "rustc")
-                })
-                .expect("compiler identity stamps every Cargo package");
-            let mut lines = rustc.version.lines();
-            assert!(lines.next().is_some_and(|line| line.starts_with("rustc ")));
-            assert!(
-                lines.any(|line| { line.starts_with("host: ") && line.len() > "host: ".len() })
-            );
-        }
 
         let app = &packages[0];
         assert!(app.descriptor.dependencies.is_none());
@@ -3676,7 +3652,7 @@ release: 1.96.0-nightly\n",
             root.join_components(&["crates", "app", "Cargo.toml"])
         );
 
-        // The synthetic workspace package is anchored at the root manifest
+        // The workspace aggregate is anchored at the root manifest
         // and depends on every crate.
         let workspace = &packages[1];
         assert_eq!(workspace.manifest_path, root.join_component(CARGO_TOML));
@@ -3691,15 +3667,6 @@ release: 1.96.0-nightly\n",
                 Relationship::internal("lib-a-test-util", DependencyKind::Production),
             ]
         );
-
-        // This all-local fixture has no external lockfile dependencies; the
-        // compiler identity is the only external identity.
-        let app_externals = app.external_dependencies.as_ref().unwrap();
-        assert_eq!(app_externals.len(), 1);
-        let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
-        assert_eq!(lib_a_externals.len(), 1);
-        let workspace_externals = workspace.external_dependencies.as_ref().unwrap();
-        assert_eq!(workspace_externals.len(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -4024,9 +3991,17 @@ release: 1.96.0-nightly\n",
 
         let app = package_info("app");
         let lib_a = package_info("lib-a");
+        let test_util = package_info("lib-a-test-util");
         let workspace = package_info("fixture-ws");
         let app_ctx = task_context(&toolchain, &root, "app", "crates/app", Some(&app));
         let lib_ctx = task_context(&toolchain, &root, "lib-a", "crates/lib-a", Some(&lib_a));
+        let test_util_ctx = task_context(
+            &toolchain,
+            &root,
+            "lib-a-test-util",
+            "crates/lib-a-test-util",
+            Some(&test_util),
+        );
         let workspace_ctx = task_context(&toolchain, &root, "fixture-ws", "", Some(&workspace));
         let environment = toolchain::TaskIOEnvironment::default();
         let context = toolchain::TaskIOContext {
@@ -4141,8 +4116,9 @@ release: 1.96.0-nightly\n",
 
         // Library verification hashes dev dependencies even when their cycle
         // prevents them from appearing in the package graph.
+        let cycle_inputs = [test_util_ctx];
         let io = toolchain
-            .derived_task_io(&lib_ctx, "test", "../..", &[], true, &context)
+            .derived_task_io(&lib_ctx, "test", "../..", &cycle_inputs, true, &context)
             .expect("library test derives IO");
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(
@@ -4156,7 +4132,7 @@ release: 1.96.0-nightly\n",
         // Library build artifacts are Cargo-internal and cannot be restored as
         // stable Turborepo outputs, so implicit caching fails closed.
         let io = toolchain
-            .derived_task_io(&lib_ctx, "build", "../..", &[], true, &context)
+            .derived_task_io(&lib_ctx, "build", "../..", &cycle_inputs, true, &context)
             .expect("library build derives IO");
         assert_eq!(io.package_default_inputs, Some(true));
         assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);

@@ -25,6 +25,7 @@ pub struct Relationship {
     declaration_alias: Option<String>,
     kind: DependencyKind,
     target: RelationshipTarget,
+    orders_tasks: bool,
 }
 
 impl Relationship {
@@ -43,12 +44,22 @@ impl Relationship {
                 .then_some(declaration_name),
             kind,
             target,
+            orders_tasks: true,
         }
     }
 
     pub fn internal(target: impl Into<String>, kind: DependencyKind) -> Self {
         let target = target.into();
         Self::new(target.clone(), kind, RelationshipTarget::Internal(target))
+    }
+
+    /// Construct an internal relationship that contributes to hashing and
+    /// affectedness without adding a task-ordering edge. Cargo uses this for
+    /// development relationships that would make its package graph cyclic.
+    pub fn internal_input(target: impl Into<String>, kind: DependencyKind) -> Self {
+        let mut relationship = Self::internal(target, kind);
+        relationship.orders_tasks = false;
+        relationship
     }
 
     pub fn declaration_name(&self) -> &str {
@@ -66,5 +77,9 @@ impl Relationship {
 
     pub fn target(&self) -> &RelationshipTarget {
         &self.target
+    }
+
+    pub fn orders_tasks(&self) -> bool {
+        self.orders_tasks
     }
 }

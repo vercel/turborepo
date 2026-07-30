@@ -524,6 +524,9 @@ impl PackageGraphAssembler {
             let mut seen = HashSet::new();
             let mut internal = HashMap::<&str, DependencyKind>::new();
             for relationship in group.relationships() {
+                if !relationship.orders_tasks() {
+                    continue;
+                }
                 if !seen.insert(relationship.declaration_name()) {
                     continue;
                 }
@@ -690,7 +693,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             scope_kind,
             descriptor: json,
             manifest_path,
-            external_dependencies: _,
             native_relationships,
             native_tasks,
         } = package.into_parts();
@@ -762,7 +764,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                             json.name.as_ref().map(|name| name.as_inner().clone()),
                             json,
                             path,
-                            None,
                         ),
                     )
                 }));
@@ -1593,7 +1594,6 @@ mod test {
                         Some("orphan".to_string()),
                         PackageJson::default(),
                         self.root.join_components(&["orphan", "manifest"]),
-                        None,
                     )],
                     Vec::new(),
                 ))
@@ -1654,7 +1654,6 @@ mod test {
             Some(name.to_string()),
             descriptor,
             root.join_components(&["custom-packages", &directory, "custom-manifest"]),
-            None,
         )
     }
 
