@@ -275,8 +275,8 @@ JavaScript reports only the repository root for its authoritative package-manage
 command family; if discovery reports a different family than an explicitly
 resolved manager, the response is rejected. Pnpm versions and Yarn/Berry share
 their respective canonical families. Cargo reports the current workspace root.
-Resolution-domain/root validation remains Phase 3 work; this package/scope
-knowledge validates workspace authorities only.
+Resolution domains are validated against these authoritative roots during
+generation construction.
 
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
@@ -308,6 +308,11 @@ Package-json membership is projected from real scopes with authoritative
 ownership and workspace path dependency splitting consume the same projection;
 duplicate contributed definition owners and physical aliases of the root
 definition are rejected during construction.
+JavaScript discovery and typed pre-parsed manifest input both attach explicit
+JavaScript task contracts; core defaults omitted contracts to empty behavior
+without consulting contributor identity. Generic argv overrides for scopes
+without native tasks are core execution policy; pure-root execution is one case
+and does not depend on whether provenance is present.
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
@@ -318,11 +323,13 @@ prune, query, hashing, and cache paths carry only the feature decision; each
 graph generation creates and drops its own Cargo contributor.
 
 Contract-derived I/O receives the same task-scoped arguments as execution plus
-a narrow, platform-aware startup-environment projection keyed by toolchain.
+a narrow, platform-aware startup-environment projection keyed by an explicit
+contract domain. Dependency source participation is likewise declared by each
+scope contract rather than inferred from contributor provenance.
 Dependency tasks do not inherit arguments for a different requested task, each
-toolchain can observe only the variables it declares, Windows lookup remains
+contract can observe only the variables it declares, Windows lookup remains
 case-insensitive, and every declared pattern automatically participates in task
-hashing. If a user env exclusion matches a projected toolchain I/O variable,
+hashing. If a user env exclusion matches a projected contract-derived I/O variable,
 automatic outputs become unavailable rather than deriving cacheable paths from
 an unhashed value. Derived outputs distinguish exact/resolved paths from
 unavailable automatic resolution. When outputs are unavailable, the engine
@@ -358,7 +365,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   package: automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages
   hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo compatibility producer reports the current workspace root.
+  safely. The Cargo contributor reports the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
@@ -403,10 +410,13 @@ whether anything changed; Cargo decides how and in what order to build.**
   and participate in task suggestions and add-all/query graph construction.
 - **Hashing and affectedness** (`HashRelationships`, `AffectedRelationships`,
   and `TaskContractKnowledge`): crate-scoped tasks hash their own
-  sources plus a conservative transitive closure of declared local Cargo
-  dependencies (flattened, so invalidation doesn't depend on `dependsOn`
-  wiring). The closure may include optional or target-specific dependencies not
-  compiled by a particular invocation. Non-ordering relationship inputs retain
+  sources plus a conservative transitive closure of local dependencies whose
+  scope contracts explicitly include dependency source inputs (Cargo package
+  scopes opt in; the workspace aggregate opts out). Unknown participation makes
+  automatic inputs untracked rather than silently cacheable. The closure is
+  flattened, so invalidation doesn't depend on `dependsOn` wiring, and may
+  include optional or target-specific dependencies not compiled by a particular
+  invocation. Non-ordering relationship inputs retain
   cycle-closing development edges so they still invalidate and mark their
   consumers affected. Tasks also hash the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),

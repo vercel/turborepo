@@ -544,8 +544,9 @@ pub struct DerivedTaskIO {
 ///
 /// Wraps a [`PackageDiscovery`] strategy (local filesystem walk,
 /// daemon-backed, or a composition) — the strategy decides *how* manifests
-/// are found, the contributor owns *what a JavaScript package is*: it loads
-/// and parses each manifest into the package descriptor.
+/// are found, the contributor owns *what a JavaScript package is*: it either
+/// loads and parses discovered manifests or accepts typed pre-parsed manifests,
+/// then attaches the same JavaScript package contract to both paths.
 pub struct JavaScriptContributor<P> {
     discovery: P,
     repo_root: AbsoluteSystemPathBuf,
@@ -583,6 +584,29 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptContributor<P> {
             package_manager.command(),
             self.repo_root.clone(),
         ))
+    }
+
+    fn package_from_json(
+        manifest_path: AbsoluteSystemPathBuf,
+        descriptor: PackageJson,
+    ) -> DiscoveredPackage {
+        let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
+        DiscoveredPackage::package(name, descriptor, manifest_path)
+            .with_task_contract(crate::task_contracts::ScopeTaskContract::javascript())
+    }
+
+    /// Converts typed pre-parsed manifests into the same package and workspace
+    /// observations as filesystem discovery, including explicit JS contracts.
+    pub(crate) async fn discover_preparsed_packages(
+        &self,
+        package_jsons: std::collections::HashMap<AbsoluteSystemPathBuf, PackageJson>,
+    ) -> Result<DiscoveredPackages, Error> {
+        let workspace_root = self.workspace_root().await?;
+        let packages = package_jsons
+            .into_iter()
+            .map(|(path, descriptor)| Self::package_from_json(path, descriptor))
+            .collect();
+        Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
     }
 }
 
@@ -666,12 +690,7 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
                     .into_par_iter()
                     .map(|workspace| {
                         let descriptor = PackageJson::load(&workspace.package_json)?;
-                        let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
-                        Ok(DiscoveredPackage::package(
-                            name,
-                            descriptor,
-                            workspace.package_json,
-                        ))
+                        Ok(Self::package_from_json(workspace.package_json, descriptor))
                     })
                     .collect::<Result<Vec<_>, Error>>()
             })?;
@@ -833,6 +852,16 @@ mod tests {
         assert_eq!(discovered.workspace_roots().len(), 1);
         assert_eq!(discovered.workspace_roots()[0].kind(), "pnpm");
         assert_eq!(discovered.workspace_roots()[0].path(), repo_root.as_ref());
+        let contract = discovered.packages()[0]
+            .clone()
+            .into_parts()
+            .task_contract
+            .expect("JavaScript discovery supplies its task contract");
+        assert_eq!(contract.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+        assert_eq!(
+            contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
+            Some(vec!["node".into()])
+        );
     }
 
     #[test]

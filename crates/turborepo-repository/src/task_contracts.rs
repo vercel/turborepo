@@ -70,6 +70,18 @@ pub enum PrunePackageMode {
     NativeDomain(crate::prune_knowledge::PruneDomainId),
 }
 
+/// Whether this scope's source directory participates in dependent automatic
+/// input derivation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DependencySourceInputs {
+    /// The producer did not classify participation. Consumers must fail closed.
+    Unknown,
+    /// Include this scope's source directory in dependent input closures.
+    Include,
+    /// Authoritatively exclude this scope from dependent source inputs.
+    Exclude,
+}
+
 impl CommandMapTarget {
     fn matches(self, key: &str) -> bool {
         matches!(
@@ -94,6 +106,7 @@ pub struct ScopeTaskContract {
     command_map_target: Option<CommandMapTarget>,
     entrypoint_domain: Option<TaskEntrypointDomain>,
     prune_package_mode: Option<PrunePackageMode>,
+    dependency_source_inputs: DependencySourceInputs,
     cargo: Option<crate::cargo::CargoTaskContract>,
     static_defaults: BTreeMap<String, TaskDefaults>,
     static_io: BTreeMap<String, crate::toolchain::DerivedTaskIO>,
@@ -111,6 +124,7 @@ impl ScopeTaskContract {
             command_map_target: Some(CommandMapTarget::JavaScript),
             entrypoint_domain: None,
             prune_package_mode: Some(PrunePackageMode::JavaScript),
+            dependency_source_inputs: DependencySourceInputs::Exclude,
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -128,6 +142,7 @@ impl ScopeTaskContract {
             command_map_target: None,
             entrypoint_domain: None,
             prune_package_mode: None,
+            dependency_source_inputs: DependencySourceInputs::Unknown,
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -136,6 +151,7 @@ impl ScopeTaskContract {
     }
 
     pub(crate) fn cargo(contract: crate::cargo::CargoTaskContract) -> Self {
+        let dependency_source_inputs = contract.dependency_source_inputs();
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
@@ -149,6 +165,7 @@ impl ScopeTaskContract {
             prune_package_mode: Some(PrunePackageMode::NativeDomain(
                 crate::prune_knowledge::CARGO_PRUNE_DOMAIN.clone(),
             )),
+            dependency_source_inputs,
             cargo: Some(contract),
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
@@ -171,6 +188,7 @@ impl ScopeTaskContract {
             command_map_target: None,
             entrypoint_domain: None,
             prune_package_mode: Some(PrunePackageMode::NativeCopy),
+            dependency_source_inputs: DependencySourceInputs::Unknown,
             cargo: None,
             static_defaults: defaults,
             static_io: io,
@@ -204,6 +222,18 @@ impl ScopeTaskContract {
 
     pub fn with_prune_package_mode(mut self, mode: PrunePackageMode) -> Self {
         self.prune_package_mode = Some(mode);
+        self
+    }
+
+    /// Classifies whether this scope's source directory may participate in a
+    /// dependent task's derived input closure.
+    pub fn dependency_source_inputs(&self) -> DependencySourceInputs {
+        self.dependency_source_inputs
+    }
+
+    /// Explicitly classifies dependency source input participation.
+    pub fn with_dependency_source_inputs(mut self, participation: DependencySourceInputs) -> Self {
+        self.dependency_source_inputs = participation;
         self
     }
 
@@ -407,6 +437,41 @@ mod tests {
                 ("rust".into(), vec!["cargo".into()]),
             ]),
             Some(vec!["cargo".into()])
+        );
+    }
+
+    #[test]
+    fn dependency_source_inputs_are_independent_of_provenance() {
+        let contract = ScopeTaskContract::derived(
+            ToolchainId::new("custom-cargo-producer"),
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .with_dependency_source_inputs(DependencySourceInputs::Include);
+
+        assert_eq!(
+            contract.dependency_source_inputs(),
+            DependencySourceInputs::Include
+        );
+        assert_eq!(
+            ScopeTaskContract::javascript().dependency_source_inputs(),
+            DependencySourceInputs::Exclude
+        );
+        assert_eq!(
+            ScopeTaskContract::empty().dependency_source_inputs(),
+            DependencySourceInputs::Unknown
+        );
+        let excluded = ScopeTaskContract::derived(
+            ToolchainId::new("custom-aggregate"),
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .with_dependency_source_inputs(DependencySourceInputs::Exclude);
+        assert_eq!(
+            excluded.dependency_source_inputs(),
+            DependencySourceInputs::Exclude
         );
     }
 

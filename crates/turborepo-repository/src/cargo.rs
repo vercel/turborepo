@@ -755,6 +755,16 @@ impl CargoTaskContract {
         toolchain::TaskDefaults { cache }
     }
 
+    /// Classifies Cargo package sources for dependent derived-input closures.
+    /// Workspace aggregates have no package source directory to include.
+    pub(crate) fn dependency_source_inputs(&self) -> crate::task_contracts::DependencySourceInputs {
+        if self.package.kind == CargoPackageKind::Workspace {
+            crate::task_contracts::DependencySourceInputs::Exclude
+        } else {
+            crate::task_contracts::DependencySourceInputs::Include
+        }
+    }
+
     pub(crate) fn compile_cache_env(
         &self,
         endpoint: &toolchain::CompileCacheEndpoint,
@@ -813,27 +823,37 @@ impl CargoTaskContract {
         }
 
         let dependency_globs = || {
+            let mut unknown = false;
             let mut globs: Vec<String> = dependencies
                 .iter()
-                .filter(|dependency| {
-                    dependency.toolchain() == Some(&ToolchainId::RUST)
-                        && dependency.kind()
-                            != crate::package_graph::PackageTaskContextKind::Aggregate
-                })
+                .filter(
+                    |dependency| match dependency.task_contract().dependency_source_inputs() {
+                        crate::task_contracts::DependencySourceInputs::Include => true,
+                        crate::task_contracts::DependencySourceInputs::Exclude => false,
+                        crate::task_contracts::DependencySourceInputs::Unknown => {
+                            unknown = true;
+                            false
+                        }
+                    },
+                )
                 .flat_map(|dependency| {
                     crate_source_globs(path_to_root, dependency.directory().to_unix().as_str())
                 })
                 .collect();
             globs.sort();
             globs.dedup();
-            globs
+            (globs, unknown)
         };
 
         match self.package.kind {
             CargoPackageKind::Entrypoint | CargoPackageKind::Library => {
                 if wants_automatic_inputs {
                     io.package_default_inputs = Some(true);
-                    io.input_globs.extend(dependency_globs());
+                    let (globs, unknown) = dependency_globs();
+                    io.input_globs.extend(globs);
+                    if unknown {
+                        io.input_safety = toolchain::DerivedInputSafety::Untracked;
+                    }
                 }
                 if subcommand == "build" {
                     if self.package.kind == CargoPackageKind::Library {
@@ -876,7 +896,11 @@ impl CargoTaskContract {
             CargoPackageKind::Workspace => {
                 if wants_automatic_inputs {
                     io.package_default_inputs = Some(false);
-                    io.input_globs.extend(dependency_globs());
+                    let (globs, unknown) = dependency_globs();
+                    io.input_globs.extend(globs);
+                    if unknown {
+                        io.input_safety = toolchain::DerivedInputSafety::Untracked;
+                    }
                 }
             }
         }
@@ -3652,6 +3676,17 @@ release: 1.96.0-nightly\n",
             manifest_alters_output_layout: false,
         };
         let native_tasks = Some(native_tasks_for_package(&details, name));
+        let task_contract = (kind == crate::package_graph::PackageTaskContextKind::Package).then(|| {
+            crate::task_contracts::ScopeTaskContract::derived(
+                ToolchainId::RUST,
+                None,
+                std::collections::BTreeMap::new(),
+                std::collections::BTreeMap::new(),
+            )
+            .with_dependency_source_inputs(
+                crate::task_contracts::DependencySourceInputs::Include,
+            )
+        });
         crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
             name.into(),
             root,
@@ -3660,6 +3695,7 @@ release: 1.96.0-nightly\n",
             kind,
             Some(&ToolchainId::RUST),
             native_tasks,
+            task_contract,
         )
     }
 
@@ -3972,6 +4008,106 @@ release: 1.96.0-nightly\n",
         assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
+
+        let custom_toolchain = ToolchainId::new("custom-cargo-producer");
+        let custom_dependency =
+            crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+                "custom-dep".into(),
+                &root,
+                turbopath::AnchoredSystemPath::new("crates/custom-dep").unwrap(),
+                None,
+                crate::package_graph::PackageTaskContextKind::Package,
+                Some(&custom_toolchain),
+                None,
+                Some(
+                    crate::task_contracts::ScopeTaskContract::derived(
+                        custom_toolchain.clone(),
+                        None,
+                        std::collections::BTreeMap::new(),
+                        std::collections::BTreeMap::new(),
+                    )
+                    .with_dependency_source_inputs(
+                        crate::task_contracts::DependencySourceInputs::Include,
+                    ),
+                ),
+            );
+        let unclassified_rust_dependency =
+            crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+                "rust-by-id-only".into(),
+                &root,
+                turbopath::AnchoredSystemPath::new("crates/rust-by-id-only").unwrap(),
+                None,
+                crate::package_graph::PackageTaskContextKind::Package,
+                Some(&ToolchainId::RUST),
+                None,
+                None,
+            );
+        let capability_io = app_contract
+            .derived_task_io(
+                &app_ctx,
+                "build",
+                "../..",
+                &[custom_dependency, unclassified_rust_dependency],
+                true,
+                &context,
+            )
+            .unwrap();
+        assert!(
+            capability_io
+                .input_globs
+                .contains(&"../../crates/custom-dep/**".to_string())
+        );
+        assert!(
+            !capability_io
+                .input_globs
+                .iter()
+                .any(|glob| glob.contains("rust-by-id-only"))
+        );
+        assert_eq!(
+            capability_io.input_safety,
+            toolchain::DerivedInputSafety::Untracked
+        );
+        let excluded_dependency =
+            crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+                "generated-scope".into(),
+                &root,
+                turbopath::AnchoredSystemPath::new("generated/scope").unwrap(),
+                None,
+                crate::package_graph::PackageTaskContextKind::Package,
+                Some(&custom_toolchain),
+                None,
+                Some(
+                    crate::task_contracts::ScopeTaskContract::derived(
+                        custom_toolchain.clone(),
+                        None,
+                        std::collections::BTreeMap::new(),
+                        std::collections::BTreeMap::new(),
+                    )
+                    .with_dependency_source_inputs(
+                        crate::task_contracts::DependencySourceInputs::Exclude,
+                    ),
+                ),
+            );
+        let excluded_io = app_contract
+            .derived_task_io(
+                &app_ctx,
+                "build",
+                "../..",
+                &[excluded_dependency],
+                true,
+                &context,
+            )
+            .unwrap();
+        assert!(
+            !excluded_io
+                .input_globs
+                .iter()
+                .any(|glob| glob.contains("generated/scope"))
+        );
+        assert_eq!(
+            excluded_io.input_safety,
+            toolchain::DerivedInputSafety::Tracked
+        );
         let toolchain::DerivedOutputs::Resolved(outputs) = &io.outputs else {
             panic!("Cargo host outputs must remain resolved");
         };

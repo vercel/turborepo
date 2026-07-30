@@ -251,28 +251,6 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             None => None,
         };
 
-        // A pure-native repository still has Turbo's root task namespace, but
-        // no root language toolchain. Explicit root command overrides are
-        // generic argv and execute directly at the knowledge-backed repo root.
-        if package_context.toolchain().is_none() {
-            let Some(override_command) = override_command else {
-                return Ok(None);
-            };
-            let Some(spec) = turborepo_repository::toolchain::override_task_command(
-                &package_context,
-                override_command,
-                self.task_args.args_for_task(task_id),
-                None,
-            ) else {
-                return Ok(None);
-            };
-            let mut cmd = Command::new(spec.program);
-            cmd.args(spec.args).current_dir(spec.cwd);
-            apply_environment(&mut cmd, environment);
-            cmd.open_stdin();
-            return Ok(Some(cmd));
-        }
-
         let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
             let (package_manager_binary, cargo_binary) = if override_command.is_some() {
                 (None, None)
@@ -694,6 +672,43 @@ mod tests {
         )
         .unwrap();
         assert!(command.is_some(), "override should bypass binary lookup");
+    }
+
+    #[tokio::test]
+    async fn pure_root_override_uses_generic_command_path() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = PackageGraph::builder_optional(&repo_root, None)
+            .build()
+            .await
+            .unwrap();
+        let task_id = TaskId::from_graph(&PackageName::Root, &TaskName::from("build"));
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+        .expect("root override should execute");
+
+        assert_eq!(command.program(), OsStr::new("custom-build"));
+        let label = command.label();
+        assert!(
+            label.contains(repo_root.as_str()),
+            "unexpected label: {label}"
+        );
+        assert_eq!(command.serial_group_name(), None);
+        assert!(command.will_open_stdin());
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
