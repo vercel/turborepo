@@ -994,7 +994,7 @@ mod tests {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         let inherited_env = inherited_env_name();
         write_custom_proxy_package(&package_dir, inherited_env);
-        let mut package_graph = package_graph(
+        let package_graph = package_graph(
             &repo_root,
             &package_dir,
             PackageJson {
@@ -1006,7 +1006,6 @@ mod tests {
             },
         )
         .await;
-        package_graph.remove_package_info_for_test(&PackageName::from("web"));
         let cmd = proxy_command(&package_graph, &filtered_environment());
         assert!(
             cmd.label()
@@ -1069,10 +1068,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_microfrontend_proxy_does_not_require_package_info_payload() {
+    async fn test_microfrontend_proxy_uses_declaration_knowledge() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         write_microfrontends_binary(&package_dir, inherited_env_name());
-        let mut graph = package_graph(
+        let graph = package_graph(
             &repo_root,
             &package_dir,
             PackageJson {
@@ -1084,7 +1083,6 @@ mod tests {
             },
         )
         .await;
-        graph.remove_package_info_for_test(&PackageName::from("web"));
         let mfe_config = MockMfeConfig("configs/microfrontends.json");
         let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
         let command_provider = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &mfe_config);
@@ -1152,11 +1150,9 @@ mod tests {
             custom_graph
                 .package_task_context(&PackageName::Root)
                 .unwrap()
-                .package_info()
-                .unwrap()
-                .package_json
-                .scripts
-                .contains_key("proxy")
+                .native_tasks()
+                .get("proxy")
+                .is_some()
         );
         let custom = proxy_command_result(&custom_graph, &environment, &config, "//")
             .unwrap()

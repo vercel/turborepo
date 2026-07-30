@@ -1,9 +1,8 @@
 //! Immutable, parser-neutral facts observed about a repository.
 //!
 //! This module deliberately contains no package manifests or native metadata.
-//! Parsers contribute normalized facts here; compatibility payloads remain
-//! inputs for classification, lockfile resolution and hash state, and task
-//! construction.
+//! Parsers contribute normalized facts here; descriptors remain transient
+//! inputs to repository construction.
 
 use std::collections::HashMap;
 

@@ -91,15 +91,13 @@ impl fmt::Display for ToolchainId {
     }
 }
 
-/// Compatibility output from native package discovery.
+/// Output from native package discovery.
 ///
 /// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].
-/// `descriptor` remains temporary compatibility input for relationship
-/// classification and JavaScript construction paths. JavaScript packages retain
-/// their parsed manifest; native producers can contribute normalized
-/// relationships and tasks separately without synthesizing JavaScript
-/// dependency maps. Cargo still supplies an empty descriptor only because graph
-/// assembly currently requires a compatibility payload for every scope.
+/// `descriptor` remains transient construction input for relationship
+/// classification and JavaScript construction paths. Native producers can
+/// contribute normalized relationships and tasks separately without
+/// synthesizing JavaScript dependency maps.
 #[derive(Debug, Clone)]
 pub struct DiscoveredPackage {
     /// Real user-facing identity, extracted by the native producer. `None`
@@ -110,7 +108,7 @@ pub struct DiscoveredPackage {
     name_source: Option<Spanned<()>>,
     /// Whether this is a real package or an execution-only aggregate scope.
     scope_kind: DiscoveredScopeKind,
-    /// Temporary relationship/task compatibility data; never identity or path
+    /// Transient relationship/task construction data; never identity or path
     /// authority.
     descriptor: PackageJson,
     /// Absolute path to the package's native manifest (`package.json`,
@@ -726,7 +724,6 @@ mod tests {
             crate::package_graph::PackageName::Root,
             &root,
             directory,
-            None,
             crate::package_graph::PackageTaskContextKind::Root,
             None,
         );
@@ -869,21 +866,23 @@ mod tests {
         let repo_root_buf =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let repo_root = repo_root_buf.as_ref() as &AbsoluteSystemPath;
-        let package = crate::package_graph::PackageInfo {
-            package_json: PackageJson::from_value(serde_json::json!({
+        let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
+        let tasks = crate::native_tasks::observation_from_package_json(
+            "web",
+            &PackageJson::from_value(serde_json::json!({
                 "name": "stale-web",
                 "scripts": { "build": "next build", "empty": "" }
             }))
             .unwrap(),
-        };
-        let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
-        let context = crate::package_graph::PackageTaskContext::new_for_test(
+        );
+        let context = crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
             "web".into(),
             repo_root,
             package_directory,
-            Some(&package),
             crate::package_graph::PackageTaskContextKind::Package,
             Some(&ToolchainId::JAVASCRIPT),
+            Some(tasks.tasks),
+            None,
         );
 
         let command = crate::native_tasks::resolve_task_command(

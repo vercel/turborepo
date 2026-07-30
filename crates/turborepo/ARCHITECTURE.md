@@ -173,7 +173,7 @@ Represents the workspace structure and package dependencies:
   explicit unavailable states without closure fallback hashing. Query external
   package listing, human names, and internal-dependent reverse indexes read
   the same resolution generation (including a lazy compact reverse index)
-  rather than `PackageInfo` closures or live lockfile human-name callbacks.
+  rather than retained manifest payloads or live lockfile human-name callbacks.
   N-API JavaScript lockfile package listing uses the JavaScript domain of that
   generation. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
@@ -187,11 +187,11 @@ Represents the workspace structure and package dependencies:
   Global hashing consumes the same root resolution fingerprint as task hashing
   and, when JavaScript resolution is unavailable, hashes resolution definition
   sources plus the root package.json instead of reading the singleton lockfile
-  object.   Phase 3 deletion removed `PackageInfo` closure/hash compatibility
-  fields and deferred resolution installation; readiness belongs to repository
+  object. Phase 3 deletion removed closure/hash compatibility fields and
+  deferred resolution installation; readiness belongs to repository
   construction. External declaration consumers (frameworks, boundaries, task
   hashing) read the authoritative `ExternalDeclarations` projection built from
-  relationship knowledge rather than raw manifests or PackageInfo maps. MFE
+  relationship knowledge rather than raw manifests. MFE
   enablement checks exact declaration names in the same relationship generation
   so internal workspace declarations and alias-key behavior remain unchanged.
   MFE configuration discovery, directory ownership, and proxy execution accept
@@ -209,42 +209,38 @@ Represents the workspace structure and package dependencies:
 
 `RepositoryKnowledge` is the crate-private authority for package identity,
 paths, scope kind, and provenance during node assembly, and the resulting
-`PackageGraph` retains that exact immutable generation. Phase 1 of the payload
-deletion is complete: `PackageInfo` carries no identity, definition path,
-directory, or toolchain provenance; the graph exposes no payload-map identity
-enumeration. Consumers enumerate and resolve authoritative contexts/views, then
-look up an optional payload only for the remaining relationship and task data.
-The retained native `PackageJson.name` is non-authoritative payload data: no
-consumer may derive package identity, path, or provenance from it.
-Compatibility payloads still provide JavaScript relationship-classification
-inputs, lockfile resolution and hash state, and task construction data. Cargo
-no longer synthesizes JavaScript dependency maps, but retains empty
-`PackageJson` descriptors until task compatibility payloads are removed.
+`PackageGraph` retains that exact immutable generation. `PackageGraph` and
+`PackageTaskContext` retain no manifest compatibility payloads. Consumers use
+authoritative contexts, views, and immutable knowledge catalogs. A
+`DiscoveredPackage` descriptor remains transient construction input for
+JavaScript relationship classification and native-task observation; it is not
+retained in the completed graph. Its `PackageJson.name` is non-authoritative:
+no consumer may derive package identity, path, or provenance from it.
 Native manifest objects do not enter repository knowledge. Repository knowledge
 may retain bounded diagnostic provenance for an authoritative fact, such as an
 authored JavaScript package name's source text and span. Native definition paths
 must remain within the repository, including after resolving existing symlinks.
 
-The remaining payload deletion phases are explicit:
+Retained graph and task-context payload deletion is complete. Discovery
+descriptor deletion remains pending:
 
-- **Phase 2:** Move script and version reads behind task queries; normalized
-  relationship knowledge now owns graph assembly, while JavaScript declarations
-  remain a temporary classification input.
-- **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it. `PackageInfo` no longer carries `unresolved_external_dependencies`, `transitive_dependencies`, or `external_deps_hash`, and deferred closure installation is gone.
+- **Phase 2:** Complete for scripts. Native task knowledge owns script queries;
+  JavaScript descriptors and package versions remain transient relationship
+  classification input and are dropped before the graph is published.
+- **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it, and deferred closure installation is gone.
 - **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. Behavioral task-command callbacks have been deleted; only the JavaScript contributor and the LSP unsaved-source adapter parse scripts.
 - **Phase 5 (complete for JavaScript and Cargo):** Task-contract knowledge catalogs are produced for every scope. Engine composition, task hashing, entrypoint selection, derived I/O, startup-environment projection, and execution-only compile-cache decoration consume explicit contract capabilities without live toolchain or provenance-ID dispatch.
 - **Phase 6 (complete for JavaScript and Cargo):** Change knowledge is produced at repository construction. Cargo discovery contributes `Cargo.toml` rediscovery names, the `Cargo.lock` resolution/rediscovery path, and the effective in-repository target-directory ignore prefix. `PackageGraph::active_watch_spec` is now a projection of only the immutable facts retained by that graph generation; it never calls live toolchains. Before the first generation is published, the watcher conservatively retains all in-repository events, closing the subscription/bootstrap race without mutable toolchain callbacks. Single-package generations retain no inactive Cargo facts.
 - **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Cargo discovery captures an immutable, generation-owned prune domain containing lockfile, root-manifest, package-directory, and post-write finalization authority. Scope contracts select JavaScript layout or an explicit native prune domain without branching on ecosystem provenance. Cargo lock pruning, extra-member selection, manifest rewriting, root/config file planning, and final lockfile canonicalization run through that graph-owned domain. Golden inventories cover standard and Docker layouts.
-- **Phase 8 (audit complete for owned consumers):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` / `PackageInfo` reads are construction entry points, LSP unsaved-buffer adapters, and package-manager detection. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
+- **Phase 8 (complete for retained payloads):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` use is limited to construction inputs and narrowly scoped operational reads that have not yet moved into knowledge, including root package-manager configuration, prune rendering, and LSP unsaved-buffer adaptation. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,
-directory, kind, and an optional compatibility payload. Repository-wide task
+directory, kind, task knowledge, and contract knowledge. Repository-wide task
 namespace and external-dependency-hash enumeration is root-first, then follows
-repository observation order; scripts and dependency closures are joined only
-as compatibility payloads. Pure Cargo retains the root Turbo namespace without
-synthesizing an empty root payload; consumers reject contexts from another
-repository, and required missing payloads fail closed.
+repository observation order. Pure Cargo retains the root Turbo namespace
+without synthesizing a JavaScript scope, and consumers reject contexts from
+another repository.
 
 Repository-facing commands use the same optional-root construction policy as
 `turbo run`: a missing root `package.json` is accepted only when Cargo support

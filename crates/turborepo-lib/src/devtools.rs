@@ -111,8 +111,7 @@ impl ProperTaskGraphBuilder {
             ),
         };
 
-        // Collect authoritative execution scopes, including aggregates. The
-        // compatibility PackageInfo map can contain a synthetic Cargo root.
+        // Collect authoritative execution scopes, including aggregates.
         let workspaces: Vec<PackageName> = pkg_graph
             .package_scope_directories()
             .map(|(name, _)| name)

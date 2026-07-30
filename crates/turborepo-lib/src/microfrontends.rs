@@ -373,7 +373,7 @@ fn microfrontend_packages(
 }
 
 /// Whether a package declares a dependency on `@vercel/microfrontends`, using
-/// relationship knowledge rather than `PackageInfo` / PackageJson.
+/// relationship knowledge rather than package manifests.
 fn has_mfe_dependency(package_graph: &PackageGraph, package: &PackageName) -> bool {
     package_graph.has_dependency_declaration(package, MICROFRONTENDS_PACKAGE)
 }

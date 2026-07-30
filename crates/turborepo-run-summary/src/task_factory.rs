@@ -234,8 +234,7 @@ where
     ///
     /// Prefer the per-run cache produced for hashing. When that cache is absent
     /// (tests or callers that did not precompute), read package resolution
-    /// knowledge directly. Never rehash closures or read
-    /// `PackageInfo::external_deps_hash`.
+    /// knowledge directly. Never rehash closures.
     fn hash_of_external_dependencies(&self, task_id: &TaskId) -> Result<String, Error> {
         let package = PackageName::from(task_id.package());
         if let Some(hashes) = self.external_deps_hashes {
@@ -448,10 +447,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn summary_uses_knowledge_when_package_payload_is_missing() {
-        let (_tempdir, mut graph) = summary_graph().await;
+    async fn summary_uses_authoritative_package_context() {
+        let (_tempdir, graph) = summary_graph().await;
         let app = PackageName::from("app");
-        assert!(graph.remove_package_info_for_test(&app).is_some());
         let task_id = TaskId::new("app", "build").into_owned();
         let engine = TestEngine {
             definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
