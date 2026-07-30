@@ -65,23 +65,23 @@ use crate::{
 
 fn project_task_io_environment(
     patterns: std::collections::BTreeMap<
-        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::task_contracts::TaskEnvironmentDomain,
         Vec<&'static str>,
     >,
     environment: &EnvironmentVariableMap,
 ) -> Result<
     HashMap<
-        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::task_contracts::TaskEnvironmentDomain,
         turborepo_repository::toolchain::TaskIOEnvironment,
     >,
     turborepo_env::Error,
 > {
     patterns
         .into_iter()
-        .map(|(toolchain, patterns)| {
+        .map(|(domain, patterns)| {
             let selected = environment.from_wildcards(&patterns)?;
             Ok((
-                toolchain,
+                domain,
                 turborepo_repository::toolchain::TaskIOEnvironment::new(selected.into_inner()),
             ))
         })
@@ -1389,7 +1389,7 @@ impl RunBuilder {
             Vec::new()
         };
         let task_io_environment =
-            project_task_io_environment(pkg_dep_graph.task_io_env_vars_by_toolchain(), environment)
+            project_task_io_environment(pkg_dep_graph.task_io_env_vars_by_domain(), environment)
                 .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
@@ -1514,25 +1514,27 @@ mod task_io_context_tests {
 
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_hash::TaskHashable;
-    use turborepo_repository::toolchain::ToolchainId;
+    use turborepo_repository::task_contracts::TaskEnvironmentDomain;
     use turborepo_types::EnvMode;
 
     use super::project_task_io_environment;
 
     #[test]
     fn empty_contract_patterns_are_excluded_from_task_io_projection() {
-        let patterns =
-            std::collections::BTreeMap::from([(ToolchainId::new("other"), vec!["OTHER_*"])]);
+        let patterns = std::collections::BTreeMap::from([(
+            TaskEnvironmentDomain::new("other"),
+            vec!["OTHER_*"],
+        )]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("NODE_ENV".to_string(), "production".to_string()),
             ("OTHER_KEY".to_string(), "value".to_string()),
         ]));
 
         let projected = project_task_io_environment(patterns, &environment).unwrap();
-        assert!(!projected.contains_key(&ToolchainId::JAVASCRIPT));
+        assert!(!projected.contains_key(&TaskEnvironmentDomain::new("javascript")));
         assert_eq!(
             projected
-                .get(&ToolchainId::new("other"))
+                .get(&TaskEnvironmentDomain::new("other"))
                 .and_then(|environment| environment.get("OTHER_KEY")),
             Some("value")
         );
@@ -1540,8 +1542,8 @@ mod task_io_context_tests {
 
     #[test]
     fn projection_is_isolated_per_toolchain() {
-        let alpha = ToolchainId::new("alpha");
-        let beta = ToolchainId::new("beta");
+        let alpha = TaskEnvironmentDomain::new("alpha");
+        let beta = TaskEnvironmentDomain::new("beta");
         let patterns = std::collections::BTreeMap::from([
             (alpha.clone(), vec!["ALPHA_*"]),
             (beta.clone(), vec!["BETA_KEY"]),
@@ -1567,7 +1569,7 @@ mod task_io_context_tests {
     #[test]
     fn cargo_projection_keeps_only_rustup_selection_environment() {
         let patterns = std::collections::BTreeMap::from([(
-            ToolchainId::RUST,
+            TaskEnvironmentDomain::new("cargo-task-io"),
             vec!["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"],
         )]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
@@ -1580,14 +1582,16 @@ mod task_io_context_tests {
         ]));
 
         let projected = project_task_io_environment(patterns, &environment).unwrap();
-        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        let cargo = projected
+            .get(&TaskEnvironmentDomain::new("cargo-task-io"))
+            .unwrap();
         assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
         assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
         assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
     }
 
     fn projected_task_hash(layout: &str, secret: &str) -> String {
-        let alpha = ToolchainId::new("alpha");
+        let alpha = TaskEnvironmentDomain::new("alpha");
         let patterns = std::collections::BTreeMap::from([(alpha.clone(), vec!["ALPHA_*"])]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("ALPHA_TARGET".to_string(), layout.to_string()),

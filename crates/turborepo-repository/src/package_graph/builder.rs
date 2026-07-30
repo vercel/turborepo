@@ -98,6 +98,8 @@ pub enum Error {
     NativeTasks(String),
     #[error("Task contract knowledge error: {0}")]
     TaskContracts(String),
+    #[error("Prune knowledge error: {0}")]
+    PruneKnowledge(String),
     #[error("package or aggregate scope at {path} uses reserved root identity //")]
     ReservedRootIdentity { path: AnchoredSystemPathBuf },
     #[error("relationship source {identity} has no authoritative repository scope")]
@@ -1452,9 +1454,24 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             package_manager.as_ref(),
             native_change_observations,
         ));
-        let prune_knowledge = Arc::new(crate::prune_knowledge::PruneKnowledge::new(
-            native_prune_domains,
-        ));
+        let referenced_prune_domains =
+            task_contract_knowledge
+                .scopes()
+                .filter_map(|(_, contract)| match contract.prune_package_mode() {
+                    Some(crate::task_contracts::PrunePackageMode::NativeDomain(domain)) => {
+                        Some(domain.clone())
+                    }
+                    _ => None,
+                });
+        let prune_knowledge = Arc::new(
+            crate::prune_knowledge::PruneKnowledge::new(
+                native_prune_domains,
+                referenced_prune_domains,
+            )
+            .map_err(|error| {
+                discovery::Error::Failed(Box::new(Error::PruneKnowledge(error.to_string())))
+            })?,
+        );
 
         Ok(PackageGraph {
             graph: workspace_graph,

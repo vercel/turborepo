@@ -158,8 +158,9 @@ impl RepositoryContributor for StubIOContributor {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let package = |name: &str, dependencies: &[(&str, &str)]| {
-                DiscoveredPackage::package(
+            let package =
+                |name: &str, dependencies: &[(&str, &str)]| {
+                    DiscoveredPackage::package(
                     Some(name.to_string()),
                     PackageJson {
                         name: Some(Spanned::new(name.to_string())),
@@ -177,8 +178,13 @@ impl RepositoryContributor for StubIOContributor {
                 .with_task_contract(
                     turborepo_repository::task_contracts::ScopeTaskContract::derived(
                         ToolchainId::new("stub-io"),
+                        Some(turborepo_repository::task_contracts::TaskEnvironmentRequirement::new(
+                            turborepo_repository::task_contracts::TaskEnvironmentDomain::new(
+                                "stub-io",
+                            ),
+                            self.environment.clone(),
+                        )),
                         std::collections::BTreeMap::new(),
-                        self.environment.clone(),
                         ["build", "test"]
                             .into_iter()
                             .map(|task| {
@@ -194,7 +200,7 @@ impl RepositoryContributor for StubIOContributor {
                             .collect(),
                     ),
                 )
-            };
+                };
             Ok(DiscoveredPackages::new(
                 vec![
                     package("app", &[("lib", "workspace:*")]),
