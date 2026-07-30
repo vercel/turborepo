@@ -126,7 +126,7 @@ fn read_no_update_notifier_from_turbo_json(
     };
 
     let file_path = path.file_name().unwrap_or("turbo.json");
-    match turborepo_turbo_json::RawRootTurboJson::parse(&contents, file_path) {
+    match turborepo_turbo_json::RawRootTurboJson::parse_from_path(&contents, file_path) {
         Ok(raw) => raw
             .no_update_notifier
             .map(|v| *v.as_inner())

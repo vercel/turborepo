@@ -54,6 +54,10 @@ use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+pub const CONFIG_FILE_TOML: &str = "turbo.toml";
+
+/// All recognized turbo configuration file names, in discovery order.
+pub const CONFIG_FILE_NAMES: [&str; 3] = [CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_TOML];
 
 pub use experimental_otel::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
@@ -731,29 +735,30 @@ impl TurborepoConfigBuilder {
     }
 }
 
-/// Given a directory path, determines which turbo.json configuration file to
-/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
-/// directory. Returns the path to the config file to use, defaulting to
-/// turbo.json if neither exists.
+/// Given a directory path, determines which turbo configuration file to use.
+///
+/// Returns an error if more than one of `turbo.json`, `turbo.jsonc`, or
+/// `turbo.toml` exists in the same directory. Returns the path to the config
+/// file to use, defaulting to `turbo.json` if none exist.
 pub fn resolve_turbo_config_path(
     dir_path: &turbopath::AbsoluteSystemPath,
 ) -> Result<turbopath::AbsoluteSystemPathBuf, Error> {
-    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
-    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
+    let mut existing = Vec::new();
+    for name in CONFIG_FILE_NAMES {
+        let path = dir_path.join_component(name);
+        if path.try_exists()? {
+            existing.push(path);
+        }
+    }
 
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::TurboJsonError(
+    match existing.len() {
+        0 => Ok(dir_path.join_component(CONFIG_FILE)),
+        1 => Ok(existing.remove(0)),
+        _ => Err(Error::TurboJsonError(
             turborepo_turbo_json::Error::MultipleTurboConfigs {
                 directory: dir_path.to_string(),
             },
         )),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
     }
 }
 
@@ -766,9 +771,10 @@ mod test {
     use turborepo_types::{ConfigurationSource, LogOrder};
 
     use crate::{
-        CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
-        ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
+        CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_TOML, ConfigurationOptions, DEFAULT_API_URL,
+        DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT, ExperimentalObservabilityOptions,
+        ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+        TurborepoConfigBuilder,
     };
 
     #[test]
@@ -1072,6 +1078,47 @@ mod test {
     }
 
     #[test]
+    fn test_only_turbo_toml() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        let turbo_toml_path = repo_root.join_component(CONFIG_FILE_TOML);
+        turbo_toml_path
+            .create_with_contents(
+                r#"
+[tasks.build]
+dependsOn = ["^build"]
+"#,
+            )
+            .unwrap();
+
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), turbo_toml_path);
+    }
+
+    #[test]
+    fn test_multiple_turbo_configs_with_toml() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component(CONFIG_FILE)
+            .create_with_contents("{}")
+            .unwrap();
+        repo_root
+            .join_component(CONFIG_FILE_TOML)
+            .create_with_contents("")
+            .unwrap();
+
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_multiple_turbo_configs());
+    }
+
+    #[test]
     fn test_no_turbo_config() {
         let tmp_dir = TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
@@ -1081,6 +1128,45 @@ mod test {
         let result = config.root_turbo_json_path(repo_root);
 
         assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
+    }
+
+    #[test]
+    fn test_turbo_toml_remote_cache() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        let turbo_toml_contents = r#"
+[remoteCache]
+enabled = true
+apiUrl = "https://example.com/api"
+loginUrl = "https://example.com/login"
+teamSlug = "acme"
+teamId = "team_123"
+signature = true
+preflight = false
+timeout = 42
+"#;
+        repo_root
+            .join_component(CONFIG_FILE_TOML)
+            .create_with_contents(turbo_toml_contents)
+            .unwrap();
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        };
+
+        let config = builder.build().unwrap();
+        assert_eq!(config.enabled, Some(true));
+        assert_eq!(config.api_url(), "https://example.com/api");
+        assert_eq!(config.login_url(), "https://example.com/login");
+        assert_eq!(config.team_slug(), Some("acme"));
+        assert_eq!(config.team_id(), Some("team_123"));
+        assert!(config.signature());
+        assert!(!config.preflight());
+        assert_eq!(config.timeout(), 42);
     }
 
     #[test]

@@ -283,7 +283,7 @@ impl GitRepo {
         let pkg_prefix = self.root.anchor(&full_pkg_path)?.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
-        static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+        static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc", "turbo.toml"];
         let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
         let total_inputs = inputs.len() + extra_inputs.len();
 
@@ -367,7 +367,8 @@ impl GitRepo {
             let full_pkg_path = turbo_root.resolve(package_path);
             let package_unix_path = pkg_prefix.as_str();
 
-            static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+            static CONFIG_FILES: &[&str] =
+                &["package.json", "turbo.json", "turbo.jsonc", "turbo.toml"];
 
             let mut glob_inclusions = Vec::new();
             let mut glob_exclusions = Vec::new();

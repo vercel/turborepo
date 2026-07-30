@@ -134,8 +134,9 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
         );
         let turbo_json: RawTurboJson = match turbo_json_path.read_existing_to_string()? {
             Some(contents) => {
-                let raw_root = RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
-                    .map_err(turborepo_turbo_json::Error::from)?;
+                let raw_root =
+                    RawRootTurboJson::parse_from_path(&contents, &root_relative_turbo_json_path)
+                        .map_err(Error::TurboJsonError)?;
                 RawTurboJson::try_from(raw_root).map_err(Error::TurboJsonError)?
             }
             None => RawTurboJson::default(),

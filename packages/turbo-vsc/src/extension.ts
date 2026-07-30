@@ -264,6 +264,7 @@ export function activate(context: ExtensionContext) {
     documentSelector: [
       { scheme: "file", pattern: "**/turbo.json" },
       { scheme: "file", pattern: "**/turbo.jsonc" },
+      { scheme: "file", pattern: "**/turbo.toml" },
       { scheme: "file", pattern: "**/package.json" }
     ]
   };

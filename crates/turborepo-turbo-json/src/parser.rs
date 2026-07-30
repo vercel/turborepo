@@ -578,11 +578,23 @@ impl RawRootTurboJson {
     pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
         parse_turbo_json::<RawRootTurboJson>(text, file_path)
     }
+
+    /// Parse a root turbo config from text, using the file path extension to
+    /// choose JSON/JSONC or TOML decoding.
+    pub fn parse_from_path(text: &str, file_path: &str) -> Result<Self, crate::error::Error> {
+        parse_config_from_path(text, file_path)
+    }
 }
 
 impl RawPackageTurboJson {
     pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
         parse_turbo_json::<RawPackageTurboJson>(text, file_path)
+    }
+
+    /// Parse a package turbo config from text, using the file path extension
+    /// to choose JSON/JSONC or TOML decoding.
+    pub fn parse_from_path(text: &str, file_path: &str) -> Result<Self, crate::error::Error> {
+        parse_config_from_path(text, file_path)
     }
 }
 
@@ -595,6 +607,45 @@ impl RawTurboJson {
         let json_string = serde_json::to_string(&value)?;
         let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
         raw_root.try_into()
+    }
+}
+
+/// Returns true when `file_path` refers to a TOML turbo config (`turbo.toml`
+/// or any path ending in `.toml`).
+pub fn is_toml_config_path(file_path: &str) -> bool {
+    // Match on the final path segment so `packages/app/turbo.toml` and bare
+    // `turbo.toml` are both recognized. Custom config paths ending in `.toml`
+    // are also accepted.
+    std::path::Path::new(file_path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"))
+}
+
+/// Convert TOML turbo config text into a JSON document string that the biome
+/// JSON deserializer can consume.
+fn toml_to_json_string(text: &str) -> Result<String, crate::error::Error> {
+    let toml_value: toml::Value =
+        toml::from_str(text).map_err(|error| crate::error::Error::TomlParse {
+            message: error.to_string(),
+        })?;
+    let json_value = serde_json::to_value(toml_value)?;
+    Ok(serde_json::to_string(&json_value)?)
+}
+
+/// Parse turbo config content, choosing a decoder based on the file path.
+///
+/// JSON and JSONC are parsed directly. TOML is first converted to an
+/// equivalent JSON document so the existing biome-based schema deserialization
+/// (including span metadata on the intermediate JSON) can be reused.
+pub fn parse_config_from_path<T: Deserializable + WithMetadata>(
+    text: &str,
+    file_path: &str,
+) -> Result<T, crate::error::Error> {
+    if is_toml_config_path(file_path) {
+        let json_text = toml_to_json_string(text)?;
+        Ok(parse_turbo_json(&json_text, file_path)?)
+    } else {
+        Ok(parse_turbo_json(text, file_path)?)
     }
 }
 
@@ -643,6 +694,118 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
+
+    #[test]
+    fn test_is_toml_config_path() {
+        assert!(is_toml_config_path("turbo.toml"));
+        assert!(is_toml_config_path("packages/app/turbo.toml"));
+        assert!(is_toml_config_path("/abs/path/turbo.toml"));
+        assert!(is_toml_config_path("custom.TOML"));
+        assert!(!is_toml_config_path("turbo.json"));
+        assert!(!is_toml_config_path("turbo.jsonc"));
+        assert!(!is_toml_config_path("turbo.toml.bak"));
+    }
+
+    #[test]
+    fn test_parse_toml_root_config() {
+        let toml = r#"
+"$schema" = "https://turborepo.dev/schema.json"
+globalDependencies = ["foo.txt"]
+globalEnv = ["SOME_ENV_VAR"]
+
+[tasks.build]
+env = ["NODE_ENV"]
+outputs = []
+
+[tasks."my-app#build"]
+inputs = ["$TURBO_DEFAULT$", ".env.local"]
+outputs = ["banana.txt", "apple.json"]
+
+[tasks.something]
+
+[remoteCache]
+enabled = true
+apiUrl = "https://example.com"
+"#;
+        let parsed = RawRootTurboJson::parse_from_path(toml, "turbo.toml").unwrap();
+        assert_eq!(
+            parsed.schema.as_ref().map(|s| s.as_str()),
+            Some("https://turborepo.dev/schema.json")
+        );
+        assert_eq!(
+            parsed
+                .global_dependencies
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|d| d.as_inner().as_str())
+                .collect::<Vec<_>>(),
+            vec!["foo.txt"]
+        );
+        assert_eq!(
+            parsed
+                .global_env
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|e| e.as_inner().as_str())
+                .collect::<Vec<_>>(),
+            vec!["SOME_ENV_VAR"]
+        );
+        let tasks = parsed.tasks.as_ref().unwrap();
+        assert!(tasks.contains_key(&"build".into()));
+        assert!(tasks.contains_key(&"my-app#build".into()));
+        assert!(tasks.contains_key(&"something".into()));
+        let remote = parsed.remote_cache.as_ref().unwrap();
+        assert_eq!(remote.enabled.as_ref().map(|v| *v.as_inner()), Some(true));
+        assert_eq!(
+            remote.api_url.as_ref().map(|v| v.as_inner().as_str()),
+            Some("https://example.com")
+        );
+    }
+
+    #[test]
+    fn test_parse_toml_package_config() {
+        let toml = r#"
+extends = ["//"]
+
+[tasks.build]
+dependsOn = ["^build"]
+outputs = ["dist/**"]
+"#;
+        let parsed = RawPackageTurboJson::parse_from_path(toml, "packages/app/turbo.toml").unwrap();
+        assert_eq!(
+            parsed
+                .extends
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|e| e.as_str())
+                .collect::<Vec<_>>(),
+            vec!["//"]
+        );
+        let tasks = parsed.tasks.as_ref().unwrap();
+        let build = tasks.get(&"build".into()).unwrap();
+        assert_eq!(
+            build
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|d| d.as_inner().as_str())
+                .collect::<Vec<_>>(),
+            vec!["^build"]
+        );
+    }
+
+    #[test]
+    fn test_parse_toml_invalid_syntax() {
+        let result = RawRootTurboJson::parse_from_path("[[[invalid", "turbo.toml");
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::error::Error::TomlParse { .. }
+        ));
+    }
 
     #[test]
     fn test_biome_parse_error_new() {

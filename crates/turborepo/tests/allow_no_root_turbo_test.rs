@@ -19,7 +19,7 @@ fn test_fails_without_turbo_json() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Could not find turbo.json or turbo.jsonc"),
+        stderr.contains("Could not find turbo.json, turbo.jsonc, or turbo.toml"),
         "expected missing config error, got: {stderr}"
     );
 }
