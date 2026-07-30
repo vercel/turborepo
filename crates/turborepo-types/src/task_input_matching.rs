@@ -42,17 +42,15 @@ pub struct CompiledGlobs {
 
 /// Pre-compiles a task's input globs for efficient matching against many files.
 ///
-/// Invalid globs are logged at `warn` level and skipped.
-///
 /// When `inputs` has no globs and `default` is false (representing either
 /// `inputs: []` or a missing `inputs` key), the compiled result will match
 /// all files — see [`check_compiled_globs`] for details.
-pub fn compile_globs(inputs: &TaskInputs) -> CompiledGlobs {
-    let (inclusions, exclusions, has_traversal_globs) = compile_patterns(&inputs.globs);
+pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, wax::BuildError> {
+    let (inclusions, exclusions, has_traversal_globs) = compile_patterns(&inputs.globs)?;
     let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) =
-        compile_patterns(&inputs.jit_globs);
+        compile_patterns(&inputs.jit_globs)?;
 
-    CompiledGlobs {
+    Ok(CompiledGlobs {
         inclusions,
         exclusions,
         jit_inclusions,
@@ -62,10 +60,12 @@ pub fn compile_globs(inputs: &TaskInputs) -> CompiledGlobs {
         eager: inputs.eager,
         has_traversal_globs,
         jit_has_traversal_globs,
-    }
+    })
 }
 
-fn compile_patterns(globs: &[String]) -> (Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool) {
+fn compile_patterns(
+    globs: &[String],
+) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), wax::BuildError> {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
     let mut has_traversal_globs = false;
@@ -75,34 +75,16 @@ fn compile_patterns(globs: &[String]) -> (Vec<wax::Glob<'static>>, Vec<wax::Glob
             if stripped.starts_with("../") {
                 has_traversal_globs = true;
             }
-            match wax::Glob::new(stripped) {
-                Ok(glob) => exclusions.push(glob.into_owned()),
-                Err(e) => {
-                    tracing::warn!(
-                        glob = %stripped,
-                        error = %e,
-                        "invalid exclusion glob in task inputs; ignoring for affected detection"
-                    );
-                }
-            }
+            exclusions.push(wax::Glob::new(stripped)?.into_owned());
         } else {
             if glob_str.starts_with("../") {
                 has_traversal_globs = true;
             }
-            match wax::Glob::new(glob_str) {
-                Ok(glob) => inclusions.push(glob.into_owned()),
-                Err(e) => {
-                    tracing::warn!(
-                        glob = %glob_str,
-                        error = %e,
-                        "invalid inclusion glob in task inputs; ignoring for affected detection"
-                    );
-                }
-            }
+            inclusions.push(wax::Glob::new(glob_str)?.into_owned());
         }
     }
 
-    (inclusions, exclusions, has_traversal_globs)
+    Ok((inclusions, exclusions, has_traversal_globs))
 }
 
 /// Checks whether a changed file matches pre-compiled task input globs.
@@ -246,7 +228,7 @@ mod tests {
     use crate::{DependencyOutputsInput, TaskInputs};
 
     fn assert_match(file: &str, pkg: &str, inputs: &TaskInputs, expected: bool) {
-        let compiled = compile_globs(inputs);
+        let compiled = compile_globs(inputs).unwrap();
         let f = AnchoredSystemPathBuf::from_raw(file).unwrap();
         let p = RelativeUnixPathBuf::new(pkg.to_string()).unwrap();
         assert_eq!(
@@ -506,21 +488,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_glob_is_skipped_gracefully() {
-        // An invalid glob should be silently skipped, not panic.
-        // The valid glob should still work.
+    fn invalid_glob_returns_error() {
         let inputs = TaskInputs {
             globs: vec!["[invalid".to_string(), "src/**/*.ts".to_string()],
             default: false,
             ..Default::default()
         };
-        assert_match(
-            "packages/lib-a/src/index.ts",
-            "packages/lib-a",
-            &inputs,
-            true,
-        );
-        assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, false);
+        assert!(compile_globs(&inputs).is_err());
     }
 
     #[test]

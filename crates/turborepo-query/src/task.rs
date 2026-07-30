@@ -16,7 +16,7 @@ pub struct RepositoryTask {
 
 impl RepositoryTask {
     pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
-        let package = Package::new(run.clone(), task_id.package().into())?;
+        let package = Package::for_task(run.clone(), task_id.package().into())?;
         let script = package.get_tasks().get(task_id.task()).cloned();
 
         Ok(RepositoryTask {

@@ -300,6 +300,12 @@ their sources still invalidate and affect consumers without creating task graph
 cycles. Cargo path, development, optional, build, target-specific, and automatic
 member relationships are emitted directly from `cargo metadata`; no synthetic
 JavaScript dependency maps or behavioral affectedness callback remain.
+Relationship projections reject unknown package identities instead of
+normalizing them to empty traversals. Engine construction and explicit scope
+queries propagate that invariant error; affectedness paths conservatively
+select all packages or tasks so they cannot under-report changes.
+If a selected task cannot be represented by the query API, the query returns an
+opaque error rather than partial task data.
 
 #### Repository Contributors (`crates/turborepo-repository/src/toolchain.rs`)
 

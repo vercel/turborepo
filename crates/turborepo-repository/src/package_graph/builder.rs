@@ -2094,11 +2094,11 @@ mod test {
             graph
                 .filtering_relationships()
                 .transitive_dependencies(&web_name),
-            Some(graph_dependencies.clone())
+            Ok(graph_dependencies.clone())
         );
         assert_eq!(
             graph.hash_relationships().dependency_inputs(&web_name),
-            Some(graph_dependencies)
+            Ok(graph_dependencies)
         );
 
         let mut graph_dependents: Vec<_> = graph
@@ -2114,7 +2114,7 @@ mod test {
             graph
                 .filtering_relationships()
                 .transitive_dependents(&ui_name),
-            Some(graph_dependents.clone())
+            Ok(graph_dependents.clone())
         );
         graph_dependents.push(ui_name.clone());
         graph_dependents.sort();
