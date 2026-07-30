@@ -164,6 +164,15 @@ impl ScopeNativeTasks {
             .map(|task| task.name().to_string())
             .collect()
     }
+
+    /// Names contributed by a native script manifest, including empty scripts.
+    pub fn script_names(&self) -> Vec<String> {
+        self.tasks()
+            .iter()
+            .filter(|task| task.script().is_some())
+            .map(|task| task.name().to_string())
+            .collect()
+    }
 }
 
 /// Producer-supplied native task facts for one scope, before catalog
@@ -438,6 +447,8 @@ mod tests {
             .unwrap();
         assert!(!empty.authored());
         assert!(!empty.executable());
+        let tasks = ScopeNativeTasks::Available(observation.tasks.into_boxed_slice());
+        assert_eq!(tasks.script_names(), ["build", "empty"]);
     }
 
     #[test]
@@ -484,5 +495,10 @@ mod tests {
         assert!(task.registered());
         assert!(task.executable());
         assert_eq!(task.cwd_policy(), WorkingDirectoryPolicy::RepositoryRoot);
+        assert!(
+            ScopeNativeTasks::Available(vec![task].into_boxed_slice())
+                .script_names()
+                .is_empty()
+        );
     }
 }
