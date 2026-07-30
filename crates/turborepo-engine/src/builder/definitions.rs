@@ -317,11 +317,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let command_override = resolve_command_override(
             scoped_command,
             unscoped_command,
-            package_context.as_ref().and_then(|context| {
-                Some((
-                    context.toolchain()?,
+            package_context.as_ref().map(|context| {
+                (
+                    context.task_contract(),
                     context.native_tasks().authors(task_id.as_inner().task()),
-                ))
+                )
             }),
         );
 
@@ -770,7 +770,10 @@ fn apply_derived_task_io(
 fn resolve_command_override(
     scoped_command: Option<ProcessedCommand>,
     unscoped_command: Option<ProcessedCommand>,
-    package_toolchain: Option<(&turborepo_repository::toolchain::ToolchainId, bool)>,
+    package_contract: Option<(
+        &turborepo_repository::task_contracts::ScopeTaskContract,
+        bool,
+    )>,
 ) -> Option<TaskCommandOverride> {
     // Levels 1–2: an explicit per-package command beats everything,
     // including the package's own script — the user targeted this package
@@ -788,7 +791,7 @@ fn resolve_command_override(
     // lean into what the ecosystem does natively. Catalog-synthesized
     // fallbacks (Cargo verb tables) are authored by nobody and sit below
     // the defaults instead.
-    if package_toolchain.is_some_and(|(_, authors)| authors) {
+    if package_contract.is_some_and(|(_, authors)| authors) {
         return None;
     }
 
@@ -797,12 +800,10 @@ fn resolve_command_override(
     match unscoped_command? {
         ProcessedCommand::Argv(argv) => Some(TaskCommandOverride::Argv(argv.into_inner())),
         ProcessedCommand::PerToolchain(entries) => {
-            let (toolchain, _) = package_toolchain?;
-            entries
-                .into_inner()
-                .into_iter()
-                .find(|(toolchain_id, _)| toolchain.as_str() == toolchain_id.as_str())
-                .map(|(_, argv)| TaskCommandOverride::Argv(argv))
+            let (contract, _) = package_contract?;
+            contract
+                .command_map_argv(&entries.into_inner())
+                .map(TaskCommandOverride::Argv)
         }
         // The validator rejects unscoped opt-outs.
         ProcessedCommand::OptOut(_) => None,
@@ -823,7 +824,7 @@ fn inherits_toolchain_task_io(command: Option<&TaskCommandOverride>) -> bool {
 #[cfg(test)]
 mod command_override_tests {
     use turborepo_errors::Spanned;
-    use turborepo_repository::toolchain::ToolchainId;
+    use turborepo_repository::task_contracts::{CommandMapTarget, ScopeTaskContract};
     use turborepo_types::TaskCommandOverride;
 
     use super::{ProcessedCommand, inherits_toolchain_task_io, resolve_command_override};
@@ -848,9 +849,12 @@ mod command_override_tests {
 
     #[test]
     fn test_precedence_levels() {
-        let rust = (&ToolchainId::RUST, false);
-        let js_with_script = (&ToolchainId::JAVASCRIPT, true);
-        let js_without_script = (&ToolchainId::JAVASCRIPT, false);
+        let rust_contract =
+            ScopeTaskContract::empty().with_command_map_target(CommandMapTarget::Rust);
+        let javascript_contract = ScopeTaskContract::javascript();
+        let rust = (&rust_contract, false);
+        let js_with_script = (&javascript_contract, true);
+        let js_without_script = (&javascript_contract, false);
 
         // Levels 1–2: a scoped command beats everything, including an
         // authored script and any unscoped default.

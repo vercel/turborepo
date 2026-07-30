@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -16,7 +16,7 @@ use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
-    package_graph::{PackageGraph, PackageName},
+    package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
     package_json::PackageJson,
 };
@@ -1309,49 +1309,16 @@ impl RunBuilder {
         exclusion_candidates: &[PackageName],
         filter_mode: &FilterMode,
     ) -> HashSet<TaskId<'static>> {
-        let mut exclusions = HashSet::new();
-        let toolchains: BTreeSet<_> = candidates
-            .iter()
-            .filter_map(|name| pkg_dep_graph.package_toolchain(name).cloned())
-            .collect();
-        for toolchain_id in toolchains {
-            let candidate_names: Vec<_> = candidates
-                .iter()
-                .filter(|name| {
-                    pkg_dep_graph
-                        .package_toolchain(name)
-                        .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                })
-                .map(|name| name.as_str().to_string())
-                .collect();
-            let prefer_workspace = match filter_mode {
-                FilterMode::AllPackages => true,
-                FilterMode::ExcludeOnly { .. } => false,
-                FilterMode::ExplicitSelection => candidate_names.len() == 1,
-            };
-            let Some(selected) = pkg_dep_graph.select_task_entrypoints(
-                &toolchain_id,
-                task.task(),
-                &candidate_names,
-                prefer_workspace,
-            ) else {
-                continue;
-            };
-            let selected: HashSet<_> = selected.into_iter().collect();
-            exclusions.extend(
-                exclusion_candidates
-                    .iter()
-                    .filter(|name| {
-                        pkg_dep_graph
-                            .package_toolchain(name)
-                            .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                    })
-                    .map(|name| name.as_str().to_string())
-                    .filter(|name| !selected.contains(name))
-                    .map(|name| TaskId::new(&name, task.task()).into_owned()),
-            );
-        }
-        exclusions
+        let preference = match filter_mode {
+            FilterMode::AllPackages => TaskEntrypointPreference::Always,
+            FilterMode::ExcludeOnly { .. } => TaskEntrypointPreference::Never,
+            FilterMode::ExplicitSelection => TaskEntrypointPreference::WhenSingleCandidate,
+        };
+        pkg_dep_graph
+            .task_entrypoint_exclusions(task.task(), candidates, exclusion_candidates, preference)
+            .into_iter()
+            .map(|name| TaskId::new(name.as_str(), task.task()).into_owned())
+            .collect()
     }
 
     fn select_engine_task_entrypoints(
