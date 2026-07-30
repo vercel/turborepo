@@ -227,7 +227,7 @@ For the full setup, see [Use Remote Caching from external CI/CD](https://vercel.
 
 ### Using OpenID Connect (recommended)
 
-After you [create a Turborepo CLI OIDC policy and add a `TURBO_TEAM` repository variable](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#openid-connect-oidc), add [`vercel/setup-turborepo-remote-cache-action`](https://github.com/vercel/setup-turborepo-remote-cache-action) before any step that runs `turbo`. It requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` for later steps:
+Follow [these instructions](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#openid-connect-oidc) to create an OIDC policy on your Vercel team and configure your `TURBO_TEAM` variable. Then add [`vercel/setup-turborepo-remote-cache-action`](https://github.com/vercel/setup-turborepo-remote-cache-action) before any step that runs `turbo`. It requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` environment variables for later steps that run `turbo`:
 
 ```yaml title=".github/workflows/ci.yml"
 # ...
@@ -246,16 +246,9 @@ jobs:
     # ...
 ```
 
-<Callout type="info">
-  If you create multiple OIDC policies on your team, Vercel will try to match
-  your GitHub OIDC token against each of them. If more than one policy matches,
-  then you will need to pass the ID of the OIDC policy you intend to use in the
-  `policy` input; otherwise, you will receive an error.
-</Callout>
-
 ### Using a Personal Access Token
 
-After you [create a scoped access token, store it as the `TURBO_TOKEN` secret, and add `TURBO_TEAM` as a repository variable](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#personal-access-token-pat), provide them to jobs that run `turbo`:
+Follow [these instructions](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#personal-access-token-pat) to create a Personal Access Token, configure your `TURBO_TOKEN` secret, and configure your `TURBO_TEAM` variable. Then provide them to jobs that run `turbo`:
 
 ```yaml title=".github/workflows/ci.yml"
 # ...
