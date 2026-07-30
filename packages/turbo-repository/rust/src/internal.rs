@@ -6,7 +6,6 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageGraphBuilder},
     package_json::PackageJson,
     package_manager,
-    toolchain::ToolchainId,
 };
 
 use crate::{Package, PackageManager, Workspace};
@@ -117,8 +116,7 @@ fn packages_from_graph(graph: &PackageGraph) -> Result<Vec<Package>, Error> {
     let mut packages = graph
         .package_task_contexts()
         .filter(|context| {
-            graph.is_real_package(context.package())
-                && context.toolchain() == Some(&ToolchainId::JAVASCRIPT)
+            graph.is_real_package(context.package()) && context.is_package_json_scope()
         })
         .map(|context| {
             let path = graph.repo_root().resolve(context.directory());
@@ -136,11 +134,50 @@ fn packages_from_graph(graph: &PackageGraph) -> Result<Vec<Package>, Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
 
     use turborepo_errors::Spanned;
+    use turborepo_repository::toolchain::{
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+        ToolchainId, WorkspaceRoot,
+    };
 
     use super::*;
+
+    struct CustomPackageJsonContributor {
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for CustomPackageJsonContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("custom")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("custom-package".to_string()),
+                            PackageJson::default(),
+                            self.root.join_components(&["custom", "package.json"]),
+                        ),
+                        DiscoveredPackage::package(
+                            Some("native-package".to_string()),
+                            PackageJson::default(),
+                            self.root.join_components(&["native", "Cargo.toml"]),
+                        ),
+                        DiscoveredPackage::aggregate(
+                            "custom-aggregate".to_string(),
+                            PackageJson::default(),
+                            self.root.join_components(&["aggregate", "package.json"]),
+                        ),
+                    ],
+                    vec![WorkspaceRoot::new("custom", self.root.clone())],
+                ))
+            })
+        }
+    }
 
     #[tokio::test]
     async fn package_listing_uses_retained_graph_generation() {
@@ -176,6 +213,30 @@ mod tests {
                 .map(|package| package.name.as_str())
                 .collect::<Vec<_>>(),
             ["a", "z"]
+        );
+    }
+
+    #[tokio::test]
+    async fn package_listing_uses_manifest_capability_not_provenance() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(temp.path().to_string_lossy().to_string()).unwrap();
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(package_manager::PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_allow_no_package_manager(true)
+            .with_contributor(Arc::new(CustomPackageJsonContributor {
+                root: root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        let packages = packages_from_graph(&graph).unwrap();
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "custom-package");
+        assert_eq!(
+            graph.package_toolchain(&"custom-package".into()),
+            Some(&ToolchainId::new("custom"))
         );
     }
 }
