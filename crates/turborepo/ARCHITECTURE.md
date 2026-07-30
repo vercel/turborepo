@@ -303,6 +303,11 @@ contract, resolution, change, and prune knowledge, then drops the collection.
 Runtime consumers query those retained catalogs and never dispatch through live
 contributors. `ToolchainId` remains open provenance data rather than a closed
 enum, keeping discovery extensible to future out-of-process plugin adapters.
+Package-json membership is projected from real scopes with authoritative
+`package.json` definition paths, independent of that provenance. Change
+ownership and workspace path dependency splitting consume the same projection;
+duplicate contributed definition owners and physical aliases of the root
+definition are rejected during construction.
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
@@ -470,7 +475,8 @@ whether anything changed; Cargo decides how and in what order to build.**
 - **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
   consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery
   observations declare workspace-definition files and build-byproduct
-  directories, and the current graph generation projects one active spec. For
+  directories; accepted observations compose directly without reactivation by
+  producer identity, and the current graph generation projects one active spec. For
   Cargo, any `Cargo.toml` or the root `Cargo.lock` triggers full
   rediscovery (the crate set or its edges may have changed), while events
   under the root `target/` directory are dropped — Cargo writes there

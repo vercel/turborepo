@@ -1,19 +1,17 @@
 //! Foundational change knowledge for watch and affectedness.
 //!
-//! Ecosystems contribute immutable observations about package ownership,
-//! membership/resolution triggers, and ignored byproduct prefixes. Core owns
-//! subscriptions, coalescing, and generation publication.
+//! Repository knowledge projects package ownership. Ecosystems contribute
+//! immutable observations about membership/resolution triggers and ignored
+//! byproduct prefixes. Core owns subscriptions, coalescing, and publication.
 //!
-//! JavaScript observations are produced from repository knowledge plus the
+//! JavaScript change facts are projected from repository knowledge plus the
 //! active package manager. Native ecosystems contribute observations with
 //! their package discovery result.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    knowledge::RepositoryKnowledge,
-    package_manager::PackageManager,
-    toolchain::{ToolchainId, WatchSpec},
+    knowledge::RepositoryKnowledge, package_manager::PackageManager, toolchain::WatchSpec,
 };
 
 /// Immutable change facts for the repository.
@@ -40,22 +38,20 @@ pub struct ChangeKnowledge {
 }
 
 /// Parser-neutral change facts contributed by one discovery producer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Definition names must be basenames. Resolution paths and ignore prefixes
+/// must be non-empty, normalized repository-relative Unix paths. Invalid
+/// observations fail package-graph construction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChangeObservation {
-    toolchain: ToolchainId,
     rediscovery_file_names: Vec<String>,
     resolution_paths: Vec<String>,
     ignore_prefixes: Vec<String>,
 }
 
 impl ChangeObservation {
-    pub fn new(toolchain: ToolchainId) -> Self {
-        Self {
-            toolchain,
-            rediscovery_file_names: Vec::new(),
-            resolution_paths: Vec::new(),
-            ignore_prefixes: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn with_rediscovery_file_name(mut self, name: impl Into<String>) -> Self {
@@ -72,23 +68,49 @@ impl ChangeObservation {
         self.ignore_prefixes.push(path.into());
         self
     }
+
+    fn validate(&self) -> Result<(), Error> {
+        for name in &self.rediscovery_file_names {
+            if name.is_empty() || matches!(name.as_str(), "." | "..") || name.contains(['/', '\\'])
+            {
+                return Err(Error::InvalidFileName(name.clone()));
+            }
+        }
+        for path in self.resolution_paths.iter().chain(&self.ignore_prefixes) {
+            let valid = !path.is_empty()
+                && !path.contains('\\')
+                && turbopath::RelativeUnixPath::new(path).is_ok()
+                && path
+                    .split('/')
+                    .all(|component| !component.is_empty() && !matches!(component, "." | ".."));
+            if !valid {
+                return Err(Error::InvalidPath(path.clone()));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum Error {
+    #[error("invalid change observation file name {0:?}")]
+    InvalidFileName(String),
+    #[error("invalid change observation path {0:?}")]
+    InvalidPath(String),
 }
 
 impl ChangeKnowledge {
-    /// Produce JavaScript change observations from repository knowledge.
+    /// Project package.json change facts and compose validated native facts.
     pub(crate) fn build(
         knowledge: &RepositoryKnowledge,
         package_manager: Option<&PackageManager>,
         native: Vec<ChangeObservation>,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let mut membership_file_names = Vec::new();
         let mut membership_paths = Vec::new();
         let mut resolution_paths = Vec::new();
 
-        let has_js = knowledge.root_javascript_scope().is_some()
-            || knowledge
-                .scopes()
-                .any(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT);
+        let has_js = knowledge.package_json_packages().next().is_some();
 
         if has_js {
             membership_file_names.push("package.json".to_string());
@@ -101,14 +123,9 @@ impl ChangeKnowledge {
         }
 
         let package_directories = knowledge
-            .scopes()
-            .filter(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT)
-            .map(|scope| {
-                (
-                    scope.identity().to_owned(),
-                    scope.directory().to_unix().to_string(),
-                )
-            })
+            .package_json_packages()
+            .filter(|(identity, _)| *identity != "//")
+            .map(|(identity, directory)| (identity.to_owned(), directory.to_unix().to_string()))
             .collect();
 
         let mut change = Self {
@@ -122,12 +139,7 @@ impl ChangeKnowledge {
         };
 
         for observation in native {
-            let active = knowledge
-                .scopes()
-                .any(|scope| scope.toolchain() == &observation.toolchain);
-            if !active {
-                continue;
-            }
+            observation.validate()?;
             change
                 .membership_file_names
                 .extend(observation.rediscovery_file_names.iter().cloned());
@@ -140,7 +152,22 @@ impl ChangeKnowledge {
             change.resolution_paths.extend(observation.resolution_paths);
             change.ignore_prefixes.extend(observation.ignore_prefixes);
         }
-        change
+        change.canonicalize();
+        Ok(change)
+    }
+
+    fn canonicalize(&mut self) {
+        for values in [
+            &mut self.membership_file_names,
+            &mut self.rediscovery_file_names,
+            &mut self.membership_paths,
+            &mut self.rediscovery_paths,
+            &mut self.resolution_paths,
+            &mut self.ignore_prefixes,
+        ] {
+            let mut seen = HashSet::with_capacity(values.len());
+            values.retain(|value| seen.insert(value.clone()));
+        }
     }
 
     pub fn membership_file_names(&self) -> &[String] {
@@ -193,7 +220,7 @@ mod tests {
     use crate::{
         knowledge::{PackageScopeObservation, ScopeKind, WorkspaceRootObservation},
         package_manager::PackageManager,
-        toolchain::WorkspaceRoot,
+        toolchain::{ToolchainId, WorkspaceRoot},
     };
 
     fn empty_repository() -> RepositoryKnowledge {
@@ -226,7 +253,7 @@ mod tests {
     #[test]
     fn empty_repository_has_no_js_triggers() {
         let knowledge = empty_repository();
-        let change = ChangeKnowledge::build(&knowledge, None, Vec::new());
+        let change = ChangeKnowledge::build(&knowledge, None, Vec::new()).unwrap();
         assert!(change.membership_file_names().is_empty());
         assert!(change.resolution_paths().is_empty());
         assert!(change.package_directories().is_empty());
@@ -235,7 +262,8 @@ mod tests {
     #[test]
     fn javascript_includes_package_json_and_lockfile() {
         let knowledge = javascript_repository();
-        let change = ChangeKnowledge::build(&knowledge, Some(&PackageManager::Npm), Vec::new());
+        let change =
+            ChangeKnowledge::build(&knowledge, Some(&PackageManager::Npm), Vec::new()).unwrap();
         assert_eq!(change.membership_file_names(), ["package.json"]);
         assert_eq!(change.resolution_paths(), ["package-lock.json"]);
         assert!(change.package_directories().contains_key("web"));
@@ -247,7 +275,8 @@ mod tests {
     #[test]
     fn pnpm_workspace_config_projects_into_watch_spec() {
         let knowledge = javascript_repository();
-        let change = ChangeKnowledge::build(&knowledge, Some(&PackageManager::Pnpm), Vec::new());
+        let change =
+            ChangeKnowledge::build(&knowledge, Some(&PackageManager::Pnpm), Vec::new()).unwrap();
         assert_eq!(change.resolution_paths(), ["pnpm-lock.yaml"]);
         let watch = change.to_watch_spec();
         assert!(
@@ -256,5 +285,83 @@ mod tests {
                 .iter()
                 .any(|path| path.contains("pnpm-workspace"))
         );
+    }
+
+    #[test]
+    fn package_json_change_facts_ignore_producer_identity() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let custom = ToolchainId::new("custom");
+        let knowledge = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[PackageScopeObservation {
+                identity: Some("web".to_string()),
+                name_source: None,
+                definition_path: root.join_components(&["apps", "web", "package.json"]),
+                toolchain: custom.clone(),
+                scope_kind: ScopeKind::Package,
+            }],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("custom", root.clone()),
+                custom,
+            )],
+        )
+        .unwrap();
+
+        let change =
+            ChangeKnowledge::build(&knowledge, Some(&PackageManager::Npm), Vec::new()).unwrap();
+        assert_eq!(change.membership_file_names(), ["package.json"]);
+        assert!(change.package_directories().contains_key("web"));
+    }
+
+    #[test]
+    fn native_observations_do_not_require_matching_scope_provenance() {
+        let observation = ChangeObservation::new()
+            .with_rediscovery_file_name("Cargo.toml")
+            .with_resolution_path("Cargo.lock")
+            .with_ignore_prefix("target");
+        let change = ChangeKnowledge::build(&empty_repository(), None, vec![observation]).unwrap();
+
+        assert_eq!(change.membership_file_names(), ["Cargo.toml"]);
+        assert_eq!(change.resolution_paths(), ["Cargo.lock"]);
+        assert_eq!(change.ignore_prefixes(), ["target"]);
+    }
+
+    #[test]
+    fn change_facts_preserve_core_resolution_priority_and_deduplicate() {
+        let cargo = ChangeObservation::new()
+            .with_rediscovery_file_name("Cargo.toml")
+            .with_resolution_path("Cargo.lock");
+        let duplicate = ChangeObservation::new()
+            .with_resolution_path("Cargo.lock")
+            .with_rediscovery_file_name("Cargo.toml");
+
+        let change = ChangeKnowledge::build(
+            &javascript_repository(),
+            Some(&PackageManager::Npm),
+            vec![cargo, duplicate],
+        )
+        .unwrap();
+
+        assert_eq!(
+            change.membership_file_names(),
+            ["package.json", "Cargo.toml"]
+        );
+        assert_eq!(
+            change.resolution_paths(),
+            ["package-lock.json", "Cargo.lock"]
+        );
+    }
+
+    #[test]
+    fn malformed_native_observations_are_rejected() {
+        for observation in [
+            ChangeObservation::new().with_rediscovery_file_name("../Cargo.toml"),
+            ChangeObservation::new().with_resolution_path("../Cargo.lock"),
+            ChangeObservation::new().with_ignore_prefix(""),
+        ] {
+            assert!(ChangeKnowledge::build(&empty_repository(), None, vec![observation]).is_err());
+        }
     }
 }
