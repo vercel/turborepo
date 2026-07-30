@@ -4,7 +4,7 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_microfrontends::TurborepoMfeConfig;
 use turborepo_repository::{
-    cargo::{CargoContributor, CARGO_TOML},
+    cargo::CARGO_TOML,
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
     package_json::PackageJson,
     toolchain::ToolchainId,
@@ -71,7 +71,7 @@ async fn build_package_graph(base: &CommandBase) -> Result<PackageGraph, Error> 
         .with_single_package_mode(base.opts().run_opts.single_package)
         .with_allow_no_package_manager(base.opts().repo_opts.allow_no_package_manager);
     if cargo_enabled {
-        builder = builder.with_contributor(CargoContributor::new(repo_root.to_owned()));
+        builder = builder.with_cargo();
     }
 
     Ok(builder.build().await?)

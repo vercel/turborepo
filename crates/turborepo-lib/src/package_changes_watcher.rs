@@ -24,7 +24,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
     package_json::{self, PackageJson},
-    toolchain::{RepositoryContributor, WatchSpec},
+    toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
 
@@ -70,7 +70,7 @@ impl PackageChangesWatcher {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+        cargo_enabled: bool,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -83,7 +83,7 @@ impl PackageChangesWatcher {
             custom_turbo_json_path,
             single_package,
             allow_no_package_manager,
-            extra_contributors,
+            cargo_enabled,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -134,10 +134,8 @@ struct Subscriber {
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
     allow_no_package_manager: bool,
-    /// Toolchains registered in addition to JavaScript (e.g. Cargo when
-    /// futureFlags.experimentalCargoWorkspaces is enabled), mirroring the
-    /// run builder so the watcher sees the same package graph a run would.
-    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+    /// Mirrors the run builder so the watcher observes the same Cargo scopes.
+    cargo_enabled: bool,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -372,7 +370,7 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+        cargo_enabled: bool,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -424,16 +422,12 @@ impl Subscriber {
             custom_turbo_json_path: normalized_custom_path,
             single_package,
             allow_no_package_manager,
-            extra_contributors,
+            cargo_enabled,
         }
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let cargo_registered = self
-            .extra_contributors
-            .iter()
-            .any(|toolchain| toolchain.id() == turborepo_repository::toolchain::ToolchainId::RUST);
-        let allow_missing_for_cargo = cargo_registered
+        let allow_missing_for_cargo = self.cargo_enabled
             && self
                 .repo_root
                 .join_component(turborepo_repository::cargo::CARGO_TOML)
@@ -453,8 +447,8 @@ impl Subscriber {
             PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.single_package)
                 .with_allow_no_package_manager(self.allow_no_package_manager);
-        for toolchain in &self.extra_contributors {
-            builder = builder.with_contributor(toolchain.clone());
+        if self.cargo_enabled {
+            builder = builder.with_cargo();
         }
         let Ok(pkg_dep_graph) = builder.build().await else {
             tracing::debug!("package graph not available, package watcher not available");
@@ -886,11 +880,10 @@ mod test {
         hash_watcher::HashWatcher, NotifyError, OptionalWatch, WatchEventSender, WatchSource,
     };
     use turborepo_repository::{
-        cargo::CargoContributor,
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
         package_graph::{PackageGraph, PackageGraphBuilder, PackageName, PackageTaskContextKind},
         package_json::PackageJson,
-        toolchain::{RepositoryContributor, WatchSpec},
+        toolchain::WatchSpec,
     };
     use turborepo_scm::{GitHashes, SCM};
 
@@ -982,7 +975,7 @@ mod test {
     fn test_subscriber(
         repo_root: &AbsoluteSystemPathBuf,
         single_package: bool,
-        extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+        cargo_enabled: bool,
     ) -> Subscriber {
         let (_file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
         let (_discovery_tx, discovery_rx) = watch::channel(None);
@@ -1000,15 +993,15 @@ mod test {
             None,
             single_package,
             false,
-            extra_contributors,
+            cargo_enabled,
         )
     }
 
     async fn initialize_test_state(
         repo_root: &AbsoluteSystemPathBuf,
-        extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+        cargo_enabled: bool,
     ) -> Option<super::RepoState> {
-        test_subscriber(repo_root, false, extra_contributors)
+        test_subscriber(repo_root, false, cargo_enabled)
             .initialize_repo_state()
             .await
     }
@@ -1031,10 +1024,9 @@ mod test {
             .create_with_contents(b"{\"tasks\":{\"build\":{}}}")
             .unwrap();
 
-        let state =
-            initialize_test_state(&repo_root, vec![CargoContributor::new(repo_root.clone())])
-                .await
-                .expect("native toolchain permits an absent root package.json");
+        let state = initialize_test_state(&repo_root, true)
+            .await
+            .expect("Cargo permits an absent root package.json");
         assert!(!state.pkg_dep_graph.has_root_javascript_scope());
         assert!(state.root_turbo_json.is_some());
         assert_eq!(state.pkg_dep_graph.active_watch_spec(), cargo_watch_spec());
@@ -1076,10 +1068,9 @@ mod test {
             .create_with_contents(br#"{"name":"web"}"#)
             .unwrap();
 
-        let state =
-            initialize_test_state(&repo_root, vec![CargoContributor::new(repo_root.clone())])
-                .await
-                .expect("mixed graph initializes");
+        let state = initialize_test_state(&repo_root, true)
+            .await
+            .expect("mixed graph initializes");
         let names: HashSet<_> = hash_scopes(&state.pkg_dep_graph)
             .map(|scope| scope.name)
             .collect();
@@ -1097,18 +1088,16 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = canonical_temp_root(&tmp);
         assert!(
-            initialize_test_state(&repo_root, vec![CargoContributor::new(repo_root.clone())])
-                .await
-                .is_none(),
+            initialize_test_state(&repo_root, true).await.is_none(),
             "registered Cargo without a root Cargo.toml must not permit a missing package.json"
         );
 
         write_cargo_workspace(&repo_root);
-        let subscriber = test_subscriber(
-            &repo_root,
-            true,
-            vec![CargoContributor::new(repo_root.clone())],
+        assert!(
+            initialize_test_state(&repo_root, false).await.is_none(),
+            "a Cargo manifest must not bypass the disabled feature"
         );
+        let subscriber = test_subscriber(&repo_root, true, true);
         let state = subscriber
             .initialize_repo_state()
             .await
@@ -1142,22 +1131,14 @@ mod test {
             .create_with_contents(b"{")
             .unwrap();
         assert!(load_root_package_json(&repo_root, true).is_err());
-        assert!(
-            initialize_test_state(&repo_root, vec![CargoContributor::new(repo_root.clone())])
-                .await
-                .is_none()
-        );
+        assert!(initialize_test_state(&repo_root, true).await.is_none());
 
         repo_root.join_component("package.json").remove().unwrap();
         repo_root
             .join_component("Cargo.toml")
             .create_with_contents(b"[workspace")
             .unwrap();
-        assert!(
-            initialize_test_state(&repo_root, vec![CargoContributor::new(repo_root.clone())])
-                .await
-                .is_none()
-        );
+        assert!(initialize_test_state(&repo_root, true).await.is_none());
     }
 
     #[test]
@@ -1200,11 +1181,7 @@ mod test {
             .unwrap();
         write_cargo_workspace(&repo_root);
 
-        let subscriber = test_subscriber(
-            &repo_root,
-            true,
-            vec![CargoContributor::new(repo_root.clone())],
-        );
+        let subscriber = test_subscriber(&repo_root, true, true);
         assert_eq!(
             *subscriber
                 .watch_spec
@@ -1839,7 +1816,7 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
-            Vec::new(),
+            false,
         );
 
         TestWatcherHandle {

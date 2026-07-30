@@ -1078,7 +1078,6 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
-        cargo::CargoContributor,
         package_graph::{PackageGraph, PackageTaskContextKind},
         package_json::PackageJson,
     };
@@ -1173,7 +1172,7 @@ mod test {
             .unwrap();
 
         PackageGraph::builder_optional(repo_root, None)
-            .with_contributor(CargoContributor::new(repo_root.clone()))
+            .with_cargo()
             .with_closure_hasher(Arc::new(hash_sorted_closures))
             .build()
             .await

@@ -1297,12 +1297,12 @@ impl PruneDomain for CargoPruneKnowledge {
 /// The Cargo repository contributor. Registered during graph construction when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
 /// root contains a `Cargo.toml`.
-pub struct CargoContributor {
+pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
 }
 
 impl CargoContributor {
-    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+    pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
         Arc::new(Self { repo_root })
     }
 }

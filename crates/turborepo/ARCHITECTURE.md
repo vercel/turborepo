@@ -304,6 +304,11 @@ JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
 
+Production callers enable Cargo through `PackageGraphBuilder::with_cargo`
+rather than constructing or retaining contributor objects. Run, watch, daemon,
+prune, query, hashing, and cache paths carry only the feature decision; each
+graph generation creates and drops its own Cargo contributor.
+
 Contract-derived I/O receives the same task-scoped arguments as execution plus
 a narrow, platform-aware startup-environment projection keyed by toolchain.
 Dependency tasks do not inherit arguments for a different requested task, each
