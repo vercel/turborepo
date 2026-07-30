@@ -387,6 +387,8 @@ struct BuildState<'a, S, T> {
     native_relationships: HashMap<String, Vec<Relationship>>,
     native_external_resolutions: Vec<ExternalResolutionDomain>,
     native_task_observations: Vec<crate::native_tasks::NativeTaskObservation>,
+    native_change_observations: Vec<crate::change_knowledge::ChangeObservation>,
+    native_prune_domains: Vec<Arc<dyn crate::prune_knowledge::PruneDomain>>,
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
@@ -669,6 +671,8 @@ where
             native_relationships: HashMap::new(),
             native_external_resolutions: Vec::new(),
             native_task_observations: Vec::new(),
+            native_change_observations: Vec::new(),
+            native_prune_domains: Vec::new(),
             lockfile,
             package_manager: None,
             package_jsons,
@@ -788,9 +792,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 continue;
             }
             let output = toolchain.discover_packages().await?;
-            let (packages, roots, external_resolutions) = output.into_parts();
+            let (packages, roots, external_resolutions, changes, prune_domains) =
+                output.into_parts();
             self.native_external_resolutions
                 .extend(external_resolutions);
+            self.native_change_observations.extend(changes);
+            self.native_prune_domains.extend(prune_domains);
             workspace_roots.extend(
                 roots
                     .into_iter()
@@ -847,6 +854,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_relationships,
             native_external_resolutions,
             native_task_observations,
+            native_change_observations,
+            native_prune_domains,
             root_package_json,
             lockfile,
             package_manager,
@@ -864,6 +873,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_relationships,
             native_external_resolutions,
             native_task_observations,
+            native_change_observations,
+            native_prune_domains,
             root_package_json,
             lockfile,
             package_manager,
@@ -997,10 +1008,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             )
             .map_err(|error| Error::TaskContracts(error.to_string()))?
         });
-        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::javascript(
+        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::build(
             &knowledge,
             package_manager.as_ref(),
+            Vec::new(),
         ));
+        let prune_knowledge = Arc::new(crate::prune_knowledge::PruneKnowledge::default());
 
         Ok(PackageGraph {
             graph: workspace_graph,
@@ -1022,6 +1035,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_task_knowledge,
             task_contract_knowledge,
             change_knowledge,
+            prune_knowledge,
         })
     }
 }
@@ -1178,6 +1192,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             relationship_knowledge,
             native_external_resolutions,
             native_task_observations,
+            native_change_observations,
+            native_prune_domains,
             root_package_json,
             javascript,
             toolchains,
@@ -1194,6 +1210,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_relationships: HashMap::new(),
             native_external_resolutions,
             native_task_observations,
+            native_change_observations,
+            native_prune_domains,
             root_package_json,
             lockfile,
             package_manager,
@@ -1365,6 +1383,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             knowledge,
             relationship_knowledge,
             native_task_observations,
+            native_change_observations,
+            native_prune_domains,
             root_package_json,
             toolchains,
             ..
@@ -1420,9 +1440,13 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 discovery::Error::Failed(Box::new(Error::TaskContracts(error.to_string())))
             })?
         });
-        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::javascript(
+        let change_knowledge = Arc::new(crate::change_knowledge::ChangeKnowledge::build(
             &knowledge,
             package_manager.as_ref(),
+            native_change_observations,
+        ));
+        let prune_knowledge = Arc::new(crate::prune_knowledge::PruneKnowledge::new(
+            native_prune_domains,
         ));
 
         Ok(PackageGraph {
@@ -1445,6 +1469,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             native_task_knowledge,
             task_contract_knowledge,
             change_knowledge,
+            prune_knowledge,
         })
     }
 }
@@ -1557,17 +1582,6 @@ mod test {
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async move { Ok(DiscoveredPackages::new(Vec::new(), self.roots.clone())) })
         }
-
-        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
-            crate::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<Option<crate::toolchain::PrunePlan>, crate::toolchain::Error> {
-            Ok(None)
-        }
     }
 
     struct PackageWithoutRootToolchain {
@@ -1591,17 +1605,6 @@ mod test {
                 ))
             })
         }
-
-        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
-            crate::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<Option<crate::toolchain::PrunePlan>, crate::toolchain::Error> {
-            Ok(None)
-        }
     }
 
     struct PackageContributingToolchain {
@@ -1622,17 +1625,6 @@ mod test {
                     vec![WorkspaceRoot::new("custom", self.root.clone())],
                 ))
             })
-        }
-
-        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
-            crate::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<Option<crate::toolchain::PrunePlan>, crate::toolchain::Error> {
-            Ok(None)
         }
     }
 

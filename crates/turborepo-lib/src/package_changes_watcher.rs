@@ -3,7 +3,10 @@ use std::{
     collections::{HashMap, HashSet},
     io::ErrorKind,
     ops::DerefMut,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
 };
 
 use notify::Event;
@@ -125,6 +128,7 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     repository_ignore: RepositoryIgnore,
     watch_spec: Arc<RwLock<WatchSpec>>,
+    watch_spec_ready: Arc<AtomicBool>,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -251,11 +255,10 @@ fn classify_changed_files(
     // Whether an anchored path is under one of the toolchains'
     // build-byproduct directories.
     let in_ignored_prefix = |path: &AnchoredSystemPathBuf| {
-        watch_spec.ignore_prefixes.iter().any(|prefix| {
-            path.components()
-                .next()
-                .is_some_and(|component| component.as_str() == prefix)
-        })
+        watch_spec
+            .ignore_prefixes
+            .iter()
+            .any(|prefix| path_is_under_prefix(path, prefix))
     };
 
     // Toolchain workspace-definition files (e.g. Cargo manifests and the
@@ -330,6 +333,15 @@ fn classify_changed_files(
     }
 }
 
+fn path_is_under_prefix(path: &AnchoredSystemPath, prefix: &str) -> bool {
+    let path = path.to_unix();
+    path.as_str() == prefix
+        || path
+            .as_str()
+            .strip_prefix(prefix)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
 impl RepoState {
     fn get_change_mapper(&self) -> Option<ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>> {
         let Ok(package_change_mapper) = GlobalDepsPackageChangeMapper::new(
@@ -398,19 +410,16 @@ impl Subscriber {
         let repository_ignore = file_events
             .repository_ignore()
             .unwrap_or_else(|| RepositoryIgnore::new(repo_root.as_std_path()));
-        let mut watch_spec = WatchSpec::default();
-        if !single_package {
-            for toolchain in &extra_toolchains {
-                watch_spec.extend(toolchain.watch_spec());
-            }
-        }
-
         Subscriber {
             repo_root,
             file_events,
             changed_files: Default::default(),
             repository_ignore,
-            watch_spec: Arc::new(RwLock::new(watch_spec)),
+            watch_spec: Arc::new(RwLock::new(WatchSpec::default())),
+            // Before the first graph generation is published, retain every
+            // in-repository event. This closes the discovery/subscription race
+            // without consulting live toolchains for bootstrap facts.
+            watch_spec_ready: Arc::new(AtomicBool::new(false)),
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
@@ -506,6 +515,7 @@ impl Subscriber {
             .watch_spec
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = pkg_dep_graph.active_watch_spec();
+        self.watch_spec_ready.store(true, Ordering::Release);
 
         Some(RepoState {
             root_turbo_json,
@@ -595,6 +605,7 @@ impl Subscriber {
         let repo_root = self.repo_root.clone();
         let repository_ignore = self.repository_ignore.clone();
         let watch_spec = self.watch_spec.clone();
+        let watch_spec_ready = self.watch_spec_ready.clone();
         let gitignore_path = repo_root.join_component(".gitignore");
         let config_paths = [
             repo_root.join_component(CONFIG_FILE),
@@ -620,14 +631,16 @@ impl Subscriber {
                 let Ok(path) = repo_root.anchor(&absolute_path) else {
                     return false;
                 };
+                if !watch_spec_ready.load(Ordering::Acquire) {
+                    return true;
+                }
                 let watch_spec = watch_spec
                     .read()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                let in_ignored_prefix = watch_spec.ignore_prefixes.iter().any(|prefix| {
-                    path.components()
-                        .next()
-                        .is_some_and(|component| component.as_str() == prefix)
-                });
+                let in_ignored_prefix = watch_spec
+                    .ignore_prefixes
+                    .iter()
+                    .any(|prefix| path_is_under_prefix(&path, prefix));
                 if in_ignored_prefix {
                     return false;
                 }
@@ -1001,6 +1014,14 @@ mod test {
             .await
     }
 
+    fn cargo_watch_spec() -> WatchSpec {
+        WatchSpec {
+            definition_file_names: vec!["Cargo.toml".to_string()],
+            definition_paths: vec!["Cargo.lock".to_string()],
+            ignore_prefixes: vec!["target".to_string()],
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn initializes_pure_cargo_and_preserves_root_and_aggregate_scopes() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1016,10 +1037,7 @@ mod test {
             .expect("native toolchain permits an absent root package.json");
         assert!(!state.pkg_dep_graph.has_root_javascript_scope());
         assert!(state.root_turbo_json.is_some());
-        assert_eq!(
-            state.pkg_dep_graph.active_watch_spec(),
-            turborepo_repository::cargo::watch_spec()
-        );
+        assert_eq!(state.pkg_dep_graph.active_watch_spec(), cargo_watch_spec());
 
         let scopes: Vec<_> = hash_scopes(&state.pkg_dep_graph).collect();
         assert_eq!(scopes.first().unwrap().name, PackageName::Root);
@@ -1418,8 +1436,7 @@ mod test {
 
         // Manifests define the crate set and its edges; the watcher's graph
         // is stale after any manifest change.
-        let action =
-            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        let action = f.classify_with_spec(&trie, &[], None, cargo_watch_spec());
         assert!(matches!(action, FileChangeAction::ConfigChanged));
 
         // Without the Cargo toolchain registered, the same file is ordinary
@@ -1435,8 +1452,7 @@ mod test {
         let mut trie = Trie::new();
         trie.insert(lock.to_string(), ());
 
-        let action =
-            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        let action = f.classify_with_spec(&trie, &[], None, cargo_watch_spec());
         assert!(matches!(action, FileChangeAction::ConfigChanged));
     }
 
@@ -1459,8 +1475,7 @@ mod test {
             (),
         );
 
-        let action =
-            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        let action = f.classify_with_spec(&trie, &[], None, cargo_watch_spec());
         assert!(
             matches!(action, FileChangeAction::NoRelevantChanges),
             "target/ writes must be dropped, got {action:?}"
@@ -1470,6 +1485,24 @@ mod test {
         // ordinary.
         let action = f.classify_with_spec(&trie, &[], None, WatchSpec::default());
         assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
+    }
+
+    #[tokio::test]
+    async fn classify_nested_target_directory_prefix_writes_ignored() {
+        let f = ClassifyFixture::new().await;
+        let mut trie = Trie::new();
+        trie.insert(
+            f.repo_root
+                .join_components(&["build", "cargo", "debug", "app"])
+                .to_string(),
+            (),
+        );
+        let spec = WatchSpec {
+            ignore_prefixes: vec!["build/cargo".to_string()],
+            ..WatchSpec::default()
+        };
+        let action = f.classify_with_spec(&trie, &[], None, spec);
+        assert!(matches!(action, FileChangeAction::NoRelevantChanges));
     }
 
     #[tokio::test]

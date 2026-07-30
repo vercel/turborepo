@@ -42,11 +42,13 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
         PackageResolution, ResolutionCompleteness, ResolutionFingerprint,
     },
     package_json::{DependencyKind, PackageJson},
+    prune_knowledge::{PruneDomain, PrunePlan},
     relationships::Relationship,
     toolchain::{
         self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain,
@@ -351,9 +353,7 @@ pub enum CargoPackageKind {
     Workspace,
 }
 
-/// Cargo-specific details for a discovered package, retained by the
-/// [`CargoToolchain`] (keyed by package name) rather than attached to the
-/// toolchain-neutral `PackageInfo`.
+/// Cargo-specific details captured in immutable task-contract knowledge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CargoPackageDetails {
     pub kind: CargoPackageKind,
@@ -361,9 +361,6 @@ pub struct CargoPackageDetails {
     /// workspace aggregate).
     pub deliverables: Vec<Deliverable>,
     pub manifest_alters_output_layout: bool,
-    /// The crate's directory, repo-root-relative in unix form (empty for
-    /// the workspace aggregate).
-    pub dir: String,
 }
 
 const VERIFICATION_SUBCOMMANDS: &[(&str, &str)] = &[
@@ -1179,37 +1176,123 @@ fn cargo_output_layout(
     })
 }
 
+fn cargo_change_observation(
+    repo_root: &AbsoluteSystemPath,
+    target_directory: Option<&AbsoluteSystemPath>,
+) -> ChangeObservation {
+    let mut observation = ChangeObservation::new(ToolchainId::RUST)
+        .with_rediscovery_file_name(CARGO_TOML)
+        .with_resolution_path(CARGO_LOCK);
+    if let Some(prefix) = target_directory
+        .and_then(|path| repo_root.anchor(path).ok())
+        .filter(|path| path.components().next().is_some())
+    {
+        observation = observation.with_ignore_prefix(prefix.to_unix().to_string());
+    }
+    observation
+}
+
+/// Cargo prune inputs captured atomically with the discovery generation.
+#[derive(Debug)]
+struct CargoPruneKnowledge {
+    toolchain: ToolchainId,
+    lockfile: String,
+    root_manifest: String,
+    package_directories: HashMap<String, String>,
+}
+
+impl CargoPruneKnowledge {
+    fn discover(repo_root: &AbsoluteSystemPath, crates: &[CargoCrate]) -> Result<Self, Error> {
+        let lockfile = match repo_root.join_component(CARGO_LOCK).read_to_string() {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err(Error::MissingLockfile);
+            }
+            Err(error) => return Err(Error::LockfileRead(error)),
+        };
+        let root_manifest = repo_root
+            .join_component(CARGO_TOML)
+            .read_to_string()
+            .map_err(Error::WorkspaceFileRead)?;
+        let package_directories = crates
+            .iter()
+            .filter_map(|cargo_crate| {
+                let directory = cargo_crate.manifest_path.parent()?;
+                let directory = AnchoredSystemPathBuf::new(repo_root, directory).ok()?;
+                Some((cargo_crate.name.clone(), directory.to_unix().to_string()))
+            })
+            .collect();
+        Ok(Self {
+            toolchain: ToolchainId::RUST,
+            lockfile,
+            root_manifest,
+            package_directories,
+        })
+    }
+}
+
+impl PruneDomain for CargoPruneKnowledge {
+    fn toolchain(&self) -> &ToolchainId {
+        &self.toolchain
+    }
+
+    fn plan(
+        &self,
+        kept_packages: &[String],
+    ) -> Result<Option<PrunePlan>, crate::prune_knowledge::Error> {
+        if kept_packages.is_empty() {
+            return Ok(None);
+        }
+        let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&self.lockfile, kept_packages)
+            .map_err(|error| failed(Error::Lockfile(error)))?;
+
+        let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
+        let mut extra_packages = Vec::new();
+        for member in &pruned_lock.members {
+            let Some(directory) = self.package_directories.get(member) else {
+                tracing::warn!(
+                    "Cargo.lock member {member} is not a discovered workspace crate; skipping"
+                );
+                continue;
+            };
+            kept_dirs.push(directory.clone());
+            if !kept_packages.contains(member) {
+                extra_packages.push(member.clone());
+            }
+        }
+        let pruned_manifest =
+            prune_root_manifest(&self.root_manifest, &kept_dirs).map_err(failed)?;
+        Ok(Some(PrunePlan {
+            extra_packages,
+            root_files: vec![
+                (CARGO_LOCK.to_string(), pruned_lock.lockfile),
+                (CARGO_TOML.to_string(), pruned_manifest),
+            ],
+            copy_paths: [
+                "rust-toolchain.toml",
+                "rust-toolchain",
+                ".cargo/config.toml",
+                ".cargo/config",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        }))
+    }
+}
+
 /// The Cargo toolchain. Registered in the
 /// [`crate::toolchain::ToolchainRegistry`] when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
 /// root contains a `Cargo.toml`.
 pub struct CargoToolchain {
     repo_root: AbsoluteSystemPathBuf,
-    /// Per-package details retained for entrypoint selection and pruning.
-    details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
 }
 
 impl CargoToolchain {
     pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
-        Arc::new(Self {
-            repo_root,
-            details: std::sync::Mutex::new(HashMap::new()),
-        })
-    }
-
-    fn package_details(&self, package: &str) -> Option<CargoPackageDetails> {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(package)
-            .cloned()
-    }
-
-    fn record_details(&self, package: String, details: CargoPackageDetails) {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(package, details);
+        Arc::new(Self { repo_root })
     }
 }
 
@@ -1291,87 +1374,6 @@ impl Toolchain for CargoToolchain {
         vars
     }
 
-    fn watch_spec(&self) -> toolchain::WatchSpec {
-        watch_spec()
-    }
-
-    /// Prune the Cargo workspace machinery around the kept crates:
-    ///
-    /// * `Cargo.lock` is subset to the closure of the kept crates, so `cargo
-    ///   build --locked` succeeds in the pruned output.
-    /// * The lock walk may surface members beyond Turborepo's package-graph
-    ///   closure (Cargo.lock merges dev-dependency edges, including
-    ///   cycle-participating ones the package graph drops). Their manifests are
-    ///   referenced by kept crates, so they are reported as extra packages to
-    ///   keep.
-    /// * The root `Cargo.toml` is rewritten: explicit `members`, filtered
-    ///   `default-members`, `[workspace.dependencies]` path entries to removed
-    ///   crates dropped.
-    /// * Toolchain and Cargo config files are carried over.
-    fn prune_plan(
-        &self,
-        kept_packages: &[String],
-    ) -> Result<Option<toolchain::PrunePlan>, toolchain::Error> {
-        if kept_packages.is_empty() {
-            return Ok(None);
-        }
-        let failed = |err: Error| toolchain::Error::Failed(Box::new(err));
-
-        let lock_path = self.repo_root.join_component(CARGO_LOCK);
-        let lock_contents = match lock_path.read_to_string() {
-            Ok(contents) => contents,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(failed(Error::MissingLockfile));
-            }
-            Err(error) => return Err(failed(Error::LockfileRead(error))),
-        };
-        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&lock_contents, kept_packages)
-            .map_err(|err| failed(Error::Lockfile(err)))?;
-
-        let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
-        let mut extra_packages = Vec::new();
-        for member in &pruned_lock.members {
-            let Some(details) = self.package_details(member) else {
-                // A lock member that discovery never saw; the lockfile and
-                // the workspace disagree. Keep going — the manifest rewrite
-                // simply won't list it, and cargo will report specifics.
-                tracing::warn!(
-                    "Cargo.lock member {member} is not a discovered workspace crate; skipping"
-                );
-                continue;
-            };
-            kept_dirs.push(details.dir.clone());
-            if !kept_packages.contains(member) {
-                extra_packages.push(member.clone());
-            }
-        }
-
-        let manifest_contents = self
-            .repo_root
-            .join_component(CARGO_TOML)
-            .read_to_string()
-            .map_err(|err| failed(Error::WorkspaceFileRead(err)))?;
-        let pruned_manifest =
-            prune_root_manifest(&manifest_contents, &kept_dirs).map_err(failed)?;
-
-        Ok(Some(toolchain::PrunePlan {
-            extra_packages,
-            root_files: vec![
-                (CARGO_LOCK.to_string(), pruned_lock.lockfile),
-                (CARGO_TOML.to_string(), pruned_manifest),
-            ],
-            copy_paths: [
-                "rust-toolchain.toml",
-                "rust-toolchain",
-                ".cargo/config.toml",
-                ".cargo/config",
-            ]
-            .iter()
-            .map(|path| path.to_string())
-            .collect(),
-        }))
-    }
-
     /// Our lock subset is reachability-based, but Cargo's real resolution
     /// is feature-aware: shrinking the workspace can deactivate features
     /// that were the only reason some packages were in the closure. Rather
@@ -1450,6 +1452,11 @@ impl Toolchain for CargoToolchain {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
+            let change_observation =
+                cargo_change_observation(&self.repo_root, target_directory.as_deref());
+            let prune_domain = CargoPruneKnowledge::discover(&self.repo_root, &crates)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+
             // Each crate contributes its already-classified native internal
             // relationships directly. No JavaScript dependency descriptor or
             // package-manager policy participates in Cargo graph assembly.
@@ -1504,19 +1511,10 @@ impl Toolchain for CargoToolchain {
                 } else {
                     CargoPackageKind::Library
                 };
-                let dir = cargo_crate
-                    .manifest_path
-                    .parent()
-                    .and_then(|dir| {
-                        turbopath::AnchoredSystemPathBuf::new(&self.repo_root, dir).ok()
-                    })
-                    .map(|dir| dir.to_unix().to_string())
-                    .unwrap_or_default();
                 let details = CargoPackageDetails {
                     kind,
                     deliverables: cargo_crate.deliverables,
                     manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
-                    dir,
                 };
                 let native_tasks = native_tasks_for_package(&details, &cargo_crate.name);
                 let task_contract = CargoTaskContract::new(
@@ -1524,7 +1522,6 @@ impl Toolchain for CargoToolchain {
                     details.clone(),
                     workspace_contract_details.clone(),
                 );
-                self.record_details(cargo_crate.name.clone(), details);
                 let external_dependencies: HashSet<turborepo_lockfiles::Package> = closures
                     .remove(&cargo_crate.name)
                     .unwrap_or_default()
@@ -1559,7 +1556,6 @@ impl Toolchain for CargoToolchain {
                     kind: CargoPackageKind::Workspace,
                     deliverables: Vec::new(),
                     manifest_alters_output_layout: false,
-                    dir: String::new(),
                 };
                 let workspace_native_tasks =
                     native_tasks_for_package(&workspace_package_details, &workspace_name);
@@ -1568,7 +1564,6 @@ impl Toolchain for CargoToolchain {
                     workspace_package_details.clone(),
                     workspace_contract_details.clone(),
                 );
-                self.record_details(workspace_name.clone(), workspace_package_details);
                 crate_names.sort();
                 let relationships = crate_names
                     .into_iter()
@@ -1606,30 +1601,15 @@ impl Toolchain for CargoToolchain {
                 },
             );
             Ok(DiscoveredPackages::new(packages, workspace_roots)
-                .with_external_resolution(resolution))
+                .with_external_resolution(resolution)
+                .with_change_observation(change_observation)
+                .with_prune_domain(Arc::new(prune_domain)))
         })
     }
 }
 
 /// The Cargo default build directory, relative to the repo root.
 pub const TARGET_DIR: &str = "target";
-
-/// How filesystem events relate to Cargo in watch mode. Manifests and the
-/// lockfile define the crate set and its edges — any change makes the
-/// watcher's package graph stale, so they trigger full rediscovery
-/// (`Cargo.toml` files under `target/` are build byproducts, not workspace
-/// definition, and are exempted via the ignore prefix). Events under the
-/// root `target/` directory are dropped entirely: Cargo writes there
-/// continuously during builds, and letting those events through would
-/// re-trigger the very tasks that produced them — usually `target/` is
-/// gitignored, but a feedback loop must not depend on a `.gitignore` entry.
-pub fn watch_spec() -> toolchain::WatchSpec {
-    toolchain::WatchSpec {
-        definition_file_names: vec![CARGO_TOML.to_string()],
-        definition_paths: vec![CARGO_LOCK.to_string()],
-        ignore_prefixes: vec![TARGET_DIR.to_string()],
-    }
-}
 
 /// Whether `name` is a valid Cargo crate name for our purposes. Cargo itself
 /// enforces this for published crates; local manifests are looser, so guard
@@ -2302,7 +2282,6 @@ mod test {
             kind,
             deliverables,
             manifest_alters_output_layout: false,
-            dir: "crate".to_string(),
         };
         let deliverable = |name: &str, kind| Deliverable {
             name: name.to_string(),
@@ -2619,7 +2598,6 @@ dependencies = ["lib-a"]
                 kind: DeliverableKind::Bin,
             }],
             manifest_alters_output_layout: false,
-            dir: "crates/app".to_string(),
         }
     }
 
@@ -3533,13 +3511,33 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         assert_eq!(toolchain.id(), ToolchainId::RUST);
 
-        let (packages, roots, resolutions) =
+        let (packages, roots, resolutions, changes, prune_domains) =
             toolchain.discover_packages().await.unwrap().into_parts();
         assert_eq!(roots.len(), 1);
         assert_eq!(roots[0].kind(), "cargo");
         assert_eq!(roots[0].path(), root.as_ref());
         assert_eq!(resolutions.len(), 1);
         assert_eq!(resolutions[0].toolchain(), &ToolchainId::RUST);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(prune_domains.len(), 1);
+        let prune_plan = prune_domains[0]
+            .plan(&["app".to_string()])
+            .unwrap()
+            .expect("a retained Cargo crate produces a prune plan");
+        assert_eq!(
+            prune_plan
+                .root_files
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<Vec<_>>(),
+            [CARGO_LOCK, CARGO_TOML]
+        );
+        assert!(
+            prune_plan
+                .copy_paths
+                .iter()
+                .any(|path| path == ".cargo/config")
+        );
         assert_eq!(resolutions[0].definition_sources()[0].as_str(), CARGO_LOCK);
         let ExternalResolutionData::Resolved {
             completeness,
@@ -3609,11 +3607,13 @@ release: 1.96.0-nightly\n",
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
         let toolchain = CargoToolchain::new(root);
-        let (packages, roots, resolutions) =
+        let (packages, roots, resolutions, changes, prune_domains) =
             toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
         assert!(roots.is_empty());
         assert!(resolutions.is_empty());
+        assert!(changes.is_empty());
+        assert!(prune_domains.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3622,11 +3622,13 @@ release: 1.96.0-nightly\n",
         write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
 
         let toolchain = CargoToolchain::new(root);
-        let (packages, roots, resolutions) =
+        let (packages, roots, resolutions, changes, prune_domains) =
             toolchain.discover_packages().await.unwrap().into_parts();
         assert!(packages.is_empty());
         assert_eq!(roots.len(), 1);
         assert!(resolutions.is_empty());
+        assert!(changes.is_empty());
+        assert!(prune_domains.is_empty());
     }
 
     fn package_info(name: &str) -> crate::package_graph::PackageInfo {
@@ -3640,7 +3642,7 @@ release: 1.96.0-nightly\n",
 
     #[rustfmt::skip]
     fn task_context<'a>(
-        toolchain: &CargoToolchain,
+        _toolchain: &CargoToolchain,
         root: &'a AbsoluteSystemPath,
         name: &str,
         directory: &'a str,
@@ -3651,9 +3653,27 @@ release: 1.96.0-nightly\n",
         } else {
             crate::package_graph::PackageTaskContextKind::Package
         };
-        let native_tasks = toolchain
-            .package_details(name)
-            .map(|details| native_tasks_for_package(&details, name));
+        let cargo_kind = if directory.is_empty() {
+            CargoPackageKind::Workspace
+        } else if name == "app" {
+            CargoPackageKind::Entrypoint
+        } else {
+            CargoPackageKind::Library
+        };
+        let deliverables = if cargo_kind == CargoPackageKind::Entrypoint {
+            vec![Deliverable {
+                name: name.to_string(),
+                kind: DeliverableKind::Bin,
+            }]
+        } else {
+            Vec::new()
+        };
+        let details = CargoPackageDetails {
+            kind: cargo_kind,
+            deliverables,
+            manifest_alters_output_layout: false,
+        };
+        let native_tasks = Some(native_tasks_for_package(&details, name));
         crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
             name.into(),
             root,

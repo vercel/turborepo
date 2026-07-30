@@ -85,6 +85,8 @@ pub enum Error {
     PackageNotPruneable(String),
     #[error(transparent)]
     Toolchain(#[from] turborepo_repository::toolchain::Error),
+    #[error(transparent)]
+    PruneKnowledge(#[from] turborepo_repository::prune_knowledge::Error),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -289,16 +291,14 @@ pub async fn prune(
         }
     }
 
-    // Each toolchain contributes whatever the pruned repository needs
-    // beyond the packages themselves: extra members it requires, rewritten
-    // workspace files, and config files to carry over.
-    for toolchain in prune.package_graph.toolchains().iter() {
-        let toolchain_id = toolchain.id();
-        let kept = kept_by_toolchain.remove(&toolchain_id).unwrap_or_default();
-        let Some(plan) = toolchain.prune_plan(&kept)? else {
+    // Project plans from immutable knowledge captured by this graph's
+    // discovery generation; live toolchains retain no prune authority.
+    for toolchain_id in prune.package_graph.prune_toolchains() {
+        let kept = kept_by_toolchain.remove(toolchain_id).unwrap_or_default();
+        let Some(plan) = prune.package_graph.prune_plan(toolchain_id, &kept)? else {
             continue;
         };
-        planned_toolchains.insert(toolchain_id);
+        planned_toolchains.insert(toolchain_id.clone());
         for extra in plan.extra_packages {
             let name = PackageName::Other(extra.clone());
             let context = prune.package_context(&name)?;

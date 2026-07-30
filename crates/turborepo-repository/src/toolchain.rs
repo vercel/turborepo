@@ -8,8 +8,8 @@
 //! (e.g. Cargo) register alongside it in the [`ToolchainRegistry`].
 //!
 //! The trait grows one concern at a time (discovery today; command
-//! resolution, derived task inputs/outputs, external-dependency hashing,
-//! watch triggers, and prune participation as they are needed), and every
+//! resolution, derived task inputs/outputs, and external-dependency hashing
+//! as they are needed), and every
 //! concern must ship with real implementations for every registered
 //! toolchain.
 //!
@@ -41,8 +41,8 @@
 //!   Lockfile handling gains a trait surface with external dependency hashing;
 //!   dependency splitting remains JS-native for now.
 //! - The prune command's JavaScript machinery (lockfile subgraphing,
-//!   workspace-file rewriting, patches) is its native path rather than a
-//!   [`Toolchain::prune_plan`] implementation.
+//!   workspace-file rewriting, patches) remains on its native path rather than
+//!   the immutable prune-knowledge path.
 
 use std::{borrow::Cow, ffi::OsString, fmt, future::Future, pin::Pin, sync::Arc};
 
@@ -50,10 +50,12 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 
 use crate::{
+    change_knowledge::ChangeObservation,
     discovery::{self, PackageDiscovery},
     external_resolution::ExternalResolutionDomain,
     package_json::PackageJson,
     package_manager::PackageManager,
+    prune_knowledge::PruneDomain,
     relationships::Relationship,
 };
 
@@ -180,7 +182,17 @@ pub struct DiscoveredPackages {
     packages: Vec<DiscoveredPackage>,
     workspace_roots: Vec<WorkspaceRoot>,
     external_resolutions: Vec<ExternalResolutionDomain>,
+    change_observations: Vec<ChangeObservation>,
+    prune_domains: Vec<Arc<dyn PruneDomain>>,
 }
+
+pub type DiscoveredPackagesParts = (
+    Vec<DiscoveredPackage>,
+    Vec<WorkspaceRoot>,
+    Vec<ExternalResolutionDomain>,
+    Vec<ChangeObservation>,
+    Vec<Arc<dyn PruneDomain>>,
+);
 
 impl DiscoveredPackages {
     pub fn new(packages: Vec<DiscoveredPackage>, workspace_roots: Vec<WorkspaceRoot>) -> Self {
@@ -188,11 +200,23 @@ impl DiscoveredPackages {
             packages,
             workspace_roots,
             external_resolutions: Vec::new(),
+            change_observations: Vec::new(),
+            prune_domains: Vec::new(),
         }
     }
 
     pub fn with_external_resolution(mut self, resolution: ExternalResolutionDomain) -> Self {
         self.external_resolutions.push(resolution);
+        self
+    }
+
+    pub fn with_change_observation(mut self, observation: ChangeObservation) -> Self {
+        self.change_observations.push(observation);
+        self
+    }
+
+    pub fn with_prune_domain(mut self, domain: Arc<dyn PruneDomain>) -> Self {
+        self.prune_domains.push(domain);
         self
     }
 
@@ -204,17 +228,13 @@ impl DiscoveredPackages {
         &self.workspace_roots
     }
 
-    pub fn into_parts(
-        self,
-    ) -> (
-        Vec<DiscoveredPackage>,
-        Vec<WorkspaceRoot>,
-        Vec<ExternalResolutionDomain>,
-    ) {
+    pub fn into_parts(self) -> DiscoveredPackagesParts {
         (
             self.packages,
             self.workspace_roots,
             self.external_resolutions,
+            self.change_observations,
+            self.prune_domains,
         )
     }
 }
@@ -386,17 +406,6 @@ pub trait Toolchain: Send + Sync {
     /// one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 
-    /// How filesystem events relate to this toolchain in watch mode:
-    /// workspace-definition files whose change requires rediscovery, and
-    /// build-byproduct directories whose events must be ignored.
-    fn watch_spec(&self) -> WatchSpec;
-
-    /// What `turbo prune` must carry for this toolchain so the pruned
-    /// repository is self-contained, given the names of this toolchain's
-    /// packages already selected for the pruned output. `None` means the
-    /// toolchain contributes nothing beyond the packages themselves.
-    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error>;
-
     /// Called after the pruned output is fully written, with its root
     /// directory. Toolchains may polish their own files in place (e.g.
     /// Cargo canonicalizes the pruned lockfile through `cargo metadata`) and
@@ -457,25 +466,7 @@ pub struct CompileCacheEndpoint {
 /// this marker to the embedded sccache instead of the normal CLI.
 pub const COMPILE_CACHE_WRAPPER_ENV: &str = "TURBO_SCCACHE_WRAPPER";
 
-/// A toolchain's contribution to a pruned repository. See
-/// [`Toolchain::prune_plan`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PrunePlan {
-    /// Packages that must additionally be kept and copied, beyond the ones
-    /// requested (e.g. crates reachable only through dev-dependency edges,
-    /// whose manifests are referenced by kept crates).
-    pub extra_packages: Vec<String>,
-    /// Files to write into the pruned repository: (repo-relative unix path,
-    /// contents). They define dependency resolution, so they go to the full
-    /// layer and, in docker mode, the json layer.
-    pub root_files: Vec<(String, String)>,
-    /// Repo-relative unix paths of toolchain configuration files to copy
-    /// verbatim when present (missing ones are skipped).
-    pub copy_paths: Vec<String>,
-}
-
-/// How filesystem events relate to a toolchain in watch mode. See
-/// [`Toolchain::watch_spec`].
+/// Watch classification projected from immutable change knowledge.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WatchSpec {
     /// Manifest file names that define the toolchain's workspace membership
@@ -498,16 +489,6 @@ pub struct WatchSpec {
 pub struct TaskDefaults {
     /// Whether task logs and outputs are cacheable.
     pub cache: Option<bool>,
-}
-
-impl WatchSpec {
-    /// Merge another spec into this one.
-    pub fn extend(&mut self, other: WatchSpec) {
-        self.definition_file_names
-            .extend(other.definition_file_names);
-        self.definition_paths.extend(other.definition_paths);
-        self.ignore_prefixes.extend(other.ignore_prefixes);
-    }
 }
 
 /// Platform-aware environment projection for one toolchain's I/O derivation.
@@ -648,15 +629,6 @@ impl ToolchainRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &dyn Toolchain> {
         self.toolchains.iter().map(AsRef::as_ref)
     }
-
-    /// The union of every registered toolchain's [`WatchSpec`].
-    pub fn watch_spec(&self) -> WatchSpec {
-        let mut merged = WatchSpec::default();
-        for toolchain in self.iter() {
-            merged.extend(toolchain.watch_spec());
-        }
-        merged
-    }
 }
 
 impl fmt::Debug for ToolchainRegistry {
@@ -760,26 +732,6 @@ pub(crate) fn package_manager_command(
 impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     fn id(&self) -> ToolchainId {
         ToolchainId::JAVASCRIPT
-    }
-
-    fn watch_spec(&self) -> WatchSpec {
-        // Deliberately nothing: JavaScript workspace redefinition (a new or
-        // removed package.json, a lockfile change) is caught by the change
-        // mapper's conservative fallback — unattributable files map to
-        // "all packages", which triggers rediscovery — and JS build outputs
-        // land inside package directories where gitignore filtering already
-        // applies. This is the real answer, not an unimplemented stub.
-        WatchSpec::default()
-    }
-
-    fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
-        // Known debt (see module docs): the prune command's JavaScript
-        // machinery — lockfile subgraphing, root package.json and
-        // pnpm-workspace rewriting, patch carrying — is its native code
-        // path, predating this abstraction. Folding it into this surface
-        // means restructuring a battle-tested command; until then, the JS
-        // contribution is deliberately empty here.
-        Ok(None)
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -1131,14 +1083,6 @@ mod tests {
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
                 Box::pin(async { Ok(DiscoveredPackages::default()) })
-            }
-
-            fn watch_spec(&self) -> WatchSpec {
-                WatchSpec::default()
-            }
-
-            fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
-                Ok(None)
             }
         }
 
