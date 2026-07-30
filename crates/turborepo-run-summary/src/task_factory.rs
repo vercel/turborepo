@@ -107,12 +107,7 @@ where
         // the display string (JavaScript: the script text; Cargo: the cargo
         // invocation), derived from the same tables as execution so display
         // cannot drift from what runs.
-        let command = summary_command(
-            self.package_graph,
-            package_context,
-            task_definition,
-            task_id.task(),
-        );
+        let command = summary_command(package_context, task_definition, task_id.task());
 
         let expanded_outputs = self
             .hash_tracker
@@ -264,12 +259,10 @@ where
 }
 
 fn summary_command(
-    package_graph: &PackageGraph,
     package_context: &PackageTaskContext<'_>,
     task_definition: &TaskDefinition,
     task: &str,
 ) -> String {
-    let _ = package_graph;
     match &task_definition.command {
         Some(turborepo_types::TaskCommandOverride::Argv(argv)) => argv.join(" "),
         Some(turborepo_types::TaskCommandOverride::OptOut) => "<OPT OUT>".to_string(),

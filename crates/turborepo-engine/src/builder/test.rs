@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use insta::{assert_json_snapshot, assert_snapshot};
@@ -17,8 +17,7 @@ use turborepo_repository::{
     package_manager::PackageManager,
     toolchain::{
         DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
-        DiscoveredPackage, DiscoveredPackages, TaskIOContext, Toolchain, ToolchainId,
-        WorkspaceRoot,
+        DiscoveredPackage, DiscoveredPackages, Toolchain, ToolchainId, WorkspaceRoot,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -157,23 +156,13 @@ impl Toolchain for AggregateToolchain {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SeenTaskIO {
-    args: Option<Vec<String>>,
-    layout_env: Option<String>,
-}
-
-type StubIOEngineResult = (
-    Engine<Built, TaskDefinition>,
-    Arc<Mutex<HashMap<String, SeenTaskIO>>>,
-);
+type StubIOEngineResult = Engine<Built, TaskDefinition>;
 
 struct StubIOToolchain {
     repo_root: AbsoluteSystemPathBuf,
     outputs: DerivedOutputs,
     input_safety: DerivedInputSafety,
     environment: Vec<&'static str>,
-    seen: Arc<Mutex<HashMap<String, SeenTaskIO>>>,
 }
 
 impl Toolchain for StubIOToolchain {
@@ -199,6 +188,26 @@ impl Toolchain for StubIOToolchain {
                     self.repo_root
                         .join_components(&["packages", name, "stub.json"]),
                 )
+                .with_task_contract(
+                    turborepo_repository::task_contracts::ScopeTaskContract::derived(
+                        ToolchainId::new("stub-io"),
+                        std::collections::BTreeMap::new(),
+                        self.environment.clone(),
+                        ["build", "test"]
+                            .into_iter()
+                            .map(|task| {
+                                (
+                                    task.to_string(),
+                                    DerivedTaskIO {
+                                        outputs: self.outputs.clone(),
+                                        input_safety: self.input_safety.clone(),
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .collect(),
+                    ),
+                )
             };
             Ok(DiscoveredPackages::new(
                 vec![
@@ -222,42 +231,6 @@ impl Toolchain for StubIOToolchain {
         turborepo_repository::toolchain::Error,
     > {
         Ok(None)
-    }
-
-    fn derives_task_io(
-        &self,
-        _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> bool {
-        true
-    }
-
-    fn task_io_env_vars(&self) -> &[&str] {
-        &self.environment
-    }
-
-    fn derived_task_io(
-        &self,
-        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        _path_to_root: &str,
-        _dependencies: &[turborepo_repository::package_graph::PackageTaskContext<'_>],
-        _wants_automatic_inputs: bool,
-        context: &TaskIOContext<'_>,
-    ) -> Option<DerivedTaskIO> {
-        let package_name = package.package().as_ref();
-        self.seen.lock().unwrap().insert(
-            format!("{package_name}#{task}"),
-            SeenTaskIO {
-                args: context.task_args.map(<[String]>::to_vec),
-                layout_env: context.environment.get("STUB_LAYOUT").map(str::to_string),
-            },
-        );
-        Some(DerivedTaskIO {
-            outputs: self.outputs.clone(),
-            input_safety: self.input_safety.clone(),
-            ..Default::default()
-        })
     }
 }
 

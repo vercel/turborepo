@@ -2,10 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, PackageNode},
-    toolchain::ToolchainId,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -244,10 +241,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let package_context = self
             .package_graph
             .package_task_context(&PackageName::from(task_id.as_inner().package()));
-        let toolchain = package_context
-            .as_ref()
-            .and_then(|context| context.toolchain())
-            .and_then(|toolchain| self.package_graph.toolchains().get(toolchain));
         // Whether the package's toolchain defines a command for this task.
         // Tasks without one are phantom/transit tasks (they exist solely for
         // dependency ordering via `dependsOn: ["^task"]`) and must not hash
@@ -276,11 +269,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&task_id.as_inner().as_task_name())
                     .is_some()
             });
-            let javascript = package_context
+            let memoizable_contract = package_context
                 .as_ref()
-                .and_then(|context| context.toolchain())
-                .is_none_or(|toolchain| toolchain == &ToolchainId::JAVASCRIPT);
-            (!package_scoped && javascript).then(|| TaskDefMemoKey {
+                .is_none_or(|context| !context.task_contract().derives_io());
+            (!package_scoped && memoizable_contract).then(|| TaskDefMemoKey {
                 chain: turbo_json_chain
                     .iter()
                     .map(|turbo_json| *turbo_json as *const TurboJson as usize)
@@ -339,26 +331,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .map(|(definition, _)| definition),
         );
         let had_explicit_cache = processed_task_definition.cache.is_some();
-        // JavaScript packages compose defaults from foundational task-contract
-        // knowledge (empty today). Other toolchains temporarily retain
-        // Toolchain::task_defaults until their ports.
-        let uses_js_task_contract = package_context.as_ref().is_some_and(|context| {
-            context.task_contract().toolchain()
-                == Some(&turborepo_repository::toolchain::ToolchainId::JAVASCRIPT)
-        });
-        if should_apply_toolchain_defaults(command_override.as_ref()) {
-            if uses_js_task_contract {
-                if let Some(context) = package_context.as_ref() {
-                    let defaults = context.task_contract().defaults();
-                    if processed_task_definition.cache.is_none() {
-                        processed_task_definition.cache = defaults.cache.map(Spanned::new);
-                    }
-                }
-            } else if let Some((context, toolchain)) = package_context.as_ref().zip(toolchain) {
-                let defaults = toolchain.task_defaults(context, task_id.as_inner().task());
-                if processed_task_definition.cache.is_none() {
-                    processed_task_definition.cache = defaults.cache.map(Spanned::new);
-                }
+        if should_apply_toolchain_defaults(command_override.as_ref())
+            && let Some(context) = package_context.as_ref()
+        {
+            let defaults = context
+                .task_contract()
+                .defaults_for_task(task_id.as_inner().task());
+            if processed_task_definition.cache.is_none() {
+                processed_task_definition.cache = defaults.cache.map(Spanned::new);
             }
         }
         let had_explicit_inputs = processed_task_definition.inputs.is_some();
@@ -390,22 +370,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        // Apply derived hash wiring. JavaScript uses foundational task-contract
-        // knowledge and never participates in Toolchain derived-I/O dispatch
-        // (turbo.json is the whole story). Cargo temporarily retains
-        // Toolchain::derived_task_io until its Rust port.
+        // Apply derived hash wiring from foundational task-contract knowledge.
         // `$TURBO_DEFAULT$` on a derived task means "everything the toolchain
         // derives automatically", so explicit `inputs` can append without
         // forfeiting automatic invalidation; explicit inputs without
         // `$TURBO_DEFAULT$` take full control.
         if inherits_toolchain_task_io(task_def.command.as_ref())
-            && !uses_js_task_contract
-            && let Some((package_context, toolchain)) = package_context
-                .as_ref()
-                .zip(toolchain)
-                .filter(|(context, toolchain)| {
-                    toolchain.derives_task_io(context, task_id.as_inner().task())
-                })
+            && let Some(package_context) = package_context.as_ref().filter(|context| {
+                context
+                    .task_contract()
+                    .derives_task_io(task_id.as_inner().task())
+            })
         {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
             // Only assembled when the toolchain will actually use it:
@@ -430,7 +405,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .and_then(|toolchain| self.environments.get(toolchain))
                     .unwrap_or(&empty_environment),
             };
-            if let Some(mut derived) = toolchain.derived_task_io(
+            if let Some(mut derived) = package_context.task_contract().derived_task_io(
                 package_context,
                 task_id.as_inner().task(),
                 path_to_root.as_str(),
@@ -448,7 +423,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 apply_derived_task_io(
                     &mut task_def,
                     derived,
-                    toolchain.task_io_env_vars(),
+                    package_context.task_contract().env_vars(),
                     had_explicit_outputs,
                     had_explicit_cache,
                 );
