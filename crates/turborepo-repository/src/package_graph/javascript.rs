@@ -14,8 +14,8 @@ use crate::{
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionChanges,
         ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
-        PackageResolution, ResolutionCompleteness, ResolutionFingerprint,
-        ResolutionUnavailableReason, compare_resolution_data,
+        JAVASCRIPT_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
+        ResolutionFingerprint, ResolutionUnavailableReason, compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::DependencyKind,
@@ -31,31 +31,8 @@ pub(super) struct ResolutionSnapshot {
     pub warning: Option<String>,
 }
 
-fn scope_directory_and_toolchain<'a>(
-    knowledge: &'a RepositoryKnowledge,
-    name: &PackageName,
-) -> Option<(&'a AnchoredSystemPath, &'a ToolchainId)> {
-    match name {
-        PackageName::Root => knowledge
-            .root_javascript_scope()
-            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
-        PackageName::Other(name) => knowledge
-            .scope(name)
-            .map(|scope| (scope.directory(), scope.toolchain())),
-    }
-}
-
 fn resolution_packages(knowledge: &RepositoryKnowledge) -> Vec<(&str, &AnchoredSystemPath)> {
-    let mut packages = Vec::new();
-    if knowledge.root_javascript_scope().is_some() {
-        packages.push((ROOT_PKG_NAME, knowledge.repository_directory()));
-    }
-    packages.extend(
-        knowledge
-            .scopes()
-            .filter(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT)
-            .map(|scope| (scope.identity(), scope.directory())),
-    );
+    let mut packages = knowledge.package_json_packages().collect::<Vec<_>>();
     packages.sort_unstable_by_key(|(identity, _)| *identity);
     packages
 }
@@ -64,7 +41,12 @@ pub(super) fn external_dependencies(
     knowledge: &RepositoryKnowledge,
     relationships: &RelationshipKnowledge,
 ) -> HashMap<String, BTreeMap<String, String>> {
-    let mut by_source: BTreeMap<String, BTreeMap<String, String>> = resolution_packages(knowledge)
+    let packages = resolution_packages(knowledge);
+    let directories = packages
+        .iter()
+        .map(|(identity, directory)| ((*identity).to_string(), *directory))
+        .collect::<HashMap<_, _>>();
+    let mut by_source: BTreeMap<String, BTreeMap<String, String>> = packages
         .into_iter()
         .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
         .collect();
@@ -83,10 +65,8 @@ pub(super) fn external_dependencies(
     by_source
         .into_iter()
         .filter_map(|(identity, dependencies)| {
-            let name = PackageName::from(identity.as_str());
-            let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
-            (toolchain == &ToolchainId::JAVASCRIPT)
-                .then(|| (directory.to_unix().to_string(), dependencies))
+            let directory = directories.get(&identity)?;
+            Some((directory.to_unix().to_string(), dependencies))
         })
         .collect()
 }
@@ -100,9 +80,15 @@ pub(super) fn unavailable_resolution(
     warning: Option<String>,
     closure_hasher: Option<&ClosureHasher>,
 ) -> Result<ResolutionSnapshot, String> {
+    let members = resolution_packages(knowledge)
+        .into_iter()
+        .map(|(identity, _)| identity.to_string())
+        .collect::<Vec<_>>();
     domains.push(ExternalResolutionDomain::new(
+        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
         ToolchainId::JAVASCRIPT,
         AnchoredSystemPathBuf::default(),
+        members,
         [definition_source],
         ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
     ));
@@ -162,9 +148,15 @@ pub(super) fn resolve_dependencies(
         })
         .collect::<Vec<_>>();
     let fingerprint = ResolutionFingerprint::from_packages(&packages);
+    let members = packages
+        .iter()
+        .map(|package| package.package().to_string())
+        .collect::<Vec<_>>();
     domains.push(ExternalResolutionDomain::new(
+        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
         ToolchainId::JAVASCRIPT,
         AnchoredSystemPathBuf::default(),
+        members,
         [definition_source],
         ExternalResolutionData::Resolved {
             completeness: ResolutionCompleteness::Complete,
@@ -185,9 +177,7 @@ fn resolution_data(
     generation: &ExternalResolutionGeneration,
 ) -> Result<&ExternalResolutionData, ChangedPackagesError> {
     generation
-        .domains()
-        .iter()
-        .find(|domain| domain.toolchain() == &ToolchainId::JAVASCRIPT)
+        .domain(&JAVASCRIPT_RESOLUTION_DOMAIN)
         .map(ExternalResolutionDomain::data)
         .ok_or(ChangedPackagesError::ResolutionUnavailable)
 }

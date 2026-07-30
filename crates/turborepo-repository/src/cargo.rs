@@ -1578,9 +1578,15 @@ impl RepositoryContributor for CargoContributor {
             }
 
             let fingerprint = ResolutionFingerprint::from_packages(&resolutions);
+            let members = resolutions
+                .iter()
+                .map(|resolution| resolution.package().to_string())
+                .collect::<Vec<_>>();
             let resolution = ExternalResolutionDomain::new(
+                crate::external_resolution::CARGO_RESOLUTION_DOMAIN.clone(),
                 ToolchainId::RUST,
                 AnchoredSystemPathBuf::default(),
+                members,
                 [AnchoredSystemPathBuf::from_raw(CARGO_LOCK)
                     .map_err(Error::from)
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
