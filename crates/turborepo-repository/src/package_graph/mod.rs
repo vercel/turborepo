@@ -25,6 +25,7 @@ use crate::{
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
     package_manager::PackageManager,
+    relationships::RelationshipTarget,
 };
 
 pub mod builder;
@@ -410,6 +411,37 @@ impl PackageGraph {
             .relationships_for_source(package.as_str())
             .iter()
             .any(|relationship| relationship.declaration_name() == declaration_name)
+    }
+
+    /// Required peer declarations that remain external after relationship
+    /// classification. Declaration keys are preserved for lockfile traversal,
+    /// including npm aliases and peers shadowed in other dependency tables.
+    pub fn required_external_peer_declarations(
+        &self,
+        package: &PackageName,
+    ) -> impl Iterator<Item = (&str, &str)> {
+        self.relationship_knowledge
+            .relationships_for_source(package.as_str())
+            .iter()
+            .filter_map(|relationship| {
+                if relationship.kind()
+                    != (crate::relationships::DependencyKind::Peer { optional: false })
+                {
+                    return None;
+                }
+                let RelationshipTarget::UnresolvedExternal { specifier, .. } =
+                    relationship.target()
+                else {
+                    return None;
+                };
+                if self
+                    .package_task_context(&PackageName::from(relationship.declaration_name()))
+                    .is_some()
+                {
+                    return None;
+                }
+                Some((relationship.declaration_name(), specifier.as_str()))
+            })
     }
 
     fn relationship_projections(&self) -> &projections::RelationshipProjections {
@@ -2080,6 +2112,63 @@ mod test {
                 .map(|identity| identity.key())
                 .collect::<HashSet<_>>(),
             HashSet::from(["key:b", "key:c"])
+        );
+    }
+
+    #[tokio::test]
+    async fn required_external_peer_declarations_preserve_required_external_manifest_entries() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "app", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "app",
+                    "dependencies": {
+                        "declared-twice": "1.0.0"
+                    },
+                    "peerDependencies": {
+                        "external-peer": "^1.0.0",
+                        "react-legacy": "npm:react@^18.0.0",
+                        "optional-peer": "^2.0.0",
+                        "declared-twice": "^2.0.0",
+                        "workspace-peer": "^2.0.0"
+                    },
+                    "peerDependenciesMeta": {
+                        "optional-peer": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "workspace-peer", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "workspace-peer",
+                    "version": "1.0.0"
+                }))
+                .unwrap(),
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+
+        let declarations = pkg_graph
+            .required_external_peer_declarations(&PackageName::from("app"))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            declarations,
+            BTreeMap::from([
+                ("declared-twice", "^2.0.0"),
+                ("external-peer", "^1.0.0"),
+                ("react-legacy", "npm:react@^18.0.0"),
+            ])
         );
     }
 
