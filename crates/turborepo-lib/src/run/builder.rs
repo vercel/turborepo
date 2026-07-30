@@ -566,10 +566,7 @@ impl RunBuilder {
             let mut builder =
                 PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                     .with_single_package_mode(self.opts.run_opts.single_package)
-                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                    .with_closure_hasher(std::sync::Arc::new(
-                        turborepo_task_hash::hash_sorted_closures,
-                    ));
+                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
             if cargo_enabled(&self.opts.future_flags) {
                 builder = builder.with_cargo();
             }

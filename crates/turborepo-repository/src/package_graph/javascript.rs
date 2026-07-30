@@ -6,16 +6,13 @@ use std::{
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
-use super::{
-    ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage,
-    builder::{ClosureHasher, apply_resolution_fingerprints},
-};
+use super::{ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage};
 use crate::{
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionChanges,
         ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
         JAVASCRIPT_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
-        ResolutionFingerprint, ResolutionUnavailableReason, compare_resolution_data,
+        ResolutionUnavailableReason, compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::DependencyKind,
@@ -78,7 +75,6 @@ pub(super) fn unavailable_resolution(
     code: &str,
     message: String,
     warning: Option<String>,
-    closure_hasher: Option<&ClosureHasher>,
 ) -> Result<ResolutionSnapshot, String> {
     let members = resolution_packages(knowledge)
         .into_iter()
@@ -92,7 +88,6 @@ pub(super) fn unavailable_resolution(
         [definition_source],
         ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
     ));
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
@@ -108,7 +103,6 @@ pub(super) fn resolve_dependencies(
     external_dependencies: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
     definition_source: AnchoredSystemPathBuf,
-    closure_hasher: Option<&ClosureHasher>,
 ) -> Result<ResolutionSnapshot, String> {
     let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
         lockfile,
@@ -125,7 +119,6 @@ pub(super) fn resolve_dependencies(
                 "closure-unavailable",
                 message.clone(),
                 Some(message),
-                closure_hasher,
             );
         }
     };
@@ -147,7 +140,6 @@ pub(super) fn resolve_dependencies(
             PackageResolution::new(identity, exact_identities)
         })
         .collect::<Vec<_>>();
-    let fingerprint = ResolutionFingerprint::from_packages(&packages);
     let members = packages
         .iter()
         .map(|package| package.package().to_string())
@@ -160,11 +152,9 @@ pub(super) fn resolve_dependencies(
         [definition_source],
         ExternalResolutionData::Resolved {
             completeness: ResolutionCompleteness::Complete,
-            fingerprint,
             packages,
         },
     ));
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
@@ -223,7 +213,6 @@ impl PackageGraph {
             external_dependencies(&self.knowledge, &self.relationship_knowledge),
             true,
             definition_source,
-            None,
         )
         .map_err(ChangedPackagesError::Resolution)?;
         let current_resolution = self

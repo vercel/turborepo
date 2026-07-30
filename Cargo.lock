@@ -8648,6 +8648,7 @@ dependencies = [
  "hex",
  "test-case",
  "turbopath",
+ "turborepo-lockfile-hash",
  "turborepo-lockfiles",
  "turborepo-types",
  "xxhash-rust",
@@ -8787,6 +8788,17 @@ dependencies = [
  "wax",
  "webbrowser",
  "which 4.4.0",
+]
+
+[[package]]
+name = "turborepo-lockfile-hash"
+version = "0.1.0"
+dependencies = [
+ "capnp",
+ "capnpc",
+ "hex",
+ "thiserror 2.0.18",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -9042,7 +9054,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
- "sha2",
  "tempfile",
  "test-case",
  "thiserror 2.0.18",
@@ -9052,6 +9063,7 @@ dependencies = [
  "turbopath",
  "turborepo-errors",
  "turborepo-graph-utils",
+ "turborepo-lockfile-hash",
  "turborepo-lockfiles",
  "turborepo-rayon-compat",
  "wax",
@@ -9300,7 +9312,6 @@ dependencies = [
  "turborepo-env",
  "turborepo-frameworks",
  "turborepo-hash",
- "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-run-summary",
  "turborepo-scm",

@@ -159,6 +159,8 @@ Represents the workspace structure and package dependencies:
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
   identities, definition sources, completeness, and stable fingerprints.
+  Repository generation owns byte-compatible per-package fingerprinting through
+  the cycle-free `turborepo-lockfile-hash` primitive; callers cannot omit it.
   Open resolution-domain IDs select behavior after construction independently
   of retained `ToolchainId` provenance, and each domain explicitly claims its
   package members. Built-in JavaScript and Cargo IDs are reserved to their

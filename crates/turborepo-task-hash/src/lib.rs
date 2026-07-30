@@ -29,7 +29,7 @@ use turborepo_env::{
     WildcardMapCache,
 };
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
-use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
+use turborepo_hash::{FileHashes, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
@@ -801,19 +801,6 @@ pub fn deferred_task_hash_message(inputs: &TaskInputs) -> &'static str {
     }
 }
 
-/// Produce byte-compatible fingerprints once from normalized resolution sets.
-pub fn hash_sorted_closures(
-    closures: &HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
-) -> HashMap<String, String> {
-    closures
-        .par_iter()
-        .map(|(package, closure)| {
-            let identities = closure.iter().map(|identity| &**identity).collect();
-            (package.clone(), LockFilePackagesRef(identities).hash())
-        })
-        .collect()
-}
-
 pub fn get_internal_deps_hash(
     scm: &SCM,
     root: &AbsoluteSystemPath,
@@ -1132,7 +1119,6 @@ mod test {
             .unwrap();
 
         PackageGraph::builder(repo_root, PackageJson::from_value(root_json).unwrap())
-            .with_closure_hasher(Arc::new(hash_sorted_closures))
             .build()
             .await
             .unwrap()
@@ -1173,7 +1159,6 @@ mod test {
 
         PackageGraph::builder_optional(repo_root, None)
             .with_cargo()
-            .with_closure_hasher(Arc::new(hash_sorted_closures))
             .build()
             .await
             .unwrap()

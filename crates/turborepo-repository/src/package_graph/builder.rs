@@ -21,10 +21,7 @@ use crate::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    external_resolution::{
-        ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
-        ResolutionFingerprint,
-    },
+    external_resolution::{ExternalResolutionDomain, ExternalResolutionGeneration},
     knowledge::{
         PackageScopeObservation, RelationshipGroup, RelationshipKnowledge, RepositoryKnowledge,
         ScopeKind, WorkspaceRootObservation,
@@ -50,7 +47,6 @@ pub struct PackageGraphBuilder<'a, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_discovery: T,
     package_manager: Option<PackageManager>,
-    closure_hasher: Option<ClosureHasher>,
     /// Toolchains registered in addition to JavaScript (e.g. Cargo when
     /// `futureFlags.experimentalCargoWorkspaces` is enabled). Their packages
     /// are discovered alongside JavaScript packages; name collisions across
@@ -266,7 +262,6 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             package_jsons: None,
             lockfile: None,
             package_manager: None,
-            closure_hasher: None,
             extra_contributors: Vec::new(),
         }
     }
@@ -296,13 +291,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     ) -> Self {
         self.package_jsons = package_jsons;
-        self
-    }
-
-    /// Provide the byte-compatible hasher used to fingerprint normalized
-    /// package resolutions once, alongside closure production.
-    pub fn with_closure_hasher(mut self, hasher: ClosureHasher) -> Self {
-        self.closure_hasher = Some(hasher);
         self
     }
 
@@ -340,7 +328,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             lockfile: self.lockfile,
             package_discovery: discovery,
             package_manager: self.package_manager,
-            closure_hasher: self.closure_hasher,
             extra_contributors: self.extra_contributors,
         }
     }
@@ -420,7 +407,6 @@ struct BuildState<'a, S, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
-    closure_hasher: Option<ClosureHasher>,
     state: std::marker::PhantomData<S>,
     /// The JavaScript contributor, kept typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
@@ -643,7 +629,6 @@ where
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
-            closure_hasher,
             is_single_package: single,
 
             package_jsons,
@@ -706,7 +691,6 @@ where
             package_manager: None,
             package_jsons,
             root_package_json,
-            closure_hasher,
             state: std::marker::PhantomData,
             javascript,
             extra_contributors: additional_contributors,
@@ -878,7 +862,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             extra_contributors,
-            closure_hasher,
             ..
         } = self;
         Ok(BuildState {
@@ -897,7 +880,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             extra_contributors,
-            closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -1215,7 +1197,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             javascript,
             extra_contributors,
-            closure_hasher,
             ..
         } = self;
         Ok(BuildState {
@@ -1233,55 +1214,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             lockfile,
             package_manager,
-            closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
             javascript,
             extra_contributors,
         })
-    }
-}
-
-/// Computes byte-compatible fingerprints from normalized package identities.
-pub type ClosureHasher = Arc<
-    dyn Fn(&HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>) -> HashMap<String, String>
-        + Send
-        + Sync,
->;
-
-pub(super) fn apply_resolution_fingerprints(
-    domains: &mut [ExternalResolutionDomain],
-    hasher: Option<&ClosureHasher>,
-) {
-    let Some(hasher) = hasher else {
-        return;
-    };
-    for domain in domains {
-        let ExternalResolutionData::Resolved { packages, .. } = domain.data_mut() else {
-            continue;
-        };
-        let identities = packages
-            .iter()
-            .map(|package| {
-                let identities = package
-                    .identities()
-                    .iter()
-                    .map(|identity| {
-                        Arc::new(turborepo_lockfiles::Package::new(
-                            identity.key(),
-                            identity.version(),
-                        ))
-                    })
-                    .collect();
-                (package.package().to_string(), identities)
-            })
-            .collect();
-        let fingerprints = hasher(&identities);
-        for package in packages {
-            if let Some(fingerprint) = fingerprints.get(package.package()) {
-                package.set_fingerprint(ResolutionFingerprint::new(fingerprint));
-            }
-        }
     }
 }
 
@@ -1347,7 +1284,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                                 external_dependencies,
                                 false,
                                 definition_source,
-                                self.closure_hasher.as_ref(),
                             )
                         })
                         .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
@@ -1366,7 +1302,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                             "declarations-unavailable",
                             error.to_string(),
                             None,
-                            self.closure_hasher.as_ref(),
                         )
                         .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
                         external_resolution =
@@ -1381,16 +1316,11 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     "lockfile-unavailable",
                     "JavaScript lockfile could not be read or parsed".to_string(),
                     None,
-                    self.closure_hasher.as_ref(),
                 )
                 .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
                 external_resolution = ExternalResolutionKnowledge::complete(snapshot.generation);
             }
         } else if !native_external_resolutions.is_empty() {
-            apply_resolution_fingerprints(
-                &mut native_external_resolutions,
-                self.closure_hasher.as_ref(),
-            );
             let generation =
                 ExternalResolutionGeneration::build(&knowledge, native_external_resolutions)
                     .map_err(|error| build_failure(Error::ExternalResolution(error.to_string())))?;

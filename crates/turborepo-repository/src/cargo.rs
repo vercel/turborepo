@@ -45,7 +45,7 @@ use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
-        PackageResolution, ResolutionCompleteness, ResolutionFingerprint,
+        PackageResolution, ResolutionCompleteness,
     },
     package_json::{DependencyKind, PackageJson},
     prune_knowledge::{PruneDomain, PrunePlan},
@@ -1577,7 +1577,6 @@ impl RepositoryContributor for CargoContributor {
                 );
             }
 
-            let fingerprint = ResolutionFingerprint::from_packages(&resolutions);
             let members = resolutions
                 .iter()
                 .map(|resolution| resolution.package().to_string())
@@ -1592,7 +1591,6 @@ impl RepositoryContributor for CargoContributor {
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
                 ExternalResolutionData::Resolved {
                     completeness: ResolutionCompleteness::Complete,
-                    fingerprint,
                     packages: resolutions,
                 },
             );
@@ -3531,15 +3529,20 @@ release: 1.96.0-nightly\n",
         assert_eq!(resolutions[0].definition_sources()[0].as_str(), CARGO_LOCK);
         let ExternalResolutionData::Resolved {
             completeness,
-            fingerprint,
             packages: resolution_packages,
         } = resolutions[0].data()
         else {
             panic!("Cargo resolution must be complete")
         };
         assert_eq!(completeness, &ResolutionCompleteness::Complete);
-        assert!(!fingerprint.as_str().is_empty());
         assert_eq!(resolution_packages.len(), 4);
+        // Producers supply normalized identities; generation construction owns
+        // byte-compatible package fingerprints.
+        assert!(
+            resolution_packages
+                .iter()
+                .all(|package| package.fingerprint().is_none())
+        );
         assert!(resolution_packages.iter().all(|package| {
             package
                 .identities()
