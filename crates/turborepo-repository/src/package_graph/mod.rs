@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -239,6 +239,13 @@ pub enum PackageTaskContextKind {
     Root,
     Package,
     Aggregate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskEntrypointPreference {
+    Always,
+    Never,
+    WhenSingleCandidate,
 }
 
 impl<'a> PackageTaskContext<'a> {
@@ -679,60 +686,82 @@ impl PackageGraph {
         self.task_contract_knowledge.env_vars_by_toolchain()
     }
 
-    pub fn select_task_entrypoints(
+    pub fn task_entrypoint_exclusions(
         &self,
-        toolchain: &crate::toolchain::ToolchainId,
         task: &str,
-        candidates: &[String],
-        prefer: bool,
-    ) -> Option<Vec<String>> {
-        let classified = candidates
-            .iter()
-            .filter_map(|candidate| {
-                let context = self.package_task_context(&PackageName::from(candidate.as_str()))?;
-                (context.toolchain() == Some(toolchain))
-                    .then(|| (candidate, context.task_contract().task_entrypoint(task)))
-            })
-            .collect::<Vec<_>>();
-        if !classified
-            .iter()
-            .any(|(_, entrypoint)| entrypoint.is_some())
-        {
-            return None;
+        candidates: &[PackageName],
+        exclusion_candidates: &[PackageName],
+        preference: TaskEntrypointPreference,
+    ) -> Vec<PackageName> {
+        let mut classified = BTreeMap::<_, Vec<_>>::new();
+        for candidate in candidates {
+            let Some(context) = self.package_task_context(candidate) else {
+                continue;
+            };
+            let contract = context.task_contract();
+            let Some(domain) = contract.task_entrypoint_domain() else {
+                continue;
+            };
+            let Some(entrypoint) = contract.task_entrypoint(task) else {
+                continue;
+            };
+            classified
+                .entry(domain.clone())
+                .or_default()
+                .push((candidate.clone(), entrypoint));
         }
-        if prefer {
-            let preferred = classified
-                .iter()
-                .filter(|(_, entrypoint)| {
+        let active_domains: BTreeSet<_> = classified.keys().cloned().collect();
+        let selected: HashSet<_> = classified
+            .into_values()
+            .flat_map(|classified| {
+                let prefer = match preference {
+                    TaskEntrypointPreference::Always => true,
+                    TaskEntrypointPreference::Never => false,
+                    TaskEntrypointPreference::WhenSingleCandidate => classified.len() == 1,
+                };
+                let has_preferred = classified.iter().any(|(_, entrypoint)| {
                     matches!(
                         entrypoint,
-                        Some(
-                            crate::task_contracts::TaskEntrypoint::Preferred
-                                | crate::task_contracts::TaskEntrypoint::PreferredOnly
-                        )
+                        crate::task_contracts::TaskEntrypoint::Preferred
+                            | crate::task_contracts::TaskEntrypoint::PreferredOnly
                     )
-                })
-                .map(|(name, _)| (*name).clone())
-                .collect::<Vec<_>>();
-            if !preferred.is_empty() {
-                return Some(preferred);
-            }
-        }
-        Some(
-            classified
-                .into_iter()
-                .filter(|(_, entrypoint)| {
-                    !matches!(
-                        entrypoint,
-                        Some(
-                            crate::task_contracts::TaskEntrypoint::Excluded
-                                | crate::task_contracts::TaskEntrypoint::PreferredOnly
-                        )
-                    )
-                })
-                .map(|(name, _)| name.clone())
-                .collect(),
-        )
+                });
+                classified
+                    .into_iter()
+                    .filter_map(move |(name, entrypoint)| {
+                        let selected = if prefer && has_preferred {
+                            matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Preferred
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
+                        } else {
+                            !matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Excluded
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
+                        };
+                        selected.then_some(name)
+                    })
+            })
+            .collect();
+
+        exclusion_candidates
+            .iter()
+            .filter(|candidate| !selected.contains(*candidate))
+            .filter(|candidate| {
+                let Some(context) = self.package_task_context(candidate) else {
+                    return false;
+                };
+                let contract = context.task_contract();
+                contract
+                    .task_entrypoint_domain()
+                    .is_some_and(|domain| active_domains.contains(domain))
+                    && contract.task_entrypoint(task).is_some()
+            })
+            .cloned()
+            .collect()
     }
 
     /// Foundational change knowledge for watch classification.
@@ -3198,6 +3227,17 @@ version = "0.1.0"
         assert_eq!(
             app_context.toolchain(),
             Some(&crate::toolchain::ToolchainId::RUST)
+        );
+        assert!(
+            pkg_graph
+                .task_entrypoint_exclusions(
+                    "test",
+                    &[PackageName::Root],
+                    std::slice::from_ref(&app_name),
+                    TaskEntrypointPreference::Always,
+                )
+                .is_empty(),
+            "an unclassified root candidate must not activate Cargo exclusions"
         );
         // Crate path dependencies still become graph edges without a package
         // manager: the `workspace:*` protocol resolves internally regardless.

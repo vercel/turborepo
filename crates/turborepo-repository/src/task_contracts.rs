@@ -9,7 +9,7 @@
 //! Execution-only decorations such as compile-cache variables are also
 //! projected here, but deliberately do not participate in task hashes.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use crate::toolchain::{TaskDefaults, ToolchainId};
 
@@ -19,6 +19,34 @@ pub enum TaskEntrypoint {
     PreferredOnly,
     Candidate,
     Excluded,
+}
+
+/// Groups scopes whose preferred entrypoints compete with one another.
+/// Deliberately independent from ecosystem provenance.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TaskEntrypointDomain(Cow<'static, str>);
+
+impl TaskEntrypointDomain {
+    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
+        Self(value.into())
+    }
+}
+
+/// A public `command` map key supported by this scope's native command model.
+/// This is explicit behavior, separate from open-ended ecosystem provenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandMapTarget {
+    JavaScript,
+    Rust,
+}
+
+impl CommandMapTarget {
+    fn matches(self, key: &str) -> bool {
+        matches!(
+            (self, key),
+            (Self::JavaScript, "javascript") | (Self::Rust, "rust")
+        )
+    }
 }
 
 /// Per-scope task-contract observation produced at repository construction.
@@ -33,9 +61,12 @@ pub struct ScopeTaskContract {
     env_vars: Vec<&'static str>,
     /// Ecosystem provenance when the observation came from a known producer.
     toolchain: Option<ToolchainId>,
+    command_map_target: Option<CommandMapTarget>,
+    entrypoint_domain: Option<TaskEntrypointDomain>,
     cargo: Option<crate::cargo::CargoTaskContract>,
     static_defaults: BTreeMap<String, TaskDefaults>,
     static_io: BTreeMap<String, crate::toolchain::DerivedTaskIO>,
+    static_entrypoints: BTreeMap<String, TaskEntrypoint>,
 }
 
 impl ScopeTaskContract {
@@ -46,9 +77,12 @@ impl ScopeTaskContract {
             defaults: TaskDefaults::default(),
             env_vars: Vec::new(),
             toolchain: Some(ToolchainId::JAVASCRIPT),
+            command_map_target: Some(CommandMapTarget::JavaScript),
+            entrypoint_domain: None,
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
+            static_entrypoints: BTreeMap::new(),
         }
     }
 
@@ -59,9 +93,12 @@ impl ScopeTaskContract {
             defaults: TaskDefaults::default(),
             env_vars: Vec::new(),
             toolchain: None,
+            command_map_target: None,
+            entrypoint_domain: None,
             cargo: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
+            static_entrypoints: BTreeMap::new(),
         }
     }
 
@@ -71,9 +108,12 @@ impl ScopeTaskContract {
             defaults: TaskDefaults::default(),
             env_vars: crate::cargo::TASK_IO_ENV_VARS.to_vec(),
             toolchain: Some(ToolchainId::RUST),
+            command_map_target: Some(CommandMapTarget::Rust),
+            entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("cargo"))),
             cargo: Some(contract),
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
+            static_entrypoints: BTreeMap::new(),
         }
     }
 
@@ -89,9 +129,12 @@ impl ScopeTaskContract {
             defaults: TaskDefaults::default(),
             env_vars,
             toolchain: Some(toolchain),
+            command_map_target: None,
+            entrypoint_domain: None,
             cargo: None,
             static_defaults: defaults,
             static_io: io,
+            static_entrypoints: BTreeMap::new(),
         }
     }
 
@@ -109,6 +152,19 @@ impl ScopeTaskContract {
 
     pub fn toolchain(&self) -> Option<&ToolchainId> {
         self.toolchain.as_ref()
+    }
+
+    pub fn with_command_map_target(mut self, target: CommandMapTarget) -> Self {
+        self.command_map_target = Some(target);
+        self
+    }
+
+    pub fn command_map_argv(&self, entries: &[(String, Vec<String>)]) -> Option<Vec<String>> {
+        let target = self.command_map_target?;
+        entries
+            .iter()
+            .find(|(key, _)| target.matches(key))
+            .map(|(_, argv)| argv.clone())
     }
 
     pub fn defaults_for_task(&self, task: &str) -> TaskDefaults {
@@ -154,7 +210,24 @@ impl ScopeTaskContract {
     }
 
     pub fn task_entrypoint(&self, task: &str) -> Option<TaskEntrypoint> {
-        self.cargo.as_ref()?.task_entrypoint(task)
+        self.static_entrypoints
+            .get(task)
+            .copied()
+            .or_else(|| self.cargo.as_ref()?.task_entrypoint(task))
+    }
+
+    pub fn task_entrypoint_domain(&self) -> Option<&TaskEntrypointDomain> {
+        self.entrypoint_domain.as_ref()
+    }
+
+    pub fn with_task_entrypoints(
+        mut self,
+        domain: TaskEntrypointDomain,
+        entrypoints: BTreeMap<String, TaskEntrypoint>,
+    ) -> Self {
+        self.entrypoint_domain = Some(domain);
+        self.static_entrypoints = entrypoints;
+        self
     }
 
     /// Environment decorations for a compiler cache served by Turborepo.
@@ -258,6 +331,29 @@ mod tests {
         assert_eq!(contract.defaults().cache, None);
         assert!(contract.env_vars().is_empty());
         assert_eq!(contract.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+        assert_eq!(
+            contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
+            Some(vec!["node".into()])
+        );
+    }
+
+    #[test]
+    fn command_map_behavior_is_independent_of_provenance() {
+        let contract = ScopeTaskContract::derived(
+            ToolchainId::new("custom-rust-producer"),
+            BTreeMap::new(),
+            Vec::new(),
+            BTreeMap::new(),
+        )
+        .with_command_map_target(CommandMapTarget::Rust);
+
+        assert_eq!(
+            contract.command_map_argv(&[
+                ("javascript".into(), vec!["node".into()]),
+                ("rust".into(), vec!["cargo".into()]),
+            ]),
+            Some(vec!["cargo".into()])
+        );
     }
 
     #[test]

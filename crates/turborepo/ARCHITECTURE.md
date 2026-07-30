@@ -362,7 +362,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   workspace-scoped verification verbs.
 - **Execution and entrypoint selection** (`NativeTaskKnowledge`, native command
   resolution in `turborepo-task-executor`, and
-  `PackageGraph::select_task_entrypoints`): crate-scoped build and verification
+  `PackageGraph::task_entrypoint_exclusions`): crate-scoped build and verification
   tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
   `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
   when the workspace has no entrypoints. Unfiltered verification uses the Cargo
@@ -576,8 +576,8 @@ The core task graph consists of:
   (`resolve_command_override`, `turborepo-engine`'s
   `builder/definitions.rs`), across five precedence levels: Package
   Configuration `command` → root `pkg#task` `command` → authored native task
-  from `NativeTaskKnowledge` → unscoped root default (per-toolchain maps fan out
-  by toolchain id) → the catalog's synthesized native command. The
+  from `NativeTaskKnowledge` → unscoped root default (command maps fan out by
+  explicit task-contract capability) → the catalog's synthesized native command. The
   resolved override is authoritative in both directions — an argv executes
   even where the toolchain defines nothing, an opt-out never executes even
   where it does — and feeds global-deps hashing, the TUI task list, the
