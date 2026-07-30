@@ -253,7 +253,7 @@ impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
     pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
-        Self::new_for_test_with_native_tasks(package, repository_root, directory, package_info, kind, toolchain, None)
+        Self::new_for_test_with_native_tasks(package, repository_root, directory, package_info, kind, toolchain, None, None)
     }
 
     #[cfg(test)]
@@ -265,6 +265,7 @@ impl<'a> PackageTaskContext<'a> {
         kind: PackageTaskContextKind,
         toolchain: Option<&'a crate::toolchain::ToolchainId>,
         native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
+        task_contract: Option<crate::task_contracts::ScopeTaskContract>,
     ) -> Self {
         static EXTERNAL_DECLARATIONS: OnceLock<ExternalDeclarations> = OnceLock::new();
         static UNKNOWN_NATIVE_TASKS: crate::native_tasks::ScopeNativeTasks =
@@ -296,7 +297,8 @@ impl<'a> PackageTaskContext<'a> {
         };
         let requires_compatibility_payload = package != PackageName::Root
             || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
-        let task_contract = crate::task_contracts::ScopeTaskContract::empty();
+        let task_contract =
+            task_contract.unwrap_or_else(crate::task_contracts::ScopeTaskContract::empty);
         Self {
             package,
             repository_root,

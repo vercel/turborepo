@@ -422,15 +422,15 @@ struct BuildState<'a, S, T> {
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     closure_hasher: Option<ClosureHasher>,
     state: std::marker::PhantomData<S>,
-    /// The JavaScript toolchain, typed. Package-manager resolution for
+    /// The JavaScript contributor, kept typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
     /// documented debt, see `crate::toolchain` module docs. Absent for a
     /// pure Cargo workspace, where there is no JavaScript project to resolve
     /// a package manager or lockfile from.
     javascript: Option<Arc<JavaScriptContributor<T>>>,
-    /// Every toolchain contributing packages, JavaScript included. Package
-    /// discovery goes through this and only this.
-    contributors: Vec<Arc<dyn RepositoryContributor>>,
+    /// Additional package contributors. JavaScript is kept typed above so
+    /// pre-parsed manifest input cannot be routed through an open ID.
+    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
 }
 
 struct PackageGraphAssembler {
@@ -653,21 +653,21 @@ where
             extra_contributors,
         } = builder;
         // Pure Cargo workspace: with no root package.json there is no
-        // JavaScript project, so the JavaScript toolchain is neither
-        // registered nor queried for a package manager. The graph is built
-        // entirely from the extra toolchains (Cargo).
+        // JavaScript project, so the typed JavaScript contributor is neither
+        // constructed nor queried for a package manager. The graph is built
+        // entirely from the extra contributors (Cargo).
         let no_javascript = root_package_json.is_none();
         let root_package_info = root_package_json
             .clone()
             .map(|package_json| PackageInfo { package_json });
         let assembler = PackageGraphAssembler::new(root_package_info);
 
-        // The discovery strategy is shared (via the JavaScript toolchain)
+        // The discovery strategy is shared (via the JavaScript contributor)
         // between package discovery and package-manager resolution; the
         // caching wrapper guarantees the underlying strategy runs once. For a
-        // pure Cargo workspace there is no JavaScript project, so discovery is
-        // not built and the toolchain is left unregistered.
-        let mut contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
+        // pure Cargo workspace there is no JavaScript project, so discovery and
+        // the typed contributor are not constructed.
+        let mut additional_contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
         let javascript = if no_javascript {
             None
         } else {
@@ -676,18 +676,18 @@ where
                 repo_root.to_owned(),
                 package_manager,
             ));
-            // JavaScript registers first: its packages claim names before any
-            // other toolchain's, so a cross-toolchain collision surfaces as the
-            // non-JS package failing to add.
-            contributors.push(javascript.clone());
             Some(javascript)
         };
         for contributor in extra_contributors {
             let id = contributor.id();
-            if contributors.iter().any(|existing| existing.id() == id) {
+            if (javascript.is_some() && id == ToolchainId::JAVASCRIPT)
+                || additional_contributors
+                    .iter()
+                    .any(|existing| existing.id() == id)
+            {
                 return Err(Error::DuplicateContributor { id });
             }
-            contributors.push(contributor);
+            additional_contributors.push(contributor);
         }
 
         Ok(BuildState {
@@ -709,7 +709,7 @@ where
             closure_hasher,
             state: std::marker::PhantomData,
             javascript,
-            contributors,
+            extra_contributors: additional_contributors,
         })
     }
 }
@@ -733,13 +733,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         // Producer-resolved external identities are contributed to the
         // resolution generation separately; PackageInfo no longer carries
         // closure/hash compatibility projections.
-        let task_contract = task_contract.unwrap_or_else(|| {
-            if toolchain == ToolchainId::JAVASCRIPT {
-                crate::task_contracts::ScopeTaskContract::javascript()
-            } else {
-                crate::task_contracts::ScopeTaskContract::empty()
-            }
-        });
+        let task_contract =
+            task_contract.unwrap_or_else(crate::task_contracts::ScopeTaskContract::empty);
         if let Some(contract_toolchain) = task_contract.toolchain()
             && contract_toolchain != &toolchain
         {
@@ -794,33 +789,26 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         // A pre-supplied set of parsed package.json files (used by the
         // package-change watcher and tests) stands in for JavaScript
         // discovery only; other toolchains always discover for themselves.
-        let mut pre_supplied = self.package_jsons.take();
         let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
         let mut workspace_roots = Vec::new();
-        for contributor in &self.contributors {
-            let id = contributor.id();
-            if id == ToolchainId::JAVASCRIPT
-                && let Some(jsons) = pre_supplied.take()
-            {
-                if let Some(javascript) = self.javascript.as_ref() {
-                    workspace_roots.push(WorkspaceRootObservation::new(
-                        javascript.workspace_root().await?,
-                        id.clone(),
-                    ));
+        let mut contributor_outputs = Vec::with_capacity(self.extra_contributors.len() + 1);
+        if let Some(javascript) = self.javascript.as_ref() {
+            let output = match self.package_jsons.take() {
+                Some(package_jsons) => {
+                    javascript
+                        .discover_preparsed_packages(package_jsons)
+                        .await?
                 }
-                discovered.extend(jsons.into_iter().map(|(path, json)| {
-                    (
-                        ToolchainId::JAVASCRIPT,
-                        DiscoveredPackage::package(
-                            json.name.as_ref().map(|name| name.as_inner().clone()),
-                            json,
-                            path,
-                        ),
-                    )
-                }));
-                continue;
-            }
+                None => javascript.discover_packages().await?,
+            };
+            contributor_outputs.push((ToolchainId::JAVASCRIPT, output));
+        }
+        for contributor in &self.extra_contributors {
+            let id = contributor.id();
             let output = contributor.discover_packages().await?;
+            contributor_outputs.push((id, output));
+        }
+        for (id, output) in contributor_outputs {
             let (packages, roots, external_resolutions, changes, prune_domains) =
                 output.into_parts();
             self.native_external_resolutions
@@ -889,7 +877,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             package_manager,
             javascript,
-            contributors,
+            extra_contributors,
             closure_hasher,
             ..
         } = self;
@@ -908,7 +896,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             package_manager,
             javascript,
-            contributors,
+            extra_contributors,
             closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -1226,7 +1214,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_prune_domains,
             root_package_json,
             javascript,
-            contributors,
+            extra_contributors,
             closure_hasher,
             ..
         } = self;
@@ -1249,7 +1237,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             package_jsons: None,
             state: std::marker::PhantomData,
             javascript,
-            contributors,
+            extra_contributors,
         })
     }
 }
@@ -1741,6 +1729,15 @@ mod test {
                 .relationships()
                 .is_empty()
         );
+        let custom_context = graph
+            .package_task_context(&PackageName::from("legacy-app"))
+            .unwrap();
+        let custom_contract = custom_context.task_contract();
+        assert_eq!(custom_contract.toolchain(), None);
+        assert_eq!(
+            custom_contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
+            None
+        );
     }
 
     #[tokio::test]
@@ -1882,6 +1879,16 @@ mod test {
                 Some("apps/app/package.json".to_string())
             );
             assert_eq!(app_view.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+            let app_contract = graph
+                .package_task_context(&PackageName::from("app"))
+                .unwrap()
+                .task_contract()
+                .clone();
+            assert_eq!(app_contract.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+            assert_eq!(
+                app_contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
+                Some(vec!["node".into()])
+            );
             let app_name_source = app_view
                 .name_source()
                 .expect("the authored JavaScript name retains diagnostic provenance");
