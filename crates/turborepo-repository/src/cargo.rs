@@ -238,16 +238,24 @@ pub fn external_closures(
     repo_root: &AbsoluteSystemPath,
     members: &[String],
 ) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
-    let lock_path = repo_root.join_component(CARGO_LOCK);
-    let contents = match lock_path.read_to_string() {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Err(Error::MissingLockfile);
-        }
-        Err(error) => return Err(Error::LockfileRead(error)),
-    };
+    let contents = read_lockfile(repo_root)?;
+    external_closures_from_lockfile(&contents, members)
+}
+
+fn read_lockfile(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
+    match repo_root.join_component(CARGO_LOCK).read_to_string() {
+        Ok(contents) => Ok(contents),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Err(Error::MissingLockfile),
+        Err(error) => Err(Error::LockfileRead(error)),
+    }
+}
+
+fn external_closures_from_lockfile(
+    contents: &str,
+    members: &[String],
+) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
     Ok(turborepo_lockfiles::cargo_external_closures(
-        &contents, members,
+        contents, members,
     )?)
 }
 
@@ -256,15 +264,16 @@ pub fn external_closures(
 /// Validation happens before task hashes and cache lookup, so artifacts are
 /// always keyed by sources Turborepo can hash, watch, and prune.
 pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
-    let lock_path = repo_root.join_component(CARGO_LOCK);
-    match lock_path.read_to_string() {
-        Ok(_) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Err(Error::MissingLockfile);
-        }
-        Err(error) => return Err(Error::LockfileRead(error)),
-    }
+    require_lockfile(repo_root)?;
+    let metadata = locked_metadata(repo_root)?;
+    validate_resolved_local_packages(repo_root, &metadata)
+}
 
+fn require_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
+    read_lockfile(repo_root).map(drop)
+}
+
+fn locked_metadata(repo_root: &AbsoluteSystemPath) -> Result<Metadata, Error> {
     let root_manifest_path = repo_root.join_component(CARGO_TOML);
     let output = std::process::Command::new("cargo")
         .args([
@@ -285,13 +294,12 @@ pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
         });
     }
 
-    let metadata: ResolvedMetadata = serde_json::from_slice(&output.stdout)?;
-    validate_resolved_local_packages(repo_root, metadata)
+    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 fn validate_resolved_local_packages(
     repo_root: &AbsoluteSystemPath,
-    metadata: ResolvedMetadata,
+    metadata: &Metadata,
 ) -> Result<(), Error> {
     let real_repo_root = repo_root
         .to_realpath()
@@ -300,14 +308,14 @@ fn validate_resolved_local_packages(
             source,
         })?;
     let root_manifest_path = real_repo_root.join_component(CARGO_TOML);
-    for package in metadata.packages {
+    for package in &metadata.packages {
         if package.source.is_some() {
             continue;
         }
         let Some(manifest_path) = metadata_path(&package.manifest_path) else {
             return Err(Error::OutsideRepositoryLocalPackage {
-                name: package.name,
-                manifest_path: package.manifest_path,
+                name: package.name.clone(),
+                manifest_path: package.manifest_path.clone(),
             });
         };
         let real_manifest_path =
@@ -319,17 +327,19 @@ fn validate_resolved_local_packages(
                 })?;
         if !real_repo_root.contains(&real_manifest_path) {
             return Err(Error::OutsideRepositoryLocalPackage {
-                name: package.name,
-                manifest_path: package.manifest_path,
+                name: package.name.clone(),
+                manifest_path: package.manifest_path.clone(),
             });
         }
         if real_manifest_path == root_manifest_path {
-            return Err(Error::UnsupportedRootPackage { name: package.name });
+            return Err(Error::UnsupportedRootPackage {
+                name: package.name.clone(),
+            });
         }
         if !metadata.workspace_members.contains(&package.id) {
             return Err(Error::NonMemberLocalPackage {
-                name: package.name,
-                manifest_path: package.manifest_path,
+                name: package.name.clone(),
+                manifest_path: package.manifest_path.clone(),
             });
         }
     }
@@ -1234,14 +1244,11 @@ struct CargoPruneKnowledge {
 }
 
 impl CargoPruneKnowledge {
-    fn discover(repo_root: &AbsoluteSystemPath, crates: &[CargoCrate]) -> Result<Self, Error> {
-        let lockfile = match repo_root.join_component(CARGO_LOCK).read_to_string() {
-            Ok(contents) => contents,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(Error::MissingLockfile);
-            }
-            Err(error) => return Err(Error::LockfileRead(error)),
-        };
+    fn discover(
+        repo_root: &AbsoluteSystemPath,
+        crates: &[CargoCrate],
+        lockfile: String,
+    ) -> Result<Self, Error> {
         let root_manifest = repo_root
             .join_component(CARGO_TOML)
             .read_to_string()
@@ -1403,6 +1410,78 @@ fn finalize_cargo_prune(pruned_root: &AbsoluteSystemPath) -> Vec<String> {
     vec![CARGO_LOCK.to_string()]
 }
 
+enum ContributorMetadata {
+    Absent,
+    Resolved {
+        metadata: Metadata,
+        lockfile: String,
+    },
+    Unresolved(Error),
+}
+
+impl ContributorMetadata {
+    fn lockfile(&self) -> Option<&str> {
+        match self {
+            Self::Resolved { lockfile, .. } => Some(lockfile),
+            Self::Absent | Self::Unresolved(_) => None,
+        }
+    }
+}
+
+fn discover_contributor_workspace(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<(DiscoveredWorkspace, ContributorMetadata), Error> {
+    let root_manifest_path = repo_root.join_component(CARGO_TOML);
+    if !root_manifest_path.exists() {
+        return Ok((discover_crates(repo_root)?, ContributorMetadata::Absent));
+    }
+
+    let lockfile = match read_lockfile(repo_root) {
+        Ok(lockfile) => lockfile,
+        Err(error) => {
+            return Ok((
+                discover_crates(repo_root)?,
+                ContributorMetadata::Unresolved(error),
+            ));
+        }
+    };
+
+    match locked_metadata(repo_root) {
+        Ok(metadata) => {
+            let workspace = workspace_from_metadata(repo_root, &root_manifest_path, &metadata)?;
+            Ok((
+                workspace,
+                ContributorMetadata::Resolved { metadata, lockfile },
+            ))
+        }
+        Err(error) => Ok((
+            discover_crates(repo_root)?,
+            ContributorMetadata::Unresolved(error),
+        )),
+    }
+}
+
+fn validate_contributor_metadata(
+    repo_root: &AbsoluteSystemPath,
+    metadata: ContributorMetadata,
+) -> Result<(), Error> {
+    match metadata {
+        ContributorMetadata::Absent => Ok(()),
+        ContributorMetadata::Resolved { metadata, lockfile } => {
+            if read_lockfile(repo_root)? != lockfile {
+                return Err(Error::InvalidLockfile {
+                    stderr: "Cargo.lock changed during repository discovery".to_string(),
+                });
+            }
+            validate_resolved_local_packages(repo_root, &metadata)
+        }
+        ContributorMetadata::Unresolved(error) => {
+            require_lockfile(repo_root)?;
+            Err(error)
+        }
+    }
+}
+
 impl RepositoryContributor for CargoContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
@@ -1412,9 +1491,10 @@ impl RepositoryContributor for CargoContributor {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
-            let workspace =
-                turborepo_rayon_compat::block_in_place(|| discover_crates(&self.repo_root))
-                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
+                discover_contributor_workspace(&self.repo_root)
+            })
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
                 .repo_root
                 .join_component(CARGO_TOML)
@@ -1427,8 +1507,10 @@ impl RepositoryContributor for CargoContributor {
 
             if crates.is_empty() {
                 if workspace.has_packages {
-                    turborepo_rayon_compat::block_in_place(|| validate_lockfile(&self.repo_root))
-                        .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+                    turborepo_rayon_compat::block_in_place(|| {
+                        validate_contributor_metadata(&self.repo_root, metadata)
+                    })
+                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                 }
                 return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
             }
@@ -1444,8 +1526,15 @@ impl RepositoryContributor for CargoContributor {
 
             let change_observation =
                 cargo_change_observation(&self.repo_root, target_directory.as_deref());
-            let prune_domain = CargoPruneKnowledge::discover(&self.repo_root, &crates)
-                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let lockfile = if let Some(lockfile) = metadata.lockfile() {
+                lockfile.to_string()
+            } else {
+                read_lockfile(&self.repo_root)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?
+            };
+            let prune_domain =
+                CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile.clone())
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
             // Each crate contributes its already-classified native internal
             // relationships directly. No JavaScript dependency descriptor or
@@ -1459,7 +1548,7 @@ impl RepositoryContributor for CargoContributor {
             let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
             let (rustc, host_target, supported_targets, mut closures) =
                 turborepo_rayon_compat::block_in_place(|| {
-                    validate_lockfile(&self.repo_root)?;
+                    validate_contributor_metadata(&self.repo_root, metadata)?;
                     let (rustc, host_target) = rustc_info(&self.repo_root)?;
                     let mut supported_targets = rustc_supported_targets(&self.repo_root);
                     supported_targets.insert(host_target.clone());
@@ -1467,7 +1556,7 @@ impl RepositoryContributor for CargoContributor {
                         rustc,
                         host_target,
                         supported_targets,
-                        external_closures(&self.repo_root, &all_names)?,
+                        external_closures_from_lockfile(&lockfile, &all_names)?,
                     ))
                 })
                 .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
@@ -1900,10 +1989,24 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
     }
     let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
-    let has_packages = !metadata.packages.is_empty();
-    let name = workspace_name(&metadata)?;
+    workspace_from_metadata(repo_root, &root_manifest_path, &metadata)
+}
+
+fn workspace_from_metadata(
+    repo_root: &AbsoluteSystemPath,
+    root_manifest_path: &AbsoluteSystemPath,
+    metadata: &Metadata,
+) -> Result<DiscoveredWorkspace, Error> {
+    let has_packages = !metadata.workspace_members.is_empty();
+    let name = workspace_name(metadata)?;
     let target_directory = metadata_path(&metadata.target_directory);
-    let crates = connect_crates(parse_members(repo_root, &root_manifest_path, metadata));
+    let packages = metadata
+        .packages
+        .iter()
+        .filter(|package| metadata.workspace_members.contains(&package.id))
+        .cloned()
+        .collect();
+    let crates = connect_crates(parse_members(repo_root, root_manifest_path, packages));
 
     if let Some(name) = &name
         && let Some(collision) = crates.iter().find(|c| &c.name == name)
@@ -2016,10 +2119,10 @@ fn manifest_alters_output_layout(manifest_path: &AbsoluteSystemPath) -> bool {
 fn parse_members(
     repo_root: &AbsoluteSystemPath,
     root_manifest_path: &AbsoluteSystemPath,
-    metadata: Metadata,
+    packages: Vec<MetadataPackage>,
 ) -> Vec<ParsedCrate> {
     let mut parsed = Vec::new();
-    for package in metadata.packages {
+    for package in packages {
         let Some(manifest_path) = metadata_path(&package.manifest_path) else {
             tracing::warn!(
                 "skipping Cargo crate {}: non-absolute manifest path {}",
@@ -2207,11 +2310,11 @@ fn reaches(adjacency: &HashMap<&str, BTreeSet<&str>>, start: &str, target: &str)
     false
 }
 
-/// The subset of `cargo metadata --no-deps` output we consume. With
-/// `--no-deps`, `packages` contains exactly the workspace members.
+/// The subset of `cargo metadata` output used for discovery and validation.
 #[derive(Debug, Deserialize)]
 struct Metadata {
     packages: Vec<MetadataPackage>,
+    workspace_members: HashSet<String>,
     target_directory: String,
     /// The `[workspace.metadata]` table, serialized as JSON. Carries the
     /// user-declared workspace name.
@@ -2219,9 +2322,11 @@ struct Metadata {
     metadata: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct MetadataPackage {
+    id: String,
     name: String,
+    source: Option<String>,
     manifest_path: String,
     #[serde(default)]
     dependencies: Vec<MetadataDependency>,
@@ -2229,7 +2334,7 @@ struct MetadataPackage {
     targets: Vec<MetadataTarget>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct MetadataDependency {
     /// Absolute path to the dependency's directory, present only for path
     /// dependencies.
@@ -2240,27 +2345,10 @@ struct MetadataDependency {
     optional: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct MetadataTarget {
     name: String,
     kind: Vec<String>,
-}
-
-/// The subset of full `cargo metadata --locked --all-features` output needed
-/// to distinguish external packages, workspace members, and unsupported local
-/// path packages.
-#[derive(Debug, Deserialize)]
-struct ResolvedMetadata {
-    packages: Vec<ResolvedMetadataPackage>,
-    workspace_members: HashSet<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResolvedMetadataPackage {
-    id: String,
-    name: String,
-    source: Option<String>,
-    manifest_path: String,
 }
 
 #[cfg(test)]
@@ -2269,6 +2357,43 @@ mod test {
     use turborepo_errors::Spanned;
 
     use super::*;
+
+    #[test]
+    fn full_metadata_discovers_only_workspace_members() {
+        let (_temp, root) = tempdir_root();
+        let root_manifest = root.join_component(CARGO_TOML);
+        let member_manifest = root.join_components(&["crates", "member", CARGO_TOML]);
+        let metadata = Metadata {
+            packages: vec![
+                MetadataPackage {
+                    id: "member 0.1.0 (path+file:///repo/crates/member)".to_string(),
+                    name: "member".to_string(),
+                    source: None,
+                    manifest_path: member_manifest.to_string(),
+                    dependencies: Vec::new(),
+                    targets: Vec::new(),
+                },
+                MetadataPackage {
+                    id: "registry 1.0.0 (registry+https://example.com/index)".to_string(),
+                    name: "registry".to_string(),
+                    source: Some("registry+https://example.com/index".to_string()),
+                    manifest_path: "/registry/registry-1.0.0/Cargo.toml".to_string(),
+                    dependencies: Vec::new(),
+                    targets: Vec::new(),
+                },
+            ],
+            workspace_members: HashSet::from([
+                "member 0.1.0 (path+file:///repo/crates/member)".to_string()
+            ]),
+            target_directory: root.join_component("target").to_string(),
+            metadata: serde_json::json!({ "name": "workspace" }),
+        };
+
+        let workspace = workspace_from_metadata(&root, &root_manifest, &metadata).unwrap();
+        assert!(workspace.has_packages);
+        assert_eq!(workspace.crates.len(), 1);
+        assert_eq!(workspace.crates[0].name, "member");
+    }
 
     #[test]
     fn crates_register_scoped_tasks() {
@@ -3319,6 +3444,16 @@ release: 1.96.0-nightly\n",
         assert!(
             err.to_string().contains("[workspace.metadata]"),
             "the error must show the fix, got: {err}"
+        );
+
+        std::fs::remove_file(root.join_component(CARGO_LOCK)).unwrap();
+        let err = CargoContributor::new(root.clone())
+            .discover_packages()
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("[workspace.metadata]"),
+            "workspace naming must be validated before the lockfile, got: {err}"
         );
 
         // Crate discovery itself still works: the name is only mandatory
