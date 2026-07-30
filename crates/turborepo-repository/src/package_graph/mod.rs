@@ -200,7 +200,7 @@ pub enum PackageGraphNodeKind {
     GraphSentinel,
 }
 
-/// Manifest-independent facts about a package graph node.
+/// Compatibility-payload-independent facts about a package graph node.
 ///
 /// Paths and provenance come from the graph's immutable repository knowledge,
 /// not from the [`PackageInfo`] compatibility projection. The graph sentinel
@@ -208,6 +208,7 @@ pub enum PackageGraphNodeKind {
 #[derive(Debug, Clone, Copy)]
 pub struct PackageGraphNodeView<'a> {
     kind: PackageGraphNodeKind,
+    name_source: Option<&'a turborepo_errors::Spanned<()>>,
     directory: Option<&'a AnchoredSystemPath>,
     definition_path: Option<&'a AnchoredSystemPath>,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
@@ -352,6 +353,10 @@ impl<'a> PackageTaskContext<'a> {
 impl<'a> PackageGraphNodeView<'a> {
     pub fn kind(&self) -> PackageGraphNodeKind {
         self.kind
+    }
+
+    pub fn name_source(&self) -> Option<&'a turborepo_errors::Spanned<()>> {
+        self.name_source
     }
 
     pub fn directory(&self) -> Option<&'a AnchoredSystemPath> {
@@ -734,6 +739,7 @@ impl PackageGraph {
         match node {
             PackageNode::Root => Some(PackageGraphNodeView {
                 kind: PackageGraphNodeKind::GraphSentinel,
+                name_source: None,
                 directory: None,
                 definition_path: None,
                 toolchain: None,
@@ -751,6 +757,7 @@ impl PackageGraph {
                 let scope = self.knowledge.root_javascript_scope()?;
                 Some(PackageGraphNodeView {
                     kind: PackageGraphNodeKind::RootJavaScript,
+                    name_source: None,
                     directory: Some(self.knowledge.repository_directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),
@@ -764,6 +771,7 @@ impl PackageGraph {
                 };
                 Some(PackageGraphNodeView {
                     kind,
+                    name_source: scope.name_source(),
                     directory: Some(scope.directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),
@@ -877,6 +885,7 @@ impl PackageGraph {
                         crate::knowledge::ScopeKind::Package => PackageGraphNodeKind::Package,
                         crate::knowledge::ScopeKind::Aggregate => PackageGraphNodeKind::Aggregate,
                     },
+                    name_source: scope.name_source(),
                     directory: Some(scope.directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),

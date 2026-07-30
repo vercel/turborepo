@@ -526,6 +526,7 @@ mod tests {
             .iter()
             .map(|identity| PackageScopeObservation {
                 identity: Some((*identity).to_string()),
+                name_source: None,
                 definition_path: root.join_components(&[identity, "package.json"]),
                 toolchain: toolchain.clone(),
                 scope_kind: ScopeKind::Package,

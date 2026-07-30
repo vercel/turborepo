@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
+use turborepo_errors::Spanned;
 
 use crate::{
     relationships::{Relationship, RelationshipTarget},
@@ -122,6 +123,7 @@ pub(crate) enum ScopeKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopeKnowledge {
     identity: String,
+    name_source: Option<Spanned<()>>,
     directory: AnchoredSystemPathBuf,
     definition_path: AnchoredSystemPathBuf,
     toolchain: ToolchainId,
@@ -135,6 +137,10 @@ impl ScopeKnowledge {
 
     pub(crate) fn user_facing_name(&self) -> &str {
         &self.identity
+    }
+
+    pub(crate) fn name_source(&self) -> Option<&Spanned<()>> {
+        self.name_source.as_ref()
     }
 
     pub(crate) fn directory(&self) -> &AnchoredSystemPath {
@@ -317,6 +323,7 @@ impl RepositoryKnowledge {
             scope_lookup.insert(identity.clone(), scopes.len());
             scopes.push(ScopeKnowledge {
                 identity: identity.clone(),
+                name_source: observation.name_source.clone(),
                 directory,
                 definition_path,
                 toolchain: observation.toolchain.clone(),
@@ -427,6 +434,7 @@ fn canonical_physical_path(path: &std::path::Path) -> Option<std::path::PathBuf>
 
 pub(crate) struct PackageScopeObservation {
     pub identity: Option<String>,
+    pub name_source: Option<Spanned<()>>,
     pub definition_path: AbsoluteSystemPathBuf,
     pub toolchain: ToolchainId,
     pub scope_kind: ScopeKind,
@@ -488,12 +496,14 @@ mod tests {
             &[
                 PackageScopeObservation {
                     identity: Some("app".to_string()),
+                    name_source: None,
                     definition_path: root.join_components(&["apps", "app", "package.json"]),
                     toolchain: ToolchainId::JAVASCRIPT,
                     scope_kind: ScopeKind::Package,
                 },
                 PackageScopeObservation {
                     identity: Some("lib".to_string()),
+                    name_source: None,
                     definition_path: root.join_components(&["packages", "lib", "package.json"]),
                     toolchain: ToolchainId::JAVASCRIPT,
                     scope_kind: ScopeKind::Package,
@@ -538,6 +548,7 @@ mod tests {
             None,
             &[PackageScopeObservation {
                 identity: Some("//".to_string()),
+                name_source: None,
                 definition_path: root.join_components(&["native", "manifest"]),
                 toolchain: ToolchainId::new("native"),
                 scope_kind: ScopeKind::Aggregate,
@@ -549,6 +560,37 @@ mod tests {
         );
 
         assert!(matches!(result, Err(Error::ReservedRootIdentity { .. })));
+    }
+
+    #[test]
+    fn repository_knowledge_preserves_package_name_provenance() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let source = Spanned::new(())
+            .with_range(9..14)
+            .with_text(r#"{"name": "app"}"#)
+            .with_path("apps/app/package.json".into());
+        let repository = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[PackageScopeObservation {
+                identity: Some("app".to_string()),
+                name_source: Some(source.clone()),
+                definition_path: root.join_components(&["apps", "app", "package.json"]),
+                toolchain: ToolchainId::JAVASCRIPT,
+                scope_kind: ScopeKind::Package,
+            }],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("npm", root.clone()),
+                ToolchainId::JAVASCRIPT,
+            )],
+        )
+        .unwrap();
+
+        assert_eq!(
+            repository.scope("app").unwrap().name_source(),
+            Some(&source)
+        );
     }
 
     #[test]
