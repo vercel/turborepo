@@ -377,10 +377,7 @@ const VERIFICATION_SUBCOMMANDS: &[(&str, &str)] = &[
     ("test", "test"),
     ("check", "check"),
     ("lint", "clippy"),
-    ("clippy", "clippy"),
-    ("doc", "doc"),
-    ("docs", "doc"),
-    ("bench", "bench"),
+    ("format", "fmt"),
 ];
 
 const ENTRYPOINT_SUBCOMMANDS: &[(&str, &str)] =
@@ -449,11 +446,15 @@ pub fn task_subcommand(kind: CargoPackageKind, task: &str) -> Option<&'static st
 /// tables as execution so it cannot drift.
 pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Option<String> {
     let subcommand = task_subcommand(kind, task)?;
-    Some(match kind {
-        CargoPackageKind::Entrypoint | CargoPackageKind::Library => {
+    Some(match (kind, subcommand) {
+        (CargoPackageKind::Entrypoint | CargoPackageKind::Library, "fmt") => {
+            format!("cargo fmt --package={package}")
+        }
+        (CargoPackageKind::Workspace, "fmt") => "cargo fmt --all".to_string(),
+        (CargoPackageKind::Entrypoint | CargoPackageKind::Library, _) => {
             format!("cargo {subcommand} --package={package} --locked")
         }
-        CargoPackageKind::Workspace => format!("cargo {subcommand} --workspace --locked"),
+        (CargoPackageKind::Workspace, _) => format!("cargo {subcommand} --workspace --locked"),
     })
 }
 
@@ -464,23 +465,25 @@ pub fn native_tasks_for_package(
 ) -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::NativeTask;
 
-    let scope_arg = match details.kind {
-        CargoPackageKind::Workspace => "--workspace".to_string(),
-        CargoPackageKind::Entrypoint | CargoPackageKind::Library => {
-            format!("--package={package}")
-        }
-    };
     registered_tasks(details)
         .into_iter()
         .filter_map(|task| {
             let subcommand = task_subcommand(details.kind, task)?;
             let display = display_command(details.kind, task, package)?;
+            let scope_arg = match (details.kind, subcommand) {
+                (CargoPackageKind::Workspace, "fmt") => "--all".to_string(),
+                (CargoPackageKind::Workspace, _) => "--workspace".to_string(),
+                (CargoPackageKind::Entrypoint | CargoPackageKind::Library, _) => {
+                    format!("--package={package}")
+                }
+            };
             Some(NativeTask::cargo(
                 task,
                 display,
                 subcommand,
-                scope_arg.clone(),
-                (subcommand != "run").then(|| "cargo".to_string()),
+                scope_arg,
+                subcommand != "fmt",
+                (!matches!(subcommand, "run" | "fmt")).then(|| "cargo".to_string()),
                 pass_through_uses_separator(subcommand),
             ))
         })
@@ -489,11 +492,11 @@ pub fn native_tasks_for_package(
 
 /// Whether pass-through args for `subcommand` must follow a `--` separator.
 /// These subcommands forward everything after `--` to the underlying tool
-/// (the built binary for `run`, the test/bench harness, clippy's lint
-/// flags); the remaining subcommands take no trailing args, so pass-through
+/// (the built binary for `run`, the test harness, clippy's lint flags, or
+/// rustfmt); the remaining subcommands take no trailing args, so pass-through
 /// args are attached directly as cargo flags.
 pub fn pass_through_uses_separator(subcommand: &str) -> bool {
-    matches!(subcommand, "test" | "bench" | "run" | "clippy")
+    matches!(subcommand, "test" | "run" | "clippy" | "fmt")
 }
 
 /// Standard Cargo and cc-rs environment variables that can change build
@@ -759,6 +762,7 @@ impl CargoTaskContract {
     pub(crate) fn task_defaults(&self, task: &str) -> toolchain::TaskDefaults {
         let cache = task_subcommand(self.package.kind, task).and_then(|subcommand| {
             (subcommand == "run"
+                || subcommand == "fmt"
                 || (self.package.kind == CargoPackageKind::Library && subcommand == "build"))
                 .then_some(false)
         });
@@ -821,6 +825,12 @@ impl CargoTaskContract {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
+        if subcommand == "fmt" {
+            io.input_globs.extend(
+                ["rustfmt.toml", ".rustfmt.toml"].map(|path| join_prefix(path_to_root, path)),
+            );
+            io.env.push("RUSTFMT".to_string());
+        }
         if let Some(workspace) = &self.workspace
             && (workspace.repository_config_untracked || workspace.external_config_present)
         {
@@ -2406,7 +2416,7 @@ mod test {
             name: name.to_string(),
             kind,
         };
-        let verification = ["test", "check", "lint", "clippy", "doc", "docs", "bench"];
+        let verification = ["test", "check", "lint", "format"];
 
         for entrypoint in [
             details(
@@ -3943,12 +3953,24 @@ release: 1.96.0-nightly\n",
         let cmd = resolve_cargo_cmd(&app_context, "check", None, None)
             .expect("entrypoint check resolves");
         assert_eq!(cmd.args, os_args(&["check", "--package=app", "--locked"]));
+        let cmd = resolve_cargo_cmd(
+                &lib_a_context,
+                "format",
+                Some(&["--check".to_string()]),
+                None,
+            ).expect("library format resolves");
+        assert_eq!(cmd.args, os_args(&["fmt", "--package=lib-a", "--", "--check"]));
+        assert_eq!(cmd.serial_group, None);
 
         // The workspace package runs verification verbs at workspace scope.
         let cmd = resolve_cargo_cmd(&workspace_context, "lint", None, None)
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace", "--locked"]));
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+        let cmd = resolve_cargo_cmd(&workspace_context, "format", None, None)
+            .expect("workspace format resolves");
+        assert_eq!(cmd.args, os_args(&["fmt", "--all"]));
+        assert_eq!(cmd.serial_group, None);
 
         // Harness-forwarding subcommands separate pass-through args with
         // `--`; e.g. `turbo test -- --nocapture` reaches the test harness.
@@ -3972,6 +3994,8 @@ release: 1.96.0-nightly\n",
         assert_eq!(app_context.native_tasks().get("build").and_then(|t| t.display()), Some("cargo build --package=app --locked"));
         assert_eq!(workspace_context.native_tasks().get("test").and_then(|t| t.display()), Some("cargo test --workspace --locked"));
         assert_eq!(lib_a_context.native_tasks().get("test").and_then(|t| t.display()), Some("cargo test --package=lib-a --locked"));
+        assert_eq!(workspace_context.native_tasks().get("format").and_then(|t| t.display()), Some("cargo fmt --all"));
+        assert_eq!(lib_a_context.native_tasks().get("format").and_then(|t| t.display()), Some("cargo fmt --package=lib-a"));
         assert_eq!(
             lib_a_context.native_tasks().get("build").and_then(|t| t.display()),
             Some("cargo build --package=lib-a --locked")
@@ -3985,6 +4009,8 @@ release: 1.96.0-nightly\n",
         assert_eq!(app_contract.defaults_for_task("build").cache, None);
         assert_eq!(workspace_contract.defaults_for_task("test").cache, None);
         assert_eq!(library_contract.defaults_for_task("test").cache, None);
+        assert_eq!(workspace_contract.defaults_for_task("format").cache, Some(false));
+        assert_eq!(library_contract.defaults_for_task("format").cache, Some(false));
         assert_eq!(library_contract.defaults_for_task("build").cache, Some(false));
         assert_eq!(
             app_context
@@ -4013,6 +4039,10 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(
             workspace_contract.task_entrypoint("test"),
+            Some(crate::task_contracts::TaskEntrypoint::PreferredOnly)
+        );
+        assert_eq!(
+            workspace_contract.task_entrypoint("format"),
             Some(crate::task_contracts::TaskEntrypoint::PreferredOnly)
         );
     }

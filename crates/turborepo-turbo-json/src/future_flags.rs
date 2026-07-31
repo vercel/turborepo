@@ -108,9 +108,9 @@ pub struct FutureFlags {
     /// expressions, propagate `--affected`, and appear in `turbo query`.
     /// Filtered builds execute each selected crate. Unfiltered builds prefer
     /// entrypoints, falling back to libraries when no entrypoints exist.
-    /// Entrypoints also expose `run` and `dev`. The `test`, `check`,
-    /// `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are selectable per
-    /// crate with `--filter`. An unfiltered run executes one workspace-wide
+    /// Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`,
+    /// and `format` tasks are selectable per crate with `--filter`. An
+    /// unfiltered run executes one workspace-wide
     /// Cargo verification command; filtered runs use the selected crates,
     /// or the workspace command when the workspace package is selected
     /// directly.
@@ -122,8 +122,8 @@ pub struct FutureFlags {
     /// exclude them with `extends: false`.
     ///
     /// Task caching uses Cargo-derived inputs and caches entrypoint build
-    /// deliverables. Library builds default to uncached. This feature is
-    /// experimental.
+    /// deliverables. Library builds and formatting default to uncached. This
+    /// feature is experimental.
     #[serde(default)]
     pub experimental_cargo_workspaces: bool,
     /// Serve the Remote Cache as an sccache storage backend for Cargo crate
