@@ -542,7 +542,7 @@ impl FsEventWatcher {
                         cf::kCFRunLoopDefaultMode,
                     );
                     if fs::FSEventStreamStart(stream_ref) == FALSE {
-                        let _ = rl_tx.send(Err(Error::generic("FSEventStream failed to start")));
+                        let _ = rl_tx.send(Err(Error::generic("FSEventStreamStart failed")));
                         return;
                     }
 
