@@ -199,6 +199,8 @@ fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
 pub enum Error {
     #[error("File watcher error: {0}")]
     FileWatcher(#[from] turborepo_filewatch::WatchError),
+    #[error("Failed to initialize file watcher: {0}")]
+    FileWatcherStartup(#[from] turborepo_filewatch::SubscribeError),
     #[error("Package watcher error: {0}")]
     PackageWatcher(String),
     #[error("Could not get current executable.")]
@@ -274,6 +276,7 @@ impl WatchClient {
             &base.repo_root,
         )?);
         let source = watcher.source();
+        source.ready().await?;
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
@@ -887,6 +890,19 @@ mod test {
         let cp = ChangedPackages::default();
         assert!(cp.is_empty());
         assert!(matches!(cp, ChangedPackages::Some { ref packages, .. } if packages.is_empty()));
+    }
+
+    #[test]
+    fn startup_failure_diagnostic_uses_concrete_watcher_cause() {
+        let error = super::Error::FileWatcherStartup(turborepo_filewatch::SubscribeError::Startup(
+            Arc::new(turborepo_filewatch::WatchError::Setup(
+                "FSEventStreamStart failed".to_string(),
+            )),
+        ))
+        .to_string();
+
+        assert!(error.contains("FSEventStreamStart failed"));
+        assert!(!error.contains("Package change channel closed"));
     }
 
     #[test]

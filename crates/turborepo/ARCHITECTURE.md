@@ -681,6 +681,14 @@ The core task graph consists of:
   cannot make it lag. Package changes, package discovery, input hashing,
   output-glob tracking, cookies, devtools, and daemon root monitoring all use
   independent scopes; there is no repository-wide raw event broadcast.
+- Watcher startup is asynchronous, but its terminal state retains the concrete
+  setup error so current and future subscribers receive the same cause. Watch
+  mode awaits this readiness before building its initial run or UI.
+- On macOS, automatic backend selection tries the complete FSEvents startup,
+  including root/control watches and the readiness cookie. If that fails, it
+  warns once and retries from fresh state with 100 ms content-aware polling.
+  The startup-only fallback can cost additional CPU and I/O. Other platforms
+  retain their native backend behavior.
 - Package-change detection declares a source-input scope that drops `.git`,
   paths excluded by repository and nested Git ignore rules, and toolchain
   build-byproduct prefixes. Tracked files and their ancestor directories remain
