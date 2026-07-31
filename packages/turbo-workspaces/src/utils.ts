@@ -49,8 +49,6 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "nub",
   "aube"
 ]);
-const DEV_ENGINES_VERSION_REGEX =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function getPackageJson({
   workspaceRoot
@@ -189,13 +187,35 @@ function getWorkspacePackageManager({
     );
   }
 
-  if (
-    !DEV_ENGINES_VERSION_REGEX.test(version) ||
-    semver.valid(version) === null
-  ) {
+  if (semver.validRange(version) === null) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.version` must be an exact semantic version"
+      "`devEngines.packageManager.version` must be a valid semantic version range"
     );
+  }
+
+  const minVersion = semver.minVersion(version);
+  if (minVersion === null) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must admit at least one version"
+    );
+  }
+
+  for (const disjunct of version.split("||")) {
+    const disjunctMinVersion = semver.minVersion(disjunct.trim());
+    if (disjunctMinVersion === null) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must admit at least one version"
+      );
+    }
+
+    if (
+      disjunctMinVersion.major !== minVersion.major ||
+      semver.satisfies(`${disjunctMinVersion.major + 1}.0.0`, disjunct.trim())
+    ) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must only allow versions within one major version"
+      );
+    }
   }
 
   return name;
