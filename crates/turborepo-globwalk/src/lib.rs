@@ -591,8 +591,6 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
     if segments.is_empty() {
         return SimplePattern::Complex;
     }
-    let root = if pattern.starts_with('/') { "/" } else { "" };
-
     // `<literal-prefix>/**`: a single trailing tree wildcard after plain
     // segments. Checked before the generic scan since `**` is neither a
     // plain segment nor a bare `*`.
@@ -605,10 +603,7 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
                 (index == 0 && is_plain_windows_drive(segment)) || plain_segment(segment)
             })
     {
-        return SimplePattern::RecursiveAll(PathBuf::from(format!(
-            "{root}{}",
-            segments[..segments.len() - 1].join("/")
-        )));
+        return SimplePattern::RecursiveAll(simple_path(&pattern[..pattern.len() - 3]));
     }
 
     let mut star_index = None;
@@ -626,13 +621,15 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
     }
 
     match star_index {
-        None => SimplePattern::Literal(PathBuf::from(format!("{root}{}", segments.join("/")))),
+        None => SimplePattern::Literal(simple_path(pattern)),
         // Require at least one suffix segment after the star — `dir/*`
         // matches files directly and keeps the full walker.
-        Some(index) if index + 1 < segments.len() && index > 0 => SimplePattern::Shallow(
-            PathBuf::from(format!("{root}{}", segments[..index].join("/"))),
-            segments[index + 1..].iter().collect(),
-        ),
+        Some(index) if index + 1 < segments.len() && index > 0 => {
+            let Some((prefix, suffix)) = pattern.split_once("/*/") else {
+                return SimplePattern::Complex;
+            };
+            SimplePattern::Shallow(simple_path(prefix), PathBuf::from(suffix))
+        }
         Some(_) => SimplePattern::Complex,
     }
 }
@@ -640,7 +637,26 @@ fn classify_simple_pattern(pattern: &str) -> SimplePattern {
 /// `C:`-style drive segment at the start of a Windows absolute pattern.
 fn is_plain_windows_drive(segment: &str) -> bool {
     let bytes = segment.as_bytes();
-    bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
+    (bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
+        || (bytes.len() == 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b'\\'
+            && bytes[2] == b':')
+}
+
+/// Convert a preprocessed plain glob path into a filesystem path. Wax requires
+/// Windows drive colons to be escaped, but filesystem APIs require the raw
+/// drive prefix.
+fn simple_path(pattern: &str) -> PathBuf {
+    let bytes = pattern.as_bytes();
+    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b'\\' && bytes[2] == b':' {
+        let mut path = String::with_capacity(pattern.len() - 1);
+        path.push(bytes[0] as char);
+        path.push_str(&pattern[2..]);
+        PathBuf::from(path)
+    } else {
+        PathBuf::from(pattern)
+    }
 }
 
 #[tracing::instrument(skip(include, exclude, settings))]
@@ -936,10 +952,12 @@ fn walk_recursive_all(
         Err(e) => return Err(e.into()),
     };
 
-    let mut yield_entry = |path: &Path, is_file: bool| -> Result<(), WalkError> {
+    let mut yield_entry = |path: &Path, is_file: bool, is_symlink: bool| -> Result<(), WalkError> {
         let wanted = match walk_type {
-            WalkType::Files => is_file,
-            WalkType::Folders => !is_file,
+            WalkType::Files => is_file || is_symlink,
+            // Preserve the existing wax-backed behavior, which only filters
+            // entries for WalkType::Files.
+            WalkType::Folders => true,
             WalkType::All => true,
         };
         if wanted && !excluded(path) {
@@ -949,13 +967,13 @@ fn walk_recursive_all(
     };
 
     if !root_meta.is_dir() {
-        yield_entry(prefix, true)?;
+        yield_entry(prefix, root_meta.is_file(), false)?;
         return Ok(());
     }
-    if prune_nested_package(prefix) {
+    if excluded(prefix) || prune_nested_package(prefix) {
         return Ok(());
     }
-    yield_entry(prefix, false)?;
+    yield_entry(prefix, false, false)?;
 
     let mut stack = vec![prefix.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -979,13 +997,13 @@ fn walk_recursive_all(
                 Err(e) => return Err(e.into()),
             };
             if file_type.is_dir() {
-                if prune_nested_package(&path) {
+                if excluded(&path) || prune_nested_package(&path) {
                     continue;
                 }
-                yield_entry(&path, false)?;
+                yield_entry(&path, false, false)?;
                 stack.push(path);
             } else {
-                yield_entry(&path, true)?;
+                yield_entry(&path, file_type.is_file(), file_type.is_symlink())?;
             }
         }
     }
@@ -1094,6 +1112,22 @@ mod classify_test {
                 assert_eq!(suffix, PathBuf::from("hooks/package.json"));
             }
             _ => panic!("should classify as shallow"),
+        }
+    }
+
+    #[test]
+    fn test_recursive_all_preserves_platform_roots() {
+        match classify("C\\:/repo/src/**") {
+            SimplePattern::RecursiveAll(prefix) => {
+                assert_eq!(prefix, PathBuf::from("C:/repo/src"));
+            }
+            _ => panic!("escaped Windows drive should classify as recursive all"),
+        }
+        match classify("//server/share/repo/src/**") {
+            SimplePattern::RecursiveAll(prefix) => {
+                assert_eq!(prefix, PathBuf::from("//server/share/repo/src"));
+            }
+            _ => panic!("UNC path should classify as recursive all"),
         }
     }
 
@@ -2230,6 +2264,46 @@ mod test {
                 .to_string(),
         ]);
         assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn recursive_all_preserves_folders_walk_behavior() {
+        let tmp = setup_files(&["src/file.txt", "src/nested/file.txt"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = [ValidatedGlob::from_str("src/**").unwrap()];
+
+        let paths: HashSet<String> = globwalk(&root, &include, &[], WalkType::Folders)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+
+        let expected = HashSet::from_iter([
+            "src".replace('/', std::path::MAIN_SEPARATOR_STR),
+            "src/file.txt".replace('/', std::path::MAIN_SEPARATOR_STR),
+            "src/nested".replace('/', std::path::MAIN_SEPARATOR_STR),
+            "src/nested/file.txt".replace('/', std::path::MAIN_SEPARATOR_STR),
+        ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recursive_all_does_not_yield_special_files() {
+        use std::os::unix::net::UnixDatagram;
+
+        let tmp = setup_files(&["src/file.txt"]);
+        UnixDatagram::bind(tmp.path().join("src/socket")).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = [ValidatedGlob::from_str("src/**").unwrap()];
+
+        let paths: HashSet<String> = globwalk(&root, &include, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+
+        assert_eq!(paths, HashSet::from(["src/file.txt".to_owned()]));
     }
 
     #[test]
