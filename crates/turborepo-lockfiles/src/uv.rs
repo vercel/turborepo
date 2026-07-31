@@ -1,10 +1,11 @@
-//! uv.lock parsing for external-dependency hashing.
+//! uv.lock parsing for external-dependency hashing and prune.
 //!
 //! Like the Cargo module (and unlike the JS lockfile implementations), this
 //! module does not implement the [`crate::Lockfile`] trait: uv owns
 //! resolution, subgraph pruning, and installation, so Turborepo only needs
 //! two things from uv.lock — the set of external packages in each workspace
-//! member's transitive dependency closure.
+//! member's transitive dependency closure, and a reachability-pruned
+//! lockfile for `turbo prune`.
 //!
 //! uv.lock is a flat list of `[[package]]` entries. Workspace members carry
 //! a local project source (`{ editable = "…" }`, or `{ virtual = "…" }` for
@@ -31,6 +32,8 @@ use crate::Package;
 pub enum Error {
     #[error("Unable to parse uv.lock: {0}")]
     Parse(#[from] Box<toml::de::Error>),
+    #[error("Unable to parse uv.lock: {0}")]
+    ParseDocument(#[from] Box<toml_edit::TomlError>),
     #[error(
         "uv.lock has unsupported schema version {version}. This version of Turborepo supports \
          uv.lock version 1; a newer Turborepo release may be required."
@@ -43,6 +46,8 @@ pub enum Error {
          commit the result."
     )]
     MissingMember(String),
+    #[error("uv.lock is malformed: the [[package]] entries are not a valid array of tables.")]
+    MalformedPackageArray,
     #[error(
         "uv.lock contains reachable local dependency {name:?} at {source_description:?}, but only \
          uv workspace members are supported. Add it to [tool.uv.workspace] or replace it with a \
@@ -227,6 +232,79 @@ pub fn uv_external_closures(
         })
         .collect();
     Ok(closures)
+}
+
+/// The result of pruning a uv.lock to a set of root members.
+#[derive(Debug)]
+pub struct PrunedUvLock {
+    /// Every workspace member in the pruned closure, sorted.
+    pub members: Vec<String>,
+    /// The pruned lockfile, preserving retained package metadata.
+    pub lockfile: String,
+}
+
+/// Prune a uv.lock to the transitive closure of the given root members.
+pub fn uv_prune_lock(
+    contents: &str,
+    roots: &[String],
+    workspace_paths: &HashMap<String, String>,
+) -> Result<PrunedUvLock, Error> {
+    let lock = parse_lock(contents)?;
+    let index = LockIndex::new(&lock)?;
+
+    let mut starts = Vec::with_capacity(roots.len());
+    for root in roots {
+        starts.push(
+            index
+                .member(root, workspace_paths)
+                .ok_or_else(|| Error::MissingMember(root.clone()))?,
+        );
+    }
+    let kept = index.reachable(&starts);
+
+    for &idx in &kept {
+        reject_non_workspace_local(&lock.package[idx], workspace_paths)?;
+    }
+
+    let mut members: Vec<String> = kept
+        .iter()
+        .filter(|&&idx| package_matches_workspace(&lock.package[idx], workspace_paths))
+        .map(|&idx| lock.package[idx].name.clone())
+        .collect();
+    members.sort();
+    members.dedup();
+
+    // Rewrite instead of re-serializing so artifact and metadata tables that
+    // uv validates against manifests survive unchanged.
+    let mut document: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+    let packages = document
+        .get_mut("package")
+        .and_then(|item| item.as_array_of_tables_mut())
+        .ok_or(Error::MalformedPackageArray)?;
+    if packages.len() != lock.package.len() {
+        return Err(Error::MalformedPackageArray);
+    }
+    let mut position = 0;
+    packages.retain(|_| {
+        let keep = kept.contains(&position);
+        position += 1;
+        keep
+    });
+
+    if let Some(manifest_members) = document
+        .get_mut("manifest")
+        .and_then(|item| item.as_table_like_mut())
+        .and_then(|manifest| manifest.get_mut("members"))
+        .and_then(|item| item.as_array_mut())
+    {
+        let members: HashSet<&str> = members.iter().map(String::as_str).collect();
+        manifest_members.retain(|entry| entry.as_str().is_some_and(|name| members.contains(name)));
+    }
+
+    Ok(PrunedUvLock {
+        members,
+        lockfile: document.to_string(),
+    })
 }
 
 fn reject_non_workspace_local(
@@ -419,6 +497,18 @@ impl<'a> LockIndex<'a> {
             return Err(Error::UnknownDependency(display(dependency)));
         }
         Ok(candidates)
+    }
+
+    fn reachable(&self, starts: &[usize]) -> HashSet<usize> {
+        let mut visited = HashSet::new();
+        let mut stack = starts.to_vec();
+        while let Some(idx) = stack.pop() {
+            if !visited.insert(idx) {
+                continue;
+            }
+            stack.extend(self.adjacency[idx].iter().copied());
+        }
+        visited
     }
 }
 
@@ -771,6 +861,8 @@ source = { directory = "vendor/local-lib" }
         let allowed = HashMap::from([("app".to_string(), "packages/app".to_string())]);
         let error = uv_external_closures(lock, &members, &allowed).unwrap_err();
         assert!(matches!(error, Error::UnsupportedLocalDependency { .. }));
+        let error = uv_prune_lock(lock, &members, &allowed).unwrap_err();
+        assert!(matches!(error, Error::UnsupportedLocalDependency { .. }));
     }
 
     #[test]
@@ -826,5 +918,103 @@ source = { registry = "https://pypi.org/simple" }
             names(&closures["app"]),
             vec!["dep@1.0.0 registry+https://pypi.org/simple"]
         );
+    }
+
+    #[test]
+    fn test_prune_does_not_treat_external_same_name_as_member() {
+        let lock = r#"
+version = 1
+
+[manifest]
+members = ["app", "shared"]
+
+[[package]]
+name = "app"
+source = { editable = "packages/app" }
+dependencies = [
+    { name = "shared", version = "2.0.0", source = { registry = "https://pypi.org/simple" } },
+]
+
+[[package]]
+name = "shared"
+source = { editable = "packages/shared" }
+
+[[package]]
+name = "shared"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+        let paths = HashMap::from([
+            ("app".to_string(), "packages/app".to_string()),
+            ("shared".to_string(), "packages/shared".to_string()),
+        ]);
+        let pruned = uv_prune_lock(lock, &["app".to_string()], &paths).unwrap();
+        assert_eq!(pruned.members, vec!["app"]);
+        assert!(pruned.lockfile.contains("version = \"2.0.0\""));
+    }
+
+    #[test]
+    fn test_prune_lock_keeps_reachable_closure() {
+        let pruned = uv_prune_lock(LOCK, &["py-lib".to_string()], &workspace_paths(LOCK)).unwrap();
+        assert_eq!(pruned.members, vec!["py-lib"]);
+        assert!(pruned.lockfile.contains("name = \"py-lib\""));
+        assert!(pruned.lockfile.contains("name = \"six\""));
+        assert!(!pruned.lockfile.contains("name = \"py-app\""));
+        assert!(!pruned.lockfile.contains("name = \"click\""));
+        assert!(!pruned.lockfile.contains("name = \"root-project\""));
+        assert!(!pruned.lockfile.contains("\"py-app\","));
+        assert!(pruned.lockfile.contains("requires-python = \">=3.11\""));
+        let closures = uv_external_closures(
+            &pruned.lockfile,
+            &["py-lib".to_string()],
+            &workspace_paths(LOCK),
+        )
+        .unwrap();
+        assert_eq!(
+            names(&closures["py-lib"]),
+            vec!["six@1.17.0 registry+https://pypi.org/simple sha256:51x"]
+        );
+    }
+
+    #[test]
+    fn test_prune_lock_preserves_metadata_tables_verbatim() {
+        let pruned = uv_prune_lock(LOCK, &["py-app".to_string()], &workspace_paths(LOCK)).unwrap();
+        assert!(pruned.lockfile.contains("[package.metadata]"));
+        assert!(
+            pruned
+                .lockfile
+                .contains(r#"{ name = "py-lib", editable = "packages/py-lib" }"#)
+        );
+        assert!(pruned.lockfile.contains("hash = \"sha256:c11c4wheel\""));
+    }
+
+    #[test]
+    fn test_prune_lock_retains_group_reachable_members() {
+        let pruned = uv_prune_lock(LOCK, &["py-app".to_string()], &workspace_paths(LOCK)).unwrap();
+        assert_eq!(pruned.members, vec!["py-app", "py-lib"]);
+        assert!(pruned.lockfile.contains("name = \"pytest\""));
+        assert!(pruned.lockfile.contains("name = \"colorama\""));
+        assert!(!pruned.lockfile.contains("name = \"ruff\""));
+    }
+
+    #[test]
+    fn test_prune_lock_stale_root_errors() {
+        let error =
+            uv_prune_lock(LOCK, &["not-in-lock".to_string()], &workspace_paths(LOCK)).unwrap_err();
+        assert!(matches!(error, Error::MissingMember(_)));
+    }
+
+    #[test]
+    fn test_prune_forked_lock_keeps_exact_forks() {
+        let pruned = uv_prune_lock(
+            FORKED_LOCK,
+            &["fork-lib".to_string()],
+            &workspace_paths(FORKED_LOCK),
+        )
+        .unwrap();
+        assert_eq!(pruned.members, vec!["fork-lib"]);
+        assert!(pruned.lockfile.contains("version = \"4.8.0\""));
+        assert!(pruned.lockfile.contains("version = \"4.16.0\""));
+        assert!(pruned.lockfile.contains("resolution-markers"));
     }
 }
