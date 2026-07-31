@@ -128,6 +128,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
+
       - parallel:
           - name: Setup Rust
             uses: ./.github/actions/setup-rust
@@ -143,6 +147,7 @@ jobs:
             if: ${{ !matrix.settings.install }}
 
           - name: Setup capnproto
+            if: runner.os != 'macOS'
             uses: ./.github/actions/setup-capnproto
             with:
               use-cache: ${{ !matrix.settings.install }}

@@ -2,10 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, PackageNode},
-    toolchain::ToolchainId,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -102,11 +99,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         Ok(package_graph
             .package_task_context(&PackageName::from(task_id.package()))
-            .and_then(|context| {
-                let toolchain = package_graph.toolchains().get(context.toolchain()?)?;
-                Some((context, toolchain))
-            })
-            .is_some_and(|(context, toolchain)| toolchain.registers_task(&context, task_id.task())))
+            .is_some_and(|context| context.native_tasks().registers(task_id.task())))
     }
 
     fn has_task_definition_in_run_inner(
@@ -248,10 +241,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let package_context = self
             .package_graph
             .package_task_context(&PackageName::from(task_id.as_inner().package()));
-        let toolchain = package_context
-            .as_ref()
-            .and_then(|context| context.toolchain())
-            .and_then(|toolchain| self.package_graph.toolchains().get(toolchain));
         // Whether the package's toolchain defines a command for this task.
         // Tasks without one are phantom/transit tasks (they exist solely for
         // dependency ordering via `dependsOn: ["^task"]`) and must not hash
@@ -260,12 +249,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // tasks that depend on them.
         let defines_task = package_context
             .as_ref()
-            .zip(toolchain)
-            .is_some_and(|(context, toolchain)| toolchain.defines_task(context, task_id.task()));
+            .is_some_and(|context| context.native_tasks().defines(task_id.task()));
         let registered_task = package_context
             .as_ref()
-            .zip(toolchain)
-            .is_some_and(|(context, toolchain)| toolchain.registers_task(context, task_id.task()));
+            .is_some_and(|context| context.native_tasks().registers(task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
@@ -282,11 +269,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&task_id.as_inner().as_task_name())
                     .is_some()
             });
-            let javascript = package_context
+            let memoizable_contract = package_context
                 .as_ref()
-                .and_then(|context| context.toolchain())
-                .is_none_or(|toolchain| toolchain == &ToolchainId::JAVASCRIPT);
-            (!package_scoped && javascript).then(|| TaskDefMemoKey {
+                .is_none_or(|context| !context.task_contract().derives_io());
+            (!package_scoped && memoizable_contract).then(|| TaskDefMemoKey {
                 chain: turbo_json_chain
                     .iter()
                     .map(|turbo_json| *turbo_json as *const TurboJson as usize)
@@ -331,15 +317,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let command_override = resolve_command_override(
             scoped_command,
             unscoped_command,
-            package_context
-                .as_ref()
-                .zip(toolchain)
-                .and_then(|(context, toolchain)| {
-                    Some((
-                        context.toolchain()?,
-                        toolchain.authors_task(context, task_id.as_inner().task()),
-                    ))
-                }),
+            package_context.as_ref().map(|context| {
+                (
+                    context.task_contract(),
+                    context.native_tasks().authors(task_id.as_inner().task()),
+                )
+            }),
         );
 
         let mut processed_task_definition = ProcessedTaskDefinition::from_iter(
@@ -348,12 +331,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .map(|(definition, _)| definition),
         );
         let had_explicit_cache = processed_task_definition.cache.is_some();
-        // Toolchain defaults describe the command the toolchain synthesizes.
-        // An override owns its behavior, including the generic cache default.
         if should_apply_toolchain_defaults(command_override.as_ref())
-            && let Some((context, toolchain)) = package_context.as_ref().zip(toolchain)
+            && let Some(context) = package_context.as_ref()
         {
-            let defaults = toolchain.task_defaults(context, task_id.as_inner().task());
+            let defaults = context
+                .task_contract()
+                .defaults_for_task(task_id.as_inner().task());
             if processed_task_definition.cache.is_none() {
                 processed_task_definition.cache = defaults.cache.map(Spanned::new);
             }
@@ -387,48 +370,51 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        // Apply toolchain-derived hash wiring: extra input globs and env
-        // vars, cacheable outputs, and default-hashing behavior. For
-        // JavaScript this is nothing (turbo.json is the whole story); for
-        // Cargo it is the workspace files, crate closures, and deliverable
-        // artifacts. `$TURBO_DEFAULT$` on a derived task means "everything
-        // the toolchain derives automatically", so explicit `inputs` can
-        // append without forfeiting automatic invalidation; explicit inputs
-        // without `$TURBO_DEFAULT$` take full control.
+        // Apply derived hash wiring from foundational task-contract knowledge.
+        // `$TURBO_DEFAULT$` on a derived task means "everything the toolchain
+        // derives automatically", so explicit `inputs` can append without
+        // forfeiting automatic invalidation; explicit inputs without
+        // `$TURBO_DEFAULT$` take full control.
         if inherits_toolchain_task_io(task_def.command.as_ref())
-            && let Some((package_context, toolchain)) = package_context
-                .as_ref()
-                .zip(toolchain)
-                .filter(|(context, toolchain)| {
-                    toolchain.derives_task_io(context, task_id.as_inner().task())
-                })
+            && let Some(package_context) = package_context.as_ref().filter(|context| {
+                context
+                    .task_contract()
+                    .derives_task_io(task_id.as_inner().task())
+            })
         {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
             // Only assembled when the toolchain will actually use it:
             // `dependencies` walks the package's full transitive closure,
             // which is far too expensive to compute per task just to hand
             // to a toolchain that derives nothing (JavaScript).
-            let dependencies: Vec<_> = self
+            let package = PackageName::from(task_id.as_inner().package());
+            let dependency_names = self
                 .package_graph
-                .dependencies(&PackageNode::Workspace(PackageName::from(
-                    task_id.as_inner().package(),
-                )))
-                .into_iter()
-                .filter_map(|dep| match dep {
-                    PackageNode::Workspace(name) => self.package_graph.package_task_context(name),
-                    _ => None,
+                .hash_relationships()
+                .dependency_inputs(&package)?;
+            let dependencies: Vec<_> = dependency_names
+                .iter()
+                .map(|dependency| {
+                    self.package_graph
+                        .package_task_context(dependency)
+                        .ok_or_else(|| {
+                            turborepo_repository::package_graph::RelationshipProjectionError::UnknownPackage(
+                                dependency.clone(),
+                            )
+                        })
                 })
-                .collect();
+                .collect::<Result<_, _>>()?;
             let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
             let empty_environment = turborepo_repository::toolchain::TaskIOEnvironment::default();
             let context = turborepo_repository::toolchain::TaskIOContext {
                 task_args: task_args.args_for_task(task_id.as_inner()),
                 environment: package_context
-                    .toolchain()
-                    .and_then(|toolchain| self.environments.get(toolchain))
+                    .task_contract()
+                    .environment_domain()
+                    .and_then(|domain| self.environments.get(domain))
                     .unwrap_or(&empty_environment),
             };
-            if let Some(mut derived) = toolchain.derived_task_io(
+            if let Some(mut derived) = package_context.task_contract().derived_task_io(
                 package_context,
                 task_id.as_inner().task(),
                 path_to_root.as_str(),
@@ -446,7 +432,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 apply_derived_task_io(
                     &mut task_def,
                     derived,
-                    toolchain.task_io_env_vars(),
+                    package_context.task_contract().env_vars(),
                     had_explicit_outputs,
                     had_explicit_cache,
                 );
@@ -471,13 +457,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let registered_task = self
             .package_graph
             .package_task_context(&package_name)
-            .and_then(|context| {
-                let toolchain = self.package_graph.toolchains().get(context.toolchain()?)?;
-                Some((context, toolchain))
-            })
-            .is_some_and(|(context, toolchain)| {
-                toolchain.registers_task(&context, task_id.as_inner().task())
-            });
+            .is_some_and(|context| context.native_tasks().registers(task_id.as_inner().task()));
         Ok(Self::resolve_task_definitions_from_chain(
             turbo_json_chain,
             task_id,
@@ -799,7 +779,10 @@ fn apply_derived_task_io(
 fn resolve_command_override(
     scoped_command: Option<ProcessedCommand>,
     unscoped_command: Option<ProcessedCommand>,
-    package_toolchain: Option<(&turborepo_repository::toolchain::ToolchainId, bool)>,
+    package_contract: Option<(
+        &turborepo_repository::task_contracts::ScopeTaskContract,
+        bool,
+    )>,
 ) -> Option<TaskCommandOverride> {
     // Levels 1–2: an explicit per-package command beats everything,
     // including the package's own script — the user targeted this package
@@ -814,10 +797,10 @@ fn resolve_command_override(
     }
 
     // Level 3: a package-authored definition shadows unscoped defaults —
-    // lean into what the toolchain does natively. Toolchain-synthesized
+    // lean into what the ecosystem does natively. Catalog-synthesized
     // fallbacks (Cargo verb tables) are authored by nobody and sit below
     // the defaults instead.
-    if package_toolchain.is_some_and(|(_, authors)| authors) {
+    if package_contract.is_some_and(|(_, authors)| authors) {
         return None;
     }
 
@@ -826,12 +809,10 @@ fn resolve_command_override(
     match unscoped_command? {
         ProcessedCommand::Argv(argv) => Some(TaskCommandOverride::Argv(argv.into_inner())),
         ProcessedCommand::PerToolchain(entries) => {
-            let (toolchain, _) = package_toolchain?;
-            entries
-                .into_inner()
-                .into_iter()
-                .find(|(toolchain_id, _)| toolchain.as_str() == toolchain_id.as_str())
-                .map(|(_, argv)| TaskCommandOverride::Argv(argv))
+            let (contract, _) = package_contract?;
+            contract
+                .command_map_argv(&entries.into_inner())
+                .map(TaskCommandOverride::Argv)
         }
         // The validator rejects unscoped opt-outs.
         ProcessedCommand::OptOut(_) => None,
@@ -852,7 +833,7 @@ fn inherits_toolchain_task_io(command: Option<&TaskCommandOverride>) -> bool {
 #[cfg(test)]
 mod command_override_tests {
     use turborepo_errors::Spanned;
-    use turborepo_repository::toolchain::ToolchainId;
+    use turborepo_repository::task_contracts::{CommandMapTarget, ScopeTaskContract};
     use turborepo_types::TaskCommandOverride;
 
     use super::{ProcessedCommand, inherits_toolchain_task_io, resolve_command_override};
@@ -877,9 +858,12 @@ mod command_override_tests {
 
     #[test]
     fn test_precedence_levels() {
-        let rust = (&ToolchainId::RUST, false);
-        let js_with_script = (&ToolchainId::JAVASCRIPT, true);
-        let js_without_script = (&ToolchainId::JAVASCRIPT, false);
+        let rust_contract =
+            ScopeTaskContract::empty().with_command_map_target(CommandMapTarget::Rust);
+        let javascript_contract = ScopeTaskContract::javascript();
+        let rust = (&rust_contract, false);
+        let js_with_script = (&javascript_contract, true);
+        let js_without_script = (&javascript_contract, false);
 
         // Levels 1–2: a scoped command beats everything, including an
         // authored script and any unscoped default.

@@ -38,9 +38,9 @@ use turborepo_lib::{
 use turborepo_repository::{
     discovery::{self, PackageDiscovery},
     inference::RepoState,
+    native_tasks::observation_from_package_json,
     package_graph::{self, PackageGraph, PackageName},
     package_json::PackageJson,
-    toolchain::ToolchainId,
 };
 
 const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
@@ -109,9 +109,10 @@ impl LspPackages {
             let Some(source) = sources.remove(&definition_path) else {
                 continue;
             };
-            if graph.package_toolchain(&identity) != Some(&ToolchainId::JAVASCRIPT)
-                || graph.is_aggregate_scope(&identity)
-            {
+            // Presence in `sources` proves this authoritative definition was
+            // parsed as package.json; provenance does not determine LSP
+            // package capabilities.
+            if graph.is_aggregate_scope(&identity) {
                 continue;
             }
             packages.push(LspPackage {
@@ -154,6 +155,22 @@ impl LspPackages {
         Self { packages }
     }
 
+    /// Map an unsaved/in-memory package.json payload to the same native-task
+    /// observation vocabulary used by the repository catalog.
+    fn observed_task_names(package: &LspPackage) -> Vec<String> {
+        let scope = package
+            .identity
+            .as_ref()
+            .map(|identity| identity.as_str())
+            .unwrap_or("//");
+        observation_from_package_json(scope, &package.package_json)
+            .tasks
+            .into_iter()
+            .filter(|task| task.script().is_some())
+            .map(|task| task.name().to_string())
+            .collect()
+    }
+
     fn task_index(&self) -> HashMap<String, Vec<Option<String>>> {
         let mut tasks = HashMap::<String, Vec<Option<String>>>::new();
         for package in &self.packages {
@@ -161,8 +178,8 @@ impl LspPackages {
                 .identity
                 .as_ref()
                 .map(|identity| identity.as_str().to_string());
-            for script in package.package_json.scripts.keys() {
-                let identities = tasks.entry(script.clone()).or_default();
+            for script in Self::observed_task_names(package) {
+                let identities = tasks.entry(script).or_default();
                 if !identities.contains(&identity) {
                     identities.push(identity.clone());
                 }
@@ -174,17 +191,12 @@ impl LspPackages {
     fn completion_labels(&self) -> Vec<String> {
         let qualified = self.packages.iter().flat_map(|package| {
             package.identity.iter().flat_map(|identity| {
-                package
-                    .package_json
-                    .scripts
-                    .keys()
+                Self::observed_task_names(package)
+                    .into_iter()
                     .map(move |script| format!("{}#{script}", identity.as_str()))
             })
         });
-        let tasks = self
-            .packages
-            .iter()
-            .flat_map(|package| package.package_json.scripts.keys().cloned());
+        let tasks = self.packages.iter().flat_map(Self::observed_task_names);
 
         qualified.chain(tasks).unique().collect()
     }
@@ -203,7 +215,9 @@ impl LspPackages {
                         .identity
                         .as_ref()
                         .is_some_and(|identity| requested == identity.as_str())
-                }) && package.package_json.scripts.contains_key(task)
+                }) && Self::observed_task_names(package)
+                    .iter()
+                    .any(|name| name == task)
             })
             .filter_map(|package| {
                 // TODO: use jsonc_ast instead of text search.

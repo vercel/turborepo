@@ -11,17 +11,14 @@ use turborepo_devtools::{
     package_graph_to_data, GraphData, GraphEdge, RepositoryGraphBuilder, TaskGraphData,
     TaskGraphError, TaskNode,
 };
-use turborepo_repository::{
-    cargo::CargoToolchain,
-    package_graph::{PackageGraph, PackageGraphBuilder, PackageName},
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageGraphBuilder, PackageName};
 use turborepo_task_id::TaskName;
 
 use crate::{
     commands::CommandBase,
     engine::{EngineBuilder, TaskNode as EngineTaskNode},
     opts::Opts,
-    run::builder::{cargo_enabled, load_root_package_json},
+    repository_graph::RepositoryGraphFeatures,
     turbo_json::{TurboJsonReader, UnifiedTurboJsonLoader},
     Args,
 };
@@ -60,19 +57,17 @@ impl ProperTaskGraphBuilder {
 
     /// Build the package graph for the repository
     async fn build_package_graph(&self, opts: &Opts) -> Result<PackageGraph, TaskGraphError> {
-        let root_package_json =
-            load_root_package_json(&self.repo_root, cargo_enabled(&opts.future_flags)).map_err(
-                |e| TaskGraphError::BuildError(format!("Failed to load package.json: {e}")),
-            )?;
+        let features = RepositoryGraphFeatures::new(&opts.future_flags);
+        let root_package_json = features
+            .load_root_package_json(&self.repo_root)
+            .map_err(|e| TaskGraphError::BuildError(format!("Failed to load package.json: {e}")))?;
 
-        let mut builder = PackageGraphBuilder::new_optional(&self.repo_root, root_package_json)
+        let builder = PackageGraphBuilder::new_optional(&self.repo_root, root_package_json)
             .with_single_package_mode(opts.run_opts.single_package)
             .with_allow_no_package_manager(opts.repo_opts.allow_no_package_manager);
-        if cargo_enabled(&opts.future_flags) {
-            builder = builder.with_toolchain(CargoToolchain::new(self.repo_root.clone()));
-        }
 
-        builder
+        features
+            .configure(builder)
             .build()
             .await
             .map_err(|e| TaskGraphError::BuildError(format!("Failed to build package graph: {e}")))
@@ -87,24 +82,34 @@ impl ProperTaskGraphBuilder {
         // Create turbo json loader
         let reader =
             TurboJsonReader::new(self.repo_root.clone()).with_future_flags(opts.future_flags);
-        let loader = match (
-            opts.run_opts.single_package,
-            pkg_graph.package_json(&PackageName::Root).cloned(),
-        ) {
-            (true, Some(root_package_json)) => UnifiedTurboJsonLoader::single_package(
-                reader,
-                opts.repo_opts.root_turbo_json_path.clone(),
-                root_package_json,
-            ),
-            _ => UnifiedTurboJsonLoader::workspace(
+        let loader = match opts.run_opts.single_package {
+            true => {
+                let root_scripts = pkg_graph
+                    .package_task_context(&PackageName::Root)
+                    .map(|context| {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    opts.repo_opts.root_turbo_json_path.clone(),
+                    root_scripts,
+                )
+            }
+            false => UnifiedTurboJsonLoader::workspace(
                 reader,
                 opts.repo_opts.root_turbo_json_path.clone(),
                 pkg_graph.package_scope_directories(),
             ),
         };
 
-        // Collect authoritative execution scopes, including aggregates. The
-        // compatibility PackageInfo map can contain a synthetic Cargo root.
+        // Collect authoritative execution scopes, including aggregates.
         let workspaces: Vec<PackageName> = pkg_graph
             .package_scope_directories()
             .map(|(name, _)| name)
@@ -123,11 +128,14 @@ impl ProperTaskGraphBuilder {
             })
             .unwrap_or_default();
 
-        // Also add all scripts from root package.json as potential root tasks
-        // This ensures tasks like //#build:ts are allowed even if not in turbo.json
-        if let Some(root_pkg_json) = pkg_graph.package_json(&PackageName::Root) {
-            for script_name in root_pkg_json.scripts.keys() {
-                let task_name = TaskName::from(format!("//#{}", script_name)).into_owned();
+        // Also add catalog-backed root tasks so //#script tasks appear even
+        // when not listed in turbo.json.
+        if let Some(context) = pkg_graph.package_task_context(&PackageName::Root) {
+            for native_task in context.native_tasks().tasks() {
+                if native_task.script().is_none() {
+                    continue;
+                }
+                let task_name = TaskName::from(format!("//#{}", native_task.name())).into_owned();
                 if !root_tasks.contains(&task_name) {
                     root_tasks.push(task_name);
                 }
@@ -164,11 +172,11 @@ impl ProperTaskGraphBuilder {
                     let task = task_id.task().to_string();
                     let id = task_id.to_string();
 
-                    // Get script from package.json
+                    // Get display/script text from the native-task catalog.
                     let script = pkg_graph
-                        .package_json(&PackageName::from(task_id.package()))
-                        .and_then(|pj| pj.scripts.get(task_id.task()))
-                        .map(|s| s.value.clone())
+                        .package_task_context(&PackageName::from(task_id.package()))
+                        .and_then(|context| context.native_tasks().get(task_id.task()))
+                        .and_then(|task| task.script().map(|script| script.as_inner().clone()))
                         .unwrap_or_default();
 
                     nodes.push(TaskNode {

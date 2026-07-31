@@ -56,6 +56,8 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("Failed to parse file: {0}")]
     Parse(String),
+    #[error("Failed to determine affected tasks.")]
+    AffectedTasks,
 }
 
 // Conversions from constituent error types into Error via the Api variant.
@@ -141,6 +143,9 @@ impl RepositoryQuery {
             }) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
             PackageInclusionReason::All(AllPackageChangeReason::ScmError { error }) => {
                 PackageChangeReason::ScmError(ScmError { error })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::ConservativeFallback) => {
+                PackageChangeReason::AllPackagesChanged(AllPackagesChanged { empty: false })
             }
             PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
                 task_name: task.to_string(),
@@ -471,6 +476,12 @@ struct ScmError {
 }
 
 #[derive(SimpleObject)]
+struct AllPackagesChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
 struct IncludedByFilter {
     filters: Vec<String>,
 }
@@ -524,6 +535,7 @@ enum PackageChangeReason {
     NonPackageFileChanged(NonPackageFileChanged),
     GitRefNotFound(GitRefNotFound),
     ScmError(ScmError),
+    AllPackagesChanged(AllPackagesChanged),
     IncludedByFilter(IncludedByFilter),
     RootTask(RootTask),
     ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),
@@ -629,6 +641,10 @@ impl RepositoryQuery {
             .run
             .calculate_affected_packages(base, head)?
             .into_iter()
+            .filter(|(package, _)| {
+                package != &PackageName::Root
+                    || self.run.pkg_dep_graph().package_view(package).is_some()
+            })
             .map(|(package, reason)| {
                 Ok(ChangedPackage {
                     package: Package::new(self.run.clone(), package)?,
@@ -672,7 +688,10 @@ impl RepositoryQuery {
         let mut changed_tasks: Array<ChangedTask> = results
             .into_iter()
             .map(|at| {
-                let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
+                let task = task::RepositoryTask::new(&at.task_id, &self.run).map_err(|error| {
+                    tracing::error!(?error, task = %at.task_id, "failed to represent affected task");
+                    Error::AffectedTasks
+                })?;
                 let reason = convert_task_change_reason(at.reason);
                 Ok(ChangedTask { reason, task })
             })
@@ -772,15 +791,13 @@ impl RepositoryQuery {
     }
 
     async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
-        let pkg_dep_graph = self.run.pkg_dep_graph();
-        let all_package_names: Vec<_> = pkg_dep_graph
-            .package_scope_directories()
-            .map(|(name, _)| name)
-            .collect();
-        let mut packages = pkg_dep_graph
-            .transitive_external_dependencies(all_package_names.iter())
-            .into_iter()
-            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+        let mut packages = self
+            .run
+            .pkg_dep_graph()
+            .external_package_identities()
+            .iter()
+            .cloned()
+            .map(|identity| ExternalPackage::from_identity(self.run.clone(), identity))
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)

@@ -10,6 +10,7 @@ use turbopath::{PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
+    native_tasks::NativeCommandTemplate,
     package_graph::{PackageGraph, PackageName, PackageTaskContext},
     toolchain::CompileCacheEndpoint,
 };
@@ -35,8 +36,9 @@ fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
 /// - `E`: The error type returned when command creation fails
 ///
 /// # Implementors
-/// - `ToolchainCommandProvider` (resolves commands through the package's
-///   toolchain: package.json scripts for JavaScript, cargo verbs for Cargo)
+/// - `ToolchainCommandProvider` (resolves commands from the package's immutable
+///   native-task catalog: package.json scripts for JavaScript, Cargo verbs for
+///   Rust)
 /// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
 pub trait CommandProvider<E> {
     /// Create a command for the given task.
@@ -113,9 +115,7 @@ pub enum CommandProviderError {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
-    #[error("Missing compatibility payload for package {package_name}.")]
-    MissingPackagePayload { package_name: PackageName },
-    #[error("Package {package_name} is not a JavaScript package execution scope.")]
+    #[error("Package {package_name} is not a package.json-backed package execution scope.")]
     InvalidMfePackageContext { package_name: PackageName },
     #[error("Package directory {directory} is outside repository root {repository_root}.")]
     PackageDirectoryOutsideRepository {
@@ -145,36 +145,36 @@ pub enum CommandProviderError {
     MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
-    MissingToolchain {
-        toolchain: turborepo_repository::toolchain::ToolchainId,
-        package_name: PackageName,
-    },
     #[error(transparent)]
-    Toolchain(#[from] turborepo_repository::toolchain::Error),
+    NativeTask(#[from] turborepo_repository::toolchain::Error),
 }
 
-/// Command provider that resolves commands through the package's toolchain.
+/// Command provider that resolves commands through the native-task catalog.
 ///
-/// The toolchain owns command construction (JavaScript: run the package.json
-/// script via the package manager; Cargo: `cargo <verb>` scoped to the
-/// crate or workspace). This provider adapts the resolved [`TaskCommand`]
-/// data into a process command and applies concerns that are not
-/// toolchain-specific: the task environment, stdin policy, and
-/// microfrontends proxy decorations.
+/// The catalog owns native command templates (JavaScript: package-manager
+/// `run <script>`; Cargo: `cargo <verb>` scoped to crate/workspace; uv:
+/// `uv <verb>` scoped to package/workspace). This provider adapts the
+/// resolved [`TaskCommand`] data into a process command and applies concerns
+/// that are not native-task-specific: the task environment, stdin policy,
+/// and microfrontends proxy decorations.
 #[derive(Debug)]
 pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
-    /// A Turborepo-served compile cache endpoint (see
-    /// [`turborepo_repository::toolchain::Toolchain::compile_cache_env`]), when
-    /// one is running for this run.
+    /// A Turborepo-served compile cache endpoint, when one is running for this
+    /// run. Immutable task contracts determine whether and how to use it.
     compile_cache: Option<&'a CompileCacheEndpoint>,
     /// Resolved `command` overrides by task, from the engine's task
-    /// definitions. An argv replaces the toolchain's own resolution; an
+    /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
+    /// Lazily resolved package-manager binary path for JS framing.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved cargo binary path for Cargo framing.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved uv binary path for Python framing.
+    uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -191,6 +191,36 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             mfe_configs,
             compile_cache,
             command_overrides,
+            package_manager_binary: std::sync::OnceLock::new(),
+            cargo_binary: std::sync::OnceLock::new(),
+            uv_binary: std::sync::OnceLock::new(),
+        }
+    }
+
+    fn package_manager_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        let Some(package_manager) = self.package_graph.package_manager() else {
+            return Ok(None);
+        };
+        match self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+        {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(error) => Err(CommandProviderError::Which(*error)),
+        }
+    }
+
+    fn cargo_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.cargo_binary.get_or_init(|| which::which("cargo")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn uv_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.uv_binary.get_or_init(|| which::which("uv")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
         }
     }
 
@@ -207,7 +237,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     }
 }
 
-fn should_inject_toolchain_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
+fn should_inject_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
     command_override.is_none()
 }
 
@@ -223,8 +253,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
 
         // A resolved `command` override is authoritative in both
         // directions: an opt-out is an explicit no-op (same outcome as a
-        // missing script), and an argv replaces the toolchain's own
-        // resolution while the toolchain keeps framing it.
+        // missing script), and an argv replaces native-catalog resolution
+        // while retaining ecosystem framing.
         let command_override = self.command_overrides.get(task_id);
         let override_command = match command_override {
             Some(TaskCommandOverride::OptOut) => return Ok(None),
@@ -232,44 +262,47 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             None => None,
         };
 
-        // A pure-native repository still has Turbo's root task namespace, but
-        // no root language toolchain. Explicit root command overrides are
-        // generic argv and execute directly at the knowledge-backed repo root.
-        let Some(toolchain_id) = package_context.toolchain() else {
-            let Some(override_command) = override_command else {
-                return Ok(None);
+        let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
+            let (package_manager_binary, cargo_binary, uv_binary) = if override_command.is_some() {
+                (None, None, None)
+            } else {
+                match native_task.command() {
+                    Some(NativeCommandTemplate::JavaScriptPackageManagerRun { .. }) => {
+                        (self.package_manager_binary()?, None, None)
+                    }
+                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?, None),
+                    Some(NativeCommandTemplate::Uv { .. }) => (None, None, self.uv_binary()?),
+                    None => (None, None, None),
+                }
             };
-            let Some(spec) = turborepo_repository::toolchain::override_task_command(
+            turborepo_repository::native_tasks::resolve_task_command(
                 &package_context,
-                override_command,
-                self.task_args.args_for_task(task_id),
-                None,
-            ) else {
-                return Ok(None);
-            };
-            let mut cmd = Command::new(spec.program);
-            cmd.args(spec.args).current_dir(spec.cwd);
-            apply_environment(&mut cmd, environment);
-            cmd.open_stdin();
-            return Ok(Some(cmd));
-        };
-        let toolchain = self
-            .package_graph
-            .toolchains()
-            .get(toolchain_id)
-            .ok_or_else(|| CommandProviderError::MissingToolchain {
-                toolchain: toolchain_id.clone(),
-                package_name: package_context.package().clone(),
-            })?;
-
-        let spec = toolchain
-            .task_command(
-                &package_context,
-                task_id.task(),
+                native_task,
+                self.package_graph.package_manager(),
+                package_manager_binary,
+                cargo_binary,
+                uv_binary,
                 self.task_args.args_for_task(task_id),
                 override_command,
             )
-            .map_err(CommandProviderError::from)?;
+            .map_err(|error| {
+                CommandProviderError::NativeTask(turborepo_repository::toolchain::Error::Failed(
+                    Box::new(error),
+                ))
+            })?
+        } else if let Some(override_command) = override_command {
+            let serial_group = package_context
+                .native_tasks()
+                .override_serial_group(override_command);
+            turborepo_repository::toolchain::override_task_command(
+                &package_context,
+                override_command,
+                self.task_args.args_for_task(task_id),
+                serial_group,
+            )
+        } else {
+            None
+        };
         let Some(spec) = spec else {
             return Ok(None);
         };
@@ -308,14 +341,14 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_MFE_PORT", port.to_string());
         }
 
-        // The toolchain decides how the injection composes with the task's
-        // environment (competing configuration suppresses it, ambient
-        // settings are tolerated) and returns exactly what to inject; see
-        // `Toolchain::compile_cache_env`.
-        if should_inject_toolchain_compile_cache(command_override)
+        // Compile-cache injection is execution-only: it deliberately does not
+        // participate in the task hash represented by this contract.
+        if should_inject_compile_cache(command_override)
             && let Some(endpoint) = self.compile_cache
         {
-            let vars = toolchain.compile_cache_env(endpoint, environment);
+            let vars = package_context
+                .task_contract()
+                .compile_cache_env(endpoint, environment);
             if vars.is_empty() {
                 debug!("no compile cache env to inject for {task_id}");
             }
@@ -387,9 +420,9 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
         Self::validate_package_context(context)
     }
 
-    fn validate_package_context(
-        context: PackageTaskContext<'_>,
-    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
+    fn validate_package_context<'b>(
+        context: PackageTaskContext<'b>,
+    ) -> Result<PackageTaskContext<'b>, CommandProviderError> {
         let package_directory = context.repository_root().resolve(context.directory());
         if !context.repository_root().contains(&package_directory) {
             return Err(CommandProviderError::PackageDirectoryOutsideRepository {
@@ -397,16 +430,8 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
                 directory: package_directory.to_string(),
             });
         }
-        if context.toolchain() != Some(&turborepo_repository::toolchain::ToolchainId::JAVASCRIPT)
-            || context.kind()
-                == turborepo_repository::package_graph::PackageTaskContextKind::Aggregate
-        {
+        if !context.is_package_json_scope() {
             return Err(CommandProviderError::InvalidMfePackageContext {
-                package_name: context.package().clone(),
-            });
-        }
-        if context.package_info().is_none() {
-            return Err(CommandProviderError::MissingPackagePayload {
                 package_name: context.package().clone(),
             });
         }
@@ -442,19 +467,13 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         );
 
         let package_context = self.validated_package_context(task_id)?;
-        let package_info = package_context.package_info().ok_or_else(|| {
-            CommandProviderError::MissingPackagePayload {
-                package_name: package_context.package().clone(),
-            }
-        })?;
-        let has_custom_proxy = package_info.package_json.scripts.contains_key("proxy");
+        let has_custom_proxy = package_context.native_tasks().defines("proxy");
 
-        // Check if package depends on @vercel/microfrontends
+        // Check if package depends on @vercel/microfrontends via declarations.
         const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
-        let has_mfe_dependency = package_info
-            .package_json
-            .all_dependencies()
-            .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+        let has_mfe_dependency = self
+            .package_graph
+            .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE);
 
         debug!(
             "MicroFrontendProxyProvider::command - has_custom_proxy: {}, has_mfe_dependency: {}",
@@ -618,14 +637,91 @@ mod tests {
     }
 
     #[test]
-    fn command_override_suppresses_toolchain_compile_cache() {
-        assert!(should_inject_toolchain_compile_cache(None));
-        assert!(!should_inject_toolchain_compile_cache(Some(
+    fn command_override_suppresses_compile_cache() {
+        assert!(should_inject_compile_cache(None));
+        assert!(!should_inject_compile_cache(Some(
             &TaskCommandOverride::Argv(vec!["node".to_string()])
         )));
-        assert!(!should_inject_toolchain_compile_cache(Some(
+        assert!(!should_inject_compile_cache(Some(
             &TaskCommandOverride::OptOut
         )));
+    }
+
+    #[tokio::test]
+    async fn command_override_does_not_resolve_package_manager_binary() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([(
+                    "build".to_owned(),
+                    Spanned::new("next build".to_owned()),
+                )]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let task_id = TaskId::new("web", "build").into_owned();
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &package_graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+        provider
+            .package_manager_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(command.is_some(), "override should bypass binary lookup");
+    }
+
+    #[tokio::test]
+    async fn pure_root_override_uses_generic_command_path() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = PackageGraph::builder_optional(&repo_root, None)
+            .build()
+            .await
+            .unwrap();
+        let task_id = TaskId::from_graph(&PackageName::Root, &TaskName::from("build"));
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+        .expect("root override should execute");
+
+        assert_eq!(command.program(), OsStr::new("custom-build"));
+        let label = command.label();
+        assert!(
+            label.contains(repo_root.as_str()),
+            "unexpected label: {label}"
+        );
+        assert_eq!(command.serial_group_name(), None);
+        assert!(command.will_open_stdin());
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
@@ -681,6 +777,42 @@ mod tests {
             .with_package_manager(PackageManager::Npm)
             .with_package_jsons(Some(HashMap::new()))
             .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn cargo_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"member\"]\n\n[workspace.metadata]\nname = \
+                 \"workspace\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["member", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"member\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        PackageGraph::builder_optional(repo_root, None)
+            .with_cargo()
             .build()
             .await
             .unwrap()
@@ -949,25 +1081,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_microfrontend_proxy_requires_compatibility_payload() {
+    async fn test_microfrontend_proxy_uses_declaration_knowledge() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
-        let mut graph = package_graph(&repo_root, &package_dir, PackageJson::default()).await;
-        graph.remove_package_info_for_test(&PackageName::from("web"));
+        write_microfrontends_binary(&package_dir, inherited_env_name());
+        let graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                dependencies: Some(BTreeMap::from([(
+                    "@vercel/microfrontends".to_owned(),
+                    "1.0.0".to_owned(),
+                )])),
+                ..Default::default()
+            },
+        )
+        .await;
         let mfe_config = MockMfeConfig("configs/microfrontends.json");
         let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
         let command_provider = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &mfe_config);
 
-        let error = CommandProvider::<CommandProviderError>::command(
+        let command = CommandProvider::<CommandProviderError>::command(
             &command_provider,
             &TaskId::new("web", "proxy"),
             &EnvironmentVariableMap::default(),
         )
-        .unwrap_err();
-
-        assert!(matches!(
-            error,
-            CommandProviderError::MissingPackagePayload { .. }
-        ));
+        .unwrap()
+        .expect("declaration knowledge should select the package binary");
+        assert!(
+            command
+                .program()
+                .to_string_lossy()
+                .contains("microfrontends")
+        );
     }
 
     #[tokio::test]
@@ -1018,11 +1163,9 @@ mod tests {
             custom_graph
                 .package_task_context(&PackageName::Root)
                 .unwrap()
-                .package_info()
-                .unwrap()
-                .package_json
-                .scripts
-                .contains_key("proxy")
+                .native_tasks()
+                .get("proxy")
+                .is_some()
         );
         let custom = proxy_command_result(&custom_graph, &environment, &config, "//")
             .unwrap()
@@ -1066,5 +1209,22 @@ mod tests {
                 .as_std_path()
                 .as_os_str()
         );
+    }
+
+    #[tokio::test]
+    async fn test_microfrontend_proxy_rejects_cargo_package_context() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = cargo_package_graph(&repo_root).await;
+        let error = MicroFrontendProxyProvider::<MockMfeConfig>::validate_package_context(
+            graph
+                .package_task_context(&PackageName::from("member"))
+                .expect("Cargo member context"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CommandProviderError::InvalidMfePackageContext { .. }
+        ));
     }
 }

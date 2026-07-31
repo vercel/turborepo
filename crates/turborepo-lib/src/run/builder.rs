@@ -16,9 +16,8 @@ use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
-    package_graph::{PackageGraph, PackageName},
+    package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
-    package_json::PackageJson,
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
@@ -56,6 +55,7 @@ use crate::{
     engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
+    repository_graph::RepositoryGraphFeatures,
     run::{
         scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
         Run, RunCache,
@@ -64,21 +64,24 @@ use crate::{
 };
 
 fn project_task_io_environment(
-    toolchains: &turborepo_repository::toolchain::ToolchainRegistry,
+    patterns: std::collections::BTreeMap<
+        turborepo_repository::task_contracts::TaskEnvironmentDomain,
+        Vec<&'static str>,
+    >,
     environment: &EnvironmentVariableMap,
 ) -> Result<
     HashMap<
-        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::task_contracts::TaskEnvironmentDomain,
         turborepo_repository::toolchain::TaskIOEnvironment,
     >,
     turborepo_env::Error,
 > {
-    toolchains
-        .iter()
-        .map(|toolchain| {
-            let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
+    patterns
+        .into_iter()
+        .map(|(domain, patterns)| {
+            let selected = environment.from_wildcards(&patterns)?;
             Ok((
-                toolchain.id(),
+                domain,
                 turborepo_repository::toolchain::TaskIOEnvironment::new(selected.into_inner()),
             ))
         })
@@ -369,9 +372,10 @@ impl RunBuilder {
             root_turbo_json,
         )
         .map_err(|err| match err {
-            // A filter that names a Rust crate is a likely mistake when the
-            // repository has a Cargo workspace but Cargo package support is
-            // not enabled; point at the opt-in.
+            // A filter that names a Rust crate or Python package is a likely
+            // mistake when the repository has a native workspace but the
+            // toolchain's package support is not enabled; point at the
+            // opt-in.
             ResolutionError::NoPackagesMatchedWithName(name)
                 if !cargo_enabled(&opts.future_flags)
                     && repo_root
@@ -379,6 +383,14 @@ impl RunBuilder {
                         .exists() =>
             {
                 Error::PackageMayBeCargoCrate { name }
+            }
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !python_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBePythonPackage { name }
             }
             err => Error::Scope(err),
         })?;
@@ -518,12 +530,13 @@ impl RunBuilder {
                 })
             })
         };
-        // A pure Cargo workspace (experimentalCargoWorkspaces, no root
-        // package.json) has no JavaScript root manifest. A *missing* file is
-        // only tolerated in that mode; a malformed one always fails, and a
-        // missing one without Cargo support keeps the original hard error.
-        let root_package_json =
-            load_root_package_json(&self.repo_root, cargo_enabled(&self.opts.future_flags))?;
+        // A pure native workspace (experimentalCargoWorkspaces or
+        // experimentalPythonWorkspaces, no root package.json) has no
+        // JavaScript root manifest. A *missing* file is only tolerated in
+        // those modes; a malformed one always fails, and a missing one
+        // without native support keeps the original hard error.
+        let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
+        let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -560,25 +573,11 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let mut builder =
+            let builder =
                 PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                     .with_single_package_mode(self.opts.run_opts.single_package)
-                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                    // Transitive closures compute on a background thread while
-                    // microfrontends config, turbo.json preloading, and other
-                    // package-list consumers run. Joined by the
-                    // `ensure_transitive_closures` call before package filtering,
-                    // the earliest possible consumer (`--affected` with a changed
-                    // lockfile compares closures).
-                    .defer_transitive_closures(true)
-                    .with_closure_hasher(std::sync::Arc::new(
-                        turborepo_task_hash::hash_sorted_closures,
-                    ));
-            if cargo_enabled(&self.opts.future_flags) {
-                builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
-                    self.repo_root.to_owned(),
-                ));
-            }
+                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let builder = graph_features.configure(builder);
 
             let graph = builder
                 .build()
@@ -705,27 +704,43 @@ impl RunBuilder {
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
+        let root_native_tasks = pkg_dep_graph
+            .package_task_context(&PackageName::Root)
+            .map(|context| context.native_tasks());
+        let task_access_enabled = root_package_json.is_some()
+            && root_native_tasks
+                .is_some_and(|tasks| TaskAccess::check_enabled(&self.repo_root, tasks));
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
-            if let (Some(root_package_json), true) = (
-                root_package_json.as_ref(),
-                TaskAccess::check_enabled(&self.repo_root),
-            ) {
+            if task_access_enabled {
+                let root_scripts = root_native_tasks
+                    .map(|tasks| tasks.script_names())
+                    .unwrap_or_default();
                 UnifiedTurboJsonLoader::task_access(
                     reader,
                     root_turbo_json_path.clone(),
-                    root_package_json.clone(),
+                    root_scripts,
                 )
-            } else if let (Some(root_package_json), true) =
-                (root_package_json.as_ref(), is_single_package)
-            {
+            } else if is_single_package {
+                let root_scripts = pkg_dep_graph
+                    .package_task_context(&PackageName::Root)
+                    .map(|context| {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
                 UnifiedTurboJsonLoader::single_package(
                     reader,
                     root_turbo_json_path.clone(),
-                    root_package_json.clone(),
+                    root_scripts,
                 )
             } else if !root_turbo_json_path.exists() &&
             // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
@@ -735,16 +750,14 @@ impl RunBuilder {
                     .package_task_contexts()
                     .map(|context| {
                         let package = context.package().clone();
-                        let info = context.package_info();
-                        if context.requires_compatibility_payload() && info.is_none() {
-                            return Err(Error::MissingPackagePayload(package));
-                        }
-                        Ok((
-                            package,
-                            info.into_iter()
-                                .flat_map(|info| info.package_json.scripts.keys().cloned())
-                                .collect(),
-                        ))
+                        let scripts = context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.executable() || task.authored())
+                            .map(|task| task.name().to_string())
+                            .collect();
+                        Ok((package, scripts))
                     })
                     .collect::<Result<_, Error>>()?;
                 UnifiedTurboJsonLoader::workspace_no_turbo_json(
@@ -788,27 +801,9 @@ impl RunBuilder {
             turbo_json_loader.preload_all();
         });
 
-        // Package filtering reads transitive closures only when a git-based
-        // selector may compare lockfile closures: `--affected`, or a
-        // `--filter` containing a git range (bracket syntax). Joining the
-        // background closure computation here in only those cases lets the
-        // common run keep overlapping it with filtering and engine
-        // construction; the unconditional join below runs before the first
-        // universal consumer (task hashing).
-        let scope_may_read_closures = self.opts.scope_opts.affected_range.is_some()
-            || self
-                .opts
-                .scope_opts
-                .filter_patterns
-                .iter()
-                .any(|pattern| pattern.contains('['));
-        if scope_may_read_closures {
-            crate::rayon_compat::block_in_place(|| {
-                let _span = tracing::info_span!("ensure_transitive_closures").entered();
-                pkg_dep_graph.ensure_transitive_closures();
-            });
-        }
-
+        // Resolution knowledge is complete at package-graph construction, so
+        // scope filtering can read lockfile-affected packages without joining
+        // deferred closure work.
         let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
@@ -902,7 +897,12 @@ impl RunBuilder {
 
         let task_access = {
             let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            let ta = TaskAccess::new(
+                self.repo_root.clone(),
+                async_cache.clone(),
+                &scm,
+                task_access_enabled,
+            );
             ta.restore_config().await;
             ta
         };
@@ -1122,15 +1122,6 @@ impl RunBuilder {
             );
         }
 
-        // Unconditional join point for the background transitive-closure
-        // computation (idempotent when the conditional join above already
-        // ran). The graph is immutable once inside `Run`, and its first
-        // closure consumer (external dependency hashing) runs shortly after.
-        crate::rayon_compat::block_in_place(|| {
-            let _span = tracing::info_span!("ensure_transitive_closures").entered();
-            pkg_dep_graph.ensure_transitive_closures();
-        });
-
         Ok((
             Run {
                 version: self.version,
@@ -1282,14 +1273,13 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph.package_task_contexts().any(|context| {
-                context
-                    .toolchain()
-                    .and_then(|id| pkg_dep_graph.toolchains().get(id))
-                    .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
-            }) || engine.task_ids().any(|task_id| {
-                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
-            });
+            let has_command = pkg_dep_graph
+                .package_task_contexts()
+                .any(|context| context.native_tasks().defines(task.task()))
+                || engine.task_ids().any(|task_id| {
+                    task_id.task() == task.task()
+                        && task_has_command(engine, pkg_dep_graph, task_id)
+                });
 
             for package in candidate_packages {
                 let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
@@ -1324,43 +1314,16 @@ impl RunBuilder {
         exclusion_candidates: &[PackageName],
         filter_mode: &FilterMode,
     ) -> HashSet<TaskId<'static>> {
-        let mut exclusions = HashSet::new();
-        for toolchain in pkg_dep_graph.toolchains().iter() {
-            let toolchain_id = toolchain.id();
-            let candidate_names: Vec<_> = candidates
-                .iter()
-                .filter(|name| {
-                    pkg_dep_graph
-                        .package_toolchain(name)
-                        .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                })
-                .map(|name| name.as_str().to_string())
-                .collect();
-            let prefer_workspace = match filter_mode {
-                FilterMode::AllPackages => true,
-                FilterMode::ExcludeOnly { .. } => false,
-                FilterMode::ExplicitSelection => candidate_names.len() == 1,
-            };
-            let Some(selected) =
-                toolchain.select_task_entrypoints(task.task(), &candidate_names, prefer_workspace)
-            else {
-                continue;
-            };
-            let selected: HashSet<_> = selected.into_iter().collect();
-            exclusions.extend(
-                exclusion_candidates
-                    .iter()
-                    .filter(|name| {
-                        pkg_dep_graph
-                            .package_toolchain(name)
-                            .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                    })
-                    .map(|name| name.as_str().to_string())
-                    .filter(|name| !selected.contains(name))
-                    .map(|name| TaskId::new(&name, task.task()).into_owned()),
-            );
-        }
-        exclusions
+        let preference = match filter_mode {
+            FilterMode::AllPackages => TaskEntrypointPreference::Always,
+            FilterMode::ExcludeOnly { .. } => TaskEntrypointPreference::Never,
+            FilterMode::ExplicitSelection => TaskEntrypointPreference::WhenSingleCandidate,
+        };
+        pkg_dep_graph
+            .task_entrypoint_exclusions(task.task(), candidates, exclusion_candidates, preference)
+            .into_iter()
+            .map(|name| TaskId::new(name.as_str(), task.task()).into_owned())
+            .collect()
     }
 
     fn select_engine_task_entrypoints(
@@ -1431,7 +1394,7 @@ impl RunBuilder {
             Vec::new()
         };
         let task_io_environment =
-            project_task_io_environment(pkg_dep_graph.toolchains(), environment)
+            project_task_io_environment(pkg_dep_graph.task_io_env_vars_by_domain(), environment)
                 .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
@@ -1512,26 +1475,15 @@ impl RunBuilder {
 /// future flag is the only switch: it is repo-level configuration, so every
 /// invoker sees the same package graph.
 pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
-    future_flags.experimental_cargo_workspaces
+    RepositoryGraphFeatures::new(future_flags).cargo_enabled()
 }
 
-pub(crate) fn load_root_package_json(
-    repo_root: &AbsoluteSystemPath,
-    cargo_enabled: bool,
-) -> Result<Option<PackageJson>, package_json::Error> {
-    match PackageJson::load(&repo_root.join_component("package.json")) {
-        Ok(package_json) => Ok(Some(package_json)),
-        Err(package_json::Error::Io(io))
-            if io.kind() == ErrorKind::NotFound
-                && cargo_enabled
-                && repo_root
-                    .join_component(turborepo_repository::cargo::CARGO_TOML)
-                    .exists() =>
-        {
-            Ok(None)
-        }
-        Err(error) => Err(error),
-    }
+/// Whether experimental Python (uv) package support is enabled, via
+/// `futureFlags.experimentalPythonWorkspaces` in the root turbo.json. The
+/// future flag is the only switch: it is repo-level configuration, so every
+/// invoker sees the same package graph.
+pub(crate) fn python_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    RepositoryGraphFeatures::new(future_flags).python_enabled()
 }
 
 fn origins_match(url1: &str, url2: &str) -> bool {
@@ -1552,107 +1504,51 @@ fn has_userinfo(url: &Url) -> bool {
 
 #[cfg(test)]
 mod task_io_context_tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::collections::HashMap;
 
-    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_hash::TaskHashable;
-    use turborepo_repository::{
-        cargo::CargoToolchain,
-        toolchain::{
-            DiscoverPackagesFuture, DiscoveredPackages, Toolchain, ToolchainId, ToolchainRegistry,
-        },
-    };
+    use turborepo_repository::task_contracts::TaskEnvironmentDomain;
     use turborepo_types::EnvMode;
 
     use super::project_task_io_environment;
 
-    struct Stub {
-        id: ToolchainId,
-        environment: Vec<&'static str>,
-    }
+    #[test]
+    fn empty_contract_patterns_are_excluded_from_task_io_projection() {
+        let patterns = std::collections::BTreeMap::from([(
+            TaskEnvironmentDomain::new("other"),
+            vec!["OTHER_*"],
+        )]);
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("NODE_ENV".to_string(), "production".to_string()),
+            ("OTHER_KEY".to_string(), "value".to_string()),
+        ]));
 
-    impl Toolchain for Stub {
-        fn id(&self) -> ToolchainId {
-            self.id.clone()
-        }
-
-        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
-            Box::pin(async { Ok(DiscoveredPackages::default()) })
-        }
-
-        fn task_command(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-            _pass_through_args: Option<&[String]>,
-            _override_command: Option<&[String]>,
-        ) -> Result<
-            Option<turborepo_repository::toolchain::TaskCommand>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
-        }
-
-        fn task_display_command(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> Option<String> {
-            None
-        }
-
-        fn defines_task(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> bool {
-            false
-        }
-
-        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-            turborepo_repository::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<
-            Option<turborepo_repository::toolchain::PrunePlan>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
-        }
-
-        fn task_io_env_vars(&self) -> &[&str] {
-            &self.environment
-        }
+        let projected = project_task_io_environment(patterns, &environment).unwrap();
+        assert!(!projected.contains_key(&TaskEnvironmentDomain::new("javascript")));
+        assert_eq!(
+            projected
+                .get(&TaskEnvironmentDomain::new("other"))
+                .and_then(|environment| environment.get("OTHER_KEY")),
+            Some("value")
+        );
     }
 
     #[test]
     fn projection_is_isolated_per_toolchain() {
-        let alpha = ToolchainId::new("alpha");
-        let beta = ToolchainId::new("beta");
-        let mut toolchains = ToolchainRegistry::new();
-        toolchains
-            .register(Arc::new(Stub {
-                id: alpha.clone(),
-                environment: vec!["ALPHA_*"],
-            }))
-            .unwrap();
-        toolchains
-            .register(Arc::new(Stub {
-                id: beta.clone(),
-                environment: vec!["BETA_KEY"],
-            }))
-            .unwrap();
+        let alpha = TaskEnvironmentDomain::new("alpha");
+        let beta = TaskEnvironmentDomain::new("beta");
+        let patterns = std::collections::BTreeMap::from([
+            (alpha.clone(), vec!["ALPHA_*"]),
+            (beta.clone(), vec!["BETA_KEY"]),
+        ]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("ALPHA_TARGET".to_string(), "alpha".to_string()),
             ("BETA_KEY".to_string(), "beta".to_string()),
             ("UNDECLARED_SECRET".to_string(), "secret".to_string()),
         ]));
 
-        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let projected = project_task_io_environment(patterns, &environment).unwrap();
         assert_eq!(projected.len(), 2);
         let alpha_environment = projected.get(&alpha).unwrap();
         assert_eq!(alpha_environment.get("ALPHA_TARGET"), Some("alpha"));
@@ -1666,10 +1562,10 @@ mod task_io_context_tests {
 
     #[test]
     fn cargo_projection_keeps_only_rustup_selection_environment() {
-        let root = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
-        let mut toolchains = ToolchainRegistry::new();
-        toolchains.register(CargoToolchain::new(root)).unwrap();
+        let patterns = std::collections::BTreeMap::from([(
+            TaskEnvironmentDomain::new("cargo-task-io"),
+            vec!["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"],
+        )]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
             ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
@@ -1679,27 +1575,23 @@ mod task_io_context_tests {
             ),
         ]));
 
-        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
-        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        let projected = project_task_io_environment(patterns, &environment).unwrap();
+        let cargo = projected
+            .get(&TaskEnvironmentDomain::new("cargo-task-io"))
+            .unwrap();
         assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
         assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
         assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
     }
 
     fn projected_task_hash(layout: &str, secret: &str) -> String {
-        let alpha = ToolchainId::new("alpha");
-        let mut toolchains = ToolchainRegistry::new();
-        toolchains
-            .register(Arc::new(Stub {
-                id: alpha.clone(),
-                environment: vec!["ALPHA_*"],
-            }))
-            .unwrap();
+        let alpha = TaskEnvironmentDomain::new("alpha");
+        let patterns = std::collections::BTreeMap::from([(alpha.clone(), vec!["ALPHA_*"])]);
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("ALPHA_TARGET".to_string(), layout.to_string()),
             ("UNDECLARED_SECRET".to_string(), secret.to_string()),
         ]));
-        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let projected = project_task_io_environment(patterns, &environment).unwrap();
         let layout = projected
             .get(&alpha)
             .and_then(|environment| environment.get("ALPHA_TARGET"))

@@ -30,8 +30,6 @@ pub struct TaskSummaryFactory<'a, E, H, R> {
 pub enum Error {
     #[error("No workspace found for {0}")]
     MissingWorkspace(String),
-    #[error("No compatibility package payload found for {0}")]
-    MissingPackagePayload(PackageName),
     #[error("No external dependency hash found for {0}")]
     MissingExternalDependencyHash(PackageName),
     #[error("No task definition found for {0}")]
@@ -109,12 +107,7 @@ where
         // the display string (JavaScript: the script text; Cargo: the cargo
         // invocation), derived from the same tables as execution so display
         // cannot drift from what runs.
-        let command = summary_command(
-            self.package_graph,
-            package_context,
-            task_definition,
-            task_id.task(),
-        );
+        let command = summary_command(package_context, task_definition, task_id.task());
 
         let expanded_outputs = self
             .hash_tracker
@@ -174,13 +167,6 @@ where
             })
             .unwrap_or_default();
 
-        if package_context.requires_compatibility_payload()
-            && package_context.package_info().is_none()
-        {
-            return Err(Error::MissingPackagePayload(
-                package_context.package().clone(),
-            ));
-        }
         let hash_of_external_dependencies = self.hash_of_external_dependencies(task_id)?;
 
         Ok(SharedTaskSummary {
@@ -248,8 +234,7 @@ where
     ///
     /// Prefer the per-run cache produced for hashing. When that cache is absent
     /// (tests or callers that did not precompute), read package resolution
-    /// knowledge directly. Never rehash closures or read
-    /// `PackageInfo::external_deps_hash`.
+    /// knowledge directly. Never rehash closures.
     fn hash_of_external_dependencies(&self, task_id: &TaskId) -> Result<String, Error> {
         let package = PackageName::from(task_id.package());
         if let Some(hashes) = self.external_deps_hashes {
@@ -273,7 +258,6 @@ where
 }
 
 fn summary_command(
-    package_graph: &PackageGraph,
     package_context: &PackageTaskContext<'_>,
     task_definition: &TaskDefinition,
     task: &str,
@@ -282,9 +266,9 @@ fn summary_command(
         Some(turborepo_types::TaskCommandOverride::Argv(argv)) => argv.join(" "),
         Some(turborepo_types::TaskCommandOverride::OptOut) => "<OPT OUT>".to_string(),
         None => package_context
-            .toolchain()
-            .and_then(|id| package_graph.toolchains().get(id))
-            .and_then(|toolchain| toolchain.task_display_command(package_context, task))
+            .native_tasks()
+            .get(task)
+            .and_then(|native_task| native_task.display().map(str::to_string))
             .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
     }
 }
@@ -463,10 +447,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn summary_fails_closed_when_required_payload_is_missing() {
-        let (_tempdir, mut graph) = summary_graph().await;
+    async fn summary_uses_authoritative_package_context() {
+        let (_tempdir, graph) = summary_graph().await;
         let app = PackageName::from("app");
-        assert!(graph.remove_package_info_for_test(&app).is_some());
         let task_id = TaskId::new("app", "build").into_owned();
         let engine = TestEngine {
             definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
@@ -483,10 +466,9 @@ mod tests {
             None,
         );
 
-        assert!(matches!(
-            factory.task_summary(task_id, None),
-            Err(Error::MissingPackagePayload(name)) if name == app
-        ));
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.package, app.as_str());
+        assert_eq!(summary.shared.hash_of_external_dependencies, "");
     }
 
     #[tokio::test]

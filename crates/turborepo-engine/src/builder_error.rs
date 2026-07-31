@@ -9,7 +9,7 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::package_graph::{PackageName, RelationshipProjectionError};
 
 use crate::{
     InvalidTaskNameError,
@@ -54,6 +54,8 @@ pub enum Error {
     },
     #[error(transparent)]
     Graph(#[from] turborepo_graph_utils::Error),
+    #[error(transparent)]
+    RelationshipProjection(#[from] RelationshipProjectionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidTaskName(Box<InvalidTaskNameError>),

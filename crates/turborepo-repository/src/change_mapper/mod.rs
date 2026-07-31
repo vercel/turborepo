@@ -15,7 +15,8 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
 use crate::package_graph::{
-    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
+    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName,
+    RelationshipProjectionError, WorkspacePackage,
 };
 
 mod package;
@@ -90,6 +91,7 @@ pub enum AllPackageChangeReason {
     ScmError {
         error: String,
     },
+    ConservativeFallback,
 }
 
 pub fn merge_changed_packages<T: Hash + Eq>(
@@ -190,6 +192,15 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             }),
                         );
 
+                        if let Err(error) =
+                            self.add_relationship_affected_packages(&mut changed_pkgs)
+                        {
+                            tracing::error!(%error, "relationship affectedness projection failed");
+                            return Ok(PackageChanges::All(
+                                AllPackageChangeReason::ConservativeFallback,
+                            ));
+                        }
+
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
 
@@ -208,6 +219,14 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     // We don't know if the lockfile changed or not, so we can't assume anything
                     LockfileContents::Unchanged => {
                         debug!("the lockfile did not change");
+                        if let Err(error) =
+                            self.add_relationship_affected_packages(&mut changed_pkgs)
+                        {
+                            tracing::error!(%error, "relationship affectedness projection failed");
+                            return Ok(PackageChanges::All(
+                                AllPackageChangeReason::ConservativeFallback,
+                            ));
+                        }
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
                 }
@@ -259,33 +278,31 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             }
         }
 
-        self.add_toolchain_affected_packages(&mut changed_packages);
         PackageChanges::Some(changed_packages)
     }
 
-    fn add_toolchain_affected_packages(
+    fn add_relationship_affected_packages(
         &self,
         changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
-    ) {
-        let directly_changed: Vec<_> = changed_packages
+    ) -> Result<(), RelationshipProjectionError> {
+        let mut directly_changed: Vec<_> = changed_packages
             .keys()
             .map(|package| package.name.clone())
             .collect();
+        directly_changed.sort();
         for dependency in directly_changed {
-            let Some(context) = self.pkg_graph.package_task_context(&dependency) else {
-                continue;
-            };
-            let Some(toolchain_id) = context.toolchain() else {
-                continue;
-            };
-            let Some(toolchain) = self.pkg_graph.toolchains().get(toolchain_id) else {
-                continue;
-            };
-            for affected in toolchain.additional_affected_packages(dependency.as_str()) {
-                let name = PackageName::Other(affected);
-                let Some(context) = self.pkg_graph.package_task_context(&name) else {
+            let affected_packages = self
+                .pkg_graph
+                .affected_relationships()
+                .additional_affected_by(&dependency)?;
+            for name in affected_packages {
+                if name == dependency {
                     continue;
-                };
+                }
+                let context = self
+                    .pkg_graph
+                    .package_task_context(&name)
+                    .ok_or_else(|| RelationshipProjectionError::UnknownPackage(name.clone()))?;
                 changed_packages
                     .entry(WorkspacePackage {
                         name,
@@ -296,6 +313,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     });
             }
         }
+        Ok(())
     }
 
     fn get_changed_packages_from_lockfile(
@@ -330,10 +348,56 @@ pub enum ChangeMapError {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
+    use std::collections::HashSet;
 
-    use super::ChangeMapper;
-    use crate::change_mapper::package::DefaultPackageChangeMapper;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+
+    use super::*;
+    use crate::{
+        change_mapper::package::DefaultPackageChangeMapper, package_graph::PackageGraph,
+        package_json::PackageJson, package_manager::PackageManager,
+    };
+
+    struct UnknownPackageMapper;
+
+    impl PackageChangeMapper for UnknownPackageMapper {
+        fn detect_package(&self, _file: &AnchoredSystemPath) -> PackageMapping {
+            PackageMapping::Package((
+                WorkspacePackage {
+                    name: PackageName::from("missing"),
+                    path: AnchoredSystemPathBuf::from_raw("missing").unwrap(),
+                },
+                PackageInclusionReason::FileChanged {
+                    file: AnchoredSystemPathBuf::from_raw("missing/file.txt").unwrap(),
+                },
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_relationship_package_conservatively_changes_all_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_single_package_mode(true)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        let mapper = ChangeMapper::new(&graph, Vec::new(), UnknownPackageMapper);
+
+        let changes = mapper
+            .changed_packages(
+                HashSet::from([AnchoredSystemPathBuf::from_raw("missing/file.txt").unwrap()]),
+                LockfileContents::Unchanged,
+            )
+            .unwrap();
+        assert_eq!(
+            changes,
+            PackageChanges::All(AllPackageChangeReason::ConservativeFallback)
+        );
+    }
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -380,8 +444,6 @@ mod test {
             &lockfile_path,
         );
 
-        // we don't want to implement PartialEq on the error type,
-        // so simply compare the debug representations
         assert_eq!(changes, expected);
     }
 }

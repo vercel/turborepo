@@ -29,8 +29,7 @@ use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
 use turborepo_repository::{
     external_resolution::PackageExternalDeclarations,
-    package_graph::{PackageGraph, PackageGraphNodeKind, PackageInfo, PackageName, PackageNode},
-    toolchain::ToolchainId,
+    package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
 };
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 use unrs_resolver::Resolver;
@@ -40,17 +39,26 @@ use crate::imports::DependencyLocations;
 #[derive(Clone)]
 pub struct PackageScope<'a> {
     pub name: PackageName,
+    pub name_source: Option<&'a Spanned<()>>,
     pub directory: &'a turbopath::AnchoredSystemPath,
+    pub definition_path: &'a turbopath::AnchoredSystemPath,
     pub kind: PackageGraphNodeKind,
-    pub toolchain: &'a ToolchainId,
+}
+
+impl PackageScope<'_> {
+    fn is_boundary_checkable(&self) -> bool {
+        // Boundary analysis consumes package.json import semantics. The
+        // authoritative definition identifies that format independently of
+        // contributor provenance.
+        self.kind == PackageGraphNodeKind::Package
+            && self.definition_path.as_path().file_name() == Some("package.json".as_ref())
+    }
 }
 
 pub trait PackageGraphProvider: Send + Sync {
     /// Authoritative scopes. Implementations must not derive these facts from
     /// compatibility manifests.
     fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_>;
-    /// Phase 2 compatibility payload used only for dependency information.
-    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
     fn external_declarations<'a>(
         &'a self,
         name: &'a PackageName,
@@ -71,16 +79,13 @@ impl PackageGraphProvider for PackageGraph {
         Box::new(self.node_views().filter_map(|(node, view)| match node {
             PackageNode::Workspace(name) => Some(PackageScope {
                 name,
+                name_source: view.name_source(),
                 directory: view.directory()?,
+                definition_path: view.definition_path()?,
                 kind: view.kind(),
-                toolchain: view.toolchain()?,
             }),
             PackageNode::Root => None,
         }))
-    }
-
-    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
-        PackageGraph::package_info(self, name)
     }
 
     fn external_declarations<'a>(
@@ -248,8 +253,6 @@ pub enum BoundariesDiagnostic {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("missing Phase 2 compatibility payload for package `{0}`")]
-    MissingCompatibilityPayload(PackageName),
     #[error("file `{0}` does not have a parent directory")]
     NoParentDir(AbsoluteSystemPathBuf),
     #[error(transparent)]
@@ -510,7 +513,7 @@ impl BoundariesChecker {
         Ok(())
     }
 
-    /// Check boundaries for all packages
+    /// Check boundaries for all filtered package.json scopes.
     pub fn check_boundaries<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         show_progress: bool,
@@ -548,17 +551,10 @@ impl BoundariesChecker {
             .filter(|scope| {
                 matches!(scope.name, PackageName::Other(_))
                     && ctx.filtered_pkgs.contains(&scope.name)
-                    && scope.kind == PackageGraphNodeKind::Package
-                    && scope.toolchain == &ToolchainId::JAVASCRIPT
+                    && scope.is_boundary_checkable()
             })
-            .map(|scope| {
-                let info = ctx
-                    .pkg_dep_graph
-                    .package_info(&scope.name)
-                    .ok_or_else(|| Error::MissingCompatibilityPayload(scope.name.clone()))?;
-                Ok((scope.name, info, scope.directory))
-            })
-            .collect::<Result<_, Error>>()?;
+            .map(|scope| (scope.name, scope.name_source, scope.directory))
+            .collect();
 
         let progress = if show_progress {
             println!("Checking packages...");
@@ -572,11 +568,11 @@ impl BoundariesChecker {
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
                     .par_iter()
-                    .map(|(package_name, package_info, package_directory)| {
+                    .map(|(package_name, package_name_source, package_directory)| {
                         let pkg_result = Self::check_package(
                             ctx,
                             package_name,
-                            package_info,
+                            *package_name_source,
                             package_directory,
                             &rules_map,
                             &global_implicit_dependencies,
@@ -611,7 +607,7 @@ impl BoundariesChecker {
     fn check_package<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         package_name: &PackageName,
-        package_info: &PackageInfo,
+        package_name_source: Option<&Spanned<()>>,
         package_directory: &turbopath::AnchoredSystemPath,
         tag_rules: &Option<ProcessedRulesMap>,
         global_implicit_dependencies: &HashMap<String, Spanned<()>>,
@@ -640,7 +636,7 @@ impl BoundariesChecker {
             result.diagnostics.extend(tags::check_package_tags(
                 ctx,
                 PackageNode::Workspace(package_name.clone()),
-                &package_info.package_json,
+                package_name_source,
                 package_tags,
                 tag_rules.as_ref(),
             )?);
@@ -907,17 +903,17 @@ mod tests {
 
     // Minimal mock providers for integration tests
     struct MockGraph {
-        packages: Vec<(PackageName, PackageInfo)>,
+        packages: Vec<PackageName>,
         aggregates: HashSet<PackageName>,
         authoritative_directories: HashMap<PackageName, turbopath::AnchoredSystemPathBuf>,
-        missing_payloads: HashSet<PackageName>,
+        definition_paths: HashMap<PackageName, turbopath::AnchoredSystemPathBuf>,
     }
 
     impl MockGraph {
-        fn new(packages: Vec<(PackageName, PackageInfo)>) -> Self {
+        fn new(packages: Vec<PackageName>) -> Self {
             let authoritative_directories = packages
                 .iter()
-                .map(|(name, _)| {
+                .map(|name| {
                     (
                         name.clone(),
                         turbopath::AnchoredSystemPathBuf::from_raw(format!(
@@ -928,11 +924,24 @@ mod tests {
                     )
                 })
                 .collect();
+            let definition_paths = packages
+                .iter()
+                .map(|name| {
+                    (
+                        name.clone(),
+                        turbopath::AnchoredSystemPathBuf::from_raw(format!(
+                            "packages/{}/package.json",
+                            name.as_str()
+                        ))
+                        .unwrap(),
+                    )
+                })
+                .collect();
             Self {
                 packages,
                 aggregates: HashSet::new(),
                 authoritative_directories,
-                missing_payloads: HashSet::new(),
+                definition_paths,
             }
         }
 
@@ -949,39 +958,38 @@ mod tests {
             self
         }
 
-        fn without_payload(mut self, name: PackageName) -> Self {
-            self.missing_payloads.insert(name);
+        fn with_definition_path(mut self, name: PackageName, definition_path: &str) -> Self {
+            self.definition_paths.insert(
+                name,
+                turbopath::AnchoredSystemPathBuf::from_raw(definition_path).unwrap(),
+            );
             self
         }
     }
 
     impl PackageGraphProvider for MockGraph {
         fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_> {
-            Box::new(self.packages.iter().map(|(name, _)| {
+            Box::new(self.packages.iter().map(|name| {
                 PackageScope {
                     name: name.clone(),
+                    name_source: None,
                     directory: self
                         .authoritative_directories
                         .get(name)
                         .map(|path| path.as_ref())
                         .expect("mock package must have an authoritative directory"),
+                    definition_path: self
+                        .definition_paths
+                        .get(name)
+                        .map(|path| path.as_ref())
+                        .expect("mock package must have an authoritative definition"),
                     kind: if self.aggregates.contains(name) {
                         PackageGraphNodeKind::Aggregate
                     } else {
                         PackageGraphNodeKind::Package
                     },
-                    toolchain: &ToolchainId::JAVASCRIPT,
                 }
             }))
-        }
-
-        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
-            if self.missing_payloads.contains(name) {
-                return None;
-            }
-            self.packages
-                .iter()
-                .find_map(|(candidate, info)| (candidate == name).then_some(info))
         }
 
         fn immediate_dependencies(&self, _: &PackageNode) -> Option<HashSet<&PackageNode>> {
@@ -1056,24 +1064,8 @@ mod tests {
         }
 
         let packages = vec![
-            (
-                PackageName::Other("pkg-a".into()),
-                PackageInfo {
-                    package_json: Default::default(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
-                },
-            ),
-            (
-                PackageName::Other("pkg-b".into()),
-                PackageInfo {
-                    package_json: Default::default(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                    ..Default::default()
-                },
-            ),
+            PackageName::Other("pkg-a".into()),
+            PackageName::Other("pkg-b".into()),
         ];
 
         let graph = MockGraph::new(packages);
@@ -1108,13 +1100,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let aggregate_name = PackageName::Other("cargo-workspace".into());
-        let graph = MockGraph::new(vec![(
-            aggregate_name.clone(),
-            PackageInfo {
-                ..Default::default()
-            },
-        )])
-        .with_aggregate(aggregate_name.clone());
+        let graph =
+            MockGraph::new(vec![aggregate_name.clone()]).with_aggregate(aggregate_name.clone());
         let filtered = HashSet::from([aggregate_name]);
         let result = BoundariesChecker::check_boundaries(
             &BoundariesContext {
@@ -1133,17 +1120,69 @@ mod tests {
     }
 
     #[test]
-    fn authoritative_package_missing_compatibility_payload_fails_closed() {
+    fn check_boundaries_excludes_non_package_json_definitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("rust-crate".into());
+        let graph = MockGraph::new(vec![package_name.clone()])
+            .with_definition_path(package_name.clone(), "crates/rust-crate/Cargo.toml");
+        let filtered = HashSet::from([package_name]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 0);
+        assert_eq!(result.files_checked, 0);
+    }
+
+    #[test]
+    fn check_boundaries_selects_package_json_in_mixed_definitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let web_name = PackageName::Other("web".into());
+        let rust_name = PackageName::Other("rust-crate".into());
+        let web_directory = repo_root.join_components(&["packages", "web"]);
+        web_directory.create_dir_all().unwrap();
+        web_directory
+            .join_component("index.ts")
+            .create_with_contents("export {};\n")
+            .unwrap();
+
+        let graph = MockGraph::new(vec![web_name.clone(), rust_name.clone()])
+            .with_definition_path(rust_name.clone(), "crates/rust-crate/Cargo.toml");
+        let filtered = HashSet::from([web_name, rust_name]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 1);
+        assert_eq!(result.files_checked, 1);
+    }
+
+    #[test]
+    fn authoritative_package_does_not_require_compatibility_payload() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let package_name = PackageName::Other("authoritative-web".into());
-        let graph = MockGraph::new(vec![(
-            package_name.clone(),
-            PackageInfo {
-                ..Default::default()
-            },
-        )])
-        .without_payload(package_name.clone());
+        let graph = MockGraph::new(vec![package_name.clone()]);
         let filtered = HashSet::from([package_name.clone()]);
 
         let result = BoundariesChecker::check_boundaries(
@@ -1155,15 +1194,10 @@ mod tests {
                 filtered_pkgs: &filtered,
             },
             false,
-        );
-        let Err(error) = result else {
-            panic!("missing compatibility payload must fail closed");
-        };
+        )
+        .unwrap();
 
-        assert!(matches!(
-            error,
-            Error::MissingCompatibilityPayload(name) if name == package_name
-        ));
+        assert_eq!(result.packages_checked, 1);
     }
 
     #[test]
@@ -1179,13 +1213,8 @@ mod tests {
             .join_components(&["actual", "web", "index.ts"])
             .create_with_contents("export {};\n")
             .unwrap();
-        let graph = MockGraph::new(vec![(
-            package_name.clone(),
-            PackageInfo {
-                ..Default::default()
-            },
-        )])
-        .with_directory(package_name.clone(), "actual/web");
+        let graph = MockGraph::new(vec![package_name.clone()])
+            .with_directory(package_name.clone(), "actual/web");
         let filtered = HashSet::from([package_name]);
 
         let result = BoundariesChecker::check_boundaries(

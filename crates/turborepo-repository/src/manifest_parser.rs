@@ -63,6 +63,10 @@ impl Manifest {
     fn finish(mut self, contents: &str, path: &str) -> PackageJson {
         let text: Arc<str> = contents.into();
         let path: Arc<str> = path.into();
+        if let Some(name) = self.package_json.name.as_mut() {
+            name.add_text(text.clone());
+            name.add_path(path.clone());
+        }
         if let Some(package_manager) = self.package_json.package_manager.as_mut() {
             package_manager.add_text(text.clone());
             package_manager.add_path(path.clone());
@@ -639,6 +643,11 @@ mod test {
         let pkg = parse_ok(contents);
         for (label, text, path) in [
             (
+                "name",
+                pkg.name.as_ref().unwrap().text.as_deref(),
+                pkg.name.as_ref().unwrap().path.as_deref(),
+            ),
+            (
                 "packageManager",
                 pkg.package_manager.as_ref().unwrap().text.as_deref(),
                 pkg.package_manager.as_ref().unwrap().path.as_deref(),
@@ -657,6 +666,7 @@ mod test {
             assert_eq!(text, Some(contents), "{label} text");
             assert_eq!(path, Some("pkg/package.json"), "{label} path");
         }
+        assert_eq!(pkg.name.as_ref().unwrap().range, Some(9..12));
     }
 
     #[test]

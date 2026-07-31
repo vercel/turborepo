@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -10,18 +10,22 @@ use petgraph::{
     visit::EdgeRef,
 };
 use serde::Serialize;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
-        ExternalDeclarations, ExternalResolutionData, ExternalResolutionGeneration,
-        ExternalResolutionStatus, PackageExternalDeclarations, PackageResolutionState,
+        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
+        ExternalResolutionDomainId, ExternalResolutionGeneration, ExternalResolutionStatus,
+        JAVASCRIPT_RESOLUTION_DOMAIN, PackageExternalDeclarations, PackageResolutionState,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
     package_manager::PackageManager,
+    relationships::RelationshipTarget,
 };
 
 pub mod builder;
@@ -40,13 +44,11 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
-type DeferredResolutionReceiver = javascript::DeferredResolutionReceiver;
-
 #[derive(Debug)]
 struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
-    receiver: Option<DeferredResolutionReceiver>,
+    claims: HashMap<String, ExternalResolutionDomainId>,
 }
 
 impl ExternalResolutionKnowledge {
@@ -54,33 +56,27 @@ impl ExternalResolutionKnowledge {
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: None,
-            receiver: None,
+            claims: HashMap::new(),
         }
     }
 
     fn complete(generation: Arc<ExternalResolutionGeneration>) -> Self {
+        let claims = generation
+            .domains()
+            .iter()
+            .flat_map(|domain| {
+                domain
+                    .members()
+                    .iter()
+                    .cloned()
+                    .map(|member| (member, domain.id().clone()))
+            })
+            .collect();
         Self {
             status: ExternalResolutionStatus::Complete,
             generation: Some(generation),
-            receiver: None,
+            claims,
         }
-    }
-
-    fn resolving(receiver: DeferredResolutionReceiver) -> Self {
-        Self {
-            status: ExternalResolutionStatus::Resolving,
-            generation: None,
-            receiver: Some(receiver),
-        }
-    }
-
-    fn take_receiver(&mut self) -> Option<DeferredResolutionReceiver> {
-        self.receiver.take()
-    }
-
-    fn finish(&mut self, generation: Option<Arc<ExternalResolutionGeneration>>) {
-        self.status = ExternalResolutionStatus::Complete;
-        self.generation = generation;
     }
 }
 
@@ -91,7 +87,7 @@ pub struct PackageGraph {
     root_workspace_index: NodeIndex,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    package_payloads: HashMap<PackageName, PackageInfo>,
+    /// Immutable root package-manager configuration captured at construction.
     root_package_json: Option<PackageJson>,
     package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
@@ -102,20 +98,26 @@ pub struct PackageGraph {
     relationship_knowledge: Arc<RelationshipKnowledge>,
     external_declarations: OnceLock<ExternalDeclarations>,
     relationship_projections: OnceLock<projections::RelationshipProjections>,
-    /// The sole owner of external-resolution lifecycle and terminal knowledge
-    /// across toolchains. Deferred JavaScript production is joined once by
-    /// [`Self::ensure_transitive_closures`].
+    /// The sole owner of external-resolution terminal knowledge across
+    /// toolchains. Resolution is complete when the package graph is returned
+    /// from construction.
     external_resolution: Mutex<ExternalResolutionKnowledge>,
-    external_dep_to_internal_dependents:
-        OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
+    /// Lazy reverse index from exact external identities to internal
+    /// dependents. Built once from the resolution generation.
+    external_dep_to_internal_dependents: OnceLock<ExternalDependencyIndex>,
     /// Lazily computed internal dependencies of the root package. They are
     /// implied dependencies of every package, so per-package operations like
     /// `dependencies` and `ancestors` consult them on every call; the set is
     /// invariant once the graph is built.
     root_internal_dependencies: OnceLock<HashSet<PackageNode>>,
-    /// Toolchains registered during graph construction. Authoritative contexts
-    /// determine which registrations were active for a particular concern.
-    toolchains: crate::toolchain::ToolchainRegistry,
+    /// Immutable native-task catalog produced during repository construction.
+    native_task_knowledge: Arc<crate::native_tasks::NativeTaskKnowledge>,
+    /// Immutable task-contract catalog produced during repository construction.
+    task_contract_knowledge: Arc<crate::task_contracts::TaskContractKnowledge>,
+    /// Immutable change knowledge for watch/affectedness classification.
+    change_knowledge: Arc<crate::change_knowledge::ChangeKnowledge>,
+    /// Immutable native prune domains from the same discovery generation.
+    prune_knowledge: Arc<crate::prune_knowledge::PruneKnowledge>,
 }
 
 /// The WorkspacePackage.
@@ -140,33 +142,6 @@ impl WorkspacePackage {
         }
     }
 }
-
-/// Compatibility data retained for descriptor relationship classification,
-/// JavaScript lockfile resolution/hash state, and task consumers.
-///
-/// Package identity, directory ownership, definition source, and provenance
-/// are authoritative in [`RepositoryKnowledge`], not in this projection.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct PackageInfo {
-    /// A temporary compatibility descriptor for relationship classification
-    /// and tasks.
-    /// Its native `name` may be retained for later payload semantics, but must
-    /// never be used as package identity or to derive paths or provenance.
-    pub package_json: PackageJson,
-    pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
-    /// The workspace's external dependency closure, sorted by `Package`'s
-    /// `(key, version)` ordering. Members are `Arc`-shared across workspaces.
-    pub transitive_dependencies: Option<Vec<Arc<turborepo_lockfiles::Package>>>,
-    /// Hash of `transitive_dependencies`, precomputed by the JavaScript
-    /// lockfile phase so task hashing and run summaries never re-sort or
-    /// re-hash closures. When `None` with a `Some` closure (toolchain-
-    /// resolved closures, e.g. Cargo's), consumers compute the hash from
-    /// the sorted closure on demand.
-    pub external_deps_hash: Option<String>,
-}
-
-type PackageKey = String;
-type PackageVersion = String;
 
 // PackageName refers to a real package's name or the root package.
 // It's not the best name, because root isn't a real package, but it's
@@ -225,11 +200,12 @@ pub enum PackageGraphNodeKind {
 /// Manifest-independent facts about a package graph node.
 ///
 /// Paths and provenance come from the graph's immutable repository knowledge,
-/// not from the [`PackageInfo`] compatibility projection. The graph sentinel
-/// has no directory, native definition, or toolchain provenance.
+/// The graph sentinel has no directory, native definition, or toolchain
+/// provenance.
 #[derive(Debug, Clone, Copy)]
 pub struct PackageGraphNodeView<'a> {
     kind: PackageGraphNodeKind,
+    name_source: Option<&'a turborepo_errors::Spanned<()>>,
     directory: Option<&'a AnchoredSystemPath>,
     definition_path: Option<&'a AnchoredSystemPath>,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
@@ -238,8 +214,8 @@ pub struct PackageGraphNodeView<'a> {
 /// Identity-bearing execution context for a Turbo task namespace.
 ///
 /// Only [`PackageGraph::package_task_context`] can construct this value, so
-/// its identity, authoritative directory, and optional compatibility payload
-/// cannot be assembled from unrelated graph entries. The root Turbo namespace
+/// its identity and authoritative directory cannot be assembled from unrelated
+/// graph entries. The root Turbo namespace
 /// exists at the repository directory even when the repository has no root
 /// JavaScript scope (for example, a pure Cargo workspace).
 #[derive(Debug, Clone)]
@@ -247,11 +223,12 @@ pub struct PackageTaskContext<'a> {
     package: PackageName,
     repository_root: &'a AbsoluteSystemPath,
     directory: &'a AnchoredSystemPath,
-    package_info: Option<&'a PackageInfo>,
+    definition_path: Option<&'a AnchoredSystemPath>,
     external_declarations: &'a ExternalDeclarations,
+    native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
+    task_contract: crate::task_contracts::ScopeTaskContract,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
-    requires_compatibility_payload: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,14 +238,58 @@ pub enum PackageTaskContextKind {
     Aggregate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskEntrypointPreference {
+    Always,
+    Never,
+    WhenSingleCandidate,
+}
+
 impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
-    pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+    pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+        Self::new_for_test_with_native_tasks(package, repository_root, directory, kind, toolchain, None, None)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_native_tasks(
+        package: PackageName,
+        repository_root: &'a AbsoluteSystemPath,
+        directory: &'a AnchoredSystemPath,
+        kind: PackageTaskContextKind,
+        toolchain: Option<&'a crate::toolchain::ToolchainId>,
+        native_tasks: Option<Vec<crate::native_tasks::NativeTask>>,
+        task_contract: Option<crate::task_contracts::ScopeTaskContract>,
+    ) -> Self {
         static EXTERNAL_DECLARATIONS: OnceLock<ExternalDeclarations> = OnceLock::new();
-        let external_declarations = EXTERNAL_DECLARATIONS.get_or_init(ExternalDeclarations::default);
-        let requires_compatibility_payload = package != PackageName::Root || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
-        Self { package, repository_root, directory, package_info, external_declarations, kind, toolchain, requires_compatibility_payload }
+        static UNKNOWN_NATIVE_TASKS: crate::native_tasks::ScopeNativeTasks =
+            crate::native_tasks::ScopeNativeTasks::UnknownScope;
+        let external_declarations =
+            EXTERNAL_DECLARATIONS.get_or_init(ExternalDeclarations::default);
+        let native_tasks = if let Some(tasks) = native_tasks {
+            let scope = if tasks.is_empty() {
+                crate::native_tasks::ScopeNativeTasks::Empty
+            } else {
+                crate::native_tasks::ScopeNativeTasks::Available(tasks.into_boxed_slice())
+            };
+            Box::leak(Box::new(scope)) as &'static _
+        } else {
+            &UNKNOWN_NATIVE_TASKS
+        };
+        let task_contract =
+            task_contract.unwrap_or_else(crate::task_contracts::ScopeTaskContract::empty);
+        Self {
+            package,
+            repository_root,
+            directory,
+            definition_path: None,
+            external_declarations,
+            native_tasks,
+            task_contract,
+            kind,
+            toolchain,
+        }
     }
 
     pub fn package(&self) -> &PackageName {
@@ -283,13 +304,28 @@ impl<'a> PackageTaskContext<'a> {
         self.directory
     }
 
-    pub fn package_info(&self) -> Option<&'a PackageInfo> {
-        self.package_info
+    /// Whether this real package/root scope is defined by package.json.
+    pub fn is_package_json_scope(&self) -> bool {
+        is_package_json_definition(
+            matches!(
+                self.kind,
+                PackageTaskContextKind::Root | PackageTaskContextKind::Package
+            ),
+            self.definition_path,
+        )
     }
 
     pub fn external_declarations(&self) -> PackageExternalDeclarations<'_> {
         self.external_declarations
             .for_package(self.package.as_str())
+    }
+
+    pub fn native_tasks(&self) -> &'a crate::native_tasks::ScopeNativeTasks {
+        self.native_tasks
+    }
+
+    pub fn task_contract(&self) -> &crate::task_contracts::ScopeTaskContract {
+        &self.task_contract
     }
 
     pub fn kind(&self) -> PackageTaskContextKind {
@@ -299,15 +335,15 @@ impl<'a> PackageTaskContext<'a> {
     pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
         self.toolchain
     }
-
-    pub fn requires_compatibility_payload(&self) -> bool {
-        self.requires_compatibility_payload
-    }
 }
 
 impl<'a> PackageGraphNodeView<'a> {
     pub fn kind(&self) -> PackageGraphNodeKind {
         self.kind
+    }
+
+    pub fn name_source(&self) -> Option<&'a turborepo_errors::Spanned<()>> {
+        self.name_source
     }
 
     pub fn directory(&self) -> Option<&'a AnchoredSystemPath> {
@@ -318,9 +354,29 @@ impl<'a> PackageGraphNodeView<'a> {
         self.definition_path
     }
 
+    /// Whether this real package/root scope is defined by package.json.
+    pub fn is_package_json_scope(&self) -> bool {
+        is_package_json_definition(
+            matches!(
+                self.kind,
+                PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
+            ),
+            self.definition_path,
+        )
+    }
+
     pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
         self.toolchain
     }
+}
+
+fn is_package_json_definition(
+    is_package_scope: bool,
+    definition_path: Option<&AnchoredSystemPath>,
+) -> bool {
+    is_package_scope
+        && definition_path
+            .is_some_and(|path| path.as_path().file_name() == Some("package.json".as_ref()))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -330,6 +386,15 @@ pub struct ExternalDependencyChange {
     pub added: Vec<turborepo_lockfiles::Package>,
     /// Dependencies that were removed from the package
     pub removed: Vec<turborepo_lockfiles::Package>,
+}
+
+/// Lazy reverse index from exact external identities to internal dependents.
+#[derive(Debug, Default)]
+struct ExternalDependencyIndex {
+    /// Unique identities retaining producer-supplied display names.
+    identities: Vec<ExternalPackageIdentity>,
+    /// Exact identity -> internal workspace dependents (including transitive).
+    dependents: HashMap<ExternalPackageIdentity, HashSet<PackageNode>>,
 }
 
 impl PackageGraph {
@@ -344,6 +409,51 @@ impl PackageGraph {
     ) -> PackageExternalDeclarations<'a> {
         self.external_declaration_view()
             .for_package(package.as_str())
+    }
+
+    /// Whether a package declared a dependency under this exact manifest key.
+    /// This includes internal and unresolved-external relationships and does
+    /// not treat an alias target as a declaration under the target's name.
+    pub fn has_dependency_declaration(
+        &self,
+        package: &PackageName,
+        declaration_name: &str,
+    ) -> bool {
+        self.relationship_knowledge
+            .relationships_for_source(package.as_str())
+            .iter()
+            .any(|relationship| relationship.declaration_name() == declaration_name)
+    }
+
+    /// Required peer declarations that remain external after relationship
+    /// classification. Declaration keys are preserved for lockfile traversal,
+    /// including npm aliases and peers shadowed in other dependency tables.
+    pub fn required_external_peer_declarations(
+        &self,
+        package: &PackageName,
+    ) -> impl Iterator<Item = (&str, &str)> {
+        self.relationship_knowledge
+            .relationships_for_source(package.as_str())
+            .iter()
+            .filter_map(|relationship| {
+                if relationship.kind()
+                    != (crate::relationships::DependencyKind::Peer { optional: false })
+                {
+                    return None;
+                }
+                let RelationshipTarget::UnresolvedExternal { specifier, .. } =
+                    relationship.target()
+                else {
+                    return None;
+                };
+                if self
+                    .package_task_context(&PackageName::from(relationship.declaration_name()))
+                    .is_some()
+                {
+                    return None;
+                }
+                Some((relationship.declaration_name(), specifier.as_str()))
+            })
     }
 
     fn relationship_projections(&self) -> &projections::RelationshipProjections {
@@ -368,7 +478,7 @@ impl PackageGraph {
         self.relationship_projections().filtering()
     }
 
-    /// Returns reverse ordering relationships for affectedness propagation.
+    /// Returns reverse input relationships for affectedness propagation.
     pub fn affected_relationships(&self) -> &AffectedRelationships {
         self.relationship_projections().affected()
     }
@@ -570,26 +680,124 @@ impl PackageGraph {
         self.package_manager.as_ref()
     }
 
-    /// Toolchains registered during graph construction.
-    pub fn toolchains(&self) -> &crate::toolchain::ToolchainRegistry {
-        &self.toolchains
+    /// Root `engines` captured into task-contract knowledge at construction.
+    pub fn root_engines(&self) -> &std::collections::BTreeMap<String, String> {
+        self.task_contract_knowledge.root_engines()
     }
 
-    /// The watch behavior of toolchains that contributed at least one
-    /// authoritative execution scope to this graph. Registered toolchains
-    /// that were inactive (notably extras in single-package mode) are omitted.
-    pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
-        let active: HashSet<_> = self
-            .package_task_contexts()
-            .filter_map(|context| context.toolchain().cloned())
-            .collect();
-        let mut watch_spec = crate::toolchain::WatchSpec::default();
-        for toolchain in self.toolchains.iter() {
-            if active.contains(&toolchain.id()) {
-                watch_spec.extend(toolchain.watch_spec());
-            }
+    pub fn task_io_env_vars_by_domain(
+        &self,
+    ) -> std::collections::BTreeMap<crate::task_contracts::TaskEnvironmentDomain, Vec<&'static str>>
+    {
+        self.task_contract_knowledge.env_vars_by_domain()
+    }
+
+    pub fn task_entrypoint_exclusions(
+        &self,
+        task: &str,
+        candidates: &[PackageName],
+        exclusion_candidates: &[PackageName],
+        preference: TaskEntrypointPreference,
+    ) -> Vec<PackageName> {
+        let mut classified = BTreeMap::<_, Vec<_>>::new();
+        for candidate in candidates {
+            let Some(context) = self.package_task_context(candidate) else {
+                continue;
+            };
+            let contract = context.task_contract();
+            let Some(domain) = contract.task_entrypoint_domain() else {
+                continue;
+            };
+            let Some(entrypoint) = contract.task_entrypoint(task) else {
+                continue;
+            };
+            classified
+                .entry(domain.clone())
+                .or_default()
+                .push((candidate.clone(), entrypoint));
         }
-        watch_spec
+        let active_domains: BTreeSet<_> = classified.keys().cloned().collect();
+        let selected: HashSet<_> = classified
+            .into_values()
+            .flat_map(|classified| {
+                let prefer = match preference {
+                    TaskEntrypointPreference::Always => true,
+                    TaskEntrypointPreference::Never => false,
+                    TaskEntrypointPreference::WhenSingleCandidate => classified.len() == 1,
+                };
+                let has_preferred = classified.iter().any(|(_, entrypoint)| {
+                    matches!(
+                        entrypoint,
+                        crate::task_contracts::TaskEntrypoint::Preferred
+                            | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                    )
+                });
+                classified
+                    .into_iter()
+                    .filter_map(move |(name, entrypoint)| {
+                        let selected = if prefer && has_preferred {
+                            matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Preferred
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
+                        } else {
+                            !matches!(
+                                entrypoint,
+                                crate::task_contracts::TaskEntrypoint::Excluded
+                                    | crate::task_contracts::TaskEntrypoint::PreferredOnly
+                            )
+                        };
+                        selected.then_some(name)
+                    })
+            })
+            .collect();
+
+        exclusion_candidates
+            .iter()
+            .filter(|candidate| !selected.contains(*candidate))
+            .filter(|candidate| {
+                let Some(context) = self.package_task_context(candidate) else {
+                    return false;
+                };
+                let contract = context.task_contract();
+                contract
+                    .task_entrypoint_domain()
+                    .is_some_and(|domain| active_domains.contains(domain))
+                    && contract.task_entrypoint(task).is_some()
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Foundational change knowledge for watch classification.
+    pub fn change_knowledge(&self) -> &crate::change_knowledge::ChangeKnowledge {
+        &self.change_knowledge
+    }
+
+    /// Watch classification facts retained by this graph generation.
+    pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
+        self.change_knowledge.to_watch_spec()
+    }
+
+    pub fn prune_domains(&self) -> impl Iterator<Item = &crate::prune_knowledge::PruneDomainId> {
+        self.prune_knowledge.domains()
+    }
+
+    pub fn prune_plan(
+        &self,
+        domain: &crate::prune_knowledge::PruneDomainId,
+        kept_packages: &[String],
+    ) -> Result<Option<crate::prune_knowledge::PrunePlan>, crate::prune_knowledge::Error> {
+        self.prune_knowledge.plan(domain, kept_packages)
+    }
+
+    pub fn finalize_prune(
+        &self,
+        domain: &crate::prune_knowledge::PruneDomainId,
+        pruned_root: &AbsoluteSystemPath,
+    ) -> Vec<String> {
+        self.prune_knowledge.finalize(domain, pruned_root)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
@@ -623,6 +831,7 @@ impl PackageGraph {
         match node {
             PackageNode::Root => Some(PackageGraphNodeView {
                 kind: PackageGraphNodeKind::GraphSentinel,
+                name_source: None,
                 directory: None,
                 definition_path: None,
                 toolchain: None,
@@ -631,7 +840,7 @@ impl PackageGraph {
         }
     }
 
-    /// Looks up manifest-independent facts for a compatibility package
+    /// Looks up manifest-independent facts for a package
     /// identity. Unlike [`Self::package_dir`], this returns `None` for the
     /// synthetic root workspace when no root JavaScript scope exists.
     pub fn package_view(&self, package: &PackageName) -> Option<PackageGraphNodeView<'_>> {
@@ -640,6 +849,7 @@ impl PackageGraph {
                 let scope = self.knowledge.root_javascript_scope()?;
                 Some(PackageGraphNodeView {
                     kind: PackageGraphNodeKind::RootJavaScript,
+                    name_source: None,
                     directory: Some(self.knowledge.repository_directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),
@@ -653,6 +863,7 @@ impl PackageGraph {
                 };
                 Some(PackageGraphNodeView {
                     kind,
+                    name_source: scope.name_source(),
                     directory: Some(scope.directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),
@@ -663,21 +874,21 @@ impl PackageGraph {
 
     /// Resolves the complete context for tasks in `package`.
     ///
-    /// Non-root identities must exist in repository knowledge. Compatibility
-    /// payload is associated when present, but is not authoritative and is not
-    /// required to construct a context. The root identity denotes Turbo's root
-    /// task namespace and is always anchored at the repository directory.
+    /// Non-root identities must exist in repository knowledge. The root
+    /// identity denotes Turbo's root task namespace and is always anchored at
+    /// the repository directory.
     pub fn package_task_context(&self, package: &PackageName) -> Option<PackageTaskContext<'_>> {
-        let (package, directory, kind, toolchain, requires_compatibility_payload) = match package {
-            PackageName::Root => (
-                PackageName::Root,
-                self.knowledge.repository_directory(),
-                PackageTaskContextKind::Root,
-                self.knowledge
-                    .root_javascript_scope()
-                    .map(|scope| scope.toolchain()),
-                self.knowledge.root_javascript_scope().is_some(),
-            ),
+        let (package, directory, definition_path, kind, toolchain) = match package {
+            PackageName::Root => {
+                let scope = self.knowledge.root_javascript_scope();
+                (
+                    PackageName::Root,
+                    self.knowledge.repository_directory(),
+                    scope.map(|scope| scope.definition_path()),
+                    PackageTaskContextKind::Root,
+                    scope.map(|scope| scope.toolchain()),
+                )
+            }
             PackageName::Other(name) => {
                 let scope = self.knowledge.scope(name)?;
                 let kind = match scope.kind() {
@@ -687,23 +898,25 @@ impl PackageGraph {
                 (
                     PackageName::Other(scope.identity().to_owned()),
                     scope.directory(),
+                    Some(scope.definition_path()),
                     kind,
                     Some(scope.toolchain()),
-                    true,
                 )
             }
         };
-        let package_info = self.package_payloads.get(&package);
+        let native_tasks = self.native_task_knowledge.for_scope(package.as_str());
+        let task_contract = self.task_contract_knowledge.for_scope(package.as_str());
 
         Some(PackageTaskContext {
             package,
             repository_root: self.knowledge.repository_root(),
             directory,
-            package_info,
+            definition_path,
             external_declarations: self.external_declaration_view(),
+            native_tasks,
+            task_contract,
             kind,
             toolchain,
-            requires_compatibility_payload,
         })
     }
 
@@ -711,8 +924,7 @@ impl PackageGraph {
     ///
     /// The root namespace is always first and present exactly once, including
     /// in repositories without a root JavaScript scope. All other identities
-    /// follow authoritative repository observation order; compatibility
-    /// payload entries cannot add or remove namespaces from this iterator.
+    /// follow authoritative repository observation order.
     pub fn package_task_contexts(&self) -> impl Iterator<Item = PackageTaskContext<'_>> + '_ {
         std::iter::once(PackageName::Root)
             .chain(
@@ -724,26 +936,6 @@ impl PackageGraph {
                 Some(context) => context,
                 None => unreachable!("authoritative package name must resolve to a task context"),
             })
-    }
-
-    /// Test hook for exercising knowledge-backed consumers without a
-    /// compatibility projection.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn remove_package_info_for_test(&mut self, package: &PackageName) -> Option<PackageInfo> {
-        self.package_payloads.remove(package)
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn set_compatibility_manifest_name_for_test(
-        &mut self,
-        package: &PackageName,
-        compatibility_manifest_name: Option<String>,
-    ) -> bool {
-        let Some(payload) = self.package_payloads.get_mut(package) else {
-            return false;
-        };
-        payload.package_json.name = compatibility_manifest_name.map(turborepo_errors::Spanned::new);
-        true
     }
 
     /// Iterates the structural graph sentinel followed by every authoritative
@@ -762,6 +954,7 @@ impl PackageGraph {
                         crate::knowledge::ScopeKind::Package => PackageGraphNodeKind::Package,
                         crate::knowledge::ScopeKind::Aggregate => PackageGraphNodeKind::Aggregate,
                     },
+                    name_source: scope.name_source(),
                     directory: Some(scope.directory()),
                     definition_path: Some(scope.definition_path()),
                     toolchain: Some(scope.toolchain()),
@@ -804,7 +997,7 @@ impl PackageGraph {
         self.package_view(package)?.definition_path()
     }
 
-    /// Toolchain provenance for a package or execution scope.
+    /// Ecosystem provenance for a package or execution scope.
     pub fn package_toolchain(
         &self,
         package: &PackageName,
@@ -829,48 +1022,6 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
-    /// Join the background transitive-closure computation (if the graph was
-    /// built with deferred closures) and install the results. Idempotent and
-    /// cheap when there is nothing to join. Must be called before any
-    /// consumer of `PackageInfo::transitive_dependencies` runs.
-    pub fn ensure_transitive_closures(&mut self) {
-        let receiver = self
-            .external_resolution
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take_receiver();
-        let Some(receiver) = receiver else {
-            return;
-        };
-        match receiver.recv() {
-            Ok(Ok(mut snapshot)) => {
-                if let Some(warning) = snapshot.warning.take() {
-                    tracing::warn!("Unable to calculate transitive closures: {}", warning);
-                }
-                let generation = Arc::clone(&snapshot.generation);
-                snapshot.project_legacy(&mut self.package_payloads, &self.knowledge);
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(Some(generation));
-            }
-            Ok(Err(e)) => {
-                tracing::warn!("Unable to calculate transitive closures: {}", e);
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(None);
-            }
-            Err(_) => {
-                tracing::warn!("transitive closure thread disappeared without a result");
-                self.external_resolution
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .finish(None);
-            }
-        }
-    }
-
     pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
         self.external_resolution
             .lock()
@@ -885,17 +1036,12 @@ impl PackageGraph {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.package_task_contexts()
             .map(|context| {
-                let state = match context.toolchain() {
+                let state = match resolution.claims.get(context.package().as_str()) {
                     None => PackageResolutionState::NotApplicable,
-                    Some(toolchain) => resolution
+                    Some(domain_id) => resolution
                         .generation
                         .as_deref()
-                        .and_then(|generation| {
-                            generation
-                                .domains()
-                                .iter()
-                                .find(|domain| domain.toolchain() == toolchain)
-                        })
+                        .and_then(|generation| generation.domain(domain_id))
                         .map_or(PackageResolutionState::Missing, |domain| {
                             match domain.data() {
                                 ExternalResolutionData::Resolved {
@@ -942,11 +1088,6 @@ impl PackageGraph {
             .generation = None;
     }
 
-    pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
-        let entry = self.package_payloads.get(package)?;
-        Some(&entry.package_json)
-    }
-
     pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
         match package {
             // Compatibility: the synthetic root workspace has historically
@@ -955,10 +1096,6 @@ impl PackageGraph {
             PackageName::Root => Some(self.knowledge.repository_directory()),
             PackageName::Other(_) => self.package_view(package)?.directory(),
         }
-    }
-
-    pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
-        self.package_payloads.get(package)
     }
 
     fn package_dir_for_node(&self, node: &PackageNode) -> Option<&AnchoredSystemPath> {
@@ -989,10 +1126,6 @@ impl PackageGraph {
             .edges_connecting(*from_index, *to_index)
             .next()
             .map(|edge| *edge.weight())
-    }
-
-    pub fn root_package_json(&self) -> Option<&PackageJson> {
-        self.root_package_json.as_ref()
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
@@ -1227,59 +1360,201 @@ impl PackageGraph {
         visited
     }
 
-    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
+    /// Unique external package identities from the resolution generation.
+    ///
+    /// Display names are the producer-supplied human names captured during
+    /// observation. This is the query authority for external package listing.
+    pub fn external_package_identities(&self) -> &[ExternalPackageIdentity] {
+        &self.external_dependency_index().identities
+    }
+
+    /// Exact external identities attributed to the given packages by the
+    /// resolution generation. Used by prune lockfile-key unions so they no
+    /// read resolution generation identities.
+    pub fn external_package_identities_for_packages<'a, I>(
         &self,
         packages: I,
-    ) -> HashSet<&turborepo_lockfiles::Package> {
-        packages
-            .into_iter()
-            .filter_map(|package| self.package_payloads.get(package))
-            .filter_map(|entry| entry.transitive_dependencies.as_ref())
-            .flatten()
-            .map(|pkg| &**pkg)
-            .collect()
+    ) -> Vec<ExternalPackageIdentity>
+    where
+        I: IntoIterator<Item = &'a PackageName>,
+    {
+        let wanted: HashSet<&str> = packages.into_iter().map(PackageName::as_str).collect();
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        let Some(generation) = self.resolution_generation() else {
+            return Vec::new();
+        };
+
+        let mut seen = HashSet::new();
+        let mut identities = Vec::new();
+        for domain in generation.domains() {
+            let ExternalResolutionData::Resolved {
+                packages: resolved, ..
+            } = domain.data()
+            else {
+                continue;
+            };
+            for package in resolved {
+                if !wanted.contains(package.package()) {
+                    continue;
+                }
+                for identity in package.identities() {
+                    if seen.insert(identity.clone()) {
+                        identities.push(identity.clone());
+                    }
+                }
+            }
+        }
+        identities.sort();
+        identities
+    }
+
+    /// Global-hash file fallback when JavaScript resolution is unavailable.
+    ///
+    /// Mirrors the historical behavior of hashing `package.json` plus the
+    /// package-manager lockfile path when a lockfile object was not loaded:
+    /// include the repository root `package.json` and any existing resolution
+    /// definition sources from the JavaScript domain. Single-package mode has
+    /// no resolution generation, so it retains the package-manager fallback.
+    pub fn external_resolution_global_file_fallback(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
+        let Some(generation) = self.resolution_generation() else {
+            let package_manager = self.package_manager()?;
+            let mut paths = vec![self.repo_root().join_component("package.json")];
+            let lockfile_path = package_manager.lockfile_path(self.repo_root());
+            if lockfile_path.exists() {
+                paths.push(lockfile_path);
+            }
+            return Some(paths);
+        };
+        let domain = generation.domain(&JAVASCRIPT_RESOLUTION_DOMAIN)?;
+        match domain.data() {
+            ExternalResolutionData::Resolved { .. } => None,
+            ExternalResolutionData::Unavailable(_) => {
+                let mut paths = vec![self.repo_root().join_component("package.json")];
+                for source in domain.definition_sources() {
+                    let path = self.repo_root().resolve(source);
+                    if path.exists() {
+                        paths.push(path);
+                    }
+                }
+                Some(paths)
+            }
+        }
+    }
+
+    /// Resolve a lockfile package to the generation identity that shares its
+    /// exact `(key, version)`, retaining any stored human name.
+    pub fn resolve_external_package_identity(
+        &self,
+        package: &turborepo_lockfiles::Package,
+    ) -> Option<&ExternalPackageIdentity> {
+        let needle = ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
+        self.external_dependency_index()
+            .identities
+            .iter()
+            .find(|identity| *identity == &needle)
+    }
+
+    /// JavaScript-domain external identities only. Used by N-API lockfile
+    /// listing which historically filtered through the JS lockfile human-name
+    /// path and therefore excluded Cargo identities.
+    pub fn javascript_external_package_identities(&self) -> Vec<ExternalPackageIdentity> {
+        let Some(generation) = self.resolution_generation() else {
+            return Vec::new();
+        };
+        let mut seen = HashSet::new();
+        let mut identities = Vec::new();
+        for domain in generation.domains() {
+            if domain.id() != &JAVASCRIPT_RESOLUTION_DOMAIN {
+                continue;
+            }
+            let ExternalResolutionData::Resolved { packages, .. } = domain.data() else {
+                continue;
+            };
+            for package in packages {
+                for identity in package.identities() {
+                    if seen.insert(identity.clone()) {
+                        identities.push(identity.clone());
+                    }
+                }
+            }
+        }
+        identities.sort();
+        identities
     }
 
     pub fn internal_dependencies_for_external_dependency(
         &self,
         external_package: &turborepo_lockfiles::Package,
     ) -> Option<&HashSet<PackageNode>> {
-        // In order to answer this once we have to calculate the info for every external
-        // package so we store the results
-        let map = self
-            .external_dep_to_internal_dependents
-            .get_or_init(|| self.build_external_dep_to_internal_dependents_map());
-        map.get(external_package)
+        let identity = ExternalPackageIdentity::new(
+            external_package.key.clone(),
+            external_package.version.clone(),
+        );
+        self.internal_dependencies_for_external_identity(&identity)
     }
 
-    /// Builds a map from external dependencies to the set of internal workspace
-    /// packages that depend on them (including transitive dependents).
-    fn build_external_dep_to_internal_dependents_map(
+    pub fn internal_dependencies_for_external_identity(
         &self,
-    ) -> HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> {
-        // TODO: provide size hint from Lockfile trait
-        let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
-        // First find which packages directly depend on each external package
-        for context in self.package_task_contexts() {
-            let Some(info) = context.package_info() else {
-                debug_assert!(
-                    !context.requires_compatibility_payload(),
-                    "builder invariant: required package context has no payload"
-                );
+        identity: &ExternalPackageIdentity,
+    ) -> Option<&HashSet<PackageNode>> {
+        self.external_dependency_index().dependents.get(identity)
+    }
+
+    fn external_dependency_index(&self) -> &ExternalDependencyIndex {
+        self.external_dep_to_internal_dependents
+            .get_or_init(|| self.build_external_dependency_index())
+    }
+
+    fn resolution_generation(&self) -> Option<Arc<ExternalResolutionGeneration>> {
+        self.external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .generation
+            .clone()
+    }
+
+    /// Builds a compact reverse index from the resolution generation.
+    fn build_external_dependency_index(&self) -> ExternalDependencyIndex {
+        let Some(generation) = self.resolution_generation() else {
+            return ExternalDependencyIndex::default();
+        };
+
+        let mut dependents: HashMap<ExternalPackageIdentity, HashSet<PackageNode>> = HashMap::new();
+        let mut identity_order: Vec<ExternalPackageIdentity> = Vec::new();
+        let mut seen_identities = HashSet::new();
+        let mut root_external_dependencies = HashSet::new();
+
+        for domain in generation.domains() {
+            let ExternalResolutionData::Resolved { packages, .. } = domain.data() else {
                 continue;
             };
-            for dep in info.transitive_dependencies.iter().flatten() {
-                let rdeps = map.entry((**dep).clone()).or_default();
-                rdeps.insert(PackageNode::Workspace(context.package().clone()));
+            for package_resolution in packages {
+                let workspace = PackageNode::Workspace(PackageName::from(
+                    package_resolution.package().to_string(),
+                ));
+                let is_root = package_resolution.package() == ROOT_PKG_NAME
+                    || package_resolution.package() == "//";
+                for identity in package_resolution.identities() {
+                    if seen_identities.insert(identity.clone()) {
+                        identity_order.push(identity.clone());
+                    }
+                    if is_root {
+                        root_external_dependencies.insert(identity.clone());
+                    }
+                    dependents
+                        .entry(identity.clone())
+                        .or_default()
+                        .insert(workspace.clone());
+                }
             }
         }
-        // Now trace through all ancestors of the direct dependants
+
+        identity_order.sort();
+
         let root_internal_dependencies = self.root_internal_dependencies();
-        let root_external_dependencies =
-            self.transitive_external_dependencies(Some(&PackageName::Root));
-        for (external_pkg, rdeps) in map.iter_mut() {
-            // If one of the reverse dependencies of this external package is a root
-            // dependency, everything depends on this
+        for (external_pkg, rdeps) in dependents.iter_mut() {
             if root_external_dependencies.contains(external_pkg)
                 || !root_internal_dependencies.is_disjoint(rdeps)
             {
@@ -1295,17 +1570,11 @@ impl PackageGraph {
                 rdeps.extend(transitive_rdeps.into_iter().cloned());
             }
         }
-        map
-    }
 
-    // Returns a map of package name and version for external dependencies
-    #[allow(dead_code)]
-    fn external_dependencies(
-        &self,
-        package: &PackageName,
-    ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
-        let entry = self.package_payloads.get(package)?;
-        entry.unresolved_external_dependencies.as_ref()
+        ExternalDependencyIndex {
+            identities: identity_order,
+            dependents,
+        }
     }
 }
 
@@ -1352,7 +1621,7 @@ impl AsRef<str> for PackageName {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, path::Path, process::Command};
+    use std::{collections::BTreeMap, fs, path::Path, process::Command};
 
     use serde_json::json;
     use turbopath::AbsoluteSystemPathBuf;
@@ -1366,6 +1635,30 @@ mod test {
         },
         discovery::PackageDiscovery,
     };
+
+    #[test]
+    fn package_json_scope_is_independent_of_toolchain_provenance() {
+        let custom_toolchain = crate::toolchain::ToolchainId::new("custom");
+        let package_json = AnchoredSystemPath::new("packages/app/package.json").unwrap();
+        let custom_view = PackageGraphNodeView {
+            kind: PackageGraphNodeKind::Package,
+            name_source: None,
+            directory: None,
+            definition_path: Some(package_json),
+            toolchain: Some(&custom_toolchain),
+        };
+        assert!(custom_view.is_package_json_scope());
+
+        let cargo_toml = AnchoredSystemPath::new("packages/app/Cargo.toml").unwrap();
+        let javascript_view = PackageGraphNodeView {
+            kind: PackageGraphNodeKind::Package,
+            name_source: None,
+            directory: None,
+            definition_path: Some(cargo_toml),
+            toolchain: Some(&crate::toolchain::ToolchainId::JAVASCRIPT),
+        };
+        assert!(!javascript_view.is_package_json_scope());
+    }
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
@@ -1557,8 +1850,7 @@ mod test {
                 );
             }
 
-            let missing = PackageName::from("b");
-            assert!(dep_graph.remove_package_info_for_test(&missing).is_some());
+            let changed = PackageName::from("b");
             assert_eq!(
                 dep_graph
                     .changed_packages_from_lockfile(previous.as_ref())
@@ -1566,7 +1858,7 @@ mod test {
                     .into_iter()
                     .map(|change| change.package.name)
                     .collect::<Vec<_>>(),
-                vec![missing]
+                vec![changed]
             );
 
             dep_graph.remove_external_resolution_for_test();
@@ -1680,13 +1972,16 @@ mod test {
             .iter()
             .collect::<HashSet<_>>()
         );
-        let b_external = pkg_graph
-            .package_payloads
-            .get(&PackageName::from("b"))
-            .unwrap()
-            .unresolved_external_dependencies
-            .as_ref()
-            .unwrap();
+        let b_external: std::collections::BTreeMap<_, _> = pkg_graph
+            .external_declarations(&PackageName::from("b"))
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
 
         let pkg_version = b_external.get("c").unwrap();
         assert_eq!(pkg_version, "1.2.3");
@@ -1811,30 +2106,170 @@ mod test {
         let foo = PackageName::from("foo");
         let bar = PackageName::from("bar");
 
-        let foo_deps = pkg_graph
-            .package_payloads
-            .get(&foo)
-            .unwrap()
-            .transitive_dependencies
-            .as_ref()
-            .unwrap();
-        let bar_deps = pkg_graph
-            .package_payloads
-            .get(&bar)
-            .unwrap()
-            .transitive_dependencies
-            .as_ref()
-            .unwrap();
         let a = turborepo_lockfiles::Package::new("key:a", "1");
-        let b = turborepo_lockfiles::Package::new("key:b", "1");
-        let c = turborepo_lockfiles::Package::new("key:c", "1");
-        // Closures are sorted by (key, version).
-        assert_eq!(foo_deps, &vec![Arc::new(a.clone()), Arc::new(c.clone())]);
-        assert_eq!(bar_deps, &vec![Arc::new(b.clone()), Arc::new(c.clone())]);
+        let _b = turborepo_lockfiles::Package::new("key:b", "1");
+        let _c = turborepo_lockfiles::Package::new("key:c", "1");
+
+        let identities = pkg_graph.external_package_identities();
         assert_eq!(
-            pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
-            HashSet::from_iter(vec![&a, &b, &c,])
+            identities
+                .iter()
+                .map(|identity| (identity.key(), identity.version()))
+                .collect::<HashSet<_>>(),
+            HashSet::from([("key:a", "1"), ("key:b", "1"), ("key:c", "1")])
         );
+
+        let a_dependents = pkg_graph
+            .internal_dependencies_for_external_dependency(&a)
+            .expect("a should have dependents");
+        assert!(a_dependents.contains(&PackageNode::Workspace(foo.clone())));
+        assert!(!a_dependents.contains(&PackageNode::Workspace(bar.clone())));
+
+        let c_dependents = pkg_graph
+            .internal_dependencies_for_external_identity(&ExternalPackageIdentity::new(
+                "key:c", "1",
+            ))
+            .expect("c should have dependents");
+        assert!(c_dependents.contains(&PackageNode::Workspace(foo.clone())));
+        assert!(c_dependents.contains(&PackageNode::Workspace(bar.clone())));
+
+        let foo_identities = pkg_graph.external_package_identities_for_packages([&foo]);
+        assert_eq!(
+            foo_identities
+                .iter()
+                .map(|identity| (identity.key(), identity.version()))
+                .collect::<Vec<_>>(),
+            vec![("key:a", "1"), ("key:c", "1")]
+        );
+        let bar_identities = pkg_graph.external_package_identities_for_packages([&bar]);
+        assert_eq!(
+            bar_identities
+                .iter()
+                .map(|identity| identity.key())
+                .collect::<HashSet<_>>(),
+            HashSet::from(["key:b", "key:c"])
+        );
+    }
+
+    #[tokio::test]
+    async fn required_external_peer_declarations_preserve_required_external_manifest_entries() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "app", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "app",
+                    "dependencies": {
+                        "declared-twice": "1.0.0"
+                    },
+                    "peerDependencies": {
+                        "external-peer": "^1.0.0",
+                        "react-legacy": "npm:react@^18.0.0",
+                        "optional-peer": "^2.0.0",
+                        "declared-twice": "^2.0.0",
+                        "workspace-peer": "^2.0.0"
+                    },
+                    "peerDependenciesMeta": {
+                        "optional-peer": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "workspace-peer", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "workspace-peer",
+                    "version": "1.0.0"
+                }))
+                .unwrap(),
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+
+        let declarations = pkg_graph
+            .required_external_peer_declarations(&PackageName::from("app"))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            declarations,
+            BTreeMap::from([
+                ("declared-twice", "^2.0.0"),
+                ("external-peer", "^1.0.0"),
+                ("react-legacy", "npm:react@^18.0.0"),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn external_dependency_reverse_index_is_lazy_and_cached() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let mut package_jsons = HashMap::new();
+        for index in 0..64 {
+            package_jsons.insert(
+                root.join_components(&[&format!("package_{index}"), "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": format!("pkg-{index}"),
+                    "dependencies": { "a": "1" }
+                }))
+                .unwrap(),
+            );
+        }
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let start = std::time::Instant::now();
+        let first = pkg_graph
+            .internal_dependencies_for_external_dependency(&turborepo_lockfiles::Package::new(
+                "key:a", "1",
+            ))
+            .expect("reverse index should resolve key:a");
+        let first_elapsed = start.elapsed();
+        assert!(first.len() >= 64);
+
+        let start = std::time::Instant::now();
+        let second = pkg_graph
+            .internal_dependencies_for_external_dependency(&turborepo_lockfiles::Package::new(
+                "key:a", "1",
+            ))
+            .expect("cached reverse index should resolve key:a");
+        let second_elapsed = start.elapsed();
+
+        assert!(std::ptr::eq(first, second));
+        assert!(
+            second_elapsed * 10 < first_elapsed.max(std::time::Duration::from_micros(50)),
+            "cached reverse-index lookup should be much cheaper than the first build \
+             (first={first_elapsed:?}, second={second_elapsed:?})"
+        );
+        assert!(
+            first_elapsed < std::time::Duration::from_secs(2),
+            "reverse-index build took too long: {first_elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn external_package_identity_equality_ignores_human_name() {
+        let left = ExternalPackageIdentity::new("key:a", "1").with_human_name("a@1");
+        let right = ExternalPackageIdentity::new("key:a", "1");
+        assert_eq!(left, right);
+        assert_eq!(left.display_name(), "a@1");
+        assert_eq!(right.display_name(), "key:a");
     }
 
     #[tokio::test]
@@ -1859,7 +2294,6 @@ mod test {
         );
         let crate::external_resolution::ExternalResolutionData::Resolved {
             completeness,
-            fingerprint,
             packages,
         } = resolved_domain.data()
         else {
@@ -1869,16 +2303,14 @@ mod test {
             completeness,
             &crate::external_resolution::ResolutionCompleteness::Complete
         );
-        assert!(!fingerprint.as_str().is_empty());
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].package(), ROOT_PKG_NAME);
         assert!(packages[0].identities().is_empty());
-        assert_eq!(
+        assert!(packages[0].fingerprint().is_some());
+        assert!(
             resolved
-                .package_payloads
-                .get(&PackageName::Root)
-                .and_then(|info| info.transitive_dependencies.as_deref()),
-            Some(&[][..])
+                .external_package_identities_for_packages([&PackageName::Root])
+                .is_empty()
         );
 
         let unavailable = PackageGraph::builder(&root, root_package())
@@ -1897,131 +2329,24 @@ mod test {
         assert_eq!(reason.code(), "lockfile-unavailable");
         assert!(
             unavailable
-                .package_payloads
-                .get(&PackageName::Root)
-                .is_some_and(|info| info.transitive_dependencies.is_none())
+                .external_resolution_global_file_fallback()
+                .is_some()
         );
-    }
 
-    /// A graph built with deferred closures must, after
-    /// `ensure_transitive_closures`, be indistinguishable from one built
-    /// inline.
-    #[tokio::test]
-    async fn test_deferred_closures_match_inline() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let package_jsons = || {
-            let mut map = HashMap::new();
-            map.insert(
-                root.join_components(&["package_a", "package.json"]),
-                PackageJson::from_value(json!({
-                    "name": "foo",
-                    "dependencies": { "a": "1" }
-                }))
-                .unwrap(),
-            );
-            map.insert(
-                root.join_components(&["package_b", "package.json"]),
-                PackageJson::from_value(json!({
-                    "name": "bar",
-                    "dependencies": { "b": "1" }
-                }))
-                .unwrap(),
-            );
-            map
-        };
-        let hasher: crate::package_graph::builder::ClosureHasher = Arc::new(|closures| {
-            closures
-                .iter()
-                .map(|(package, identities)| {
-                    let fingerprint = identities
-                        .iter()
-                        .map(|identity| format!("{}@{}", identity.key, identity.version))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    (package.clone(), fingerprint)
-                })
-                .collect()
-        });
-
-        let inline = PackageGraph::builder(
-            &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-        )
-        .with_package_discovery(MockDiscovery)
-        .with_package_jsons(Some(package_jsons()))
-        .with_lockfile(Some(Box::new(MockLockfile {})))
-        .with_closure_hasher(hasher.clone())
-        .build()
-        .await
-        .unwrap();
-
-        let mut deferred = PackageGraph::builder(
-            &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-        )
-        .with_package_discovery(MockDiscovery)
-        .with_package_jsons(Some(package_jsons()))
-        .with_lockfile(Some(Box::new(MockLockfile {})))
-        .defer_transitive_closures(true)
-        .with_closure_hasher(hasher)
-        .build()
-        .await
-        .unwrap();
-
-        assert_eq!(
-            inline.external_resolution_status(),
-            ExternalResolutionStatus::Complete
-        );
-        assert_eq!(
-            deferred.external_resolution_status(),
-            ExternalResolutionStatus::Resolving
-        );
-        let inline_generation = inline
-            .external_resolution_generation()
-            .expect("inline resolution should be available");
-        assert_eq!(inline_generation.domains().len(), 1);
-
-        // Before the join, closures are absent.
+        let fallback = unavailable
+            .external_resolution_global_file_fallback()
+            .expect("unavailable JS resolution should expose a global file fallback");
         assert!(
-            deferred
-                .package_payloads
-                .values()
-                .all(|info| info.transitive_dependencies.is_none()),
-            "deferred graph must not have closures before ensure"
+            fallback
+                .iter()
+                .any(|path| path.file_name() == Some("package.json"))
         );
-
-        deferred.ensure_transitive_closures();
-        // Idempotent.
-        deferred.ensure_transitive_closures();
-
-        assert_eq!(
-            deferred.external_resolution_status(),
-            ExternalResolutionStatus::Complete
+        assert!(
+            resolved
+                .external_resolution_global_file_fallback()
+                .is_none(),
+            "resolved domains must not use the global file fallback"
         );
-        assert_eq!(
-            inline_generation,
-            deferred
-                .external_resolution_generation()
-                .expect("deferred resolution should be available after joining")
-        );
-
-        for (name, info) in &inline.package_payloads {
-            let deferred_info = deferred.package_payloads.get(name).unwrap();
-            assert_eq!(
-                info.transitive_dependencies, deferred_info.transitive_dependencies,
-                "closures must match for {name}"
-            );
-            assert_eq!(
-                info.external_deps_hash, deferred_info.external_deps_hash,
-                "external deps hashes must match for {name}"
-            );
-            assert_eq!(
-                info.external_deps_hash.is_some(),
-                info.transitive_dependencies.is_some(),
-                "hash must be present exactly when the closure is, for {name}"
-            );
-        }
     }
 
     #[tokio::test]
@@ -2510,10 +2835,10 @@ version = "0.1.0"
         // Several iterations: the closure-attribution regression this guards
         // was decided by HashMap iteration order, roughly a coin flip per
         // process/build.
-        let mut expected_cargo_fingerprint = None;
+        let mut expected_cargo_fingerprints = None;
         for iteration in 0..8 {
-            let defer_resolution = iteration % 2 == 1;
-            let mut pkg_graph = PackageGraph::builder(
+            let _defer_resolution = iteration % 2 == 1;
+            let pkg_graph = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
                     .unwrap(),
@@ -2528,31 +2853,22 @@ version = "0.1.0"
                 map
             }))
             .with_lockfile(Some(Box::new(MockLockfile {})))
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
-            .defer_transitive_closures(defer_resolution)
+            .with_cargo()
             .build()
             .await
             .unwrap();
-            pkg_graph.ensure_transitive_closures();
 
             assert!(pkg_graph.validate().is_ok());
-            assert!(pkg_graph.package_task_contexts().all(|context| {
-                context.requires_compatibility_payload() && context.package_info().is_some()
-            }));
+            assert!(
+                pkg_graph
+                    .package_task_contexts()
+                    .all(|context| { pkg_graph.package_task_context(context.package()).is_some() })
+            );
 
             let app_name = PackageName::from("app");
-            assert!(pkg_graph.set_compatibility_manifest_name_for_test(
-                &app_name,
-                Some("stale-payload-name".into())
-            ));
             assert_eq!(
                 pkg_graph.package_task_context(&app_name).unwrap().package(),
                 &app_name
-            );
-            assert!(
-                pkg_graph
-                    .package_task_context(&PackageName::from("stale-payload-name"))
-                    .is_none()
             );
 
             // All packages are present with knowledge-backed provenance.
@@ -2564,7 +2880,6 @@ version = "0.1.0"
                 pkg_graph.package_toolchain(&PackageName::from("js-pkg")),
                 Some(&crate::toolchain::ToolchainId::JAVASCRIPT)
             );
-            let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
             assert_eq!(
                 pkg_graph.package_toolchain(&PackageName::from("acme")),
                 Some(&crate::toolchain::ToolchainId::RUST)
@@ -2642,13 +2957,13 @@ version = "0.1.0"
                     .ordering_relationships()
                     .direct_dependencies(&PackageName::from("app"))
                     .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-                Some(vec![PackageName::from("lib-a")])
+                Ok(vec![PackageName::from("lib-a")])
             );
             assert_eq!(
                 pkg_graph
                     .hash_relationships()
                     .dependency_inputs(&PackageName::from("app")),
-                Some(vec![PackageName::from("lib-a"), PackageName::from("lib-b")]),
+                Ok(vec![PackageName::from("lib-a"), PackageName::from("lib-b")]),
                 "mixed repositories retain transitive native hash inputs"
             );
             let workspace_deps = pkg_graph
@@ -2660,48 +2975,38 @@ version = "0.1.0"
                 "workspace package should depend on every crate, got {workspace_deps:?}"
             );
 
-            // The root's JS lockfile closure is attributed to the root, not
-            // stolen by the cargo workspace package sharing its directory.
-            let root_closure = pkg_graph
-                .package_info(&PackageName::Root)
-                .unwrap()
-                .transitive_dependencies
-                .as_ref()
-                .expect("root should have a lockfile closure");
-            // Closures are sorted by (key, version).
+            // The root's JS resolution identities are attributed to the root
+            // package, not stolen by the Cargo workspace package sharing its
+            // directory.
+            let root_identities =
+                pkg_graph.external_package_identities_for_packages([&PackageName::Root]);
             assert_eq!(
-                root_closure,
-                &vec![
-                    Arc::new(turborepo_lockfiles::Package::new("key:a", "1")),
-                    Arc::new(turborepo_lockfiles::Package::new("key:c", "1")),
-                ],
-            );
-            // Cargo packages carry toolchain-resolved closures (here just
-            // the rustc stamp — the fixture has no external dependencies),
-            // never JS lockfile entries.
-            assert!(
-                workspace_pkg
-                    .transitive_dependencies
+                root_identities
                     .iter()
-                    .flatten()
-                    .all(|package| package.key == "rustc"),
-                "the cargo workspace package must not carry JS lockfile entries, got {:?}",
-                workspace_pkg.transitive_dependencies
+                    .map(|identity| (identity.key(), identity.version()))
+                    .collect::<Vec<_>>(),
+                vec![("key:a", "1"), ("key:c", "1")],
             );
+            // Cargo packages contribute identities through the Rust resolution
+            // domain, never JS lockfile entries.
 
             let resolution = pkg_graph
                 .external_resolution_generation()
                 .expect("mixed repository should retain external resolution knowledge");
             assert_eq!(resolution.domains().len(), 2);
             let cargo_domain = resolution
-                .domains()
-                .iter()
-                .find(|domain| domain.toolchain() == &crate::toolchain::ToolchainId::RUST)
+                .domain(&crate::external_resolution::CARGO_RESOLUTION_DOMAIN)
                 .expect("Cargo should contribute one resolution domain");
+            assert_eq!(
+                resolution
+                    .domain(&crate::external_resolution::JAVASCRIPT_RESOLUTION_DOMAIN)
+                    .unwrap()
+                    .id(),
+                &crate::external_resolution::JAVASCRIPT_RESOLUTION_DOMAIN
+            );
             assert_eq!(cargo_domain.definition_sources()[0].as_str(), "Cargo.lock");
             let crate::external_resolution::ExternalResolutionData::Resolved {
                 completeness,
-                fingerprint,
                 packages,
             } = cargo_domain.data()
             else {
@@ -2711,10 +3016,14 @@ version = "0.1.0"
                 completeness,
                 &crate::external_resolution::ResolutionCompleteness::Complete
             );
-            if let Some(expected) = &expected_cargo_fingerprint {
-                assert_eq!(fingerprint, expected);
+            let fingerprints = packages
+                .iter()
+                .map(|package| package.fingerprint().unwrap().clone())
+                .collect::<Vec<_>>();
+            if let Some(expected) = &expected_cargo_fingerprints {
+                assert_eq!(&fingerprints, expected);
             } else {
-                expected_cargo_fingerprint = Some(fingerprint.clone());
+                expected_cargo_fingerprints = Some(fingerprints);
             }
             assert_eq!(packages.len(), 4);
             for package in packages {
@@ -2726,33 +3035,29 @@ version = "0.1.0"
                     "{} must include the compiler identity",
                     package.package()
                 );
-                let legacy: HashSet<_> = pkg_graph
-                    .package_info(&PackageName::from(package.package()))
-                    .and_then(|info| info.transitive_dependencies.as_ref())
-                    .into_iter()
-                    .flatten()
-                    .map(|identity| (identity.key.as_str(), identity.version.as_str()))
-                    .collect();
-                let normalized: HashSet<_> = package
-                    .identities()
-                    .iter()
-                    .map(|identity| (identity.key(), identity.version()))
-                    .collect();
-                assert_eq!(normalized, legacy);
+                assert!(
+                    package
+                        .identities()
+                        .iter()
+                        .all(|identity| identity.key() == "rustc"),
+                    "{} should only carry the compiler identity in this fixture, got {:?}",
+                    package.package(),
+                    package.identities()
+                );
             }
         }
     }
 
     /// A pure Cargo workspace has no root package.json and no JavaScript
     /// package manager: the graph is built entirely from the Cargo toolchain,
-    /// and both `package_manager()` and `root_package_json()` report `None`.
+    /// and `package_manager()` reports `None`.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_pure_cargo_workspace_has_no_javascript() {
         let (_tmp, root) = canonical_tempdir();
         write_cargo_workspace_fixture(&root);
 
         let mut pkg_graph = PackageGraph::builder_optional(&root, None)
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .with_cargo()
             .build()
             .await
             .unwrap();
@@ -2763,20 +3068,31 @@ version = "0.1.0"
             .expect("pure Cargo repository should retain external resolution knowledge");
         assert_eq!(resolution.domains().len(), 1);
         assert_eq!(
-            resolution.domains()[0].toolchain(),
-            &crate::toolchain::ToolchainId::RUST
+            resolution.domains()[0].id(),
+            &crate::external_resolution::CARGO_RESOLUTION_DOMAIN
         );
+        let states = pkg_graph.package_resolution_states();
+        assert_eq!(states["//"], PackageResolutionState::NotApplicable);
+        assert!(matches!(
+            states["app"],
+            PackageResolutionState::Resolved { .. }
+        ));
         assert!(
             pkg_graph.relationship_projections.get().is_none(),
             "relationship projections must remain lazy for current consumers"
         );
+
+        pkg_graph.remove_external_resolution_for_test();
+        let missing_states = pkg_graph.package_resolution_states();
+        assert_eq!(missing_states["//"], PackageResolutionState::NotApplicable);
+        assert_eq!(missing_states["app"], PackageResolutionState::Missing);
 
         assert_eq!(
             pkg_graph
                 .ordering_relationships()
                 .direct_dependencies(&PackageName::Root)
                 .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
-            Some(Vec::new()),
+            Ok(Vec::new()),
             "pure Cargo recognizes the root Turbo namespace without JS edges"
         );
         assert!(pkg_graph.relationship_projections.get().is_some());
@@ -2784,14 +3100,14 @@ version = "0.1.0"
         let expected_dependencies = vec![PackageName::from("lib-a"), PackageName::from("lib-b")];
         assert_eq!(
             pkg_graph.hash_relationships().dependency_inputs(&app),
-            Some(expected_dependencies.clone()),
+            Ok(expected_dependencies.clone()),
             "Cargo hash inputs include transitive path dependencies"
         );
         assert_eq!(
             pkg_graph
                 .filtering_relationships()
                 .transitive_dependencies(&app),
-            Some(expected_dependencies.clone())
+            Ok(expected_dependencies.clone())
         );
         let mut graph_dependencies: Vec<_> = pkg_graph
             .dependencies(&PackageNode::Workspace(app.clone()))
@@ -2834,8 +3150,7 @@ version = "0.1.0"
         );
         assert_eq!(root_context.kind(), PackageTaskContextKind::Root);
         assert_eq!(root_context.toolchain(), None);
-        assert!(root_context.package_info().is_none());
-        assert!(pkg_graph.package_info(&PackageName::Root).is_none());
+        assert!(!root_context.is_package_json_scope());
         assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
         assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
         assert!(
@@ -2872,17 +3187,14 @@ version = "0.1.0"
             "existing workspace-scoped Cargo behavior is represented as an aggregate"
         );
 
-        // No JavaScript project: no package manager, no root manifest.
+        // No JavaScript project: no package manager or root JavaScript scope.
         assert!(
             pkg_graph.package_manager().is_none(),
             "a pure Cargo workspace has no JavaScript package manager"
         );
-        assert!(
-            pkg_graph.root_package_json().is_none(),
-            "a pure Cargo workspace has no root package.json"
-        );
+        assert!(!pkg_graph.has_root_javascript_scope());
 
-        // The Cargo crates and synthetic workspace package populate the graph.
+        // The Cargo crates and workspace aggregate populate the graph.
         assert_eq!(
             pkg_graph.package_toolchain(&PackageName::from("app")),
             Some(&crate::toolchain::ToolchainId::RUST)
@@ -2896,8 +3208,6 @@ version = "0.1.0"
             Some(&crate::toolchain::ToolchainId::RUST)
         );
 
-        // Command resolution receives identity, path, and provenance from the
-        // graph-created context.
         let app_name = PackageName::from("app");
         let app_context = pkg_graph.package_task_context(&app_name).unwrap();
         assert_eq!(app_context.package(), &app_name);
@@ -2909,23 +3219,17 @@ version = "0.1.0"
             app_context.toolchain(),
             Some(&crate::toolchain::ToolchainId::RUST)
         );
-        let command = pkg_graph
-            .toolchains()
-            .get(app_context.toolchain().unwrap())
-            .unwrap()
-            .task_command(&app_context, "build", None, None)
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            command.args,
-            vec![
-                std::ffi::OsString::from("build"),
-                std::ffi::OsString::from("--package=app"),
-                std::ffi::OsString::from("--locked"),
-            ]
+        assert!(
+            pkg_graph
+                .task_entrypoint_exclusions(
+                    "test",
+                    &[PackageName::Root],
+                    std::slice::from_ref(&app_name),
+                    TaskEntrypointPreference::Always,
+                )
+                .is_empty(),
+            "an unclassified root candidate must not activate Cargo exclusions"
         );
-        assert_eq!(command.cwd, root);
-
         // Crate path dependencies still become graph edges without a package
         // manager: the `workspace:*` protocol resolves internally regardless.
         let app_deps = pkg_graph
@@ -2936,12 +3240,6 @@ version = "0.1.0"
             "app should depend on lib-a, got {app_deps:?}"
         );
 
-        assert!(
-            pkg_graph
-                .remove_package_info_for_test(&PackageName::Root)
-                .is_none()
-        );
-        assert!(pkg_graph.remove_package_info_for_test(&app_name).is_some());
         let contexts = pkg_graph.package_task_contexts().collect::<Vec<_>>();
         assert_eq!(
             contexts.first().map(|context| context.package()),
@@ -2970,27 +3268,11 @@ version = "0.1.0"
             assert_eq!(enumerated.directory(), point.directory());
             assert_eq!(enumerated.kind(), point.kind());
             assert_eq!(enumerated.toolchain(), point.toolchain());
-            assert_eq!(
-                enumerated.requires_compatibility_payload(),
-                point.requires_compatibility_payload()
-            );
-            assert_eq!(
-                enumerated.package_info().map(std::ptr::from_ref),
-                point.package_info().map(std::ptr::from_ref)
-            );
         }
-        assert!(
-            contexts
-                .iter()
-                .find(|context| context.package() == &app_name)
-                .is_some_and(|context| context.package_info().is_none()),
-            "removing compatibility payload must not remove the package namespace"
-        );
-        let root_without_payload = pkg_graph
+        let root_context = pkg_graph
             .package_task_context(&PackageName::Root)
-            .expect("root context is independent of compatibility payload");
-        assert!(root_without_payload.package_info().is_none());
-        assert_eq!(root_without_payload.repository_root(), root.as_ref());
+            .expect("root Turbo namespace always has a context");
+        assert_eq!(root_context.repository_root(), root.as_ref());
     }
 
     /// A crate and a JS package sharing a name is a hard error, like any
@@ -3014,7 +3296,7 @@ version = "0.1.0"
             map
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
-        .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+        .with_cargo()
         .build()
         .await;
 

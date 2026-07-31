@@ -6,7 +6,7 @@ This document serves as a sketch of the architecture of the `turbo run` command
 
 A run consists of the following steps:
 
-1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces`, Cargo workspace crates)
+1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces` / `futureFlags.experimentalPythonWorkspaces`, Cargo workspace crates and uv workspace members)
 2. Build a task graph based on package dependencies and configuration
 3. Determine global/task hashes
 4. Execute tasks in topological order
@@ -155,20 +155,48 @@ Represents the workspace structure and package dependencies:
   consumes the normalized external declaration view; inline and deferred
   lockfile closure calculation create the same immutable snapshot. Cargo
   contributes per-crate closures, the aggregate workspace union, and the full
-  `rustc -vV` identity from the same sets used by compatibility payloads. Cargo
+  `rustc -vV` identity directly through its external-resolution domain. Cargo
   keeps missing, stale, or invalid lockfile and compiler identity failures
   fatal. Core validates the combined domains and retains exact opaque
-  identities, definition sources, completeness, and stable fingerprints. A
+  identities, definition sources, completeness, and stable fingerprints.
+  Repository generation owns byte-compatible per-package fingerprinting through
+  the cycle-free `turborepo-lockfile-hash` primitive; callers cannot omit it.
+  Open resolution-domain IDs select behavior after construction independently
+  of retained `ToolchainId` provenance, and each domain explicitly claims its
+  package members. Built-in JavaScript and Cargo IDs are reserved to their
+  canonical producers and repository roots. Core rejects duplicate IDs, package
+  ownership, unknown members, resolution rows outside declared membership, and
+  complete domains without exactly one row per member. A
   single resolution owner tracks lifecycle status. Task hashing and run/task
   summaries (including OpenTelemetry external-input attributes) consume the
   same stored byte-compatible package resolution fingerprint and preserve
-  explicit unavailable states without closure fallback hashing. The JavaScript
+  explicit unavailable states without closure fallback hashing. Query external
+  package listing, human names, and internal-dependent reverse indexes read
+  the same resolution generation (including a lazy compact reverse index)
+  rather than retained manifest payloads or live lockfile human-name callbacks.
+  N-API JavaScript lockfile package listing uses the JavaScript domain of that
+  generation. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
   ecosystem knowledge; unavailable, parse, and comparison failures retain the
-  conservative all-packages fallback. The snapshot projects temporary
-  `PackageInfo` closure/hash fields for the remaining global-hash migration.
+  conservative all-packages fallback. Prune lockfile-key unions also consume
+  exact per-package resolution identities for retained JavaScript workspaces;
+  required external peer declarations come from relationship knowledge before
+  closure expansion consults the lockfile.
+  Global hashing consumes the same root resolution fingerprint as task hashing
+  and, when JavaScript resolution is unavailable, hashes resolution definition
+  sources plus the root package.json instead of reading the singleton lockfile
+  object. Phase 3 deletion removed closure/hash compatibility fields and
+  deferred resolution installation; readiness belongs to repository
+  construction. External declaration consumers (frameworks, boundaries, task
+  hashing) read the authoritative `ExternalDeclarations` projection built from
+  relationship knowledge rather than raw manifests. MFE
+  enablement checks exact declaration names in the same relationship generation
+  so internal workspace declarations and alias-key behavior remain unchanged.
+  MFE configuration discovery, directory ownership, and proxy execution accept
+  package/root scopes backed by authoritative `package.json` definitions;
+  aggregate and Cargo-manifest scopes are excluded without provenance dispatch.
   Framework inference and boundaries validation consume the package-scoped
   declaration projection directly;
   aliases, duplicate
@@ -181,37 +209,38 @@ Represents the workspace structure and package dependencies:
 
 `RepositoryKnowledge` is the crate-private authority for package identity,
 paths, scope kind, and provenance during node assembly, and the resulting
-`PackageGraph` retains that exact immutable generation. Phase 1 of the payload
-deletion is complete: `PackageInfo` carries no identity, definition path,
-directory, or toolchain provenance; the graph exposes no payload-map identity
-enumeration. Consumers enumerate and resolve authoritative contexts/views, then
-look up an optional payload only for the remaining relationship and task data.
-The retained native `PackageJson.name` is non-authoritative payload data: no
-consumer may derive package identity, path, or provenance from it.
-Compatibility payloads still provide JavaScript relationship-classification
-inputs, lockfile resolution and hash state, and task construction data. Cargo
-no longer synthesizes JavaScript dependency maps, but retains empty
-`PackageJson` descriptors until task compatibility payloads are removed.
-Native manifests and metadata do not enter repository knowledge. Native
-definition paths must remain within the repository, including after resolving
-existing symlinks.
+`PackageGraph` retains that exact immutable generation. `PackageGraph` and
+`PackageTaskContext` retain no manifest compatibility payloads. Consumers use
+authoritative contexts, views, and immutable knowledge catalogs. A
+`DiscoveredPackage` descriptor remains transient construction input for
+JavaScript relationship classification and native-task observation; it is not
+retained in the completed graph. Its `PackageJson.name` is non-authoritative:
+no consumer may derive package identity, path, or provenance from it.
+Native manifest objects do not enter repository knowledge. Repository knowledge
+may retain bounded diagnostic provenance for an authoritative fact, such as an
+authored JavaScript package name's source text and span. Native definition paths
+must remain within the repository, including after resolving existing symlinks.
 
-The remaining payload deletion phases are explicit:
+Retained graph and task-context payload deletion is complete. Discovery
+descriptor deletion remains pending:
 
-- **Phase 2:** Move script and version reads behind task queries; normalized
-  relationship knowledge now owns graph assembly, while JavaScript declarations
-  remain a temporary classification input.
-- **Phase 3:** Move unresolved dependency and lockfile-closure/hash state behind lockfile and hashing queries.
-- **Phase 4:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
+- **Phase 2:** Complete for scripts. Native task knowledge owns script queries;
+  JavaScript descriptors and package versions remain transient relationship
+  classification input and are dropped before the graph is published.
+- **Phase 3:** Complete. External resolution lives in the immutable generation; query, prune, hashing, and summaries consume it, and deferred closure installation is gone.
+- **Phase 4 (complete):** Native task/command knowledge is an immutable catalog produced at repository construction. JavaScript scripts and Cargo verb tables contribute observations; engine, turbo-json, executor, query, devtools, LSP, and summary consumers read the catalog. Behavioral task-command callbacks have been deleted; only the JavaScript contributor and the LSP unsaved-source adapter parse scripts.
+- **Phase 5 (complete for JavaScript and Cargo):** Task-contract knowledge catalogs are produced for every scope. Engine composition, task hashing, entrypoint selection, derived I/O, startup-environment projection, and execution-only compile-cache decoration consume explicit contract capabilities without live toolchain or provenance-ID dispatch.
+- **Phase 6 (complete for JavaScript and Cargo):** Change knowledge is produced at repository construction. Cargo discovery contributes `Cargo.toml` rediscovery names, the `Cargo.lock` resolution/rediscovery path, and the effective in-repository target-directory ignore prefix. `PackageGraph::active_watch_spec` is now a projection of only the immutable facts retained by that graph generation; it never calls live toolchains. Before the first generation is published, the watcher conservatively retains all in-repository events, closing the subscription/bootstrap race without mutable toolchain callbacks. Single-package generations retain no inactive Cargo facts.
+- **Phase 7 (complete):** JavaScript prune rendering is a distinct pure step (`render_javascript_prune`) producing typed artifacts; `commands/prune.rs` selects closures, performs path-safe layout, and materializes those artifacts without inline lockfile/manifest/patch format interpretation. Cargo discovery captures an immutable, generation-owned prune domain containing lockfile, root-manifest, package-directory, and post-write finalization authority. Scope contracts select JavaScript layout or an explicit native prune domain without branching on ecosystem provenance. Cargo lock pruning, extra-member selection, manifest rewriting, root/config file planning, and final lockfile canonicalization run through that graph-owned domain. Golden inventories cover standard and Docker layouts.
+- **Phase 8 (complete for retained payloads):** Query/devtools/summary/run/engine/watch/prune task and resolution views consume knowledge catalogs. Remaining `PackageJson` use is limited to construction inputs and narrowly scoped operational reads that have not yet moved into knowledge, including root package-manager configuration, prune rendering, and LSP unsaved-buffer adaptation. Boundary tag diagnostics consume optional authored-name provenance from repository knowledge only when the authored name matches the authoritative identity.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,
-directory, kind, and an optional compatibility payload. Repository-wide task
+directory, kind, task knowledge, and contract knowledge. Repository-wide task
 namespace and external-dependency-hash enumeration is root-first, then follows
-repository observation order; scripts and dependency closures are joined only
-as compatibility payloads. Pure Cargo retains the root Turbo namespace without
-synthesizing an empty root payload; consumers reject contexts from another
-repository, and required missing payloads fail closed.
+repository observation order. Pure Cargo retains the root Turbo namespace
+without synthesizing a JavaScript scope, and consumers reject contexts from
+another repository.
 
 Repository-facing commands use the same optional-root construction policy as
 `turbo run`: a missing root `package.json` is accepted only when Cargo support
@@ -242,16 +271,16 @@ Repository knowledge accepts at most one physical workspace root for each open
 `ToolchainId`, so a repository cannot combine multiple package managers for one
 language. Repeated observations from one producer of the same kind and
 canonical root deduplicate, while observations from different producers may
-coexist. Public toolchain output supplies only root kind and path; core binds
-each root to the `ToolchainId` of the registry entry whose discovery envelope
-contained it. Every toolchain that contributes packages must own an accepted
+coexist. Public contributor output supplies only root kind and path; core binds
+each root to the `ToolchainId` of the contributor whose discovery envelope
+contained it. Every contributor that supplies packages must own an accepted
 root, and contributed roots must remain physically within the repository.
 JavaScript reports only the repository root for its authoritative package-manager
 command family; if discovery reports a different family than an explicitly
 resolved manager, the response is rejected. Pnpm versions and Yarn/Berry share
 their respective canonical families. Cargo reports the current workspace root.
-Resolution-domain/root validation remains Phase 3 work; this package/scope
-knowledge validates workspace authorities only.
+External-resolution generation validates domain roots against these authoritative
+workspace roots before publishing terminal knowledge.
 
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
@@ -259,32 +288,52 @@ detection is deferred to the task graph layer (engine builder), since
 package-level cycles only matter when they produce task-level cycles via
 topological (`^`) dependencies.
 
-#### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
+Normalized relationship knowledge also records whether an internal relationship
+orders tasks. Named core projections keep ordering, filtering, and package prune
+closures acyclic while hash and affectedness projections include non-ordering
+inputs. Cargo uses this distinction for cycle-closing development dependencies:
+their sources still invalidate and affect consumers without creating task graph
+cycles. Cargo path, development, optional, build, target-specific, and automatic
+member relationships are emitted directly from `cargo metadata`; no synthetic
+JavaScript dependency maps or behavioral affectedness callback remain.
 
-The package graph is generic over language toolchains. The existing discovery
-method returns one envelope containing packages/scopes and workspace-root
-observations. Core validates the combined contributed roots
-without adding another behavioral toolchain method. Watching native marker-only
-changes that are not observed by today's package watcher remains Phase 6 work.
-Native discovery output contributes package/scope observations to repository
-knowledge, while a
-`Toolchain` continues to answer ecosystem-specific behavioral questions such as
-what command a task runs and what hash wiring a task derives. All lookups go through the
-`ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
-open string identifier, not a closed enum; and trait methods are
-coarse-grained and data-in/data-out, keeping the door open to out-of-process
-plugin adapters. JavaScript is the first, production implementation: its
-discovery, script command construction, and phantom-task detection flow
-through the trait. Machinery that predates the abstraction and has no trait
-surface yet (package-manager resolution for dependency splitting, the JS
-lockfile closure phase) is documented as known debt in the module.
+#### Repository Contributors (`crates/turborepo-repository/src/toolchain.rs`)
 
-Toolchain-derived I/O receives the same task-scoped arguments as execution plus
-a narrow, platform-aware startup-environment projection keyed by toolchain.
+`RepositoryContributor` is a construction-time discovery abstraction. Its method
+returns one envelope containing packages/scopes, workspace roots, and
+ecosystem observations. The builder combines those envelopes in a local vector;
+core validates them, builds immutable relationship, task,
+contract, resolution, change, and prune knowledge, then drops the collection.
+Runtime consumers query those retained catalogs and never dispatch through live
+contributors. `ToolchainId` remains open provenance data rather than a closed
+enum, keeping discovery extensible to future out-of-process plugin adapters.
+Package-json membership is projected from real scopes with authoritative
+`package.json` definition paths, independent of that provenance. Change
+ownership and workspace path dependency splitting consume the same projection;
+duplicate contributed definition owners and physical aliases of the root
+definition are rejected during construction.
+JavaScript discovery and typed pre-parsed manifest input both attach explicit
+JavaScript task contracts; core defaults omitted contracts to empty behavior
+without consulting contributor identity. Generic argv overrides for scopes
+without native tasks are core execution policy; pure-root execution is one case
+and does not depend on whether provenance is present.
+JavaScript is the first production producer. Machinery that predates the
+abstraction (package-manager resolution for dependency splitting and the JS
+lockfile closure phase) remains documented debt.
+
+Production callers enable Cargo through `PackageGraphBuilder::with_cargo`
+rather than constructing or retaining contributor objects. Run, watch, daemon,
+prune, query, hashing, and cache paths carry only the feature decision; each
+graph generation creates and drops its own Cargo contributor.
+
+Contract-derived I/O receives the same task-scoped arguments as execution plus
+a narrow, platform-aware startup-environment projection keyed by an explicit
+contract domain. Dependency source participation is likewise declared by each
+scope contract rather than inferred from contributor provenance.
 Dependency tasks do not inherit arguments for a different requested task, each
-toolchain can observe only the variables it declares, Windows lookup remains
+contract can observe only the variables it declares, Windows lookup remains
 case-insensitive, and every declared pattern automatically participates in task
-hashing. If a user env exclusion matches a projected toolchain I/O variable,
+hashing. If a user env exclusion matches a projected contract-derived I/O variable,
 automatic outputs become unavailable rather than deriving cacheable paths from
 an unhashed value. Derived outputs distinguish exact/resolved paths from
 unavailable automatic resolution. When outputs are unavailable, the engine
@@ -300,60 +349,68 @@ root and adds them to the package graph. Cargo workspaces can stand alone or
 coexist with JavaScript workspaces; a root `package.json` and JavaScript package
 manager are only required when JavaScript packages participate. Cargo-only
 repositories may omit `package.json`; when one exists, it must still be valid.
-`CargoToolchain` is the second `Toolchain` implementation.
+`CargoContributor` is the second `RepositoryContributor` implementation.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the
 division of labor is: **Turborepo decides which crates are in scope and
 whether anything changed; Cargo decides how and in what order to build.**
 
-- **Discovery** (`discover_crates`) shells out to `cargo metadata --no-deps`
-  — Cargo is the only correct implementation of its own membership semantics
+- **Discovery** normally uses one `cargo metadata --locked --all-features`
+  snapshot — Cargo is the only correct implementation of its own membership
+  semantics
   (member globs, automatic path-dependency members, excludes, target-specific
   dependency tables, renames). Dev-dependency edges that would form a cycle
   are dropped (Cargo permits dev-dep cycles; crate edges must support
   topological `^` ordering). Crate names are validated, and a crate/JS package
   name collision hard-errors. Cargo contributes its already-classified native
   internal relationships directly, without JavaScript dependency descriptors
-  or package-manager policy. A second full `cargo metadata
-  --locked --all-features` pass validates resolution and every resolved local
-  package: automatic in-repository workspace members are supported, while
+  or package-manager policy. The same snapshot validates resolution and every
+  resolved local package. `--no-deps` is used only to preserve error precedence
+  and classify memberless workspaces when locked metadata cannot be obtained.
+  Automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages
   hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo compatibility producer reports the current workspace root.
+  safely. The Cargo contributor reports the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
   filtered build and verification tasks. Unfiltered builds prefer entrypoints
-  because Cargo builds their library dependency closures implicitly. A synthetic
-  *workspace* scope — named by the user via `[workspace.metadata] name` in
+  because Cargo builds their library dependency closures implicitly. A
+  user-named *workspace* scope — declared via `[workspace.metadata] name` in
   the root Cargo.toml, a hard requirement — is an aggregate in repository
-  knowledge. Its compatibility package depends on every crate and hosts
+  knowledge. Its normalized relationships point to every crate, and it hosts
   workspace-scoped verification verbs.
-- **Execution and entrypoint selection** (`Toolchain::task_command` and
-  `Toolchain::select_task_entrypoints`): crate-scoped build and verification
+- **Execution and entrypoint selection** (`NativeTaskKnowledge`, native command
+  resolution in `turborepo-task-executor`, and
+  `PackageGraph::task_entrypoint_exclusions`): crate-scoped build and verification
   tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
   `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
-  when the workspace has no entrypoints. Unfiltered verification uses the synthetic workspace package:
+  when the workspace has no entrypoints. Unfiltered verification uses the Cargo
+  workspace aggregate:
   `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
-  `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
-  crates; selecting only the workspace package uses its workspace command.
+  `cargo clippy --workspace --locked`, etc. Formatting is mutating and defaults
+  to uncached:
+  filtered runs use `cargo fmt --package=<crate>`, while the workspace aggregate
+  uses `cargo fmt --all`; neither form uses `--locked`. Other filtered runs use
+  their selected crates; selecting only the workspace aggregate uses its
+  workspace command.
   `RunBuilder` combines filter mode with the resolved package scope to derive
   task-specific exclusions. `EngineBuilder` applies package-level exclusions
   before traversal; task-level filtering defers selection until after matching
   task inputs. Exclude-only filters therefore remain exclusions rather than
   being swallowed by a workspace command. Package-qualified task arguments remain
-  authoritative. `--locked` preserves
+  authoritative. `--locked` on non-formatting tasks preserves
   the dependency resolution validated before task hashing. Cargo commands
-  (except `cargo run`) share a mutually-exclusive serial group: concurrent
+  (except `cargo run` and `cargo fmt`) share a mutually-exclusive serial group: concurrent
   cargo processes serialize on the build-directory lock anyway, so the
   executor runs one at a time without the "waiting for file lock" noise. Run
-  summaries derive display commands from the same verb tables via
-  `Toolchain::task_display_command`, so display cannot drift from execution.
-- **Task registration** (`Toolchain::registered_tasks`): every crate implicitly
+  summaries read the same resolved native command catalog as execution, so
+  display cannot drift from execution.
+- **Task registration** (`NativeTaskKnowledge`): every crate implicitly
   registers `build`; entrypoints with exactly one binary also register `run`
-  and its `dev` alias. Every crate and the workspace package register `test`, `check`,
-  `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
+  and its `dev` alias. Every crate and the workspace aggregate register `test`,
+  `check`, `lint`, and `format`. These act as empty task definitions
   at the lowest precedence, so normal
   `tasks` entries configure or override them and package configuration can
   exclude them with `extends: false`. Registration is package-aware, so the
@@ -361,29 +418,33 @@ whether anything changed; Cargo decides how and in what order to build.**
   same-named JavaScript scripts runnable without their usual turbo.json
   definition. The names come from the same verb tables as command resolution
   and participate in task suggestions and add-all/query graph construction.
-- **Hashing and affectedness** (`Toolchain::derived_task_io` and
-  `Toolchain::additional_affected_packages`): crate-scoped tasks hash their own
-  sources plus a conservative transitive closure of declared local Cargo
-  dependencies (flattened, so invalidation doesn't depend on `dependsOn`
-  wiring). The closure may include optional or target-specific dependencies not
-  compiled by a particular invocation. It is retained separately from the
-  package graph so cycle-closing dev-dependency edges still invalidate and mark
-  their consumers affected. Tasks also hash the
+- **Hashing and affectedness** (`HashRelationships`, `AffectedRelationships`,
+  and `TaskContractKnowledge`): crate-scoped tasks hash their own
+  sources plus a conservative transitive closure of local dependencies whose
+  scope contracts explicitly include dependency source inputs (Cargo package
+  scopes opt in; the workspace aggregate opts out). Unknown participation makes
+  automatic inputs untracked rather than silently cacheable. The closure is
+  flattened, so invalidation doesn't depend on `dependsOn` wiring, and may
+  include optional or target-specific dependencies not compiled by a particular
+  invocation. Non-ordering relationship inputs retain
+  cycle-closing development edges so they still invalidate and mark their
+  consumers affected. Tasks also hash the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
   and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
   compiler and rustdoc selection and flags, Cargo build/profile/target
   configuration, native compiler and
   archiver settings (including target-qualified forms), and platform SDK
-  selection. Arbitrary variables consumed by project-specific build scripts
-  remain explicit task `env` configuration. The workspace package hashes all
+  selection. Formatting additionally includes `rustfmt.toml`, `.rustfmt.toml`,
+  and `RUSTFMT`. Arbitrary variables consumed by project-specific build scripts
+  remain explicit task `env` configuration. The workspace aggregate hashes all
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
   `include_str!` from outside any crate directory) are additive.
 - **External dependencies** (`turborepo-lockfiles/src/cargo.rs`): locked
   registry/git packages and the compiler itself flow through the same
-  external-dependency hash JS packages use
-  (`PackageInfo.transitive_dependencies`). Each crate's closure is computed
+  `ExternalResolutionGeneration` and resolution fingerprint used by JavaScript
+  packages. Each crate's closure is computed
   from `Cargo.lock` (identity = version + source + checksum, so git rev
   bumps count). Source-qualified lockfile edges distinguish identical
   name/version packages from different registries or git references, so each
@@ -432,37 +493,39 @@ whether anything changed; Cargo decides how and in what order to build.**
   requested process, and library artifacts have no stable final path to restore.
   An explicit turbo.json `cache` setting overrides the toolchain default.
 
-- **Watch mode** (`Toolchain::watch_spec`, consumed by
-  `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares
-  its workspace-definition files and build-byproduct directories. For
+- **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
+  consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery
+  observations declare workspace-definition files and build-byproduct
+  directories; accepted observations compose directly without reactivation by
+  producer identity, and the current graph generation projects one active spec. For
   Cargo, any `Cargo.toml` or the root `Cargo.lock` triggers full
   rediscovery (the crate set or its edges may have changed), while events
   under the root `target/` directory are dropped — Cargo writes there
   continuously during builds, and the feedback loop must not depend on a
   `.gitignore` entry (`Cargo.toml` files under `target/` are build
   byproducts, not workspace definition). The watcher builds its package
-  graph with the same toolchains a run would register, so watch sees the
-  same package set. JavaScript declares nothing extra: workspace
+  graph through the same construction path as a run, so watch sees the same
+  package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
   all-packages fallback. Known gap: the hash watcher's content-hash dedup
   is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
   fast cache hit rather than being suppressed.
 
-- **Prune** (`Toolchain::prune_plan` / `prune_finalize`, consumed by
-  `turborepo-lib/src/commands/prune.rs`): each toolchain reports what a
-  self-contained pruned repository needs beyond the copied packages. For
+- **Prune** (`PruneKnowledge` and `PruneDomain::{plan, finalize}`, consumed by
+  `turborepo-lib/src/commands/prune.rs`): each generation-owned domain reports
+  what a self-contained pruned repository needs beyond copied packages. For
   Cargo: the kept-member set comes from a `Cargo.lock` reachability walk
   (not the package graph — the lockfile merges dev-dependency edges, so
   members reachable only through dev-deps are retained, since kept crates'
   manifests reference them), the lockfile is subset to that closure, and
   the root `Cargo.toml` is rewritten with `toml_edit` (explicit `members`,
   filtered `default-members`, `[workspace.dependencies]` path entries to
-  removed crates dropped — comments and formatting preserved). Toolchain
+  removed crates dropped — comments and formatting preserved). Ecosystem
   and Cargo config files are carried over. Reachability pruning cannot see
-  Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
+  Cargo's feature unification, so the retained Cargo domain runs `cargo metadata`
   once in the complete output (offline first, then networked) to let Cargo
   minimally sync its own lockfile; failure downgrades to a warning.
-  Only toolchains that contributed a prune plan are finalized. Finalizers
+  Only domains that contributed a prune plan are finalized. Finalizers
   report files they may have changed, and prune copies those finalized bytes
   to alternate output layers without rerunning the toolchain. Reported sources
   must be regular files rather than symlinks, and paths must remain within both
@@ -470,10 +533,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   synchronization failures are warnings. In docker layout,
   the json layer carries the root manifest, each kept crate's `Cargo.toml`, and
   finalized lock; sources go to the full layer. A
-  package anchored at the repo root (the synthetic workspace package) is not
+  aggregate anchored at the repo root (the Cargo workspace scope) is not
   a pruneable target.
 
-- **Compile cache** (`Toolchain::compile_cache_env`, consumed by
+- **Compile cache** (`ScopeTaskContract::compile_cache_env`, consumed by
   `ToolchainCommandProvider`; gated by `futureFlags.experimentalCargoSccache`):
   when enabled alongside `experimentalCargoWorkspaces` in a CI environment
   with a linked Remote Cache, the run serves a local HTTP proxy
@@ -496,7 +559,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   is derived from the repo root and the bearer token is persisted at
   `.turbo/sccache-proxy-token`. Injection is execution-only and does not
   participate in task hashes (a compile cache is output-transparent). The
-  toolchain decides how injection composes with the task environment: a
+  Cargo task contract decides how injection composes with the task environment: a
   user-supplied `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
   competing compiler-cache configuration and suppresses the whole injected
   set, while an ambient `CARGO_INCREMENTAL` (CI images commonly export
@@ -523,6 +586,48 @@ invalidation, lockfile enforcement, unsupported local-package rejection,
 uncached `run`/`dev` execution, and the filter hint. `turbo query` serves Cargo
 packages through the same graph.
 
+#### Experimental Python (uv) Support (`crates/turborepo-repository/src/uv.rs`)
+
+Behind `futureFlags.experimentalPythonWorkspaces`, `turbo run` discovers
+Python packages from the root uv workspace and adds them to the package graph.
+uv is the only supported Python package manager. uv workspaces can stand alone
+or coexist with JavaScript and Cargo workspaces; no `PackageManager` variant is
+involved. `UvContributor` contributes pre-classified relationships, native
+tasks, external resolution, change observations, and a prune domain through
+the shared repository graph.
+
+- **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
+  in-process, so graph construction does not require the `uv` binary. Names
+  are PEP 503-normalized. Dependencies become internal graph edges only when
+  their effective `[tool.uv.sources]` entry selects `workspace = true`.
+  Development edges that would create a cycle become non-ordering input
+  edges. A root `[project]` participates in hashing and pruning but is not a
+  package. A synthetic workspace package, named by `[tool.turbo] name`,
+  depends on every member and hosts workspace-wide quality tasks.
+- **Execution** registers `build` for buildable members and `format` and
+  `check` for all members. Unfiltered quality runs prefer the workspace
+  aggregate; filtered runs target selected members. `check` tasks share a
+  serial group because uv synchronizes their environment. Built-in tasks
+  default to uncached until uv, Python, ty, and build-backend identities are
+  represented in task hashes.
+- **Hashing and affectedness** include member sources, relevant workspace
+  files and uv/pip environment variables, internal source closures for
+  checks, and each member's external dependency closure from `uv.lock`.
+  Package identities include version, source, and artifact hashes. A
+  `uv.lock` change across git refs conservatively affects all uv packages.
+- **Watch mode** rediscoveries follow any `pyproject.toml` and the root
+  `uv.lock`; root `.venv/` and `dist/` events are ignored as task byproducts.
+- **Prune** walks `uv.lock` reachability, including dependency groups and
+  optional extras, and preserves retained package metadata through
+  `toml_edit`. It rewrites root workspace members, removes dangling uv source
+  entries, and copies `.python-version` and `uv.toml` when present. Reachable
+  local dependencies that are not workspace members fail closed.
+
+End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
+pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
+execution, and prune output. Linux Rust CI installs a pinned uv version; local
+tests that execute uv skip when it is unavailable.
+
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 
 The task graph is a graph of all tasks that will be part of the run and related configuration.
@@ -542,9 +647,9 @@ The core task graph consists of:
   (`futureFlags.experimentalTaskCommand`) in one place
   (`resolve_command_override`, `turborepo-engine`'s
   `builder/definitions.rs`), across five precedence levels: Package
-  Configuration `command` → root `pkg#task` `command` → package-authored
-  script (`Toolchain::authors_task`) → unscoped root default (per-toolchain
-  maps fan out by toolchain id) → the toolchain's own resolution. The
+  Configuration `command` → root `pkg#task` `command` → authored native task
+  from `NativeTaskKnowledge` → unscoped root default (command maps fan out by
+  explicit task-contract capability) → the catalog's synthesized native command. The
   resolved override is authoritative in both directions — an argv executes
   even where the toolchain defines nothing, an opt-out never executes even
   where it does — and feeds global-deps hashing, the TUI task list, the
@@ -553,11 +658,11 @@ The core task graph consists of:
   argv in their frame: cwd is the package directory, nothing is prepended,
   and Cargo keeps its serial group when the override still invokes cargo.
   Because an argv override is otherwise arbitrary, it does not inherit the
-  native command's toolchain-derived inputs, outputs, default-input behavior,
+  native command's contract-derived inputs, outputs, default-input behavior,
   or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
-  authoritative task-level I/O configuration. Toolchain task defaults and
+  authoritative task-level I/O configuration. Contract-derived task defaults and
   execution-only compile-cache environment injection likewise apply only to
-  native toolchain-resolved commands.
+  native-catalog-resolved commands.
 
 #### Run Entrypoint Selection (`crates/turborepo-lib/src/run/builder.rs`)
 
@@ -568,7 +673,7 @@ The core task graph consists of:
   only in scoped packages where that task resolves a command. A missing task is
   therefore not allowed to pull its configured dependencies into a run merely
   because another package implements the requested task.
-- When no package resolves a command for a configured or toolchain-registered
+- When no package resolves a command for a configured or native-catalog task,
   task, its scoped package nodes remain entrypoints so graph-only orchestration
   tasks continue to fan out to their configured dependencies. If any branch
   reaches a runnable command, only paths to runnable work are retained; when no
@@ -582,8 +687,8 @@ The core task graph consists of:
   Missing requested nodes are dropped after selector expansion: a plain filter
   runs nothing for a missing command, while trailing or leading `...` may retain
   executable tasks reached through that node in the Task Graph.
-- Native package scripts, resolved `command` overrides, and toolchain-provided
-  commands all count as executable definitions. Toolchain-specific entrypoint
+- Native package scripts, resolved `command` overrides, and native-catalog
+  commands all count as executable definitions. Contract-derived entrypoint
   selection, including Cargo workspace/crate selection, remains authoritative
   and is composed with this generic command-aware pruning.
 
@@ -618,6 +723,14 @@ The core task graph consists of:
   cannot make it lag. Package changes, package discovery, input hashing,
   output-glob tracking, cookies, devtools, and daemon root monitoring all use
   independent scopes; there is no repository-wide raw event broadcast.
+- Watcher startup is asynchronous, but its terminal state retains the concrete
+  setup error so current and future subscribers receive the same cause. Watch
+  mode awaits this readiness before building its initial run or UI.
+- On macOS, automatic backend selection tries the complete FSEvents startup,
+  including root/control watches and the readiness cookie. If that fails, it
+  warns once and retries from fresh state with 100 ms content-aware polling.
+  The startup-only fallback can cost additional CPU and I/O. Other platforms
+  retain their native backend behavior.
 - Package-change detection declares a source-input scope that drops `.git`,
   paths excluded by repository and nested Git ignore rules, and toolchain
   build-byproduct prefixes. Tracked files and their ancestor directories remain
@@ -630,8 +743,8 @@ The core task graph consists of:
   interpret ripgrep `.ignore` files. On macOS, a global excludes file on a
   different device is conservatively not applied because one FSEvents stream
   cannot monitor both devices. The package scope
-  refreshes the merged toolchain `WatchSpec` whenever the package graph is
-  initialized or rediscovered. Turbo config and toolchain definition changes
+  refreshes the active `WatchSpec` from the current graph generation whenever
+  the package graph is initialized or rediscovered. Turbo config and ecosystem definition changes
   trigger full rediscovery after routing.
 - Git index and `.git/info/exclude` control paths are watched separately so
   tracked-file and exclude state stays current without exposing `.git` events

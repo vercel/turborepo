@@ -108,9 +108,9 @@ pub struct FutureFlags {
     /// expressions, propagate `--affected`, and appear in `turbo query`.
     /// Filtered builds execute each selected crate. Unfiltered builds prefer
     /// entrypoints, falling back to libraries when no entrypoints exist.
-    /// Entrypoints also expose `run` and `dev`. The `test`, `check`,
-    /// `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are selectable per
-    /// crate with `--filter`. An unfiltered run executes one workspace-wide
+    /// Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`,
+    /// and `format` tasks are selectable per crate with `--filter`. An
+    /// unfiltered run executes one workspace-wide
     /// Cargo verification command; filtered runs use the selected crates,
     /// or the workspace command when the workspace package is selected
     /// directly.
@@ -122,10 +122,19 @@ pub struct FutureFlags {
     /// exclude them with `extends: false`.
     ///
     /// Task caching uses Cargo-derived inputs and caches entrypoint build
-    /// deliverables. Library builds default to uncached. This feature is
-    /// experimental.
+    /// deliverables. Library builds and formatting default to uncached. This
+    /// feature is experimental.
     #[serde(default)]
     pub experimental_cargo_workspaces: bool,
+    /// Treat the members of a uv workspace as Turborepo packages.
+    ///
+    /// When enabled, Python packages are discovered from the root
+    /// `pyproject.toml`'s `[tool.uv.workspace]` members and participate in
+    /// the package graph, resolve in `--filter` expressions, and appear in
+    /// `turbo query`. uv is the only supported Python package manager. This
+    /// feature is experimental.
+    #[serde(default)]
+    pub experimental_python_workspaces: bool,
     /// Serve the Remote Cache as an sccache storage backend for Cargo crate
     /// tasks. When enabled (together with `experimentalCargoWorkspaces` and
     /// a linked Remote Cache), `turbo` starts a local proxy and routes
@@ -166,7 +175,8 @@ impl TS for FutureFlags {
          boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
-         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -175,7 +185,8 @@ impl TS for FutureFlags {
          boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
-         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -185,7 +196,7 @@ impl TS for FutureFlags {
          boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         experimentalPythonWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -195,7 +206,7 @@ impl TS for FutureFlags {
          boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         experimentalPythonWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
             .to_string()
     }
 

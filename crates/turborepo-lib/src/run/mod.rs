@@ -37,9 +37,8 @@ use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_hash::{
-    collect_global_file_hash_inputs, compute_external_deps_hashes, get_external_deps_hash,
-    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs,
-    PackageInputsHashes,
+    collect_global_file_hash_inputs, compute_external_deps_hashes, get_internal_deps_hash,
+    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
@@ -521,29 +520,16 @@ impl Run {
             if !self.filtered_pkgs.contains(name) {
                 continue;
             }
-            let package_info = context.package_info();
-            if context.requires_compatibility_payload() && package_info.is_none() {
-                return Err(Error::MissingPackagePayload(name.clone()));
-            }
-            for task_name in package_info
-                .into_iter()
-                .flat_map(|info| info.package_json.scripts.keys())
-            {
-                tasks
-                    .entry(task_name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(name.to_string())
-            }
-            if let Some(toolchain) = context
-                .toolchain()
-                .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
-            {
-                for task_name in toolchain.registered_tasks(&context) {
-                    tasks
-                        .entry(task_name)
-                        .or_insert_with(Vec::new)
-                        .push(name.to_string());
+            // Authored scripts and registered native tasks both come from the
+            // native-task catalog produced at repository construction.
+            for native_task in context.native_tasks().tasks() {
+                if !native_task.executable() && !native_task.registered() {
+                    continue;
                 }
+                tasks
+                    .entry(native_task.name().to_string())
+                    .or_insert_with(Vec::new)
+                    .push(name.to_string());
             }
         }
 
@@ -1145,16 +1131,9 @@ impl Run {
         };
         let repo_index = repo_index_arc.as_ref().as_ref();
 
-        let root_context = self
-            .pkg_dep_graph
+        self.pkg_dep_graph
             .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
-        let empty_root_workspace = turborepo_repository::package_graph::PackageInfo::default();
-        let root_workspace = match root_context.package_info() {
-            Some(payload) => payload,
-            None if !root_context.requires_compatibility_payload() => &empty_root_workspace,
-            None => return Err(Error::MissingPackagePayload(PackageName::Root)),
-        };
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
@@ -1216,11 +1195,17 @@ impl Run {
                 s.spawn(|_| {
                     let _span =
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    let resolution_file_fallback = self
+                        .pkg_dep_graph
+                        .external_resolution_global_file_fallback()
+                        .unwrap_or_default();
+                    let root_engines = self.pkg_dep_graph.root_engines();
+                    let root_engines = (!root_engines.is_empty()).then_some(root_engines);
                     global_file_result = Some(collect_global_file_hash_inputs(
-                        root_workspace,
+                        root_engines,
                         &self.repo_root,
                         self.pkg_dep_graph.package_manager(),
-                        self.pkg_dep_graph.lockfile(),
+                        &resolution_file_fallback,
                         self.root_turbo_json.global_deps_for_hash(),
                         &self.env_at_execution_start,
                         &self.root_turbo_json.global_env,
@@ -1249,12 +1234,21 @@ impl Run {
             global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
         let external_deps_hashes = external_deps_hashes.transpose()?;
 
-        let root_external_dependencies_hash = is_monorepo.then(|| {
-            root_workspace
-                .external_deps_hash
-                .clone()
-                .unwrap_or_else(|| get_external_deps_hash(&root_workspace.transitive_dependencies))
-        });
+        let root_external_dependencies_hash = if is_monorepo {
+            let cache = external_deps_hashes.as_ref().ok_or_else(|| {
+                turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+            })?;
+            Some(
+                cache
+                    .get(PackageName::Root.as_str())
+                    .cloned()
+                    .ok_or_else(|| {
+                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+                    })?,
+            )
+        } else {
+            None
+        };
 
         let pass_through_env = match env_mode {
             EnvMode::Loose => {

@@ -16,7 +16,7 @@ pub struct RepositoryTask {
 
 impl RepositoryTask {
     pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
-        let package = Package::new(run.clone(), task_id.package().into())?;
+        let package = Package::for_task(run.clone(), task_id.package().into())?;
         let script = package.get_tasks().get(task_id.task()).cloned();
 
         Ok(RepositoryTask {
@@ -42,15 +42,7 @@ impl RepositoryTask {
                 .run()
                 .pkg_dep_graph()
                 .package_task_context(self.package.get_name())
-                .and_then(|context| {
-                    self.package
-                        .run()
-                        .pkg_dep_graph()
-                        .toolchains()
-                        .get(context.toolchain()?)
-                        .map(|toolchain| (context, toolchain))
-                })
-                .is_some_and(|(context, toolchain)| toolchain.defines_task(&context, &self.name)),
+                .is_some_and(|context| context.native_tasks().defines(&self.name)),
         }
     }
 

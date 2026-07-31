@@ -81,14 +81,12 @@ Turborepo implicitly registers these task mappings, since they are common to all
 | Entrypoint crate with exactly one binary | `run`, `dev`     | `cargo run --package=<crate> --locked`     |
 | Any crate                                | `test`           | `cargo test --package=<crate> --locked`    |
 | Any crate                                | `check`          | `cargo check --package=<crate> --locked`   |
-| Any crate                                | `lint`, `clippy` | `cargo clippy --package=<crate> --locked`  |
-| Any crate                                | `bench`          | `cargo bench --package=<crate> --locked`   |
-| Any crate                                | `doc`, `docs`    | `cargo doc --package=<crate> --locked`     |
+| Any crate                                | `lint`           | `cargo clippy --package=<crate> --locked`  |
+| Any crate                                | `format`         | `cargo fmt --package=<crate>`              |
 | Workspace package                        | `test`           | `cargo test --workspace --locked`          |
 | Workspace package                        | `check`          | `cargo check --workspace --locked`         |
-| Workspace package                        | `lint`, `clippy` | `cargo clippy --workspace --locked`        |
-| Workspace package                        | `bench`          | `cargo bench --workspace --locked`         |
-| Workspace package                        | `doc`, `docs`    | `cargo doc --workspace --locked`           |
+| Workspace package                        | `lint`           | `cargo clippy --workspace --locked`        |
+| Workspace package                        | `format`         | `cargo fmt --all`                          |
 
 Without a filter, Turborepo uses one workspace-wide command instead of creating one verification task per crate. Filtered runs use crate-scoped commands; filtering directly to the workspace package uses its workspace-wide command.
 
@@ -105,17 +103,18 @@ turbo run build --filter=rust-api -- --target=aarch64-unknown-linux-gnu
 turbo run build --filter=rust-api -- --target-dir=target-ci
 ```
 
-`check` and `doc` also accept Cargo flags directly after `--`. For `run`, `test`, `bench`, and `lint`/`clippy`, Turborepo inserts Cargo's second `--`, so the arguments go to the binary, test or bench harness, or Clippy rather than Cargo itself. For example:
+`check` accepts Cargo flags directly after `--`. For `run`, `test`, `lint`, and `format`, Turborepo inserts Cargo's second `--`, so the arguments go to the binary, test harness, Clippy, or rustfmt rather than Cargo itself. For example:
 
 ```bash title="Terminal"
 turbo run run --filter=rust-api -- --port 8080
 turbo run test --filter=rust-library -- --nocapture
 turbo run test --filter=acme-rust -- --nocapture
+turbo run format -- --check
 ```
 
 ## Custom tasks
 
-To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `format` task and make its workspace-wide `lint` task reject warnings:
+To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `docs` task and make its workspace-wide `lint` task reject warnings:
 
 ```json title="./turbo.json"
 {
@@ -125,8 +124,8 @@ To define a Cargo-backed task that is not built in, or replace a built-in mappin
     "experimentalTaskCommand": true
   },
   "tasks": {
-    "acme-rust#format": {
-      "command": ["cargo", "fmt", "--all", "--", "--check"]
+    "acme-rust#docs": {
+      "command": ["cargo", "doc", "--workspace", "--locked"]
     },
     "acme-rust#lint": {
       "command": [
@@ -179,6 +178,8 @@ With zero configuration, Turborepo creates task hashes using:
 - Relevant Cargo and compiler environment
 - The resolved external dependency closure from `Cargo.lock`
 - The complete `rustc -vV` identity.
+
+The built-in `format` task also includes `rustfmt.toml`, `.rustfmt.toml`, and `RUSTFMT` in its derived inputs. Because formatting mutates source files, it defaults to uncached.
 
 Project-specific hashing inputs must be accounted for manually. This includes:
 

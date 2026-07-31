@@ -6,16 +6,12 @@ use std::{
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
-use super::{
-    ExternalDependencyChange, PackageGraph, PackageInfo, PackageName, ROOT_PKG_NAME,
-    WorkspacePackage,
-    builder::{ClosureHasher, apply_resolution_fingerprints},
-};
+use super::{ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage};
 use crate::{
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionChanges,
         ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
-        PackageResolution, ResolutionCompleteness, ResolutionFingerprint,
+        JAVASCRIPT_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
         ResolutionUnavailableReason, compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
@@ -24,84 +20,15 @@ use crate::{
     toolchain::ToolchainId,
 };
 
-/// One JavaScript resolution snapshot and its temporary compatibility
-/// projection. Both inline and deferred production create this exact shape.
+/// One JavaScript resolution snapshot. Both production paths create this
+/// exact generation-backed shape.
 pub(super) struct ResolutionSnapshot {
     pub generation: Arc<ExternalResolutionGeneration>,
-    pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
     pub warning: Option<String>,
 }
 
-impl ResolutionSnapshot {
-    pub(super) fn project_legacy(
-        &mut self,
-        package_payloads: &mut HashMap<PackageName, PackageInfo>,
-        knowledge: &RepositoryKnowledge,
-    ) {
-        let fingerprints = self
-            .generation
-            .domains()
-            .iter()
-            .find(|domain| domain.toolchain() == &ToolchainId::JAVASCRIPT)
-            .and_then(|domain| match domain.data() {
-                ExternalResolutionData::Resolved { packages, .. } => Some(
-                    packages
-                        .iter()
-                        .filter_map(|package| {
-                            package
-                                .fingerprint()
-                                .map(|fingerprint| (package.package(), fingerprint.as_str()))
-                        })
-                        .collect::<HashMap<_, _>>(),
-                ),
-                ExternalResolutionData::Unavailable(_) => None,
-            })
-            .unwrap_or_default();
-        for (name, info) in package_payloads {
-            let facts = scope_directory_and_toolchain(knowledge, name);
-            let Some((directory, toolchain)) = facts else {
-                continue;
-            };
-            if toolchain != &ToolchainId::JAVASCRIPT {
-                continue;
-            }
-            let directory = directory.to_unix();
-            info.transitive_dependencies = self.closures.remove(directory.as_str());
-            info.external_deps_hash = fingerprints
-                .get(name.as_str())
-                .map(|fingerprint| (*fingerprint).to_string());
-        }
-    }
-}
-
-pub(super) type DeferredResolutionReceiver =
-    std::sync::mpsc::Receiver<Result<ResolutionSnapshot, String>>;
-
-fn scope_directory_and_toolchain<'a>(
-    knowledge: &'a RepositoryKnowledge,
-    name: &PackageName,
-) -> Option<(&'a AnchoredSystemPath, &'a ToolchainId)> {
-    match name {
-        PackageName::Root => knowledge
-            .root_javascript_scope()
-            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
-        PackageName::Other(name) => knowledge
-            .scope(name)
-            .map(|scope| (scope.directory(), scope.toolchain())),
-    }
-}
-
 fn resolution_packages(knowledge: &RepositoryKnowledge) -> Vec<(&str, &AnchoredSystemPath)> {
-    let mut packages = Vec::new();
-    if knowledge.root_javascript_scope().is_some() {
-        packages.push((ROOT_PKG_NAME, knowledge.repository_directory()));
-    }
-    packages.extend(
-        knowledge
-            .scopes()
-            .filter(|scope| scope.toolchain() == &ToolchainId::JAVASCRIPT)
-            .map(|scope| (scope.identity(), scope.directory())),
-    );
+    let mut packages = knowledge.package_json_packages().collect::<Vec<_>>();
     packages.sort_unstable_by_key(|(identity, _)| *identity);
     packages
 }
@@ -110,7 +37,12 @@ pub(super) fn external_dependencies(
     knowledge: &RepositoryKnowledge,
     relationships: &RelationshipKnowledge,
 ) -> HashMap<String, BTreeMap<String, String>> {
-    let mut by_source: BTreeMap<String, BTreeMap<String, String>> = resolution_packages(knowledge)
+    let packages = resolution_packages(knowledge);
+    let directories = packages
+        .iter()
+        .map(|(identity, directory)| ((*identity).to_string(), *directory))
+        .collect::<HashMap<_, _>>();
+    let mut by_source: BTreeMap<String, BTreeMap<String, String>> = packages
         .into_iter()
         .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
         .collect();
@@ -129,10 +61,8 @@ pub(super) fn external_dependencies(
     by_source
         .into_iter()
         .filter_map(|(identity, dependencies)| {
-            let name = PackageName::from(identity.as_str());
-            let (directory, toolchain) = scope_directory_and_toolchain(knowledge, &name)?;
-            (toolchain == &ToolchainId::JAVASCRIPT)
-                .then(|| (directory.to_unix().to_string(), dependencies))
+            let directory = directories.get(&identity)?;
+            Some((directory.to_unix().to_string(), dependencies))
         })
         .collect()
 }
@@ -144,20 +74,23 @@ pub(super) fn unavailable_resolution(
     code: &str,
     message: String,
     warning: Option<String>,
-    closure_hasher: Option<&ClosureHasher>,
 ) -> Result<ResolutionSnapshot, String> {
+    let members = resolution_packages(knowledge)
+        .into_iter()
+        .map(|(identity, _)| identity.to_string())
+        .collect::<Vec<_>>();
     domains.push(ExternalResolutionDomain::new(
+        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
         ToolchainId::JAVASCRIPT,
         AnchoredSystemPathBuf::default(),
+        members,
         [definition_source],
         ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
     ));
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
         generation: Arc::new(generation),
-        closures: HashMap::new(),
         warning,
     })
 }
@@ -169,7 +102,6 @@ pub(super) fn resolve_dependencies(
     external_dependencies: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
     definition_source: AnchoredSystemPathBuf,
-    closure_hasher: Option<&ClosureHasher>,
 ) -> Result<ResolutionSnapshot, String> {
     let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
         lockfile,
@@ -186,7 +118,6 @@ pub(super) fn resolve_dependencies(
                 "closure-unavailable",
                 message.clone(),
                 Some(message),
-                closure_hasher,
             );
         }
     };
@@ -198,28 +129,35 @@ pub(super) fn resolve_dependencies(
                 .into_iter()
                 .flatten()
                 .map(|package| {
-                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone())
+                    let mut identity =
+                        ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
+                    if let Some(human_name) = lockfile.human_name(package) {
+                        identity = identity.with_human_name(human_name);
+                    }
+                    identity
                 });
             PackageResolution::new(identity, exact_identities)
         })
         .collect::<Vec<_>>();
-    let fingerprint = ResolutionFingerprint::from_packages(&packages);
+    let members = packages
+        .iter()
+        .map(|package| package.package().to_string())
+        .collect::<Vec<_>>();
     domains.push(ExternalResolutionDomain::new(
+        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
         ToolchainId::JAVASCRIPT,
         AnchoredSystemPathBuf::default(),
+        members,
         [definition_source],
         ExternalResolutionData::Resolved {
             completeness: ResolutionCompleteness::Complete,
-            fingerprint,
             packages,
         },
     ));
-    apply_resolution_fingerprints(&mut domains, closure_hasher);
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
         generation: Arc::new(generation),
-        closures,
         warning: None,
     })
 }
@@ -228,9 +166,7 @@ fn resolution_data(
     generation: &ExternalResolutionGeneration,
 ) -> Result<&ExternalResolutionData, ChangedPackagesError> {
     generation
-        .domains()
-        .iter()
-        .find(|domain| domain.toolchain() == &ToolchainId::JAVASCRIPT)
+        .domain(&JAVASCRIPT_RESOLUTION_DOMAIN)
         .map(ExternalResolutionDomain::data)
         .ok_or(ChangedPackagesError::ResolutionUnavailable)
 }
@@ -244,7 +180,8 @@ impl PackageGraph {
             .package_manager()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let root_package_json = self
-            .root_package_json()
+            .root_package_json
+            .as_ref()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let yarnrc = matches!(package_manager, PackageManager::Berry)
             .then(|| crate::package_manager::yarnrc::YarnRc::from_file(self.repo_root()))
@@ -276,7 +213,6 @@ impl PackageGraph {
             external_dependencies(&self.knowledge, &self.relationship_knowledge),
             true,
             definition_source,
-            None,
         )
         .map_err(ChangedPackagesError::Resolution)?;
         let current_resolution = self

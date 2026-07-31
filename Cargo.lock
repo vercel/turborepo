@@ -8648,6 +8648,7 @@ dependencies = [
  "hex",
  "test-case",
  "turbopath",
+ "turborepo-lockfile-hash",
  "turborepo-lockfiles",
  "turborepo-types",
  "xxhash-rust",
@@ -8790,6 +8791,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-lockfile-hash"
+version = "0.1.0"
+dependencies = [
+ "capnp",
+ "capnpc",
+ "hex",
+ "thiserror 2.0.18",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "turborepo-lockfiles"
 version = "0.1.0"
 dependencies = [
@@ -8816,6 +8828,7 @@ dependencies = [
  "test-case",
  "thiserror 2.0.18",
  "toml 0.9.12+spec-1.1.0",
+ "toml_edit 0.22.15",
  "tracing",
  "turbopath",
  "turborepo-errors",
@@ -8898,6 +8911,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "pretty_assertions",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9041,16 +9055,17 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
- "sha2",
  "tempfile",
  "test-case",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "toml_edit 0.22.15",
  "tracing",
  "turbopath",
  "turborepo-errors",
  "turborepo-graph-utils",
+ "turborepo-lockfile-hash",
  "turborepo-lockfiles",
  "turborepo-rayon-compat",
  "wax",
@@ -9299,7 +9314,6 @@ dependencies = [
  "turborepo-env",
  "turborepo-frameworks",
  "turborepo-hash",
- "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-run-summary",
  "turborepo-scm",
@@ -9397,7 +9411,6 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "tracing",
  "ts-rs",
  "turbopath",
  "turborepo-errors",

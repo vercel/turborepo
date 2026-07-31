@@ -301,7 +301,7 @@
           "type": "boolean"
         },
         "experimentalCargoWorkspaces": {
-          "description": "Treat the crates of a Cargo workspace as Turborepo packages.\n\nWhen enabled, Rust crates are discovered via `cargo metadata` and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. Filtered builds execute each selected crate. Unfiltered builds prefer entrypoints, falling back to libraries when no entrypoints exist. Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are selectable per crate with `--filter`. An unfiltered run executes one workspace-wide Cargo verification command; filtered runs use the selected crates, or the workspace command when the workspace package is selected directly.\n\nAll crates implicitly register `build` and the verification tasks; entrypoints with one binary also register `run` and `dev`. The workspace package registers the verification tasks. Normal task definitions configure or override these defaults, and package configuration can exclude them with `extends: false`.\n\nTask caching uses Cargo-derived inputs and caches entrypoint build deliverables. Library builds default to uncached. This feature is experimental.",
+          "description": "Treat the crates of a Cargo workspace as Turborepo packages.\n\nWhen enabled, Rust crates are discovered via `cargo metadata` and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. Filtered builds execute each selected crate. Unfiltered builds prefer entrypoints, falling back to libraries when no entrypoints exist. Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and `format` tasks are selectable per crate with `--filter`. An unfiltered run executes one workspace-wide Cargo verification command; filtered runs use the selected crates, or the workspace command when the workspace package is selected directly.\n\nAll crates implicitly register `build` and the verification tasks; entrypoints with one binary also register `run` and `dev`. The workspace package registers the verification tasks. Normal task definitions configure or override these defaults, and package configuration can exclude them with `extends: false`.\n\nTask caching uses Cargo-derived inputs and caches entrypoint build deliverables. Library builds and formatting default to uncached. This feature is experimental.",
           "default": false,
           "type": "boolean"
         },
@@ -310,8 +310,18 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalPythonWorkspaces": {
+          "description": "Treat the members of a uv workspace as Turborepo packages.\n\nWhen enabled, Python packages are discovered from the root `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the package graph, resolve in `--filter` expressions, and appear in `turbo query`. uv is the only supported Python package manager. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "filterUsingTasks": {
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
+          "default": false,
+          "type": "boolean"
+        },
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
           "default": false,
           "type": "boolean"
         },
@@ -327,11 +337,6 @@
         },
         "pruneIncludesGlobalFiles": {
           "description": "Include files matching `globalDependencies` globs in the `turbo prune` output. Without this flag, `globalDependencies` entries are preserved in the pruned `turbo.json` but the actual files are not copied.",
-          "default": false,
-          "type": "boolean"
-        },
-        "githubActionsRemoteBaseRefFallback": {
-          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
           "default": false,
           "type": "boolean"
         },

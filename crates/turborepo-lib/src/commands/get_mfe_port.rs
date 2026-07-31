@@ -1,24 +1,19 @@
-use std::{io, io::ErrorKind};
+use std::io;
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_microfrontends::TurborepoMfeConfig;
-use turborepo_repository::{
-    cargo::{CargoToolchain, CARGO_TOML},
-    package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
-    package_json::PackageJson,
-    toolchain::ToolchainId,
+use turborepo_repository::package_graph::{
+    PackageGraph, PackageGraphNodeKind, PackageName, PackageNode,
 };
 
-use crate::{
-    commands::CommandBase, microfrontends::MicrofrontendsConfigs, run::builder::cargo_enabled,
-};
+use crate::{commands::CommandBase, microfrontends::MicrofrontendsConfigs};
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Failed to get current working directory: {0}")]
     Cwd(#[from] turbopath::PathError),
-    #[error("No package.json found in current directory")]
+    #[error("Current directory does not belong to a named JavaScript package")]
     NoPackageJson,
     #[error("package.json is missing the 'name' field")]
     NoPackageName,
@@ -53,28 +48,14 @@ async fn get_port_for_current_package(base: &CommandBase) -> Result<u16, Error> 
 
 async fn build_package_graph(base: &CommandBase) -> Result<PackageGraph, Error> {
     let repo_root = &base.repo_root;
-    let root_package_json_path = repo_root.join_component("package.json");
-    let cargo_enabled = cargo_enabled(&base.opts().future_flags);
-    let root_package_json = match PackageJson::load(&root_package_json_path) {
-        Ok(package_json) => Some(package_json),
-        Err(turborepo_repository::package_json::Error::Io(io))
-            if io.kind() == ErrorKind::NotFound
-                && cargo_enabled
-                && repo_root.join_component(CARGO_TOML).exists() =>
-        {
-            None
-        }
-        Err(error) => return Err(error.into()),
-    };
+    let features = crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+    let root_package_json = features.load_root_package_json(repo_root)?;
 
-    let mut builder = PackageGraph::builder_optional(repo_root, root_package_json)
+    let builder = PackageGraph::builder_optional(repo_root, root_package_json)
         .with_single_package_mode(base.opts().run_opts.single_package)
         .with_allow_no_package_manager(base.opts().repo_opts.allow_no_package_manager);
-    if cargo_enabled {
-        builder = builder.with_toolchain(CargoToolchain::new(repo_root.to_owned()));
-    }
 
-    Ok(builder.build().await?)
+    Ok(features.configure(builder).build().await?)
 }
 
 /// Resolve directory ownership from authoritative repository knowledge. The
@@ -94,29 +75,22 @@ fn package_for_directory(
                 return None;
             }
             let component_count = directory.components().count();
-            let is_javascript_package = matches!(
-                view.kind(),
-                PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
-            ) && view.toolchain() == Some(&ToolchainId::JAVASCRIPT);
+            let is_package_json_scope = view.is_package_json_scope();
             cwd.strip_prefix(directory)
-                .map(|_| (component_count, is_javascript_package, node, view))
+                .map(|_| (component_count, is_package_json_scope, node, view))
         })
-        .max_by_key(|(component_count, is_javascript_package, _, _)| {
-            (*component_count, *is_javascript_package)
+        .max_by_key(|(component_count, is_package_json_scope, _, _)| {
+            (*component_count, *is_package_json_scope)
         })
         .ok_or(Error::NoPackageJson)?;
 
     match owner {
         (_, _, PackageNode::Workspace(PackageName::Other(name)), view)
-            if view.kind() == PackageGraphNodeKind::Package
-                && view.toolchain() == Some(&ToolchainId::JAVASCRIPT) =>
+            if view.is_package_json_scope() =>
         {
             Ok(name)
         }
-        (_, _, PackageNode::Workspace(PackageName::Root), view)
-            if view.kind() == PackageGraphNodeKind::RootJavaScript
-                && view.toolchain() == Some(&ToolchainId::JAVASCRIPT) =>
-        {
+        (_, _, PackageNode::Workspace(PackageName::Root), view) if view.is_package_json_scope() => {
             package_graph
                 .root_javascript_scope_name()
                 .flatten()
@@ -127,28 +101,10 @@ fn package_for_directory(
     }
 }
 
-fn check_exact_cwd_manifest(
-    repo_root: &AbsoluteSystemPath,
-    cwd: &AbsoluteSystemPath,
-) -> Result<(), Error> {
-    let Ok(relative) = repo_root.anchor(cwd) else {
-        return Err(Error::NoPackageJson);
-    };
-    let manifest = cwd.join_component("package.json");
-    if manifest.exists() || relative.as_str().is_empty() {
-        let package_json = PackageJson::load(&manifest).map_err(|_| Error::NoPackageJson)?;
-        if package_json.name.is_none() {
-            return Err(Error::NoPackageName);
-        }
-    }
-    Ok(())
-}
-
 async fn get_port_for_current_package_at(
     base: &CommandBase,
     cwd: &AbsoluteSystemPath,
 ) -> Result<u16, Error> {
-    check_exact_cwd_manifest(&base.repo_root, cwd)?;
     let package_graph = build_package_graph(base).await?;
     let package_name = package_for_directory(&package_graph, &base.repo_root, cwd)?;
     get_port_from_graph(base, &package_graph, &package_name)
@@ -534,26 +490,85 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exact_unnamed_and_malformed_workspace_errors_precede_graph_identity() {
-        for (manifest, expected_unnamed) in [(r#"{}"#, true), ("{", false)] {
-            let tmp = TempDir::new().unwrap();
-            let repo_root = setup_test_repo(&tmp);
-            let app = repo_root.join_components(&["apps", "web"]);
-            app.create_dir_all().unwrap();
-            app.join_component("package.json")
-                .create_with_contents(manifest)
-                .unwrap();
-            let base = create_command_base(repo_root);
+    async fn test_unnamed_workspace_has_no_authoritative_owner() {
+        let tmp = TempDir::new().unwrap();
+        let repo_root = setup_test_repo(&tmp);
+        let app = repo_root.join_components(&["apps", "web"]);
+        app.create_dir_all().unwrap();
+        app.join_component("package.json")
+            .create_with_contents(r#"{}"#)
+            .unwrap();
+        let base = create_command_base(repo_root);
 
-            let error = get_port_for_current_package_at(&base, &app)
-                .await
-                .unwrap_err();
-            assert!(if expected_unnamed {
-                matches!(error, Error::NoPackageName)
-            } else {
-                matches!(error, Error::NoPackageJson)
-            });
-        }
+        assert!(matches!(
+            get_port_for_current_package_at(&base, &app).await,
+            Err(Error::NoPackageJson)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_malformed_registered_workspace_returns_package_graph_error() {
+        let tmp = TempDir::new().unwrap();
+        let repo_root = setup_test_repo(&tmp);
+        let app = repo_root.join_components(&["apps", "web"]);
+        app.create_dir_all().unwrap();
+        app.join_component("package.json")
+            .create_with_contents("{")
+            .unwrap();
+        let base = create_command_base(repo_root);
+
+        assert!(matches!(
+            get_port_for_current_package_at(&base, &app).await,
+            Err(Error::PackageGraph(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_unnamed_root_returns_no_package_name() {
+        let tmp = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"packageManager":"pnpm@9.0.0","workspaces":["apps/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("pnpm-workspace.yaml")
+            .create_with_contents("packages:\n  - 'apps/*'\n")
+            .unwrap();
+        let base = create_command_base(repo_root.clone());
+
+        assert!(matches!(
+            get_port_for_current_package_at(&base, &repo_root).await,
+            Err(Error::NoPackageName)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_unregistered_nested_manifest_does_not_override_graph_owner() {
+        let tmp = TempDir::new().unwrap();
+        let repo_root = setup_test_repo(&tmp);
+        let shell = repo_root.join_components(&["apps", "shell"]);
+        let src = shell.join_component("src");
+        src.create_dir_all().unwrap();
+        shell
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"shell"}"#)
+            .unwrap();
+        src.join_component("package.json")
+            .create_with_contents("{")
+            .unwrap();
+        shell
+            .join_component("microfrontends.json")
+            .create_with_contents(
+                r#"{"version":"1","applications":{"shell":{"development":{"local":3010}}}}"#,
+            )
+            .unwrap();
+        let base = create_command_base(repo_root);
+
+        assert_eq!(
+            get_port_for_current_package_at(&base, &src).await.unwrap(),
+            3010
+        );
     }
 
     #[tokio::test]
@@ -704,7 +719,7 @@ mod tests {
         let err = Error::NoPackageJson;
         assert_eq!(
             err.to_string(),
-            "No package.json found in current directory"
+            "Current directory does not belong to a named JavaScript package"
         );
 
         let err = Error::NoPackageName;

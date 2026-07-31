@@ -199,6 +199,8 @@ fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
 pub enum Error {
     #[error("File watcher error: {0}")]
     FileWatcher(#[from] turborepo_filewatch::WatchError),
+    #[error("Failed to initialize file watcher: {0}")]
+    FileWatcherStartup(#[from] turborepo_filewatch::SubscribeError),
     #[error("Package watcher error: {0}")]
     PackageWatcher(String),
     #[error("Could not get current executable.")]
@@ -274,6 +276,7 @@ impl WatchClient {
             &base.repo_root,
         )?);
         let source = watcher.source();
+        source.ready().await?;
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
@@ -300,16 +303,9 @@ impl WatchClient {
             source,
             scm,
         ));
-        // The watcher builds its own package graph; register the same
-        // toolchains a run would so it watches the same package set.
-        let mut extra_toolchains: Vec<
-            std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
-        > = Vec::new();
-        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
-            extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
-                base.repo_root.clone(),
-            ));
-        }
+        // The watcher builds its own graph and must enable the same ecosystems.
+        let graph_features =
+            crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
@@ -317,7 +313,7 @@ impl WatchClient {
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
-            extra_toolchains,
+            graph_features,
         );
 
         // Subscribe before building the Run so we don't miss the initial
@@ -894,6 +890,19 @@ mod test {
         let cp = ChangedPackages::default();
         assert!(cp.is_empty());
         assert!(matches!(cp, ChangedPackages::Some { ref packages, .. } if packages.is_empty()));
+    }
+
+    #[test]
+    fn startup_failure_diagnostic_uses_concrete_watcher_cause() {
+        let error = super::Error::FileWatcherStartup(turborepo_filewatch::SubscribeError::Startup(
+            Arc::new(turborepo_filewatch::WatchError::Setup(
+                "FSEventStreamStart failed".to_string(),
+            )),
+        ))
+        .to_string();
+
+        assert!(error.contains("FSEventStreamStart failed"));
+        assert!(!error.contains("Package change channel closed"));
     }
 
     #[test]

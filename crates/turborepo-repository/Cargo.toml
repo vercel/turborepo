@@ -26,14 +26,15 @@ rust-ini = "0.20.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
-sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio.workspace = true
+toml = { workspace = true }
 toml_edit = { workspace = true }
 tracing.workspace = true
 turbopath = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
+turborepo-lockfile-hash = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-rayon-compat = { workspace = true }
 wax = { workspace = true }

@@ -435,11 +435,11 @@ async fn typed_projections_match_the_contract_fixture_graph_and_prune_closures()
         graph
             .filtering_relationships()
             .transitive_dependencies(&app),
-        Some(graph_dependencies.clone())
+        Ok(graph_dependencies.clone())
     );
     assert_eq!(
         graph.hash_relationships().dependency_inputs(&app),
-        Some(graph_dependencies)
+        Ok(graph_dependencies)
     );
 
     let changed = PackageName::from("transitive-lib");
@@ -474,7 +474,7 @@ async fn typed_projections_match_the_contract_fixture_graph_and_prune_closures()
         graph
             .filtering_relationships()
             .transitive_dependents(&root_input),
-        Some(graph_root_dependents)
+        Ok(graph_root_dependents)
     );
     let mut graph_root_affected: Vec<_> = graph_root_ancestors
         .into_iter()

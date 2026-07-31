@@ -830,8 +830,8 @@ export interface FutureFlags {
    * expressions, propagate `--affected`, and appear in `turbo query`.
    * Filtered builds execute each selected crate. Unfiltered builds prefer
    * entrypoints, falling back to libraries when no entrypoints exist.
-   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and
-   * `doc`/`docs` tasks are selectable per crate with `--filter`. An
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
    * unfiltered run executes one workspace-wide Cargo verification command;
    * filtered runs use the selected crates, or the workspace command when the
    * workspace package is selected directly.
@@ -843,12 +843,30 @@ export interface FutureFlags {
    * exclude them with `extends: false`.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
-   * deliverables. Library builds default to uncached. This feature is
-   * experimental.
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
    *
    * @defaultValue `false`
    */
   experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`;
+   * the user-named workspace package registers workspace-wide versions of the
+   * quality tasks. External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
 }
 
 "#

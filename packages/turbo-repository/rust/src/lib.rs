@@ -177,32 +177,22 @@ impl Workspace {
         Ok(map)
     }
 
-    /// Returns all external packages from the lockfile as
-    /// `npm/<name>@<version>` strings. Collects the transitive external
-    /// dependencies of every workspace package and formats them using the
-    /// lockfile's human-readable name.
+    /// Returns all external packages from the JavaScript resolution domain as
+    /// `npm/<name>@<version>` strings. Names come from producer-supplied
+    /// human names on the resolution generation; Cargo identities are
+    /// excluded to preserve the historical lockfile-only listing.
     #[napi]
     pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
-        let lockfile = self
-            .graph
-            .lockfile()
-            .ok_or_else(|| napi::Error::from_reason("No lockfile found"))?;
+        let identities = self.graph.javascript_external_package_identities();
+        if identities.is_empty() && self.graph.lockfile().is_none() {
+            return Err(napi::Error::from_reason("No lockfile found"));
+        }
 
-        let mut seen = HashSet::new();
-        let mut result: Vec<String> = self
-            .graph
-            .package_task_contexts()
-            .filter_map(|context| {
-                let info = context.package_info();
-                debug_assert!(
-                    info.is_some() || !context.requires_compatibility_payload(),
-                    "builder invariant: required package context has no payload"
-                );
-                info.and_then(|info| info.transitive_dependencies.as_ref())
-            })
-            .flatten()
-            .filter(|pkg| seen.insert(&pkg.key))
-            .filter_map(|pkg| lockfile.human_name(pkg).map(|name| format!("npm/{name}")))
+        let mut seen_keys = HashSet::new();
+        let mut result: Vec<String> = identities
+            .into_iter()
+            .filter(|identity| seen_keys.insert(identity.key().to_string()))
+            .filter_map(|identity| identity.human_name().map(|name| format!("npm/{name}")))
             .collect();
 
         result.sort();

@@ -12,6 +12,33 @@ expression: query_output
       "subscriptionType": null,
       "types": [
         {
+          "kind": "OBJECT",
+          "name": "AllPackagesChanged",
+          "description": null,
+          "fields": [
+            {
+              "name": "empty",
+              "description": "This is a nothing field",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Boolean",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
           "kind": "SCALAR",
           "name": "Boolean",
           "description": "The `Boolean` scalar type represents `true` or `false`.",
@@ -1783,6 +1810,11 @@ expression: query_output
             {
               "kind": "OBJECT",
               "name": "ScmError",
+              "ofType": null
+            },
+            {
+              "kind": "OBJECT",
+              "name": "AllPackagesChanged",
               "ofType": null
             },
             {

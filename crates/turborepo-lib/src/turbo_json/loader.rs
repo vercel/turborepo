@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_engine::BuilderError;
-use turborepo_repository::{package_graph::PackageName, package_json::PackageJson};
+use turborepo_repository::package_graph::PackageName;
 // Re-export TurboJsonLoader and related types from turborepo-turbo-json
 pub use turborepo_turbo_json::{
     LoaderError, NoOpUpdater, TurboJsonLoader, TurboJsonReader, TurboJsonUpdater,
@@ -112,12 +112,12 @@ impl UnifiedTurboJsonLoader {
     pub fn single_package(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::single_package(
             reader,
             root_turbo_json,
-            package_json,
+            root_scripts,
         ))
     }
 
@@ -125,12 +125,12 @@ impl UnifiedTurboJsonLoader {
     pub fn task_access(
         reader: TurboJsonReader,
         root_turbo_json: AbsoluteSystemPathBuf,
-        package_json: PackageJson,
+        root_scripts: Vec<String>,
     ) -> Self {
         Self::Standard(TurboJsonLoader::task_access(
             reader,
             root_turbo_json,
-            package_json,
+            root_scripts,
         ))
     }
 
@@ -170,14 +170,12 @@ impl turborepo_engine::TurboJsonLoader for UnifiedTurboJsonLoader {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::HashSet;
 
     use tempfile::tempdir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
     use turborepo_engine::TaskDefinitionFromProcessed;
-    use turborepo_errors::Spanned;
-    use turborepo_repository::package_json::PackageJson;
     use turborepo_task_id::TaskName;
     use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
     use turborepo_types::TaskDefinition;
@@ -225,16 +223,9 @@ mod test {
             trace_path.create_with_contents(content.as_bytes()).unwrap();
         }
 
-        let mut scripts = BTreeMap::new();
-        scripts.insert("build".into(), Spanned::new("echo building".into()));
-        let root_package_json = PackageJson {
-            scripts,
-            ..Default::default()
-        };
-
         let reader = TurboJsonReader::new(repo_root.to_owned());
         let loader =
-            UnifiedTurboJsonLoader::task_access(reader, root_turbo_json, root_package_json);
+            UnifiedTurboJsonLoader::task_access(reader, root_turbo_json, vec!["build".into()]);
         let turbo_json = loader.load(&PackageName::Root).unwrap();
         let root_build = turbo_json
             .tasks

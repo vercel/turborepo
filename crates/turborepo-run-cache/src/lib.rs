@@ -957,7 +957,6 @@ mod test {
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
     use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
     use turborepo_repository::{
-        cargo::CargoToolchain,
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
     };
@@ -1038,7 +1037,7 @@ mod test {
             )
             .unwrap();
         PackageGraph::builder_optional(repo_root, None)
-            .with_toolchain(CargoToolchain::new(repo_root.clone()))
+            .with_cargo()
             .build()
             .await
             .unwrap()
@@ -1077,11 +1076,11 @@ mod test {
     }
 
     #[tokio::test]
-    async fn task_cache_uses_context_and_ignores_missing_payload() {
+    async fn task_cache_uses_authoritative_context() {
         let tmp = tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
-        let mut graph = javascript_graph(&repo_root, "packages").await;
+        let graph = javascript_graph(&repo_root, "packages").await;
         let cache = run_cache(&repo_root);
         let definition = TaskDefinition {
             incremental: Some(vec![IncrementalPartition {
@@ -1145,7 +1144,6 @@ mod test {
             Err(super::Error::TaskPackageMismatch { .. })
         ));
 
-        graph.remove_package_info_for_test(&PackageName::from("app"));
         assert!(
             cache
                 .task_cache(
@@ -1167,9 +1165,7 @@ mod test {
             .unwrap()
             .to_realpath()
             .unwrap();
-        let mut graph = cargo_graph(&repo_root).await;
-        graph.remove_package_info_for_test(&PackageName::Root);
-        graph.remove_package_info_for_test(&PackageName::from("cargo-workspace"));
+        let graph = cargo_graph(&repo_root).await;
         let cache = run_cache(&repo_root);
         let definition = TaskDefinition {
             outputs: TaskOutputs {
