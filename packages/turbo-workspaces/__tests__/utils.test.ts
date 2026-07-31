@@ -68,7 +68,10 @@ describe("utils", () => {
       ["pnpm", "^9.0.0"],
       ["pnpm", "9"],
       ["pnpm", ">=9.0.0 <10.0.0"],
-      ["pnpm", ">=9.0.0 <10.0.0 || >=9.5.0 <10.0.0"]
+      ["pnpm", ">=9.0.0 <10.0.0 || >=9.5.0 <10.0.0"],
+      ["pnpm", "^6.35.1"],
+      ["yarn", "^4.0.0"],
+      ["yarn", "^1.22.0"]
     ] as const)("reads %s from devEngines.packageManager", (name, version) => {
       const workspaceRoot = makeWorkspace({
         devEngines: {
@@ -193,6 +196,17 @@ describe("utils", () => {
         {
           devEngines: {
             packageManager: { name: "pnpm", version: ">=1.0.0 <1.0.0" }
+          }
+        },
+        "at least one version"
+      ],
+      [
+        {
+          devEngines: {
+            packageManager: {
+              name: "pnpm",
+              version: "9 || >=1.0.0 <1.0.0"
+            }
           }
         },
         "at least one version"

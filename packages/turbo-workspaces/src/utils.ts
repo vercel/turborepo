@@ -200,18 +200,22 @@ function getWorkspacePackageManager({
     );
   }
 
-  if (
-    version
-      .split("||")
-      .some(
-        (disjunct) =>
-          semver.minVersion(disjunct)?.major !== minVersion.major ||
-          semver.satisfies(`${minVersion.major + 1}.0.0`, disjunct)
-      )
-  ) {
-    throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.version` must only allow versions within one major version"
-    );
+  for (const disjunct of version.split("||")) {
+    const disjunctMinVersion = semver.minVersion(disjunct.trim());
+    if (disjunctMinVersion === null) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must admit at least one version"
+      );
+    }
+
+    if (
+      disjunctMinVersion.major !== minVersion.major ||
+      semver.satisfies(`${disjunctMinVersion.major + 1}.0.0`, disjunct.trim())
+    ) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must only allow versions within one major version"
+      );
+    }
   }
 
   return name;
