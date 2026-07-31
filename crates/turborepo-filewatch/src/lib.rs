@@ -2190,6 +2190,7 @@ mod test {
         let repository_ignore = super::RepositoryIgnore::new(repo_root.as_std_path());
         let (control, mut control_rx) = mpsc::unbounded_channel();
         let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        super::prepare_cookie_dir(&cookie_dir).await.unwrap();
         let mut started = super::start_watcher_attempt(
             super::MacOsBackend::Poll,
             &repo_root,
