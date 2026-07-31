@@ -215,10 +215,28 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Resolved task definition from root `turbo.json` and package `turbo.json`               | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
 | Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                                                                             |
+| Source files in internal packages used by the Workspace root                           | If the root `package.json` depends on `@repo/tooling`, changing `packages/tooling/src/index.ts` will cause **all** tasks to miss cache                                                                           |
 | [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                                                                              |
 | Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                                                                           |
 | Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                                                                      |
 | Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will cause **all** tasks to miss cache when compared to either `turbo build` or `turbo build -- --arg=diff` (including dependencies of `build` that did not receive `--arg=value`) |
+
+#### Root workspace dependencies
+
+Turborepo includes the source files of every internal workspace package that the
+root `package.json` depends on, directly or transitively, in the global hash.
+This keeps cache entries correct when root-level scripts or tooling use those
+packages.
+
+For example, if the root package depends on `@repo/tooling`, changing a source
+file in `@repo/tooling` causes every cacheable task to miss cache. A change to
+an internal package outside this root dependency closure only changes the
+relevant package and task hashes.
+
+When comparing Git revisions, `turbo query affected --packages` reports this
+repository-wide result with the `RootInternalDepChanged` reason. See
+[Understanding affected-package reasons](/docs/reference/query#understanding-affected-package-reasons)
+for the diagnostic reason types.
 
 ### Package hash inputs
 
