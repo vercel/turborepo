@@ -6,7 +6,7 @@ This document serves as a sketch of the architecture of the `turbo run` command
 
 A run consists of the following steps:
 
-1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces`, Cargo workspace crates)
+1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces` / `futureFlags.experimentalPythonWorkspaces`, Cargo workspace crates and uv workspace members)
 2. Build a task graph based on package dependencies and configuration
 3. Determine global/task hashes
 4. Execute tasks in topological order
@@ -585,6 +585,48 @@ graph shape, execution, caching, deliverable restoration, cross-crate
 invalidation, lockfile enforcement, unsupported local-package rejection,
 uncached `run`/`dev` execution, and the filter hint. `turbo query` serves Cargo
 packages through the same graph.
+
+#### Experimental Python (uv) Support (`crates/turborepo-repository/src/uv.rs`)
+
+Behind `futureFlags.experimentalPythonWorkspaces`, `turbo run` discovers
+Python packages from the root uv workspace and adds them to the package graph.
+uv is the only supported Python package manager. uv workspaces can stand alone
+or coexist with JavaScript and Cargo workspaces; no `PackageManager` variant is
+involved. `UvContributor` contributes pre-classified relationships, native
+tasks, external resolution, change observations, and a prune domain through
+the shared repository graph.
+
+- **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
+  in-process, so graph construction does not require the `uv` binary. Names
+  are PEP 503-normalized. Dependencies become internal graph edges only when
+  their effective `[tool.uv.sources]` entry selects `workspace = true`.
+  Development edges that would create a cycle become non-ordering input
+  edges. A root `[project]` participates in hashing and pruning but is not a
+  package. A synthetic workspace package, named by `[tool.turbo] name`,
+  depends on every member and hosts workspace-wide quality tasks.
+- **Execution** registers `build` for buildable members and `format` and
+  `check` for all members. Unfiltered quality runs prefer the workspace
+  aggregate; filtered runs target selected members. `check` tasks share a
+  serial group because uv synchronizes their environment. Built-in tasks
+  default to uncached until uv, Python, ty, and build-backend identities are
+  represented in task hashes.
+- **Hashing and affectedness** include member sources, relevant workspace
+  files and uv/pip environment variables, internal source closures for
+  checks, and each member's external dependency closure from `uv.lock`.
+  Package identities include version, source, and artifact hashes. A
+  `uv.lock` change across git refs conservatively affects all uv packages.
+- **Watch mode** rediscoveries follow any `pyproject.toml` and the root
+  `uv.lock`; root `.venv/` and `dist/` events are ignored as task byproducts.
+- **Prune** walks `uv.lock` reachability, including dependency groups and
+  optional extras, and preserves retained package metadata through
+  `toml_edit`. It rewrites root workspace members, removes dangling uv source
+  entries, and copies `.python-version` and `uv.toml` when present. Reachable
+  local dependencies that are not workspace members fail closed.
+
+End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
+pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
+execution, and prune output. Linux Rust CI installs a pinned uv version; local
+tests that execute uv skip when it is unavailable.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 
