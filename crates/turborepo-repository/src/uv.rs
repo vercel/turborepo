@@ -52,6 +52,7 @@ use crate::{
         PackageResolution, ResolutionCompleteness,
     },
     package_json::PackageJson,
+    prune_knowledge::{PruneDomain, PrunePlan},
     relationships::{DependencyKind, Relationship},
     toolchain::{
         self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
@@ -79,6 +80,10 @@ pub enum Error {
         #[source]
         source: Box<toml::de::Error>,
     },
+    #[error("failed to parse root pyproject.toml: {0}")]
+    ManifestEdit(#[from] Box<toml_edit::TomlError>),
+    #[error("root pyproject.toml has no [tool.uv.workspace] table")]
+    NotAWorkspace,
     #[error(
         "The uv workspace has no name.\n\nTurborepo needs a name for the workspace's tasks \
          (`<name>#check`), filters (`--filter=<name>`), and configuration. Add one to the root \
@@ -1148,6 +1153,169 @@ fn package_resolution(
     )
 }
 
+// ---------------------------------------------------------------------------
+// Prune
+// ---------------------------------------------------------------------------
+
+/// Rewrite the workspace root manifest for a pruned repository.
+pub fn prune_root_manifest(
+    contents: &str,
+    kept_dirs: &[String],
+    kept_names: &HashSet<String>,
+) -> Result<String, Error> {
+    let mut document: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+    let normalized_kept: HashSet<String> = kept_dirs.iter().map(|dir| normalize_dir(dir)).collect();
+
+    let uv = document
+        .get_mut("tool")
+        .and_then(|item| item.as_table_like_mut())
+        .and_then(|tool| tool.get_mut("uv"))
+        .and_then(|item| item.as_table_like_mut())
+        .ok_or(Error::NotAWorkspace)?;
+
+    {
+        let workspace = uv
+            .get_mut("workspace")
+            .and_then(|item| item.as_table_like_mut())
+            .ok_or(Error::NotAWorkspace)?;
+        let mut members = toml_edit::Array::new();
+        let mut sorted_dirs = kept_dirs.to_vec();
+        sorted_dirs.sort();
+        sorted_dirs.dedup();
+        for dir in &sorted_dirs {
+            members.push(dir.as_str());
+        }
+        workspace.insert("members", toml_edit::value(members));
+        workspace.remove("exclude");
+    }
+
+    if let Some(sources) = uv
+        .get_mut("sources")
+        .and_then(|item| item.as_table_like_mut())
+    {
+        let removed: Vec<String> = sources
+            .iter()
+            .filter(|(name, value)| {
+                let workspace_target = value
+                    .get("workspace")
+                    .and_then(|workspace| workspace.as_bool())
+                    .unwrap_or(false);
+                if workspace_target {
+                    return !kept_names.contains(&normalize_name(name));
+                }
+                value
+                    .get("path")
+                    .and_then(|path| path.as_str())
+                    .is_some_and(|path| !normalized_kept.contains(&normalize_dir(path)))
+            })
+            .map(|(name, _)| name.to_string())
+            .collect();
+        for name in removed {
+            sources.remove(&name);
+        }
+    }
+
+    Ok(document.to_string())
+}
+
+fn normalize_dir(dir: &str) -> String {
+    dir.replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+#[derive(Debug)]
+struct UvPruneKnowledge {
+    domain: crate::prune_knowledge::PruneDomainId,
+    lockfile: String,
+    root_manifest: String,
+    package_directories: HashMap<String, String>,
+    root_project_name: Option<String>,
+}
+
+impl UvPruneKnowledge {
+    fn discover(
+        repo_root: &AbsoluteSystemPath,
+        package_directories: HashMap<String, String>,
+        root_project_name: Option<String>,
+        lockfile: String,
+    ) -> Result<Self, Error> {
+        let root_manifest = repo_root
+            .join_component(PYPROJECT_TOML)
+            .read_to_string()
+            .map_err(|source| Error::ManifestRead {
+                path: repo_root.join_component(PYPROJECT_TOML).to_string(),
+                source,
+            })?;
+        Ok(Self {
+            domain: crate::prune_knowledge::PYTHON_PRUNE_DOMAIN.clone(),
+            lockfile,
+            root_manifest,
+            package_directories,
+            root_project_name,
+        })
+    }
+}
+
+impl PruneDomain for UvPruneKnowledge {
+    fn id(&self) -> &crate::prune_knowledge::PruneDomainId {
+        &self.domain
+    }
+
+    fn plan(
+        &self,
+        kept_packages: &[String],
+    ) -> Result<Option<PrunePlan>, crate::prune_knowledge::Error> {
+        if kept_packages.is_empty() {
+            return Ok(None);
+        }
+        let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
+        let mut roots = kept_packages.to_vec();
+        if let Some(root_project) = &self.root_project_name {
+            roots.push(root_project.clone());
+        }
+        let pruned_lock =
+            turborepo_lockfiles::uv_prune_lock(&self.lockfile, &roots, &self.package_directories)
+                .map_err(|error| failed(Error::Lockfile(error)))?;
+
+        let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
+        let mut kept_names = HashSet::with_capacity(pruned_lock.members.len());
+        let mut extra_packages = Vec::new();
+        let requested_packages: HashSet<&str> = kept_packages.iter().map(String::as_str).collect();
+        for member in &pruned_lock.members {
+            if self.root_project_name.as_deref() == Some(member.as_str()) {
+                kept_names.insert(member.clone());
+                continue;
+            }
+            let Some(directory) = self.package_directories.get(member) else {
+                tracing::warn!(
+                    "uv.lock member {member} is not a discovered workspace package; skipping"
+                );
+                continue;
+            };
+            kept_dirs.push(directory.clone());
+            kept_names.insert(member.clone());
+            if !requested_packages.contains(member.as_str()) {
+                extra_packages.push(member.clone());
+            }
+        }
+        let pruned_manifest =
+            prune_root_manifest(&self.root_manifest, &kept_dirs, &kept_names).map_err(failed)?;
+        Ok(Some(PrunePlan {
+            extra_packages,
+            root_files: vec![
+                (UV_LOCK.to_string(), pruned_lock.lockfile),
+                (PYPROJECT_TOML.to_string(), pruned_manifest),
+            ],
+            copy_paths: [".python-version", "uv.toml"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        }))
+    }
+}
+
 fn uv_change_observation() -> ChangeObservation {
     ChangeObservation::new()
         .with_rediscovery_file_name(PYPROJECT_TOML)
@@ -1229,6 +1397,13 @@ impl RepositoryContributor for UvContributor {
                 .collect();
             workspace_directories.sort();
             workspace_directories.dedup();
+            let prune_domain = UvPruneKnowledge::discover(
+                &self.repo_root,
+                package_directories.clone(),
+                workspace.root_project_name.clone(),
+                lockfile.clone(),
+            )
+            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
             // Each package contributes its already-classified native
             // internal relationships directly. External dependencies (locked
@@ -1345,7 +1520,8 @@ impl RepositoryContributor for UvContributor {
             );
             Ok(DiscoveredPackages::new(discovered, workspace_roots)
                 .with_external_resolution(resolution)
-                .with_change_observation(change_observation))
+                .with_change_observation(change_observation)
+                .with_prune_domain(Arc::new(prune_domain)))
         })
     }
 }
@@ -1887,5 +2063,44 @@ overridden = { index = "private" }
         let virtual_contract = UvTaskContract::new(UvPackageKind::VirtualPackage, "py-app");
         assert!(!virtual_contract.derives_task_io("build"));
         assert!(virtual_contract.derives_task_io("check"));
+    }
+
+    #[test]
+    fn test_prune_root_manifest() {
+        let manifest = r#"
+[project]
+name = "root-project"
+version = "0.1.0"
+dependencies = ["py-app"]
+
+[tool.turbo]
+name = "acme"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["packages/skipped"]
+
+[tool.uv.sources]
+py-app = { workspace = true }
+gone = { workspace = true }
+local = { path = "packages/gone-dir" }
+"#;
+        let kept_names: HashSet<String> = ["py-app".to_string(), "root-project".to_string()].into();
+        let pruned =
+            prune_root_manifest(manifest, &["packages/py-app".to_string()], &kept_names).unwrap();
+        assert!(pruned.contains(r#"members = ["packages/py-app"]"#));
+        assert!(!pruned.contains("exclude"));
+        assert!(pruned.contains("py-app = { workspace = true }"));
+        assert!(!pruned.contains("gone"));
+        assert!(!pruned.contains("local"));
+        assert!(pruned.contains("name = \"root-project\""));
+        assert!(pruned.contains("name = \"acme\""));
+    }
+
+    #[test]
+    fn test_prune_root_manifest_requires_workspace() {
+        let error =
+            prune_root_manifest("[project]\nname = \"x\"\n", &[], &HashSet::new()).unwrap_err();
+        assert!(matches!(error, Error::NotAWorkspace));
     }
 }

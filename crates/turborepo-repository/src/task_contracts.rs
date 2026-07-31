@@ -192,7 +192,9 @@ impl ScopeTaskContract {
             toolchain: Some(ToolchainId::PYTHON),
             command_map_target: Some(CommandMapTarget::Python),
             entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("uv"))),
-            prune_package_mode: Some(PrunePackageMode::NativeCopy),
+            prune_package_mode: Some(PrunePackageMode::NativeDomain(
+                crate::prune_knowledge::PYTHON_PRUNE_DOMAIN.clone(),
+            )),
             dependency_source_inputs,
             dynamic: Some(DynamicTaskContract::Python(contract)),
             static_defaults: BTreeMap::new(),
