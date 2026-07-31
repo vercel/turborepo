@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    io::ErrorKind,
     ops::DerefMut,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -23,13 +22,13 @@ use turborepo_repository::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
-    package_json::{self, PackageJson},
     toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
 
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    repository_graph::RepositoryGraphFeatures,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
@@ -70,7 +69,7 @@ impl PackageChangesWatcher {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        cargo_enabled: bool,
+        graph_features: RepositoryGraphFeatures,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -83,7 +82,7 @@ impl PackageChangesWatcher {
             custom_turbo_json_path,
             single_package,
             allow_no_package_manager,
-            cargo_enabled,
+            graph_features,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -134,8 +133,7 @@ struct Subscriber {
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
     allow_no_package_manager: bool,
-    /// Mirrors the run builder so the watcher observes the same Cargo scopes.
-    cargo_enabled: bool,
+    graph_features: RepositoryGraphFeatures,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -160,21 +158,6 @@ struct RepoState {
 struct PackageHashBaseline {
     path: AnchoredSystemPathBuf,
     hashes: Arc<GitHashes>,
-}
-
-fn load_root_package_json(
-    repo_root: &AbsoluteSystemPathBuf,
-    allow_missing_for_cargo: bool,
-) -> Result<Option<PackageJson>, package_json::Error> {
-    match PackageJson::load(&repo_root.join_component("package.json")) {
-        Ok(package_json) => Ok(Some(package_json)),
-        Err(package_json::Error::Io(error))
-            if error.kind() == ErrorKind::NotFound && allow_missing_for_cargo =>
-        {
-            Ok(None)
-        }
-        Err(error) => Err(error),
-    }
 }
 
 fn baseline_matches(
@@ -370,7 +353,7 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        cargo_enabled: bool,
+        graph_features: RepositoryGraphFeatures,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -422,35 +405,25 @@ impl Subscriber {
             custom_turbo_json_path: normalized_custom_path,
             single_package,
             allow_no_package_manager,
-            cargo_enabled,
+            graph_features,
         }
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let allow_missing_for_cargo = self.cargo_enabled
-            && self
-                .repo_root
-                .join_component(turborepo_repository::cargo::CARGO_TOML)
-                .exists();
-        let root_package_json =
-            match load_root_package_json(&self.repo_root, allow_missing_for_cargo) {
-                Ok(package_json) => package_json,
-                Err(error) => {
-                    tracing::debug!(
-                        ?error,
-                        "root package.json not available, package watcher not available"
-                    );
-                    return None;
-                }
-            };
-        let mut builder =
-            PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.single_package)
-                .with_allow_no_package_manager(self.allow_no_package_manager);
-        if self.cargo_enabled {
-            builder = builder.with_cargo();
-        }
-        let Ok(pkg_dep_graph) = builder.build().await else {
+        let root_package_json = match self.graph_features.load_root_package_json(&self.repo_root) {
+            Ok(package_json) => package_json,
+            Err(error) => {
+                tracing::debug!(
+                    ?error,
+                    "root package.json not available, package watcher not available"
+                );
+                return None;
+            }
+        };
+        let builder = PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+            .with_single_package_mode(self.single_package)
+            .with_allow_no_package_manager(self.allow_no_package_manager);
+        let Ok(pkg_dep_graph) = self.graph_features.configure(builder).build().await else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;
         };
@@ -889,10 +862,10 @@ mod test {
 
     use super::{
         ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
-        is_in_git_folder, load_root_package_json, ChangedFiles, FileChangeAction,
-        PackageChangeEvent, PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore,
-        Subscriber, CONFIG_FILE,
+        is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
+        PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
     };
+    use crate::repository_graph::RepositoryGraphFeatures;
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf::try_from(s).unwrap()
@@ -993,7 +966,9 @@ mod test {
             None,
             single_package,
             false,
-            cargo_enabled,
+            RepositoryGraphFeatures {
+                cargo: cargo_enabled,
+            },
         )
     }
 
@@ -1130,7 +1105,9 @@ mod test {
             .join_component("package.json")
             .create_with_contents(b"{")
             .unwrap();
-        assert!(load_root_package_json(&repo_root, true).is_err());
+        assert!(RepositoryGraphFeatures { cargo: true }
+            .load_root_package_json(&repo_root)
+            .is_err());
         assert!(initialize_test_state(&repo_root, true).await.is_none());
 
         repo_root.join_component("package.json").remove().unwrap();
@@ -1816,7 +1793,7 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
-            false,
+            RepositoryGraphFeatures { cargo: false },
         );
 
         TestWatcherHandle {

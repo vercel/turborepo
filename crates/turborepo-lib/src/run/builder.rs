@@ -18,7 +18,6 @@ use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
-    package_json::PackageJson,
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
@@ -56,6 +55,7 @@ use crate::{
     engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
+    repository_graph::RepositoryGraphFeatures,
     run::{
         scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
         Run, RunCache,
@@ -525,8 +525,8 @@ impl RunBuilder {
         // package.json) has no JavaScript root manifest. A *missing* file is
         // only tolerated in that mode; a malformed one always fails, and a
         // missing one without Cargo support keeps the original hard error.
-        let root_package_json =
-            load_root_package_json(&self.repo_root, cargo_enabled(&self.opts.future_flags))?;
+        let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
+        let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -563,13 +563,11 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let mut builder =
+            let builder =
                 PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                     .with_single_package_mode(self.opts.run_opts.single_package)
                     .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
-            if cargo_enabled(&self.opts.future_flags) {
-                builder = builder.with_cargo();
-            }
+            let builder = graph_features.configure(builder);
 
             let graph = builder
                 .build()
@@ -1467,26 +1465,7 @@ impl RunBuilder {
 /// future flag is the only switch: it is repo-level configuration, so every
 /// invoker sees the same package graph.
 pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
-    future_flags.experimental_cargo_workspaces
-}
-
-pub(crate) fn load_root_package_json(
-    repo_root: &AbsoluteSystemPath,
-    cargo_enabled: bool,
-) -> Result<Option<PackageJson>, package_json::Error> {
-    match PackageJson::load(&repo_root.join_component("package.json")) {
-        Ok(package_json) => Ok(Some(package_json)),
-        Err(package_json::Error::Io(io))
-            if io.kind() == ErrorKind::NotFound
-                && cargo_enabled
-                && repo_root
-                    .join_component(turborepo_repository::cargo::CARGO_TOML)
-                    .exists() =>
-        {
-            Ok(None)
-        }
-        Err(error) => Err(error),
-    }
+    RepositoryGraphFeatures::new(future_flags).cargo_enabled()
 }
 
 fn origins_match(url1: &str, url2: &str) -> bool {

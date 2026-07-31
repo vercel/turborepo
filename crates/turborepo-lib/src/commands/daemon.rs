@@ -344,7 +344,8 @@ pub async fn daemon_server(
         custom_turbo_json_path,
         allow_no_package_manager,
         {
-            let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+            let graph_features =
+                crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
             move |args| {
                 PackageChangesWatcher::new(
                     args.repo_root,
@@ -353,7 +354,7 @@ pub async fn daemon_server(
                     args.custom_turbo_json_path,
                     false,
                     args.allow_no_package_manager,
-                    cargo_enabled,
+                    graph_features,
                 )
             }
         },

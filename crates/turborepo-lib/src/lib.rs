@@ -23,6 +23,7 @@ mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod rayon_compat;
+mod repository_graph;
 mod run;
 mod shim;
 mod task_change_detector;

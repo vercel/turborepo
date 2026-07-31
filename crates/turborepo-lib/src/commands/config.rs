@@ -5,7 +5,7 @@ use turborepo_repository::package_graph::PackageGraph;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{
-    cli, config::resolve_configuration_from_args, run::builder::load_root_package_json,
+    cli, config::resolve_configuration_from_args, repository_graph::RepositoryGraphFeatures,
     turbo_json::RawTurboJson, Args,
 };
 
@@ -40,15 +40,12 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
     let future_flags = RawTurboJson::read(&repo_root, &root_turbo_json_path, true)?
         .and_then(|raw| raw.future_flags.map(|flags| flags.into_inner()))
         .unwrap_or_default();
-    let cargo_enabled = future_flags.experimental_cargo_workspaces;
-    let root_package_json = load_root_package_json(&repo_root, cargo_enabled)?;
+    let features = RepositoryGraphFeatures::new(&future_flags);
+    let root_package_json = features.load_root_package_json(&repo_root)?;
 
-    let mut builder = PackageGraph::builder_optional(&repo_root, root_package_json)
+    let builder = PackageGraph::builder_optional(&repo_root, root_package_json)
         .with_allow_no_package_manager(config.allow_no_package_manager());
-    if cargo_enabled {
-        builder = builder.with_cargo();
-    }
-    let package_graph = builder.build().await?;
+    let package_graph = features.configure(builder).build().await?;
 
     let package_manager = package_graph.package_manager().map(|pm| pm.name());
 
