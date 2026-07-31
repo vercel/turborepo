@@ -2222,15 +2222,7 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         "cargo build --package=lib-a --locked"
     );
 
-    for (task, subcommand) in [
-        ("test", "test"),
-        ("check", "check"),
-        ("clippy", "clippy"),
-        ("lint", "clippy"),
-        ("bench", "bench"),
-        ("doc", "doc"),
-        ("docs", "doc"),
-    ] {
+    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
         let output = run_turbo(
             tempdir.path(),
             &["run", task, "--filter=lib-a", "--dry-run=json"],
@@ -2248,15 +2240,7 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         );
     }
 
-    for (task, subcommand) in [
-        ("test", "test"),
-        ("check", "check"),
-        ("clippy", "clippy"),
-        ("lint", "clippy"),
-        ("bench", "bench"),
-        ("doc", "doc"),
-        ("docs", "doc"),
-    ] {
+    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
         let output = run_turbo(
             tempdir.path(),
             &["run", task, "--filter=acme", "--dry-run=json"],
@@ -2280,6 +2264,42 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         );
         assert_eq!(json["packages"], serde_json::json!(["acme"]));
     }
+
+    for (filter, task_id, expected_command) in [
+        ("lib-a", "lib-a#format", "cargo fmt --package=lib-a"),
+        ("acme", "acme#format", "cargo fmt --all"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["format", &format!("--filter={filter}"), "--dry-run=json"],
+        );
+        assert!(output.status.success(), "format failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("{task_id} in graph"));
+        assert_eq!(definition["command"], expected_command);
+        assert_eq!(definition["resolvedTaskDefinition"]["cache"], false);
+    }
+}
+
+#[test]
+fn test_cargo_format_formats_selected_crate() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("crates/lib-a/src/lib.rs"),
+        "pub fn greeting()->&'static str{\"hello from lib-a\"}\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["format", "--filter=lib-a"]);
+    assert_command_success(&output, "cargo format");
+    assert_eq!(
+        fs::read_to_string(tempdir.path().join("crates/lib-a/src/lib.rs")).unwrap(),
+        "pub fn greeting() -> &'static str {\n    \"hello from lib-a\"\n}\n"
+    );
 }
 
 #[test]
@@ -2375,12 +2395,15 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     assert!(library_tasks.iter().any(|task| task == "build"));
     assert!(library_tasks.iter().any(|task| task == "test"));
     assert!(library_tasks.iter().any(|task| task == "lint"));
-    assert!(library_tasks.iter().any(|task| task == "docs"));
+    assert!(library_tasks.iter().any(|task| task == "format"));
 
     let workspace_tasks = query("acme");
-    assert!(workspace_tasks.iter().any(|task| task == "clippy"));
     assert!(workspace_tasks.iter().any(|task| task == "lint"));
-    assert!(workspace_tasks.iter().any(|task| task == "docs"));
+    assert!(workspace_tasks.iter().any(|task| task == "format"));
+    for removed in ["doc", "docs", "clippy", "bench"] {
+        assert!(!library_tasks.iter().any(|task| task == removed));
+        assert!(!workspace_tasks.iter().any(|task| task == removed));
+    }
 
     fs::write(
         tempdir.path().join("crates/app/turbo.json"),

@@ -389,24 +389,28 @@ whether anything changed; Cargo decides how and in what order to build.**
   when the workspace has no entrypoints. Unfiltered verification uses the Cargo
   workspace aggregate:
   `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
-  `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
-  crates; selecting only the workspace aggregate uses its workspace command.
+  `cargo clippy --workspace --locked`, etc. Formatting is mutating and defaults
+  to uncached:
+  filtered runs use `cargo fmt --package=<crate>`, while the workspace aggregate
+  uses `cargo fmt --all`; neither form uses `--locked`. Other filtered runs use
+  their selected crates; selecting only the workspace aggregate uses its
+  workspace command.
   `RunBuilder` combines filter mode with the resolved package scope to derive
   task-specific exclusions. `EngineBuilder` applies package-level exclusions
   before traversal; task-level filtering defers selection until after matching
   task inputs. Exclude-only filters therefore remain exclusions rather than
   being swallowed by a workspace command. Package-qualified task arguments remain
-  authoritative. `--locked` preserves
+  authoritative. `--locked` on non-formatting tasks preserves
   the dependency resolution validated before task hashing. Cargo commands
-  (except `cargo run`) share a mutually-exclusive serial group: concurrent
+  (except `cargo run` and `cargo fmt`) share a mutually-exclusive serial group: concurrent
   cargo processes serialize on the build-directory lock anyway, so the
   executor runs one at a time without the "waiting for file lock" noise. Run
   summaries read the same resolved native command catalog as execution, so
   display cannot drift from execution.
 - **Task registration** (`NativeTaskKnowledge`): every crate implicitly
   registers `build`; entrypoints with exactly one binary also register `run`
-  and its `dev` alias. Every crate and the workspace aggregate register `test`, `check`,
-  `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
+  and its `dev` alias. Every crate and the workspace aggregate register `test`,
+  `check`, `lint`, and `format`. These act as empty task definitions
   at the lowest precedence, so normal
   `tasks` entries configure or override them and package configuration can
   exclude them with `extends: false`. Registration is package-aware, so the
@@ -430,7 +434,8 @@ whether anything changed; Cargo decides how and in what order to build.**
   compiler and rustdoc selection and flags, Cargo build/profile/target
   configuration, native compiler and
   archiver settings (including target-qualified forms), and platform SDK
-  selection. Arbitrary variables consumed by project-specific build scripts
+  selection. Formatting additionally includes `rustfmt.toml`, `.rustfmt.toml`,
+  and `RUSTFMT`. Arbitrary variables consumed by project-specific build scripts
   remain explicit task `env` configuration. The workspace aggregate hashes all
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo

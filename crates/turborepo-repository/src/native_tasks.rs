@@ -31,11 +31,12 @@ pub enum WorkingDirectoryPolicy {
 pub enum NativeCommandTemplate {
     /// `<package-manager> run <task>` with package-manager arg separators.
     JavaScriptPackageManagerRun { task: String },
-    /// `cargo <subcommand> <scope> --locked` with Cargo serial grouping.
+    /// `cargo <subcommand> <scope>` with optional locking and serial grouping.
     Cargo {
         subcommand: String,
-        /// `--package=<name>` or `--workspace`.
+        /// `--package=<name>`, `--workspace`, or `--all`.
         scope_arg: String,
+        locked: bool,
         serial_group: Option<String>,
         pass_through_uses_separator: bool,
     },
@@ -97,6 +98,7 @@ impl NativeTask {
         display: String,
         subcommand: impl Into<String>,
         scope_arg: impl Into<String>,
+        locked: bool,
         serial_group: Option<String>,
         pass_through_uses_separator: bool,
     ) -> Self {
@@ -111,6 +113,7 @@ impl NativeTask {
             command: Some(NativeCommandTemplate::Cargo {
                 subcommand: subcommand.into(),
                 scope_arg: scope_arg.into(),
+                locked,
                 serial_group,
                 pass_through_uses_separator,
             }),
@@ -373,12 +376,15 @@ pub fn resolve_task_command(
         NativeCommandTemplate::Cargo {
             subcommand,
             scope_arg,
+            locked,
             serial_group,
             pass_through_uses_separator,
         } => {
             let cargo_binary = cargo_binary.ok_or(ResolveNativeCommandError::MissingCargoBinary)?;
-            let mut args: Vec<OsString> =
-                vec![subcommand.into(), scope_arg.into(), "--locked".into()];
+            let mut args: Vec<OsString> = vec![subcommand.into(), scope_arg.into()];
+            if *locked {
+                args.push("--locked".into());
+            }
             if let Some(pass_through_args) = pass_through_args {
                 if *pass_through_uses_separator {
                     args.push("--".into());
@@ -502,6 +508,7 @@ mod tests {
             "cargo build --package=app --locked".into(),
             "build",
             "--package=app",
+            true,
             Some("cargo".into()),
             false,
         );
