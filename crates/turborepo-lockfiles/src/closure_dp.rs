@@ -292,16 +292,16 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     Ok(Some(result))
 }
 
-struct SccResult {
+pub(crate) struct SccResult {
     /// SCCs in emission order: every SCC's successors appear earlier.
-    components: Vec<Vec<u32>>,
+    pub(crate) components: Vec<Vec<u32>>,
     /// Node id -> index into `components`.
-    scc_of: Vec<u32>,
+    pub(crate) scc_of: Vec<u32>,
 }
 
 /// Iterative Tarjan SCC. Recursion-free: lockfile graphs can chain
 /// thousands of packages deep.
-fn tarjan_scc(adjacency: &[Vec<u32>]) -> SccResult {
+pub(crate) fn tarjan_scc(adjacency: &[Vec<u32>]) -> SccResult {
     let n = adjacency.len();
     const UNVISITED: u32 = u32::MAX;
     let mut index = vec![UNVISITED; n];

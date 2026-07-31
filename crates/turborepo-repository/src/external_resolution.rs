@@ -395,6 +395,9 @@ pub const JAVASCRIPT_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
 /// Built-in Cargo lockfile and compiler-identity domain.
 pub const CARGO_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
     ExternalResolutionDomainId(Cow::Borrowed("cargo"));
+/// Built-in uv lockfile domain.
+pub const PYTHON_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("python"));
 
 /// One parser-neutral external resolution domain contributed by a producer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -513,6 +516,8 @@ impl ExternalResolutionGeneration {
                     && repository.root_javascript_scope().is_some()
             } else if domain.id == CARGO_RESOLUTION_DOMAIN {
                 domain.toolchain == ToolchainId::RUST && domain.root.as_str().is_empty()
+            } else if domain.id == PYTHON_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::PYTHON && domain.root.as_str().is_empty()
             } else {
                 true
             };

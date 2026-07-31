@@ -19,6 +19,7 @@ mod closure_dp;
 mod error;
 mod npm;
 mod pnpm;
+mod uv;
 mod yarn1;
 
 use std::{
@@ -41,6 +42,7 @@ use rayon::prelude::*;
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
+pub use uv::{Error as UvLockError, uv_external_closures};
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 // The closure walk visits every edge of every workspace's dependency closure,

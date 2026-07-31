@@ -46,6 +46,10 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    external_resolution::{
+        ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
+        PackageResolution, ResolutionCompleteness,
+    },
     package_json::PackageJson,
     relationships::{DependencyKind, Relationship},
     toolchain::{
@@ -74,6 +78,10 @@ pub enum Error {
         #[source]
         source: Box<toml::de::Error>,
     },
+    #[error("failed to parse root pyproject.toml: {0}")]
+    ManifestEdit(#[from] Box<toml_edit::TomlError>),
+    #[error("root pyproject.toml has no [tool.uv.workspace] table")]
+    NotAWorkspace,
     #[error(
         "The uv workspace has no name.\n\nTurborepo needs a name for the workspace's tasks \
          (`<name>#check`), filters (`--filter=<name>`), and configuration. Add one to the root \
@@ -99,6 +107,12 @@ pub enum Error {
         first: String,
         second: String,
     },
+    #[error("uv.lock is required for Python workspaces. Run `uv lock` and commit the result.")]
+    MissingLockfile,
+    #[error("failed to read uv.lock: {0}")]
+    LockfileRead(#[source] io::Error),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::UvLockError),
     #[error("invalid uv workspace member glob: {0}")]
     MemberGlob(#[from] globwalk::GlobError),
     #[error("failed to walk uv workspace members: {0}")]
@@ -1089,6 +1103,55 @@ impl UvTaskContract {
 }
 
 // ---------------------------------------------------------------------------
+// External dependency hashing
+// ---------------------------------------------------------------------------
+
+/// Per-package external dependency closures from uv.lock, for the packages'
+/// external-dependency hashes.
+///
+/// A missing, unreadable, or unparsable lockfile is a hard error — silently
+/// hashing nothing would be unsound.
+pub fn external_closures(
+    repo_root: &AbsoluteSystemPath,
+    members: &[String],
+    workspace_paths: &HashMap<String, String>,
+) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
+    let lock_path = repo_root.join_component(UV_LOCK);
+    let contents = match lock_path.read_to_string() {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(Error::MissingLockfile);
+        }
+        Err(error) => return Err(Error::LockfileRead(error)),
+    };
+    Ok(turborepo_lockfiles::uv_external_closures(
+        &contents,
+        members,
+        workspace_paths,
+    )?)
+}
+
+fn read_lockfile(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
+    match repo_root.join_component(UV_LOCK).read_to_string() {
+        Ok(contents) => Ok(contents),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Err(Error::MissingLockfile),
+        Err(error) => Err(Error::LockfileRead(error)),
+    }
+}
+
+fn package_resolution(
+    package: impl Into<String>,
+    identities: &HashSet<turborepo_lockfiles::Package>,
+) -> PackageResolution {
+    PackageResolution::new(
+        package,
+        identities.iter().map(|identity| {
+            ExternalPackageIdentity::new(identity.key.clone(), identity.version.clone())
+        }),
+    )
+}
+
+// ---------------------------------------------------------------------------
 // The contributor
 // ---------------------------------------------------------------------------
 
@@ -1138,7 +1201,9 @@ impl RepositoryContributor for UvContributor {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
-            let package_directories: HashMap<String, String> = packages
+            let lockfile = read_lockfile(&self.repo_root)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let mut package_directories: HashMap<String, String> = packages
                 .iter()
                 .map(|package| {
                     let directory = package.manifest_path.parent().ok_or_else(|| {
@@ -1149,6 +1214,9 @@ impl RepositoryContributor for UvContributor {
                 })
                 .collect::<Result<_, Error>>()
                 .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            if let Some(root_project) = &workspace.root_project_name {
+                package_directories.insert(root_project.clone(), ".".to_string());
+            }
             let mut workspace_directories: Vec<String> = packages
                 .iter()
                 .filter_map(|package| package_directories.get(&package.name).cloned())
@@ -1156,8 +1224,36 @@ impl RepositoryContributor for UvContributor {
             workspace_directories.sort();
             workspace_directories.dedup();
 
-            let mut package_names = Vec::with_capacity(packages.len());
+            // Each package contributes its already-classified native
+            // internal relationships directly. External dependencies (locked
+            // registry/git/URL distributions) participate in each package
+            // task's hash through the same external-dependency mechanism JS
+            // packages use, scoped to the package's transitive closure — a
+            // dependency bump only invalidates packages that actually depend
+            // on it.
+            let mut closure_members: Vec<String> = packages
+                .iter()
+                .map(|package| package.name.clone())
+                .collect();
+            if let Some(root_project) = &workspace.root_project_name {
+                closure_members.push(root_project.clone());
+            }
+            let mut closures = turborepo_lockfiles::uv_external_closures(
+                &lockfile,
+                &closure_members,
+                &package_directories,
+            )
+            .map_err(Error::from)
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+
+            // The workspace-scoped closure covers every member plus the root
+            // project's own dependencies (when the root is a package).
+            let workspace_externals: HashSet<turborepo_lockfiles::Package> =
+                closures.values().flatten().cloned().collect();
+
             let mut discovered = Vec::with_capacity(packages.len() + 1);
+            let mut resolutions = Vec::with_capacity(packages.len() + 1);
+            let mut package_names = Vec::with_capacity(packages.len());
             for package in packages {
                 let kind = if package.buildable {
                     UvPackageKind::Package
@@ -1170,6 +1266,11 @@ impl RepositoryContributor for UvContributor {
                 let native_tasks =
                     native_tasks_for_package(kind, &package.name, package_directory, &[]);
                 let task_contract = UvTaskContract::new(kind, &package.name);
+                let external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                resolutions.push(package_resolution(
+                    package.name.clone(),
+                    &external_dependencies,
+                ));
                 package_names.push(package.name.clone());
                 discovered.push(
                     DiscoveredPackage::package(
@@ -1185,6 +1286,10 @@ impl RepositoryContributor for UvContributor {
                 );
             }
 
+            // The workspace aggregate, anchored at the root pyproject.toml
+            // and named by the user via `[tool.turbo] name`. It depends on
+            // every package so `--affected` and dependent-filters propagate
+            // package changes to it.
             let workspace_native_tasks = native_tasks_for_package(
                 UvPackageKind::Workspace,
                 &workspace_name,
@@ -1198,6 +1303,10 @@ impl RepositoryContributor for UvContributor {
                 .into_iter()
                 .map(|name| Relationship::internal(name, DependencyKind::Production))
                 .collect();
+            resolutions.push(package_resolution(
+                workspace_name.clone(),
+                &workspace_externals,
+            ));
             discovered.push(
                 DiscoveredPackage::aggregate(
                     workspace_name,
@@ -1211,7 +1320,25 @@ impl RepositoryContributor for UvContributor {
                 ),
             );
 
-            Ok(DiscoveredPackages::new(discovered, workspace_roots))
+            let members = resolutions
+                .iter()
+                .map(|resolution| resolution.package().to_string())
+                .collect::<Vec<_>>();
+            let resolution = ExternalResolutionDomain::new(
+                crate::external_resolution::PYTHON_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::PYTHON,
+                AnchoredSystemPathBuf::default(),
+                members,
+                [AnchoredSystemPathBuf::from_raw(UV_LOCK)
+                    .map_err(Error::from)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
+                ExternalResolutionData::Resolved {
+                    completeness: ResolutionCompleteness::Complete,
+                    packages: resolutions,
+                },
+            );
+            Ok(DiscoveredPackages::new(discovered, workspace_roots)
+                .with_external_resolution(resolution))
         })
     }
 }
