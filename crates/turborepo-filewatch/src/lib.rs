@@ -2191,7 +2191,7 @@ mod test {
         let (control, mut control_rx) = mpsc::unbounded_channel();
         let registry = Arc::new(super::SubscriptionRegistry::new(control));
         super::prepare_cookie_dir(&cookie_dir).await.unwrap();
-        let mut started = super::start_watcher_attempt(
+        let _started = super::start_watcher_attempt(
             super::MacOsBackend::Poll,
             &repo_root,
             &cookie_dir,
@@ -2201,12 +2201,19 @@ mod test {
         )
         .await
         .unwrap();
+        let (_ready_tx, ready) = tokio::sync::watch::channel(super::SourceState::Ready);
+        let source = super::WatchSource {
+            ready,
+            registry,
+            repository_ignore: Some(repository_ignore),
+        };
+        let mut subscription = source.subscribe(super::WatchScope::all()).await.unwrap();
         let changed = repo_root.join_component("changed.txt");
         changed.create_with_contents("changed").unwrap();
 
         tokio::time::timeout(Duration::from_secs(2), async {
             loop {
-                let event = started.recv_file_events.recv().await.unwrap().unwrap();
+                let event = subscription.recv().await.unwrap().unwrap();
                 if event.paths.iter().any(|path| path == changed.as_std_path()) {
                     break;
                 }
