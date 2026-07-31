@@ -7,6 +7,7 @@ use std::{
     ffi::OsString,
 };
 
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_errors::Spanned;
 
 use crate::{
@@ -39,6 +40,15 @@ pub enum NativeCommandTemplate {
         locked: bool,
         serial_group: Option<String>,
         pass_through_uses_separator: bool,
+    },
+    /// `uv <subcommand> <args>` with uv serial grouping. None of the
+    /// registered subcommands forwards trailing args to another tool, so
+    /// pass-through args attach directly as uv flags.
+    Uv {
+        subcommand: String,
+        /// Fixed arguments, e.g. `--package=<name>` or `--all-packages`.
+        args: Vec<String>,
+        serial_group: Option<String>,
     },
 }
 
@@ -120,6 +130,31 @@ impl NativeTask {
             cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
         }
     }
+
+    /// Construct a uv-synthesized native task (not package-authored).
+    pub fn uv(
+        name: impl Into<String>,
+        display: String,
+        subcommand: impl Into<String>,
+        args: Vec<String>,
+        serial_group: Option<String>,
+    ) -> Self {
+        let name = name.into();
+        Self {
+            name: name.clone(),
+            authored: false,
+            registered: true,
+            executable: true,
+            display: Some(display),
+            script: None,
+            command: Some(NativeCommandTemplate::Uv {
+                subcommand: subcommand.into(),
+                args,
+                serial_group,
+            }),
+            cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
+        }
+    }
 }
 
 /// Observation state for one authoritative scope's native tasks.
@@ -180,13 +215,24 @@ impl ScopeNativeTasks {
     /// command family. This also applies to override-only task names that have
     /// no catalog entry.
     pub fn override_serial_group(&self, override_command: &[String]) -> Option<String> {
-        let invokes_cargo = override_command.first().map(String::as_str) == Some("cargo");
-        (invokes_cargo
+        let program = override_command.first().map(String::as_str);
+        if program == Some("cargo")
             && self
                 .tasks()
                 .iter()
-                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Cargo { .. }))))
-        .then(|| "cargo".to_string())
+                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Cargo { .. })))
+        {
+            return Some("cargo".to_string());
+        }
+        if program == Some("uv")
+            && self
+                .tasks()
+                .iter()
+                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Uv { .. })))
+        {
+            return Some("uv".to_string());
+        }
+        None
     }
 }
 
@@ -320,6 +366,7 @@ pub fn resolve_task_command(
     package_manager: Option<&PackageManager>,
     package_manager_binary: Option<&std::path::Path>,
     cargo_binary: Option<&std::path::Path>,
+    uv_binary: Option<&std::path::Path>,
     pass_through_args: Option<&[String]>,
     override_command: Option<&[String]>,
 ) -> Result<Option<TaskCommand>, ResolveNativeCommandError> {
@@ -398,7 +445,44 @@ pub fn resolve_task_command(
                 serial_group: serial_group.clone(),
             }))
         }
+        NativeCommandTemplate::Uv {
+            subcommand,
+            args: fixed_args,
+            serial_group,
+        } => resolve_uv_task_command(
+            uv_binary,
+            cwd,
+            subcommand,
+            fixed_args,
+            serial_group.clone(),
+            pass_through_args,
+        )
+        .map(Some),
     }
+}
+
+fn resolve_uv_task_command(
+    uv_binary: Option<&std::path::Path>,
+    cwd: AbsoluteSystemPathBuf,
+    subcommand: &str,
+    fixed_args: &[String],
+    serial_group: Option<String>,
+    pass_through_args: Option<&[String]>,
+) -> Result<TaskCommand, ResolveNativeCommandError> {
+    let uv_binary = uv_binary.ok_or(ResolveNativeCommandError::MissingUvBinary)?;
+    let mut args: Vec<OsString> = std::iter::once(subcommand)
+        .chain(fixed_args.iter().map(String::as_str))
+        .map(OsString::from)
+        .collect();
+    if let Some(pass_through_args) = pass_through_args {
+        args.extend(pass_through_args.iter().map(OsString::from));
+    }
+    Ok(TaskCommand {
+        program: uv_binary.as_os_str().to_owned(),
+        args,
+        cwd,
+        serial_group,
+    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -409,6 +493,11 @@ pub enum ResolveNativeCommandError {
     MissingPackageManagerBinary,
     #[error("Cargo binary is not available for native task resolution")]
     MissingCargoBinary,
+    #[error(
+        "The `uv` binary is required to run Python tasks but was not found on PATH. Install uv: \
+         https://docs.astral.sh/uv/getting-started/installation/"
+    )]
+    MissingUvBinary,
 }
 
 #[cfg(test)]
@@ -521,5 +610,43 @@ mod tests {
                 .script_names()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn uv_command_resolution_preserves_argument_order_and_group() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let binary = std::path::Path::new(if cfg!(windows) {
+            r"C:\bin\uv.exe"
+        } else {
+            "/bin/uv"
+        });
+        let pass_through = ["--frozen".to_string()];
+        let command = resolve_uv_task_command(
+            Some(binary),
+            root.clone(),
+            "sync",
+            &["--package=app".to_string()],
+            Some("uv".to_string()),
+            Some(&pass_through),
+        )
+        .unwrap();
+        assert_eq!(command.program, binary.as_os_str());
+        assert_eq!(
+            command.args,
+            ["sync", "--package=app", "--frozen"].map(OsString::from)
+        );
+        assert_eq!(command.cwd, root);
+        assert_eq!(command.serial_group.as_deref(), Some("uv"));
+    }
+
+    #[test]
+    fn uv_command_resolution_requires_binary() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        assert!(matches!(
+            resolve_uv_task_command(None, root, "build", &[], None, None),
+            Err(ResolveNativeCommandError::MissingUvBinary)
+        ));
     }
 }

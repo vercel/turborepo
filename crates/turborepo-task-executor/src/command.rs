@@ -152,10 +152,11 @@ pub enum CommandProviderError {
 /// Command provider that resolves commands through the native-task catalog.
 ///
 /// The catalog owns native command templates (JavaScript: package-manager
-/// `run <script>`; Cargo: `cargo <verb>` scoped to crate/workspace). This
-/// provider adapts the resolved [`TaskCommand`] data into a process command
-/// and applies concerns that are not native-task-specific: the task
-/// environment, stdin policy, and microfrontends proxy decorations.
+/// `run <script>`; Cargo: `cargo <verb>` scoped to crate/workspace; uv:
+/// `uv <verb>` scoped to package/workspace). This provider adapts the
+/// resolved [`TaskCommand`] data into a process command and applies concerns
+/// that are not native-task-specific: the task environment, stdin policy,
+/// and microfrontends proxy decorations.
 #[derive(Debug)]
 pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
@@ -172,6 +173,8 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     /// Lazily resolved cargo binary path for Cargo framing.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved uv binary path for Python framing.
+    uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -190,6 +193,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             command_overrides,
             package_manager_binary: std::sync::OnceLock::new(),
             cargo_binary: std::sync::OnceLock::new(),
+            uv_binary: std::sync::OnceLock::new(),
         }
     }
 
@@ -208,6 +212,13 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
 
     fn cargo_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
         match self.cargo_binary.get_or_init(|| which::which("cargo")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn uv_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.uv_binary.get_or_init(|| which::which("uv")) {
             Ok(path) => Ok(Some(path.as_path())),
             Err(_) => Ok(None),
         }
@@ -252,15 +263,16 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         };
 
         let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
-            let (package_manager_binary, cargo_binary) = if override_command.is_some() {
-                (None, None)
+            let (package_manager_binary, cargo_binary, uv_binary) = if override_command.is_some() {
+                (None, None, None)
             } else {
                 match native_task.command() {
                     Some(NativeCommandTemplate::JavaScriptPackageManagerRun { .. }) => {
-                        (self.package_manager_binary()?, None)
+                        (self.package_manager_binary()?, None, None)
                     }
-                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?),
-                    None => (None, None),
+                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?, None),
+                    Some(NativeCommandTemplate::Uv { .. }) => (None, None, self.uv_binary()?),
+                    None => (None, None, None),
                 }
             };
             turborepo_repository::native_tasks::resolve_task_command(
@@ -269,6 +281,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 self.package_graph.package_manager(),
                 package_manager_binary,
                 cargo_binary,
+                uv_binary,
                 self.task_args.args_for_task(task_id),
                 override_command,
             )

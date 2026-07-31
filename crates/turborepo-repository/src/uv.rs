@@ -14,15 +14,23 @@
 //! machines that only orchestrate. The `uv` binary is required only to
 //! execute tasks.
 //!
-//! A synthetic package anchored at the root `pyproject.toml` and depending on
-//! every member represents the workspace itself. Its name is declared by the
-//! user in the root manifest; using Turborepo with Python requires naming the
-//! workspace:
+//! Buildable packages register `build` (`uv build --package=<name>`), and all
+//! packages register `format` and `check`. A synthetic package
+//! anchored at the root `pyproject.toml` and depending on every member
+//! represents the workspace itself; it registers workspace-wide versions of the
+//! same quality tasks. Every other task comes from normal task definitions (via
+//! the `command` map's `python` key). The
+//! workspace package's name is declared by the user in the root manifest —
+//! using Turborepo with Python requires naming the workspace:
 //!
 //! ```toml
 //! [tool.turbo]
 //! name = "acme"
 //! ```
+//!
+//! External dependencies hash from `uv.lock` per member (see
+//! [`external_closures`]), scoped to each member's transitive closure, so a
+//! dependency bump only invalidates the packages that depend on it.
 //!
 //! Support is experimental and gated behind
 //! `futureFlags.experimentalPythonWorkspaces`.
@@ -35,7 +43,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
     package_json::PackageJson,
@@ -106,7 +114,7 @@ pub enum Error {
     #[error("uv workspace glob exceeds the maximum length of {0} bytes")]
     WorkspaceGlobTooLong(usize),
     #[error(transparent)]
-    Path(#[from] turbopath::PathError),
+    ResolutionPath(#[from] turbopath::PathError),
 }
 
 /// Normalize a Python package name per PEP 503: lowercase, with runs of
@@ -133,6 +141,10 @@ pub fn normalize_name(name: &str) -> String {
 /// The distribution-name form of a normalized package name: `-` becomes
 /// `_`, matching the file names `uv build` writes to the dist directory
 /// (PEP 625 / the wheel file name convention).
+fn dist_name(normalized_name: &str) -> String {
+    normalized_name.replace('-', "_")
+}
+
 /// Extract the package name from a PEP 508 dependency string: the leading
 /// identifier before any extras (`[...]`), version specifier, URL (`@`),
 /// or environment marker (`;`). Returns `None` for strings that do not
@@ -660,6 +672,423 @@ fn connect_packages(
 }
 
 // ---------------------------------------------------------------------------
+// Native tasks
+// ---------------------------------------------------------------------------
+
+/// How a Python-toolchain package participates in task execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UvPackageKind {
+    /// A buildable workspace member.
+    Package,
+    /// A workspace member uv cannot build as a distribution. It receives the
+    /// quality tasks but no built-in build task.
+    VirtualPackage,
+    /// The user-named workspace aggregate hosting workspace-scoped quality
+    /// tasks.
+    Workspace,
+}
+
+const PACKAGE_TASKS: &[(&str, &str)] =
+    &[("build", "build"), ("format", "format"), ("check", "check")];
+const QUALITY_TASKS: &[(&str, &str)] = &[("format", "format"), ("check", "check")];
+
+/// The uv subcommand a task resolves to for a package, given its
+/// [`UvPackageKind`]. `None` means the task is a no-op for this package
+/// (like a missing package.json script).
+pub fn task_subcommand(kind: UvPackageKind, task: &str) -> Option<&'static str> {
+    let tasks = match kind {
+        UvPackageKind::Package => PACKAGE_TASKS,
+        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
+    };
+    tasks
+        .iter()
+        .find_map(|(name, subcommand)| (*name == task).then_some(*subcommand))
+}
+
+fn registered_tasks(kind: UvPackageKind) -> impl Iterator<Item = &'static str> {
+    match kind {
+        UvPackageKind::Package => PACKAGE_TASKS,
+        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
+    }
+    .iter()
+    .map(|(task, _)| *task)
+}
+
+/// The fixed arguments the subcommand takes for this package, derived from
+/// the same tables as registration so display and execution cannot drift.
+fn task_arguments(
+    kind: UvPackageKind,
+    task: &str,
+    package: &str,
+    package_directory: &str,
+    workspace_directories: &[String],
+) -> Vec<String> {
+    match (kind, task) {
+        (UvPackageKind::Package, "build") => vec![format!("--package={package}")],
+        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "format") => {
+            vec!["--".to_string(), package_directory.to_string()]
+        }
+        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "check") => {
+            vec![format!("--package={package}")]
+        }
+        (UvPackageKind::Workspace, "format") => std::iter::once("--".to_string())
+            .chain(workspace_directories.iter().cloned())
+            .collect(),
+        (UvPackageKind::Workspace, "check") => vec!["--all-packages".to_string()],
+        (UvPackageKind::Workspace, _) => Vec::new(),
+        _ => Vec::new(),
+    }
+}
+
+/// The display string for a uv task's command.
+pub fn display_command(
+    kind: UvPackageKind,
+    task: &str,
+    package: &str,
+    package_directory: &str,
+    workspace_directories: &[String],
+) -> Option<String> {
+    let subcommand = task_subcommand(kind, task)?;
+    let mut display = format!("uv {subcommand}");
+    for argument in task_arguments(
+        kind,
+        task,
+        package,
+        package_directory,
+        workspace_directories,
+    ) {
+        display.push(' ');
+        display.push_str(&argument);
+    }
+    Some(display)
+}
+
+/// Build native-task facts for a Python package from its verb tables.
+pub fn native_tasks_for_package(
+    kind: UvPackageKind,
+    package: &str,
+    package_directory: &str,
+    workspace_directories: &[String],
+) -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::NativeTask;
+
+    registered_tasks(kind)
+        .filter_map(|task| {
+            let subcommand = task_subcommand(kind, task)?;
+            let display = display_command(
+                kind,
+                task,
+                package,
+                package_directory,
+                workspace_directories,
+            )?;
+            Some(NativeTask::uv(
+                task,
+                display,
+                subcommand,
+                task_arguments(
+                    kind,
+                    task,
+                    package,
+                    package_directory,
+                    workspace_directories,
+                ),
+                (task == "check").then(|| "uv".to_string()),
+            ))
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Task contract
+// ---------------------------------------------------------------------------
+
+/// Standard uv and pip environment variables that can change what a uv
+/// invocation resolves, installs, or builds. Credentials and purely
+/// cosmetic settings are deliberately excluded.
+pub const HASHED_ENV_VARS: &[&str] = &[
+    "APPDATA",
+    "HOME",
+    "UV_BUILD_CONSTRAINT",
+    "UV_COMPILE_BYTECODE",
+    "UV_CONFIG_FILE",
+    "UV_CONSTRAINT",
+    "UV_DEFAULT_INDEX",
+    "UV_EXCLUDE",
+    "UV_EXCLUDE_NEWER",
+    "UV_INDEX",
+    "UV_INDEX_STRATEGY",
+    "UV_INDEX_URL",
+    "UV_EXTRA_INDEX_URL",
+    "UV_FIND_LINKS",
+    "UV_FORK_STRATEGY",
+    "UV_GIT_LFS",
+    "UV_INSECURE_HOST",
+    "UV_LINK_MODE",
+    "UV_MANAGED_PYTHON",
+    "UV_NO_BUILD_ISOLATION",
+    "UV_NO_BUILD_ISOLATION_PACKAGE",
+    "UV_PYTHON",
+    "UV_PYTHON_DOWNLOADS",
+    "UV_PYTHON_PREFERENCE",
+    "UV_PROJECT",
+    "UV_PROJECT_ENVIRONMENT",
+    "UV_NO_BINARY",
+    "UV_NO_BINARY_PACKAGE",
+    "UV_NO_BUILD",
+    "UV_NO_BUILD_PACKAGE",
+    "UV_NO_CONFIG",
+    "UV_NO_EDITABLE",
+    "UV_NO_MANAGED_PYTHON",
+    "UV_NO_SOURCES_PACKAGE",
+    "UV_NO_SYSTEM_CONFIG",
+    "UV_NO_SOURCES",
+    "UV_OFFLINE",
+    "UV_OVERRIDE",
+    "UV_RESOLUTION",
+    "UV_PRERELEASE",
+    "UV_SYSTEM_CERTS",
+    "UV_WORKING_DIR",
+    "XDG_CONFIG_HOME",
+    "PIP_INDEX_URL",
+    "PIP_EXTRA_INDEX_URL",
+];
+
+const UV_PATH_ENV_VARS: &[&str] = &[
+    "UV_BUILD_CONSTRAINT",
+    "UV_CONFIG_FILE",
+    "UV_CONSTRAINT",
+    "UV_EXCLUDE",
+    "UV_OVERRIDE",
+    "UV_PROJECT",
+    "UV_WORKING_DIR",
+];
+
+fn has_untracked_uv_path_env(environment: &toolchain::TaskIOEnvironment) -> bool {
+    UV_PATH_ENV_VARS
+        .iter()
+        .any(|name| environment.get(name).is_some())
+}
+
+fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) -> bool {
+    if has_untracked_uv_path_env(environment) {
+        return true;
+    }
+    if environment.get("UV_NO_CONFIG").is_some_and(|value| {
+        !matches!(
+            value.to_ascii_lowercase().as_str(),
+            "" | "0" | "false" | "no"
+        )
+    }) {
+        return false;
+    }
+    let mut paths = Vec::new();
+    if let Some(config_home) = environment.get("XDG_CONFIG_HOME") {
+        paths.push(std::path::PathBuf::from(config_home).join("uv/uv.toml"));
+    } else if let Some(home) = environment.get("HOME") {
+        paths.push(std::path::PathBuf::from(home).join(".config/uv/uv.toml"));
+    }
+    if let Some(app_data) = environment.get("APPDATA") {
+        paths.push(std::path::PathBuf::from(app_data).join("uv/uv.toml"));
+    }
+    if let Some(program_data) = std::env::var_os("PROGRAMDATA") {
+        paths.push(std::path::PathBuf::from(program_data).join("uv/uv.toml"));
+    }
+    #[cfg(unix)]
+    paths.push(std::path::PathBuf::from("/etc/uv/uv.toml"));
+
+    paths.into_iter().any(|path| path.is_file())
+}
+
+/// Input globs whose changes should invalidate a Python task's cache: the
+/// workspace root manifest (workspace membership, sources, and
+/// requires-python live there), uv's optional configuration file, and the
+/// pinned interpreter version — expressed relative to the task's package
+/// directory via `prefix` (the path from the package to the repo root;
+/// empty for the workspace package). Globs that don't match anything (e.g.
+/// a missing `.python-version`) simply contribute nothing.
+///
+/// uv.lock is deliberately absent: locked dependencies participate in each
+/// package task's external-dependency hash, scoped to that package's
+/// transitive closure (see [`external_closures`]), so a dependency bump
+/// only invalidates the packages that actually depend on it.
+pub fn hash_input_globs(prefix: &str) -> Vec<String> {
+    [PYPROJECT_TOML, "uv.toml", ".python-version"]
+        .iter()
+        .map(|rel| join_prefix(prefix, rel))
+        .collect()
+}
+
+fn join_prefix(prefix: &str, rel: &str) -> String {
+    if prefix.is_empty() {
+        rel.to_string()
+    } else {
+        format!("{prefix}/{rel}")
+    }
+}
+
+/// uv-specific details captured in immutable task-contract knowledge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UvTaskContract {
+    kind: UvPackageKind,
+    /// The package's distribution file-name stem (normalized name with `_`
+    /// separators), used to derive `uv build` output globs. Empty for the
+    /// workspace aggregate.
+    dist_name: String,
+    /// Repository-relative member directories for workspace-wide quality
+    /// tasks. Empty for member packages.
+    workspace_directories: Vec<String>,
+}
+
+impl UvTaskContract {
+    fn new(kind: UvPackageKind, package_name: &str) -> Self {
+        Self {
+            kind,
+            dist_name: match kind {
+                UvPackageKind::Package | UvPackageKind::VirtualPackage => dist_name(package_name),
+                UvPackageKind::Workspace => String::new(),
+            },
+            workspace_directories: Vec::new(),
+        }
+    }
+
+    fn workspace(package_name: &str, workspace_directories: Vec<String>) -> Self {
+        Self {
+            workspace_directories,
+            ..Self::new(UvPackageKind::Workspace, package_name)
+        }
+    }
+
+    pub(crate) fn task_defaults(&self, task: &str) -> toolchain::TaskDefaults {
+        // uv, Python, ty, and isolated build-backend versions are not
+        // yet part of the task fingerprint, so built-in uv commands fail
+        // closed on cache.
+        let cache = task_subcommand(self.kind, task).map(|_| false);
+        toolchain::TaskDefaults { cache }
+    }
+
+    /// Classifies Python package sources for dependent derived-input
+    /// closures. Workspace aggregates have no package source directory to
+    /// include.
+    pub(crate) fn dependency_source_inputs(&self) -> crate::task_contracts::DependencySourceInputs {
+        match self.kind {
+            UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+                crate::task_contracts::DependencySourceInputs::Include
+            }
+            UvPackageKind::Workspace => crate::task_contracts::DependencySourceInputs::Exclude,
+        }
+    }
+
+    pub(crate) fn derives_task_io(&self, task: &str) -> bool {
+        registered_tasks(self.kind).any(|registered| registered == task)
+    }
+
+    pub(crate) fn task_entrypoint(
+        &self,
+        task: &str,
+    ) -> Option<crate::task_contracts::TaskEntrypoint> {
+        if task_subcommand(self.kind, task).is_some() {
+            return Some(match self.kind {
+                // Unfiltered quality tasks use the workspace-scoped command
+                // only; per-package commands are for filtered runs.
+                UvPackageKind::Workspace => crate::task_contracts::TaskEntrypoint::PreferredOnly,
+                UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+                    crate::task_contracts::TaskEntrypoint::Candidate
+                }
+            });
+        }
+        match (self.kind, task) {
+            (UvPackageKind::Workspace | UvPackageKind::VirtualPackage, "build") => {
+                Some(crate::task_contracts::TaskEntrypoint::Excluded)
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn derived_task_io(
+        &self,
+        _package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
+        wants_automatic_inputs: bool,
+        context: &toolchain::TaskIOContext<'_>,
+    ) -> Option<toolchain::DerivedTaskIO> {
+        let subcommand = task_subcommand(self.kind, task)?;
+        let mut io = toolchain::DerivedTaskIO {
+            input_globs: hash_input_globs(path_to_root),
+            env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
+            ..Default::default()
+        };
+        // These variables point at files whose contents affect uv. Until the
+        // paths can be resolved against the repository safely, fail closed
+        // instead of restoring an artifact hashed only by the path string.
+        if has_untracked_uv_configuration(context.environment) {
+            io.input_safety = toolchain::DerivedInputSafety::Untracked;
+        }
+        match self.kind {
+            UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+                if wants_automatic_inputs {
+                    io.package_default_inputs = Some(true);
+                    if task == "check" {
+                        let mut globs: Vec<String> = dependencies
+                            .iter()
+                            .filter(|dependency| {
+                                dependency.task_contract().dependency_source_inputs()
+                                    == crate::task_contracts::DependencySourceInputs::Include
+                            })
+                            .flat_map(|dependency| {
+                                let directory = join_prefix(
+                                    path_to_root,
+                                    dependency.directory().to_unix().as_str(),
+                                );
+                                [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                            })
+                            .collect();
+                        globs.sort();
+                        globs.dedup();
+                        io.input_globs.extend(globs);
+                    }
+                }
+                if subcommand == "build" {
+                    // `uv build` writes `<dist_name>-<version>*` sdists and
+                    // wheels into the workspace root's dist directory. Extra
+                    // task args can relocate the output (`--out-dir`), so
+                    // outputs resolve only for the bare invocation.
+                    io.outputs = if context.task_args.is_some_and(|args| !args.is_empty()) {
+                        toolchain::DerivedOutputs::Unavailable
+                    } else {
+                        toolchain::DerivedOutputs::Resolved(vec![join_prefix(
+                            path_to_root,
+                            &format!("dist/{}-*", self.dist_name),
+                        )])
+                    };
+                }
+            }
+            UvPackageKind::Workspace => {
+                if wants_automatic_inputs {
+                    // The aggregate is anchored at the repository root;
+                    // default-hashing the entire repository would be wrong.
+                    io.package_default_inputs = Some(false);
+                    let mut globs: Vec<String> = self
+                        .workspace_directories
+                        .iter()
+                        .flat_map(|directory| {
+                            let directory = join_prefix(path_to_root, directory);
+                            [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                        })
+                        .collect();
+                    globs.sort();
+                    globs.dedup();
+                    io.input_globs.extend(globs);
+                }
+            }
+        }
+        Some(io)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The contributor
 // ---------------------------------------------------------------------------
 
@@ -709,9 +1138,38 @@ impl RepositoryContributor for UvContributor {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
+            let package_directories: HashMap<String, String> = packages
+                .iter()
+                .map(|package| {
+                    let directory = package.manifest_path.parent().ok_or_else(|| {
+                        Error::InvalidMemberManifestPath(package.manifest_path.to_string())
+                    })?;
+                    let directory = AnchoredSystemPathBuf::new(&self.repo_root, directory)?;
+                    Ok((package.name.clone(), directory.to_unix().to_string()))
+                })
+                .collect::<Result<_, Error>>()
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let mut workspace_directories: Vec<String> = packages
+                .iter()
+                .filter_map(|package| package_directories.get(&package.name).cloned())
+                .collect();
+            workspace_directories.sort();
+            workspace_directories.dedup();
+
             let mut package_names = Vec::with_capacity(packages.len());
             let mut discovered = Vec::with_capacity(packages.len() + 1);
             for package in packages {
+                let kind = if package.buildable {
+                    UvPackageKind::Package
+                } else {
+                    UvPackageKind::VirtualPackage
+                };
+                let package_directory = package_directories
+                    .get(&package.name)
+                    .map_or(".", String::as_str);
+                let native_tasks =
+                    native_tasks_for_package(kind, &package.name, package_directory, &[]);
+                let task_contract = UvTaskContract::new(kind, &package.name);
                 package_names.push(package.name.clone());
                 discovered.push(
                     DiscoveredPackage::package(
@@ -719,10 +1177,22 @@ impl RepositoryContributor for UvContributor {
                         PackageJson::default(),
                         package.manifest_path,
                     )
-                    .with_native_relationships(package.relationships),
+                    .with_native_relationships(package.relationships)
+                    .with_native_tasks(native_tasks)
+                    .with_task_contract(
+                        crate::task_contracts::ScopeTaskContract::python(task_contract),
+                    ),
                 );
             }
 
+            let workspace_native_tasks = native_tasks_for_package(
+                UvPackageKind::Workspace,
+                &workspace_name,
+                ".",
+                &workspace_directories,
+            );
+            let workspace_task_contract =
+                UvTaskContract::workspace(&workspace_name, workspace_directories);
             package_names.sort();
             let workspace_relationships = package_names
                 .into_iter()
@@ -734,7 +1204,11 @@ impl RepositoryContributor for UvContributor {
                     PackageJson::default(),
                     self.repo_root.join_component(PYPROJECT_TOML),
                 )
-                .with_native_relationships(workspace_relationships),
+                .with_native_relationships(workspace_relationships)
+                .with_native_tasks(workspace_native_tasks)
+                .with_task_contract(
+                    crate::task_contracts::ScopeTaskContract::python(workspace_task_contract),
+                ),
             );
 
             Ok(DiscoveredPackages::new(discovered, workspace_roots))
@@ -753,6 +1227,12 @@ mod test {
         assert_eq!(normalize_name("a.b--c__d"), "a-b-c-d");
         assert_eq!(normalize_name("already-normal"), "already-normal");
         assert_eq!(normalize_name(""), "");
+    }
+
+    #[test]
+    fn test_dist_name() {
+        assert_eq!(dist_name("py-app"), "py_app");
+        assert_eq!(dist_name("single"), "single");
     }
 
     #[test]
@@ -1083,6 +1563,43 @@ overridden = { index = "private" }
     }
 
     #[test]
+    fn test_uv_path_environment_disables_automatic_inputs() {
+        let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "UV_CONFIG_FILE".to_string(),
+            "/outside/uv.toml".to_string(),
+        )]));
+        assert!(has_untracked_uv_configuration(&environment));
+        assert!(!has_untracked_uv_configuration(
+            &toolchain::TaskIOEnvironment::default()
+        ));
+    }
+
+    #[test]
+    fn test_no_config_does_not_hide_other_path_inputs() {
+        let environment = toolchain::TaskIOEnvironment::new(HashMap::from([
+            ("UV_NO_CONFIG".to_string(), "true".to_string()),
+            (
+                "UV_BUILD_CONSTRAINT".to_string(),
+                "/outside/constraints.txt".to_string(),
+            ),
+        ]));
+        assert!(has_untracked_uv_configuration(&environment));
+    }
+
+    #[test]
+    fn test_user_uv_config_disables_automatic_inputs() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let config_dir = tempdir.path().join("uv");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("uv.toml"), "offline = true\n").unwrap();
+        let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "XDG_CONFIG_HOME".to_string(),
+            tempdir.path().to_string_lossy().to_string(),
+        )]));
+        assert!(has_untracked_uv_configuration(&environment));
+    }
+
+    #[test]
     fn test_missing_workspace_table_discovers_nothing() {
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
@@ -1145,5 +1662,96 @@ overridden = { index = "private" }
             .unwrap();
         let error = discover_workspace(&root).unwrap_err();
         assert!(matches!(error, Error::InvalidWorkspaceName { .. }));
+    }
+
+    #[test]
+    fn test_task_tables() {
+        assert_eq!(
+            task_subcommand(UvPackageKind::Package, "build"),
+            Some("build")
+        );
+        assert_eq!(
+            task_subcommand(UvPackageKind::Package, "format"),
+            Some("format")
+        );
+        assert_eq!(task_subcommand(UvPackageKind::Package, "lock"), None);
+        assert_eq!(task_subcommand(UvPackageKind::Package, "test"), None);
+        assert_eq!(
+            task_subcommand(UvPackageKind::VirtualPackage, "format"),
+            Some("format")
+        );
+        assert_eq!(
+            task_subcommand(UvPackageKind::VirtualPackage, "build"),
+            None
+        );
+        assert_eq!(
+            task_subcommand(UvPackageKind::Workspace, "check"),
+            Some("check")
+        );
+        assert_eq!(task_subcommand(UvPackageKind::Workspace, "lock"), None);
+        assert_eq!(task_subcommand(UvPackageKind::Workspace, "build"), None);
+
+        assert_eq!(
+            display_command(
+                UvPackageKind::Package,
+                "build",
+                "py-app",
+                "packages/py-app",
+                &[]
+            )
+            .as_deref(),
+            Some("uv build --package=py-app")
+        );
+        assert_eq!(
+            display_command(
+                UvPackageKind::Package,
+                "format",
+                "py-app",
+                "packages/py-app",
+                &[]
+            )
+            .as_deref(),
+            Some("uv format -- packages/py-app")
+        );
+        assert_eq!(
+            display_command(
+                UvPackageKind::Workspace,
+                "format",
+                "acme",
+                ".",
+                &["packages/py-app".to_string(), "packages/py-lib".to_string()]
+            )
+            .as_deref(),
+            Some("uv format -- packages/py-app packages/py-lib")
+        );
+        assert_eq!(
+            display_command(UvPackageKind::Workspace, "check", "acme", ".", &[]).as_deref(),
+            Some("uv check --all-packages")
+        );
+
+        let tasks =
+            native_tasks_for_package(UvPackageKind::Package, "py-app", "packages/py-app", &[]);
+        assert_eq!(tasks.len(), 3);
+        assert!(
+            tasks
+                .iter()
+                .all(|task| task.registered() && task.executable())
+        );
+    }
+
+    #[test]
+    fn test_derived_outputs_for_build() {
+        let contract = UvTaskContract::new(UvPackageKind::Package, "py-app");
+        assert!(contract.derives_task_io("build"));
+        assert!(contract.derives_task_io("format"));
+        assert!(contract.derives_task_io("check"));
+        assert!(!contract.derives_task_io("test"));
+        assert_eq!(contract.task_defaults("check").cache, Some(false));
+        assert_eq!(contract.task_defaults("build").cache, Some(false));
+        assert_eq!(contract.dist_name, "py_app");
+
+        let virtual_contract = UvTaskContract::new(UvPackageKind::VirtualPackage, "py-app");
+        assert!(!virtual_contract.derives_task_io("build"));
+        assert!(virtual_contract.derives_task_io("check"));
     }
 }
