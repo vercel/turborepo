@@ -84,4 +84,11 @@ pub enum Error {
          root turbo.json."
     ))]
     PackageMayBeCargoCrate { name: String },
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a pyproject.toml, but Python package support is not enabled. uv \
+         workspace members become packages when `futureFlags.experimentalPythonWorkspaces` is set \
+         in the root turbo.json."
+    ))]
+    PackageMayBePythonPackage { name: String },
 }

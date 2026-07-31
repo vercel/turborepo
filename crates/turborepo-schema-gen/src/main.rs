@@ -849,6 +849,19 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph, resolve in `--filter` expressions, and appear in
+   * `turbo query`. uv is the only supported Python package manager. This
+   * feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
 }
 
 "#

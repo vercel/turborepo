@@ -372,9 +372,10 @@ impl RunBuilder {
             root_turbo_json,
         )
         .map_err(|err| match err {
-            // A filter that names a Rust crate is a likely mistake when the
-            // repository has a Cargo workspace but Cargo package support is
-            // not enabled; point at the opt-in.
+            // A filter that names a Rust crate or Python package is a likely
+            // mistake when the repository has a native workspace but the
+            // toolchain's package support is not enabled; point at the
+            // opt-in.
             ResolutionError::NoPackagesMatchedWithName(name)
                 if !cargo_enabled(&opts.future_flags)
                     && repo_root
@@ -382,6 +383,14 @@ impl RunBuilder {
                         .exists() =>
             {
                 Error::PackageMayBeCargoCrate { name }
+            }
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !python_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBePythonPackage { name }
             }
             err => Error::Scope(err),
         })?;
@@ -521,10 +530,11 @@ impl RunBuilder {
                 })
             })
         };
-        // A pure Cargo workspace (experimentalCargoWorkspaces, no root
-        // package.json) has no JavaScript root manifest. A *missing* file is
-        // only tolerated in that mode; a malformed one always fails, and a
-        // missing one without Cargo support keeps the original hard error.
+        // A pure native workspace (experimentalCargoWorkspaces or
+        // experimentalPythonWorkspaces, no root package.json) has no
+        // JavaScript root manifest. A *missing* file is only tolerated in
+        // those modes; a malformed one always fails, and a missing one
+        // without native support keeps the original hard error.
         let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
         let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
@@ -1466,6 +1476,14 @@ impl RunBuilder {
 /// invoker sees the same package graph.
 pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
     RepositoryGraphFeatures::new(future_flags).cargo_enabled()
+}
+
+/// Whether experimental Python (uv) package support is enabled, via
+/// `futureFlags.experimentalPythonWorkspaces` in the root turbo.json. The
+/// future flag is the only switch: it is repo-level configuration, so every
+/// invoker sees the same package graph.
+pub(crate) fn python_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    RepositoryGraphFeatures::new(future_flags).python_enabled()
 }
 
 fn origins_match(url1: &str, url2: &str) -> bool {

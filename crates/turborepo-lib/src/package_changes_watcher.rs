@@ -968,6 +968,7 @@ mod test {
             false,
             RepositoryGraphFeatures {
                 cargo: cargo_enabled,
+                python: false,
             },
         )
     }
@@ -1105,9 +1106,12 @@ mod test {
             .join_component("package.json")
             .create_with_contents(b"{")
             .unwrap();
-        assert!(RepositoryGraphFeatures { cargo: true }
-            .load_root_package_json(&repo_root)
-            .is_err());
+        assert!(RepositoryGraphFeatures {
+            cargo: true,
+            python: false,
+        }
+        .load_root_package_json(&repo_root)
+        .is_err());
         assert!(initialize_test_state(&repo_root, true).await.is_none());
 
         repo_root.join_component("package.json").remove().unwrap();
@@ -1793,7 +1797,10 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
-            RepositoryGraphFeatures { cargo: false },
+            RepositoryGraphFeatures {
+                cargo: false,
+                python: false,
+            },
         );
 
         TestWatcherHandle {

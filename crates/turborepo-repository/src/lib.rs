@@ -27,4 +27,5 @@ pub mod prune_knowledge;
 pub mod relationships;
 pub mod task_contracts;
 pub mod toolchain;
+pub mod uv;
 pub mod workspaces;

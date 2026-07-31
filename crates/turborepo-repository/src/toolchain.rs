@@ -70,6 +70,13 @@ impl ToolchainId {
     /// Experimental, gated behind `futureFlags.experimentalCargoWorkspaces`.
     pub const RUST: ToolchainId = ToolchainId(Cow::Borrowed("rust"));
 
+    /// The Python toolchain: packages discovered from a uv workspace (see
+    /// [`crate::uv`]). Named for the language, like [`ToolchainId::RUST`],
+    /// while the implementation is uv-specific — uv is the only supported
+    /// Python package manager. Experimental, gated behind
+    /// `futureFlags.experimentalPythonWorkspaces`.
+    pub const PYTHON: ToolchainId = ToolchainId(Cow::Borrowed("python"));
+
     pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
         Self(id.into())
     }
