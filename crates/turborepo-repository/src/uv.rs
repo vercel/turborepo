@@ -46,6 +46,7 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
         PackageResolution, ResolutionCompleteness,
@@ -78,10 +79,6 @@ pub enum Error {
         #[source]
         source: Box<toml::de::Error>,
     },
-    #[error("failed to parse root pyproject.toml: {0}")]
-    ManifestEdit(#[from] Box<toml_edit::TomlError>),
-    #[error("root pyproject.toml has no [tool.uv.workspace] table")]
-    NotAWorkspace,
     #[error(
         "The uv workspace has no name.\n\nTurborepo needs a name for the workspace's tasks \
          (`<name>#check`), filters (`--filter=<name>`), and configuration. Add one to the root \
@@ -1151,6 +1148,14 @@ fn package_resolution(
     )
 }
 
+fn uv_change_observation() -> ChangeObservation {
+    ChangeObservation::new()
+        .with_rediscovery_file_name(PYPROJECT_TOML)
+        .with_resolution_path(UV_LOCK)
+        .with_ignore_prefix(".venv")
+        .with_ignore_prefix("dist")
+}
+
 // ---------------------------------------------------------------------------
 // The contributor
 // ---------------------------------------------------------------------------
@@ -1201,6 +1206,7 @@ impl RepositoryContributor for UvContributor {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
+            let change_observation = uv_change_observation();
             let lockfile = read_lockfile(&self.repo_root)
                 .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
             let mut package_directories: HashMap<String, String> = packages
@@ -1338,7 +1344,8 @@ impl RepositoryContributor for UvContributor {
                 },
             );
             Ok(DiscoveredPackages::new(discovered, workspace_roots)
-                .with_external_resolution(resolution))
+                .with_external_resolution(resolution)
+                .with_change_observation(change_observation))
         })
     }
 }
