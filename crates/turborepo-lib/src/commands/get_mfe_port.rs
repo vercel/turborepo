@@ -7,11 +7,7 @@ use turborepo_repository::package_graph::{
     PackageGraph, PackageGraphNodeKind, PackageName, PackageNode,
 };
 
-use crate::{
-    commands::CommandBase,
-    microfrontends::MicrofrontendsConfigs,
-    run::builder::{cargo_enabled, load_root_package_json},
-};
+use crate::{commands::CommandBase, microfrontends::MicrofrontendsConfigs};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -52,17 +48,14 @@ async fn get_port_for_current_package(base: &CommandBase) -> Result<u16, Error> 
 
 async fn build_package_graph(base: &CommandBase) -> Result<PackageGraph, Error> {
     let repo_root = &base.repo_root;
-    let cargo_enabled = cargo_enabled(&base.opts().future_flags);
-    let root_package_json = load_root_package_json(repo_root, cargo_enabled)?;
+    let features = crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+    let root_package_json = features.load_root_package_json(repo_root)?;
 
-    let mut builder = PackageGraph::builder_optional(repo_root, root_package_json)
+    let builder = PackageGraph::builder_optional(repo_root, root_package_json)
         .with_single_package_mode(base.opts().run_opts.single_package)
         .with_allow_no_package_manager(base.opts().repo_opts.allow_no_package_manager);
-    if cargo_enabled {
-        builder = builder.with_cargo();
-    }
 
-    Ok(builder.build().await?)
+    Ok(features.configure(builder).build().await?)
 }
 
 /// Resolve directory ownership from authoritative repository knowledge. The

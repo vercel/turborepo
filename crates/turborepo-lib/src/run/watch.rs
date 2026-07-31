@@ -301,7 +301,8 @@ impl WatchClient {
             scm,
         ));
         // The watcher builds its own graph and must enable the same ecosystems.
-        let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+        let graph_features =
+            crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
@@ -309,7 +310,7 @@ impl WatchClient {
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
-            cargo_enabled,
+            graph_features,
         );
 
         // Subscribe before building the Run so we don't miss the initial

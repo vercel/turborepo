@@ -18,7 +18,7 @@ use crate::{
     commands::CommandBase,
     engine::{EngineBuilder, TaskNode as EngineTaskNode},
     opts::Opts,
-    run::builder::{cargo_enabled, load_root_package_json},
+    repository_graph::RepositoryGraphFeatures,
     turbo_json::{TurboJsonReader, UnifiedTurboJsonLoader},
     Args,
 };
@@ -57,19 +57,17 @@ impl ProperTaskGraphBuilder {
 
     /// Build the package graph for the repository
     async fn build_package_graph(&self, opts: &Opts) -> Result<PackageGraph, TaskGraphError> {
-        let root_package_json =
-            load_root_package_json(&self.repo_root, cargo_enabled(&opts.future_flags)).map_err(
-                |e| TaskGraphError::BuildError(format!("Failed to load package.json: {e}")),
-            )?;
+        let features = RepositoryGraphFeatures::new(&opts.future_flags);
+        let root_package_json = features
+            .load_root_package_json(&self.repo_root)
+            .map_err(|e| TaskGraphError::BuildError(format!("Failed to load package.json: {e}")))?;
 
-        let mut builder = PackageGraphBuilder::new_optional(&self.repo_root, root_package_json)
+        let builder = PackageGraphBuilder::new_optional(&self.repo_root, root_package_json)
             .with_single_package_mode(opts.run_opts.single_package)
             .with_allow_no_package_manager(opts.repo_opts.allow_no_package_manager);
-        if cargo_enabled(&opts.future_flags) {
-            builder = builder.with_cargo();
-        }
 
-        builder
+        features
+            .configure(builder)
             .build()
             .await
             .map_err(|e| TaskGraphError::BuildError(format!("Failed to build package graph: {e}")))
