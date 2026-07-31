@@ -520,29 +520,13 @@ impl<'a> Prune<'a> {
             return Err(Error::NoWorkspaceSpecified);
         }
 
-        let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
-        let root_package_json_path = base.repo_root.join_component("package.json");
-        let root_package_json = match PackageJson::load(&root_package_json_path) {
-            Ok(package_json) => Some(package_json),
-            Err(turborepo_repository::package_json::Error::Io(error))
-                if error.kind() == ErrorKind::NotFound
-                    && cargo_enabled
-                    && base
-                        .repo_root
-                        .join_component(turborepo_repository::cargo::CARGO_TOML)
-                        .exists() =>
-            {
-                None
-            }
-            Err(error) => return Err(error.into()),
-        };
+        let features =
+            crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+        let root_package_json = features.load_root_package_json(&base.repo_root)?;
 
-        let mut graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)
+        let graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)
             .with_allow_no_package_manager(allow_missing_package_manager);
-        if cargo_enabled {
-            graph_builder = graph_builder.with_cargo();
-        }
-        let package_graph = graph_builder.build().await?;
+        let package_graph = features.configure(graph_builder).build().await?;
 
         let out_directory = AbsoluteSystemPathBuf::from_unknown(&base.repo_root, output_dir);
 
