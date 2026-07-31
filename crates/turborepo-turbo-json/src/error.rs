@@ -314,11 +314,10 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
-    #[error(
-        "The {key:?} toolchain in `command` requires `futureFlags.experimentalCargoWorkspaces`."
-    )]
+    #[error("The {key:?} toolchain in `command` requires `futureFlags.{flag}`.")]
     TaskCommandToolchainRequiresFlag {
         key: String,
+        flag: &'static str,
         #[label("toolchain is not enabled")]
         span: Option<SourceSpan>,
         #[source_code]
