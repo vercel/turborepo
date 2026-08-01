@@ -1,5 +1,4 @@
 #![feature(box_patterns)]
-#![feature(try_blocks)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -34,7 +33,8 @@ mod turbo_json;
 
 // Re-export daemon types from the new crate location
 pub use turborepo_daemon::{
-    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
+    Paths as DaemonPaths,
 };
 pub use turborepo_query_api::QueryServer;
 

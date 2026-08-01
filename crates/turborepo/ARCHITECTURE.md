@@ -90,6 +90,20 @@ behavior:
 - Existing final-output coverage should continue proving that shutdown keeps the
   UI and log pipeline alive long enough to drain task output.
 
+### Daemon Lifecycle
+
+`crates/turborepo-daemon` owns daemon lifecycle operations, server shutdown
+semantics, and the daemon-backed package-discovery adapter. Both the `turbo`
+application and the standalone `turborepo-lsp` binary use this shared API, so a
+`DaemonConnector` can start the current executable with `--skip-infer daemon`
+without requiring the LSP to depend on `turborepo-lib`.
+
+The `turbo` application supplies its package-graph-aware change watcher and
+keeps CLI-specific rendering in `turborepo-lib`. The standalone LSP supplies a
+conservative daemon-owned watcher that emits full rediscovery for filesystem
+changes. This preserves correctness when the packaged LSP hosts the daemon,
+while the richer watcher avoids unnecessary rediscovery when `turbo` hosts it.
+
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
 **Key responsibilities:**
