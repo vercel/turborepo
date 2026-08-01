@@ -32,7 +32,6 @@ mod task_hash;
 mod tracing;
 mod turbo_json;
 
-pub use run::package_discovery::DaemonPackageDiscovery;
 // Re-export daemon types from the new crate location
 pub use turborepo_daemon::{
     DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,

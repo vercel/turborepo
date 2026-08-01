@@ -32,12 +32,14 @@ mod client;
 mod connector;
 mod default_timeout_layer;
 pub mod endpoint;
+mod package_discovery;
 mod server;
 
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
+pub use package_discovery::DaemonPackageDiscovery;
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;

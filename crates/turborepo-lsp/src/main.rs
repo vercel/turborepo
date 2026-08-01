@@ -19,14 +19,13 @@ fn has_daemon_command(args: impl IntoIterator<Item = OsString>) -> bool {
 }
 
 fn run_daemon_command() -> ! {
-    std::panic::set_hook(Box::new(turborepo_lib::panic_handler));
-
-    let exit_code = turborepo_lib::main(None).unwrap_or_else(|err| {
-        eprintln!("{err:?}");
-        1
-    });
-
-    std::process::exit(exit_code)
+    // The Turborepo language server no longer embeds the `turbo daemon`
+    // runtime, so it no longer depends on the application crate. The `daemon`
+    // subcommand is kept as an informational no-op so that any lingering
+    // invocation (e.g. the VS Code extension's daemon start/stop/status
+    // commands) exits cleanly instead of failing.
+    eprintln!("The turbo daemon is not available from the Turborepo language server.");
+    std::process::exit(0)
 }
 
 #[cfg(test)]

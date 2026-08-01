@@ -1,11 +1,12 @@
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_daemon::{
-    proto::{DiscoverPackagesResponse, PackageFiles, PackageManager as ProtoPackageManager},
-    DaemonClient,
-};
 use turborepo_repository::{
     discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData},
     package_manager::PackageManager,
+};
+
+use crate::{
+    proto::{DiscoverPackagesResponse, PackageFiles, PackageManager as ProtoPackageManager},
+    DaemonClient,
 };
 
 #[derive(Debug)]
