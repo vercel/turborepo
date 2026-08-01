@@ -21,7 +21,7 @@ pub struct RepositoryIgnore {
     match_root: Arc<PathBuf>,
     snapshot: Arc<RwLock<Snapshot>>,
     control_paths: Arc<RwLock<HashSet<PathBuf>>>,
-    index_path: Arc<RwLock<Option<PathBuf>>>,
+    derived_controls: Arc<RwLock<HashSet<PathBuf>>>,
 }
 
 #[derive(Default)]
@@ -40,6 +40,10 @@ struct GitContext {
     index: Option<PathBuf>,
     info_exclude: Option<PathBuf>,
     global_exclude: Option<PathBuf>,
+    /// Config files can change core.excludesFile and core.worktree. They are
+    /// also useful controls in linked worktrees, where the administrative
+    /// directory is outside the worktree.
+    config: HashSet<PathBuf>,
 }
 
 impl RepositoryIgnore {
@@ -48,13 +52,14 @@ impl RepositoryIgnore {
         let match_root = Arc::new(normalize_path(&root));
         let context = GitContext::discover(&match_root);
         let control_paths = context.control_paths(&match_root);
+        let derived_controls = context.derived_controls();
         let snapshot = Snapshot::load(&match_root, &context);
         Self {
             root,
             match_root,
             snapshot: Arc::new(RwLock::new(snapshot)),
             control_paths: Arc::new(RwLock::new(control_paths)),
-            index_path: Arc::new(RwLock::new(context.index)),
+            derived_controls: Arc::new(RwLock::new(derived_controls)),
         }
     }
 
@@ -63,20 +68,27 @@ impl RepositoryIgnore {
     }
 
     /// Re-read repository ignore rules and tracked index state.
+    ///
+    /// Returns whether the refresh observed a change that consumers cannot
+    /// discover from the triggering event alone: a different set of ignore
+    /// sources, or a tracked path whose ignore relevance flipped.
     pub fn refresh(&self) -> bool {
         // Re-discovering the context makes an explicit refresh observe changes
         // to core.excludesFile as well as changes to the exclude file itself.
         let context = GitContext::discover(&self.match_root);
-        *self
+        let control_paths = context.control_paths(&self.match_root);
+        let mut controls = self
             .control_paths
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-            context.control_paths(&self.match_root);
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let sources_changed = *controls != control_paths;
+        *controls = control_paths;
+        drop(controls);
         let replacement = Snapshot::load(&self.match_root, &context);
         *self
-            .index_path
+            .derived_controls
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = context.index;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = context.derived_controls();
         let mut snapshot = self
             .snapshot
             .write()
@@ -89,7 +101,7 @@ impl RepositoryIgnore {
                     || replacement.path_is_ignored(&self.match_root, path, false)
             });
         *snapshot = replacement;
-        tracked_relevance_changed
+        sources_changed || tracked_relevance_changed
     }
 
     pub fn is_gitignore(path: &Path) -> bool {
@@ -121,15 +133,18 @@ impl RepositoryIgnore {
     /// semantics to the event. An inherited ignore file cannot be represented
     /// by an in-root event (and may change the relevance of the root itself),
     /// so it must invalidate every consumer.
+    ///
+    /// Control paths whose contribution a refresh re-derives in full are
+    /// deferred to that refresh instead: writing to them is not evidence that
+    /// anything about the ignore rules moved.
     pub fn invalidates_consumers(&self, path: &Path) -> bool {
         if self.is_control_path(path) {
             let path = normalize_event_path(&self.root, &self.match_root, path);
-            return self
-                .index_path
+            return !self
+                .derived_controls
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .as_ref()
-                != Some(&path);
+                .contains(&path);
         }
         if !Self::is_gitignore(path) {
             return false;
@@ -219,11 +234,16 @@ impl GitContext {
         });
         #[cfg(not(target_os = "macos"))]
         let global_exclude = discovered_global_exclude;
+        let config = git_path(root, "config")
+            .into_iter()
+            .chain(git_path(root, "config.worktree"))
+            .collect();
         Self {
             worktree_root,
             index,
             info_exclude,
             global_exclude,
+            config,
         }
     }
 
@@ -232,16 +252,22 @@ impl GitContext {
         paths.extend(self.index.iter().cloned());
         paths.extend(self.info_exclude.iter().cloned());
         paths.extend(self.global_exclude.iter().cloned());
-        // These files can change core.excludesFile. They are also useful
-        // controls in linked worktrees, where the administrative directory is
-        // outside the worktree.
-        paths.extend(git_path(root, "config"));
-        paths.extend(git_path(root, "config.worktree"));
+        paths.extend(self.config.iter().cloned());
         paths.extend(
             directories_between(&self.worktree_root, root)
                 .into_iter()
                 .map(|directory| directory.join(".gitignore")),
         );
+        paths
+    }
+
+    /// Control paths that only matter through state a refresh re-derives: the
+    /// index through the tracked set, and the config files through the ignore
+    /// sources they name. Comparing the refreshed state is exact, so a write
+    /// that leaves it alone is not a reason to invalidate consumers.
+    fn derived_controls(&self) -> HashSet<PathBuf> {
+        let mut paths = self.config.clone();
+        paths.extend(self.index.iter().cloned());
         paths
     }
 }
@@ -671,6 +697,48 @@ mod tests {
         assert!(!model.invalidates_consumers(&root_ignore));
         assert!(model.should_refresh(&nested));
         assert!(!model.invalidates_consumers(&nested));
+    }
+
+    #[test]
+    fn config_refresh_invalidates_only_when_ignore_sources_change() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("worktree");
+        fs::create_dir_all(&root).unwrap();
+        git(&root, &["init", "-q"]);
+        fs::write(root.join(".gitignore"), "ignored.txt\n").unwrap();
+
+        let model = RepositoryIgnore::new(&root);
+        let config = fs::canonicalize(root.join(".git/config")).unwrap();
+        assert!(model.should_refresh(&config));
+        assert!(
+            !model.invalidates_consumers(&config),
+            "a config write is not evidence that the ignore sources moved"
+        );
+
+        git(&root, &["config", "watch.unrelated", "1"]);
+        assert!(
+            !model.refresh(),
+            "a config key unrelated to ignore rules changes nothing"
+        );
+
+        let global = temp.path().join("global-ignore");
+        fs::write(&global, "excluded.txt\n").unwrap();
+        git(
+            &root,
+            &["config", "core.excludesFile", global.to_str().unwrap()],
+        );
+        assert!(
+            model.refresh(),
+            "pointing core.excludesFile at a new file changes the ignore sources"
+        );
+        assert!(!model.is_relevant(&root.join("excluded.txt"), false));
+
+        git(&root, &["config", "--unset", "core.excludesFile"]);
+        assert!(
+            model.refresh(),
+            "dropping core.excludesFile changes the ignore sources"
+        );
+        assert!(model.is_relevant(&root.join("excluded.txt"), false));
     }
 
     #[test]
