@@ -169,6 +169,10 @@ impl Lockfile for NpmLockfile {
         Ok(Some(std::borrow::Cow::Owned(deps)))
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(NpmEdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -241,6 +245,36 @@ impl Lockfile for NpmLockfile {
         let version = npm_package.version.as_deref()?;
         let name = package.key.split("node_modules/").last()?;
         Some(format!("{name}@{version}"))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// npm transitive edges come from `all_dependencies`, which emits fully
+/// resolved lockfile keys (`find_dep_in_lockfile` only returns keys present
+/// in the packages map). `resolve_package`'s first candidate matches such a
+/// key directly without consulting the workspace, so every workspace
+/// resolves the edge identically. A name that is not a lockfile key would
+/// fall through to the workspace-scoped candidates, so report it sensitive
+/// (defensive; unreachable via `all_dependencies` output).
+struct NpmEdgeResolver<'a> {
+    lockfile: &'a NpmLockfile,
+}
+
+impl crate::TransitiveEdgeResolver for NpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        _version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(match self.lockfile.packages.get(name) {
+            // Mirrors the `name` candidate in `resolve_package`.
+            Some(pkg) => crate::TransitiveEdgeResolution::Global(Some(Package {
+                key: name.to_string(),
+                version: pkg.version.clone().unwrap_or_default(),
+            })),
+            None => crate::TransitiveEdgeResolution::WorkspaceSensitive,
+        })
     }
 }
 
