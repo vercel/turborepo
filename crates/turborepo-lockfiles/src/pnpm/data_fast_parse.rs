@@ -179,11 +179,15 @@ fn parse_fragment(fragment: &str) -> FResult<TopLevelFields> {
 /// Byte offsets of child-entry starts: lines indented by exactly two
 /// spaces whose first content byte could begin a pnpm map key (package
 /// keys like `'@scope/name@1.0.0':`, importer paths like `packages/foo` or
-/// `.`). `-` is excluded so block-sequence items never look like keys, and
-/// any line indented by exactly one space aborts (the two-space level
-/// would not be a direct child). Continuation lines of multi-line scalars
-/// are indented deeper than two spaces, so a boundary can never land
-/// inside an entry the scanner accepts.
+/// `.`), plus explicit-key entries (`? 'very long key'`). `-` is excluded
+/// so block-sequence items never look like keys, and any line indented by
+/// exactly one space aborts (the two-space level would not be a direct
+/// child). Continuation lines of multi-line scalars are indented deeper
+/// than two spaces, and an explicit key's `: value` line is treated as
+/// interior, so a boundary can never land inside an entry the scanner
+/// accepts. Non-blank content before the first entry start aborts: the
+/// chunk assembly drops everything before the first start, so accepting it
+/// could change meaning.
 fn child_entry_starts(fragment: &str) -> Option<Vec<usize>> {
     let bytes = fragment.as_bytes();
     let mut starts = Vec::new();
@@ -215,8 +219,20 @@ fn child_entry_starts(fragment: &str) -> Option<Vec<usize>> {
             continue;
         };
         match third {
-            // Deeper indentation or blank remainder: interior line.
-            b' ' | b'\n' | b'\r' => continue,
+            // Blank remainder: interior line.
+            b'\n' | b'\r' => continue,
+            // Deeper indentation before the first entry would be dropped
+            // by the chunk assembly; after it, it's an interior line.
+            b' ' if starts.is_empty() => return None,
+            b' ' => continue,
+            // Explicit-key entry (`? 'key'`, value on the next `: value`
+            // line). The `: ` line is interior to it, so a chunk boundary
+            // can't separate the pair; a stray `: ` line without its
+            // `? ` key makes the chunk's scanner decline, which falls
+            // back to sequential parsing.
+            b'?' if bytes.get(line_start + 3) == Some(&b' ') => starts.push(line_start),
+            b':' if starts.is_empty() => return None,
+            b':' => continue,
             c if c.is_ascii_alphanumeric()
                 || matches!(c, b'_' | b'\'' | b'"' | b'@' | b'.' | b'/') =>
             {
@@ -1539,6 +1555,99 @@ packages:
       folded with trailing newline
 "#,
         );
+    }
+
+    #[test]
+    fn test_explicit_keys_differential() {
+        // The `yaml` library pnpm uses emits explicit keys (`? key` with
+        // the value on the following `: value` line) for mapping keys
+        // longer than 1024 bytes — real lockfiles hit this with heavily
+        // peer-suffixed snapshot keys. The scanner must accept both a
+        // block-mapping value starting on the `: ` line and an inline
+        // scalar value, at any mapping depth.
+        assert_scanner_matches_serde(
+            r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+overrides:
+  ? some-really-long-override-name
+  : 7.5.3
+
+snapshots:
+
+  ? 'long-key@1.0.0(peer-a@2.0.0)(peer-b@3.0.0)'
+  : dependencies:
+      dep-a: 1.0.0
+      dep-b: 2.0.0(dep-a@1.0.0)
+
+  short@1.0.0:
+    dependencies:
+      ? another-long-name-in-a-nested-mapping
+      : 1.0.0
+"#,
+        );
+    }
+
+    #[test]
+    fn test_explicit_key_without_value_line_falls_back() {
+        // `? key` at EOF (saphyr gives it a null value; the scanner
+        // declines rather than model that).
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n");
+        // `? key` followed by a line that is not its `: value` line.
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n  other: 1.0.0\n",
+        );
+        // `? key` whose `: value` line sits at a different indent.
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n      : 1.0.0\n",
+        );
+    }
+
+    #[test]
+    fn test_chunked_split_handles_explicit_keys() {
+        // Build a snapshots section big enough to cross the chunked-split
+        // threshold, with explicit-key entries at the start, middle, and
+        // end, so chunk boundaries interact with `? `/`: ` pairs.
+        let mut yaml =
+            String::from("lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\nsnapshots:\n\n");
+        let explicit = |name: &str| {
+            format!("  ? '{name}@1.0.0(peer@2.0.0)'\n  : dependencies:\n      dep: 1.0.0\n\n")
+        };
+        yaml.push_str(&explicit("first-explicit"));
+        for i in 0..12000 {
+            yaml.push_str(&format!(
+                "  pkg{i}@1.0.0:\n    dependencies:\n      dep{i}: 1.0.0\n\n"
+            ));
+            if i == 6000 {
+                yaml.push_str(&explicit("middle-explicit"));
+            }
+        }
+        yaml.push_str(&explicit("last-explicit"));
+        assert!(
+            yaml.len() >= 2 * CHUNKED_FRAGMENT_MIN_BYTES,
+            "input must be large enough to exercise the chunked path"
+        );
+        assert_scanner_matches_serde(&yaml);
+    }
+
+    #[test]
+    fn test_chunked_split_rejects_content_before_first_entry() {
+        // Deeper-indented content between a section header and its first
+        // child entry would be dropped by the chunk assembly; the splitter
+        // must decline so the sequential tiers (which also decline) decide.
+        let mut yaml = String::from(
+            "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\nsnapshots:\n    stray: 1.0.0\n",
+        );
+        for i in 0..12000 {
+            yaml.push_str(&format!(
+                "  pkg{i}@1.0.0:\n    dependencies:\n      dep{i}: 1.0.0\n\n"
+            ));
+        }
+        assert!(yaml.len() >= 2 * CHUNKED_FRAGMENT_MIN_BYTES);
+        assert_falls_back(&yaml);
     }
 
     #[test]
