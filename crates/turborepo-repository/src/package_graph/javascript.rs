@@ -125,36 +125,56 @@ pub(super) fn resolve_dependencies(
     // monorepo has many packages with the same dependencies) share one
     // materialized identity list instead of each cloning every member's
     // strings and re-reading its lockfile display name. Closure members
-    // are interned `Arc`s when the shared closure DP produced them, so
-    // an identical pointer sequence means an identical closure; formats
-    // that fall back to the legacy per-workspace walk produce distinct
-    // pointers and simply keep building their lists independently.
-    let mut slice_memo: HashMap<
-        Vec<*const turborepo_lockfiles::Package>,
-        Arc<[ExternalPackageIdentity]>,
-    > = HashMap::new();
+    // are interned `Arc`s when the shared closure DP produced them, so an
+    // identical pointer sequence means an identical closure; formats that
+    // fall back to the legacy per-workspace walk produce distinct pointers
+    // and simply build their lists independently.
+    //
+    // The identity lists for the *distinct* closures are built in parallel:
+    // this is the bulk of resolution assembly on large monorepos (a string
+    // clone plus a lockfile `human_name` lookup per closure member). Raw
+    // pointers stay on the sequential bucketing side; only the borrowed
+    // closure slices cross into the parallel build.
+    use rayon::prelude::*;
+
     let resolution_members = resolution_packages(knowledge);
-    let mut packages = Vec::with_capacity(resolution_members.len());
-    for (identity, directory) in resolution_members {
-        let members = closures.get(directory.to_unix().as_str());
+    let mut index_of: HashMap<Vec<*const turborepo_lockfiles::Package>, usize> = HashMap::new();
+    let mut distinct_closures: Vec<&[Arc<turborepo_lockfiles::Package>]> = Vec::new();
+    let mut plan: Vec<(&str, usize)> = Vec::with_capacity(resolution_members.len());
+    for &(identity, directory) in &resolution_members {
+        let members: &[Arc<turborepo_lockfiles::Package>] = closures
+            .get(directory.to_unix().as_str())
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let pointer_key: Vec<*const turborepo_lockfiles::Package> =
-            members.into_iter().flatten().map(Arc::as_ptr).collect();
-        if let Some(shared) = slice_memo.get(&pointer_key) {
-            packages.push(PackageResolution::from_shared(identity, Arc::clone(shared)));
-            continue;
-        }
-        let exact_identities = members.into_iter().flatten().map(|package| {
-            let mut identity =
-                ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
-            if let Some(human_name) = lockfile.human_name(package) {
-                identity = identity.with_human_name(human_name);
-            }
-            identity
+            members.iter().map(Arc::as_ptr).collect();
+        let idx = *index_of.entry(pointer_key).or_insert_with(|| {
+            distinct_closures.push(members);
+            distinct_closures.len() - 1
         });
-        let resolution = PackageResolution::new(identity, exact_identities);
-        slice_memo.insert(pointer_key, resolution.shared_identities());
-        packages.push(resolution);
+        plan.push((identity, idx));
     }
+
+    let built: Vec<Arc<[ExternalPackageIdentity]>> = distinct_closures
+        .par_iter()
+        .map(|members| {
+            PackageResolution::shared_identity_list(members.iter().map(|package| {
+                let mut identity =
+                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
+                if let Some(human_name) = lockfile.human_name(package) {
+                    identity = identity.with_human_name(human_name);
+                }
+                identity
+            }))
+        })
+        .collect();
+    drop(distinct_closures);
+
+    let packages: Vec<PackageResolution> = plan
+        .into_iter()
+        .map(|(identity, idx)| PackageResolution::from_shared(identity, Arc::clone(&built[idx])))
+        .collect();
+
     let members = packages
         .iter()
         .map(|package| package.package().to_string())

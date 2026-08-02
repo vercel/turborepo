@@ -297,14 +297,24 @@ impl PackageResolution {
         package: impl Into<String>,
         identities: impl IntoIterator<Item = ExternalPackageIdentity>,
     ) -> Self {
+        Self {
+            package: package.into(),
+            identities: Self::shared_identity_list(identities),
+            fingerprint: None,
+        }
+    }
+
+    /// Build a sorted, deduplicated identity list in shareable form. This is
+    /// the single source of truth for the invariant `new` and `from_shared`
+    /// rely on, so a caller that constructs the list separately (e.g. in
+    /// parallel) and attributes it via `from_shared` stays consistent.
+    pub(crate) fn shared_identity_list(
+        identities: impl IntoIterator<Item = ExternalPackageIdentity>,
+    ) -> Arc<[ExternalPackageIdentity]> {
         let mut identities: Vec<_> = identities.into_iter().collect();
         identities.sort_unstable();
         identities.dedup();
-        Self {
-            package: package.into(),
-            identities: identities.into(),
-            fingerprint: None,
-        }
+        identities.into()
     }
 
     /// Attribute an already-materialized identity list to another package.
@@ -318,12 +328,6 @@ impl PackageResolution {
             identities,
             fingerprint: None,
         }
-    }
-
-    /// The identity list in its shareable form, for reuse via
-    /// [`PackageResolution::from_shared`].
-    pub(crate) fn shared_identities(&self) -> Arc<[ExternalPackageIdentity]> {
-        Arc::clone(&self.identities)
     }
 
     pub fn package(&self) -> &str {
