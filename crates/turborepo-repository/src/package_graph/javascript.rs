@@ -121,24 +121,40 @@ pub(super) fn resolve_dependencies(
             );
         }
     };
-    let packages = resolution_packages(knowledge)
-        .into_iter()
-        .map(|(identity, directory)| {
-            let exact_identities = closures
-                .get(directory.to_unix().as_str())
-                .into_iter()
-                .flatten()
-                .map(|package| {
-                    let mut identity =
-                        ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
-                    if let Some(human_name) = lockfile.human_name(package) {
-                        identity = identity.with_human_name(human_name);
-                    }
-                    identity
-                });
-            PackageResolution::new(identity, exact_identities)
-        })
-        .collect::<Vec<_>>();
+    // Workspaces sharing an identical external closure (common when a
+    // monorepo has many packages with the same dependencies) share one
+    // materialized identity list instead of each cloning every member's
+    // strings and re-reading its lockfile display name. Closure members
+    // are interned `Arc`s when the shared closure DP produced them, so
+    // an identical pointer sequence means an identical closure; formats
+    // that fall back to the legacy per-workspace walk produce distinct
+    // pointers and simply keep building their lists independently.
+    let mut slice_memo: HashMap<
+        Vec<*const turborepo_lockfiles::Package>,
+        Arc<[ExternalPackageIdentity]>,
+    > = HashMap::new();
+    let resolution_members = resolution_packages(knowledge);
+    let mut packages = Vec::with_capacity(resolution_members.len());
+    for (identity, directory) in resolution_members {
+        let members = closures.get(directory.to_unix().as_str());
+        let pointer_key: Vec<*const turborepo_lockfiles::Package> =
+            members.into_iter().flatten().map(Arc::as_ptr).collect();
+        if let Some(shared) = slice_memo.get(&pointer_key) {
+            packages.push(PackageResolution::from_shared(identity, Arc::clone(shared)));
+            continue;
+        }
+        let exact_identities = members.into_iter().flatten().map(|package| {
+            let mut identity =
+                ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
+            if let Some(human_name) = lockfile.human_name(package) {
+                identity = identity.with_human_name(human_name);
+            }
+            identity
+        });
+        let resolution = PackageResolution::new(identity, exact_identities);
+        slice_memo.insert(pointer_key, resolution.shared_identities());
+        packages.push(resolution);
+    }
     let members = packages
         .iter()
         .map(|package| package.package().to_string())
