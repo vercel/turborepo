@@ -855,6 +855,26 @@ impl RunBuilder {
             && self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
+        // Package filters still constrain task-level --affected runs. Resolve
+        // that scope without package-level --affected so tasks matched only
+        // through custom inputs (for example $TURBO_ROOT$) remain eligible
+        // before the task graph is pruned.
+        let task_level_affected_packages =
+            if use_task_level_affected && !self.opts.scope_opts.filter_patterns.is_empty() {
+                let mut opts = self.opts.clone();
+                opts.scope_opts.affected_range = None;
+                let (packages, _, _) = Self::calculate_filtered_packages(
+                    &self.repo_root,
+                    &opts,
+                    &pkg_dep_graph,
+                    &scm,
+                    &root_turbo_json,
+                )?;
+                Some(packages.into_keys().collect())
+            } else {
+                None
+            };
+
         let use_watch_task_level_filter = self
             .changed_files_for_watch
             .as_ref()
@@ -1006,6 +1026,11 @@ impl RunBuilder {
                 &root_turbo_json,
                 &scm,
             )?;
+
+            if let Some(scoped_packages) = &task_level_affected_packages {
+                let scoped_tasks = engine.task_ids_for_packages(scoped_packages);
+                engine = engine.retain_filtered_tasks(&scoped_tasks);
+            }
         }
 
         if needs_all_packages {

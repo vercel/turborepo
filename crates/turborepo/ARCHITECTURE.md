@@ -125,6 +125,9 @@ construction:
    containing directly affected tasks, their transitive dependents, and all
    transitive dependencies required for execution (upstream tasks needed as
    cache hits)
+5. **Package scope intersection**: When `--filter` is present, the run builder
+   resolves it without package-level `--affected`, then keeps the scoped
+   affected tasks and their execution dependencies
 
 This differs from the default `--affected` behavior which operates at the
 package level (all tasks in changed packages run).

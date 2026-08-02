@@ -818,6 +818,92 @@ fn test_task_level_affected_root_package_json_not_global() {
 }
 
 #[test]
+fn test_task_level_affected_filter_limits_scheduled_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change two independent packages so both are affected before --filter is
+    // applied to the task graph.
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("packages/lib-no-test/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=lib-no-test",
+            "--dry=json",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let packages: Vec<_> = json["packages"]
+        .as_array()
+        .expect("packages array")
+        .iter()
+        .map(|package| package.as_str().expect("package name"))
+        .collect();
+    assert_eq!(packages, ["lib-no-test"]);
+
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    assert_eq!(task_ids, ["lib-no-test#build"]);
+
+    // Filtering to app-a still retains lib-a#build because it is an upstream
+    // task dependency, while excluding the independently affected package.
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--affected", "--filter=app-a", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let packages: Vec<_> = json["packages"]
+        .as_array()
+        .expect("packages array")
+        .iter()
+        .map(|package| package.as_str().expect("package name"))
+        .collect();
+    assert_eq!(packages, ["app-a"]);
+
+    let mut task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    task_ids.sort_unstable();
+    assert_eq!(task_ids, ["app-a#build", "lib-a#build"]);
+}
+
+#[test]
 fn test_affected_with_nonexistent_task_errors() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_affected(tempdir.path());
