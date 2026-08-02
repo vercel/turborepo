@@ -105,10 +105,12 @@ turbo run lint --filter=!legacy-app --filter=!deprecated-pkg
 
 ## Complex Combinations
 
-Apps that changed, plus their dependents:
+Separate `--filter` flags are unioned, not intersected — to intersect a directory with a git range, wrap the directory in `{}` inside a single filter.
+
+Apps that changed since the last commit:
 
 ```bash
-turbo run build --filter=...[HEAD^1] --filter=./apps/*
+turbo run build --filter={./apps/*}[HEAD^1]
 ```
 
 All packages except docs, but only if changed:
@@ -142,7 +144,7 @@ turbo run build test lint --affected
 Deploy only changed apps:
 
 ```bash
-turbo run deploy --filter=./apps/* --filter=[main...HEAD]
+turbo run deploy --filter={./apps/*}[main...HEAD]
 ```
 
 Full rebuild of specific app and deps:

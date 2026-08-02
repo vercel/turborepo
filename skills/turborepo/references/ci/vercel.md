@@ -56,8 +56,17 @@ npx turbo-ignore web
 # Use specific comparison ref
 npx turbo-ignore --fallback=HEAD~1
 
-# Verbose output
-npx turbo-ignore --verbose
+# Check a task other than build
+npx turbo-ignore --task=test
+
+# Run in a specific directory
+npx turbo-ignore --directory=apps/web
+
+# Explicitly set which version of turbo to invoke
+npx turbo-ignore --turbo-version=2.5.0
+
+# Raise child process maxBuffer in KB (default: 1024)
+npx turbo-ignore --max-buffer=2048
 ```
 
 ## Environment Variables

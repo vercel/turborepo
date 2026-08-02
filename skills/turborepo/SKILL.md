@@ -128,12 +128,12 @@ Cache problems?
 ```
 Run only what changed?
 ├─ Changed packages + dependents (RECOMMENDED) → turbo run build --affected
-├─ Custom base branch → --affected --affected-base=origin/develop
+├─ Custom base branch → TURBO_SCM_BASE=origin/develop turbo run build --affected
 ├─ Manual git comparison → --filter=...[origin/main]
 └─ See all filter options → references/filtering/RULE.md
 ```
 
-**`--affected` is the primary way to run only changed packages.** It automatically compares against the default branch and includes dependents.
+**`--affected` is the primary way to run only changed packages.** It compares against `main` (falling back to `master`) — not the repo's configured default branch — and includes dependents. Set `TURBO_SCM_BASE` for any other base branch.
 
 ### "I want to filter packages"
 
@@ -427,7 +427,7 @@ A large `env` array (even 50+ variables) is **not** a problem. It usually means 
 
 ### Using `--parallel` Flag
 
-The `--parallel` flag bypasses Turborepo's dependency graph. If tasks need parallel execution, configure `dependsOn` correctly instead.
+The `--parallel` flag bypasses Turborepo's dependency graph. It is deprecated and will be removed in a future major version—use task configuration (`persistent`, `with`) instead.
 
 ```bash
 # WRONG - bypasses dependency graph
