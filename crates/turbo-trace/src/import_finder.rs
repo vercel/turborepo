@@ -64,7 +64,11 @@ pub fn find_imports(
         }
     }
 
-    find_require_calls(statements, &mut results);
+    // require() calls are always value imports; skip them entirely when the
+    // caller only wants type-only imports.
+    if import_trace_type != ImportTraceType::Types {
+        find_require_calls(statements, &mut results);
+    }
 
     results
 }
