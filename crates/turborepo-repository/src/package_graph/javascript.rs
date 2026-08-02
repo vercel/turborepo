@@ -155,20 +155,56 @@ pub(super) fn resolve_dependencies(
         plan.push((identity, idx));
     }
 
-    let built: Vec<Arc<[ExternalPackageIdentity]>> = distinct_closures
+    // A shared dependency appears in many distinct closures. Intern one
+    // `ExternalPackageIdentity` per distinct package (the DP hands us the
+    // same `Arc<Package>` everywhere it occurs) so its key/version/human_name
+    // strings are allocated once and every closure that contains it clones a
+    // cheap `Arc<str>`-backed identity instead of re-cloning the strings.
+    let mut identity_of: HashMap<*const turborepo_lockfiles::Package, u32> = HashMap::new();
+    let mut distinct_packages: Vec<&Arc<turborepo_lockfiles::Package>> = Vec::new();
+    for members in &distinct_closures {
+        for package in *members {
+            identity_of.entry(Arc::as_ptr(package)).or_insert_with(|| {
+                distinct_packages.push(package);
+                (distinct_packages.len() - 1) as u32
+            });
+        }
+    }
+    // Build each distinct identity once, in parallel (the key/version clones
+    // and lockfile `human_name` lookup).
+    let interned: Vec<ExternalPackageIdentity> = distinct_packages
         .par_iter()
+        .map(|package| {
+            let mut identity =
+                ExternalPackageIdentity::new(package.key.as_str(), package.version.as_str());
+            if let Some(human_name) = lockfile.human_name(package) {
+                identity = identity.with_human_name(human_name);
+            }
+            identity
+        })
+        .collect();
+    // Resolve each closure's members to interned indices sequentially (the
+    // raw pointers never leave this side), then assemble the lists in
+    // parallel by cloning interned identities.
+    let closure_indices: Vec<Vec<u32>> = distinct_closures
+        .iter()
         .map(|members| {
-            PackageResolution::shared_identity_list(members.iter().map(|package| {
-                let mut identity =
-                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
-                if let Some(human_name) = lockfile.human_name(package) {
-                    identity = identity.with_human_name(human_name);
-                }
-                identity
-            }))
+            members
+                .iter()
+                .map(|package| identity_of[&Arc::as_ptr(package)])
+                .collect()
         })
         .collect();
     drop(distinct_closures);
+
+    let built: Vec<Arc<[ExternalPackageIdentity]>> = closure_indices
+        .par_iter()
+        .map(|indices| {
+            PackageResolution::shared_identity_list(
+                indices.iter().map(|&i| interned[i as usize].clone()),
+            )
+        })
+        .collect();
 
     let packages: Vec<PackageResolution> = plan
         .into_iter()

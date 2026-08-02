@@ -145,9 +145,9 @@ impl<'a> PackageExternalDeclarations<'a> {
 /// consumers do not re-read native lockfiles.
 #[derive(Debug, Clone)]
 pub struct ExternalPackageIdentity {
-    key: String,
-    version: String,
-    human_name: Option<String>,
+    key: Arc<str>,
+    version: Arc<str>,
+    human_name: Option<Arc<str>>,
 }
 
 impl PartialEq for ExternalPackageIdentity {
@@ -178,7 +178,7 @@ impl std::hash::Hash for ExternalPackageIdentity {
 }
 
 impl ExternalPackageIdentity {
-    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+    pub fn new(key: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
         Self {
             key: key.into(),
             version: version.into(),
@@ -186,7 +186,7 @@ impl ExternalPackageIdentity {
         }
     }
 
-    pub fn with_human_name(mut self, human_name: impl Into<String>) -> Self {
+    pub fn with_human_name(mut self, human_name: impl Into<Arc<str>>) -> Self {
         self.human_name = Some(human_name.into());
         self
     }
