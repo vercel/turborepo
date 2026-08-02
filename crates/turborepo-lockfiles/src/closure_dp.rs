@@ -88,7 +88,14 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     // 2. Global graph: BFS from all roots, resolving each distinct (name, version)
     //    edge once.
     let mut adjacency: Vec<Vec<u32>> = vec![Vec::new(); packages.len()];
-    let mut edge_memo: FxHashMap<(String, String), Option<u32>> = FxHashMap::default();
+    // Memoize edge resolution by `name\0version`. Keying on a single owned
+    // `String` (rather than `(String, String)`) lets each lookup reuse one
+    // scratch buffer and probe by `&str` via `Borrow`, so only genuinely new
+    // edges allocate — instead of cloning both `name` and `version` on every
+    // edge just to build the lookup key. The graph is dense with shared
+    // dependencies, so the vast majority of probes are hits.
+    let mut edge_memo: FxHashMap<String, Option<u32>> = FxHashMap::default();
+    let mut edge_key = String::new();
     let mut stack: Vec<u32> = {
         let mut seen = vec![false; packages.len()];
         let mut stack = Vec::new();
@@ -113,7 +120,12 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
             continue;
         };
         for (name, version) in deps.as_ref() {
-            let target = match edge_memo.get(&(name.clone(), version.clone())) {
+            edge_key.clear();
+            edge_key.reserve(name.len() + version.len() + 1);
+            edge_key.push_str(name);
+            edge_key.push('\0');
+            edge_key.push_str(version);
+            let target = match edge_memo.get(edge_key.as_str()) {
                 Some(cached) => *cached,
                 None => {
                     let resolved = match resolver.resolve_edge(name, version)? {
@@ -128,7 +140,9 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
                         }
                         id
                     });
-                    edge_memo.insert((name.clone(), version.clone()), target);
+                    // Only distinct edges allocate: clone the scratch key so
+                    // the buffer keeps its capacity for the next probe.
+                    edge_memo.insert(edge_key.clone(), target);
                     target
                 }
             };
