@@ -511,32 +511,49 @@ impl ExternalResolutionGeneration {
             domain.definition_sources.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
                 // Identity lists are sorted and deduped at construction
-                // (`PackageResolution::new`) and immutable afterward, so
-                // packages sharing one list (via `from_shared`) hash it
-                // once. The memo is keyed by slice address: at most one
-                // probe per package, and a miss costs nothing beyond the
-                // hash that was already required.
-                let mut fingerprint_memo: HashMap<
-                    *const [ExternalPackageIdentity],
-                    ResolutionFingerprint,
-                > = HashMap::new();
+                // (`PackageResolution::new`) and immutable afterward, and
+                // packages sharing one list (via `from_shared`) share its
+                // `Arc`. Fingerprint each *distinct* list exactly once —
+                // keyed by slice address — and hash those distinct lists in
+                // parallel, since each is an independent Cap'n Proto
+                // canonicalization plus xxHash. On a monorepo with thousands
+                // of workspaces this is the dominant cost of building a
+                // generation. Output is unchanged: the canonical bytes are
+                // deterministic per input, and packages are re-sorted
+                // deterministically below.
+                use rayon::prelude::*;
+
+                // First-seen distinct lists, and each package's index into
+                // them. Raw pointers stay on this sequential side; only the
+                // borrowed slices cross into the parallel hash.
+                let mut index_of: HashMap<*const [ExternalPackageIdentity], usize> = HashMap::new();
+                let mut distinct: Vec<&[ExternalPackageIdentity]> = Vec::new();
+                for package in packages.iter() {
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    index_of.entry(slice_ptr).or_insert_with(|| {
+                        distinct.push(&package.identities);
+                        distinct.len() - 1
+                    });
+                }
+
+                let fingerprints = distinct
+                    .par_iter()
+                    .map(|identities| {
+                        Ok(ResolutionFingerprint::new(
+                            turborepo_lockfile_hash::hash(
+                                identities
+                                    .iter()
+                                    .map(|identity| (identity.key(), identity.version())),
+                            )
+                            .map_err(ExternalResolutionError::Fingerprint)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, ExternalResolutionError>>()?;
+                drop(distinct);
+
                 for package in packages.iter_mut() {
                     let slice_ptr = Arc::as_ptr(&package.identities);
-                    if let Some(fingerprint) = fingerprint_memo.get(&slice_ptr) {
-                        package.set_fingerprint(fingerprint.clone());
-                        continue;
-                    }
-                    let fingerprint = ResolutionFingerprint::new(
-                        turborepo_lockfile_hash::hash(
-                            package
-                                .identities
-                                .iter()
-                                .map(|identity| (identity.key(), identity.version())),
-                        )
-                        .map_err(ExternalResolutionError::Fingerprint)?,
-                    );
-                    fingerprint_memo.insert(slice_ptr, fingerprint.clone());
-                    package.set_fingerprint(fingerprint);
+                    package.set_fingerprint(fingerprints[index_of[&slice_ptr]].clone());
                 }
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }
