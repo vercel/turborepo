@@ -56,6 +56,9 @@ pub(super) struct LineScanner<'a> {
     /// Set after a `key:` line whose value, if any, is a nested block
     /// collection introduced by the next line's indentation.
     pending_child: Option<usize>,
+    /// Set after an explicit `? key` line; holds the key's indent. The
+    /// next content line must be its `: value` line at the same indent.
+    pending_explicit_value: Option<usize>,
     state: State,
 }
 
@@ -69,6 +72,7 @@ impl<'a> LineScanner<'a> {
             queue: std::collections::VecDeque::with_capacity(16),
             stack: Vec::new(),
             pending_child: None,
+            pending_explicit_value: None,
             state: State::Start,
         }
     }
@@ -99,6 +103,10 @@ impl<'a> LineScanner<'a> {
                 // Empty input isn't a mapping; let the fallback error.
                 return Err(Unsupported::here());
             }
+            if self.pending_explicit_value.is_some() {
+                // `? key` at EOF with no `: value` line.
+                return Err(Unsupported::here());
+            }
             if self.pending_child.take().is_some() {
                 self.queue.push_back(null_scalar());
             }
@@ -123,6 +131,15 @@ impl<'a> LineScanner<'a> {
         } else if is_document_marker(content) {
             // Multi-document input.
             return Err(Unsupported::here());
+        }
+
+        // An explicit `? key` line must be followed by its `: value` line
+        // at the same indent; anything else leaves the fast path.
+        if let Some(key_indent) = self.pending_explicit_value.take() {
+            if indent != key_indent {
+                return Err(Unsupported::here());
+            }
+            return self.explicit_value_line(key_indent, content);
         }
 
         // A `key:` line opens a child collection only if the next content
@@ -210,6 +227,17 @@ impl<'a> LineScanner<'a> {
     }
 
     fn key_line(&mut self, indent: usize, content: &'a str) -> FResult<()> {
+        // Explicit-key form: `? key` with the value on the following
+        // `: value` line. pnpm emits this for mapping keys longer than
+        // 1024 bytes — the YAML limit for implicit keys — which real
+        // lockfiles hit with heavily peer-suffixed snapshot keys.
+        if let Some(key) = content.strip_prefix("? ") {
+            let ev = inline_scalar(key, FlowContext::Block)?;
+            self.queue.push_back(ev);
+            self.pending_explicit_value = Some(indent);
+            return Ok(());
+        }
+
         let (key_event, rest) = split_key(content)?;
         self.queue.push_back(key_event);
 
@@ -219,6 +247,33 @@ impl<'a> LineScanner<'a> {
             return Ok(());
         }
         self.value_events(indent, value)
+    }
+
+    /// Value line (`: value`) completing a preceding explicit `? key`
+    /// line. The value is either an inline scalar or a block mapping
+    /// whose first entry begins on this line (e.g. `: dependencies:`),
+    /// with children indented past the `: ` marker.
+    fn explicit_value_line(&mut self, key_indent: usize, content: &'a str) -> FResult<()> {
+        let Some(rest) = content.strip_prefix(": ") else {
+            return Err(Unsupported::here());
+        };
+        if rest.starts_with(' ') {
+            // Extra spaces would shift the value's block indent; let the
+            // general parser decide.
+            return Err(Unsupported::here());
+        }
+        // The value node starts in the column right after the `: ` marker.
+        let value_indent = key_indent + 2;
+        if split_key(rest).is_ok() {
+            // `key:` or `key: value` here means the explicit key's value
+            // is a block mapping starting on this line.
+            self.queue.push_back(start_event(Kind::Mapping));
+            self.stack.push((value_indent, Kind::Mapping));
+            return self.key_line(value_indent, rest);
+        }
+        let ev = inline_scalar(rest, FlowContext::Block)?;
+        self.queue.push_back(ev);
+        Ok(())
     }
 
     fn sequence_item(&mut self, content: &'a str) -> FResult<()> {
