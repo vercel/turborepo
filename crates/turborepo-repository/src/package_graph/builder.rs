@@ -535,16 +535,38 @@ impl PackageGraphAssembler {
         &mut self,
         relationships: &RelationshipKnowledge,
     ) -> Result<(), Error> {
+        // Index workspace nodes by identity string once, so each group and
+        // each dependency edge probes by `&str` instead of allocating a
+        // `PackageName` + `PackageNode` per lookup (previously one per edge).
+        // Borrow the graph fields disjointly: the index reads `node_lookup`
+        // while `add_edge` mutates `workspace_graph`.
+        let Self {
+            node_lookup,
+            workspace_graph,
+            package_jsons,
+            root_node_index,
+            ..
+        } = self;
+        let root_node_index = *root_node_index;
+        let node_of: HashMap<&str, NodeIndex> = node_lookup
+            .iter()
+            .filter_map(|(node, &idx)| match node {
+                PackageNode::Workspace(PackageName::Other(name)) => Some((name.as_str(), idx)),
+                PackageNode::Workspace(PackageName::Root) => Some(("//", idx)),
+                PackageNode::Root => None,
+            })
+            .collect();
+        let mut seen = HashSet::new();
+        let mut internal = HashMap::<&str, DependencyKind>::new();
         for group in relationships.groups() {
             let identity = group.source();
-            let name = package_name_from_identity(identity);
-            if !self.package_jsons.contains_key(&name) {
+            if !package_jsons.contains_key(&package_name_from_identity(identity)) {
                 return Err(Error::MissingDescriptor {
                     name: identity.to_string(),
                 });
             }
-            let mut seen = HashSet::new();
-            let mut internal = HashMap::<&str, DependencyKind>::new();
+            seen.clear();
+            internal.clear();
             for relationship in group.relationships() {
                 if !relationship.orders_tasks() {
                     continue;
@@ -574,32 +596,22 @@ impl PackageGraphAssembler {
                     ) => {}
                 }
             }
-            let node_idx = self
-                .node_lookup
-                .get(&PackageNode::Workspace(name.clone()))
-                .copied()
+            let node_idx = *node_of
+                .get(identity)
                 .ok_or_else(|| Error::MissingDescriptor {
                     name: identity.to_string(),
                 })?;
             if internal.is_empty() {
-                self.workspace_graph.add_edge(
-                    node_idx,
-                    self.root_node_index,
-                    DependencyKind::Production,
-                );
+                workspace_graph.add_edge(node_idx, root_node_index, DependencyKind::Production);
             }
-            for (dependency, kind) in internal {
-                let dependency_idx = self
-                    .node_lookup
-                    .get(&PackageNode::Workspace(package_name_from_identity(
-                        dependency,
-                    )))
-                    .copied()
-                    .ok_or_else(|| Error::UnknownRelationshipTarget {
-                        identity: dependency.to_string(),
-                    })?;
-                self.workspace_graph
-                    .add_edge(node_idx, dependency_idx, kind);
+            for (dependency, kind) in &internal {
+                let dependency_idx =
+                    *node_of
+                        .get(*dependency)
+                        .ok_or_else(|| Error::UnknownRelationshipTarget {
+                            identity: dependency.to_string(),
+                        })?;
+                workspace_graph.add_edge(node_idx, dependency_idx, *kind);
             }
         }
         Ok(())
