@@ -9,10 +9,10 @@ use turborepo_lockfiles::Lockfile;
 use super::{ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage};
 use crate::{
     external_resolution::{
-        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionChanges,
-        ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
-        JAVASCRIPT_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
-        ResolutionUnavailableReason, compare_resolution_data,
+        ExternalPackageIdentity, ExternalResolutionChanges, ExternalResolutionData,
+        ExternalResolutionDomain, ExternalResolutionGeneration, JAVASCRIPT_RESOLUTION_DOMAIN,
+        PackageResolution, ResolutionCompleteness, ResolutionUnavailableReason,
+        compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::DependencyKind,
@@ -46,16 +46,33 @@ pub(super) fn external_dependencies(
         .into_iter()
         .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
         .collect();
-    for declaration in ExternalDeclarations::build(relationships).declarations() {
-        if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
-            continue;
-        }
-        let Some(dependencies) = by_source.get_mut(declaration.source()) else {
+    // Iterate the relationship groups directly rather than materializing an
+    // owned `ExternalDeclarations` (one struct per declaration, cloning the
+    // group source and declaration name that this loop only reads). Only the
+    // `name`/`specifier` that actually land in `by_source` are cloned. The
+    // per-group dedup by declaration name — first occurrence wins, applied
+    // before the external filter — matches `ExternalDeclarations::build`.
+    for group in relationships.groups() {
+        let Some(dependencies) = by_source.get_mut(group.source()) else {
             continue;
         };
-        dependencies
-            .entry(declaration.package_name().to_string())
-            .or_insert_with(|| declaration.specifier().to_string());
+        let mut seen = std::collections::HashSet::new();
+        for relationship in group.relationships() {
+            if !seen.insert(relationship.declaration_name()) {
+                continue;
+            }
+            let crate::relationships::RelationshipTarget::UnresolvedExternal { name, specifier } =
+                relationship.target()
+            else {
+                continue;
+            };
+            if matches!(relationship.kind(), DependencyKind::Peer { .. }) {
+                continue;
+            }
+            dependencies
+                .entry(name.clone())
+                .or_insert_with(|| specifier.clone());
+        }
     }
 
     by_source
@@ -278,14 +295,16 @@ impl PackageGraph {
             .package_manager()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let definition_source = AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name())?;
-        let previous_resolution = resolve_dependencies(
-            &self.knowledge,
-            Vec::new(),
-            previous_lockfile,
-            external_dependencies(&self.knowledge, &self.relationship_knowledge),
-            true,
-            definition_source,
-        )
+        let previous_resolution = turborepo_rayon_compat::block_in_place(|| {
+            resolve_dependencies(
+                &self.knowledge,
+                Vec::new(),
+                previous_lockfile,
+                external_dependencies(&self.knowledge, &self.relationship_knowledge),
+                true,
+                definition_source,
+            )
+        })
         .map_err(ChangedPackagesError::Resolution)?;
         let current_resolution = self
             .external_resolution
