@@ -30,18 +30,22 @@ pub struct Relationship {
 
 impl Relationship {
     pub fn new(
-        declaration_name: impl Into<String>,
+        declaration_name: impl Into<String> + AsRef<str>,
         kind: DependencyKind,
         target: RelationshipTarget,
     ) -> Self {
-        let declaration_name = declaration_name.into();
         let target_name = match &target {
-            RelationshipTarget::Internal(target) => target,
-            RelationshipTarget::UnresolvedExternal { name, .. } => name,
+            RelationshipTarget::Internal(target) => target.as_str(),
+            RelationshipTarget::UnresolvedExternal { name, .. } => name.as_str(),
         };
+        // Only an alias — a declaration name that differs from the resolved
+        // target — needs to be owned. When they match (the common case, e.g.
+        // every unresolved external dependency) skip the allocation entirely
+        // instead of allocating a `String` and immediately discarding it.
+        let declaration_alias =
+            (declaration_name.as_ref() != target_name).then(|| declaration_name.into());
         Self {
-            declaration_alias: (declaration_name.as_str() != target_name)
-                .then_some(declaration_name),
+            declaration_alias,
             kind,
             target,
             orders_tasks: true,
@@ -49,8 +53,15 @@ impl Relationship {
     }
 
     pub fn internal(target: impl Into<String>, kind: DependencyKind) -> Self {
-        let target = target.into();
-        Self::new(target.clone(), kind, RelationshipTarget::Internal(target))
+        // The declaration name equals the target here, so there is never an
+        // alias to retain. Build directly to avoid cloning the target only to
+        // compare it against itself and drop the copy.
+        Self {
+            declaration_alias: None,
+            kind,
+            target: RelationshipTarget::Internal(target.into()),
+            orders_tasks: true,
+        }
     }
 
     /// Construct an internal relationship that contributes to hashing and
