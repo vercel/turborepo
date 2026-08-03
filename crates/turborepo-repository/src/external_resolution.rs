@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     ops::Range,
+    sync::Arc,
 };
 
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -278,10 +279,16 @@ impl ResolutionFingerprint {
 }
 
 /// Exact external identities attributed to one authoritative package.
+///
+/// The identity list is immutable once constructed (`new` sorts and
+/// dedups) and stored behind an `Arc` so packages with identical
+/// resolutions — common when many workspaces share the same external
+/// closure — can share one materialized list via
+/// [`PackageResolution::from_shared`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageResolution {
     package: String,
-    identities: Vec<ExternalPackageIdentity>,
+    identities: Arc<[ExternalPackageIdentity]>,
     fingerprint: Option<ResolutionFingerprint>,
 }
 
@@ -295,9 +302,28 @@ impl PackageResolution {
         identities.dedup();
         Self {
             package: package.into(),
+            identities: identities.into(),
+            fingerprint: None,
+        }
+    }
+
+    /// Attribute an already-materialized identity list to another package.
+    /// The list carries `new`'s sorted/deduped invariant with it.
+    pub(crate) fn from_shared(
+        package: impl Into<String>,
+        identities: Arc<[ExternalPackageIdentity]>,
+    ) -> Self {
+        Self {
+            package: package.into(),
             identities,
             fingerprint: None,
         }
+    }
+
+    /// The identity list in its shareable form, for reuse via
+    /// [`PackageResolution::from_shared`].
+    pub(crate) fn shared_identities(&self) -> Arc<[ExternalPackageIdentity]> {
+        Arc::clone(&self.identities)
     }
 
     pub fn package(&self) -> &str {
@@ -484,10 +510,23 @@ impl ExternalResolutionGeneration {
             domain.definition_sources.sort();
             domain.definition_sources.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
+                // Identity lists are sorted and deduped at construction
+                // (`PackageResolution::new`) and immutable afterward, so
+                // packages sharing one list (via `from_shared`) hash it
+                // once. The memo is keyed by slice address: at most one
+                // probe per package, and a miss costs nothing beyond the
+                // hash that was already required.
+                let mut fingerprint_memo: HashMap<
+                    *const [ExternalPackageIdentity],
+                    ResolutionFingerprint,
+                > = HashMap::new();
                 for package in packages.iter_mut() {
-                    package.identities.sort();
-                    package.identities.dedup();
-                    package.set_fingerprint(ResolutionFingerprint::new(
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    if let Some(fingerprint) = fingerprint_memo.get(&slice_ptr) {
+                        package.set_fingerprint(fingerprint.clone());
+                        continue;
+                    }
+                    let fingerprint = ResolutionFingerprint::new(
                         turborepo_lockfile_hash::hash(
                             package
                                 .identities
@@ -495,7 +534,9 @@ impl ExternalResolutionGeneration {
                                 .map(|identity| (identity.key(), identity.version())),
                         )
                         .map_err(ExternalResolutionError::Fingerprint)?,
-                    ));
+                    );
+                    fingerprint_memo.insert(slice_ptr, fingerprint.clone());
+                    package.set_fingerprint(fingerprint);
                 }
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }
