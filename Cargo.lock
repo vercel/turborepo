@@ -8436,6 +8436,7 @@ dependencies = [
  "pidlock",
  "prost 0.14.3",
  "semver 1.0.23",
+ "serde",
  "serde_json",
  "sha2",
  "sysinfo",
@@ -8458,6 +8459,7 @@ dependencies = [
  "turborepo-scm",
  "turborepo-types",
  "uds_windows",
+ "which 4.4.0",
  "windows-sys 0.59.0",
 ]
 
@@ -8849,7 +8851,10 @@ dependencies = [
 name = "turborepo-lsp"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "crop",
+ "go-parse-duration",
+ "humantime",
  "itertools 0.14.0",
  "jsonc-parser 0.23.0",
  "pidlock",
@@ -8858,8 +8863,11 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "tower-lsp",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "turbopath",
- "turborepo-lib",
+ "turborepo-daemon",
  "turborepo-repository",
  "wax",
 ]

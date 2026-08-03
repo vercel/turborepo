@@ -31,9 +31,9 @@ use tower_lsp::{
     lsp_types::*,
 };
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lib::{
+use turborepo_daemon::{
     DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
-    DaemonPaths,
+    Paths as DaemonPaths,
 };
 use turborepo_repository::{
     discovery::{self, PackageDiscovery},
