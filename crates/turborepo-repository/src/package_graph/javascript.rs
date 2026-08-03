@@ -242,14 +242,16 @@ impl PackageGraph {
             .package_manager()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let definition_source = AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name())?;
-        let previous_resolution = resolve_dependencies(
-            &self.knowledge,
-            Vec::new(),
-            previous_lockfile,
-            external_dependencies(&self.knowledge, &self.relationship_knowledge),
-            true,
-            definition_source,
-        )
+        let previous_resolution = turborepo_rayon_compat::block_in_place(|| {
+            resolve_dependencies(
+                &self.knowledge,
+                Vec::new(),
+                previous_lockfile,
+                external_dependencies(&self.knowledge, &self.relationship_knowledge),
+                true,
+                definition_source,
+            )
+        })
         .map_err(ChangedPackagesError::Resolution)?;
         let current_resolution = self
             .external_resolution
