@@ -14,7 +14,7 @@
 //! equal (`==`) lockfiles for any input the fast path accepts; tests
 //! enforce this differentially.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use saphyr_parser::{Event, Parser, ScalarStyle, StrInput};
 use serde_yaml_ng::{Mapping, Number, Value};
@@ -331,16 +331,36 @@ impl<'a> Events<'a> {
     /// `>`) are fine here: the parser hands us the spec-decoded value, and
     /// serde treats any non-plain scalar as a string (pnpm emits folded
     /// scalars for long `deprecated` messages).
-    fn scalar(&mut self) -> FResult<(String, ScalarStyle)> {
+    /// Borrow the next scalar without allocating. The value borrows the
+    /// input (or an unescape buffer) for `'a`, so it stays valid across
+    /// later reads — callers that only compare it (e.g. matching a struct
+    /// field name) avoid the `String` allocation that [`Self::scalar`]
+    /// would make; callers that keep it call `.into_owned()`.
+    fn scalar_borrowed(&mut self) -> FResult<(Cow<'a, str>, ScalarStyle)> {
         match self.next()? {
             Event::Scalar(value, style, anchor_id, tag) => {
                 if anchor_id != 0 || tag.is_some() {
                     return Err(Unsupported::here());
                 }
-                Ok((value.into_owned(), style))
+                Ok((value, style))
             }
             _ => Err(Unsupported::here()),
         }
+    }
+
+    fn scalar(&mut self) -> FResult<(String, ScalarStyle)> {
+        let (value, style) = self.scalar_borrowed()?;
+        Ok((value.into_owned(), style))
+    }
+
+    /// Borrowing counterpart to [`Self::string`], for string-typed scalars
+    /// that are only inspected (not stored).
+    fn string_borrowed(&mut self) -> FResult<Cow<'a, str>> {
+        let (value, style) = self.scalar_borrowed()?;
+        if style == ScalarStyle::Plain && is_yaml_null(&value) {
+            return Err(Unsupported::here());
+        }
+        Ok(value)
     }
 
     /// Consume a scalar in a string-typed position (map key, `String`
@@ -348,11 +368,7 @@ impl<'a> Events<'a> {
     /// that reads as YAML null fails string deserialization, so it aborts
     /// the fast path rather than silently becoming a string.
     fn string(&mut self) -> FResult<String> {
-        let (value, style) = self.scalar()?;
-        if style == ScalarStyle::Plain && is_yaml_null(&value) {
-            return Err(Unsupported::here());
-        }
-        Ok(value)
+        Ok(self.string_borrowed()?.into_owned())
     }
 
     fn mapping_start(&mut self) -> FResult<()> {
@@ -607,8 +623,8 @@ fn parse_dependency(events: &mut Events) -> FResult<Dependency> {
     let mut specifier = None;
     let mut version = None;
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "specifier" => set_once(&mut specifier, events.string()?)?,
             "version" => set_once(&mut version, events.string()?)?,
             _ => events.skip_node()?,
@@ -640,8 +656,8 @@ fn parse_project_snapshot(events: &mut Events) -> FResult<ProjectSnapshot> {
     let mut publish_directory = None;
 
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "specifiers" => set_once(&mut specifiers, parse_string_map(events)?)?,
             "dependencies" => set_once(&mut dependencies, parse_dep_section(events)?)?,
             "optionalDependencies" => {
@@ -725,8 +741,8 @@ fn parse_dependencies_meta(events: &mut Events) -> FResult<Map<String, Dependenc
         let mut node = None;
         let mut patch = None;
         while !events.at_mapping_end()? {
-            let field = events.string()?;
-            match field.as_str() {
+            let field = events.string_borrowed()?;
+            match field.as_ref() {
                 "injected" => {
                     let (value, style) = events.scalar()?;
                     set_once(&mut injected, parse_bool_scalar(&value, style)?)?;
@@ -767,8 +783,8 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
     // `PackageResolution`.
     let mut other = Map::new();
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "type" => set_once(&mut type_field, events.string()?)?,
             "integrity" => set_once(&mut integrity, events.string()?)?,
             "tarball" => set_once(&mut tarball, events.string()?)?,
@@ -777,7 +793,7 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
             "commit" => set_once(&mut commit, events.string()?)?,
             _ => {
                 let value = parse_value(events)?;
-                if other.insert(key, value).is_some() {
+                if other.insert(key.into_owned(), value).is_some() {
                     return Err(Unsupported::here());
                 }
             }
@@ -855,8 +871,8 @@ fn parse_package_snapshot(events: &mut Events) -> FResult<PackageSnapshot> {
     let mut other = Map::new();
 
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "resolution" => set_once(&mut resolution, parse_resolution(events)?)?,
             "id" => set_once(&mut id, events.string()?)?,
             "name" => set_once(&mut name, events.string()?)?,
@@ -868,7 +884,7 @@ fn parse_package_snapshot(events: &mut Events) -> FResult<PackageSnapshot> {
             _ => {
                 if !v7.consume(&key, events)? {
                     let value = parse_value(events)?;
-                    if other.insert(key, value).is_some() {
+                    if other.insert(key.into_owned(), value).is_some() {
                         return Err(Unsupported::here());
                     }
                 }
@@ -947,8 +963,8 @@ fn parse_patched_dependencies(events: &mut Events) -> FResult<Map<String, PatchF
                 let mut path = None;
                 let mut hash = None;
                 while !events.at_mapping_end()? {
-                    let field = events.string()?;
-                    match field.as_str() {
+                    let field = events.string_borrowed()?;
+                    match field.as_ref() {
                         "path" => set_once(&mut path, events.string()?)?,
                         "hash" => set_once(&mut hash, events.string()?)?,
                         _ => events.skip_node()?,
@@ -996,8 +1012,8 @@ fn parse_settings(events: &mut Events) -> FResult<LockfileSettings> {
     let mut dedupe_peers = None;
     let mut peers_suffix_max_length = None;
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "autoInstallPeers" => {
                 let (value, style) = events.scalar()?;
                 set_once(&mut auto_install_peers, parse_bool_scalar(&value, style)?)?;
