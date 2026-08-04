@@ -12,6 +12,9 @@ use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     discovery::PackageDiscovery,
+    native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+    },
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_json::PackageJson,
     package_manager::PackageManager,
@@ -130,16 +133,60 @@ impl RepositoryContributor for AggregateContributor {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
+            let command = |name: &str| {
+                NativeTask::command_task(
+                    name,
+                    format!("tool {name}"),
+                    NativeCommandProgram::Tool("tool".to_string()),
+                    NativeCommandArguments::new(vec![name.to_string()]),
+                    None,
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+            };
             Ok(DiscoveredPackages::new(
-                vec![DiscoveredPackage::aggregate(
-                    "cargo-workspace".to_owned(),
-                    PackageJson::default(),
-                    self.repo_root.join_component("Cargo.toml"),
-                )],
+                vec![
+                    DiscoveredPackage::aggregate(
+                        "cargo-workspace".to_owned(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Cargo.toml"),
+                    )
+                    .with_native_tasks(vec![
+                        NativeTask::aggregate("all", ["check", "lint"]),
+                        command("check"),
+                        command("lint"),
+                    ]),
+                    DiscoveredPackage::aggregate(
+                        "other-workspace".to_owned(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Other.toml"),
+                    )
+                    .with_native_tasks(vec![
+                        NativeTask::aggregate("all", ["check"]),
+                        command("check"),
+                    ]),
+                ],
                 vec![WorkspaceRoot::new("aggregate-test", self.repo_root.clone())],
             ))
         })
     }
+}
+
+fn mock_aggregate_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(
+            PackageGraph::builder_optional(repo_root, None)
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::new()))
+                .with_contributor(Arc::new(AggregateContributor {
+                    repo_root: repo_root.clone(),
+                }))
+                .build(),
+        )
+        .unwrap()
 }
 
 type StubIOEngineResult = Engine<Built, TaskDefinition>;
