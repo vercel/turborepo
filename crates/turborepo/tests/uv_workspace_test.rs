@@ -28,6 +28,11 @@ fn setup_uv_pure_workspace(dir: &Path) {
     );
 }
 
+fn setup_uv_native_tools(dir: &Path) {
+    setup::copy_fixture("uv_native_tools", dir).unwrap();
+    setup::setup_git(dir).unwrap();
+}
+
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let mut command = common::turbo_command(dir);
@@ -71,6 +76,14 @@ fn find_task<'a>(json: &'a serde_json::Value, task_id: &str) -> &'a serde_json::
         .iter()
         .find(|task| task["taskId"] == task_id)
         .unwrap_or_else(|| panic!("{task_id} in task graph"))
+}
+
+fn append_manifest(dir: &Path, relative: &str, contents: &str) {
+    use std::io::Write;
+
+    let path = dir.join(relative);
+    let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(contents.as_bytes()).unwrap();
 }
 
 #[test]
@@ -156,6 +169,231 @@ fn test_uv_filter_by_package() {
         !ids.contains(&"acme#build".to_string()),
         "the workspace aggregate does not build: {ids:?}"
     );
+}
+
+#[test]
+fn test_uv_root_native_tools_workspace_fanout_and_qualified_filter() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "pyproject.toml",
+        r#"
+
+[dependency-groups]
+dev = ["Ruff", "black", "mypy", "ty", "pyright"]
+"#,
+    );
+    let lock_before = fs::read(tempdir.path().join("uv.lock")).unwrap();
+
+    let check = dry_run_tasks(tempdir.path(), &["check"]);
+    let ids = task_ids(&check);
+    for id in [
+        "acme#check",
+        "acme#check:mypy",
+        "acme#check:ty",
+        "acme#check:pyright",
+    ] {
+        assert!(ids.contains(&id.to_string()), "ids: {ids:?}");
+    }
+    let dependencies: Vec<&str> = find_task(&check, "acme#check")["dependencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    assert_eq!(
+        dependencies,
+        ["acme#check:mypy", "acme#check:pyright", "acme#check:ty"]
+    );
+    assert_eq!(
+        find_task(&check, "acme#check:mypy")["command"],
+        "uv run --frozen mypy packages/py-app packages/py-lib"
+    );
+    assert_eq!(
+        find_task(&check, "acme#check:mypy")["resolvedTaskDefinition"]["cache"],
+        false
+    );
+
+    let format = dry_run_tasks(tempdir.path(), &["format"]);
+    assert_eq!(task_ids(&format), vec!["acme#format".to_string()]);
+    assert_eq!(
+        find_task(&format, "acme#format")["command"],
+        "uv run --frozen ruff format packages/py-app packages/py-lib"
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "format:ruff",
+            "--filter=py-app",
+            "--dry-run=json",
+            "--",
+            "--check",
+        ],
+    );
+    assert_command_success(&output, "qualified formatter dry-run");
+    let qualified: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(task_ids(&qualified), vec!["py-app#format:ruff".to_string()]);
+    assert_eq!(
+        find_task(&qualified, "py-app#format:ruff")["command"],
+        "uv run --frozen ruff format packages/py-app"
+    );
+
+    let warning_output = run_turbo(tempdir.path(), &["format", "--dry-run=json"]);
+    assert_command_success(&warning_output, "formatter warning dry-run");
+    let stderr = String::from_utf8_lossy(&warning_output.stderr);
+    assert_eq!(stderr.matches("declares multiple formatters").count(), 1);
+    for expected in [
+        "scope \"acme\"",
+        "ruff, black",
+        "selected ruff",
+        "Ruff before Black",
+        "format:ruff, format:black",
+    ] {
+        assert!(stderr.contains(expected), "missing {expected:?}: {stderr}");
+    }
+    assert_eq!(
+        fs::read(tempdir.path().join("uv.lock")).unwrap(),
+        lock_before
+    );
+}
+
+#[test]
+fn test_uv_heterogeneous_tools_use_member_entrypoints() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_native_tools(tempdir.path());
+
+    let format = dry_run_tasks(tempdir.path(), &["format"]);
+    let ids = task_ids(&format);
+    assert_eq!(
+        ids,
+        ["py-app#format".to_string(), "py-lib#format".to_string()]
+    );
+    assert_eq!(
+        find_task(&format, "py-app#format")["command"],
+        "uv run --frozen --package py-app black packages/py-app"
+    );
+    assert_eq!(
+        find_task(&format, "py-lib#format")["command"],
+        "uv run --frozen ruff format packages/py-lib"
+    );
+
+    let check = dry_run_tasks(tempdir.path(), &["check"]);
+    let ids = task_ids(&check);
+    assert!(
+        !ids.iter().any(|id| id.starts_with("acme#")),
+        "ids: {ids:?}"
+    );
+    for id in [
+        "py-app#check",
+        "py-app#check:pyright",
+        "py-lib#check",
+        "py-lib#check:mypy",
+    ] {
+        assert!(ids.contains(&id.to_string()), "ids: {ids:?}");
+    }
+    for package in ["py-app", "py-lib"] {
+        let dependencies = find_task(&check, &format!("{package}#check"))["dependencies"]
+            .as_array()
+            .unwrap();
+        assert!(dependencies.iter().all(|dependency| {
+            dependency
+                .as_str()
+                .is_some_and(|dependency| dependency.starts_with(package))
+        }));
+    }
+
+    let lint = dry_run_tasks(tempdir.path(), &["lint"]);
+    assert!(task_ids(&lint).contains(&"acme#lint".to_string()));
+    assert_eq!(
+        find_task(&lint, "acme#lint:ruff")["command"],
+        "uv run --frozen ruff check packages/py-app packages/py-lib"
+    );
+}
+
+#[test]
+fn test_uv_compatible_member_tools_use_all_packages_entrypoint() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    for member in ["py-app", "py-lib"] {
+        append_manifest(
+            tempdir.path(),
+            &format!("packages/{member}/pyproject.toml"),
+            "\n[dependency-groups]\ndev = [\"ruff\"]\n",
+        );
+    }
+
+    let lint = dry_run_tasks(tempdir.path(), &["lint"]);
+    assert!(task_ids(&lint).contains(&"acme#lint".to_string()));
+    assert_eq!(
+        find_task(&lint, "acme#lint:ruff")["command"],
+        "uv run --frozen --all-packages ruff check packages/py-app packages/py-lib"
+    );
+
+    let filtered = dry_run_tasks(tempdir.path(), &["lint:ruff", "--filter=py-app"]);
+    assert_eq!(task_ids(&filtered), ["py-app#lint:ruff"]);
+    assert_eq!(
+        find_task(&filtered, "py-app#lint:ruff")["command"],
+        "uv run --frozen --package py-app ruff check packages/py-app"
+    );
+}
+
+#[test]
+fn test_uv_multi_child_check_rejects_pass_through_args() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"mypy\", \"ty\", \"pyright\"]\n",
+    );
+
+    let output = run_turbo(tempdir.path(), &["check", "--", "--strict"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("qualified dependency tasks"),
+        "stderr: {stderr}"
+    );
+    for qualified in ["acme#check:mypy", "acme#check:ty", "acme#check:pyright"] {
+        assert!(stderr.contains(qualified), "missing {qualified}: {stderr}");
+    }
+}
+
+#[test]
+fn test_uv_native_tools_are_visible_to_query_in_mixed_repo() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_monorepo(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"ruff\", \"mypy\"]\n",
+    );
+
+    let lint = dry_run_tasks(tempdir.path(), &["lint"]);
+    let ids = task_ids(&lint);
+    assert!(ids.contains(&"pyacme#lint".to_string()), "ids: {ids:?}");
+    assert!(
+        ids.contains(&"pyacme#lint:ruff".to_string()),
+        "ids: {ids:?}"
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { package(name: \"py-app\") { tasks { items { name } } } }",
+        ],
+    );
+    assert_command_success(&output, "native task query");
+    let query = String::from_utf8_lossy(&output.stdout);
+    for task in ["lint", "lint:ruff", "format", "format:ruff", "check:mypy"] {
+        assert!(
+            query.contains(&format!("\"name\": \"{task}\"")),
+            "query: {query}"
+        );
+    }
 }
 
 #[test]
