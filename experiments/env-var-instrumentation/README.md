@@ -455,23 +455,50 @@ regardless of candidate count; only behavioral dependencies need
 O(log n) attribution. Doctor runs must use loose mode so the poison reaches
 the task, and their (poisoned) outputs must never be written to the cache.
 
+### Experiment 11 — declaration-gap detection with zero injection
+
+A design decision worth making explicit: **turbo should never inject code
+into user processes.** Experiment 3's silent npm death is the standing
+argument — a runtime shim's unhandled edge case becomes an undebuggable
+turbo bug in someone's build. The Node Proxy recorder is therefore *not*
+part of the recommended design; it exists in this repo as evidence, not as
+a component. It isn't needed: removing a variable (strict mode) is just
+another perturbation, so "an undeclared var matters" is detectable from
+outputs alone. On the fixture with `env: []` and `API_URL`/`DOCS_TOKEN`/
+`MINIFY` set in the parent env:
+
+```
+loose-run outputs:  dc9f2327…   (all vars visible)
+strict-run outputs: 25df8e7b…   (only declared vars visible)
+VERDICT: outputs differ -> undeclared env vars affect this task
+         (no process was instrumented)
+```
+
+One strict/loose pair per task answers "are my declarations complete for
+this environment?"; Experiments 9–10 then *name* the missing vars. The
+entire pipeline touches only things turbo already owns: the env it
+constructs and the outputs it hashes.
+
 ### The product shape
 
 1. **Trust path (unchanged, already shipped):** strict mode constructs the
    task env from `env[]` + passthrough + framework inference. Sound for
    every language, forever. Detection output never enters the hash
    (Experiment 5 stands).
-2. **Every strict run, for free:** turbo injects the Node recorder
-   (Experiments 3–4) into the env it constructs and reports
-   `task looked up API_URL — it was filtered` the moment a miss happens,
-   with the exact `env[]` addition. Covers the JS majority instantly;
-   script-text `$VAR` parsing covers shell one-liners.
-3. **On demand / on suspicion:** `turbo env doctor <task>` runs the
-   sentinel-taint engine (Experiment 9) for the long tail — Go, Python,
-   static binaries, anything — and emits evidence-backed suggestions.
-4. **For agents and `--fix`:** both reporters emit structured JSON with the
+2. **Completeness check, zero injection:** a strict-vs-loose output diff
+   (Experiment 11) says whether any undeclared variable affects a task —
+   runnable on demand or as a periodic CI job. Script-text `$VAR` parsing
+   covers shell one-liners for free.
+3. **Attribution:** `turbo env doctor <task>` names the vars via
+   self-identifying sentinels — one poisoned build for value dependencies,
+   O(log n) bisection for the behavioral tail (Experiments 9–10). Doctor
+   runs never write to the cache.
+4. **For agents and `--fix`:** the doctor emits structured JSON with the
    proposed `turbo.json` diff. The loop "build behaved oddly → doctor →
    apply suggested env[] → green" is one round-trip, no human archaeology.
+5. **Nothing enters user processes.** No LD_PRELOAD, no NODE_OPTIONS, no
+   process.env wrapping. Turbo manipulates only the environment it hands
+   to tasks and reads only the outputs it already hashes.
 
 Under this design the failure mode is never a silently wrong cache hit —
 strict mode makes that impossible — it is a visible, explained, one-click
