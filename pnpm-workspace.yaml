@@ -8,6 +8,9 @@ packages:
   - lockfile-tests
 
 minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+  - next
+  - "@next/*"
 
 onlyBuiltDependencies:
   - "@swc/core"

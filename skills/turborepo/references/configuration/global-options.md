@@ -40,11 +40,11 @@ Use for credentials that shouldn't affect cache keys.
 
 ## cacheDir
 
-Custom cache location. Default: `node_modules/.cache/turbo`.
+Custom cache location. Default: `.turbo/cache`.
 
 ```json
 {
-  "cacheDir": ".turbo/cache"
+  "cacheDir": ".cache/turbo"
 }
 ```
 
@@ -95,17 +95,17 @@ Configure remote caching.
 }
 ```
 
-| Option          | Default                | Description                                            |
-| --------------- | ---------------------- | ------------------------------------------------------ |
-| `enabled`       | `true`                 | Enable/disable remote caching                          |
-| `signature`     | `false`                | Sign artifacts with `TURBO_REMOTE_CACHE_SIGNATURE_KEY` |
-| `preflight`     | `false`                | Send OPTIONS request before cache requests             |
-| `timeout`       | `30`                   | Timeout in seconds for cache operations                |
-| `uploadTimeout` | `60`                   | Timeout in seconds for uploads                         |
-| `apiUrl`        | `"https://vercel.com"` | Remote cache API endpoint                              |
-| `loginUrl`      | `"https://vercel.com"` | Login endpoint                                         |
-| `teamId`        | -                      | Team ID (must start with `team_`)                      |
-| `teamSlug`      | -                      | Team slug for querystring                              |
+| Option          | Default                    | Description                                            |
+| --------------- | -------------------------- | ------------------------------------------------------ |
+| `enabled`       | `true`                     | Enable/disable remote caching                          |
+| `signature`     | `false`                    | Sign artifacts with `TURBO_REMOTE_CACHE_SIGNATURE_KEY` |
+| `preflight`     | `false`                    | Send OPTIONS request before cache requests             |
+| `timeout`       | `30`                       | Timeout in seconds for cache operations                |
+| `uploadTimeout` | `60`                       | Timeout in seconds for uploads                         |
+| `apiUrl`        | `"https://vercel.com/api"` | Remote cache API endpoint                              |
+| `loginUrl`      | `"https://vercel.com"`     | Login endpoint                                         |
+| `teamId`        | -                          | Team ID (must start with `team_`)                      |
+| `teamSlug`      | -                          | Team slug for querystring                              |
 
 See https://turborepo.dev/docs/core-concepts/remote-caching for setup.
 
@@ -145,6 +145,34 @@ When using `outputLogs: "errors-only"`, show task hashes on start/completion:
 ### `longerSignatureKey`
 
 Enforce a minimum key length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken HMAC-SHA256 signatures. Fails the run immediately if the key is too short.
+
+### `experimentalObservability`
+
+Enable experimental OpenTelemetry exporter support: honors the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.
+
+### `affectedUsingTaskInputs`
+
+Use task-level `inputs` globs to determine which tasks `--affected` selects — only tasks whose declared inputs match the changed files, rather than all tasks in changed packages.
+
+### `githubActionsRemoteBaseRefFallback`
+
+When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>` (supports detached checkouts with only remote-tracking refs).
+
+### `watchUsingTaskInputs`
+
+Use task-level `inputs` globs to determine which tasks `turbo watch` re-runs when files change, rather than re-running all tasks in changed packages.
+
+### `pruneIncludesGlobalFiles`
+
+Include files matching `globalDependencies` globs in the `turbo prune` output. Without this flag, the entries are preserved in the pruned `turbo.json` but the files are not copied.
+
+### `filterUsingTasks`
+
+Resolve `--filter` at the task level: git-range filters (e.g. `--filter=[main]`) match against task `inputs` globs, and `...` traverses the task graph in addition to the package graph.
+
+### `strictTaskEntrypointSelection`
+
+When any package can run a requested task, skip packages without a command as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration.
 
 ### `globalConfiguration`
 
@@ -197,6 +225,14 @@ With `global.inputs` (new): files are treated as **implicit task inputs** prepen
 - Tasks with no explicit `inputs` still hash all package files plus the global inputs
 
 See the [gotchas doc](./gotchas.md) for guidance on using `$TURBO_DEFAULT$` with `global.inputs`.
+
+### `experimentalCargoWorkspaces`
+
+Treat the crates of a Cargo workspace as Turborepo packages: crates are discovered via `cargo metadata` and participate in the package graph, `--filter`, `--affected`, and `turbo query`. Experimental.
+
+### `experimentalPythonWorkspaces`
+
+Treat the members of a uv workspace as Turborepo packages: packages are discovered from the root `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the package graph. uv is the only supported Python package manager. Experimental.
 
 ## noUpdateNotifier
 

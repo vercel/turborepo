@@ -169,8 +169,12 @@ Specify the filesystem cache directory.
   When no `cacheDir` is specified and you're working in a [Git
   worktree](https://git-scm.com/docs/git-worktree), Turborepo automatically
   shares the cache with the main worktree. This allows cache hits across
-  different branches checked out in separate worktrees. Setting an explicit
-  `cacheDir` disables this behavior.
+  different branches checked out in separate worktrees. Cache artifacts are
+  restored without rewriting their contents, so outputs containing absolute
+  worktree paths can point to another checkout after a cache hit. Setting an
+  explicit relative `cacheDir`, such as `.turbo/cache`, resolves from the root
+  of the current worktree and disables sharing, giving each worktree its own
+  local cache.
 </Callout>
 
 ### `cacheMaxAge`

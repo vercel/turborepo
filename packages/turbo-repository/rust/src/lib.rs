@@ -178,9 +178,8 @@ impl Workspace {
     }
 
     /// Returns all external packages from the JavaScript resolution domain as
-    /// `npm/<name>@<version>` strings. Names come from producer-supplied
-    /// human names on the resolution generation; Cargo identities are
-    /// excluded to preserve the historical lockfile-only listing.
+    /// `npm/<name>@<version>` strings. Cargo identities are excluded to
+    /// preserve the historical lockfile-only listing.
     #[napi]
     pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
         let identities = self.graph.javascript_external_package_identities();
@@ -192,7 +191,7 @@ impl Workspace {
         let mut result: Vec<String> = identities
             .into_iter()
             .filter(|identity| seen_keys.insert(identity.key().to_string()))
-            .filter_map(|identity| identity.human_name().map(|name| format!("npm/{name}")))
+            .map(|identity| format!("npm/{}", identity.display_name()))
             .collect();
 
         result.sort();

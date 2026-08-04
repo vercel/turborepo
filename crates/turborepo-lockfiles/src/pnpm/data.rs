@@ -1014,7 +1014,11 @@ impl crate::Lockfile for PnpmLockfile {
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
-            Some(package.key.clone())
+            // For v7/v9 the key is already the human-readable identity, so a
+            // `human_name` here would just duplicate it. `display_name()`
+            // falls back to the key when `human_name` is absent, while the
+            // resolution fingerprint hashes only `(key, version)`.
+            None
         } else {
             // TODO: this is really hacky and doesn't properly handle v5 as it uses `/` as
             // the delimiter between name and version

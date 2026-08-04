@@ -16,8 +16,8 @@ If inputs haven't changed, restore outputs from cache instead of re-running the 
 
 These affect ALL tasks in the repo:
 
-- `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml`
-- Files listed in `globalDependencies` (or `global.env` when using `globalConfiguration`)
+- `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` / `bun.lock` (binary `bun.lockb` is unsupported — run `bun install --save-text-lockfile`)
+- Files listed in `globalDependencies` (or `global.inputs` when using `globalConfiguration` — those move to task hashes, see below)
 - Environment variables in `globalEnv` (or `global.env`)
 - `turbo.json` configuration
 

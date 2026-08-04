@@ -32,12 +32,21 @@ mod client;
 mod connector;
 mod default_timeout_layer;
 pub mod endpoint;
+mod lifecycle;
+mod package_changes_watcher;
+mod package_discovery;
 mod server;
 
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
+pub use lifecycle::{
+    clean_daemon, clean_daemon_files, daemon_log_filename, follow_daemon_logs,
+    run_lifecycle_command, serve, DaemonLifecycleCommand, DaemonLifecycleOutput, DaemonStatus,
+};
+pub use package_changes_watcher::RediscoveringPackageChangesWatcher;
+pub use package_discovery::DaemonPackageDiscovery;
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;

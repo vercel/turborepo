@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     ops::Range,
+    sync::Arc,
 };
 
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -144,9 +145,9 @@ impl<'a> PackageExternalDeclarations<'a> {
 /// consumers do not re-read native lockfiles.
 #[derive(Debug, Clone)]
 pub struct ExternalPackageIdentity {
-    key: String,
-    version: String,
-    human_name: Option<String>,
+    key: Arc<str>,
+    version: Arc<str>,
+    human_name: Option<Arc<str>>,
 }
 
 impl PartialEq for ExternalPackageIdentity {
@@ -177,7 +178,7 @@ impl std::hash::Hash for ExternalPackageIdentity {
 }
 
 impl ExternalPackageIdentity {
-    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+    pub fn new(key: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
         Self {
             key: key.into(),
             version: version.into(),
@@ -185,7 +186,7 @@ impl ExternalPackageIdentity {
         }
     }
 
-    pub fn with_human_name(mut self, human_name: impl Into<String>) -> Self {
+    pub fn with_human_name(mut self, human_name: impl Into<Arc<str>>) -> Self {
         self.human_name = Some(human_name.into());
         self
     }
@@ -278,10 +279,16 @@ impl ResolutionFingerprint {
 }
 
 /// Exact external identities attributed to one authoritative package.
+///
+/// The identity list is immutable once constructed (`new` sorts and
+/// dedups) and stored behind an `Arc` so packages with identical
+/// resolutions — common when many workspaces share the same external
+/// closure — can share one materialized list via
+/// [`PackageResolution::from_shared`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageResolution {
     package: String,
-    identities: Vec<ExternalPackageIdentity>,
+    identities: Arc<[ExternalPackageIdentity]>,
     fingerprint: Option<ResolutionFingerprint>,
 }
 
@@ -290,9 +297,32 @@ impl PackageResolution {
         package: impl Into<String>,
         identities: impl IntoIterator<Item = ExternalPackageIdentity>,
     ) -> Self {
+        Self {
+            package: package.into(),
+            identities: Self::shared_identity_list(identities),
+            fingerprint: None,
+        }
+    }
+
+    /// Build a sorted, deduplicated identity list in shareable form. This is
+    /// the single source of truth for the invariant `new` and `from_shared`
+    /// rely on, so a caller that constructs the list separately (e.g. in
+    /// parallel) and attributes it via `from_shared` stays consistent.
+    pub(crate) fn shared_identity_list(
+        identities: impl IntoIterator<Item = ExternalPackageIdentity>,
+    ) -> Arc<[ExternalPackageIdentity]> {
         let mut identities: Vec<_> = identities.into_iter().collect();
         identities.sort_unstable();
         identities.dedup();
+        identities.into()
+    }
+
+    /// Attribute an already-materialized identity list to another package.
+    /// The list carries `new`'s sorted/deduped invariant with it.
+    pub(crate) fn from_shared(
+        package: impl Into<String>,
+        identities: Arc<[ExternalPackageIdentity]>,
+    ) -> Self {
         Self {
             package: package.into(),
             identities,
@@ -484,18 +514,50 @@ impl ExternalResolutionGeneration {
             domain.definition_sources.sort();
             domain.definition_sources.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
+                // Identity lists are sorted and deduped at construction
+                // (`PackageResolution::new`) and immutable afterward, and
+                // packages sharing one list (via `from_shared`) share its
+                // `Arc`. Fingerprint each *distinct* list exactly once —
+                // keyed by slice address — and hash those distinct lists in
+                // parallel, since each is an independent Cap'n Proto
+                // canonicalization plus xxHash. On a monorepo with thousands
+                // of workspaces this is the dominant cost of building a
+                // generation. Output is unchanged: the canonical bytes are
+                // deterministic per input, and packages are re-sorted
+                // deterministically below.
+                use rayon::prelude::*;
+
+                // First-seen distinct lists, and each package's index into
+                // them. Raw pointers stay on this sequential side; only the
+                // borrowed slices cross into the parallel hash.
+                let mut index_of: HashMap<*const [ExternalPackageIdentity], usize> = HashMap::new();
+                let mut distinct: Vec<&[ExternalPackageIdentity]> = Vec::new();
+                for package in packages.iter() {
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    index_of.entry(slice_ptr).or_insert_with(|| {
+                        distinct.push(&package.identities);
+                        distinct.len() - 1
+                    });
+                }
+
+                let fingerprints = distinct
+                    .par_iter()
+                    .map(|identities| {
+                        Ok(ResolutionFingerprint::new(
+                            turborepo_lockfile_hash::hash(
+                                identities
+                                    .iter()
+                                    .map(|identity| (identity.key(), identity.version())),
+                            )
+                            .map_err(ExternalResolutionError::Fingerprint)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, ExternalResolutionError>>()?;
+                drop(distinct);
+
                 for package in packages.iter_mut() {
-                    package.identities.sort();
-                    package.identities.dedup();
-                    package.set_fingerprint(ResolutionFingerprint::new(
-                        turborepo_lockfile_hash::hash(
-                            package
-                                .identities
-                                .iter()
-                                .map(|identity| (identity.key(), identity.version())),
-                        )
-                        .map_err(ExternalResolutionError::Fingerprint)?,
-                    ));
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    package.set_fingerprint(fingerprints[index_of[&slice_ptr]].clone());
                 }
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }

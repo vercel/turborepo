@@ -14,7 +14,7 @@
 //! equal (`==`) lockfiles for any input the fast path accepts; tests
 //! enforce this differentially.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use saphyr_parser::{Event, Parser, ScalarStyle, StrInput};
 use serde_yaml_ng::{Mapping, Number, Value};
@@ -179,11 +179,15 @@ fn parse_fragment(fragment: &str) -> FResult<TopLevelFields> {
 /// Byte offsets of child-entry starts: lines indented by exactly two
 /// spaces whose first content byte could begin a pnpm map key (package
 /// keys like `'@scope/name@1.0.0':`, importer paths like `packages/foo` or
-/// `.`). `-` is excluded so block-sequence items never look like keys, and
-/// any line indented by exactly one space aborts (the two-space level
-/// would not be a direct child). Continuation lines of multi-line scalars
-/// are indented deeper than two spaces, so a boundary can never land
-/// inside an entry the scanner accepts.
+/// `.`), plus explicit-key entries (`? 'very long key'`). `-` is excluded
+/// so block-sequence items never look like keys, and any line indented by
+/// exactly one space aborts (the two-space level would not be a direct
+/// child). Continuation lines of multi-line scalars are indented deeper
+/// than two spaces, and an explicit key's `: value` line is treated as
+/// interior, so a boundary can never land inside an entry the scanner
+/// accepts. Non-blank content before the first entry start aborts: the
+/// chunk assembly drops everything before the first start, so accepting it
+/// could change meaning.
 fn child_entry_starts(fragment: &str) -> Option<Vec<usize>> {
     let bytes = fragment.as_bytes();
     let mut starts = Vec::new();
@@ -215,8 +219,20 @@ fn child_entry_starts(fragment: &str) -> Option<Vec<usize>> {
             continue;
         };
         match third {
-            // Deeper indentation or blank remainder: interior line.
-            b' ' | b'\n' | b'\r' => continue,
+            // Blank remainder: interior line.
+            b'\n' | b'\r' => continue,
+            // Deeper indentation before the first entry would be dropped
+            // by the chunk assembly; after it, it's an interior line.
+            b' ' if starts.is_empty() => return None,
+            b' ' => continue,
+            // Explicit-key entry (`? 'key'`, value on the next `: value`
+            // line). The `: ` line is interior to it, so a chunk boundary
+            // can't separate the pair; a stray `: ` line without its
+            // `? ` key makes the chunk's scanner decline, which falls
+            // back to sequential parsing.
+            b'?' if bytes.get(line_start + 3) == Some(&b' ') => starts.push(line_start),
+            b':' if starts.is_empty() => return None,
+            b':' => continue,
             c if c.is_ascii_alphanumeric()
                 || matches!(c, b'_' | b'\'' | b'"' | b'@' | b'.' | b'/') =>
             {
@@ -331,16 +347,36 @@ impl<'a> Events<'a> {
     /// `>`) are fine here: the parser hands us the spec-decoded value, and
     /// serde treats any non-plain scalar as a string (pnpm emits folded
     /// scalars for long `deprecated` messages).
-    fn scalar(&mut self) -> FResult<(String, ScalarStyle)> {
+    /// Borrow the next scalar without allocating. The value borrows the
+    /// input (or an unescape buffer) for `'a`, so it stays valid across
+    /// later reads — callers that only compare it (e.g. matching a struct
+    /// field name) avoid the `String` allocation that [`Self::scalar`]
+    /// would make; callers that keep it call `.into_owned()`.
+    fn scalar_borrowed(&mut self) -> FResult<(Cow<'a, str>, ScalarStyle)> {
         match self.next()? {
             Event::Scalar(value, style, anchor_id, tag) => {
                 if anchor_id != 0 || tag.is_some() {
                     return Err(Unsupported::here());
                 }
-                Ok((value.into_owned(), style))
+                Ok((value, style))
             }
             _ => Err(Unsupported::here()),
         }
+    }
+
+    fn scalar(&mut self) -> FResult<(String, ScalarStyle)> {
+        let (value, style) = self.scalar_borrowed()?;
+        Ok((value.into_owned(), style))
+    }
+
+    /// Borrowing counterpart to [`Self::string`], for string-typed scalars
+    /// that are only inspected (not stored).
+    fn string_borrowed(&mut self) -> FResult<Cow<'a, str>> {
+        let (value, style) = self.scalar_borrowed()?;
+        if style == ScalarStyle::Plain && is_yaml_null(&value) {
+            return Err(Unsupported::here());
+        }
+        Ok(value)
     }
 
     /// Consume a scalar in a string-typed position (map key, `String`
@@ -348,11 +384,7 @@ impl<'a> Events<'a> {
     /// that reads as YAML null fails string deserialization, so it aborts
     /// the fast path rather than silently becoming a string.
     fn string(&mut self) -> FResult<String> {
-        let (value, style) = self.scalar()?;
-        if style == ScalarStyle::Plain && is_yaml_null(&value) {
-            return Err(Unsupported::here());
-        }
-        Ok(value)
+        Ok(self.string_borrowed()?.into_owned())
     }
 
     fn mapping_start(&mut self) -> FResult<()> {
@@ -607,8 +639,8 @@ fn parse_dependency(events: &mut Events) -> FResult<Dependency> {
     let mut specifier = None;
     let mut version = None;
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "specifier" => set_once(&mut specifier, events.string()?)?,
             "version" => set_once(&mut version, events.string()?)?,
             _ => events.skip_node()?,
@@ -640,8 +672,8 @@ fn parse_project_snapshot(events: &mut Events) -> FResult<ProjectSnapshot> {
     let mut publish_directory = None;
 
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "specifiers" => set_once(&mut specifiers, parse_string_map(events)?)?,
             "dependencies" => set_once(&mut dependencies, parse_dep_section(events)?)?,
             "optionalDependencies" => {
@@ -725,8 +757,8 @@ fn parse_dependencies_meta(events: &mut Events) -> FResult<Map<String, Dependenc
         let mut node = None;
         let mut patch = None;
         while !events.at_mapping_end()? {
-            let field = events.string()?;
-            match field.as_str() {
+            let field = events.string_borrowed()?;
+            match field.as_ref() {
                 "injected" => {
                     let (value, style) = events.scalar()?;
                     set_once(&mut injected, parse_bool_scalar(&value, style)?)?;
@@ -767,8 +799,8 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
     // `PackageResolution`.
     let mut other = Map::new();
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "type" => set_once(&mut type_field, events.string()?)?,
             "integrity" => set_once(&mut integrity, events.string()?)?,
             "tarball" => set_once(&mut tarball, events.string()?)?,
@@ -777,7 +809,7 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
             "commit" => set_once(&mut commit, events.string()?)?,
             _ => {
                 let value = parse_value(events)?;
-                if other.insert(key, value).is_some() {
+                if other.insert(key.into_owned(), value).is_some() {
                     return Err(Unsupported::here());
                 }
             }
@@ -855,8 +887,8 @@ fn parse_package_snapshot(events: &mut Events) -> FResult<PackageSnapshot> {
     let mut other = Map::new();
 
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "resolution" => set_once(&mut resolution, parse_resolution(events)?)?,
             "id" => set_once(&mut id, events.string()?)?,
             "name" => set_once(&mut name, events.string()?)?,
@@ -868,7 +900,7 @@ fn parse_package_snapshot(events: &mut Events) -> FResult<PackageSnapshot> {
             _ => {
                 if !v7.consume(&key, events)? {
                     let value = parse_value(events)?;
-                    if other.insert(key, value).is_some() {
+                    if other.insert(key.into_owned(), value).is_some() {
                         return Err(Unsupported::here());
                     }
                 }
@@ -947,8 +979,8 @@ fn parse_patched_dependencies(events: &mut Events) -> FResult<Map<String, PatchF
                 let mut path = None;
                 let mut hash = None;
                 while !events.at_mapping_end()? {
-                    let field = events.string()?;
-                    match field.as_str() {
+                    let field = events.string_borrowed()?;
+                    match field.as_ref() {
                         "path" => set_once(&mut path, events.string()?)?,
                         "hash" => set_once(&mut hash, events.string()?)?,
                         _ => events.skip_node()?,
@@ -996,8 +1028,8 @@ fn parse_settings(events: &mut Events) -> FResult<LockfileSettings> {
     let mut dedupe_peers = None;
     let mut peers_suffix_max_length = None;
     while !events.at_mapping_end()? {
-        let key = events.string()?;
-        match key.as_str() {
+        let key = events.string_borrowed()?;
+        match key.as_ref() {
             "autoInstallPeers" => {
                 let (value, style) = events.scalar()?;
                 set_once(&mut auto_install_peers, parse_bool_scalar(&value, style)?)?;
@@ -1539,6 +1571,99 @@ packages:
       folded with trailing newline
 "#,
         );
+    }
+
+    #[test]
+    fn test_explicit_keys_differential() {
+        // The `yaml` library pnpm uses emits explicit keys (`? key` with
+        // the value on the following `: value` line) for mapping keys
+        // longer than 1024 bytes — real lockfiles hit this with heavily
+        // peer-suffixed snapshot keys. The scanner must accept both a
+        // block-mapping value starting on the `: ` line and an inline
+        // scalar value, at any mapping depth.
+        assert_scanner_matches_serde(
+            r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+overrides:
+  ? some-really-long-override-name
+  : 7.5.3
+
+snapshots:
+
+  ? 'long-key@1.0.0(peer-a@2.0.0)(peer-b@3.0.0)'
+  : dependencies:
+      dep-a: 1.0.0
+      dep-b: 2.0.0(dep-a@1.0.0)
+
+  short@1.0.0:
+    dependencies:
+      ? another-long-name-in-a-nested-mapping
+      : 1.0.0
+"#,
+        );
+    }
+
+    #[test]
+    fn test_explicit_key_without_value_line_falls_back() {
+        // `? key` at EOF (saphyr gives it a null value; the scanner
+        // declines rather than model that).
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n");
+        // `? key` followed by a line that is not its `: value` line.
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n  other: 1.0.0\n",
+        );
+        // `? key` whose `: value` line sits at a different indent.
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n      : 1.0.0\n",
+        );
+    }
+
+    #[test]
+    fn test_chunked_split_handles_explicit_keys() {
+        // Build a snapshots section big enough to cross the chunked-split
+        // threshold, with explicit-key entries at the start, middle, and
+        // end, so chunk boundaries interact with `? `/`: ` pairs.
+        let mut yaml =
+            String::from("lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\nsnapshots:\n\n");
+        let explicit = |name: &str| {
+            format!("  ? '{name}@1.0.0(peer@2.0.0)'\n  : dependencies:\n      dep: 1.0.0\n\n")
+        };
+        yaml.push_str(&explicit("first-explicit"));
+        for i in 0..12000 {
+            yaml.push_str(&format!(
+                "  pkg{i}@1.0.0:\n    dependencies:\n      dep{i}: 1.0.0\n\n"
+            ));
+            if i == 6000 {
+                yaml.push_str(&explicit("middle-explicit"));
+            }
+        }
+        yaml.push_str(&explicit("last-explicit"));
+        assert!(
+            yaml.len() >= 2 * CHUNKED_FRAGMENT_MIN_BYTES,
+            "input must be large enough to exercise the chunked path"
+        );
+        assert_scanner_matches_serde(&yaml);
+    }
+
+    #[test]
+    fn test_chunked_split_rejects_content_before_first_entry() {
+        // Deeper-indented content between a section header and its first
+        // child entry would be dropped by the chunk assembly; the splitter
+        // must decline so the sequential tiers (which also decline) decide.
+        let mut yaml = String::from(
+            "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\nsnapshots:\n    stray: 1.0.0\n",
+        );
+        for i in 0..12000 {
+            yaml.push_str(&format!(
+                "  pkg{i}@1.0.0:\n    dependencies:\n      dep{i}: 1.0.0\n\n"
+            ));
+        }
+        assert!(yaml.len() >= 2 * CHUNKED_FRAGMENT_MIN_BYTES);
+        assert_falls_back(&yaml);
     }
 
     #[test]

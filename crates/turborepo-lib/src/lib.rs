@@ -1,5 +1,4 @@
 #![feature(box_patterns)]
-#![feature(try_blocks)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -32,10 +31,10 @@ mod task_hash;
 mod tracing;
 mod turbo_json;
 
-pub use run::package_discovery::DaemonPackageDiscovery;
 // Re-export daemon types from the new crate location
 pub use turborepo_daemon::{
-    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
+    Paths as DaemonPaths,
 };
 pub use turborepo_query_api::QueryServer;
 

@@ -102,6 +102,10 @@ impl Lockfile for Yarn1Lockfile {
         })
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(Yarn1EdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -164,6 +168,27 @@ impl Lockfile for Yarn1Lockfile {
         let name = entry.name.as_deref()?;
         let version = &entry.version;
         Some(format!("{name}@{version}"))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// yarn1 resolution never consults the workspace: `resolve_package` ignores
+/// its workspace argument entirely and resolves purely from the lockfile's
+/// `name@specifier` keys, so every edge is globally uniform by construction.
+struct Yarn1EdgeResolver<'a> {
+    lockfile: &'a Yarn1Lockfile,
+}
+
+impl crate::TransitiveEdgeResolver for Yarn1EdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile.resolve_package("", name, version)?,
+        ))
     }
 }
 

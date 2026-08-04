@@ -6,6 +6,7 @@ license = "MIT"
 description = "Task hashing utilities for Turborepo cache invalidation"
 
 [dependencies]
+dashmap = { workspace = true }
 either = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }

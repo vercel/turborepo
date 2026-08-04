@@ -9,10 +9,10 @@ use turborepo_lockfiles::Lockfile;
 use super::{ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage};
 use crate::{
     external_resolution::{
-        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionChanges,
-        ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionGeneration,
-        JAVASCRIPT_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
-        ResolutionUnavailableReason, compare_resolution_data,
+        ExternalPackageIdentity, ExternalResolutionChanges, ExternalResolutionData,
+        ExternalResolutionDomain, ExternalResolutionGeneration, JAVASCRIPT_RESOLUTION_DOMAIN,
+        PackageResolution, ResolutionCompleteness, ResolutionUnavailableReason,
+        compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::DependencyKind,
@@ -46,16 +46,33 @@ pub(super) fn external_dependencies(
         .into_iter()
         .map(|(identity, _)| (identity.to_string(), BTreeMap::new()))
         .collect();
-    for declaration in ExternalDeclarations::build(relationships).declarations() {
-        if matches!(declaration.kind(), DependencyKind::Peer { .. }) {
-            continue;
-        }
-        let Some(dependencies) = by_source.get_mut(declaration.source()) else {
+    // Iterate the relationship groups directly rather than materializing an
+    // owned `ExternalDeclarations` (one struct per declaration, cloning the
+    // group source and declaration name that this loop only reads). Only the
+    // `name`/`specifier` that actually land in `by_source` are cloned. The
+    // per-group dedup by declaration name — first occurrence wins, applied
+    // before the external filter — matches `ExternalDeclarations::build`.
+    for group in relationships.groups() {
+        let Some(dependencies) = by_source.get_mut(group.source()) else {
             continue;
         };
-        dependencies
-            .entry(declaration.package_name().to_string())
-            .or_insert_with(|| declaration.specifier().to_string());
+        let mut seen = std::collections::HashSet::new();
+        for relationship in group.relationships() {
+            if !seen.insert(relationship.declaration_name()) {
+                continue;
+            }
+            let crate::relationships::RelationshipTarget::UnresolvedExternal { name, specifier } =
+                relationship.target()
+            else {
+                continue;
+            };
+            if matches!(relationship.kind(), DependencyKind::Peer { .. }) {
+                continue;
+            }
+            dependencies
+                .entry(name.clone())
+                .or_insert_with(|| specifier.clone());
+        }
     }
 
     by_source
@@ -121,24 +138,96 @@ pub(super) fn resolve_dependencies(
             );
         }
     };
-    let packages = resolution_packages(knowledge)
-        .into_iter()
-        .map(|(identity, directory)| {
-            let exact_identities = closures
-                .get(directory.to_unix().as_str())
-                .into_iter()
-                .flatten()
-                .map(|package| {
-                    let mut identity =
-                        ExternalPackageIdentity::new(package.key.clone(), package.version.clone());
-                    if let Some(human_name) = lockfile.human_name(package) {
-                        identity = identity.with_human_name(human_name);
-                    }
-                    identity
-                });
-            PackageResolution::new(identity, exact_identities)
+    // Workspaces sharing an identical external closure (common when a
+    // monorepo has many packages with the same dependencies) share one
+    // materialized identity list instead of each cloning every member's
+    // strings and re-reading its lockfile display name. Closure members
+    // are interned `Arc`s when the shared closure DP produced them, so an
+    // identical pointer sequence means an identical closure; formats that
+    // fall back to the legacy per-workspace walk produce distinct pointers
+    // and simply build their lists independently.
+    //
+    // The identity lists for the *distinct* closures are built in parallel:
+    // this is the bulk of resolution assembly on large monorepos (a string
+    // clone plus a lockfile `human_name` lookup per closure member). Raw
+    // pointers stay on the sequential bucketing side; only the borrowed
+    // closure slices cross into the parallel build.
+    use rayon::prelude::*;
+
+    let resolution_members = resolution_packages(knowledge);
+    let mut index_of: HashMap<Vec<*const turborepo_lockfiles::Package>, usize> = HashMap::new();
+    let mut distinct_closures: Vec<&[Arc<turborepo_lockfiles::Package>]> = Vec::new();
+    let mut plan: Vec<(&str, usize)> = Vec::with_capacity(resolution_members.len());
+    for &(identity, directory) in &resolution_members {
+        let members: &[Arc<turborepo_lockfiles::Package>] = closures
+            .get(directory.to_unix().as_str())
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let pointer_key: Vec<*const turborepo_lockfiles::Package> =
+            members.iter().map(Arc::as_ptr).collect();
+        let idx = *index_of.entry(pointer_key).or_insert_with(|| {
+            distinct_closures.push(members);
+            distinct_closures.len() - 1
+        });
+        plan.push((identity, idx));
+    }
+
+    // A shared dependency appears in many distinct closures. Intern one
+    // `ExternalPackageIdentity` per distinct package (the DP hands us the
+    // same `Arc<Package>` everywhere it occurs) so its key/version/human_name
+    // strings are allocated once and every closure that contains it clones a
+    // cheap `Arc<str>`-backed identity instead of re-cloning the strings.
+    let mut identity_of: HashMap<*const turborepo_lockfiles::Package, u32> = HashMap::new();
+    let mut distinct_packages: Vec<&Arc<turborepo_lockfiles::Package>> = Vec::new();
+    for members in &distinct_closures {
+        for package in *members {
+            identity_of.entry(Arc::as_ptr(package)).or_insert_with(|| {
+                distinct_packages.push(package);
+                (distinct_packages.len() - 1) as u32
+            });
+        }
+    }
+    // Build each distinct identity once, in parallel (the key/version clones
+    // and lockfile `human_name` lookup).
+    let interned: Vec<ExternalPackageIdentity> = distinct_packages
+        .par_iter()
+        .map(|package| {
+            let mut identity =
+                ExternalPackageIdentity::new(package.key.as_str(), package.version.as_str());
+            if let Some(human_name) = lockfile.human_name(package) {
+                identity = identity.with_human_name(human_name);
+            }
+            identity
         })
-        .collect::<Vec<_>>();
+        .collect();
+    // Resolve each closure's members to interned indices sequentially (the
+    // raw pointers never leave this side), then assemble the lists in
+    // parallel by cloning interned identities.
+    let closure_indices: Vec<Vec<u32>> = distinct_closures
+        .iter()
+        .map(|members| {
+            members
+                .iter()
+                .map(|package| identity_of[&Arc::as_ptr(package)])
+                .collect()
+        })
+        .collect();
+    drop(distinct_closures);
+
+    let built: Vec<Arc<[ExternalPackageIdentity]>> = closure_indices
+        .par_iter()
+        .map(|indices| {
+            PackageResolution::shared_identity_list(
+                indices.iter().map(|&i| interned[i as usize].clone()),
+            )
+        })
+        .collect();
+
+    let packages: Vec<PackageResolution> = plan
+        .into_iter()
+        .map(|(identity, idx)| PackageResolution::from_shared(identity, Arc::clone(&built[idx])))
+        .collect();
+
     let members = packages
         .iter()
         .map(|package| package.package().to_string())
@@ -206,14 +295,16 @@ impl PackageGraph {
             .package_manager()
             .ok_or(ChangedPackagesError::NoLockfile)?;
         let definition_source = AnchoredSystemPathBuf::from_raw(package_manager.lockfile_name())?;
-        let previous_resolution = resolve_dependencies(
-            &self.knowledge,
-            Vec::new(),
-            previous_lockfile,
-            external_dependencies(&self.knowledge, &self.relationship_knowledge),
-            true,
-            definition_source,
-        )
+        let previous_resolution = turborepo_rayon_compat::block_in_place(|| {
+            resolve_dependencies(
+                &self.knowledge,
+                Vec::new(),
+                previous_lockfile,
+                external_dependencies(&self.knowledge, &self.relationship_knowledge),
+                true,
+                definition_source,
+            )
+        })
         .map_err(ChangedPackagesError::Resolution)?;
         let current_resolution = self
             .external_resolution

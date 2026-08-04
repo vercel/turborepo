@@ -13,6 +13,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
+use dashmap::DashMap;
 pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
@@ -343,6 +344,11 @@ pub struct TaskHasher<'a, R> {
     /// environment.
     wildcard_cache: WildcardMapCache,
     external_deps_hash_cache: HashMap<String, String>,
+    /// Memoized framework inference keyed by package name. Inference scans
+    /// every known framework's dependency matchers against the package's
+    /// external declarations, and the result is identical for every task in
+    /// the package, so compute it once per package instead of once per task.
+    framework_cache: DashMap<String, Option<&'static Framework>>,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
@@ -385,6 +391,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             builtin_pass_through_env,
             wildcard_cache: WildcardMapCache::default(),
             external_deps_hash_cache: HashMap::new(),
+            framework_cache: DashMap::new(),
         }
     }
 
@@ -555,9 +562,21 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let do_framework_inference = self.run_opts.framework_inference();
         let is_monorepo = !self.run_opts.single_package();
 
-        // See if we can infer a framework
+        // See if we can infer a framework. The result only depends on the
+        // package's external declarations, so it's memoized per package and
+        // shared by all of the package's tasks. A racing recompute between
+        // `get` and `insert` produces the same value, so it's harmless.
         let framework = do_framework_inference
-            .then(|| infer_framework(package_context.external_declarations(), is_monorepo))
+            .then(|| match self.framework_cache.get(task_id.package()) {
+                Some(cached) => *cached,
+                None => {
+                    let inferred =
+                        infer_framework(package_context.external_declarations(), is_monorepo);
+                    self.framework_cache
+                        .insert(task_id.package().to_string(), inferred);
+                    inferred
+                }
+            })
             .flatten()
             .inspect(|framework| {
                 debug!("auto detected framework for {}", task_id.package());

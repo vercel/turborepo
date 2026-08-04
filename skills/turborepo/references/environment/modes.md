@@ -51,20 +51,22 @@ Turborepo automatically detects frameworks and includes their conventional env v
 
 ### Inferred Variables by Framework
 
-| Framework        | Pattern             |
-| ---------------- | ------------------- |
-| Next.js          | `NEXT_PUBLIC_*`     |
-| Vite             | `VITE_*`            |
-| Create React App | `REACT_APP_*`       |
-| Gatsby           | `GATSBY_*`          |
-| Nuxt             | `NUXT_*`, `NITRO_*` |
-| Expo             | `EXPO_PUBLIC_*`     |
-| Astro            | `PUBLIC_*`          |
-| SvelteKit        | `PUBLIC_*`          |
-| Remix            | `REMIX_*`           |
-| Redwood          | `REDWOOD_ENV_*`     |
-| Sanity           | `SANITY_STUDIO_*`   |
-| Solid            | `VITE_*`            |
+| Framework        | Pattern                                          |
+| ---------------- | ------------------------------------------------ |
+| Next.js          | `NEXT_PUBLIC_*`                                  |
+| Blitz.js         | `NEXT_PUBLIC_*`                                  |
+| Vite             | `VITE_*`                                         |
+| Create React App | `REACT_APP_*`                                    |
+| Gatsby           | `GATSBY_*`                                       |
+| Nitro            | `NITRO_*`, `SERVER_*`, plus deploy-platform vars |
+| Nuxt             | All Nitro vars plus `NUXT_*`, `LAUNCH_EDITOR`    |
+| Expo             | `EXPO_PUBLIC_*`                                  |
+| Astro            | `PUBLIC_*`                                       |
+| SvelteKit        | `VITE_*`, `PUBLIC_*`                             |
+| Redwood          | `REDWOOD_ENV_*`                                  |
+| Sanity           | `SANITY_STUDIO_*`                                |
+| Solid            | `VITE_*`                                         |
+| Vue              | `VUE_APP_*`, `LAUNCH_EDITOR`                     |
 
 ### Disabling Framework Inference
 
