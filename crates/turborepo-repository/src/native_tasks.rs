@@ -14,8 +14,50 @@ use crate::{
     package_graph::PackageTaskContext,
     package_json::PackageJson,
     package_manager::PackageManager,
-    toolchain::{TaskCommand, override_task_command, package_manager_command},
+    toolchain::{TaskCommand, TaskDefaults, override_task_command, package_manager_command},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TaskEntrypoint {
+    Preferred,
+    PreferredOnly,
+    Candidate,
+    Excluded,
+}
+
+/// Immutable task-local behavior supplied by a native-task producer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct NativeTaskContract {
+    defaults: TaskDefaults,
+    entrypoint: Option<TaskEntrypoint>,
+    derives_io: bool,
+}
+
+impl NativeTaskContract {
+    pub fn new(
+        defaults: TaskDefaults,
+        entrypoint: Option<TaskEntrypoint>,
+        derives_io: bool,
+    ) -> Self {
+        Self {
+            defaults,
+            entrypoint,
+            derives_io,
+        }
+    }
+
+    pub fn defaults(&self) -> &TaskDefaults {
+        &self.defaults
+    }
+
+    pub fn entrypoint(&self) -> Option<TaskEntrypoint> {
+        self.entrypoint
+    }
+
+    pub fn derives_io(&self) -> bool {
+        self.derives_io
+    }
+}
 
 /// How a native command chooses its working directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +132,7 @@ pub struct NativeTask {
     script: Option<Spanned<String>>,
     command: Option<NativeCommandTemplate>,
     cwd_policy: WorkingDirectoryPolicy,
+    contract: NativeTaskContract,
 }
 
 impl NativeTask {
@@ -125,6 +168,15 @@ impl NativeTask {
         self.cwd_policy
     }
 
+    pub fn contract(&self) -> &NativeTaskContract {
+        &self.contract
+    }
+
+    pub fn with_contract(mut self, contract: NativeTaskContract) -> Self {
+        self.contract = contract;
+        self
+    }
+
     /// Construct a synthesized native command task (not package-authored).
     pub fn command_task(
         name: impl Into<String>,
@@ -148,6 +200,22 @@ impl NativeTask {
                 serial_group,
             }),
             cwd_policy,
+            contract: NativeTaskContract::default(),
+        }
+    }
+
+    /// Construct a non-executable task carrying classification facts.
+    pub fn contract_task(name: impl Into<String>, contract: NativeTaskContract) -> Self {
+        Self {
+            name: name.into(),
+            authored: false,
+            registered: false,
+            executable: false,
+            display: None,
+            script: None,
+            command: None,
+            cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
+            contract,
         }
     }
 }
@@ -335,6 +403,7 @@ pub fn observation_from_scripts(
                 serial_group: None,
             }),
             cwd_policy: WorkingDirectoryPolicy::PackageDirectory,
+            contract: NativeTaskContract::default(),
         });
     }
     NativeTaskObservation {

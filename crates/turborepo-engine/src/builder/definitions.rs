@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
+use turborepo_repository::{
+    native_tasks::NativeTaskContract,
+    package_graph::{PackageGraph, PackageName, PackageNode},
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -17,15 +20,16 @@ use crate::{
 
 /// Memo key for resolved task definitions: the turbo.json chain (by
 /// address; loader-owned for the duration of a build), the task name, and
-/// the two package-dependent inputs that survive resolution — path to the
-/// repo root and whether the package's toolchain defines a command for the
-/// task. See `task_definition_cached`.
+/// the package-dependent inputs that survive resolution: path to the repo
+/// root, native execution eligibility, and task-local contract facts. See
+/// `task_definition_cached`.
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct TaskDefMemoKey {
     chain: Vec<usize>,
     task_name: TaskName<'static>,
     path_to_root: turbopath::RelativeUnixPathBuf,
     defines_task: bool,
+    native_contract: Option<NativeTaskContract>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -247,9 +251,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // global input files — they don't execute, and including the files
         // would cause their hash to change and cascade into downstream
         // tasks that depend on them.
-        let defines_task = package_context
+        let native_task = package_context
             .as_ref()
-            .is_some_and(|context| context.native_tasks().defines(task_id.task()));
+            .and_then(|context| context.native_tasks().get(task_id.task()));
+        let native_contract = native_task.map(|task| task.contract().clone());
+        let defines_task = native_task.is_some_and(|task| task.executable());
         let registered_task = package_context
             .as_ref()
             .is_some_and(|context| context.native_tasks().registers(task_id.task()));
@@ -257,8 +263,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
         // `$TURBO_ROOT$`/global-input anchoring) and whether the package's
-        // toolchain defines a command for the task. Memoize on exactly
-        // those inputs. Two exceptions must skip the memo: a package-scoped
+        // toolchain defines a command for the task, and task-local contract
+        // facts. Memoize on exactly those inputs. Two exceptions must skip the memo: a
+        // package-scoped
         // task key (`web#build`) in the chain, which `TurboJson::task`
         // consults first, and packages whose toolchain derives per-package
         // hash wiring (e.g. Cargo crate closures differ per crate).
@@ -269,9 +276,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&task_id.as_inner().as_task_name())
                     .is_some()
             });
-            let memoizable_contract = package_context
-                .as_ref()
-                .is_none_or(|context| !context.task_contract().derives_io());
+            let memoizable_contract = package_context.as_ref().is_none_or(|context| {
+                !native_contract.as_ref().map_or_else(
+                    || {
+                        context
+                            .task_contract()
+                            .derives_task_io(task_id.as_inner().task())
+                    },
+                    NativeTaskContract::derives_io,
+                )
+            });
             (!package_scoped && memoizable_contract).then(|| TaskDefMemoKey {
                 chain: turbo_json_chain
                     .iter()
@@ -280,6 +294,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 task_name: task_name.clone().into_owned(),
                 path_to_root: path_to_root.clone(),
                 defines_task,
+                native_contract: native_contract.clone(),
             })
         };
         if let Some(key) = &memo_key
@@ -334,9 +349,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         if should_apply_toolchain_defaults(command_override.as_ref())
             && let Some(context) = package_context.as_ref()
         {
-            let defaults = context
-                .task_contract()
-                .defaults_for_task(task_id.as_inner().task());
+            let defaults = native_contract
+                .as_ref()
+                .map(|contract| contract.defaults().clone())
+                .unwrap_or_else(|| {
+                    context
+                        .task_contract()
+                        .defaults_for_task(task_id.as_inner().task())
+                });
             if processed_task_definition.cache.is_none() {
                 processed_task_definition.cache = defaults.cache.map(Spanned::new);
             }
@@ -377,9 +397,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // `$TURBO_DEFAULT$` take full control.
         if inherits_toolchain_task_io(task_def.command.as_ref())
             && let Some(package_context) = package_context.as_ref().filter(|context| {
-                context
-                    .task_contract()
-                    .derives_task_io(task_id.as_inner().task())
+                native_contract.as_ref().map_or_else(
+                    || {
+                        context
+                            .task_contract()
+                            .derives_task_io(task_id.as_inner().task())
+                    },
+                    NativeTaskContract::derives_io,
+                )
             })
         {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;

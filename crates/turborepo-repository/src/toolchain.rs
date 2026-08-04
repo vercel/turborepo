@@ -445,7 +445,7 @@ pub struct WatchSpec {
 }
 
 /// Default task behavior supplied by task-contract knowledge.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TaskDefaults {
     /// Whether task logs and outputs are cacheable.
     pub cache: Option<bool>,

@@ -464,11 +464,11 @@ pub fn native_tasks_for_package(
     package: &str,
 ) -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::{
-        NativeCommandArguments, NativeCommandProgram, NativeTask, PassThroughPlacement,
-        PassThroughSeparator, WorkingDirectoryPolicy,
+        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
+        PassThroughPlacement, PassThroughSeparator, WorkingDirectoryPolicy,
     };
 
-    registered_tasks(details)
+    let mut tasks: Vec<_> = registered_tasks(details)
         .into_iter()
         .filter_map(|task| {
             let subcommand = task_subcommand(details.kind, task)?;
@@ -480,25 +480,68 @@ pub fn native_tasks_for_package(
                     format!("--package={package}")
                 }
             };
-            Some(NativeTask::command_task(
-                task,
-                display,
-                NativeCommandProgram::Tool("cargo".to_string()),
-                NativeCommandArguments {
-                    prefix: vec![subcommand.to_string(), scope_arg],
-                    pass_through_placement: PassThroughPlacement::AfterSuffix,
-                    pass_through_separator: pass_through_uses_separator(subcommand)
-                        .then(|| PassThroughSeparator::Fixed("--".to_string())),
-                    suffix: (subcommand != "fmt")
-                        .then(|| "--locked".to_string())
-                        .into_iter()
-                        .collect(),
-                },
-                (!matches!(subcommand, "run" | "fmt")).then(|| "cargo".to_string()),
-                WorkingDirectoryPolicy::RepositoryRoot,
-            ))
+            Some(
+                NativeTask::command_task(
+                    task,
+                    display,
+                    NativeCommandProgram::Tool("cargo".to_string()),
+                    NativeCommandArguments {
+                        prefix: vec![subcommand.to_string(), scope_arg],
+                        pass_through_placement: PassThroughPlacement::AfterSuffix,
+                        pass_through_separator: pass_through_uses_separator(subcommand)
+                            .then(|| PassThroughSeparator::Fixed("--".to_string())),
+                        suffix: (subcommand != "fmt")
+                            .then(|| "--locked".to_string())
+                            .into_iter()
+                            .collect(),
+                    },
+                    (!matches!(subcommand, "run" | "fmt")).then(|| "cargo".to_string()),
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+                .with_contract(NativeTaskContract::new(
+                    cargo_task_defaults(details, task),
+                    cargo_task_entrypoint(details.kind, task),
+                    true,
+                )),
+            )
         })
-        .collect()
+        .collect();
+    if !tasks.iter().any(|task| task.name() == "build") {
+        tasks.push(NativeTask::contract_task(
+            "build",
+            NativeTaskContract::new(
+                cargo_task_defaults(details, "build"),
+                cargo_task_entrypoint(details.kind, "build"),
+                false,
+            ),
+        ));
+    }
+    tasks
+}
+
+fn cargo_task_defaults(details: &CargoPackageDetails, task: &str) -> toolchain::TaskDefaults {
+    let cache = task_subcommand(details.kind, task).and_then(|subcommand| {
+        (subcommand == "run"
+            || subcommand == "fmt"
+            || (details.kind == CargoPackageKind::Library && subcommand == "build"))
+            .then_some(false)
+    });
+    toolchain::TaskDefaults { cache }
+}
+
+fn cargo_task_entrypoint(
+    kind: CargoPackageKind,
+    task: &str,
+) -> Option<crate::native_tasks::TaskEntrypoint> {
+    use crate::native_tasks::TaskEntrypoint;
+
+    library_subcommand(task)?;
+    Some(match (task == "build", kind) {
+        (true, CargoPackageKind::Workspace) => TaskEntrypoint::Excluded,
+        (true, CargoPackageKind::Entrypoint) => TaskEntrypoint::Preferred,
+        (false, CargoPackageKind::Workspace) => TaskEntrypoint::PreferredOnly,
+        _ => TaskEntrypoint::Candidate,
+    })
 }
 
 /// Whether pass-through args for `subcommand` must follow a `--` separator.
@@ -770,16 +813,6 @@ impl CargoTaskContract {
         }
     }
 
-    pub(crate) fn task_defaults(&self, task: &str) -> toolchain::TaskDefaults {
-        let cache = task_subcommand(self.package.kind, task).and_then(|subcommand| {
-            (subcommand == "run"
-                || subcommand == "fmt"
-                || (self.package.kind == CargoPackageKind::Library && subcommand == "build"))
-                .then_some(false)
-        });
-        toolchain::TaskDefaults { cache }
-    }
-
     /// Classifies Cargo package sources for dependent derived-input closures.
     /// Workspace aggregates have no package source directory to include.
     pub(crate) fn dependency_source_inputs(&self) -> crate::task_contracts::DependencySourceInputs {
@@ -796,29 +829,6 @@ impl CargoTaskContract {
         task_env: &std::collections::HashMap<String, String>,
     ) -> Vec<(String, String)> {
         cargo_compile_cache_env(endpoint, task_env)
-    }
-
-    pub(crate) fn derives_task_io(&self, task: &str) -> bool {
-        registered_tasks(&self.package)
-            .into_iter()
-            .any(|registered| registered == task)
-    }
-
-    pub(crate) fn task_entrypoint(
-        &self,
-        task: &str,
-    ) -> Option<crate::task_contracts::TaskEntrypoint> {
-        library_subcommand(task)?;
-        Some(match (task == "build", self.package.kind) {
-            (true, CargoPackageKind::Workspace) => crate::task_contracts::TaskEntrypoint::Excluded,
-            (true, CargoPackageKind::Entrypoint) => {
-                crate::task_contracts::TaskEntrypoint::Preferred
-            }
-            (false, CargoPackageKind::Workspace) => {
-                crate::task_contracts::TaskEntrypoint::PreferredOnly
-            }
-            _ => crate::task_contracts::TaskEntrypoint::Candidate,
-        })
     }
 
     pub(crate) fn derived_task_io(
@@ -3896,17 +3906,6 @@ release: 1.96.0-nightly\n",
         write_fixture_workspace(&root);
 
         let toolchain = CargoContributor::new(root.clone());
-        let discovered = toolchain.discover_packages().await.unwrap();
-        let contracts: HashMap<_, _> = discovered
-            .packages()
-            .iter()
-            .cloned()
-            .filter_map(|package| {
-                let parts = package.into_parts();
-                Some((parts.name?, parts.task_contract?))
-            })
-            .collect();
-
         let app_context = task_context(&toolchain, &root, "app", "crates/app");
         let lib_a_context = task_context(&toolchain, &root, "lib-a", "crates/lib-a");
         let workspace_context = task_context(&toolchain, &root, "fixture-ws", "");
@@ -3999,17 +3998,18 @@ release: 1.96.0-nightly\n",
             Some("cargo build --package=lib-a --locked")
         );
 
-        let app_contract = &contracts["app"];
-        let library_contract = &contracts["lib-a"];
-        let workspace_contract = &contracts["fixture-ws"];
-        assert_eq!(app_contract.defaults_for_task("run").cache, Some(false));
-        assert_eq!(app_contract.defaults_for_task("dev").cache, Some(false));
-        assert_eq!(app_contract.defaults_for_task("build").cache, None);
-        assert_eq!(workspace_contract.defaults_for_task("test").cache, None);
-        assert_eq!(library_contract.defaults_for_task("test").cache, None);
-        assert_eq!(workspace_contract.defaults_for_task("format").cache, Some(false));
-        assert_eq!(library_contract.defaults_for_task("format").cache, Some(false));
-        assert_eq!(library_contract.defaults_for_task("build").cache, Some(false));
+        let app_build = app_context.native_tasks().get("build").unwrap().contract();
+        let library_build = lib_a_context.native_tasks().get("build").unwrap().contract();
+        let workspace_build = workspace_context.native_tasks().get("build").unwrap().contract();
+        assert_eq!(app_context.native_tasks().get("run").unwrap().contract().defaults().cache, Some(false));
+        assert_eq!(app_context.native_tasks().get("dev").unwrap().contract().defaults().cache, Some(false));
+        assert_eq!(app_build.defaults().cache, None);
+        assert_eq!(workspace_context.native_tasks().get("test").unwrap().contract().defaults().cache, None);
+        assert_eq!(lib_a_context.native_tasks().get("test").unwrap().contract().defaults().cache, None);
+        assert_eq!(workspace_context.native_tasks().get("format").unwrap().contract().defaults().cache, Some(false));
+        assert_eq!(lib_a_context.native_tasks().get("format").unwrap().contract().defaults().cache, Some(false));
+        assert_eq!(library_build.defaults().cache, Some(false));
+        assert!(app_build.derives_io());
         assert_eq!(
             app_context
                 .native_tasks()
@@ -4024,23 +4024,23 @@ release: 1.96.0-nightly\n",
         );
 
         assert_eq!(
-            app_contract.task_entrypoint("build"),
+            app_build.entrypoint(),
             Some(crate::task_contracts::TaskEntrypoint::Preferred)
         );
         assert_eq!(
-            library_contract.task_entrypoint("build"),
+            library_build.entrypoint(),
             Some(crate::task_contracts::TaskEntrypoint::Candidate)
         );
         assert_eq!(
-            workspace_contract.task_entrypoint("build"),
+            workspace_build.entrypoint(),
             Some(crate::task_contracts::TaskEntrypoint::Excluded)
         );
         assert_eq!(
-            workspace_contract.task_entrypoint("test"),
+            workspace_context.native_tasks().get("test").unwrap().contract().entrypoint(),
             Some(crate::task_contracts::TaskEntrypoint::PreferredOnly)
         );
         assert_eq!(
-            workspace_contract.task_entrypoint("format"),
+            workspace_context.native_tasks().get("format").unwrap().contract().entrypoint(),
             Some(crate::task_contracts::TaskEntrypoint::PreferredOnly)
         );
     }
