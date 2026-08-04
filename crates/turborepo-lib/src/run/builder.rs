@@ -801,19 +801,46 @@ impl RunBuilder {
             turbo_json_loader.preload_all();
         });
 
+        // When filterUsingTasks is active, --affected is handled by the
+        // same task-level filter rather than a separate codepath.
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.affected_range.is_some());
+
+        let use_task_level_affected = !use_task_level_filter
+            && self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        let has_task_level_affected_package_scope = use_task_level_affected
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.pkg_inference_root.is_some());
+
+        // Task-level affectedness replaces package-level affectedness. Resolve
+        // package constraints independently so SCM is queried only by the task
+        // detector and the final package list can come from selected tasks.
+        let package_scope_opts = use_task_level_affected.then(|| {
+            let mut opts = self.opts.clone();
+            opts.scope_opts.affected_range = None;
+            opts
+        });
+        let package_resolution_opts = package_scope_opts.as_ref().unwrap_or(&self.opts);
+
         // Resolution knowledge is complete at package-graph construction, so
         // scope filtering can read lockfile-affected packages without joining
         // deferred closure work.
-        let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
+        let (mut filtered_pkgs, mut filter_mode, unqualified_entrypoint_packages) = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
                 &self.repo_root,
-                &self.opts,
+                package_resolution_opts,
                 &pkg_dep_graph,
                 &scm,
                 &root_turbo_json,
             )?
         };
+        if use_task_level_affected {
+            filter_mode = FilterMode::ExplicitSelection;
+        }
         // The root Turbo task namespace exists independently of a root
         // JavaScript package scope. Non-root namespaces, including aggregate
         // scopes, come from authoritative repository knowledge.
@@ -845,15 +872,11 @@ impl RunBuilder {
         scoped_entrypoint_exclusions
             .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
-        // When filterUsingTasks is active, --affected is handled by the
-        // same task-level filter rather than a separate codepath.
-        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
-            && (!self.opts.scope_opts.filter_patterns.is_empty()
-                || self.opts.scope_opts.affected_range.is_some());
-
-        let use_task_level_affected = !use_task_level_filter
-            && self.opts.scope_opts.affected_range.is_some()
-            && self.opts.future_flags.affected_using_task_inputs;
+        let task_level_affected_package_scope = if has_task_level_affected_package_scope {
+            Some(filtered_pkgs.keys().cloned().collect())
+        } else {
+            None
+        };
 
         let use_watch_task_level_filter = self
             .changed_files_for_watch
@@ -1000,12 +1023,17 @@ impl RunBuilder {
 
         // Task-level --affected detection (separate from --filter).
         if use_task_level_affected {
-            engine = self.filter_engine_to_affected_tasks(
+            let (affected_engine, selected_packages) = self.filter_engine_to_affected_tasks(
                 engine,
                 &pkg_dep_graph,
                 &root_turbo_json,
                 &scm,
+                task_level_affected_package_scope.as_ref(),
             )?;
+            engine = affected_engine;
+            if let Some(selected_packages) = selected_packages {
+                filtered_pkgs.retain(|package, _| selected_packages.contains(package));
+            }
         }
 
         if needs_all_packages {
@@ -1171,7 +1199,8 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         scm: &SCM,
-    ) -> Result<Engine, Error> {
+        package_scope: Option<&HashSet<PackageName>>,
+    ) -> Result<(Engine, Option<HashSet<PackageName>>), Error> {
         let (from_ref, to_ref) = self
             .opts
             .scope_opts
@@ -1202,7 +1231,26 @@ impl RunBuilder {
                     changed_files = changed_files.len(),
                     "task-level affected detection complete"
                 );
-                Ok(engine.retain_affected_tasks(&affected_tasks))
+                // Scope affected entrypoints before retaining their execution
+                // dependencies. Scoping the fully expanded execution graph
+                // would incorrectly promote unaffected upstream dependencies
+                // to selected tasks.
+                let mut affected_entrypoints = engine.collect_task_dependents(&affected_tasks);
+                affected_entrypoints.extend(affected_tasks);
+                if let Some(package_scope) = package_scope {
+                    let scoped_tasks = engine.task_ids_for_packages(package_scope);
+                    affected_entrypoints.retain(|task| scoped_tasks.contains(task));
+                }
+                let selected_packages = affected_entrypoints
+                    .iter()
+                    .map(|task| PackageName::from(task.package()))
+                    .collect();
+                let affected_entrypoints =
+                    super::task_filter::expand_with_siblings(&engine, affected_entrypoints);
+                Ok((
+                    engine.retain_filtered_tasks(&affected_entrypoints),
+                    Some(selected_packages),
+                ))
             }
             Err(e) => {
                 tracing::warn!(
@@ -1216,7 +1264,12 @@ impl RunBuilder {
                 )
                 .field("error", format!("{e:?}"))
                 .emit();
-                Ok(engine)
+                let Some(package_scope) = package_scope else {
+                    return Ok((engine, None));
+                };
+                let scoped_tasks = engine.task_ids_for_packages(package_scope);
+                let scoped_tasks = super::task_filter::expand_with_siblings(&engine, scoped_tasks);
+                Ok((engine.retain_filtered_tasks(&scoped_tasks), None))
             }
         }
     }

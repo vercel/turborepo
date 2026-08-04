@@ -135,10 +135,18 @@ construction:
    Shared with `turbo query { affectedTasks }`.
 3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
    Determines directly affected tasks, handling global deps and per-task inputs
-4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
-   containing directly affected tasks, their transitive dependents, and all
-   transitive dependencies required for execution (upstream tasks needed as
-   cache hits)
+4. **Affected expansion**: The engine expands directly affected tasks to their
+   transitive dependents, without adding upstream execution dependencies yet.
+5. **Package scope composition**: When package scope is present, it intersects
+   with those affected entrypoints. This prevents an unaffected upstream
+   dependency from becoming selected merely because it was needed by an
+   out-of-scope task. The run's reported packages come from these selected
+   entrypoints, not from a separate package-level affected calculation.
+6. **Co-scheduled task expansion**: Selected entrypoints expand through `with`
+   relationships, which are not represented by task graph edges.
+7. **Engine pruning** (`Engine::retain_filtered_tasks`): The engine retains the
+   selected tasks and adds their transitive execution dependencies (upstream
+   tasks needed as cache hits).
 
 This differs from the default `--affected` behavior which operates at the
 package level (all tasks in changed packages run).
