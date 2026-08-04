@@ -196,6 +196,112 @@ every limitation becomes acceptable because a human confirms the result:
 - Coverage caveat to document honestly: suggestions cover Node processes
   only. Shell/Python/Go/Bun steps need the other signals or manual entry.
 
+## Part 2 — Caching specifically: is there any sound design at all?
+
+The analysis above rules out one design: *learn a static `env` list from a
+recorded run and feed it into the hash*. Experiment 5 kills that forever.
+But for caching there is a second design the first analysis glossed over,
+borrowed from build systems that already cache tasks with dynamically
+discovered dependencies (`gcc -MD` depfiles, Buck2 dep-files, Shake's
+constructive traces):
+
+**Value-keyed traces.** Don't learn a list — record, per cache entry, the
+pairs `(var, value-observed-at-record-time)`. Lookup becomes: compute the
+static hash (files, deps, script text) → fetch candidate entries → an entry
+hits only if every recorded var has the same value in the environment turbo
+is about to hand the task.
+
+Two properties make this attractive for turbo, and both dissolve objections
+from Part 1:
+
+- **The bootstrap/timing problem disappears.** Turbo constructs the child
+  environment before spawning, so validating a trace is a dictionary lookup
+  against values turbo already holds — no need to observe anything before
+  the run. The first run is a miss anyway; that's when the trace is recorded.
+- **The path-dependence counterexample dissolves.** Record on dev:
+  `{CI: unset}` → artifact A. On CI, `CI=1` mismatches → miss → run, record
+  `{CI: "1", CI_DEPLOY_KEY: "xyz"}` → entry B. A later run with a different
+  deploy key mismatches both entries → correct rebuild. For a deterministic
+  task, if every recorded read sees an equal value, execution takes the same
+  path, reads the same set, and produces the same output. That's the standard
+  depfile soundness argument, and conditional access is handled *by
+  construction*.
+
+The soundness argument has exactly one load-bearing premise: **the trace must
+contain every env read the executed path made.** Part 1 proves that premise
+fails in general (shells, Python, Bun, Go, static binaries are unobservable).
+So the design question becomes: *can turbo detect when the premise fails and
+bail to a conservative miss instead of returning a wrong hit?*
+
+### Experiment 6 — Escape detection: censusing the process tree
+
+`execsnoop.c` is an LD_PRELOAD shim in which every dynamically linked process
+self-announces its executable path at load, and interposed
+`execve`/`execvp`/`posix_spawn(p)` calls log the binary about to be run. A
+full `turbo run build` under it produced a complete census:
+
+```
+21284  self  /opt/node22/bin/node      ← turbo's bin wrapper
+21291  exec  .../@turbo/linux-64/bin/turbo   ← static binary spawn VISIBLE from parent
+21302  self  /usr/bin/git
+21304  self  /opt/node22/bin/node      ← npm (web)
+21305  self  /opt/node22/bin/node      ← npm (docs)
+21326  self  /usr/bin/dash             ← task shell (web)
+21327  self  /usr/bin/dash             ← task shell (docs)
+21328  self  /opt/node22/bin/node      ← build.js
+```
+
+Every process is either self-announced (instrumentation loaded) or visible as
+an exec target from an instrumented parent — including the spawn of the
+statically-linked turbo binary, precisely the kind of process whose *reads*
+are invisible. In the real feature turbo is the orchestrator and knows its
+direct children natively, so the root of the tree is covered by construction.
+**Escapes from observability are detectable at spawn time; a sound
+conservative bailout is implementable.**
+
+### The resulting design space for cache-correct automation
+
+A task tree is *verifiable* when every env-reading process in it is one turbo
+can fully observe. Given the census, classify each process:
+
+1. **Node processes** — fully observable via the (npm-safe) Proxy recorder,
+   including reads of vars that turn out to be unset, and `set` operations
+   (needed to exclude self-set keys — e.g. `dotenv` loads `.env` into
+   `process.env` before code reads it; those reads validate against the
+   `.env` *file* (already hashable via `inputs`), not the parent env).
+2. **The npm-injected `sh -c "<script>"` wrapper** — its reads are invisible,
+   but the script text is already a hash input, and `$VAR` references in that
+   one-liner are statically detectable. No `$` references → the shell adds no
+   env dependencies of its own.
+3. **Anything else** (python, go, static tools, compiled formatters…) —
+   unobservable → mark the task unverifiable → fall back to declared `env`
+   exactly as today (or optionally warn).
+
+Within the verifiable subset, value-keyed traces are sound. The honest costs:
+
+- **Hit-rate erosion from housekeeping reads.** Node internals read
+  `FORCE_COLOR`, `TERM`, `NODE_OPTIONS`, etc. (Experiments 2/5); a trace
+  keyed on their values misses across dev/CI boundaries. A curated ignore
+  list fixes hit rates but is a deliberate, documented unsoundness hole
+  (colored output *can* end up in artifacts). This is a judgment call, not a
+  correctness proof.
+- **Cache plumbing changes shape.** Today's model is `hash → artifact`;
+  traces need `static-hash → [(read-set, values) → artifact]` with
+  get→validate→maybe-refetch rounds, including in the remote cache protocol
+  and its HTTP API.
+- **Ecosystem fragility.** The npm silent-death bug (Experiment 3) is the
+  cautionary tale: the recorder sits under every user process, and its edge
+  cases become turbo bugs. Windows needs a separate mechanism for the
+  non-Node census (no LD_PRELOAD; Node-level spawn hooks cover part of it).
+- **Determinism is assumed, not enforced** — same as turbo's existing model.
+
+**Bottom line for caching:** a static learned list can never be trusted in
+the hash; a value-keyed trace with spawn-time escape detection *can* be made
+sound for Node-only task trees, at the price of a new cache-entry model,
+per-platform census machinery, and a curated housekeeping ignore list. The
+suggestion/strict-warning mode from Part 1 remains the low-risk first step
+and shares all of its machinery with this design.
+
 ## Files
 
 - `shim.c` — LD_PRELOAD getenv/secure_getenv interposer (Experiments 2, 4)
@@ -204,4 +310,5 @@ every limitation becomes acceptable because a human confirms the result:
 - `readers/` — per-runtime test programs (C, Go, Rust, conditional-access JS)
 - `fixture/` — two-workspace turbo monorepo used in Experiment 4
   (`npm install turbo` inside it, then run with the env vars shown above)
+- `execsnoop.c` — LD_PRELOAD process-tree census: exec interposition + self-announce (Experiment 6)
 - `run-matrix.sh` — one-command reproduction of the Experiment 2 matrix
