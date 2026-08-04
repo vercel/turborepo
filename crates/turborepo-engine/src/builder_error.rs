@@ -61,6 +61,12 @@ pub enum Error {
     InvalidTaskName(Box<InvalidTaskNameError>),
     #[error("Engine builder cannot be constructed without a turbo.json loader")]
     MissingTurboJsonLoader,
+    #[error(
+        "Cannot pass arguments to aggregate task `{task_id}` because it does not run a process. \
+         Run a qualified dependency task instead, for example `turbo run {package}#<task> -- \
+         <args>`."
+    )]
+    AggregatePassThrough { task_id: String, package: String },
 }
 
 impl From<ValidateError> for Error {

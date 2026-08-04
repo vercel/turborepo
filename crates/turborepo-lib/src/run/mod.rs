@@ -522,7 +522,7 @@ impl Run {
             // Authored scripts and registered native tasks both come from the
             // native-task catalog produced at repository construction.
             for native_task in context.native_tasks().tasks() {
-                if !native_task.executable() && !native_task.registered() {
+                if !native_task.participates() && !native_task.registered() {
                     continue;
                 }
                 tasks

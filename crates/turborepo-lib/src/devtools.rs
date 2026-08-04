@@ -91,7 +91,7 @@ impl ProperTaskGraphBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.participates() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect()
                     })

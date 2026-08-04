@@ -94,6 +94,25 @@ pub(crate) fn task_has_command(
     }
 }
 
+pub(crate) fn task_participates(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context.native_tasks().participates(task.task()),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()

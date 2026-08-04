@@ -10,7 +10,6 @@ use turbopath::{PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
-    native_tasks::NativeCommandTemplate,
     package_graph::{PackageGraph, PackageName, PackageTaskContext},
     toolchain::CompileCacheEndpoint,
 };
@@ -263,16 +262,25 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         };
 
         let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
-            let (package_manager_binary, cargo_binary, uv_binary) = if override_command.is_some() {
-                (None, None, None)
+            let (package_manager_binary, tool_binary) = if override_command.is_some() {
+                (None, None)
             } else {
-                match native_task.command() {
-                    Some(NativeCommandTemplate::JavaScriptPackageManagerRun { .. }) => {
-                        (self.package_manager_binary()?, None, None)
+                match native_task.command().map(|command| &command.program) {
+                    Some(
+                        turborepo_repository::native_tasks::NativeCommandProgram::PackageManager,
+                    ) => (self.package_manager_binary()?, None),
+                    Some(turborepo_repository::native_tasks::NativeCommandProgram::Tool(tool))
+                        if tool == "cargo" =>
+                    {
+                        (None, self.cargo_binary()?)
                     }
-                    Some(NativeCommandTemplate::Cargo { .. }) => (None, self.cargo_binary()?, None),
-                    Some(NativeCommandTemplate::Uv { .. }) => (None, None, self.uv_binary()?),
-                    None => (None, None, None),
+                    Some(turborepo_repository::native_tasks::NativeCommandProgram::Tool(tool))
+                        if tool == "uv" =>
+                    {
+                        (None, self.uv_binary()?)
+                    }
+                    Some(turborepo_repository::native_tasks::NativeCommandProgram::Tool(_))
+                    | None => (None, None),
                 }
             };
             turborepo_repository::native_tasks::resolve_task_command(
@@ -280,8 +288,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 native_task,
                 self.package_graph.package_manager(),
                 package_manager_binary,
-                cargo_binary,
-                uv_binary,
+                tool_binary,
                 self.task_args.args_for_task(task_id),
                 override_command,
             )

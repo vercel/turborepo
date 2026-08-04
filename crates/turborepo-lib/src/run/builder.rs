@@ -732,7 +732,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.participates() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect::<Vec<_>>()
                     })
@@ -754,7 +754,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.participates() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect();
                         Ok((package, scripts))
@@ -1326,12 +1326,12 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph
+            let has_participant = pkg_dep_graph
                 .package_task_contexts()
-                .any(|context| context.native_tasks().defines(task.task()))
+                .any(|context| context.native_tasks().participates(task.task()))
                 || engine.task_ids().any(|task_id| {
                     task_id.task() == task.task()
-                        && task_has_command(engine, pkg_dep_graph, task_id)
+                        && crate::engine::task_participates(engine, pkg_dep_graph, task_id)
                 });
 
             for package in candidate_packages {
@@ -1341,9 +1341,11 @@ impl RunBuilder {
                 }
 
                 selection.candidates.insert(task_id.clone());
-                if !has_command || task_has_command(engine, pkg_dep_graph, &task_id) {
+                if !has_participant
+                    || crate::engine::task_participates(engine, pkg_dep_graph, &task_id)
+                {
                     selection.selected.insert(task_id.clone());
-                    if !has_command {
+                    if !has_participant {
                         selection
                             .orchestration
                             .entry(task.task().to_string())

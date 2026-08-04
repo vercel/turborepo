@@ -900,7 +900,6 @@ mod tests {
             None,
             None,
             None,
-            None,
         )
         .unwrap()
         .expect("script exists, command resolves");

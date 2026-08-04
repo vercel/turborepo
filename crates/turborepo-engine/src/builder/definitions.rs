@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
+use turborepo_repository::{
+    native_tasks::NativeTaskExecution,
+    package_graph::{PackageGraph, PackageName, PackageNode},
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -17,15 +20,17 @@ use crate::{
 
 /// Memo key for resolved task definitions: the turbo.json chain (by
 /// address; loader-owned for the duration of a build), the task name, and
-/// the two package-dependent inputs that survive resolution — path to the
-/// repo root and whether the package's toolchain defines a command for the
-/// task. See `task_definition_cached`.
+/// the package-dependent inputs that survive resolution: path to the repo
+/// root and the native task's execution/definition facts. See
+/// `task_definition_cached`.
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct TaskDefMemoKey {
     chain: Vec<usize>,
     task_name: TaskName<'static>,
     path_to_root: turbopath::RelativeUnixPathBuf,
-    defines_task: bool,
+    native_execution: NativeTaskExecution,
+    authored_task: bool,
+    registered_task: bool,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -247,18 +252,27 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // global input files — they don't execute, and including the files
         // would cause their hash to change and cascade into downstream
         // tasks that depend on them.
-        let defines_task = package_context
+        let mut native_execution = package_context
             .as_ref()
-            .is_some_and(|context| context.native_tasks().defines(task_id.task()));
+            .and_then(|context| context.native_tasks().get(task_id.task()))
+            .map(|task| task.execution().clone())
+            .unwrap_or(NativeTaskExecution::None);
+        if task_is_excluded(&turbo_json_chain, task_id.as_inner(), task_name) {
+            native_execution = NativeTaskExecution::None;
+        }
+        let defines_task = matches!(native_execution, NativeTaskExecution::Command(_));
         let registered_task = package_context
             .as_ref()
             .is_some_and(|context| context.native_tasks().registers(task_id.task()));
+        let authored_task = package_context
+            .as_ref()
+            .is_some_and(|context| context.native_tasks().authors(task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
-        // `$TURBO_ROOT$`/global-input anchoring) and whether the package's
-        // toolchain defines a command for the task. Memoize on exactly
-        // those inputs. Two exceptions must skip the memo: a package-scoped
+        // `$TURBO_ROOT$`/global-input anchoring) and native execution facts.
+        // Memoize on exactly those inputs. Two exceptions must skip the memo:
+        // a package-scoped
         // task key (`web#build`) in the chain, which `TurboJson::task`
         // consults first, and packages whose toolchain derives per-package
         // hash wiring (e.g. Cargo crate closures differ per crate).
@@ -279,7 +293,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .collect(),
                 task_name: task_name.clone().into_owned(),
                 path_to_root: path_to_root.clone(),
-                defines_task,
+                native_execution: native_execution.clone(),
+                authored_task,
+                registered_task,
             })
         };
         if let Some(key) = &memo_key
@@ -317,12 +333,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let command_override = resolve_command_override(
             scoped_command,
             unscoped_command,
-            package_context.as_ref().map(|context| {
-                (
-                    context.task_contract(),
-                    context.native_tasks().authors(task_id.as_inner().task()),
-                )
-            }),
+            package_context
+                .as_ref()
+                .map(|context| (context.task_contract(), authored_task)),
         );
 
         let mut processed_task_definition = ProcessedTaskDefinition::from_iter(
@@ -346,6 +359,31 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
         task_def.command = command_override;
+
+        if task_def.command.is_none()
+            && let NativeTaskExecution::Aggregate(dependencies) = &native_execution
+        {
+            let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
+            if task_args.args_for_task(task_id.as_inner()).is_some() {
+                return Err(BuilderError::AggregatePassThrough {
+                    task_id: task_id.to_string(),
+                    package: task_id.package().to_string(),
+                });
+            }
+            let mut seen: HashSet<String> = task_def
+                .task_dependencies
+                .iter()
+                .map(|dependency| dependency.task().to_string())
+                .collect();
+            task_def.task_dependencies.extend(
+                dependencies
+                    .iter()
+                    .filter(|dependency| seen.insert((*dependency).clone()))
+                    .map(|dependency| {
+                        Spanned::new(TaskName::from(dependency.clone()).into_owned())
+                    }),
+            );
+        }
 
         if !self.future_flags.incremental_tasks {
             task_def.incremental = None;
@@ -696,6 +734,29 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         Ok(turbo_jsons.into_iter().rev().collect())
     }
+}
+
+fn task_is_excluded(
+    turbo_json_chain: &[&TurboJson],
+    task_id: &TaskId,
+    task_name: &TaskName,
+) -> bool {
+    let task_id_name = task_id.as_task_name();
+    let base_name = TaskName::from(task_name.task());
+    turbo_json_chain.iter().rev().find_map(|turbo_json| {
+        turbo_json
+            .tasks
+            .get(&task_id_name)
+            .or_else(|| turbo_json.tasks.get(task_name))
+            .or_else(|| turbo_json.tasks.get(&base_name))
+            .map(|definition| {
+                definition
+                    .extends
+                    .as_ref()
+                    .is_some_and(|extends| !*extends.as_inner())
+                    && !definition.has_config_beyond_extends()
+            })
+    }) == Some(true)
 }
 
 /// Resolve a task's `command` override across the five precedence levels

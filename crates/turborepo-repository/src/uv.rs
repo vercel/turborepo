@@ -786,7 +786,9 @@ pub fn native_tasks_for_package(
     package_directory: &str,
     workspace_directories: &[String],
 ) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::NativeTask;
+    use crate::native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+    };
 
     registered_tasks(kind)
         .filter_map(|task| {
@@ -798,18 +800,23 @@ pub fn native_tasks_for_package(
                 package_directory,
                 workspace_directories,
             )?;
-            Some(NativeTask::uv(
+            Some(NativeTask::command_task(
                 task,
                 display,
-                subcommand,
-                task_arguments(
-                    kind,
-                    task,
-                    package,
-                    package_directory,
-                    workspace_directories,
+                NativeCommandProgram::Tool("uv".to_string()),
+                NativeCommandArguments::new(
+                    std::iter::once(subcommand.to_string())
+                        .chain(task_arguments(
+                            kind,
+                            task,
+                            package,
+                            package_directory,
+                            workspace_directories,
+                        ))
+                        .collect(),
                 ),
                 (task == "check").then(|| "uv".to_string()),
+                WorkingDirectoryPolicy::RepositoryRoot,
             ))
         })
         .collect()
@@ -2045,7 +2052,7 @@ overridden = { index = "private" }
         assert!(
             tasks
                 .iter()
-                .all(|task| task.registered() && task.executable())
+                .all(|task| task.registered() && task.executes())
         );
     }
 

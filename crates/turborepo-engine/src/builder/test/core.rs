@@ -50,6 +50,163 @@ fn test_default_engine() {
     assert_eq!(all_dependencies(&engine), expected);
 }
 
+fn aggregate_engine(
+    repo_root: &AbsoluteSystemPathBuf,
+    root_config: serde_json::Value,
+    aggregate_config: Option<serde_json::Value>,
+    pass_through_args: Vec<String>,
+) -> Result<Engine<Built, TaskDefinition>, BuilderError> {
+    let package_graph = mock_aggregate_package_graph(repo_root);
+    let flags = FutureFlags {
+        experimental_task_command: true,
+        ..Default::default()
+    };
+    let mut root_config = turbo_json(root_config);
+    root_config.future_flags = flags;
+    let mut configs = HashMap::from([(PackageName::Root, root_config)]);
+    if let Some(config) = aggregate_config {
+        let mut config = turbo_json(config);
+        config.future_flags = flags;
+        configs.insert(PackageName::from("cargo-workspace"), config);
+    }
+    EngineBuilder::new(
+        repo_root,
+        &package_graph,
+        &TestTurboJsonLoader::new(configs),
+        false,
+    )
+    .with_tasks(Some(Spanned::new(TaskName::from("all"))))
+    .with_workspaces(vec![PackageName::from("cargo-workspace")])
+    .with_task_io_context(pass_through_args, vec!["all".to_string()], HashMap::new())
+    .with_future_flags(flags)
+    .build()
+}
+
+#[test]
+fn native_aggregate_composes_same_scope_dependencies_and_deduplicates() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "all": { "dependsOn": ["check"] } } }),
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_execution_is_part_of_definition_memoization() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let package_graph = mock_aggregate_package_graph(&repo_root);
+    let loader = TestTurboJsonLoader::new(HashMap::from([(
+        PackageName::Root,
+        turbo_json(json!({ "tasks": {} })),
+    )]));
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from("all"))))
+        .with_workspaces(vec![
+            PackageName::from("cargo-workspace"),
+            PackageName::from("other-workspace"),
+        ])
+        .build()
+        .unwrap();
+
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"],
+            "other-workspace#all" => ["other-workspace#check"],
+            "other-workspace#check" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_dependencies_participate_in_cycle_validation() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let error = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "check": { "dependsOn": ["all"] } } }),
+        None,
+        Vec::new(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, BuilderError::Graph(_)), "got {error:?}");
+}
+
+#[test]
+fn command_override_and_opt_out_disable_native_aggregate_dependencies() {
+    for command in [json!(["echo", "all"]), serde_json::Value::Null] {
+        let repo = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+        let engine = aggregate_engine(
+            &repo_root,
+            json!({
+                "tasks": {
+                    "cargo-workspace#all": { "command": command }
+                }
+            }),
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            all_dependencies(&engine),
+            deps! { "cargo-workspace#all" => ["___ROOT___"] }
+        );
+    }
+}
+
+#[test]
+fn extends_false_preserves_native_aggregate_opt_out() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "all": {} } }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": { "all": { "extends": false } }
+        })),
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert!(all_dependencies(&engine).is_empty());
+}
+
+#[test]
+fn native_aggregate_rejects_pass_through_arguments_with_qualified_guidance() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let error = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": {} }),
+        None,
+        vec!["--fix".to_string()],
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, BuilderError::AggregatePassThrough { .. }));
+    assert!(error.to_string().contains("cargo-workspace#<task>"));
+}
+
 #[test]
 fn test_dependencies_on_unspecified_packages() {
     let repo_root_dir = TempDir::with_prefix("repo").unwrap();
