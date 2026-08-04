@@ -1043,170 +1043,138 @@ pub enum UvPackageKind {
     Workspace,
 }
 
-const PACKAGE_TASKS: &[(&str, &str)] =
-    &[("build", "build"), ("format", "format"), ("check", "check")];
-const QUALITY_TASKS: &[(&str, &str)] = &[("format", "format"), ("check", "check")];
-
-/// The uv subcommand a task resolves to for a package, given its
-/// [`UvPackageKind`]. `None` means the task is a no-op for this package
-/// (like a missing package.json script).
-pub fn task_subcommand(kind: UvPackageKind, task: &str) -> Option<&'static str> {
-    let tasks = match kind {
-        UvPackageKind::Package => PACKAGE_TASKS,
-        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
+fn uv_command_task(
+    kind: UvPackageKind,
+    name: &str,
+    prefix: Vec<String>,
+    suffix: Vec<String>,
+    serial_group: Option<String>,
+) -> crate::native_tasks::NativeTask {
+    use crate::native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
+        PassThroughPlacement, WorkingDirectoryPolicy,
     };
-    tasks
-        .iter()
-        .find_map(|(name, subcommand)| (*name == task).then_some(*subcommand))
+
+    let display = std::iter::once("uv".to_string())
+        .chain(prefix.iter().cloned())
+        .chain(suffix.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    NativeTask::command_task(
+        name,
+        display,
+        NativeCommandProgram::Tool("uv".to_string()),
+        NativeCommandArguments {
+            prefix,
+            pass_through_placement: PassThroughPlacement::BeforeSuffix,
+            pass_through_separator: None,
+            suffix,
+        },
+        serial_group,
+        WorkingDirectoryPolicy::RepositoryRoot,
+    )
+    .with_contract(NativeTaskContract::new(
+        toolchain::TaskDefaults { cache: Some(false) },
+        Some(uv_task_entrypoint(kind)),
+        true,
+    ))
 }
 
-fn registered_tasks(kind: UvPackageKind) -> impl Iterator<Item = &'static str> {
+fn uv_task_entrypoint(kind: UvPackageKind) -> crate::native_tasks::TaskEntrypoint {
+    use crate::native_tasks::TaskEntrypoint;
+
     match kind {
-        UvPackageKind::Package => PACKAGE_TASKS,
-        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
+        UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
     }
-    .iter()
-    .map(|(task, _)| *task)
 }
 
-/// The fixed arguments the subcommand takes for this package, derived from
-/// the same tables as registration so display and execution cannot drift.
-fn task_arguments(
-    kind: UvPackageKind,
-    task: &str,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
-) -> Vec<String> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UvTaskClass {
+    Build,
+    Quality,
+}
+
+fn fallback_task_class(kind: UvPackageKind, task: &str) -> Option<UvTaskClass> {
     match (kind, task) {
-        (UvPackageKind::Package, "build") => vec![format!("--package={package}")],
-        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "format") => {
-            vec!["--".to_string(), package_directory.to_string()]
-        }
-        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "check") => {
-            vec![format!("--package={package}")]
-        }
-        (UvPackageKind::Workspace, "format") => std::iter::once("--".to_string())
-            .chain(workspace_directories.iter().cloned())
-            .collect(),
-        (UvPackageKind::Workspace, "check") => vec!["--all-packages".to_string()],
-        (UvPackageKind::Workspace, _) => Vec::new(),
-        _ => Vec::new(),
+        (UvPackageKind::Package, "build") => Some(UvTaskClass::Build),
+        (_, "format" | "check") => Some(UvTaskClass::Quality),
+        _ => None,
     }
 }
 
-/// The display string for a uv task's command.
-pub fn display_command(
-    kind: UvPackageKind,
-    task: &str,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
-) -> Option<String> {
-    let subcommand = task_subcommand(kind, task)?;
-    let mut display = format!("uv {subcommand}");
-    for argument in task_arguments(
-        kind,
-        task,
-        package,
-        package_directory,
-        workspace_directories,
-    ) {
-        display.push(' ');
-        display.push_str(&argument);
-    }
-    Some(display)
+fn excluded_uv_task(name: &str) -> crate::native_tasks::NativeTask {
+    use crate::native_tasks::{NativeTask, NativeTaskContract, TaskEntrypoint};
+
+    NativeTask::contract_task(
+        name,
+        NativeTaskContract::new(
+            toolchain::TaskDefaults::default(),
+            Some(TaskEntrypoint::Excluded),
+            false,
+        ),
+    )
 }
 
-/// Build native-task facts for a Python package from its verb tables.
+/// Build the built-in uv fallbacks used when no authored command exists.
 pub fn native_tasks_for_package(
     kind: UvPackageKind,
     package: &str,
     package_directory: &str,
     workspace_directories: &[String],
 ) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::{
-        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
-        WorkingDirectoryPolicy,
-    };
-
-    let mut tasks: Vec<_> = registered_tasks(kind)
-        .filter_map(|task| {
-            let subcommand = task_subcommand(kind, task)?;
-            let display = display_command(
-                kind,
-                task,
-                package,
-                package_directory,
-                workspace_directories,
-            )?;
-            Some(
-                NativeTask::command_task(
-                    task,
-                    display,
-                    NativeCommandProgram::Tool("uv".to_string()),
-                    NativeCommandArguments::new(
-                        std::iter::once(subcommand.to_string())
-                            .chain(task_arguments(
-                                kind,
-                                task,
-                                package,
-                                package_directory,
-                                workspace_directories,
-                            ))
-                            .collect(),
-                    ),
-                    (task == "check").then(|| "uv".to_string()),
-                    WorkingDirectoryPolicy::RepositoryRoot,
-                )
-                .with_contract(NativeTaskContract::new(
-                    uv_task_defaults(kind, task),
-                    uv_task_entrypoint(kind, task),
-                    true,
-                )),
-            )
-        })
-        .collect();
-    if !tasks.iter().any(|task| task.name() == "build") {
-        tasks.push(NativeTask::contract_task(
+    let mut tasks = Vec::with_capacity(3);
+    if kind == UvPackageKind::Package {
+        tasks.push(uv_command_task(
+            kind,
             "build",
-            NativeTaskContract::new(
-                uv_task_defaults(kind, "build"),
-                uv_task_entrypoint(kind, "build"),
-                false,
-            ),
+            vec!["build".to_string(), format!("--package={package}")],
+            Vec::new(),
+            None,
         ));
     }
+
+    let format_arguments = match kind {
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+            vec![
+                "format".to_string(),
+                "--".to_string(),
+                package_directory.to_string(),
+            ]
+        }
+        UvPackageKind::Workspace => std::iter::once("format".to_string())
+            .chain(std::iter::once("--".to_string()))
+            .chain(workspace_directories.iter().cloned())
+            .collect(),
+    };
+    tasks.push(uv_command_task(
+        kind,
+        "format",
+        format_arguments,
+        Vec::new(),
+        None,
+    ));
+
+    let check_arguments = match kind {
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+            vec!["check".to_string(), format!("--package={package}")]
+        }
+        UvPackageKind::Workspace => {
+            vec!["check".to_string(), "--all-packages".to_string()]
+        }
+    };
+    tasks.push(uv_command_task(
+        kind,
+        "check",
+        check_arguments,
+        Vec::new(),
+        Some("uv".to_string()),
+    ));
+
+    if kind != UvPackageKind::Package {
+        tasks.push(excluded_uv_task("build"));
+    }
     tasks
-}
-
-fn uv_task_defaults(kind: UvPackageKind, task: &str) -> toolchain::TaskDefaults {
-    // Tool versions are not yet part of the task fingerprint.
-    toolchain::TaskDefaults {
-        cache: task_subcommand(kind, task).map(|_| false),
-    }
-}
-
-fn uv_task_entrypoint(
-    kind: UvPackageKind,
-    task: &str,
-) -> Option<crate::native_tasks::TaskEntrypoint> {
-    use crate::native_tasks::TaskEntrypoint;
-
-    if task_subcommand(kind, task).is_some() {
-        return Some(match kind {
-            UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
-            UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
-        });
-    }
-    matches!(
-        (kind, task),
-        (
-            UvPackageKind::Workspace | UvPackageKind::VirtualPackage,
-            "build"
-        )
-    )
-    .then_some(TaskEntrypoint::Excluded)
 }
 
 // ---------------------------------------------------------------------------
@@ -1390,7 +1358,7 @@ impl UvTaskContract {
         wants_automatic_inputs: bool,
         context: &toolchain::TaskIOContext<'_>,
     ) -> Option<toolchain::DerivedTaskIO> {
-        let subcommand = task_subcommand(self.kind, task)?;
+        let task_class = fallback_task_class(self.kind, task)?;
         let mut io = toolchain::DerivedTaskIO {
             input_globs: hash_input_globs(path_to_root),
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
@@ -1426,7 +1394,7 @@ impl UvTaskContract {
                         io.input_globs.extend(globs);
                     }
                 }
-                if subcommand == "build" {
+                if task_class == UvTaskClass::Build {
                     // `uv build` writes `<dist_name>-<version>*` sdists and
                     // wheels into the workspace root's dist directory. Extra
                     // task args can relocate the output (`--out-dir`), so
@@ -2689,73 +2657,20 @@ overridden = { index = "private" }
     }
 
     #[test]
-    fn test_task_tables() {
-        assert_eq!(
-            task_subcommand(UvPackageKind::Package, "build"),
-            Some("build")
-        );
-        assert_eq!(
-            task_subcommand(UvPackageKind::Package, "format"),
-            Some("format")
-        );
-        assert_eq!(task_subcommand(UvPackageKind::Package, "lock"), None);
-        assert_eq!(task_subcommand(UvPackageKind::Package, "test"), None);
-        assert_eq!(
-            task_subcommand(UvPackageKind::VirtualPackage, "format"),
-            Some("format")
-        );
-        assert_eq!(
-            task_subcommand(UvPackageKind::VirtualPackage, "build"),
-            None
-        );
-        assert_eq!(
-            task_subcommand(UvPackageKind::Workspace, "check"),
-            Some("check")
-        );
-        assert_eq!(task_subcommand(UvPackageKind::Workspace, "lock"), None);
-        assert_eq!(task_subcommand(UvPackageKind::Workspace, "build"), None);
-
-        assert_eq!(
-            display_command(
-                UvPackageKind::Package,
-                "build",
-                "py-app",
-                "packages/py-app",
-                &[]
-            )
-            .as_deref(),
-            Some("uv build --package=py-app")
-        );
-        assert_eq!(
-            display_command(
-                UvPackageKind::Package,
-                "format",
-                "py-app",
-                "packages/py-app",
-                &[]
-            )
-            .as_deref(),
-            Some("uv format -- packages/py-app")
-        );
-        assert_eq!(
-            display_command(
-                UvPackageKind::Workspace,
-                "format",
-                "acme",
-                ".",
-                &["packages/py-app".to_string(), "packages/py-lib".to_string()]
-            )
-            .as_deref(),
-            Some("uv format -- packages/py-app packages/py-lib")
-        );
-        assert_eq!(
-            display_command(UvPackageKind::Workspace, "check", "acme", ".", &[]).as_deref(),
-            Some("uv check --all-packages")
-        );
-
+    fn test_uv_fallback_task_parity() {
         let tasks =
             native_tasks_for_package(UvPackageKind::Package, "py-app", "packages/py-app", &[]);
-        assert_eq!(tasks.len(), 3);
+        assert_eq!(
+            tasks
+                .iter()
+                .filter_map(|task| task.display())
+                .collect::<Vec<_>>(),
+            [
+                "uv build --package=py-app",
+                "uv format -- packages/py-app",
+                "uv check --package=py-app",
+            ]
+        );
         assert!(
             tasks
                 .iter()
@@ -2785,6 +2700,23 @@ overridden = { index = "private" }
             Some(crate::native_tasks::TaskEntrypoint::Excluded)
         );
         assert!(!build.contract().derives_io());
+
+        let workspace = native_tasks_for_package(
+            UvPackageKind::Workspace,
+            "acme",
+            ".",
+            &["packages/py-app".to_string(), "packages/py-lib".to_string()],
+        );
+        assert_eq!(
+            workspace
+                .iter()
+                .filter_map(|task| task.display())
+                .collect::<Vec<_>>(),
+            [
+                "uv format -- packages/py-app packages/py-lib",
+                "uv check --all-packages",
+            ]
+        );
     }
 
     #[test]
