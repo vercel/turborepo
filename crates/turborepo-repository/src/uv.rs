@@ -2057,7 +2057,47 @@ impl RepositoryContributor for UvContributor {
 
 #[cfg(test)]
 mod test {
+    use std::ffi::OsString;
+
     use super::*;
+    use crate::package_graph::{PackageName, PackageTaskContext, PackageTaskContextKind};
+
+    fn resolved_args(
+        task: &crate::native_tasks::NativeTask,
+        pass_through: &[&str],
+    ) -> Vec<OsString> {
+        let repo_root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let context = PackageTaskContext::new_for_test(
+            PackageName::from("app"),
+            &repo_root,
+            turbopath::AnchoredSystemPath::new("packages/app").unwrap(),
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let binary = std::path::Path::new(if cfg!(windows) {
+            r"C:\bin\uv.exe"
+        } else {
+            "/bin/uv"
+        });
+        let pass_through = pass_through
+            .iter()
+            .map(|argument| (*argument).to_string())
+            .collect::<Vec<_>>();
+
+        crate::native_tasks::resolve_task_command(
+            &context,
+            task,
+            None,
+            None,
+            Some(binary),
+            Some(&pass_through),
+            None,
+        )
+        .unwrap()
+        .unwrap()
+        .args
+    }
 
     #[test]
     fn test_normalize_name() {
@@ -2894,8 +2934,10 @@ overridden = { index = "private" }
 
     #[test]
     fn test_exact_root_and_member_quality_commands() {
-        let root: PyProjectManifest =
-            toml::from_str("[dependency-groups]\nquality=['ruff']\n").unwrap();
+        let root: PyProjectManifest = toml::from_str(
+            "[dependency-groups]\nquality=['ruff']\n[tool.uv]\ndefault-groups=['quality']\n",
+        )
+        .unwrap();
         let member: PyProjectManifest =
             toml::from_str("[dependency-groups]\ntypes=['pyright']\n").unwrap();
         let plan = QualityPlan::effective(
@@ -2913,7 +2955,7 @@ overridden = { index = "private" }
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
             task("lint:ruff").display(),
-            Some("uv run --frozen --no-default-groups --group quality ruff check packages/app")
+            Some("uv run --frozen ruff check packages/app")
         );
         assert_eq!(
             task("check:pyright").display(),
@@ -2928,6 +2970,26 @@ overridden = { index = "private" }
             crate::native_tasks::PassThroughPlacement::BeforeSuffix
         );
         assert_eq!(arguments.suffix, ["packages/app"]);
+        assert_eq!(
+            resolved_args(task("lint:ruff"), &["--fix"]),
+            ["run", "--frozen", "ruff", "check", "--fix", "packages/app",].map(OsString::from)
+        );
+        assert_eq!(
+            resolved_args(task("check:pyright"), &["--warnings"]),
+            [
+                "run",
+                "--frozen",
+                "--package",
+                "app",
+                "--no-default-groups",
+                "--group",
+                "types",
+                "pyright",
+                "--warnings",
+                "packages/app",
+            ]
+            .map(OsString::from)
+        );
     }
 
     #[test]
@@ -2945,13 +3007,28 @@ overridden = { index = "private" }
             &plan,
             true,
         );
+        let lint = tasks
+            .iter()
+            .find(|task| task.name() == "lint:ruff")
+            .unwrap();
         assert_eq!(
-            tasks
-                .iter()
-                .find(|task| task.name() == "lint:ruff")
-                .unwrap()
-                .display(),
+            lint.display(),
             Some("uv run --frozen --all-packages ruff check packages/one packages/two")
+        );
+        assert_eq!(
+            resolved_args(lint, &["--fix", "--unsafe-fixes"]),
+            [
+                "run",
+                "--frozen",
+                "--all-packages",
+                "ruff",
+                "check",
+                "--fix",
+                "--unsafe-fixes",
+                "packages/one",
+                "packages/two",
+            ]
+            .map(OsString::from)
         );
     }
 
@@ -2970,24 +3047,59 @@ overridden = { index = "private" }
             &plan,
             true,
         );
+        let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
-            tasks
-                .iter()
-                .find(|task| task.name() == "format")
-                .unwrap()
-                .display(),
+            task("format:ruff").display(),
             Some("uv run --frozen --package app ruff format app")
         );
+        assert_eq!(
+            task("format:black").display(),
+            Some("uv run --frozen --package app black app")
+        );
+        assert_eq!(
+            task("format").display(),
+            task("format:ruff").display(),
+            "the unqualified formatter must prefer Ruff while retaining Black's qualified task"
+        );
+        assert_eq!(
+            task("check:mypy").display(),
+            Some("uv run --frozen --package app mypy app")
+        );
+        assert_eq!(
+            task("check:ty").display(),
+            Some("uv run --frozen --package app ty check app")
+        );
+        assert_eq!(
+            task("check:pyright").display(),
+            Some("uv run --frozen --package app pyright app")
+        );
         assert!(matches!(
-            tasks.iter().find(|task| task.name() == "lint").unwrap().execution(),
+            task("lint").execution(),
             crate::native_tasks::NativeTaskExecution::Aggregate(children)
                 if children.as_ref() == ["lint:ruff"]
         ));
+        let check = task("check");
         assert!(matches!(
-            tasks.iter().find(|task| task.name() == "check").unwrap().execution(),
+            check.execution(),
             crate::native_tasks::NativeTaskExecution::Aggregate(children)
                 if children.as_ref() == ["check:mypy", "check:ty", "check:pyright"]
         ));
+        assert!(check.command().is_none());
+        assert_eq!(check.contract().defaults().cache, None);
+        assert_eq!(
+            check.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        assert!(!check.contract().derives_io());
+
+        let mypy = task("check:mypy");
+        assert_eq!(mypy.command().unwrap().serial_group.as_deref(), Some("uv"));
+        assert_eq!(mypy.contract().defaults().cache, Some(false));
+        assert_eq!(
+            mypy.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        assert!(mypy.contract().derives_io());
     }
 
     #[test]
