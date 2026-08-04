@@ -381,6 +381,78 @@ upgrades identified above); dependencies + dynamic keys → runtime traces
 including a maximally smart linter — is provably incomplete as a cache-hash
 source of truth.
 
+## Part 4 — The recommended solution: constructed environments + a repair loop
+
+Parts 1–3 establish that no detection technique — kernel, libc, runtime,
+or static — can enumerate env dependencies completely and correctly. The
+design that satisfies "simple, covers everything, no mistakes" comes from
+inverting the problem: **turbo should not observe the environment; it should
+construct it.** Strict env mode (already the default) filters the child env
+at spawn time, and that is universal by physics — a Go binary, a shell, a
+Python script cannot read a variable that is not in its address space.
+Correctness never depends on detection. The remaining product gap is that a
+missing declaration today fails *silently*: the task sees `undefined` and
+misbehaves quietly instead of telling the user what to declare.
+
+So the missing piece is not a better detector feeding the hash — it is a
+**loud, self-repairing miss experience**. That needs one detector that is
+truly universal, which none of the read-based techniques are. There is one:
+treat the task as a black box and ask the only question caching actually
+cares about — *does this variable affect the outputs?*
+
+### Experiment 9 — sentinel tainting ("env doctor"): black-box output-dependence
+
+`doctor.sh` prototypes it: run a baseline build, then for each candidate
+variable rerun with a poisoned value (`__TURBO_DOCTOR_<VAR>__`) and check
+(a) whether the sentinel string appears in any task output — a value
+dependency — or (b) whether outputs changed at all — a behavioral/control-flow
+dependency. Against a fixture with four dependency shapes:
+
+```
+API_URL:    AFFECTS OUTPUT (sentinel value found in apps/web/dist/out.txt)  ← Node value leak
+DOCS_TOKEN: AFFECTS OUTPUT (sentinel value found in apps/docs/out.txt)      ← SHELL read: invisible to every technique in Parts 1–3
+MINIFY:     AFFECTS OUTPUT (behavioral: outputs changed, no value leak)     ← control-flow only, no value embedded
+UNUSED_VAR: no effect on outputs -> safe to omit                            ← decoy, correctly rejected
+```
+
+4/4, including the shell-script variable that Experiments 1–4 proved
+unobservable at read time, and the control-flow dependency that value-grep
+alone would miss. The approach is language-agnostic because it never asks
+*how* the variable was read — only whether the artifact depends on it.
+
+Honest limits: it costs one build per candidate naively (group bisection /
+delta-debugging brings it to O(affected · log n); it is a diagnostic, not a
+per-run cost); nondeterministic outputs need a baseline-stability check and
+normalization; sentinel values perturb conditionals (usually a feature — it
+widens path coverage; occasionally a crash, which is itself signal); and
+combination-only dependencies need pairwise probing. And like everything in
+this report, it examines the paths that ran — which is exactly why it feeds
+suggestions, never the hash.
+
+### The product shape
+
+1. **Trust path (unchanged, already shipped):** strict mode constructs the
+   task env from `env[]` + passthrough + framework inference. Sound for
+   every language, forever. Detection output never enters the hash
+   (Experiment 5 stands).
+2. **Every strict run, for free:** turbo injects the Node recorder
+   (Experiments 3–4) into the env it constructs and reports
+   `task looked up API_URL — it was filtered` the moment a miss happens,
+   with the exact `env[]` addition. Covers the JS majority instantly;
+   script-text `$VAR` parsing covers shell one-liners.
+3. **On demand / on suspicion:** `turbo env doctor <task>` runs the
+   sentinel-taint engine (Experiment 9) for the long tail — Go, Python,
+   static binaries, anything — and emits evidence-backed suggestions.
+4. **For agents and `--fix`:** both reporters emit structured JSON with the
+   proposed `turbo.json` diff. The loop "build behaved oddly → doctor →
+   apply suggested env[] → green" is one round-trip, no human archaeology.
+
+Under this design the failure mode is never a silently wrong cache hit —
+strict mode makes that impossible — it is a visible, explained, one-click
+(or one-tool-call) repair. That is the "simple and great" that detection
+alone can never deliver, and every mechanism in it is validated by an
+experiment above.
+
 ## Files
 
 - `shim.c` — LD_PRELOAD getenv/secure_getenv interposer (Experiments 2, 4)
@@ -391,4 +463,5 @@ source of truth.
   (`npm install turbo` inside it, then run with the env vars shown above)
 - `execsnoop.c` — LD_PRELOAD process-tree census: exec interposition + self-announce (Experiment 6)
 - `lint-corpus.js` — 12 env-access patterns for testing static analyzers (Experiment 7)
+- `doctor.sh` — sentinel-taint output-dependence prototype (Experiment 9)
 - `run-matrix.sh` — one-command reproduction of the Experiment 2 matrix
