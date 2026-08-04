@@ -302,6 +302,85 @@ per-platform census machinery, and a curated housekeeping ignore list. The
 suggestion/strict-warning mode from Part 1 remains the low-risk first step
 and shares all of its machinery with this design.
 
+## Part 3 — Static analysis: can a linter see every env var that impacts the program?
+
+Short answer: **no linter can be complete, even in principle — but not for the
+reason you'd guess.** The hard ceiling isn't exotic metaprogramming in user
+code; it's that most env reads in a real app don't happen in user code at all.
+
+### Experiment 7 — the shipped `eslint-plugin-turbo` vs. a 12-pattern corpus
+
+The existing rule (`no-undeclared-env-vars`) AST-matches three shapes —
+`process.env.X`, `process.env["X"]`, and destructuring — plus framework
+wildcard allowlists via dependency inference. We ran the *published* plugin
+against `lint-corpus.js`, twelve realistic access patterns each reading a
+distinct variable:
+
+| # | Pattern | Caught? | Fixable statically? |
+|---|---|---|---|
+| 1 | `process.env.V01` | ✅ | — |
+| 2 | `process.env["V02"]` | ✅ | — |
+| 3 | `const { V03 } = process.env` | ✅ | — |
+| 4 | `const { V04: renamed } = process.env` | ✅ | — |
+| 5 | `const e = process.env; e.V05` | ❌ | needs data-flow analysis |
+| 6 | `process.env["V06_" + "CONCAT"]` | ❌ | yes — constant folding |
+| 7 | ``process.env[`V07_${"TPL"}`]`` | ❌ | yes — constant folding |
+| 8 | `getEnv("V08")` helper indirection | ❌ | inter-procedural data flow; hard cross-module |
+| 9 | `Reflect.get(process.env, "V09")` | ❌ | yes — one more AST shape |
+| 10 | `"V10" in process.env` | ❌ | **yes — cheap rule fix, worth doing regardless** |
+| 11 | `Object.keys(process.env).filter(k => k.startsWith("V11_"))` | ❌ | no finite list exists; only expressible as a `V11_*` wildcard |
+| 12 | same shapes in another linted module | ✅ | — |
+
+5 of 12 caught. Several misses are engineering (6, 7, 9, 10 are
+mechanical rule improvements; 5 and 8 need real data-flow analysis, e.g. a
+TS-program-based rule). Pattern 11 is the theoretical wall: a prefix scan has
+no finite variable list — though turbo's `env` already supports wildcards, so
+a linter could *suggest* `V11_*`. This is the classic static-analysis
+trade-off: to be sound it must over-approximate (whole-env wildcards), to be
+precise it must under-approximate (miss dynamic reads). It cannot do both.
+
+### Experiment 8 — the dependency iceberg (why completeness is dead on arrival)
+
+Linters lint *your* source. Env vars are read by *the whole program*:
+
+- The 73-package `node_modules` of a bare eslint toolchain contains
+  **35 distinct literal env var reads** (`DEBUG`, `NODE_ENV`, `TIMING`,
+  `HTTP(S)_PROXY`, `DOTENV_CONFIG_*`, …) plus 2 dynamic `process.env[t]`
+  sites — none of it ever linted.
+- `next/dist` alone reads **303 distinct literal env vars** and has **19
+  dynamic access sites** (`process.env[key]`, `process.env[innerKey]`, …),
+  through aliases like `const o = process.env` that defeat even text-level
+  scans. Every Next.js app "reads" env vars its author has never heard of.
+
+Linting `node_modules` isn't the fix: it's minified, aliased, dynamic, and
+the sheer volume (303 vars for one framework) would drown the signal.
+Turbo's `frameworks.json` inference is the existing — and correct — curated
+workaround for exactly this layer.
+
+### What a linter *is* good for
+
+1. **Authoring-time suggestions in user code** — the current rule, upgraded
+   with constant folding, `in`-check support (#10 above), `Reflect.get`, and
+   optionally TS-based alias tracking. High value, no runtime risk, and it
+   sees code paths that never executed — the one thing runtime tracing can't.
+2. **A soundness classifier for the caching design in Part 2**: don't try to
+   list the vars; instead classify each workspace's own code as "all env
+   accesses statically enumerable" vs. "contains unanalyzable access → bail."
+   That's the static twin of Experiment 6's spawn-time escape detection. But
+   it only classifies *user* code — the dependency iceberg means it must be
+   paired with runtime traces (which see dependency reads perfectly, since
+   they observe the actual lookups regardless of which package makes them).
+3. **Shell one-liners**: `$VAR` references in `package.json` script text are
+   trivially parseable, closing the gap runtime tracing proved blind to
+   (Experiment 4's `DOCS_TOKEN`).
+
+**Division of labor that actually covers the space:** framework layer →
+curated inference (exists); user source → linter (exists; several mechanical
+upgrades identified above); dependencies + dynamic keys → runtime traces
+(Parts 1–2); shell wrappers → script-text parsing. Any single layer alone —
+including a maximally smart linter — is provably incomplete as a cache-hash
+source of truth.
+
 ## Files
 
 - `shim.c` — LD_PRELOAD getenv/secure_getenv interposer (Experiments 2, 4)
@@ -311,4 +390,5 @@ and shares all of its machinery with this design.
 - `fixture/` — two-workspace turbo monorepo used in Experiment 4
   (`npm install turbo` inside it, then run with the env vars shown above)
 - `execsnoop.c` — LD_PRELOAD process-tree census: exec interposition + self-announce (Experiment 6)
+- `lint-corpus.js` — 12 env-access patterns for testing static analyzers (Experiment 7)
 - `run-matrix.sh` — one-command reproduction of the Experiment 2 matrix
