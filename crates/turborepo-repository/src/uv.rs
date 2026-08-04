@@ -220,6 +220,8 @@ struct UvToolTable {
     sources: BTreeMap<String, toml::Value>,
     #[serde(default, rename = "dev-dependencies")]
     dev_dependencies: Vec<String>,
+    #[serde(default, rename = "default-groups")]
+    default_groups: Option<toml::Value>,
     package: Option<bool>,
 }
 
@@ -310,6 +312,171 @@ impl PyProjectManifest {
             .map(|dependency| (dependency.as_str(), DependencyKind::Development));
         dependencies.chain(optional).chain(groups).chain(legacy_dev)
     }
+
+    fn tool_declarations(&self, owner: DeclarationOwner) -> ToolDeclarations {
+        let mut declarations = ToolDeclarations::default();
+        for dependency in self
+            .project
+            .as_ref()
+            .map(|project| project.dependencies.as_slice())
+            .unwrap_or_default()
+        {
+            if let Some(tool) = PythonTool::from_dependency(dependency) {
+                declarations.insert(tool, owner, None);
+            }
+        }
+
+        let default_groups = self.default_dependency_groups();
+        for dependency in self.uv().into_iter().flat_map(|uv| &uv.dev_dependencies) {
+            if let Some(tool) = PythonTool::from_dependency(dependency) {
+                declarations.insert(
+                    tool,
+                    owner,
+                    Some(DependencyGroup {
+                        name: "dev".to_string(),
+                        is_default: default_groups.contains("dev"),
+                    }),
+                );
+            }
+        }
+
+        for group in self.dependency_groups.keys() {
+            let mut dependencies = Vec::new();
+            self.walk_dependency_group(group, &mut HashSet::new(), &mut dependencies);
+            let declaration_group = DependencyGroup {
+                name: group.clone(),
+                is_default: default_groups.contains(group),
+            };
+            for dependency in dependencies {
+                if let Some(tool) = PythonTool::from_dependency(dependency) {
+                    declarations.insert(tool, owner, Some(declaration_group.clone()));
+                }
+            }
+        }
+        declarations
+    }
+
+    fn walk_dependency_group<'a>(
+        &'a self,
+        group: &str,
+        visiting: &mut HashSet<String>,
+        dependencies: &mut Vec<&'a str>,
+    ) {
+        if !visiting.insert(group.to_string()) {
+            return;
+        }
+        if let Some(entries) = self
+            .dependency_groups
+            .get(group)
+            .and_then(toml::Value::as_array)
+        {
+            for entry in entries {
+                if let Some(dependency) = entry.as_str() {
+                    dependencies.push(dependency);
+                } else if let Some(included) = entry
+                    .as_table()
+                    .and_then(|table| table.get("include-group"))
+                    .and_then(toml::Value::as_str)
+                {
+                    self.walk_dependency_group(included, visiting, dependencies);
+                }
+            }
+        }
+        visiting.remove(group);
+    }
+
+    fn default_dependency_groups(&self) -> HashSet<String> {
+        match self.uv().and_then(|uv| uv.default_groups.as_ref()) {
+            Some(toml::Value::String(value)) if value == "all" => self
+                .dependency_groups
+                .keys()
+                .cloned()
+                .chain(std::iter::once("dev".to_string()))
+                .collect(),
+            Some(toml::Value::Array(values)) => values
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .map(str::to_string)
+                .collect(),
+            _ => HashSet::from(["dev".to_string()]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum PythonTool {
+    Ruff,
+    Black,
+    Mypy,
+    Ty,
+    Pyright,
+}
+
+impl PythonTool {
+    fn from_dependency(dependency: &str) -> Option<Self> {
+        if dependency.contains(';') {
+            return None;
+        }
+        match normalize_name(pep508_name(dependency)?).as_str() {
+            "ruff" => Some(Self::Ruff),
+            "black" => Some(Self::Black),
+            "mypy" => Some(Self::Mypy),
+            "ty" => Some(Self::Ty),
+            "pyright" => Some(Self::Pyright),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeclarationOwner {
+    #[allow(
+        dead_code,
+        reason = "root declarations are consumed by the planning layer"
+    )]
+    Root,
+    Member,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct DependencyGroup {
+    name: String,
+    is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolDeclaration {
+    owner: DeclarationOwner,
+    group: Option<DependencyGroup>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ToolDeclarations(BTreeMap<PythonTool, ToolDeclaration>);
+
+impl ToolDeclarations {
+    fn insert(
+        &mut self,
+        tool: PythonTool,
+        owner: DeclarationOwner,
+        group: Option<DependencyGroup>,
+    ) {
+        let rank = |group: &Option<DependencyGroup>| match group {
+            None => (0, String::new()),
+            Some(group) if group.is_default => (1, group.name.clone()),
+            Some(group) => (2, group.name.clone()),
+        };
+        match self.0.entry(tool) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(ToolDeclaration { owner, group });
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry)
+                if rank(&group) < rank(&entry.get().group) =>
+            {
+                entry.insert(ToolDeclaration { owner, group });
+            }
+            std::collections::btree_map::Entry::Occupied(_) => {}
+        }
+    }
 }
 
 fn effective_source<'a>(
@@ -385,6 +552,7 @@ pub struct UvPackage {
     pub relationships: Vec<Relationship>,
     /// Whether uv can build this member as a Python distribution.
     pub buildable: bool,
+    tool_declarations: ToolDeclarations,
 }
 
 /// The result of uv workspace discovery: the member packages plus the
@@ -682,6 +850,7 @@ fn connect_packages(
                 manifest_path,
                 relationships: package_relationships,
                 buildable: manifest.is_buildable(),
+                tool_declarations: manifest.tool_declarations(DeclarationOwner::Member),
             }
         })
         .collect()
@@ -1584,6 +1753,223 @@ mod test {
         assert_eq!(pep508_name(">=1.0"), None);
     }
 
+    #[test]
+    fn test_tool_declaration_sources() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+dependencies = ["ruff>=0.12"]
+
+[dependency-groups]
+types = ["mypy"]
+
+[tool.uv]
+dev-dependencies = ["black"]
+"#,
+        )
+        .unwrap();
+
+        let declarations = manifest.tool_declarations(DeclarationOwner::Root);
+        assert_eq!(
+            declarations.0[&PythonTool::Ruff],
+            ToolDeclaration {
+                owner: DeclarationOwner::Root,
+                group: None,
+            }
+        );
+        assert_eq!(
+            declarations.0[&PythonTool::Mypy]
+                .group
+                .as_ref()
+                .unwrap()
+                .name,
+            "types"
+        );
+        let legacy = declarations.0[&PythonTool::Black].group.as_ref().unwrap();
+        assert_eq!(legacy.name, "dev");
+        assert!(legacy.is_default);
+    }
+
+    #[test]
+    fn test_tool_declaration_recursive_includes_use_declaring_group() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[dependency-groups]
+dev = [{ include-group = "quality" }]
+quality = [{ include-group = "typing" }, "ruff"]
+typing = ["mypy", { include-group = "missing" }]
+"#,
+        )
+        .unwrap();
+
+        let declarations = manifest.tool_declarations(DeclarationOwner::Member);
+        for tool in [PythonTool::Ruff, PythonTool::Mypy] {
+            let declaration = &declarations.0[&tool];
+            assert_eq!(declaration.owner, DeclarationOwner::Member);
+            assert_eq!(declaration.group.as_ref().unwrap().name, "dev");
+            assert!(declaration.group.as_ref().unwrap().is_default);
+        }
+    }
+
+    #[test]
+    fn test_tool_declaration_include_cycles_terminate() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[dependency-groups]
+dev = [{ include-group = "quality" }]
+quality = ["black", { include-group = "dev" }]
+self-cycle = ["pyright", { include-group = "self-cycle" }]
+"#,
+        )
+        .unwrap();
+
+        let declarations = manifest.tool_declarations(DeclarationOwner::Member);
+        let black = declarations.0[&PythonTool::Black].group.as_ref().unwrap();
+        assert_eq!(black.name, "dev");
+        assert!(black.is_default);
+        assert_eq!(
+            declarations.0[&PythonTool::Pyright]
+                .group
+                .as_ref()
+                .unwrap()
+                .name,
+            "self-cycle"
+        );
+    }
+
+    #[test]
+    fn test_tool_declaration_names_are_normalized() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+dependencies = [
+  "RuFf[format]>=0.12",
+  "BLACK @ https://example.com/black.whl",
+  "MyPy (>=1.0)",
+  "TY",
+  "PyRight",
+  "not-a-tool",
+]
+"#,
+        )
+        .unwrap();
+
+        let declarations = manifest.tool_declarations(DeclarationOwner::Member);
+        assert_eq!(
+            declarations.0.keys().copied().collect::<Vec<_>>(),
+            [
+                PythonTool::Ruff,
+                PythonTool::Black,
+                PythonTool::Mypy,
+                PythonTool::Ty,
+                PythonTool::Pyright,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_optional_only_tool_declarations_are_excluded() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[project.optional-dependencies]
+quality = ["ruff", "black", "mypy"]
+"#,
+        )
+        .unwrap();
+
+        assert!(
+            manifest
+                .tool_declarations(DeclarationOwner::Member)
+                .0
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_marker_qualified_tool_declarations_are_excluded() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+dependencies = ["ruff; python_version >= '3.12'"]
+
+[dependency-groups]
+types = ["mypy ; platform_system == 'Linux'"]
+
+[tool.uv]
+dev-dependencies = ["black; implementation_name == 'cpython'"]
+"#,
+        )
+        .unwrap();
+
+        assert!(
+            manifest
+                .tool_declarations(DeclarationOwner::Member)
+                .0
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_legacy_dev_declaration_respects_default_groups() {
+        let default_manifest: PyProjectManifest =
+            toml::from_str("[tool.uv]\ndev-dependencies = ['ruff']\n").unwrap();
+        let disabled_manifest: PyProjectManifest =
+            toml::from_str("[tool.uv]\ndev-dependencies = ['ruff']\ndefault-groups = []\n")
+                .unwrap();
+
+        let declaration = |manifest: &PyProjectManifest| {
+            manifest
+                .tool_declarations(DeclarationOwner::Member)
+                .0
+                .remove(&PythonTool::Ruff)
+                .unwrap()
+        };
+        assert!(declaration(&default_manifest).group.unwrap().is_default);
+        assert!(!declaration(&disabled_manifest).group.unwrap().is_default);
+    }
+
+    #[test]
+    fn test_configured_default_groups() {
+        let listed: PyProjectManifest = toml::from_str(
+            r#"
+[dependency-groups]
+quality = ["ruff"]
+types = ["mypy"]
+
+[tool.uv]
+default-groups = ["quality"]
+"#,
+        )
+        .unwrap();
+        let declarations = listed.tool_declarations(DeclarationOwner::Member);
+        assert!(
+            declarations.0[&PythonTool::Ruff]
+                .group
+                .as_ref()
+                .unwrap()
+                .is_default
+        );
+        assert!(
+            !declarations.0[&PythonTool::Mypy]
+                .group
+                .as_ref()
+                .unwrap()
+                .is_default
+        );
+
+        let all: PyProjectManifest = toml::from_str(
+            "[dependency-groups]\nquality = ['ruff']\n[tool.uv]\ndev-dependencies = \
+             ['black']\ndefault-groups = 'all'\n",
+        )
+        .unwrap();
+        assert!(
+            all.tool_declarations(DeclarationOwner::Member)
+                .0
+                .values()
+                .all(|declaration| declaration.group.as_ref().unwrap().is_default)
+        );
+    }
+
     fn write_workspace(root: &AbsoluteSystemPath) {
         root.join_component(PYPROJECT_TOML)
             .create_with_contents(
@@ -1612,7 +1998,7 @@ py-app = { workspace = true }
 [project]
 name = "py-app"
 version = "0.1.0"
-dependencies = ["py-lib", "click>=8.1"]
+dependencies = ["py-lib", "click>=8.1", "ruff"]
 
 [dependency-groups]
 dev = ["pytest>=8", "py-lib"]
@@ -1667,6 +2053,10 @@ version = "0.1.0"
         assert_eq!(names, ["py-app", "py-lib"]);
 
         let py_app = &workspace.packages[0];
+        assert_eq!(
+            py_app.tool_declarations.0[&PythonTool::Ruff].owner,
+            DeclarationOwner::Member
+        );
         // py-lib is declared as both a production dependency and a
         // dependency-group entry; both facts are kept (like Cargo), and both
         // target the same internal package.
