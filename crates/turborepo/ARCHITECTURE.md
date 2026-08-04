@@ -768,10 +768,13 @@ The core task graph consists of:
   refreshes the active `WatchSpec` from the current graph generation whenever
   the package graph is initialized or rediscovered. Turbo config and ecosystem definition changes
   trigger full rediscovery after routing.
-- Git index and `.git/info/exclude` control paths are watched separately so
-  tracked-file and exclude state stays current without exposing `.git` events
-  to normal consumers. Backend rescan signals bypass path scopes and invoke
-  each consumer's conservative recovery.
+- Git index, `.git/info/exclude`, `core.excludesFile`, and repository Git config
+  control paths are watched separately so tracked-file and exclude state stays
+  current without exposing `.git` events to normal consumers. Refreshes publish
+  the complete control-path and ignore snapshot as one generation and
+  conservatively invalidate consumers when `core.worktree` changes. Backend
+  rescan signals bypass path scopes and invoke each consumer's conservative
+  recovery.
 - Output and hash watchers retain their independent event requirements: ignored
   outputs and explicitly configured inputs may still be relevant to those
   consumers. Git-ignore filtering is therefore consumer-specific rather than a
