@@ -94,6 +94,25 @@ pub(crate) fn task_has_command(
     }
 }
 
+pub(crate) fn task_participates(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context.native_tasks().participates(task.task()),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -157,15 +176,13 @@ impl EngineExt for Engine<Built> {
                             })?;
 
                     let package_name = PackageName::from(dep_id.package());
-                    let Some(dep_context) = package_graph.package_task_context(&package_name)
+                    let Some(_dep_context) = package_graph.package_task_context(&package_name)
                     else {
                         return Err(ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         });
                     };
-                    if task_definition.persistent
-                        && dep_context.native_tasks().defines(dep_id.task())
-                    {
+                    if task_definition.persistent && task_has_command(self, package_graph, dep_id) {
                         let (span, text) = self
                             .task_locations()
                             .get(dep_id)
@@ -183,13 +200,13 @@ impl EngineExt for Engine<Built> {
 
                 // check if the package for the task defines an executable native task
                 let package_name = PackageName::from(task_id.package().to_string());
-                let Some(context) = package_graph.package_task_context(&package_name) else {
+                let Some(_context) = package_graph.package_task_context(&package_name) else {
                     return Err(ValidateError::MissingPackageJson {
                         package: task_id.package().to_string(),
                     });
                 };
 
-                let package_has_task = context.native_tasks().defines(task_id.task());
+                let package_has_task = task_has_command(self, package_graph, task_id);
 
                 let task_is_persistent = self
                     .task_definition(task_id)
