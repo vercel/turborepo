@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
-    native_tasks::NativeTaskExecution,
+    native_tasks::{NativeTaskContract, NativeTaskExecution},
     package_graph::{PackageGraph, PackageName, PackageNode},
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -29,6 +29,7 @@ pub(super) struct TaskDefMemoKey {
     task_name: TaskName<'static>,
     path_to_root: turbopath::RelativeUnixPathBuf,
     native_execution: NativeTaskExecution,
+    native_contract: Option<NativeTaskContract>,
     authored_task: bool,
     registered_task: bool,
 }
@@ -252,9 +253,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // global input files — they don't execute, and including the files
         // would cause their hash to change and cascade into downstream
         // tasks that depend on them.
-        let mut native_execution = package_context
+        let native_task = package_context
             .as_ref()
-            .and_then(|context| context.native_tasks().get(task_id.task()))
+            .and_then(|context| context.native_tasks().get(task_id.task()));
+        let native_contract = native_task.map(|task| task.contract().clone());
+        let mut native_execution = native_task
             .map(|task| task.execution().clone())
             .unwrap_or(NativeTaskExecution::None);
         if task_is_excluded(&turbo_json_chain, task_id.as_inner(), task_name) {
@@ -283,9 +286,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&task_id.as_inner().as_task_name())
                     .is_some()
             });
-            let memoizable_contract = package_context
-                .as_ref()
-                .is_none_or(|context| !context.task_contract().derives_io());
+            let memoizable_contract = package_context.as_ref().is_none_or(|context| {
+                !native_contract.as_ref().map_or_else(
+                    || {
+                        context
+                            .task_contract()
+                            .derives_task_io(task_id.as_inner().task())
+                    },
+                    NativeTaskContract::derives_io,
+                )
+            });
             (!package_scoped && memoizable_contract).then(|| TaskDefMemoKey {
                 chain: turbo_json_chain
                     .iter()
@@ -294,6 +304,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 task_name: task_name.clone().into_owned(),
                 path_to_root: path_to_root.clone(),
                 native_execution: native_execution.clone(),
+                native_contract: native_contract.clone(),
                 authored_task,
                 registered_task,
             })
@@ -347,9 +358,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         if should_apply_toolchain_defaults(command_override.as_ref())
             && let Some(context) = package_context.as_ref()
         {
-            let defaults = context
-                .task_contract()
-                .defaults_for_task(task_id.as_inner().task());
+            let defaults = native_contract
+                .as_ref()
+                .map(|contract| contract.defaults().clone())
+                .unwrap_or_else(|| {
+                    context
+                        .task_contract()
+                        .defaults_for_task(task_id.as_inner().task())
+                });
             if processed_task_definition.cache.is_none() {
                 processed_task_definition.cache = defaults.cache.map(Spanned::new);
             }
@@ -426,9 +442,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // `$TURBO_DEFAULT$` take full control.
         if inherits_toolchain_task_io(task_def.command.as_ref())
             && let Some(package_context) = package_context.as_ref().filter(|context| {
-                context
-                    .task_contract()
-                    .derives_task_io(task_id.as_inner().task())
+                native_contract.as_ref().map_or_else(
+                    || {
+                        context
+                            .task_contract()
+                            .derives_task_io(task_id.as_inner().task())
+                    },
+                    NativeTaskContract::derives_io,
+                )
             })
         {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
