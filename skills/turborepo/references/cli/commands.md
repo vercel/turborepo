@@ -195,18 +195,18 @@ turbo build --ui=stream-with-experimental-timestamps  # streaming logs with time
 
 ### TUI keybinds
 
-| Key | Action |
-| --- | --- |
-| `↑`/`k`, `↓`/`j` | Select previous/next task |
-| `h` | Show selected task's logs full-screen, verbatim (toggle) |
-| `s` | Stream all task logs (toggle) |
-| `Shift+H` | Toggle task list sidebar |
-| `i` or `Enter` | Interact with selected task |
-| `Ctrl+Z` | Stop interacting with task |
-| `/` | Filter tasks to search term (`Esc` clears) |
-| `p` | Toggle pinned task selection |
-| `u` / `d` | Scroll logs up/down |
-| `m` | Toggle keybind help popup |
+| Key              | Action                                                   |
+| ---------------- | -------------------------------------------------------- |
+| `↑`/`k`, `↓`/`j` | Select previous/next task                                |
+| `h`              | Show selected task's logs full-screen, verbatim (toggle) |
+| `s`              | Stream all task logs (toggle)                            |
+| `Shift+H`        | Toggle task list sidebar                                 |
+| `i` or `Enter`   | Interact with selected task                              |
+| `Ctrl+Z`         | Stop interacting with task                               |
+| `/`              | Filter tasks to search term (`Esc` clears)               |
+| `p`              | Toggle pinned task selection                             |
+| `u` / `d`        | Scroll logs up/down                                      |
+| `m`              | Toggle keybind help popup                                |
 
 ---
 
