@@ -171,6 +171,14 @@ When worktree cache sharing is active, you'll see a message in the output:
   use its own cache directory as specified.
 </Callout>
 
+<Callout type="warn" title="Outputs containing absolute paths">
+  Cache artifacts are restored without rewriting their contents. If a task
+  output contains the absolute path to its worktree, sharing that artifact can
+  restore an output that points to another checkout. Set an explicit
+  [`cacheDir`](/docs/reference/configuration#cachedir), such as `.turbo/cache`,
+  to keep the local cache isolated to each worktree.
+</Callout>
+
 ### With Remote Caching
 
 Git worktree cache sharing works alongside [Remote Caching](/docs/core-concepts/remote-caching). When both are enabled:
