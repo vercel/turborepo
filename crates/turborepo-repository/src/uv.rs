@@ -426,14 +426,25 @@ impl PythonTool {
             _ => None,
         }
     }
+
+    fn role(self) -> ToolRole {
+        match self {
+            Self::Ruff => ToolRole::Lint,
+            Self::Black => ToolRole::Format,
+            Self::Mypy | Self::Ty | Self::Pyright => ToolRole::Check,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolRole {
+    Lint,
+    Format,
+    Check,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DeclarationOwner {
-    #[allow(
-        dead_code,
-        reason = "root declarations are consumed by the planning layer"
-    )]
     Root,
     Member,
 }
@@ -476,6 +487,152 @@ impl ToolDeclarations {
             }
             std::collections::btree_map::Entry::Occupied(_) => {}
         }
+    }
+
+    fn for_role(&self, role: ToolRole) -> Self {
+        Self(
+            self.0
+                .iter()
+                .filter(|(tool, _)| {
+                    tool.role() == role || **tool == PythonTool::Ruff && role == ToolRole::Format
+                })
+                .map(|(tool, declaration)| (*tool, declaration.clone()))
+                .collect(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecutionOwner {
+    Root,
+    Member,
+    AllMembers,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolExecution {
+    owner: ExecutionOwner,
+    group: Option<DependencyGroup>,
+}
+
+impl ToolExecution {
+    fn activation_group(&self) -> Option<&str> {
+        self.group
+            .as_ref()
+            .filter(|group| !group.is_default)
+            .map(|group| group.name.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct QualityPlan {
+    lint: BTreeMap<PythonTool, ToolExecution>,
+    format: BTreeMap<PythonTool, ToolExecution>,
+    check: BTreeMap<PythonTool, ToolExecution>,
+    lint_homogeneous: bool,
+    format_homogeneous: bool,
+    check_homogeneous: bool,
+}
+
+impl QualityPlan {
+    fn effective(root: &ToolDeclarations, member: &ToolDeclarations) -> Self {
+        let role = |role| {
+            let member = member.for_role(role);
+            let declarations = if member.0.is_empty() {
+                root.for_role(role)
+            } else {
+                member
+            };
+            declarations
+                .0
+                .into_iter()
+                .map(|(tool, declaration)| {
+                    let owner = match declaration.owner {
+                        DeclarationOwner::Root => ExecutionOwner::Root,
+                        DeclarationOwner::Member => ExecutionOwner::Member,
+                    };
+                    (
+                        tool,
+                        ToolExecution {
+                            owner,
+                            group: declaration.group,
+                        },
+                    )
+                })
+                .collect()
+        };
+        Self {
+            lint: role(ToolRole::Lint),
+            format: role(ToolRole::Format),
+            check: role(ToolRole::Check),
+            lint_homogeneous: true,
+            format_homogeneous: true,
+            check_homogeneous: true,
+        }
+    }
+
+    fn homogeneous(plans: &[Self]) -> Self {
+        let merge = |select: fn(&Self) -> &BTreeMap<PythonTool, ToolExecution>| {
+            let Some(first) = plans.first().map(select) else {
+                return (false, BTreeMap::new());
+            };
+            if !plans
+                .iter()
+                .all(|plan| select(plan).keys().eq(first.keys()))
+            {
+                return (false, BTreeMap::new());
+            }
+
+            let mut tools = BTreeMap::new();
+            for (tool, execution) in first {
+                let executions: Vec<_> = plans.iter().map(|plan| &select(plan)[tool]).collect();
+                let owner = if executions.iter().all(|candidate| {
+                    candidate.owner == ExecutionOwner::Root
+                        && candidate.activation_group() == execution.activation_group()
+                }) {
+                    ExecutionOwner::Root
+                } else if executions.iter().all(|candidate| {
+                    candidate.owner == ExecutionOwner::Member
+                        && candidate.activation_group() == execution.activation_group()
+                }) {
+                    ExecutionOwner::AllMembers
+                } else {
+                    return (false, BTreeMap::new());
+                };
+                tools.insert(
+                    *tool,
+                    ToolExecution {
+                        owner,
+                        group: execution
+                            .group
+                            .as_ref()
+                            .filter(|group| !group.is_default)
+                            .cloned(),
+                    },
+                );
+            }
+            (true, tools)
+        };
+        let (lint_homogeneous, lint) = merge(|plan| &plan.lint);
+        let (format_homogeneous, format) = merge(|plan| &plan.format);
+        let (check_homogeneous, check) = merge(|plan| &plan.check);
+        Self {
+            lint,
+            format,
+            check,
+            lint_homogeneous,
+            format_homogeneous,
+            check_homogeneous,
+        }
+    }
+
+    #[allow(dead_code, reason = "consumed by native task synthesis layer")]
+    fn uses_root_tools(&self) -> bool {
+        self.lint
+            .values()
+            .chain(self.format.values())
+            .chain(self.check.values())
+            .any(|execution| execution.owner == ExecutionOwner::Root)
     }
 }
 
@@ -552,7 +709,7 @@ pub struct UvPackage {
     pub relationships: Vec<Relationship>,
     /// Whether uv can build this member as a Python distribution.
     pub buildable: bool,
-    tool_declarations: ToolDeclarations,
+    quality_plan: QualityPlan,
 }
 
 /// The result of uv workspace discovery: the member packages plus the
@@ -572,6 +729,8 @@ pub struct DiscoveredWorkspace {
     /// be the entire repository), but its uv.lock entry participates in
     /// workspace-scoped hashing and pruning.
     pub root_project_name: Option<String>,
+    #[allow(dead_code, reason = "consumed by native task synthesis layer")]
+    quality_plan: QualityPlan,
 }
 
 /// Discover the uv workspace rooted at `repo_root` by parsing
@@ -592,6 +751,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             name: None,
             packages: Vec::new(),
             root_project_name: None,
+            quality_plan: QualityPlan::default(),
         });
     };
     let name = workspace_name(&root_manifest)?;
@@ -604,6 +764,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             name,
             packages: Vec::new(),
             root_project_name: None,
+            quality_plan: QualityPlan::default(),
         });
     };
 
@@ -662,6 +823,12 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         .filter(|name| !name.is_empty());
     let member_names: HashSet<String> = parsed.iter().map(|(name, _, _)| name.clone()).collect();
     let packages = connect_packages(parsed, &member_names, &root_manifest);
+    let quality_plan = QualityPlan::homogeneous(
+        &packages
+            .iter()
+            .map(|package| package.quality_plan.clone())
+            .collect::<Vec<_>>(),
+    );
 
     if let Some(name) = &name {
         let collision = packages
@@ -689,6 +856,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         name,
         packages,
         root_project_name,
+        quality_plan,
     })
 }
 
@@ -768,6 +936,7 @@ fn connect_packages(
     member_names: &HashSet<String>,
     root_manifest: &PyProjectManifest,
 ) -> Vec<UvPackage> {
+    let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let mut graph = petgraph::Graph::<(), ()>::new();
     let node_indices: HashMap<&str, petgraph::graph::NodeIndex> = parsed
         .iter()
@@ -850,7 +1019,10 @@ fn connect_packages(
                 manifest_path,
                 relationships: package_relationships,
                 buildable: manifest.is_buildable(),
-                tool_declarations: manifest.tool_declarations(DeclarationOwner::Member),
+                quality_plan: QualityPlan::effective(
+                    &root_tools,
+                    &manifest.tool_declarations(DeclarationOwner::Member),
+                ),
             }
         })
         .collect()
@@ -1970,6 +2142,129 @@ default-groups = ["quality"]
         );
     }
 
+    #[test]
+    fn test_quality_plan_root_defaults_and_member_role_overrides() {
+        let root: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+dependencies = ["ruff", "mypy", "ty"]
+"#,
+        )
+        .unwrap();
+        let member: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+dependencies = ["black"]
+
+[dependency-groups]
+types = ["pyright"]
+"#,
+        )
+        .unwrap();
+        let root = root.tool_declarations(DeclarationOwner::Root);
+        let member = member.tool_declarations(DeclarationOwner::Member);
+        let plan = QualityPlan::effective(&root, &member);
+
+        assert_eq!(
+            plan.lint.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Ruff]
+        );
+        assert_eq!(
+            plan.format.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Black]
+        );
+        assert_eq!(
+            plan.check.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Pyright]
+        );
+        assert_eq!(plan.lint[&PythonTool::Ruff].owner, ExecutionOwner::Root);
+        assert_eq!(
+            plan.format[&PythonTool::Black].owner,
+            ExecutionOwner::Member
+        );
+        assert_eq!(
+            plan.check[&PythonTool::Pyright]
+                .group
+                .as_ref()
+                .map(|group| group.name.as_str()),
+            Some("types")
+        );
+        assert!(plan.uses_root_tools());
+
+        let inherited = QualityPlan::effective(&root, &ToolDeclarations::default());
+        assert_eq!(
+            inherited.format.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Ruff]
+        );
+        assert_eq!(
+            inherited.check.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Mypy, PythonTool::Ty]
+        );
+        assert!(
+            inherited
+                .check
+                .values()
+                .all(|execution| execution.owner == ExecutionOwner::Root)
+        );
+    }
+
+    #[test]
+    fn test_homogeneous_and_heterogeneous_quality_plans() {
+        let declarations = |contents: &str| {
+            toml::from_str::<PyProjectManifest>(contents)
+                .unwrap()
+                .tool_declarations(DeclarationOwner::Member)
+        };
+        let ruff = declarations("[project]\ndependencies=['ruff']\n");
+        let black = declarations("[project]\ndependencies=['black']\n");
+        let quality_group = declarations("[dependency-groups]\nquality=['ruff']\n");
+        let other_group = declarations("[dependency-groups]\nother=['ruff']\n");
+        let effective = |member: &ToolDeclarations| {
+            QualityPlan::effective(&ToolDeclarations::default(), member)
+        };
+
+        let member_owned = QualityPlan::homogeneous(&[effective(&ruff), effective(&ruff)]);
+        assert!(member_owned.lint_homogeneous);
+        assert!(member_owned.format_homogeneous);
+        assert_eq!(
+            member_owned.lint[&PythonTool::Ruff].owner,
+            ExecutionOwner::AllMembers
+        );
+
+        let grouped =
+            QualityPlan::homogeneous(&[effective(&quality_group), effective(&quality_group)]);
+        assert_eq!(
+            grouped.lint[&PythonTool::Ruff]
+                .group
+                .as_ref()
+                .map(|group| group.name.as_str()),
+            Some("quality")
+        );
+        let incompatible_groups =
+            QualityPlan::homogeneous(&[effective(&quality_group), effective(&other_group)]);
+        assert!(!incompatible_groups.lint_homogeneous);
+
+        let different_tools = QualityPlan::homogeneous(&[effective(&ruff), effective(&black)]);
+        assert!(!different_tools.lint_homogeneous);
+        assert!(!different_tools.format_homogeneous);
+        assert!(different_tools.check_homogeneous);
+
+        let root_manifest: PyProjectManifest =
+            toml::from_str("[project]\ndependencies=['ruff']\n").unwrap();
+        let root = root_manifest.tool_declarations(DeclarationOwner::Root);
+        let root_owned = QualityPlan::effective(&root, &ToolDeclarations::default());
+        let root_workspace = QualityPlan::homogeneous(&[root_owned.clone(), root_owned.clone()]);
+        assert_eq!(
+            root_workspace.lint[&PythonTool::Ruff].owner,
+            ExecutionOwner::Root
+        );
+        assert!(root_workspace.uses_root_tools());
+
+        let mixed_owners = QualityPlan::homogeneous(&[root_owned, effective(&ruff)]);
+        assert!(!mixed_owners.lint_homogeneous);
+        assert!(!mixed_owners.format_homogeneous);
+    }
+
     fn write_workspace(root: &AbsoluteSystemPath) {
         root.join_component(PYPROJECT_TOML)
             .create_with_contents(
@@ -1977,7 +2272,7 @@ default-groups = ["quality"]
 [project]
 name = "root-project"
 version = "0.1.0"
-dependencies = ["py-app"]
+dependencies = ["py-app", "mypy"]
 
 [tool.turbo]
 name = "acme"
@@ -2054,9 +2349,19 @@ version = "0.1.0"
 
         let py_app = &workspace.packages[0];
         assert_eq!(
-            py_app.tool_declarations.0[&PythonTool::Ruff].owner,
-            DeclarationOwner::Member
+            py_app.quality_plan.lint[&PythonTool::Ruff].owner,
+            ExecutionOwner::Member
         );
+        assert!(!workspace.quality_plan.lint_homogeneous);
+        assert!(!workspace.quality_plan.format_homogeneous);
+        assert!(workspace.quality_plan.check_homogeneous);
+        assert_eq!(
+            workspace.quality_plan.check[&PythonTool::Mypy].owner,
+            ExecutionOwner::Root
+        );
+        assert!(workspace.packages.iter().all(|package| {
+            package.quality_plan.check[&PythonTool::Mypy].owner == ExecutionOwner::Root
+        }));
         // py-lib is declared as both a production dependency and a
         // dependency-group entry; both facts are kept (like Cargo), and both
         // target the same internal package.
