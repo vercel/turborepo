@@ -339,6 +339,44 @@ JavaScript task contracts; core defaults omitted contracts to empty behavior
 without consulting contributor identity. Generic argv overrides for scopes
 without native tasks are core execution policy; pure-root execution is one case
 and does not depend on whether provenance is present.
+
+#### Native Task Execution and Contracts (`crates/turborepo-repository/src/native_tasks.rs`)
+
+The immutable native-task catalog classifies each task as `Command`,
+`Aggregate`, or `None`. `Command` stores a declarative program, argument layout,
+working-directory policy, and serial group. `Aggregate` runs no process; it adds
+same-scope task dependencies. `None` carries classification or contract facts
+without making the task runnable.
+
+Aggregate children are validated while the catalog is built. They must be
+unqualified, participating tasks in the same observed scope and cannot name the
+aggregate itself. Duplicate children are removed. The engine merges these
+implicit dependencies with authored `dependsOn` entries, deduplicates by the
+effective same-scope task ID, and subjects the result to normal cycle
+validation. An explicit argv `command` or `command: null` replaces the native
+aggregate in either direction, while Package Configuration `extends: false`
+can remove the inherited task. A scoped definition that adds configuration
+after `extends: false` participates normally and restores the native aggregate.
+Arguments cannot target an active aggregate because it has no process; the
+error directs users to its package-qualified child tasks.
+
+`NativeCommandArguments` models fixed prefixes and suffixes, pass-through
+placement before or after the suffix, and optional fixed or package-manager
+separators. This keeps Cargo, uv, and JavaScript argument behavior in data
+rather than executor branches. Argument lookup remains task-specific, so a
+dependency task does not inherit arguments supplied for another requested
+task.
+
+Behavior that varies by native task lives in `NativeTaskContract`: defaults,
+entrypoint classification, and whether that task derives I/O. Broader behavior
+such as environment projection, dependency-source participation, dynamic I/O,
+pruning, and command-map capability remains on `ScopeTaskContract`. Engine
+composition uses the task-local contract when present and the scope contract
+only as a fallback. Definition memoization keys include native execution and
+task-local contract facts, and it is disabled for package-scoped definitions or
+per-package derived I/O. This prevents scopes with the same turbo.json chain but
+different aggregates or contracts from sharing an invalid definition.
+
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
@@ -626,19 +664,51 @@ the shared repository graph.
   edges. A root `[project]` participates in hashing and pruning but is not a
   package. A synthetic workspace package, named by `[tool.turbo] name`,
   depends on every member and hosts workspace-wide quality tasks.
-- **Execution** registers `build` for buildable members and `format` and
-  `check` for all members. Unfiltered quality runs prefer the workspace
-  aggregate; filtered runs target selected members. `check` tasks share a
-  serial group because uv synchronizes their environment. Built-in tasks
-  default to uncached until uv, Python, ty, and build-backend identities are
-  represented in task hashes.
+- **Quality-tool discovery** recognizes direct, unconditional declarations of
+  Ruff, Black, mypy, ty, and Pyright in `[project].dependencies`, recursive
+  `[dependency-groups]` (including `include-group`), and legacy
+  `[tool.uv].dev-dependencies`. Optional dependencies and declarations with an
+  environment marker are excluded. Discovery records whether a declaration
+  belongs to the root or a member and whether its dependency group is active by
+  default. For each role, a member's declarations replace the root
+  declarations; an empty member role inherits the root role. Ruff supplies both
+  lint and format roles.
+- **Execution** registers `build` for buildable members. Without a recognized
+  tool, all members receive fallback `format` and `check` commands. Recognized
+  tools add qualified `lint:<tool>`, `format:<tool>`, and `check:<tool>` tasks;
+  `lint` and `check` are same-scope aggregates of their qualified tasks.
+  Canonical `format` selects Ruff before Black and warns once per selected
+  scope when both are declared, while qualified tasks remain available for an
+  explicit choice. If every member has the same tools, owner, and non-default
+  activation group for a role, unfiltered runs use the workspace scope;
+  member-owned tools add `--all-packages`. Otherwise, member scopes are the
+  entrypoints for that role. Filtered runs use member commands.
+- **Command shapes** are `uv build --package=<name>`, or `uv run --frozen`
+  followed by owner selection (`--package <name>` for a member,
+  `--all-packages` for homogeneous member ownership, and no owner flag for a
+  root declaration), non-default group activation (`--no-default-groups
+  --group <group>`), the tool and subcommand, pass-through arguments, and the
+  member-directory targets. Ruff uses `check`/`format`; ty uses `check`.
+  Fallbacks remain `uv format -- <dirs...>` and either
+  `uv check --package=<name>` or `uv check --all-packages`. All command tasks
+  use the `uv` serial group and default to uncached. Detected-tool commands use
+  `--frozen`; Turborepo itself never creates or updates `uv.lock`.
+  Pass-through arguments are inserted before path targets. Active aggregates
+  reject them and name the package-qualified child tasks that can receive them.
 - **Hashing and affectedness** include member sources, relevant workspace
-  files and uv/pip environment variables, internal source closures for
-  checks, and each member's external dependency closure from `uv.lock`.
-  Package identities include version, source, and artifact hashes. A
-  `uv.lock` change across git refs conservatively affects all uv packages.
+  files, supported tool configuration, and uv/pip environment variables;
+  `check` and `check:*` also include internal source closures. Workspace tasks
+  include every member's sources. Quality caches, `.venv`, and `__pycache__`
+  are excluded. Path-valued uv settings and active user/system uv configuration
+  make automatic inputs untracked. Each scope also hashes its external
+  dependency closure from `uv.lock`; root-owned tools conservatively add the
+  workspace closure. Package identities include version, source, and artifact
+  hashes. A `uv.lock` change across git refs conservatively affects all uv
+  packages. Build output inference covers the bare command's matching `dist/`
+  artifacts and becomes unavailable when arguments are present.
 - **Watch mode** rediscoveries follow any `pyproject.toml` and the root
-  `uv.lock`; root `.venv/` and `dist/` events are ignored as task byproducts.
+  `uv.lock`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
+  directories at the root and member scopes, are ignored as task byproducts.
 - **Prune** walks `uv.lock` reachability, including dependency groups and
   optional extras, and preserves retained package metadata through
   `toml_edit`. It rewrites root workspace members, removes dangling uv source
