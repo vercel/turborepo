@@ -3,7 +3,7 @@
 //! Ecosystems contribute observations once; core consumes an immutable catalog.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::OsString,
 };
 
@@ -321,6 +321,54 @@ impl NativeTaskKnowledge {
                 });
             }
 
+            let participating: HashMap<_, _> = tasks
+                .iter()
+                .map(|task| (task.name.clone(), task.participates()))
+                .collect();
+            for task in &mut tasks {
+                let NativeTaskExecution::Aggregate(dependencies) = &mut task.execution else {
+                    continue;
+                };
+                let mut seen = HashSet::new();
+                let mut normalized = Vec::with_capacity(dependencies.len());
+                for dependency in dependencies.iter() {
+                    if dependency.contains('#') {
+                        return Err(NativeTaskError::QualifiedAggregateChild {
+                            scope: observation.scope,
+                            task: task.name.clone(),
+                            dependency: dependency.clone(),
+                        });
+                    }
+                    if dependency == &task.name {
+                        return Err(NativeTaskError::SelfAggregateChild {
+                            scope: observation.scope,
+                            task: task.name.clone(),
+                        });
+                    }
+                    match participating.get(dependency) {
+                        None => {
+                            return Err(NativeTaskError::UnknownAggregateChild {
+                                scope: observation.scope,
+                                task: task.name.clone(),
+                                dependency: dependency.clone(),
+                            });
+                        }
+                        Some(false) => {
+                            return Err(NativeTaskError::NonParticipatingAggregateChild {
+                                scope: observation.scope,
+                                task: task.name.clone(),
+                                dependency: dependency.clone(),
+                            });
+                        }
+                        Some(true) => {}
+                    }
+                    if seen.insert(dependency.clone()) {
+                        normalized.push(dependency.clone());
+                    }
+                }
+                *dependencies = normalized.into_boxed_slice();
+            }
+
             let state = if tasks.is_empty() {
                 ScopeNativeTasks::Empty
             } else {
@@ -350,6 +398,26 @@ pub enum NativeTaskError {
     UnknownScope { identity: String },
     #[error("scope {scope} contributed duplicate native task {task}")]
     DuplicateTask { scope: String, task: String },
+    #[error("aggregate native task {scope}#{task} has qualified child {dependency}")]
+    QualifiedAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
+    #[error("aggregate native task {scope}#{task} cannot depend on itself")]
+    SelfAggregateChild { scope: String, task: String },
+    #[error("aggregate native task {scope}#{task} has unknown child {dependency}")]
+    UnknownAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
+    #[error("aggregate native task {scope}#{task} has non-participating child {dependency}")]
+    NonParticipatingAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
 }
 
 /// Convert package.json scripts into native-task observations.
@@ -597,6 +665,103 @@ mod tests {
         let observation = observation_from_scripts("other", &BTreeMap::new());
         let error = NativeTaskKnowledge::build(&repository, vec![observation]).unwrap_err();
         assert!(matches!(error, NativeTaskError::UnknownScope { .. }));
+    }
+
+    fn test_command(name: &str) -> NativeTask {
+        NativeTask::command_task(
+            name,
+            format!("tool {name}"),
+            NativeCommandProgram::Tool("tool".into()),
+            NativeCommandArguments::new(vec![name.to_string()]),
+            None,
+            WorkingDirectoryPolicy::RepositoryRoot,
+        )
+    }
+
+    fn test_observation(tasks: Vec<NativeTask>) -> NativeTaskObservation {
+        NativeTaskObservation {
+            scope: "web".into(),
+            tasks,
+            task_contract: crate::task_contracts::ScopeTaskContract::javascript(),
+        }
+    }
+
+    #[test]
+    fn catalog_rejects_invalid_aggregate_children() {
+        let repository = repository();
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["other#check"]),
+                test_command("check"),
+            ])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::QualifiedAggregateChild { .. }
+        ));
+
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![NativeTask::aggregate(
+                "all",
+                ["all"],
+            )])],
+        )
+        .unwrap_err();
+        assert!(matches!(error, NativeTaskError::SelfAggregateChild { .. }));
+
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![NativeTask::aggregate(
+                "all",
+                ["missing"],
+            )])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::UnknownAggregateChild { .. }
+        ));
+
+        let empty = observation_from_scripts(
+            "web",
+            &BTreeMap::from([("empty".into(), Spanned::new(String::new()))]),
+        )
+        .tasks
+        .pop()
+        .unwrap();
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["empty"]),
+                empty,
+            ])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::NonParticipatingAggregateChild { .. }
+        ));
+    }
+
+    #[test]
+    fn catalog_deduplicates_aggregate_children_in_observation_order() {
+        let knowledge = NativeTaskKnowledge::build(
+            &repository(),
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["check", "lint", "check"]),
+                test_command("check"),
+                test_command("lint"),
+            ])],
+        )
+        .unwrap();
+
+        assert_eq!(
+            knowledge.for_scope("web").get("all").unwrap().execution(),
+            &NativeTaskExecution::Aggregate(vec!["check".into(), "lint".into()].into_boxed_slice())
+        );
     }
 
     #[test]

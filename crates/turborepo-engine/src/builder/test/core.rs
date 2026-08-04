@@ -56,6 +56,22 @@ fn aggregate_engine(
     aggregate_config: Option<serde_json::Value>,
     pass_through_args: Vec<String>,
 ) -> Result<Engine<Built, TaskDefinition>, BuilderError> {
+    aggregate_engine_for_task(
+        repo_root,
+        root_config,
+        aggregate_config,
+        pass_through_args,
+        "all",
+    )
+}
+
+fn aggregate_engine_for_task(
+    repo_root: &AbsoluteSystemPathBuf,
+    root_config: serde_json::Value,
+    aggregate_config: Option<serde_json::Value>,
+    pass_through_args: Vec<String>,
+    task: &str,
+) -> Result<Engine<Built, TaskDefinition>, BuilderError> {
     let package_graph = mock_aggregate_package_graph(repo_root);
     let flags = FutureFlags {
         experimental_task_command: true,
@@ -75,9 +91,9 @@ fn aggregate_engine(
         &TestTurboJsonLoader::new(configs),
         false,
     )
-    .with_tasks(Some(Spanned::new(TaskName::from("all"))))
+    .with_tasks(Some(Spanned::new(TaskName::from(task).into_owned())))
     .with_workspaces(vec![PackageName::from("cargo-workspace")])
-    .with_task_io_context(pass_through_args, vec!["all".to_string()], HashMap::new())
+    .with_task_io_context(pass_through_args, vec![task.to_string()], HashMap::new())
     .with_future_flags(flags)
     .build()
 }
@@ -100,6 +116,29 @@ fn native_aggregate_composes_same_scope_dependencies_and_deduplicates() {
             "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
             "cargo-workspace#check" => ["___ROOT___"],
             "cargo-workspace#lint" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_dedupe_uses_effective_same_scope_task_id() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "all": { "dependsOn": ["other-workspace#check"] } } }),
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint", "other-workspace#check"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"],
+            "other-workspace#check" => ["___ROOT___"]
         }
     );
 }
@@ -192,6 +231,49 @@ fn extends_false_preserves_native_aggregate_opt_out() {
 }
 
 #[test]
+fn qualified_extends_false_suppresses_and_scoped_config_readds_native_aggregate() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let suppressed = aggregate_engine_for_task(
+        &repo_root,
+        json!({ "tasks": {} }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": { "all": { "extends": false } }
+        })),
+        Vec::new(),
+        "cargo-workspace#all",
+    )
+    .unwrap();
+    assert!(all_dependencies(&suppressed).is_empty());
+
+    let readded = aggregate_engine_for_task(
+        &repo_root,
+        json!({ "tasks": {} }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": {
+                "all": {
+                    "extends": false,
+                    "dependsOn": ["check"]
+                }
+            }
+        })),
+        Vec::new(),
+        "cargo-workspace#all",
+    )
+    .unwrap();
+    assert_eq!(
+        all_dependencies(&readded),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
 fn native_aggregate_rejects_pass_through_arguments_with_qualified_guidance() {
     let repo = TempDir::new().unwrap();
     let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
@@ -204,7 +286,9 @@ fn native_aggregate_rejects_pass_through_arguments_with_qualified_guidance() {
     .unwrap_err();
 
     assert!(matches!(error, BuilderError::AggregatePassThrough { .. }));
-    assert!(error.to_string().contains("cargo-workspace#<task>"));
+    let message = error.to_string();
+    assert!(message.contains("cargo-workspace#check"));
+    assert!(message.contains("cargo-workspace#lint"));
 }
 
 #[test]

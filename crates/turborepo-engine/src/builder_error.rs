@@ -63,10 +63,12 @@ pub enum Error {
     MissingTurboJsonLoader,
     #[error(
         "Cannot pass arguments to aggregate task `{task_id}` because it does not run a process. \
-         Run a qualified dependency task instead, for example `turbo run {package}#<task> -- \
-         <args>`."
+         Run one of its qualified dependency tasks instead: {alternatives}."
     )]
-    AggregatePassThrough { task_id: String, package: String },
+    AggregatePassThrough {
+        task_id: String,
+        alternatives: String,
+    },
 }
 
 impl From<ValidateError> for Error {
