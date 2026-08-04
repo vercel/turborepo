@@ -65,10 +65,10 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
         )
     };
 
-    // `eprintln!` panics if stderr is unwritable, and a panic in a panic hook aborts.
-    let _ = std::io::stderr().write_all(
-        format!("Oops! Turbo has crashed.\n\n{report_message}\n").as_bytes(),
-    );
+    // `eprintln!` panics if stderr is unwritable, and a panic in a panic hook
+    // aborts.
+    let _ = std::io::stderr()
+        .write_all(format!("Oops! Turbo has crashed.\n\n{report_message}\n").as_bytes());
 }
 
 #[cfg(test)]
