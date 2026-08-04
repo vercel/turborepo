@@ -898,8 +898,7 @@ mod tests {
             Some(&PackageManager::Npm),
             which::which("npm").ok().as_deref(),
             None,
-            None,
-            None,
+            Some(&["--watch".to_string()]),
             None,
         )
         .unwrap()
@@ -909,8 +908,8 @@ mod tests {
         assert!(
             command
                 .args
-                .ends_with(&[OsString::from("run"), OsString::from("build")]),
-            "expected `run build` invocation, got {:?}",
+                .ends_with(&["run", "build", "--", "--watch"].map(OsString::from)),
+            "expected package-manager separator and pass-through args, got {:?}",
             command.args
         );
         assert_eq!(

@@ -463,7 +463,10 @@ pub fn native_tasks_for_package(
     details: &CargoPackageDetails,
     package: &str,
 ) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::NativeTask;
+    use crate::native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, PassThroughPlacement,
+        PassThroughSeparator, WorkingDirectoryPolicy,
+    };
 
     registered_tasks(details)
         .into_iter()
@@ -477,14 +480,22 @@ pub fn native_tasks_for_package(
                     format!("--package={package}")
                 }
             };
-            Some(NativeTask::cargo(
+            Some(NativeTask::command_task(
                 task,
                 display,
-                subcommand,
-                scope_arg,
-                subcommand != "fmt",
+                NativeCommandProgram::Tool("cargo".to_string()),
+                NativeCommandArguments {
+                    prefix: vec![subcommand.to_string(), scope_arg],
+                    pass_through_placement: PassThroughPlacement::AfterSuffix,
+                    pass_through_separator: pass_through_uses_separator(subcommand)
+                        .then(|| PassThroughSeparator::Fixed("--".to_string())),
+                    suffix: (subcommand != "fmt")
+                        .then(|| "--locked".to_string())
+                        .into_iter()
+                        .collect(),
+                },
                 (!matches!(subcommand, "run" | "fmt")).then(|| "cargo".to_string()),
-                pass_through_uses_separator(subcommand),
+                WorkingDirectoryPolicy::RepositoryRoot,
             ))
         })
         .collect()
@@ -3862,7 +3873,6 @@ release: 1.96.0-nightly\n",
                 None,
                 None,
                 cargo_binary.as_deref(),
-                None,
                 pass_through_args,
                 override_command,
             )
