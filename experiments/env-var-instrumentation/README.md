@@ -429,6 +429,32 @@ combination-only dependencies need pairwise probing. And like everything in
 this report, it examines the paths that ran — which is exactly why it feeds
 suggestions, never the hash.
 
+### Experiment 10 — day-zero bootstrap: one poisoned build names the list
+
+"Where does the list come from in the first place?" The candidate universe is
+never *all possible names* — it is exactly the finite set of variables in the
+environment turbo was launched from, which turbo already holds. And because
+each sentinel embeds its own variable name (`__TURBO_DOCTOR_API_URL__`), all
+candidates can be poisoned in a **single build** and the value dependencies
+read back out of the outputs by name. `bootstrap.sh` demonstrates the full
+day-zero flow on the fixture (5 candidate vars, empty `env[]`):
+
+```
+STEP 1: baseline build with real values
+STEP 2: ONE build with every candidate poisoned simultaneously
+    -> declare: API_URL      (named by its sentinel in apps/web/dist/out.txt)
+    -> declare: DOCS_TOKEN   (named by its sentinel in apps/docs/out.txt)
+STEP 3: outputs changed beyond value leaks -> bisect the remainder
+    -> declare: MINIFY       (behavioral dependency, isolated in 2 builds)
+RESULT: UNUSED_VAR and CI certified irrelevant to outputs.
+```
+
+Four builds total: baseline + one all-poisoned + two bisection steps. Value
+dependencies (the overwhelmingly common case) cost O(1) extra builds
+regardless of candidate count; only behavioral dependencies need
+O(log n) attribution. Doctor runs must use loose mode so the poison reaches
+the task, and their (poisoned) outputs must never be written to the cache.
+
 ### The product shape
 
 1. **Trust path (unchanged, already shipped):** strict mode constructs the
@@ -464,4 +490,5 @@ experiment above.
 - `execsnoop.c` — LD_PRELOAD process-tree census: exec interposition + self-announce (Experiment 6)
 - `lint-corpus.js` — 12 env-access patterns for testing static analyzers (Experiment 7)
 - `doctor.sh` — sentinel-taint output-dependence prototype (Experiment 9)
+- `bootstrap.sh` — day-zero one-shot list bootstrap via self-identifying sentinels (Experiment 10)
 - `run-matrix.sh` — one-command reproduction of the Experiment 2 matrix
