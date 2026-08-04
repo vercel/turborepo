@@ -220,6 +220,8 @@ struct UvToolTable {
     sources: BTreeMap<String, toml::Value>,
     #[serde(default, rename = "dev-dependencies")]
     dev_dependencies: Vec<String>,
+    #[serde(default, rename = "default-groups")]
+    default_groups: Option<toml::Value>,
     package: Option<bool>,
 }
 
@@ -280,10 +282,7 @@ impl PyProjectManifest {
     }
 
     /// All declared dependency strings, tagged with their semantic role.
-    /// PEP 735 dependency groups can nest `{ include-group = "…" }` tables;
-    /// only the string entries carry package names, and every group is
-    /// walked, so includes add nothing.
-    fn dependencies_with_kind(&self) -> impl Iterator<Item = (&str, DependencyKind)> {
+    fn dependencies_with_kind(&self) -> Vec<(&str, DependencyKind)> {
         let project = self.project.as_ref();
         let dependencies = project
             .map(|project| project.dependencies.as_slice())
@@ -296,19 +295,356 @@ impl PyProjectManifest {
             .flatten()
             .flat_map(|(_, dependencies)| dependencies)
             .map(|dependency| (dependency.as_str(), DependencyKind::Optional));
-        let groups = self
-            .dependency_groups
-            .values()
-            .filter_map(toml::Value::as_array)
-            .flatten()
-            .filter_map(toml::Value::as_str)
+        let mut group_dependencies = Vec::new();
+        for group in self.dependency_groups.keys() {
+            self.walk_dependency_group(group, &mut HashSet::new(), &mut group_dependencies);
+        }
+        let groups = group_dependencies
+            .into_iter()
             .map(|dependency| (dependency, DependencyKind::Development));
         let legacy_dev = self
             .uv()
             .into_iter()
             .flat_map(|uv| &uv.dev_dependencies)
             .map(|dependency| (dependency.as_str(), DependencyKind::Development));
-        dependencies.chain(optional).chain(groups).chain(legacy_dev)
+        dependencies
+            .chain(optional)
+            .chain(groups)
+            .chain(legacy_dev)
+            .collect()
+    }
+
+    fn walk_dependency_group<'a>(
+        &'a self,
+        group: &str,
+        visiting: &mut HashSet<String>,
+        dependencies: &mut Vec<&'a str>,
+    ) {
+        if !visiting.insert(group.to_string()) {
+            return;
+        }
+        if let Some(entries) = self
+            .dependency_groups
+            .get(group)
+            .and_then(toml::Value::as_array)
+        {
+            for entry in entries {
+                if let Some(dependency) = entry.as_str() {
+                    dependencies.push(dependency);
+                } else if let Some(included) = entry
+                    .as_table()
+                    .and_then(|table| table.get("include-group"))
+                    .and_then(toml::Value::as_str)
+                {
+                    self.walk_dependency_group(included, visiting, dependencies);
+                }
+            }
+        }
+        visiting.remove(group);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum PythonTool {
+    Ruff,
+    Black,
+    Mypy,
+    Ty,
+    Pyright,
+}
+
+impl PythonTool {
+    fn from_dependency(dependency: &str) -> Option<Self> {
+        if dependency.contains(';') {
+            return None;
+        }
+        match normalize_name(pep508_name(dependency)?).as_str() {
+            "ruff" => Some(Self::Ruff),
+            "black" => Some(Self::Black),
+            "mypy" => Some(Self::Mypy),
+            "ty" => Some(Self::Ty),
+            "pyright" => Some(Self::Pyright),
+            _ => None,
+        }
+    }
+
+    fn role(self) -> ToolRole {
+        match self {
+            Self::Ruff => ToolRole::Lint,
+            Self::Black => ToolRole::Format,
+            Self::Mypy | Self::Ty | Self::Pyright => ToolRole::Check,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Ruff => "ruff",
+            Self::Black => "black",
+            Self::Mypy => "mypy",
+            Self::Ty => "ty",
+            Self::Pyright => "pyright",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolRole {
+    Lint,
+    Format,
+    Check,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeclarationOwner {
+    Root,
+    Member,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct DependencyGroup {
+    name: String,
+    is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolDeclaration {
+    owner: DeclarationOwner,
+    group: Option<DependencyGroup>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ToolDeclarations(BTreeMap<PythonTool, ToolDeclaration>);
+
+impl ToolDeclarations {
+    fn insert(
+        &mut self,
+        tool: PythonTool,
+        owner: DeclarationOwner,
+        group: Option<DependencyGroup>,
+    ) {
+        match self.0.entry(tool) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(ToolDeclaration { owner, group });
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let rank = |group: &Option<DependencyGroup>| match group {
+                    None => (0, String::new()),
+                    Some(group) if group.is_default => (1, group.name.clone()),
+                    Some(group) => (2, group.name.clone()),
+                };
+                let replace = rank(&group) < rank(&entry.get().group);
+                if replace {
+                    entry.insert(ToolDeclaration { owner, group });
+                }
+            }
+        }
+    }
+
+    fn for_role(&self, role: ToolRole) -> Self {
+        Self(
+            self.0
+                .iter()
+                .filter(|(tool, _)| {
+                    tool.role() == role || **tool == PythonTool::Ruff && role == ToolRole::Format
+                })
+                .map(|(tool, declaration)| (*tool, declaration.clone()))
+                .collect(),
+        )
+    }
+}
+
+impl PyProjectManifest {
+    fn tool_declarations(&self, owner: DeclarationOwner) -> ToolDeclarations {
+        let mut declarations = ToolDeclarations::default();
+        let project_dependencies = self
+            .project
+            .as_ref()
+            .map(|project| project.dependencies.as_slice())
+            .unwrap_or_default();
+        for dependency in project_dependencies {
+            if let Some(tool) = PythonTool::from_dependency(dependency) {
+                declarations.insert(tool, owner, None);
+            }
+        }
+
+        let default_groups = self.default_dependency_groups();
+        for dependency in self.uv().into_iter().flat_map(|uv| &uv.dev_dependencies) {
+            if let Some(tool) = PythonTool::from_dependency(dependency) {
+                declarations.insert(
+                    tool,
+                    owner,
+                    Some(DependencyGroup {
+                        name: "dev".to_string(),
+                        is_default: default_groups.contains("dev"),
+                    }),
+                );
+            }
+        }
+        for group in self.dependency_groups.keys() {
+            let mut dependencies = Vec::new();
+            self.walk_dependency_group(group, &mut HashSet::new(), &mut dependencies);
+            let declaration_group = DependencyGroup {
+                name: group.clone(),
+                is_default: default_groups.contains(group),
+            };
+            for dependency in dependencies {
+                if let Some(tool) = PythonTool::from_dependency(dependency) {
+                    declarations.insert(tool, owner, Some(declaration_group.clone()));
+                }
+            }
+        }
+        declarations
+    }
+
+    fn default_dependency_groups(&self) -> HashSet<String> {
+        let configured = self.uv().and_then(|uv| uv.default_groups.as_ref());
+        match configured {
+            Some(toml::Value::String(value)) if value == "all" => self
+                .dependency_groups
+                .keys()
+                .cloned()
+                .chain(std::iter::once("dev".to_string()))
+                .collect(),
+            Some(toml::Value::Array(values)) => values
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .map(str::to_string)
+                .collect(),
+            _ => HashSet::from(["dev".to_string()]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecutionOwner {
+    Root,
+    Member,
+    AllMembers,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolExecution {
+    owner: ExecutionOwner,
+    group: Option<DependencyGroup>,
+}
+
+impl ToolExecution {
+    fn activation_group(&self) -> Option<&str> {
+        self.group
+            .as_ref()
+            .filter(|group| !group.is_default)
+            .map(|group| group.name.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct QualityPlan {
+    lint: BTreeMap<PythonTool, ToolExecution>,
+    format: BTreeMap<PythonTool, ToolExecution>,
+    check: BTreeMap<PythonTool, ToolExecution>,
+    lint_homogeneous: bool,
+    format_homogeneous: bool,
+    check_homogeneous: bool,
+}
+
+impl QualityPlan {
+    fn effective(root: &ToolDeclarations, member: &ToolDeclarations) -> Self {
+        let role = |role| {
+            let local = member.for_role(role);
+            let declarations = if local.0.is_empty() {
+                root.for_role(role)
+            } else {
+                local
+            };
+            declarations
+                .0
+                .into_iter()
+                .map(|(tool, declaration)| {
+                    let owner = match declaration.owner {
+                        DeclarationOwner::Root => ExecutionOwner::Root,
+                        DeclarationOwner::Member => ExecutionOwner::Member,
+                    };
+                    (
+                        tool,
+                        ToolExecution {
+                            owner,
+                            group: declaration.group,
+                        },
+                    )
+                })
+                .collect()
+        };
+        Self {
+            lint: role(ToolRole::Lint),
+            format: role(ToolRole::Format),
+            check: role(ToolRole::Check),
+            lint_homogeneous: true,
+            format_homogeneous: true,
+            check_homogeneous: true,
+        }
+    }
+
+    fn homogeneous(plans: &[Self]) -> Self {
+        let merge = |select: fn(&Self) -> &BTreeMap<PythonTool, ToolExecution>| {
+            let Some(first) = plans.first().map(select) else {
+                return (false, BTreeMap::new());
+            };
+            if !plans
+                .iter()
+                .all(|plan| select(plan).keys().eq(first.keys()))
+            {
+                return (false, BTreeMap::new());
+            }
+            let mut tools = BTreeMap::new();
+            for (tool, execution) in first {
+                let executions: Vec<&ToolExecution> =
+                    plans.iter().map(|plan| &select(plan)[tool]).collect();
+                let owner = if executions.iter().all(|candidate| {
+                    candidate.owner == ExecutionOwner::Root
+                        && candidate.activation_group() == execution.activation_group()
+                }) {
+                    ExecutionOwner::Root
+                } else if executions.iter().all(|candidate| {
+                    candidate.owner == ExecutionOwner::Member
+                        && candidate.activation_group() == execution.activation_group()
+                }) {
+                    ExecutionOwner::AllMembers
+                } else {
+                    return (false, BTreeMap::new());
+                };
+                tools.insert(
+                    *tool,
+                    ToolExecution {
+                        owner,
+                        group: execution
+                            .group
+                            .as_ref()
+                            .filter(|group| !group.is_default)
+                            .cloned(),
+                    },
+                );
+            }
+            (true, tools)
+        };
+        let (lint_homogeneous, lint) = merge(|plan| &plan.lint);
+        let (format_homogeneous, format) = merge(|plan| &plan.format);
+        let (check_homogeneous, check) = merge(|plan| &plan.check);
+        Self {
+            lint,
+            format,
+            check,
+            lint_homogeneous,
+            format_homogeneous,
+            check_homogeneous,
+        }
+    }
+
+    fn uses_root_tools(&self) -> bool {
+        self.lint
+            .values()
+            .chain(self.format.values())
+            .chain(self.check.values())
+            .any(|execution| execution.owner == ExecutionOwner::Root)
     }
 }
 
@@ -385,6 +721,7 @@ pub struct UvPackage {
     pub relationships: Vec<Relationship>,
     /// Whether uv can build this member as a Python distribution.
     pub buildable: bool,
+    quality_plan: QualityPlan,
 }
 
 /// The result of uv workspace discovery: the member packages plus the
@@ -404,6 +741,7 @@ pub struct DiscoveredWorkspace {
     /// be the entire repository), but its uv.lock entry participates in
     /// workspace-scoped hashing and pruning.
     pub root_project_name: Option<String>,
+    quality_plan: QualityPlan,
 }
 
 /// Discover the uv workspace rooted at `repo_root` by parsing
@@ -424,6 +762,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             name: None,
             packages: Vec::new(),
             root_project_name: None,
+            quality_plan: QualityPlan::default(),
         });
     };
     let name = workspace_name(&root_manifest)?;
@@ -436,6 +775,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             name,
             packages: Vec::new(),
             root_project_name: None,
+            quality_plan: QualityPlan::default(),
         });
     };
 
@@ -494,6 +834,12 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         .filter(|name| !name.is_empty());
     let member_names: HashSet<String> = parsed.iter().map(|(name, _, _)| name.clone()).collect();
     let packages = connect_packages(parsed, &member_names, &root_manifest);
+    let quality_plan = QualityPlan::homogeneous(
+        &packages
+            .iter()
+            .map(|package| package.quality_plan.clone())
+            .collect::<Vec<_>>(),
+    );
 
     if let Some(name) = &name {
         let collision = packages
@@ -521,6 +867,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         name,
         packages,
         root_project_name,
+        quality_plan,
     })
 }
 
@@ -600,6 +947,7 @@ fn connect_packages(
     member_names: &HashSet<String>,
     root_manifest: &PyProjectManifest,
 ) -> Vec<UvPackage> {
+    let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let mut graph = petgraph::Graph::<(), ()>::new();
     let node_indices: HashMap<&str, petgraph::graph::NodeIndex> = parsed
         .iter()
@@ -678,6 +1026,10 @@ fn connect_packages(
                 .sort_by(|left, right| left.declaration_name().cmp(right.declaration_name()));
             package_relationships.dedup();
             UvPackage {
+                quality_plan: QualityPlan::effective(
+                    &root_tools,
+                    &manifest.tool_declarations(DeclarationOwner::Member),
+                ),
                 name,
                 manifest_path,
                 relationships: package_relationships,
@@ -704,170 +1056,252 @@ pub enum UvPackageKind {
     Workspace,
 }
 
-const PACKAGE_TASKS: &[(&str, &str)] =
-    &[("build", "build"), ("format", "format"), ("check", "check")];
-const QUALITY_TASKS: &[(&str, &str)] = &[("format", "format"), ("check", "check")];
-
-/// The uv subcommand a task resolves to for a package, given its
-/// [`UvPackageKind`]. `None` means the task is a no-op for this package
-/// (like a missing package.json script).
-pub fn task_subcommand(kind: UvPackageKind, task: &str) -> Option<&'static str> {
-    let tasks = match kind {
-        UvPackageKind::Package => PACKAGE_TASKS,
-        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
-    };
-    tasks
-        .iter()
-        .find_map(|(name, subcommand)| (*name == task).then_some(*subcommand))
-}
-
-fn registered_tasks(kind: UvPackageKind) -> impl Iterator<Item = &'static str> {
-    match kind {
-        UvPackageKind::Package => PACKAGE_TASKS,
-        UvPackageKind::VirtualPackage | UvPackageKind::Workspace => QUALITY_TASKS,
-    }
-    .iter()
-    .map(|(task, _)| *task)
-}
-
-/// The fixed arguments the subcommand takes for this package, derived from
-/// the same tables as registration so display and execution cannot drift.
-fn task_arguments(
+fn uv_command_task(
     kind: UvPackageKind,
-    task: &str,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
-) -> Vec<String> {
-    match (kind, task) {
-        (UvPackageKind::Package, "build") => vec![format!("--package={package}")],
-        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "format") => {
-            vec!["--".to_string(), package_directory.to_string()]
-        }
-        (UvPackageKind::Package | UvPackageKind::VirtualPackage, "check") => {
-            vec![format!("--package={package}")]
-        }
-        (UvPackageKind::Workspace, "format") => std::iter::once("--".to_string())
-            .chain(workspace_directories.iter().cloned())
-            .collect(),
-        (UvPackageKind::Workspace, "check") => vec!["--all-packages".to_string()],
-        (UvPackageKind::Workspace, _) => Vec::new(),
-        _ => Vec::new(),
-    }
-}
-
-/// The display string for a uv task's command.
-pub fn display_command(
-    kind: UvPackageKind,
-    task: &str,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
-) -> Option<String> {
-    let subcommand = task_subcommand(kind, task)?;
-    let mut display = format!("uv {subcommand}");
-    for argument in task_arguments(
-        kind,
-        task,
-        package,
-        package_directory,
-        workspace_directories,
-    ) {
-        display.push(' ');
-        display.push_str(&argument);
-    }
-    Some(display)
-}
-
-/// Build native-task facts for a Python package from its verb tables.
-pub fn native_tasks_for_package(
-    kind: UvPackageKind,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
-) -> Vec<crate::native_tasks::NativeTask> {
+    name: &str,
+    prefix: Vec<String>,
+    suffix: Vec<String>,
+) -> crate::native_tasks::NativeTask {
     use crate::native_tasks::{
         NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
-        WorkingDirectoryPolicy,
+        PassThroughPlacement, WorkingDirectoryPolicy,
     };
-
-    let mut tasks: Vec<_> = registered_tasks(kind)
-        .filter_map(|task| {
-            let subcommand = task_subcommand(kind, task)?;
-            let display = display_command(
-                kind,
-                task,
-                package,
-                package_directory,
-                workspace_directories,
-            )?;
-            Some(
-                NativeTask::command_task(
-                    task,
-                    display,
-                    NativeCommandProgram::Tool("uv".to_string()),
-                    NativeCommandArguments::new(
-                        std::iter::once(subcommand.to_string())
-                            .chain(task_arguments(
-                                kind,
-                                task,
-                                package,
-                                package_directory,
-                                workspace_directories,
-                            ))
-                            .collect(),
-                    ),
-                    (task == "check").then(|| "uv".to_string()),
-                    WorkingDirectoryPolicy::RepositoryRoot,
-                )
-                .with_contract(NativeTaskContract::new(
-                    uv_task_defaults(kind, task),
-                    uv_task_entrypoint(kind, task),
-                    true,
-                )),
-            )
-        })
-        .collect();
-    if !tasks.iter().any(|task| task.name() == "build") {
-        tasks.push(NativeTask::contract_task(
-            "build",
-            NativeTaskContract::new(
-                uv_task_defaults(kind, "build"),
-                uv_task_entrypoint(kind, "build"),
-                false,
-            ),
-        ));
-    }
-    tasks
+    let display = std::iter::once("uv".to_string())
+        .chain(prefix.iter().cloned())
+        .chain(suffix.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    NativeTask::command_task(
+        name,
+        display,
+        NativeCommandProgram::Tool("uv".to_string()),
+        NativeCommandArguments {
+            prefix,
+            pass_through_placement: PassThroughPlacement::BeforeSuffix,
+            pass_through_separator: None,
+            suffix,
+        },
+        Some("uv".to_string()),
+        WorkingDirectoryPolicy::RepositoryRoot,
+    )
+    .with_contract(NativeTaskContract::new(
+        toolchain::TaskDefaults { cache: Some(false) },
+        Some(uv_task_entrypoint(kind)),
+        true,
+    ))
 }
 
-fn uv_task_defaults(kind: UvPackageKind, task: &str) -> toolchain::TaskDefaults {
-    // Tool versions are not yet part of the task fingerprint.
-    toolchain::TaskDefaults {
-        cache: task_subcommand(kind, task).map(|_| false),
-    }
-}
-
-fn uv_task_entrypoint(
-    kind: UvPackageKind,
-    task: &str,
-) -> Option<crate::native_tasks::TaskEntrypoint> {
+fn uv_task_entrypoint(kind: UvPackageKind) -> crate::native_tasks::TaskEntrypoint {
     use crate::native_tasks::TaskEntrypoint;
 
-    if task_subcommand(kind, task).is_some() {
-        return Some(match kind {
-            UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
-            UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
-        });
+    match kind {
+        UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
     }
-    matches!(
-        (kind, task),
-        (
-            UvPackageKind::Workspace | UvPackageKind::VirtualPackage,
-            "build"
-        )
-    )
-    .then_some(TaskEntrypoint::Excluded)
+}
+
+fn aggregate_task(
+    kind: UvPackageKind,
+    name: &str,
+    children: Vec<String>,
+) -> crate::native_tasks::NativeTask {
+    use crate::native_tasks::{NativeTask, NativeTaskContract};
+
+    NativeTask::aggregate(name, children).with_contract(NativeTaskContract::new(
+        toolchain::TaskDefaults::default(),
+        Some(uv_task_entrypoint(kind)),
+        false,
+    ))
+}
+
+fn declared_tool_task(
+    kind: UvPackageKind,
+    task: &str,
+    tool: PythonTool,
+    execution: &ToolExecution,
+    package: &str,
+    targets: &[String],
+) -> crate::native_tasks::NativeTask {
+    let mut prefix = vec!["run".to_string(), "--frozen".to_string()];
+    match execution.owner {
+        ExecutionOwner::Root => {}
+        ExecutionOwner::Member => {
+            prefix.extend(["--package".to_string(), package.to_string()]);
+        }
+        ExecutionOwner::AllMembers => prefix.push("--all-packages".to_string()),
+    }
+    if let Some(group) = &execution.group
+        && !group.is_default
+    {
+        prefix.extend([
+            "--no-default-groups".to_string(),
+            "--group".to_string(),
+            group.name.clone(),
+        ]);
+    }
+    prefix.push(tool.name().to_string());
+    if tool == PythonTool::Ruff {
+        prefix.push(
+            if task.starts_with("lint") {
+                "check"
+            } else {
+                "format"
+            }
+            .to_string(),
+        );
+    } else if tool == PythonTool::Ty {
+        prefix.push("check".to_string());
+    }
+    uv_command_task(kind, task, prefix, targets.to_vec())
+}
+
+fn warn_formatter_precedence(scope: &str, formatters: &[PythonTool], selected: PythonTool) {
+    if formatters.len() < 2 {
+        return;
+    }
+    let detected = formatters
+        .iter()
+        .map(|tool| tool.name())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let alternatives = formatters
+        .iter()
+        .map(|tool| format!("format:{}", tool.name()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    tracing::warn!(
+        "Python scope {scope:?} declares multiple formatters ({detected}); selected {} because \
+         the formatter precedence is Ruff before Black. Run a qualified task to choose \
+         explicitly: {alternatives}.",
+        selected.name()
+    );
+}
+
+fn native_tasks_for_package(
+    kind: UvPackageKind,
+    package: &str,
+    package_directory: &str,
+    workspace_directories: &[String],
+    plan: &QualityPlan,
+    emit_formatter_warning: bool,
+) -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::NativeTask;
+
+    let targets = match kind {
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+            vec![package_directory.to_string()]
+        }
+        UvPackageKind::Workspace => workspace_directories.to_vec(),
+    };
+    let mut tasks = Vec::new();
+    if kind == UvPackageKind::Package {
+        tasks.push(uv_command_task(
+            kind,
+            "build",
+            vec!["build".to_string(), format!("--package={package}")],
+            Vec::new(),
+        ));
+    }
+
+    if plan.lint_homogeneous {
+        let children: Vec<String> = plan
+            .lint
+            .iter()
+            .map(|(tool, execution)| {
+                let name = format!("lint:{}", tool.name());
+                tasks.push(declared_tool_task(
+                    kind, &name, *tool, execution, package, &targets,
+                ));
+                name
+            })
+            .collect();
+        if !children.is_empty() {
+            tasks.push(aggregate_task(kind, "lint", children));
+        }
+    }
+
+    if plan.format_homogeneous {
+        let formatters: Vec<PythonTool> = plan.format.keys().copied().collect();
+        for (tool, execution) in &plan.format {
+            let name = format!("format:{}", tool.name());
+            tasks.push(declared_tool_task(
+                kind, &name, *tool, execution, package, &targets,
+            ));
+        }
+        if let Some(selected) = [PythonTool::Ruff, PythonTool::Black]
+            .into_iter()
+            .find(|tool| plan.format.contains_key(tool))
+        {
+            if emit_formatter_warning {
+                warn_formatter_precedence(package, &formatters, selected);
+            }
+            tasks.push(declared_tool_task(
+                kind,
+                "format",
+                selected,
+                &plan.format[&selected],
+                package,
+                &targets,
+            ));
+        } else {
+            let mut prefix = vec!["format".to_string(), "--".to_string()];
+            prefix.extend(targets.iter().cloned());
+            tasks.push(uv_command_task(kind, "format", prefix, Vec::new()));
+        }
+    }
+
+    if plan.check_homogeneous {
+        let children: Vec<String> = plan
+            .check
+            .iter()
+            .map(|(tool, execution)| {
+                let name = format!("check:{}", tool.name());
+                tasks.push(declared_tool_task(
+                    kind, &name, *tool, execution, package, &targets,
+                ));
+                name
+            })
+            .collect();
+        if children.is_empty() {
+            let args = match kind {
+                UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+                    vec!["check".to_string(), format!("--package={package}")]
+                }
+                UvPackageKind::Workspace => {
+                    vec!["check".to_string(), "--all-packages".to_string()]
+                }
+            };
+            tasks.push(uv_command_task(kind, "check", args, Vec::new()));
+        } else {
+            tasks.push(aggregate_task(kind, "check", children));
+        }
+    }
+
+    const CLASSIFIED_TASKS: &[&str] = &[
+        "build",
+        "lint",
+        "lint:ruff",
+        "format",
+        "format:ruff",
+        "format:black",
+        "check",
+        "check:mypy",
+        "check:ty",
+        "check:pyright",
+    ];
+    for name in CLASSIFIED_TASKS {
+        if !tasks.iter().any(|task| task.name() == *name) {
+            tasks.push(NativeTask::contract_task(
+                *name,
+                crate::native_tasks::NativeTaskContract::new(
+                    toolchain::TaskDefaults::default(),
+                    Some(crate::native_tasks::TaskEntrypoint::Excluded),
+                    false,
+                ),
+            ));
+        }
+    }
+    tasks
 }
 
 // ---------------------------------------------------------------------------
@@ -984,10 +1418,21 @@ fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) ->
 /// transitive closure (see [`external_closures`]), so a dependency bump
 /// only invalidates the packages that actually depend on it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
-    [PYPROJECT_TOML, "uv.toml", ".python-version"]
-        .iter()
-        .map(|rel| join_prefix(prefix, rel))
-        .collect()
+    [
+        PYPROJECT_TOML,
+        "uv.toml",
+        ".python-version",
+        "ruff.toml",
+        ".ruff.toml",
+        "mypy.ini",
+        ".mypy.ini",
+        "pyrightconfig.json",
+        "setup.cfg",
+        "ty.toml",
+    ]
+    .iter()
+    .map(|rel| join_prefix(prefix, rel))
+    .collect()
 }
 
 fn join_prefix(prefix: &str, rel: &str) -> String {
@@ -1051,12 +1496,21 @@ impl UvTaskContract {
         wants_automatic_inputs: bool,
         context: &toolchain::TaskIOContext<'_>,
     ) -> Option<toolchain::DerivedTaskIO> {
-        let subcommand = task_subcommand(self.kind, task)?;
         let mut io = toolchain::DerivedTaskIO {
             input_globs: hash_input_globs(path_to_root),
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
+        for cache in [
+            ".venv/**",
+            ".ruff_cache/**",
+            ".mypy_cache/**",
+            ".pyright/**",
+            ".ty/**",
+            "**/__pycache__/**",
+        ] {
+            io.input_globs.push(format!("!{cache}"));
+        }
         // These variables point at files whose contents affect uv. Until the
         // paths can be resolved against the repository safely, fail closed
         // instead of restoring an artifact hashed only by the path string.
@@ -1067,7 +1521,7 @@ impl UvTaskContract {
             UvPackageKind::Package | UvPackageKind::VirtualPackage => {
                 if wants_automatic_inputs {
                     io.package_default_inputs = Some(true);
-                    if task == "check" {
+                    if task == "check" || task.starts_with("check:") {
                         let mut globs: Vec<String> = dependencies
                             .iter()
                             .filter(|dependency| {
@@ -1079,7 +1533,16 @@ impl UvTaskContract {
                                     path_to_root,
                                     dependency.directory().to_unix().as_str(),
                                 );
-                                [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                                [
+                                    format!("{directory}/**"),
+                                    format!("!{directory}/.turbo/**"),
+                                    format!("!{directory}/.venv/**"),
+                                    format!("!{directory}/.ruff_cache/**"),
+                                    format!("!{directory}/.mypy_cache/**"),
+                                    format!("!{directory}/.pyright/**"),
+                                    format!("!{directory}/.ty/**"),
+                                    format!("!{directory}/**/__pycache__/**"),
+                                ]
                             })
                             .collect();
                         globs.sort();
@@ -1087,7 +1550,7 @@ impl UvTaskContract {
                         io.input_globs.extend(globs);
                     }
                 }
-                if subcommand == "build" {
+                if task == "build" {
                     // `uv build` writes `<dist_name>-<version>*` sdists and
                     // wheels into the workspace root's dist directory. Extra
                     // task args can relocate the output (`--out-dir`), so
@@ -1112,7 +1575,16 @@ impl UvTaskContract {
                         .iter()
                         .flat_map(|directory| {
                             let directory = join_prefix(path_to_root, directory);
-                            [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                            [
+                                format!("{directory}/**"),
+                                format!("!{directory}/.turbo/**"),
+                                format!("!{directory}/.venv/**"),
+                                format!("!{directory}/.ruff_cache/**"),
+                                format!("!{directory}/.mypy_cache/**"),
+                                format!("!{directory}/.pyright/**"),
+                                format!("!{directory}/.ty/**"),
+                                format!("!{directory}/**/__pycache__/**"),
+                            ]
                         })
                         .collect();
                     globs.sort();
@@ -1337,12 +1809,29 @@ impl PruneDomain for UvPruneKnowledge {
     }
 }
 
-fn uv_change_observation() -> ChangeObservation {
-    ChangeObservation::new()
+fn uv_change_observation(package_directories: &[String]) -> ChangeObservation {
+    let mut observation = ChangeObservation::new()
         .with_rediscovery_file_name(PYPROJECT_TOML)
         .with_resolution_path(UV_LOCK)
         .with_ignore_prefix(".venv")
-        .with_ignore_prefix("dist")
+        .with_ignore_prefix("dist");
+    for directory in std::iter::once("".to_string()).chain(package_directories.iter().cloned()) {
+        for cache in [
+            ".ruff_cache",
+            ".mypy_cache",
+            ".pyright",
+            ".ty",
+            "__pycache__",
+        ] {
+            let path = if directory.is_empty() {
+                cache.to_string()
+            } else {
+                format!("{directory}/{cache}")
+            };
+            observation = observation.with_ignore_prefix(path);
+        }
+    }
+    observation
 }
 
 // ---------------------------------------------------------------------------
@@ -1395,7 +1884,6 @@ impl RepositoryContributor for UvContributor {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
-            let change_observation = uv_change_observation();
             let lockfile = read_lockfile(&self.repo_root)
                 .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
             let mut package_directories: HashMap<String, String> = packages
@@ -1418,6 +1906,7 @@ impl RepositoryContributor for UvContributor {
                 .collect();
             workspace_directories.sort();
             workspace_directories.dedup();
+            let change_observation = uv_change_observation(&workspace_directories);
             let prune_domain = UvPruneKnowledge::discover(
                 &self.repo_root,
                 package_directories.clone(),
@@ -1465,10 +1954,22 @@ impl RepositoryContributor for UvContributor {
                 let package_directory = package_directories
                     .get(&package.name)
                     .map_or(".", String::as_str);
-                let native_tasks =
-                    native_tasks_for_package(kind, &package.name, package_directory, &[]);
+                let native_tasks = native_tasks_for_package(
+                    kind,
+                    &package.name,
+                    package_directory,
+                    &[],
+                    &package.quality_plan,
+                    !workspace.quality_plan.format_homogeneous,
+                );
                 let task_contract = UvTaskContract::new(kind, &package.name);
-                let external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                if package.quality_plan.uses_root_tools() {
+                    // Root-owned tools execute in the root environment. Include the
+                    // workspace closure conservatively so their locked identities
+                    // participate in member task hashes without rewriting uv.lock.
+                    external_dependencies.extend(workspace_externals.iter().cloned());
+                }
                 resolutions.push(package_resolution(
                     package.name.clone(),
                     &external_dependencies,
@@ -1497,6 +1998,8 @@ impl RepositoryContributor for UvContributor {
                 &workspace_name,
                 ".",
                 &workspace_directories,
+                &workspace.quality_plan,
+                true,
             );
             let workspace_task_contract =
                 UvTaskContract::workspace(&workspace_name, workspace_directories);
@@ -1549,7 +2052,10 @@ impl RepositoryContributor for UvContributor {
 
 #[cfg(test)]
 mod test {
+    use std::ffi::OsString;
+
     use super::*;
+    use crate::package_graph::{PackageName, PackageTaskContext, PackageTaskContextKind};
 
     #[test]
     fn test_normalize_name() {
@@ -1996,77 +2502,38 @@ overridden = { index = "private" }
     }
 
     #[test]
-    fn test_task_tables() {
-        assert_eq!(
-            task_subcommand(UvPackageKind::Package, "build"),
-            Some("build")
+    fn test_fallback_tasks() {
+        let tasks = native_tasks_for_package(
+            UvPackageKind::Package,
+            "py-app",
+            "packages/py-app",
+            &[],
+            &QualityPlan::effective(&ToolDeclarations::default(), &ToolDeclarations::default()),
+            true,
         );
         assert_eq!(
-            task_subcommand(UvPackageKind::Package, "format"),
-            Some("format")
-        );
-        assert_eq!(task_subcommand(UvPackageKind::Package, "lock"), None);
-        assert_eq!(task_subcommand(UvPackageKind::Package, "test"), None);
-        assert_eq!(
-            task_subcommand(UvPackageKind::VirtualPackage, "format"),
-            Some("format")
-        );
-        assert_eq!(
-            task_subcommand(UvPackageKind::VirtualPackage, "build"),
-            None
-        );
-        assert_eq!(
-            task_subcommand(UvPackageKind::Workspace, "check"),
-            Some("check")
-        );
-        assert_eq!(task_subcommand(UvPackageKind::Workspace, "lock"), None);
-        assert_eq!(task_subcommand(UvPackageKind::Workspace, "build"), None);
-
-        assert_eq!(
-            display_command(
-                UvPackageKind::Package,
-                "build",
-                "py-app",
-                "packages/py-app",
-                &[]
-            )
-            .as_deref(),
+            tasks
+                .iter()
+                .find(|task| task.name() == "build")
+                .unwrap()
+                .display(),
             Some("uv build --package=py-app")
         );
         assert_eq!(
-            display_command(
-                UvPackageKind::Package,
-                "format",
-                "py-app",
-                "packages/py-app",
-                &[]
-            )
-            .as_deref(),
+            tasks
+                .iter()
+                .find(|task| task.name() == "format")
+                .unwrap()
+                .display(),
             Some("uv format -- packages/py-app")
         );
         assert_eq!(
-            display_command(
-                UvPackageKind::Workspace,
-                "format",
-                "acme",
-                ".",
-                &["packages/py-app".to_string(), "packages/py-lib".to_string()]
-            )
-            .as_deref(),
-            Some("uv format -- packages/py-app packages/py-lib")
-        );
-        assert_eq!(
-            display_command(UvPackageKind::Workspace, "check", "acme", ".", &[]).as_deref(),
-            Some("uv check --all-packages")
-        );
-
-        let tasks =
-            native_tasks_for_package(UvPackageKind::Package, "py-app", "packages/py-app", &[]);
-        assert_eq!(tasks.len(), 3);
-        assert!(
             tasks
                 .iter()
-                .all(|task| task.registered() && task.executes())
+                .find(|task| task.name() == "check")
+                .unwrap()
+                .display(),
+            Some("uv check --package=py-app")
         );
         let build = tasks.iter().find(|task| task.name() == "build").unwrap();
         assert_eq!(build.contract().defaults().cache, Some(false));
@@ -2081,6 +2548,8 @@ overridden = { index = "private" }
             "py-app",
             "packages/py-app",
             &[],
+            &QualityPlan::effective(&ToolDeclarations::default(), &ToolDeclarations::default()),
+            true,
         );
         let build = virtual_tasks
             .iter()
@@ -2092,12 +2561,401 @@ overridden = { index = "private" }
             Some(crate::native_tasks::TaskEntrypoint::Excluded)
         );
         assert!(!build.contract().derives_io());
+        let lint = tasks.iter().find(|task| task.name() == "lint").unwrap();
+        assert!(!lint.participates());
+        assert_eq!(
+            lint.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Excluded)
+        );
+        assert!(!lint.contract().derives_io());
+    }
+
+    #[test]
+    fn test_tool_declarations_sources_groups_and_cycles() {
+        let manifest: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+name = "app"
+dependencies = ["RuFf>=0.1"]
+
+[dependency-groups]
+dev = [{ include-group = "quality" }, { include-group = "cycle" }]
+quality = ["MyPy", "pyright"]
+cycle = [{ include-group = "dev" }]
+custom = ["ty"]
+
+[tool.uv]
+dev-dependencies = ["black"]
+"#,
+        )
+        .unwrap();
+        let declarations = manifest.tool_declarations(DeclarationOwner::Member);
+        assert_eq!(declarations.0[&PythonTool::Ruff].group, None);
+        let legacy = &declarations.0[&PythonTool::Black];
+        assert_eq!(legacy.owner, DeclarationOwner::Member);
+        assert_eq!(legacy.group.as_ref().unwrap().name, "dev");
+        assert!(legacy.group.as_ref().unwrap().is_default);
+        for tool in [PythonTool::Mypy, PythonTool::Pyright] {
+            let group = declarations.0[&tool].group.as_ref().unwrap();
+            assert_eq!(group.name, "dev");
+            assert!(group.is_default);
+        }
+        let custom = declarations.0[&PythonTool::Ty].group.as_ref().unwrap();
+        assert_eq!(custom.name, "custom");
+        assert!(!custom.is_default);
+    }
+
+    #[test]
+    fn test_optional_only_declaration_is_excluded() {
+        let manifest: PyProjectManifest = toml::from_str(
+            "[project]\nname='app'\n[project.optional-dependencies]\nquality=['black']\n",
+        )
+        .unwrap();
+        assert!(
+            manifest
+                .tool_declarations(DeclarationOwner::Member)
+                .0
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_marker_only_declaration_is_excluded() {
+        let manifest: PyProjectManifest = toml::from_str(
+            "[project]\nname='app'\ndependencies=[\"mypy; python_version > '3.10'\"]\n",
+        )
+        .unwrap();
+        assert!(
+            manifest
+                .tool_declarations(DeclarationOwner::Member)
+                .0
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_member_role_override_and_exact_declared_commands() {
+        let root: PyProjectManifest =
+            toml::from_str("[project]\nname='root'\ndependencies=['ruff', 'mypy', 'ty']\n")
+                .unwrap();
+        let member: PyProjectManifest = toml::from_str(
+            "[project]\nname='app'\ndependencies=['black']\n[dependency-groups]\ntypes=['pyright'\
+             ]\n",
+        )
+        .unwrap();
+        let plan = QualityPlan::effective(
+            &root.tool_declarations(DeclarationOwner::Root),
+            &member.tool_declarations(DeclarationOwner::Member),
+        );
+        assert_eq!(
+            plan.lint.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Ruff]
+        );
+        assert_eq!(
+            plan.format.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Black]
+        );
+        assert_eq!(
+            plan.check.keys().copied().collect::<Vec<_>>(),
+            [PythonTool::Pyright]
+        );
+        let tasks = native_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "app",
+            "packages/app",
+            &[],
+            &plan,
+            true,
+        );
+        let display = |name| {
+            tasks
+                .iter()
+                .find(|task| task.name() == name)
+                .and_then(|task| task.display())
+        };
+        assert_eq!(
+            display("lint:ruff"),
+            Some("uv run --frozen ruff check packages/app")
+        );
+        assert_eq!(
+            display("format"),
+            Some("uv run --frozen --package app black packages/app")
+        );
+        assert_eq!(
+            display("check:pyright"),
+            Some(
+                "uv run --frozen --package app --no-default-groups --group types pyright \
+                 packages/app"
+            )
+        );
+        assert!(matches!(
+            tasks.iter().find(|task| task.name() == "lint").unwrap().execution(),
+            crate::native_tasks::NativeTaskExecution::Aggregate(children)
+                if children.as_ref() == ["lint:ruff"]
+        ));
+    }
+
+    #[test]
+    fn test_root_and_member_group_activation() {
+        let root: PyProjectManifest = toml::from_str(
+            "[dependency-groups]\nquality=['ruff']\n[tool.uv]\ndefault-groups=['quality']\n",
+        )
+        .unwrap();
+        let declaration = &root.tool_declarations(DeclarationOwner::Root).0[&PythonTool::Ruff];
+        assert_eq!(declaration.owner, DeclarationOwner::Root);
+        assert_eq!(declaration.group.as_ref().unwrap().name, "quality");
+        assert!(declaration.group.as_ref().unwrap().is_default);
+
+        let root: PyProjectManifest =
+            toml::from_str("[dependency-groups]\nquality=['ruff']\n").unwrap();
+        let member: PyProjectManifest =
+            toml::from_str("[dependency-groups]\ntypes=['mypy']\n").unwrap();
+        let plan = QualityPlan::effective(
+            &root.tool_declarations(DeclarationOwner::Root),
+            &member.tool_declarations(DeclarationOwner::Member),
+        );
+        let tasks = native_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "app",
+            "packages/app",
+            &[],
+            &plan,
+            true,
+        );
+        assert_eq!(
+            tasks
+                .iter()
+                .find(|task| task.name() == "lint:ruff")
+                .unwrap()
+                .display(),
+            Some("uv run --frozen --no-default-groups --group quality ruff check packages/app")
+        );
+        let mypy = tasks
+            .iter()
+            .find(|task| task.name() == "check:mypy")
+            .unwrap();
+        assert_eq!(
+            mypy.display(),
+            Some(
+                "uv run --frozen --package app --no-default-groups --group types mypy packages/app"
+            )
+        );
+        let arguments = &mypy.command().unwrap().arguments;
+        assert_eq!(
+            arguments.pass_through_placement,
+            crate::native_tasks::PassThroughPlacement::BeforeSuffix
+        );
+        assert_eq!(arguments.suffix, ["packages/app"]);
+
+        let repo_root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let context = PackageTaskContext::new_for_test(
+            PackageName::from("app"),
+            &repo_root,
+            turbopath::AnchoredSystemPath::new("packages/app").unwrap(),
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let binary = std::path::Path::new(if cfg!(windows) {
+            r"C:\bin\uv.exe"
+        } else {
+            "/bin/uv"
+        });
+        let pass_through = ["--strict".to_string()];
+        let resolved = crate::native_tasks::resolve_task_command(
+            &context,
+            mypy,
+            None,
+            None,
+            Some(binary),
+            Some(&pass_through),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            resolved.args,
+            [
+                "run",
+                "--frozen",
+                "--package",
+                "app",
+                "--no-default-groups",
+                "--group",
+                "types",
+                "mypy",
+                "--strict",
+                "packages/app",
+            ]
+            .map(OsString::from)
+        );
+
+        let root_ruff = tasks
+            .iter()
+            .find(|task| task.name() == "lint:ruff")
+            .unwrap();
+        let pass_through = ["--fix".to_string()];
+        let resolved = crate::native_tasks::resolve_task_command(
+            &context,
+            root_ruff,
+            None,
+            None,
+            Some(binary),
+            Some(&pass_through),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            resolved.args,
+            [
+                "run",
+                "--frozen",
+                "--no-default-groups",
+                "--group",
+                "quality",
+                "ruff",
+                "check",
+                "--fix",
+                "packages/app",
+            ]
+            .map(OsString::from)
+        );
+    }
+
+    #[test]
+    fn test_legacy_dev_dependency_honors_disabled_default_groups() {
+        let manifest: PyProjectManifest =
+            toml::from_str("[tool.uv]\ndev-dependencies=['ruff']\ndefault-groups=[]\n").unwrap();
+        let declarations = manifest.tool_declarations(DeclarationOwner::Member);
+        let group = declarations.0[&PythonTool::Ruff].group.as_ref().unwrap();
+        assert_eq!(group.name, "dev");
+        assert!(!group.is_default);
+        let plan = QualityPlan::effective(&ToolDeclarations::default(), &declarations);
+        let tasks = native_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "app",
+            "packages/app",
+            &[],
+            &plan,
+            true,
+        );
+        assert_eq!(
+            tasks
+                .iter()
+                .find(|task| task.name() == "lint:ruff")
+                .unwrap()
+                .display(),
+            Some(
+                "uv run --frozen --package app --no-default-groups --group dev ruff check \
+                 packages/app"
+            )
+        );
+    }
+
+    #[test]
+    fn test_multiple_formatters_and_checkers_fan_out() {
+        let manifest: PyProjectManifest = toml::from_str(
+            "[project]\nname='app'\ndependencies=['ruff', 'black', 'mypy', 'ty', 'pyright']\n",
+        )
+        .unwrap();
+        let plan = QualityPlan::effective(
+            &ToolDeclarations::default(),
+            &manifest.tool_declarations(DeclarationOwner::Member),
+        );
+        let tasks = native_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "app",
+            "app",
+            &[],
+            &plan,
+            true,
+        );
+        assert_eq!(
+            tasks
+                .iter()
+                .find(|task| task.name() == "format")
+                .unwrap()
+                .display(),
+            Some("uv run --frozen --package app ruff format app")
+        );
+        assert!(matches!(
+            tasks.iter().find(|task| task.name() == "check").unwrap().execution(),
+            crate::native_tasks::NativeTaskExecution::Aggregate(children)
+                if children.as_ref() == ["check:mypy", "check:ty", "check:pyright"]
+        ));
+        let check = tasks.iter().find(|task| task.name() == "check").unwrap();
+        assert!(!check.contract().derives_io());
+        assert_eq!(check.contract().defaults().cache, None);
+        assert_eq!(
+            check.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        let mypy = tasks
+            .iter()
+            .find(|task| task.name() == "check:mypy")
+            .unwrap();
+        assert!(mypy.contract().derives_io());
+        assert_eq!(mypy.contract().defaults().cache, Some(false));
+    }
+
+    #[test]
+    fn test_homogeneous_and_heterogeneous_workspace_plans() {
+        let member_manifest: PyProjectManifest =
+            toml::from_str("[project]\nname='app'\ndependencies=['ruff']\n").unwrap();
+        let black_manifest: PyProjectManifest =
+            toml::from_str("[project]\nname='app'\ndependencies=['black']\n").unwrap();
+        let ruff = member_manifest.tool_declarations(DeclarationOwner::Member);
+        let black = black_manifest.tool_declarations(DeclarationOwner::Member);
+        let first = QualityPlan::effective(&ToolDeclarations::default(), &ruff);
+        let second = QualityPlan::effective(&ToolDeclarations::default(), &ruff);
+        let homogeneous = QualityPlan::homogeneous(&[first.clone(), second]);
+        assert!(homogeneous.lint_homogeneous && homogeneous.format_homogeneous);
+        assert_eq!(
+            homogeneous.lint[&PythonTool::Ruff].owner,
+            ExecutionOwner::AllMembers
+        );
+        let workspace_tasks = native_tasks_for_package(
+            UvPackageKind::Workspace,
+            "acme",
+            ".",
+            &["packages/one".to_string(), "packages/two".to_string()],
+            &homogeneous,
+            true,
+        );
+        assert_eq!(
+            workspace_tasks
+                .iter()
+                .find(|task| task.name() == "lint:ruff")
+                .unwrap()
+                .display(),
+            Some("uv run --frozen --all-packages ruff check packages/one packages/two")
+        );
+        let heterogeneous = QualityPlan::homogeneous(&[
+            first,
+            QualityPlan::effective(&ToolDeclarations::default(), &black),
+        ]);
+        assert!(!heterogeneous.lint_homogeneous);
+        assert!(!heterogeneous.format_homogeneous);
+        assert!(heterogeneous.check_homogeneous);
+
+        let root_manifest: PyProjectManifest =
+            toml::from_str("[project]\nname='root'\ndependencies=['ruff']\n").unwrap();
+        let root = root_manifest.tool_declarations(DeclarationOwner::Root);
+        let root_owned = QualityPlan::effective(&root, &ToolDeclarations::default());
+        let member_owned = QualityPlan::effective(&ToolDeclarations::default(), &ruff);
+        let same_tool_different_context = QualityPlan::homogeneous(&[root_owned, member_owned]);
+        assert!(!same_tool_different_context.lint_homogeneous);
+        assert!(!same_tool_different_context.format_homogeneous);
     }
 
     #[test]
     fn test_derived_outputs_for_build() {
         let contract = UvTaskContract::new(UvPackageKind::Package, "py-app");
         assert_eq!(contract.dist_name, "py_app");
+        let globs = hash_input_globs("../..");
+        assert!(globs.contains(&"../../setup.cfg".to_string()));
+        assert!(globs.contains(&"../../ty.toml".to_string()));
     }
 
     #[test]
