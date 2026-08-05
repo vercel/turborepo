@@ -1166,17 +1166,33 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
     setup::copy_fixture("watch_task_inputs_dependency_test", &test_dir).unwrap();
     setup::setup_git(&test_dir).unwrap();
 
-    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev", "observe"]));
     let initial_pkg =
         wait_for_prefixed_markers(&test_dir, "pkg", "dev-", 1, Duration::from_secs(60));
     let initial_app =
         wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    let initial_pkg_observe =
+        wait_for_prefixed_markers(&test_dir, "pkg", "observe-", 1, Duration::from_secs(60));
+    let initial_app_observe =
+        wait_for_prefixed_markers(&test_dir, "app", "observe-", 1, Duration::from_secs(60));
+    let initial_observer = wait_for_prefixed_markers(
+        &test_dir,
+        "observer",
+        "observe-",
+        1,
+        Duration::from_secs(60),
+    );
     assert!(initial_pkg > 0, "package dev task should start");
     assert!(initial_app > 0, "app dev task should start");
-    std::thread::sleep(Duration::from_secs(2));
+    assert!(initial_pkg_observe > 0, "package observer should start");
+    assert!(initial_app_observe > 0, "app observer should start");
+    assert!(initial_observer > 0, "completion observer should start");
 
     let pkg_before = prefixed_marker_count(&test_dir, "pkg", "dev-");
     let app_before = prefixed_marker_count(&test_dir, "app", "dev-");
+    let pkg_observe_before = prefixed_marker_count(&test_dir, "pkg", "observe-");
+    let app_observe_before = prefixed_marker_count(&test_dir, "app", "observe-");
+    let observer_before = prefixed_marker_count(&test_dir, "observer", "observe-");
 
     // A package change reruns its non-persistent task but must not restart the
     // persistent app that depends on it.
@@ -1187,6 +1203,17 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
     .unwrap();
     common::git(&test_dir, &["add", "."]);
     common::git(&test_dir, &["commit", "-m", "change package", "--quiet"]);
+    let pkg_observe_after_change = wait_for_prefixed_markers(
+        &test_dir,
+        "pkg",
+        "observe-",
+        pkg_observe_before + 1,
+        Duration::from_secs(30),
+    );
+    assert!(
+        pkg_observe_after_change > pkg_observe_before,
+        "package observer should acknowledge the package change"
+    );
     let pkg_after_change = wait_for_prefixed_markers(
         &test_dir,
         "pkg",
@@ -1198,7 +1225,31 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
         pkg_after_change > pkg_before,
         "package change should rerun its dev task"
     );
-    std::thread::sleep(Duration::from_secs(2));
+
+    // This independent event cannot affect either dev task. Its observer can
+    // only run after the package-change run has completed.
+    fs::write(
+        test_dir.join("packages/observer/README.md"),
+        "# Package change completed\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "observe package change", "--quiet"],
+    );
+    let observer_after_package_change = wait_for_prefixed_markers(
+        &test_dir,
+        "observer",
+        "observe-",
+        observer_before + 1,
+        Duration::from_secs(30),
+    );
+    assert!(
+        observer_after_package_change > observer_before,
+        "observer should acknowledge package-change completion"
+    );
+    let pkg_after_change = prefixed_marker_count(&test_dir, "pkg", "dev-");
     assert_eq!(
         prefixed_marker_count(&test_dir, "app", "dev-"),
         app_before,
@@ -1210,7 +1261,41 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
     fs::write(test_dir.join("packages/app/README.md"), "# App changed\n").unwrap();
     common::git(&test_dir, &["add", "."]);
     common::git(&test_dir, &["commit", "-m", "change app", "--quiet"]);
-    std::thread::sleep(Duration::from_secs(5));
+    let app_observe_after_change = wait_for_prefixed_markers(
+        &test_dir,
+        "app",
+        "observe-",
+        app_observe_before + 1,
+        Duration::from_secs(30),
+    );
+    assert!(
+        app_observe_after_change > app_observe_before,
+        "app observer should acknowledge the app change"
+    );
+
+    // A second independent observer event is a completion barrier for the app
+    // event, preventing negative assertions from racing its tasks.
+    fs::write(
+        test_dir.join("packages/observer/README.md"),
+        "# App change completed\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "observe app change", "--quiet"],
+    );
+    let observer_after_app_change = wait_for_prefixed_markers(
+        &test_dir,
+        "observer",
+        "observe-",
+        observer_before + 2,
+        Duration::from_secs(30),
+    );
+    assert!(
+        observer_after_app_change > observer_after_package_change,
+        "observer should acknowledge app-change completion"
+    );
 
     drop(guard);
 
@@ -1222,6 +1307,6 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
     assert_eq!(
         prefixed_marker_count(&test_dir, "app", "dev-"),
         app_before,
-        "app change should not restart its persistent task"
+        "package or app changes should not restart the persistent app"
     );
 }
