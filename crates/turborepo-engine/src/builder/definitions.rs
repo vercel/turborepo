@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
-    native_tasks::NativeTaskContract,
+    native_tasks::{NativeTaskContract, NativeTaskExecution},
     package_graph::{PackageGraph, PackageName, PackageNode},
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -21,14 +21,14 @@ use crate::{
 /// Memo key for resolved task definitions: the turbo.json chain (by
 /// address; loader-owned for the duration of a build), the task name, and
 /// the package-dependent inputs that survive resolution: path to the repo
-/// root, native execution eligibility, and task-local contract facts. See
+/// root, native execution, and task-local contract facts. See
 /// `task_definition_cached`.
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct TaskDefMemoKey {
     chain: Vec<usize>,
     task_name: TaskName<'static>,
     path_to_root: turbopath::RelativeUnixPathBuf,
-    defines_task: bool,
+    native_execution: NativeTaskExecution,
     native_contract: Option<NativeTaskContract>,
 }
 
@@ -254,8 +254,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let native_task = package_context
             .as_ref()
             .and_then(|context| context.native_tasks().get(task_id.task()));
+        let native_execution = native_task
+            .map(|task| task.execution().clone())
+            .unwrap_or(NativeTaskExecution::None);
         let native_contract = native_task.map(|task| task.contract().clone());
-        let defines_task = native_task.is_some_and(|task| task.executes());
+        let defines_task = matches!(native_execution, NativeTaskExecution::Command(_));
         let registered_task = package_context
             .as_ref()
             .is_some_and(|context| context.native_tasks().registers(task_id.task()));
@@ -263,8 +266,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
         // `$TURBO_ROOT$`/global-input anchoring) and whether the package's
-        // toolchain defines a command for the task, and task-local contract
-        // facts. Memoize on exactly those inputs. Two exceptions must skip the memo: a
+        // toolchain's execution for the task, and task-local contract facts.
+        // Memoize on exactly those inputs. Two exceptions must skip the memo: a
         // package-scoped
         // task key (`web#build`) in the chain, which `TurboJson::task`
         // consults first, and packages whose toolchain derives per-package
@@ -293,7 +296,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .collect(),
                 task_name: task_name.clone().into_owned(),
                 path_to_root: path_to_root.clone(),
-                defines_task,
+                native_execution: native_execution.clone(),
                 native_contract: native_contract.clone(),
             })
         };
@@ -366,6 +369,44 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
         task_def.command = command_override;
+
+        if task_def.command.is_none()
+            && let NativeTaskExecution::Aggregate(dependencies) = &native_execution
+        {
+            let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
+            if task_args.args_for_task(task_id.as_inner()).is_some() {
+                let alternatives = dependencies
+                    .iter()
+                    .map(|dependency| format!("{}#{dependency}", task_id.package()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(BuilderError::AggregatePassThrough {
+                    task_id: task_id.to_string(),
+                    alternatives,
+                });
+            }
+
+            let mut seen: HashSet<TaskId<'static>> = task_def
+                .task_dependencies
+                .iter()
+                .map(|dependency| {
+                    dependency
+                        .task_id()
+                        .unwrap_or_else(|| TaskId::new(task_id.package(), dependency.task()))
+                        .into_owned()
+                })
+                .collect();
+            task_def.task_dependencies.extend(
+                dependencies
+                    .iter()
+                    .filter(|dependency| {
+                        seen.insert(TaskId::new(task_id.package(), dependency).into_owned())
+                    })
+                    .map(|dependency| {
+                        Spanned::new(TaskName::from(dependency.clone()).into_owned())
+                    }),
+            );
+        }
 
         if !self.future_flags.incremental_tasks {
             task_def.incremental = None;
