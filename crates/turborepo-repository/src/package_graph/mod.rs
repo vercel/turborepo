@@ -708,7 +708,10 @@ impl PackageGraph {
             let Some(domain) = contract.task_entrypoint_domain() else {
                 continue;
             };
-            let Some(entrypoint) = contract.task_entrypoint(task) else {
+            let Some(entrypoint) = context.native_tasks().get(task).map_or_else(
+                || contract.task_entrypoint(task),
+                |task| task.contract().entrypoint(),
+            ) else {
                 continue;
             };
             classified
@@ -761,10 +764,14 @@ impl PackageGraph {
                     return false;
                 };
                 let contract = context.task_contract();
+                let classified = context.native_tasks().get(task).map_or_else(
+                    || contract.task_entrypoint(task),
+                    |task| task.contract().entrypoint(),
+                );
                 contract
                     .task_entrypoint_domain()
                     .is_some_and(|domain| active_domains.contains(domain))
-                    && contract.task_entrypoint(task).is_some()
+                    && classified.is_some()
             })
             .cloned()
             .collect()

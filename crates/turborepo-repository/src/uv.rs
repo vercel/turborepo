@@ -787,10 +787,11 @@ pub fn native_tasks_for_package(
     workspace_directories: &[String],
 ) -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::{
-        NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
+        WorkingDirectoryPolicy,
     };
 
-    registered_tasks(kind)
+    let mut tasks: Vec<_> = registered_tasks(kind)
         .filter_map(|task| {
             let subcommand = task_subcommand(kind, task)?;
             let display = display_command(
@@ -800,26 +801,73 @@ pub fn native_tasks_for_package(
                 package_directory,
                 workspace_directories,
             )?;
-            Some(NativeTask::command_task(
-                task,
-                display,
-                NativeCommandProgram::Tool("uv".to_string()),
-                NativeCommandArguments::new(
-                    std::iter::once(subcommand.to_string())
-                        .chain(task_arguments(
-                            kind,
-                            task,
-                            package,
-                            package_directory,
-                            workspace_directories,
-                        ))
-                        .collect(),
-                ),
-                (task == "check").then(|| "uv".to_string()),
-                WorkingDirectoryPolicy::RepositoryRoot,
-            ))
+            Some(
+                NativeTask::command_task(
+                    task,
+                    display,
+                    NativeCommandProgram::Tool("uv".to_string()),
+                    NativeCommandArguments::new(
+                        std::iter::once(subcommand.to_string())
+                            .chain(task_arguments(
+                                kind,
+                                task,
+                                package,
+                                package_directory,
+                                workspace_directories,
+                            ))
+                            .collect(),
+                    ),
+                    (task == "check").then(|| "uv".to_string()),
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+                .with_contract(NativeTaskContract::new(
+                    uv_task_defaults(kind, task),
+                    uv_task_entrypoint(kind, task),
+                    true,
+                )),
+            )
         })
-        .collect()
+        .collect();
+    if !tasks.iter().any(|task| task.name() == "build") {
+        tasks.push(NativeTask::contract_task(
+            "build",
+            NativeTaskContract::new(
+                uv_task_defaults(kind, "build"),
+                uv_task_entrypoint(kind, "build"),
+                false,
+            ),
+        ));
+    }
+    tasks
+}
+
+fn uv_task_defaults(kind: UvPackageKind, task: &str) -> toolchain::TaskDefaults {
+    // Tool versions are not yet part of the task fingerprint.
+    toolchain::TaskDefaults {
+        cache: task_subcommand(kind, task).map(|_| false),
+    }
+}
+
+fn uv_task_entrypoint(
+    kind: UvPackageKind,
+    task: &str,
+) -> Option<crate::native_tasks::TaskEntrypoint> {
+    use crate::native_tasks::TaskEntrypoint;
+
+    if task_subcommand(kind, task).is_some() {
+        return Some(match kind {
+            UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
+            UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
+        });
+    }
+    matches!(
+        (kind, task),
+        (
+            UvPackageKind::Workspace | UvPackageKind::VirtualPackage,
+            "build"
+        )
+    )
+    .then_some(TaskEntrypoint::Excluded)
 }
 
 // ---------------------------------------------------------------------------
@@ -982,14 +1030,6 @@ impl UvTaskContract {
         }
     }
 
-    pub(crate) fn task_defaults(&self, task: &str) -> toolchain::TaskDefaults {
-        // uv, Python, ty, and isolated build-backend versions are not
-        // yet part of the task fingerprint, so built-in uv commands fail
-        // closed on cache.
-        let cache = task_subcommand(self.kind, task).map(|_| false);
-        toolchain::TaskDefaults { cache }
-    }
-
     /// Classifies Python package sources for dependent derived-input
     /// closures. Workspace aggregates have no package source directory to
     /// include.
@@ -999,32 +1039,6 @@ impl UvTaskContract {
                 crate::task_contracts::DependencySourceInputs::Include
             }
             UvPackageKind::Workspace => crate::task_contracts::DependencySourceInputs::Exclude,
-        }
-    }
-
-    pub(crate) fn derives_task_io(&self, task: &str) -> bool {
-        registered_tasks(self.kind).any(|registered| registered == task)
-    }
-
-    pub(crate) fn task_entrypoint(
-        &self,
-        task: &str,
-    ) -> Option<crate::task_contracts::TaskEntrypoint> {
-        if task_subcommand(self.kind, task).is_some() {
-            return Some(match self.kind {
-                // Unfiltered quality tasks use the workspace-scoped command
-                // only; per-package commands are for filtered runs.
-                UvPackageKind::Workspace => crate::task_contracts::TaskEntrypoint::PreferredOnly,
-                UvPackageKind::Package | UvPackageKind::VirtualPackage => {
-                    crate::task_contracts::TaskEntrypoint::Candidate
-                }
-            });
-        }
-        match (self.kind, task) {
-            (UvPackageKind::Workspace | UvPackageKind::VirtualPackage, "build") => {
-                Some(crate::task_contracts::TaskEntrypoint::Excluded)
-            }
-            _ => None,
         }
     }
 
@@ -2054,22 +2068,36 @@ overridden = { index = "private" }
                 .iter()
                 .all(|task| task.registered() && task.executable())
         );
+        let build = tasks.iter().find(|task| task.name() == "build").unwrap();
+        assert_eq!(build.contract().defaults().cache, Some(false));
+        assert_eq!(
+            build.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        assert!(build.contract().derives_io());
+
+        let virtual_tasks = native_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "py-app",
+            "packages/py-app",
+            &[],
+        );
+        let build = virtual_tasks
+            .iter()
+            .find(|task| task.name() == "build")
+            .unwrap();
+        assert!(!build.executable());
+        assert_eq!(
+            build.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Excluded)
+        );
+        assert!(!build.contract().derives_io());
     }
 
     #[test]
     fn test_derived_outputs_for_build() {
         let contract = UvTaskContract::new(UvPackageKind::Package, "py-app");
-        assert!(contract.derives_task_io("build"));
-        assert!(contract.derives_task_io("format"));
-        assert!(contract.derives_task_io("check"));
-        assert!(!contract.derives_task_io("test"));
-        assert_eq!(contract.task_defaults("check").cache, Some(false));
-        assert_eq!(contract.task_defaults("build").cache, Some(false));
         assert_eq!(contract.dist_name, "py_app");
-
-        let virtual_contract = UvTaskContract::new(UvPackageKind::VirtualPackage, "py-app");
-        assert!(!virtual_contract.derives_task_io("build"));
-        assert!(virtual_contract.derives_task_io("check"));
     }
 
     #[test]
