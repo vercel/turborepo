@@ -7,7 +7,6 @@ use std::{
     ffi::OsString,
 };
 
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_errors::Spanned;
 
 use crate::{
@@ -27,29 +26,53 @@ pub enum WorkingDirectoryPolicy {
     RepositoryRoot,
 }
 
+/// Where pass-through arguments are placed relative to fixed command arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PassThroughPlacement {
+    BeforeSuffix,
+    AfterSuffix,
+}
+
+/// Separator inserted before pass-through arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PassThroughSeparator {
+    Fixed(String),
+    PackageManager,
+}
+
+/// General argument layout for a native command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeCommandArguments {
+    pub prefix: Vec<String>,
+    pub pass_through_placement: PassThroughPlacement,
+    pub pass_through_separator: Option<PassThroughSeparator>,
+    pub suffix: Vec<String>,
+}
+
+impl NativeCommandArguments {
+    pub fn new(prefix: Vec<String>) -> Self {
+        Self {
+            prefix,
+            pass_through_placement: PassThroughPlacement::AfterSuffix,
+            pass_through_separator: None,
+            suffix: Vec::new(),
+        }
+    }
+}
+
+/// How the executable for a native command is selected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NativeCommandProgram {
+    PackageManager,
+    Tool(String),
+}
+
 /// Declarative command template resolved into a [`TaskCommand`] at execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NativeCommandTemplate {
-    /// `<package-manager> run <task>` with package-manager arg separators.
-    JavaScriptPackageManagerRun { task: String },
-    /// `cargo <subcommand> <scope>` with optional locking and serial grouping.
-    Cargo {
-        subcommand: String,
-        /// `--package=<name>`, `--workspace`, or `--all`.
-        scope_arg: String,
-        locked: bool,
-        serial_group: Option<String>,
-        pass_through_uses_separator: bool,
-    },
-    /// `uv <subcommand> <args>` with uv serial grouping. None of the
-    /// registered subcommands forwards trailing args to another tool, so
-    /// pass-through args attach directly as uv flags.
-    Uv {
-        subcommand: String,
-        /// Fixed arguments, e.g. `--package=<name>` or `--all-packages`.
-        args: Vec<String>,
-        serial_group: Option<String>,
-    },
+pub struct NativeCommandTemplate {
+    pub program: NativeCommandProgram,
+    pub arguments: NativeCommandArguments,
+    pub serial_group: Option<String>,
 }
 
 /// One native task observed for an authoritative scope.
@@ -102,15 +125,14 @@ impl NativeTask {
         self.cwd_policy
     }
 
-    /// Construct a Cargo-synthesized native task (not package-authored).
-    pub fn cargo(
+    /// Construct a synthesized native command task (not package-authored).
+    pub fn command_task(
         name: impl Into<String>,
         display: String,
-        subcommand: impl Into<String>,
-        scope_arg: impl Into<String>,
-        locked: bool,
+        program: NativeCommandProgram,
+        arguments: NativeCommandArguments,
         serial_group: Option<String>,
-        pass_through_uses_separator: bool,
+        cwd_policy: WorkingDirectoryPolicy,
     ) -> Self {
         let name = name.into();
         Self {
@@ -120,39 +142,12 @@ impl NativeTask {
             executable: true,
             display: Some(display),
             script: None,
-            command: Some(NativeCommandTemplate::Cargo {
-                subcommand: subcommand.into(),
-                scope_arg: scope_arg.into(),
-                locked,
-                serial_group,
-                pass_through_uses_separator,
-            }),
-            cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
-        }
-    }
-
-    /// Construct a uv-synthesized native task (not package-authored).
-    pub fn uv(
-        name: impl Into<String>,
-        display: String,
-        subcommand: impl Into<String>,
-        args: Vec<String>,
-        serial_group: Option<String>,
-    ) -> Self {
-        let name = name.into();
-        Self {
-            name: name.clone(),
-            authored: false,
-            registered: true,
-            executable: true,
-            display: Some(display),
-            script: None,
-            command: Some(NativeCommandTemplate::Uv {
-                subcommand: subcommand.into(),
-                args,
+            command: Some(NativeCommandTemplate {
+                program,
+                arguments,
                 serial_group,
             }),
-            cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
+            cwd_policy,
         }
     }
 }
@@ -215,24 +210,14 @@ impl ScopeNativeTasks {
     /// command family. This also applies to override-only task names that have
     /// no catalog entry.
     pub fn override_serial_group(&self, override_command: &[String]) -> Option<String> {
-        let program = override_command.first().map(String::as_str);
-        if program == Some("cargo")
-            && self
-                .tasks()
-                .iter()
-                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Cargo { .. })))
-        {
-            return Some("cargo".to_string());
-        }
-        if program == Some("uv")
-            && self
-                .tasks()
-                .iter()
-                .any(|task| matches!(task.command(), Some(NativeCommandTemplate::Uv { .. })))
-        {
-            return Some("uv".to_string());
-        }
-        None
+        let program = override_command.first()?;
+        self.tasks().iter().find_map(|task| {
+            let command = task.command()?;
+            match &command.program {
+                NativeCommandProgram::Tool(tool) if tool == program => command.serial_group.clone(),
+                NativeCommandProgram::PackageManager | NativeCommandProgram::Tool(_) => None,
+            }
+        })
     }
 }
 
@@ -339,8 +324,16 @@ pub fn observation_from_scripts(
             executable,
             display: executable.then(|| script.as_inner().clone()),
             script: Some(script.clone()),
-            command: executable
-                .then(|| NativeCommandTemplate::JavaScriptPackageManagerRun { task: name.clone() }),
+            command: executable.then(|| NativeCommandTemplate {
+                program: NativeCommandProgram::PackageManager,
+                arguments: NativeCommandArguments {
+                    prefix: vec!["run".to_string(), name.clone()],
+                    pass_through_placement: PassThroughPlacement::AfterSuffix,
+                    pass_through_separator: Some(PassThroughSeparator::PackageManager),
+                    suffix: Vec::new(),
+                },
+                serial_group: None,
+            }),
             cwd_policy: WorkingDirectoryPolicy::PackageDirectory,
         });
     }
@@ -365,8 +358,7 @@ pub fn resolve_task_command(
     task: &NativeTask,
     package_manager: Option<&PackageManager>,
     package_manager_binary: Option<&std::path::Path>,
-    cargo_binary: Option<&std::path::Path>,
-    uv_binary: Option<&std::path::Path>,
+    tool_binary: Option<&std::path::Path>,
     pass_through_args: Option<&[String]>,
     override_command: Option<&[String]>,
 ) -> Result<Option<TaskCommand>, ResolveNativeCommandError> {
@@ -396,93 +388,67 @@ pub fn resolve_task_command(
         WorkingDirectoryPolicy::RepositoryRoot => context.repository_root().to_owned(),
     };
 
-    match template {
-        NativeCommandTemplate::JavaScriptPackageManagerRun { task: task_name } => {
+    let (program, mut args) = match &template.program {
+        NativeCommandProgram::PackageManager => {
             let package_manager =
                 package_manager.ok_or(ResolveNativeCommandError::MissingPackageManager)?;
             let package_manager_binary = package_manager_binary
                 .ok_or(ResolveNativeCommandError::MissingPackageManagerBinary)?;
-            let (program, mut args) =
-                package_manager_command(package_manager, package_manager_binary);
-            args.extend([OsString::from("run"), OsString::from(task_name)]);
-            if let Some(pass_through_args) = pass_through_args {
-                args.extend(
-                    package_manager
-                        .arg_separator(pass_through_args)
-                        .map(OsString::from),
-                );
-                args.extend(pass_through_args.iter().map(OsString::from));
-            }
-            Ok(Some(TaskCommand {
-                program,
-                args,
-                cwd,
-                serial_group: None,
-            }))
+            package_manager_command(package_manager, package_manager_binary)
         }
-        NativeCommandTemplate::Cargo {
-            subcommand,
-            scope_arg,
-            locked,
-            serial_group,
-            pass_through_uses_separator,
-        } => {
-            let cargo_binary = cargo_binary.ok_or(ResolveNativeCommandError::MissingCargoBinary)?;
-            let mut args: Vec<OsString> = vec![subcommand.into(), scope_arg.into()];
-            if *locked {
-                args.push("--locked".into());
-            }
-            if let Some(pass_through_args) = pass_through_args {
-                if *pass_through_uses_separator {
-                    args.push("--".into());
-                }
-                args.extend(pass_through_args.iter().map(OsString::from));
-            }
-            Ok(Some(TaskCommand {
-                program: cargo_binary.as_os_str().to_owned(),
-                args,
-                cwd,
-                serial_group: serial_group.clone(),
-            }))
+        NativeCommandProgram::Tool(tool) => {
+            let binary = tool_binary.ok_or_else(|| {
+                ResolveNativeCommandError::MissingToolBinary { tool: tool.clone() }
+            })?;
+            (binary.as_os_str().to_owned(), Vec::new())
         }
-        NativeCommandTemplate::Uv {
-            subcommand,
-            args: fixed_args,
-            serial_group,
-        } => resolve_uv_task_command(
-            uv_binary,
-            cwd,
-            subcommand,
-            fixed_args,
-            serial_group.clone(),
+    };
+    args.extend(template.arguments.prefix.iter().map(OsString::from));
+    if template.arguments.pass_through_placement == PassThroughPlacement::BeforeSuffix {
+        append_pass_through(
+            &mut args,
+            &template.arguments,
             pass_through_args,
-        )
-        .map(Some),
+            package_manager,
+        );
     }
-}
-
-fn resolve_uv_task_command(
-    uv_binary: Option<&std::path::Path>,
-    cwd: AbsoluteSystemPathBuf,
-    subcommand: &str,
-    fixed_args: &[String],
-    serial_group: Option<String>,
-    pass_through_args: Option<&[String]>,
-) -> Result<TaskCommand, ResolveNativeCommandError> {
-    let uv_binary = uv_binary.ok_or(ResolveNativeCommandError::MissingUvBinary)?;
-    let mut args: Vec<OsString> = std::iter::once(subcommand)
-        .chain(fixed_args.iter().map(String::as_str))
-        .map(OsString::from)
-        .collect();
-    if let Some(pass_through_args) = pass_through_args {
-        args.extend(pass_through_args.iter().map(OsString::from));
+    args.extend(template.arguments.suffix.iter().map(OsString::from));
+    if template.arguments.pass_through_placement == PassThroughPlacement::AfterSuffix {
+        append_pass_through(
+            &mut args,
+            &template.arguments,
+            pass_through_args,
+            package_manager,
+        );
     }
-    Ok(TaskCommand {
-        program: uv_binary.as_os_str().to_owned(),
+    Ok(Some(TaskCommand {
+        program,
         args,
         cwd,
-        serial_group,
-    })
+        serial_group: template.serial_group.clone(),
+    }))
+}
+
+fn append_pass_through(
+    args: &mut Vec<OsString>,
+    layout: &NativeCommandArguments,
+    pass_through_args: Option<&[String]>,
+    package_manager: Option<&PackageManager>,
+) {
+    let Some(pass_through_args) = pass_through_args else {
+        return;
+    };
+    match &layout.pass_through_separator {
+        Some(PassThroughSeparator::Fixed(separator)) => args.push(separator.into()),
+        Some(PassThroughSeparator::PackageManager) => args.extend(
+            package_manager
+                .into_iter()
+                .flat_map(|manager| manager.arg_separator(pass_through_args))
+                .map(OsString::from),
+        ),
+        None => {}
+    }
+    args.extend(pass_through_args.iter().map(OsString::from));
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -491,13 +457,8 @@ pub enum ResolveNativeCommandError {
     MissingPackageManager,
     #[error("JavaScript package manager binary is not available for native task resolution")]
     MissingPackageManagerBinary,
-    #[error("Cargo binary is not available for native task resolution")]
-    MissingCargoBinary,
-    #[error(
-        "The `uv` binary is required to run Python tasks but was not found on PATH. Install uv: \
-         https://docs.astral.sh/uv/getting-started/installation/"
-    )]
-    MissingUvBinary,
+    #[error("The `{tool}` binary is not available for native task resolution")]
+    MissingToolBinary { tool: String },
 }
 
 #[cfg(test)]
@@ -509,6 +470,7 @@ mod tests {
         knowledge::{
             PackageScopeObservation, RepositoryKnowledge, ScopeKind, WorkspaceRootObservation,
         },
+        package_graph::{PackageName, PackageTaskContextKind},
         toolchain::{ToolchainId, WorkspaceRoot},
     };
 
@@ -592,14 +554,18 @@ mod tests {
 
     #[test]
     fn cargo_tasks_are_registered_not_authored() {
-        let task = NativeTask::cargo(
+        let task = NativeTask::command_task(
             "build",
             "cargo build --package=app --locked".into(),
-            "build",
-            "--package=app",
-            true,
+            NativeCommandProgram::Tool("cargo".into()),
+            NativeCommandArguments {
+                prefix: vec!["build".into(), "--package=app".into()],
+                pass_through_placement: PassThroughPlacement::AfterSuffix,
+                pass_through_separator: None,
+                suffix: vec!["--locked".into()],
+            },
             Some("cargo".into()),
-            false,
+            WorkingDirectoryPolicy::RepositoryRoot,
         );
         assert!(!task.authored());
         assert!(task.registered());
@@ -613,40 +579,79 @@ mod tests {
     }
 
     #[test]
-    fn uv_command_resolution_preserves_argument_order_and_group() {
+    fn generalized_command_resolution_supports_prefix_suffix_and_fixed_separator() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let binary = std::path::Path::new(if cfg!(windows) {
-            r"C:\bin\uv.exe"
+            r"C:\bin\tool.exe"
         } else {
-            "/bin/uv"
+            "/bin/tool"
         });
         let pass_through = ["--frozen".to_string()];
-        let command = resolve_uv_task_command(
-            Some(binary),
-            root.clone(),
+        let task = NativeTask::command_task(
             "sync",
-            &["--package=app".to_string()],
-            Some("uv".to_string()),
+            "tool sync --package=app --locked".into(),
+            NativeCommandProgram::Tool("tool".into()),
+            NativeCommandArguments {
+                prefix: vec!["sync".into(), "--package=app".into()],
+                pass_through_placement: PassThroughPlacement::BeforeSuffix,
+                pass_through_separator: Some(PassThroughSeparator::Fixed("--".into())),
+                suffix: vec!["--locked".into()],
+            },
+            Some("tool".into()),
+            WorkingDirectoryPolicy::RepositoryRoot,
+        );
+        let directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
+        let context = PackageTaskContext::new_for_test(
+            PackageName::from("web"),
+            &root,
+            directory,
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let command = resolve_task_command(
+            &context,
+            &task,
+            None,
+            None,
+            Some(binary),
             Some(&pass_through),
+            None,
         )
+        .unwrap()
         .unwrap();
         assert_eq!(command.program, binary.as_os_str());
         assert_eq!(
             command.args,
-            ["sync", "--package=app", "--frozen"].map(OsString::from)
+            ["sync", "--package=app", "--", "--frozen", "--locked"].map(OsString::from)
         );
         assert_eq!(command.cwd, root);
-        assert_eq!(command.serial_group.as_deref(), Some("uv"));
+        assert_eq!(command.serial_group.as_deref(), Some("tool"));
     }
 
     #[test]
-    fn uv_command_resolution_requires_binary() {
+    fn generalized_command_resolution_requires_tool_binary() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let directory = turbopath::AnchoredSystemPath::new("").unwrap();
+        let context = PackageTaskContext::new_for_test(
+            PackageName::from("workspace"),
+            &root,
+            directory,
+            PackageTaskContextKind::Aggregate,
+            None,
+        );
+        let task = NativeTask::command_task(
+            "build",
+            "uv build".into(),
+            NativeCommandProgram::Tool("uv".into()),
+            NativeCommandArguments::new(vec!["build".into()]),
+            None,
+            WorkingDirectoryPolicy::RepositoryRoot,
+        );
         assert!(matches!(
-            resolve_uv_task_command(None, root, "build", &[], None, None),
-            Err(ResolveNativeCommandError::MissingUvBinary)
+            resolve_task_command(&context, &task, None, None, None, None, None),
+            Err(ResolveNativeCommandError::MissingToolBinary { tool }) if tool == "uv"
         ));
     }
 }
