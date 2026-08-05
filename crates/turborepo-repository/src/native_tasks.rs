@@ -3,7 +3,7 @@
 //! Ecosystems contribute observations once; core consumes an immutable catalog.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::OsString,
 };
 
@@ -69,21 +69,21 @@ pub enum WorkingDirectoryPolicy {
 }
 
 /// Where pass-through arguments are placed relative to fixed command arguments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PassThroughPlacement {
     BeforeSuffix,
     AfterSuffix,
 }
 
 /// Separator inserted before pass-through arguments.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PassThroughSeparator {
     Fixed(String),
     PackageManager,
 }
 
 /// General argument layout for a native command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NativeCommandArguments {
     pub prefix: Vec<String>,
     pub pass_through_placement: PassThroughPlacement,
@@ -103,18 +103,27 @@ impl NativeCommandArguments {
 }
 
 /// How the executable for a native command is selected.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NativeCommandProgram {
     PackageManager,
     Tool(String),
 }
 
 /// Declarative command template resolved into a [`TaskCommand`] at execution.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NativeCommandTemplate {
     pub program: NativeCommandProgram,
     pub arguments: NativeCommandArguments,
     pub serial_group: Option<String>,
+}
+
+/// What a native task does when selected.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum NativeTaskExecution {
+    Command(NativeCommandTemplate),
+    /// Same-scope tasks that this task aggregates.
+    Aggregate(Box<[String]>),
+    None,
 }
 
 /// One native task observed for an authoritative scope.
@@ -125,12 +134,10 @@ pub struct NativeTask {
     authored: bool,
     /// Appears in toolchain registered-task tables without turbo.json.
     registered: bool,
-    /// Has a concrete executable command (non-empty script / known Cargo verb).
-    executable: bool,
+    execution: NativeTaskExecution,
     display: Option<String>,
     /// Source span for authored script text when available.
     script: Option<Spanned<String>>,
-    command: Option<NativeCommandTemplate>,
     cwd_policy: WorkingDirectoryPolicy,
     contract: NativeTaskContract,
 }
@@ -148,8 +155,16 @@ impl NativeTask {
         self.registered
     }
 
-    pub fn executable(&self) -> bool {
-        self.executable
+    pub fn execution(&self) -> &NativeTaskExecution {
+        &self.execution
+    }
+
+    pub fn executes(&self) -> bool {
+        matches!(self.execution, NativeTaskExecution::Command(_))
+    }
+
+    pub fn participates(&self) -> bool {
+        !matches!(self.execution, NativeTaskExecution::None)
     }
 
     pub fn display(&self) -> Option<&str> {
@@ -161,7 +176,10 @@ impl NativeTask {
     }
 
     pub fn command(&self) -> Option<&NativeCommandTemplate> {
-        self.command.as_ref()
+        match &self.execution {
+            NativeTaskExecution::Command(command) => Some(command),
+            NativeTaskExecution::Aggregate(_) | NativeTaskExecution::None => None,
+        }
     }
 
     pub fn cwd_policy(&self) -> WorkingDirectoryPolicy {
@@ -191,29 +209,50 @@ impl NativeTask {
             name: name.clone(),
             authored: false,
             registered: true,
-            executable: true,
-            display: Some(display),
-            script: None,
-            command: Some(NativeCommandTemplate {
+            execution: NativeTaskExecution::Command(NativeCommandTemplate {
                 program,
                 arguments,
                 serial_group,
             }),
+            display: Some(display),
+            script: None,
             cwd_policy,
             contract: NativeTaskContract::default(),
         }
     }
 
-    /// Construct a non-executable task carrying classification facts.
+    /// Construct a synthesized same-scope aggregate task.
+    pub fn aggregate(
+        name: impl Into<String>,
+        dependencies: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            authored: false,
+            registered: true,
+            execution: NativeTaskExecution::Aggregate(
+                dependencies
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            ),
+            display: None,
+            script: None,
+            cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
+            contract: NativeTaskContract::default(),
+        }
+    }
+
+    /// Construct a non-participating task carrying classification facts.
     pub fn contract_task(name: impl Into<String>, contract: NativeTaskContract) -> Self {
         Self {
             name: name.into(),
             authored: false,
             registered: false,
-            executable: false,
+            execution: NativeTaskExecution::None,
             display: None,
             script: None,
-            command: None,
             cwd_policy: WorkingDirectoryPolicy::RepositoryRoot,
             contract,
         }
@@ -246,7 +285,11 @@ impl ScopeNativeTasks {
     }
 
     pub fn defines(&self, name: &str) -> bool {
-        self.get(name).is_some_and(NativeTask::executable)
+        self.get(name).is_some_and(NativeTask::executes)
+    }
+
+    pub fn participates(&self, name: &str) -> bool {
+        self.get(name).is_some_and(NativeTask::participates)
     }
 
     pub fn authors(&self, name: &str) -> bool {
@@ -345,6 +388,54 @@ impl NativeTaskKnowledge {
                 });
             }
 
+            let participating: HashMap<_, _> = tasks
+                .iter()
+                .map(|task| (task.name.clone(), task.participates()))
+                .collect();
+            for task in &mut tasks {
+                let NativeTaskExecution::Aggregate(dependencies) = &mut task.execution else {
+                    continue;
+                };
+                let mut seen = HashSet::new();
+                let mut normalized = Vec::with_capacity(dependencies.len());
+                for dependency in dependencies.iter() {
+                    if dependency.contains('#') {
+                        return Err(NativeTaskError::QualifiedAggregateChild {
+                            scope: observation.scope,
+                            task: task.name.clone(),
+                            dependency: dependency.clone(),
+                        });
+                    }
+                    if dependency == &task.name {
+                        return Err(NativeTaskError::SelfAggregateChild {
+                            scope: observation.scope,
+                            task: task.name.clone(),
+                        });
+                    }
+                    match participating.get(dependency) {
+                        None => {
+                            return Err(NativeTaskError::UnknownAggregateChild {
+                                scope: observation.scope,
+                                task: task.name.clone(),
+                                dependency: dependency.clone(),
+                            });
+                        }
+                        Some(false) => {
+                            return Err(NativeTaskError::NonParticipatingAggregateChild {
+                                scope: observation.scope,
+                                task: task.name.clone(),
+                                dependency: dependency.clone(),
+                            });
+                        }
+                        Some(true) => {}
+                    }
+                    if seen.insert(dependency.clone()) {
+                        normalized.push(dependency.clone());
+                    }
+                }
+                *dependencies = normalized.into_boxed_slice();
+            }
+
             let state = if tasks.is_empty() {
                 ScopeNativeTasks::Empty
             } else {
@@ -374,6 +465,26 @@ pub enum NativeTaskError {
     UnknownScope { identity: String },
     #[error("scope {scope} contributed duplicate native task {task}")]
     DuplicateTask { scope: String, task: String },
+    #[error("aggregate native task {scope}#{task} has qualified child {dependency}")]
+    QualifiedAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
+    #[error("aggregate native task {scope}#{task} cannot depend on itself")]
+    SelfAggregateChild { scope: String, task: String },
+    #[error("aggregate native task {scope}#{task} has unknown child {dependency}")]
+    UnknownAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
+    #[error("aggregate native task {scope}#{task} has non-participating child {dependency}")]
+    NonParticipatingAggregateChild {
+        scope: String,
+        task: String,
+        dependency: String,
+    },
 }
 
 /// Convert package.json scripts into native-task observations.
@@ -389,19 +500,22 @@ pub fn observation_from_scripts(
             name: name.clone(),
             authored: executable,
             registered: false,
-            executable,
+            execution: if executable {
+                NativeTaskExecution::Command(NativeCommandTemplate {
+                    program: NativeCommandProgram::PackageManager,
+                    arguments: NativeCommandArguments {
+                        prefix: vec!["run".to_string(), name.clone()],
+                        pass_through_placement: PassThroughPlacement::AfterSuffix,
+                        pass_through_separator: Some(PassThroughSeparator::PackageManager),
+                        suffix: Vec::new(),
+                    },
+                    serial_group: None,
+                })
+            } else {
+                NativeTaskExecution::None
+            },
             display: executable.then(|| script.as_inner().clone()),
             script: Some(script.clone()),
-            command: executable.then(|| NativeCommandTemplate {
-                program: NativeCommandProgram::PackageManager,
-                arguments: NativeCommandArguments {
-                    prefix: vec!["run".to_string(), name.clone()],
-                    pass_through_placement: PassThroughPlacement::AfterSuffix,
-                    pass_through_separator: Some(PassThroughSeparator::PackageManager),
-                    suffix: Vec::new(),
-                },
-                serial_group: None,
-            }),
             cwd_policy: WorkingDirectoryPolicy::PackageDirectory,
             contract: NativeTaskContract::default(),
         });
@@ -446,7 +560,7 @@ pub fn resolve_task_command(
     let Some(template) = task.command() else {
         return Ok(None);
     };
-    if !task.executable() {
+    if !task.executes() {
         return Ok(None);
     }
 
@@ -577,7 +691,8 @@ mod tests {
             .find(|task| task.name() == "build")
             .unwrap();
         assert!(build.authored());
-        assert!(build.executable());
+        assert!(build.executes());
+        assert!(build.participates());
         assert!(!build.registered());
         assert_eq!(build.display(), Some("next build"));
         let empty = observation
@@ -586,7 +701,8 @@ mod tests {
             .find(|task| task.name() == "empty")
             .unwrap();
         assert!(!empty.authored());
-        assert!(!empty.executable());
+        assert!(!empty.executes());
+        assert!(!empty.participates());
         let tasks = ScopeNativeTasks::Available(observation.tasks.into_boxed_slice());
         assert_eq!(tasks.script_names(), ["build", "empty"]);
     }
@@ -621,6 +737,98 @@ mod tests {
         assert!(matches!(error, NativeTaskError::UnknownScope { .. }));
     }
 
+    fn test_command(name: &str) -> NativeTask {
+        NativeTask::command_task(
+            name,
+            format!("tool {name}"),
+            NativeCommandProgram::Tool("tool".into()),
+            NativeCommandArguments::new(vec![name.to_string()]),
+            None,
+            WorkingDirectoryPolicy::RepositoryRoot,
+        )
+    }
+
+    fn test_observation(tasks: Vec<NativeTask>) -> NativeTaskObservation {
+        NativeTaskObservation {
+            scope: "web".into(),
+            tasks,
+            task_contract: crate::task_contracts::ScopeTaskContract::javascript(),
+        }
+    }
+
+    #[test]
+    fn catalog_rejects_invalid_aggregate_children() {
+        let repository = repository();
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["other#check"]),
+                test_command("check"),
+            ])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::QualifiedAggregateChild { .. }
+        ));
+
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![NativeTask::aggregate(
+                "all",
+                ["all"],
+            )])],
+        )
+        .unwrap_err();
+        assert!(matches!(error, NativeTaskError::SelfAggregateChild { .. }));
+
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![NativeTask::aggregate(
+                "all",
+                ["missing"],
+            )])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::UnknownAggregateChild { .. }
+        ));
+
+        let contract = NativeTask::contract_task("build", NativeTaskContract::default());
+        assert!(!contract.participates());
+        let error = NativeTaskKnowledge::build(
+            &repository,
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["build"]),
+                contract,
+            ])],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            NativeTaskError::NonParticipatingAggregateChild { .. }
+        ));
+    }
+
+    #[test]
+    fn catalog_deduplicates_aggregate_children_in_observation_order() {
+        let knowledge = NativeTaskKnowledge::build(
+            &repository(),
+            vec![test_observation(vec![
+                NativeTask::aggregate("all", ["check", "lint", "check"]),
+                test_command("check"),
+                test_command("lint"),
+            ])],
+        )
+        .unwrap();
+
+        assert_eq!(
+            knowledge.for_scope("web").get("all").unwrap().execution(),
+            &NativeTaskExecution::Aggregate(vec!["check".into(), "lint".into()].into_boxed_slice())
+        );
+    }
+
     #[test]
     fn cargo_tasks_are_registered_not_authored() {
         let task = NativeTask::command_task(
@@ -638,7 +846,8 @@ mod tests {
         );
         assert!(!task.authored());
         assert!(task.registered());
-        assert!(task.executable());
+        assert!(task.executes());
+        assert!(task.participates());
         assert_eq!(task.cwd_policy(), WorkingDirectoryPolicy::RepositoryRoot);
         assert!(
             ScopeNativeTasks::Available(vec![task].into_boxed_slice())
@@ -722,5 +931,32 @@ mod tests {
             resolve_task_command(&context, &task, None, None, None, None, None),
             Err(ResolveNativeCommandError::MissingToolBinary { tool }) if tool == "uv"
         ));
+    }
+
+    #[test]
+    fn aggregate_participates_without_executing() {
+        let task = NativeTask::aggregate("all", ["lint", "test"]);
+        assert!(task.participates());
+        assert!(!task.executes());
+        assert!(task.registered());
+        assert_eq!(
+            task.execution(),
+            &NativeTaskExecution::Aggregate(vec!["lint".into(), "test".into()].into_boxed_slice())
+        );
+
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let context = PackageTaskContext::new_for_test(
+            PackageName::from("workspace"),
+            &root,
+            turbopath::AnchoredSystemPath::new("").unwrap(),
+            PackageTaskContextKind::Aggregate,
+            None,
+        );
+        assert!(
+            resolve_task_command(&context, &task, None, None, None, None, None)
+                .unwrap()
+                .is_none()
+        );
     }
 }

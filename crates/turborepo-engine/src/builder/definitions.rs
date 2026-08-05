@@ -255,7 +255,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             .as_ref()
             .and_then(|context| context.native_tasks().get(task_id.task()));
         let native_contract = native_task.map(|task| task.contract().clone());
-        let defines_task = native_task.is_some_and(|task| task.executable());
+        let defines_task = native_task.is_some_and(|task| task.executes());
         let registered_task = package_context
             .as_ref()
             .is_some_and(|context| context.native_tasks().registers(task_id.task()));

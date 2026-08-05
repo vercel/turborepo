@@ -732,7 +732,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.executes() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect::<Vec<_>>()
                     })
@@ -754,7 +754,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.executes() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect();
                         Ok((package, scripts))

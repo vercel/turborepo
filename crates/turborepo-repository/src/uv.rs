@@ -2066,7 +2066,7 @@ overridden = { index = "private" }
         assert!(
             tasks
                 .iter()
-                .all(|task| task.registered() && task.executable())
+                .all(|task| task.registered() && task.executes())
         );
         let build = tasks.iter().find(|task| task.name() == "build").unwrap();
         assert_eq!(build.contract().defaults().cache, Some(false));
@@ -2086,7 +2086,7 @@ overridden = { index = "private" }
             .iter()
             .find(|task| task.name() == "build")
             .unwrap();
-        assert!(!build.executable());
+        assert!(!build.executes());
         assert_eq!(
             build.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Excluded)
