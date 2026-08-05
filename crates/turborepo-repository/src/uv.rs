@@ -427,11 +427,11 @@ impl PythonTool {
         }
     }
 
-    fn role(self) -> ToolRole {
+    fn supports_role(self, role: ToolRole) -> bool {
         match self {
-            Self::Ruff => ToolRole::Lint,
-            Self::Black => ToolRole::Format,
-            Self::Mypy | Self::Ty | Self::Pyright => ToolRole::Check,
+            Self::Ruff => matches!(role, ToolRole::Lint | ToolRole::Format),
+            Self::Black => role == ToolRole::Format,
+            Self::Mypy | Self::Ty | Self::Pyright => role == ToolRole::Check,
         }
     }
 }
@@ -493,9 +493,7 @@ impl ToolDeclarations {
         Self(
             self.0
                 .iter()
-                .filter(|(tool, _)| {
-                    tool.role() == role || **tool == PythonTool::Ruff && role == ToolRole::Format
-                })
+                .filter(|(tool, _)| tool.supports_role(role))
                 .map(|(tool, declaration)| (*tool, declaration.clone()))
                 .collect(),
         )
