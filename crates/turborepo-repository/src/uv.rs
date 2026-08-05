@@ -1484,11 +1484,31 @@ fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) ->
 /// transitive closure (see [`external_closures`]), so a dependency bump
 /// only invalidates the packages that actually depend on it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
-    [PYPROJECT_TOML, "uv.toml", ".python-version"]
-        .iter()
-        .map(|rel| join_prefix(prefix, rel))
-        .collect()
+    [
+        PYPROJECT_TOML,
+        "uv.toml",
+        ".python-version",
+        "ruff.toml",
+        ".ruff.toml",
+        "mypy.ini",
+        ".mypy.ini",
+        "pyrightconfig.json",
+        "setup.cfg",
+        "ty.toml",
+    ]
+    .iter()
+    .map(|rel| join_prefix(prefix, rel))
+    .collect()
 }
+
+const PYTHON_CACHE_GLOBS: [&str; 6] = [
+    ".venv/**",
+    ".ruff_cache/**",
+    ".mypy_cache/**",
+    ".pyright/**",
+    ".ty/**",
+    "**/__pycache__/**",
+];
 
 fn join_prefix(prefix: &str, rel: &str) -> String {
     if prefix.is_empty() {
@@ -1557,6 +1577,8 @@ impl UvTaskContract {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
+        io.input_globs
+            .extend(PYTHON_CACHE_GLOBS.map(|cache| format!("!{cache}")));
         // These variables point at files whose contents affect uv. Until the
         // paths can be resolved against the repository safely, fail closed
         // instead of restoring an artifact hashed only by the path string.
@@ -1579,7 +1601,12 @@ impl UvTaskContract {
                                     path_to_root,
                                     dependency.directory().to_unix().as_str(),
                                 );
-                                [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                                std::iter::once(format!("{directory}/**"))
+                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                    .chain(
+                                        PYTHON_CACHE_GLOBS
+                                            .map(|cache| format!("!{directory}/{cache}")),
+                                    )
                             })
                             .collect();
                         globs.sort();
@@ -1612,7 +1639,11 @@ impl UvTaskContract {
                         .iter()
                         .flat_map(|directory| {
                             let directory = join_prefix(path_to_root, directory);
-                            [format!("{directory}/**"), format!("!{directory}/.turbo/**")]
+                            std::iter::once(format!("{directory}/**"))
+                                .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                .chain(
+                                    PYTHON_CACHE_GLOBS.map(|cache| format!("!{directory}/{cache}")),
+                                )
                         })
                         .collect();
                     globs.sort();
@@ -1837,12 +1868,24 @@ impl PruneDomain for UvPruneKnowledge {
     }
 }
 
-fn uv_change_observation() -> ChangeObservation {
-    ChangeObservation::new()
+fn uv_change_observation(package_directories: &[String]) -> ChangeObservation {
+    let mut observation = ChangeObservation::new()
         .with_rediscovery_file_name(PYPROJECT_TOML)
         .with_resolution_path(UV_LOCK)
         .with_ignore_prefix(".venv")
-        .with_ignore_prefix("dist")
+        .with_ignore_prefix("dist");
+    for directory in std::iter::once("").chain(package_directories.iter().map(String::as_str)) {
+        for cache in [
+            ".ruff_cache",
+            ".mypy_cache",
+            ".pyright",
+            ".ty",
+            "__pycache__",
+        ] {
+            observation = observation.with_ignore_prefix(join_prefix(directory, cache));
+        }
+    }
+    observation
 }
 
 // ---------------------------------------------------------------------------
@@ -1895,7 +1938,6 @@ impl RepositoryContributor for UvContributor {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
-            let change_observation = uv_change_observation();
             let lockfile = read_lockfile(&self.repo_root)
                 .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
             let mut package_directories: HashMap<String, String> = packages
@@ -1918,6 +1960,7 @@ impl RepositoryContributor for UvContributor {
                 .collect();
             workspace_directories.sort();
             workspace_directories.dedup();
+            let change_observation = uv_change_observation(&workspace_directories);
             let prune_domain = UvPruneKnowledge::discover(
                 &self.repo_root,
                 package_directories.clone(),
@@ -1974,7 +2017,11 @@ impl RepositoryContributor for UvContributor {
                     !workspace.quality_plan.format_homogeneous,
                 );
                 let task_contract = UvTaskContract::new(kind, &package.name);
-                let external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                if package.quality_plan.uses_root_tools() {
+                    // Root-owned tools execute against the root environment.
+                    external_dependencies.extend(workspace_externals.iter().cloned());
+                }
                 resolutions.push(package_resolution(
                     package.name.clone(),
                     &external_dependencies,
@@ -3106,6 +3153,100 @@ overridden = { index = "private" }
     fn test_derived_outputs_for_build() {
         let contract = UvTaskContract::new(UvPackageKind::Package, "py-app");
         assert_eq!(contract.dist_name, "py_app");
+        assert_eq!(
+            hash_input_globs("../.."),
+            [
+                "pyproject.toml",
+                "uv.toml",
+                ".python-version",
+                "ruff.toml",
+                ".ruff.toml",
+                "mypy.ini",
+                ".mypy.ini",
+                "pyrightconfig.json",
+                "setup.cfg",
+                "ty.toml",
+            ]
+            .map(|path| format!("../../{path}"))
+        );
+    }
+
+    #[test]
+    fn test_check_inputs_include_dependency_sources_and_exclude_python_caches() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let package_directory = turbopath::AnchoredSystemPath::new("packages/app").unwrap();
+        let dependency_directory = turbopath::AnchoredSystemPath::new("packages/lib").unwrap();
+        let package = PackageTaskContext::new_for_test(
+            PackageName::from("app"),
+            &root,
+            package_directory,
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let dependency = PackageTaskContext::new_for_test_with_native_tasks(
+            PackageName::from("lib"),
+            &root,
+            dependency_directory,
+            PackageTaskContextKind::Package,
+            None,
+            None,
+            Some(crate::task_contracts::ScopeTaskContract::python(
+                UvTaskContract::new(UvPackageKind::Package, "lib"),
+            )),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let io = UvTaskContract::new(UvPackageKind::VirtualPackage, "app")
+            .derived_task_io(
+                &package,
+                "check:mypy",
+                "../..",
+                &[dependency],
+                true,
+                &context,
+            )
+            .unwrap();
+
+        assert!(
+            io.input_globs
+                .contains(&"../../packages/lib/**".to_string())
+        );
+        assert!(
+            io.input_globs
+                .contains(&"!../../packages/lib/.mypy_cache/**".to_string())
+        );
+        assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
+    }
+
+    #[test]
+    fn test_python_watch_ignores_root_and_member_caches() {
+        let observation = uv_change_observation(&["packages/app".to_string()]);
+        let expected = ChangeObservation::new()
+            .with_rediscovery_file_name(PYPROJECT_TOML)
+            .with_resolution_path(UV_LOCK)
+            .with_ignore_prefix(".venv")
+            .with_ignore_prefix("dist");
+        let expected = ["", "packages/app"]
+            .into_iter()
+            .fold(expected, |observation, dir| {
+                [
+                    ".ruff_cache",
+                    ".mypy_cache",
+                    ".pyright",
+                    ".ty",
+                    "__pycache__",
+                ]
+                .into_iter()
+                .fold(observation, |observation, cache| {
+                    observation.with_ignore_prefix(join_prefix(dir, cache))
+                })
+            });
+
+        assert_eq!(observation, expected);
     }
 
     #[test]
