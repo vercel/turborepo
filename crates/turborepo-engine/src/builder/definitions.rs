@@ -30,6 +30,8 @@ pub(super) struct TaskDefMemoKey {
     path_to_root: turbopath::RelativeUnixPathBuf,
     native_execution: NativeTaskExecution,
     native_contract: Option<NativeTaskContract>,
+    authored_task: bool,
+    registered_task: bool,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -254,14 +256,20 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let native_task = package_context
             .as_ref()
             .and_then(|context| context.native_tasks().get(task_id.task()));
-        let native_execution = native_task
+        let native_contract = native_task.map(|task| task.contract().clone());
+        let mut native_execution = native_task
             .map(|task| task.execution().clone())
             .unwrap_or(NativeTaskExecution::None);
-        let native_contract = native_task.map(|task| task.contract().clone());
+        if task_is_excluded(&turbo_json_chain, task_id.as_inner(), task_name) {
+            native_execution = NativeTaskExecution::None;
+        }
         let defines_task = matches!(native_execution, NativeTaskExecution::Command(_));
         let registered_task = package_context
             .as_ref()
             .is_some_and(|context| context.native_tasks().registers(task_id.task()));
+        let authored_task = package_context
+            .as_ref()
+            .is_some_and(|context| context.native_tasks().authors(task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
@@ -298,6 +306,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 path_to_root: path_to_root.clone(),
                 native_execution: native_execution.clone(),
                 native_contract: native_contract.clone(),
+                authored_task,
+                registered_task,
             })
         };
         if let Some(key) = &memo_key
@@ -335,12 +345,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let command_override = resolve_command_override(
             scoped_command,
             unscoped_command,
-            package_context.as_ref().map(|context| {
-                (
-                    context.task_contract(),
-                    context.native_tasks().authors(task_id.as_inner().task()),
-                )
-            }),
+            package_context
+                .as_ref()
+                .map(|context| (context.task_contract(), authored_task)),
         );
 
         let mut processed_task_definition = ProcessedTaskDefinition::from_iter(
@@ -553,12 +560,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         should_validate_engine: bool,
         registered_task: bool,
     ) -> Result<Vec<(ProcessedTaskDefinition, bool)>, BuilderError> {
-        let root_used_scoped_key = |turbo_json: &TurboJson| {
-            turbo_json
-                .tasks
-                .get(&task_id.as_inner().as_task_name())
-                .is_some()
-        };
         let mut task_definitions = Vec::new();
 
         // Find the first package in the chain (iterating in reverse from leaf to root)
@@ -566,7 +567,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // packages.
         let mut extends_false_index: Option<usize> = None;
         for (index, turbo_json) in turbo_json_chain.iter().enumerate().rev() {
-            if let Some(task_def) = turbo_json.tasks.get(task_name)
+            if let Some(key) = configured_task_key(turbo_json, task_id, task_name)
+                && let Some(task_def) = turbo_json.tasks.get(&key)
                 && task_def
                     .extends
                     .as_ref()
@@ -582,15 +584,18 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // If we found extends: false, only process from that point onwards
         if let Some(index) = extends_false_index {
             if let Some(turbo_json) = turbo_json_chain.get(index)
-                && let Some(local_def) = turbo_json.task(task_id, task_name)?
+                && let Some(key) = configured_task_key(turbo_json, task_id, task_name)
+                && let Some(local_def) = turbo_json.task(task_id, &key)?
                 && local_def.has_config_beyond_extends()
             {
-                let scoped = index > 0 || root_used_scoped_key(turbo_json);
+                let scoped = index > 0 || key.is_package_task();
                 task_definitions.push((local_def, scoped));
             }
             // Process any packages after this one (towards the leaf)
             for turbo_json in turbo_json_chain.iter().skip(index + 1) {
-                if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
+                if let Some(key) = configured_task_key(turbo_json, task_id, task_name)
+                    && let Some(workspace_def) = turbo_json.task(task_id, &key)?
+                {
                     task_definitions.push((workspace_def, true));
                 }
             }
@@ -601,9 +606,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let mut turbo_json_chain = turbo_json_chain.into_iter();
 
         if let Some(root_turbo_json) = turbo_json_chain.next()
-            && let Some(root_definition) = root_turbo_json.task(task_id, task_name)?
+            && let Some(key) = configured_task_key(root_turbo_json, task_id, task_name)
+            && let Some(root_definition) = root_turbo_json.task(task_id, &key)?
         {
-            let scoped = root_used_scoped_key(root_turbo_json);
+            let scoped = key.is_package_task();
             task_definitions.push((root_definition, scoped))
         }
 
@@ -624,7 +630,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         }
 
         for turbo_json in turbo_json_chain {
-            if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
+            if let Some(key) = configured_task_key(turbo_json, task_id, task_name)
+                && let Some(workspace_def) = turbo_json.task(task_id, &key)?
+            {
                 task_definitions.push((workspace_def, true));
             }
         }
@@ -762,6 +770,37 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         Ok(turbo_jsons.into_iter().rev().collect())
     }
+}
+
+fn task_is_excluded(
+    turbo_json_chain: &[&TurboJson],
+    task_id: &TaskId,
+    task_name: &TaskName,
+) -> bool {
+    turbo_json_chain.iter().rev().find_map(|turbo_json| {
+        configured_task_key(turbo_json, task_id, task_name).and_then(|key| {
+            turbo_json.tasks.get(&key).map(|definition| {
+                definition
+                    .extends
+                    .as_ref()
+                    .is_some_and(|extends| !*extends.as_inner())
+                    && !definition.has_config_beyond_extends()
+            })
+        })
+    }) == Some(true)
+}
+
+fn configured_task_key(
+    turbo_json: &TurboJson,
+    task_id: &TaskId,
+    task_name: &TaskName,
+) -> Option<TaskName<'static>> {
+    let scoped = task_id.as_task_name();
+    let base = TaskName::from(task_name.task());
+    [&scoped, task_name, &base]
+        .into_iter()
+        .find(|key| turbo_json.tasks.contains_key(*key))
+        .map(|key| key.clone().into_owned())
 }
 
 /// Resolve a task's `command` override across the five precedence levels
