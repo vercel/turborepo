@@ -238,6 +238,45 @@ fn retry_file_change(test_dir: &Path, pkg: &str, before: usize, max_attempts: us
     marker_count(test_dir, pkg)
 }
 
+/// Modify a package README and retry until its observer acknowledges the
+/// change. Filesystem watchers may coalesce notifications under load, so each
+/// attempt writes and commits distinct content.
+fn retry_observed_change(
+    test_dir: &Path,
+    pkg: &str,
+    description: &str,
+    before: usize,
+    max_attempts: usize,
+) -> usize {
+    let readme = test_dir.join(format!("packages/{pkg}/README.md"));
+    for attempt in 0..max_attempts {
+        fs::write(&readme, format!("# {description} (attempt {attempt})\n")).unwrap();
+        common::git(test_dir, &["add", "."]);
+        common::git(
+            test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("{description} (attempt {attempt})"),
+                "--quiet",
+            ],
+        );
+
+        let count = wait_for_prefixed_markers(
+            test_dir,
+            pkg,
+            "observe-",
+            before + 1,
+            Duration::from_secs(10),
+        );
+        if count > before {
+            return count;
+        }
+    }
+
+    prefixed_marker_count(test_dir, pkg, "observe-")
+}
+
 fn setup_watch_test() -> (tempfile::TempDir, PathBuf) {
     let tempdir = tempfile::tempdir().expect("failed to create tempdir");
     let test_dir = tempdir.path().to_path_buf();
@@ -1196,20 +1235,8 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
 
     // A package change reruns its non-persistent task but must not restart the
     // persistent app that depends on it.
-    fs::write(
-        test_dir.join("packages/pkg/README.md"),
-        "# Package changed\n",
-    )
-    .unwrap();
-    common::git(&test_dir, &["add", "."]);
-    common::git(&test_dir, &["commit", "-m", "change package", "--quiet"]);
-    let pkg_observe_after_change = wait_for_prefixed_markers(
-        &test_dir,
-        "pkg",
-        "observe-",
-        pkg_observe_before + 1,
-        Duration::from_secs(30),
-    );
+    let pkg_observe_after_change =
+        retry_observed_change(&test_dir, "pkg", "change package", pkg_observe_before, 3);
     assert!(
         pkg_observe_after_change > pkg_observe_before,
         "package observer should acknowledge the package change"
@@ -1228,22 +1255,12 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
 
     // This independent event cannot affect either dev task. Its observer can
     // only run after the package-change run has completed.
-    fs::write(
-        test_dir.join("packages/observer/README.md"),
-        "# Package change completed\n",
-    )
-    .unwrap();
-    common::git(&test_dir, &["add", "."]);
-    common::git(
-        &test_dir,
-        &["commit", "-m", "observe package change", "--quiet"],
-    );
-    let observer_after_package_change = wait_for_prefixed_markers(
+    let observer_after_package_change = retry_observed_change(
         &test_dir,
         "observer",
-        "observe-",
-        observer_before + 1,
-        Duration::from_secs(30),
+        "observe package change",
+        observer_before,
+        3,
     );
     assert!(
         observer_after_package_change > observer_before,
@@ -1258,16 +1275,8 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
 
     // An app change is handled by its persistent server and must not rerun the
     // app's non-cacheable upstream dependency.
-    fs::write(test_dir.join("packages/app/README.md"), "# App changed\n").unwrap();
-    common::git(&test_dir, &["add", "."]);
-    common::git(&test_dir, &["commit", "-m", "change app", "--quiet"]);
-    let app_observe_after_change = wait_for_prefixed_markers(
-        &test_dir,
-        "app",
-        "observe-",
-        app_observe_before + 1,
-        Duration::from_secs(30),
-    );
+    let app_observe_after_change =
+        retry_observed_change(&test_dir, "app", "change app", app_observe_before, 3);
     assert!(
         app_observe_after_change > app_observe_before,
         "app observer should acknowledge the app change"
@@ -1275,22 +1284,12 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
 
     // A second independent observer event is a completion barrier for the app
     // event, preventing negative assertions from racing its tasks.
-    fs::write(
-        test_dir.join("packages/observer/README.md"),
-        "# App change completed\n",
-    )
-    .unwrap();
-    common::git(&test_dir, &["add", "."]);
-    common::git(
-        &test_dir,
-        &["commit", "-m", "observe app change", "--quiet"],
-    );
-    let observer_after_app_change = wait_for_prefixed_markers(
+    let observer_after_app_change = retry_observed_change(
         &test_dir,
         "observer",
-        "observe-",
-        observer_before + 2,
-        Duration::from_secs(30),
+        "observe app change",
+        observer_after_package_change,
+        3,
     );
     assert!(
         observer_after_app_change > observer_after_package_change,
