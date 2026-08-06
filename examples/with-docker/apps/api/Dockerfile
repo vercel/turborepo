@@ -18,7 +18,8 @@ WORKDIR /app
 
 # First install dependencies (as they change less often)
 COPY --from=prepare /app/out/json/ .
-RUN yarn install
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn,id=yarn-cache \
+    yarn install
 
 # Build the project and its dependencies
 COPY --from=prepare /app/out/full/ .
@@ -30,7 +31,8 @@ COPY --from=prepare /app/out/full/ .
 # ARG TURBO_TOKEN
 # ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo build
+RUN --mount=type=cache,target=/app/.turbo/cache,id=turbo-cache \
+    yarn turbo build
 
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
