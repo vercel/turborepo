@@ -5,6 +5,7 @@ pub mod npm;
 pub mod npmrc;
 pub mod nub;
 pub mod pnpm;
+pub mod utoo;
 pub mod yarn;
 pub mod yarnrc;
 
@@ -85,6 +86,12 @@ pub enum PackageManager {
     Aube {
         lockfile: Box<PackageManager>,
     },
+    /// utoo (<https://utoo.land>) uses an npm-compatible `package-lock.json`
+    /// while exposing the `ut` package-manager CLI. `lockfile` holds the
+    /// concrete package manager whose lockfile operations delegate to.
+    Utoo {
+        lockfile: Box<PackageManager>,
+    },
 }
 
 #[derive(Debug)]
@@ -134,6 +141,10 @@ impl Display for MissingWorkspaceError {
             PackageManager::Aube { .. } => {
                 "aube-workspace.yaml or package.json: no packages found. Turborepo requires \
                  workspaces to be defined in the root aube-workspace.yaml or package.json"
+            }
+            PackageManager::Utoo { .. } => {
+                "package.json: no workspaces found. Turborepo requires workspaces to be defined in \
+                 the root package.json"
             }
         };
         write!(f, "{err}")
@@ -254,6 +265,7 @@ impl PackageManager {
         match self {
             PackageManager::Aube { lockfile } => lockfile.as_ref(),
             PackageManager::Nub { lockfile } => lockfile.as_ref(),
+            PackageManager::Utoo { lockfile } => lockfile.as_ref(),
             other => other,
         }
     }
@@ -276,6 +288,9 @@ impl PackageManager {
             },
             PackageManager::Nub { .. } => PackageManager::Nub {
                 lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+            },
+            PackageManager::Utoo { .. } => PackageManager::Utoo {
+                lockfile: Box::new(utoo::underlying_lockfile_manager(repo_root)),
             },
             other => other,
         }
@@ -305,6 +320,7 @@ impl PackageManager {
             PackageManager::Bun => "bun",
             PackageManager::Nub { .. } => "nub",
             PackageManager::Aube { .. } => "aube",
+            PackageManager::Utoo { .. } => "utoo",
         }
     }
 
@@ -316,6 +332,7 @@ impl PackageManager {
             PackageManager::Bun => "bun",
             PackageManager::Nub { .. } => "nub",
             PackageManager::Aube { .. } => "aube",
+            PackageManager::Utoo { .. } => "ut",
         }
     }
 
@@ -343,9 +360,10 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 pnpm::get_default_exclusions()
             }
-            PackageManager::Npm | PackageManager::Nub { .. } | PackageManager::Aube { .. } => {
-                ["**/node_modules/**"].as_slice()
-            }
+            PackageManager::Npm
+            | PackageManager::Nub { .. }
+            | PackageManager::Aube { .. }
+            | PackageManager::Utoo { .. } => ["**/node_modules/**"].as_slice(),
             PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
             PackageManager::Berry => ["**/node_modules", "**/.git", "**/.yarn"].as_slice(),
             PackageManager::Yarn => [].as_slice(), // yarn does its own handling above
@@ -435,6 +453,18 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManager::Utoo { .. } => {
+                let package_json_text =
+                    fs::read_to_string(root_path.join_component("package.json"))?;
+                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
+
+                if package_json.workspaces.as_ref().is_empty() {
+                    return Err(MissingWorkspaceError::from(self.clone()).into());
+                } else {
+                    package_json.workspaces.into()
+                }
+            }
         };
 
         // Normalize globs by stripping leading "./" since paths are relative to the
@@ -492,6 +522,9 @@ impl PackageManager {
                 "nub" => Ok(PackageManager::Nub {
                     lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
                 }),
+                "utoo" => Ok(PackageManager::Utoo {
+                    lockfile: Box::new(utoo::underlying_lockfile_manager(repo_root)),
+                }),
                 "yarn" => Ok(YarnDetector::new(repo_root)
                     .next()
                     .ok_or_else(|| Error::MissingPackageManager)??),
@@ -519,6 +552,9 @@ impl PackageManager {
                 "bun" => Ok(PackageManager::Bun),
                 "nub" => Ok(PackageManager::Nub {
                     lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+                }),
+                "utoo" => Ok(PackageManager::Utoo {
+                    lockfile: Box::new(utoo::underlying_lockfile_manager(repo_root)),
                 }),
                 "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
                 "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
@@ -590,12 +626,15 @@ impl PackageManager {
                 "`devEngines.packageManager.name` must not contain leading or trailing whitespace",
             ));
         }
-        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun" | "nub" | "aube") {
+        if !matches!(
+            name,
+            "npm" | "pnpm" | "yarn" | "bun" | "nub" | "aube" | "utoo"
+        ) {
             return Err(Self::invalid_dev_engines_package_manager_at(
                 dev_engines,
                 &["packageManager", "name"],
                 "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, \
-                 `nub`, or `aube`",
+                 `nub`, `aube`, or `utoo`",
             ));
         }
 
@@ -744,6 +783,9 @@ impl PackageManager {
             "bun" => Ok(PackageManager::Bun),
             "nub" => Ok(PackageManager::Nub {
                 lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+            }),
+            "utoo" => Ok(PackageManager::Utoo {
+                lockfile: Box::new(utoo::underlying_lockfile_manager(repo_root)),
             }),
             "yarn" => YarnDetector::detect_berry_or_yarn(version),
             "pnpm" => PnpmDetector::detect_pnpm6_or_pnpm(version),
@@ -1036,7 +1078,7 @@ impl PackageManager {
         manager: &Spanned<String>,
     ) -> Result<(&str, &str), Error> {
         let package_manager_pattern = regex!(
-            r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
+            r"\A(?P<manager>aube|bun|npm|nub|pnpm|utoo|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
         );
         if let Some(captures) = package_manager_pattern.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
@@ -1067,6 +1109,7 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => pnpm::LOCKFILE,
             PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
             PackageManager::Aube { lockfile } => lockfile.lockfile_name(),
+            PackageManager::Utoo { lockfile } => lockfile.lockfile_name(),
             // nub uses the lockfile of whichever package manager the project
             // already uses; delegate to the resolved underlying manager.
             PackageManager::Nub { lockfile } => lockfile.lockfile_name(),
@@ -1086,6 +1129,7 @@ impl PackageManager {
             | PackageManager::Berry
             | PackageManager::Yarn
             | PackageManager::Bun
+            | PackageManager::Utoo { .. }
             // nub with a non-pnpm underlying lockfile reads `workspaces` from package.json.
             | PackageManager::Nub { .. } => None,
         }
@@ -1107,6 +1151,9 @@ impl PackageManager {
                 let contents = root_path.join_component(native_lockfile).read()?;
                 return lockfile.parse_lockfile(root_package_json, &contents, None);
             }
+            return lockfile.read_lockfile(root_path, root_package_json);
+        }
+        if let PackageManager::Utoo { lockfile } = self {
             return lockfile.read_lockfile(root_path, root_package_json);
         }
 
@@ -1182,7 +1229,9 @@ impl PackageManager {
                 )?)
             }
             // nub delegates to the parser of the lockfile actually present.
-            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
+            PackageManager::Nub { lockfile }
+            | PackageManager::Aube { lockfile }
+            | PackageManager::Utoo { lockfile } => {
                 return lockfile.parse_lockfile(root_package_json, contents, yarnrc);
             }
         })
@@ -1204,7 +1253,9 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
             // nub delegates patch pruning to the underlying package manager.
-            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
+            PackageManager::Nub { lockfile }
+            | PackageManager::Aube { lockfile }
+            | PackageManager::Utoo { lockfile } => {
                 lockfile.prune_patched_packages(package_json, patches, repo_root)
             }
         }
@@ -1304,7 +1355,7 @@ impl PackageManager {
                     None
                 }
             }
-            PackageManager::Npm | PackageManager::Pnpm6 => Some("--"),
+            PackageManager::Npm | PackageManager::Pnpm6 | PackageManager::Utoo { .. } => Some("--"),
             // nub has a pnpm-compatible CLI, which forwards script arguments
             // without needing a `--` separator.
             PackageManager::Pnpm
@@ -1337,6 +1388,7 @@ impl PackageManager {
             // drop every internal workspace edge declared without `workspace:`,
             // so resolve it from nub's own behavior instead.
             PackageManager::Nub { .. } => true,
+            PackageManager::Utoo { lockfile } => lockfile.link_workspace_packages(repo_root),
             PackageManager::Aube { lockfile } => match lockfile.as_ref() {
                 PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
                     let pnpm_version = pnpm::PnpmVersion::try_from(lockfile.as_ref())
@@ -1460,6 +1512,9 @@ mod tests {
             PackageManager::Yarn,
             PackageManager::Npm,
             PackageManager::Bun,
+            PackageManager::Utoo {
+                lockfile: Box::new(PackageManager::Npm),
+            },
         ] {
             let found = mgr.get_package_jsons(&with_yarn).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
@@ -1589,7 +1644,9 @@ mod tests {
                     "**/bower_components/**",
                     "packages/skip",
                 ],
-                PackageManager::Nub { .. } | PackageManager::Aube { .. } => &["**/node_modules/**"],
+                PackageManager::Nub { .. }
+                | PackageManager::Aube { .. }
+                | PackageManager::Utoo { .. } => &["**/node_modules/**"],
             };
             let expected: HashSet<String> =
                 HashSet::from_iter(expected.iter().map(|s| s.to_string()));
@@ -1706,6 +1763,13 @@ mod tests {
                 expected_error: false,
             },
             TestCase {
+                name: "supports utoo".to_owned(),
+                package_manager: Spanned::new("utoo@1.1.3".to_owned()),
+                expected_manager: "utoo".to_owned(),
+                expected_version: "1.1.3".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
                 name: "supports custom URL".to_owned(),
                 package_manager: Spanned::new("npm@https://some-npm-fork".to_owned()),
                 expected_manager: "npm".to_owned(),
@@ -1795,6 +1859,15 @@ mod tests {
             }
         );
 
+        package_json.package_manager = Some(Spanned::new("utoo@1.1.3".to_string()));
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(
+            package_manager,
+            PackageManager::Utoo {
+                lockfile: Box::new(PackageManager::Npm)
+            }
+        );
+
         Ok(())
     }
 
@@ -1808,6 +1881,7 @@ mod tests {
     #[test_case("pnpm", "9.12.3-alpha.0", PackageManager::Pnpm ; "pnpm prerelease")]
     #[test_case("nub", "0.1.0", PackageManager::Nub { lockfile: Box::new(PackageManager::Npm) } ; "nub")]
     #[test_case("aube", "0.1.0", PackageManager::Aube { lockfile: Box::new(PackageManager::Npm) } ; "aube")]
+    #[test_case("utoo", "1.1.3", PackageManager::Utoo { lockfile: Box::new(PackageManager::Npm) } ; "utoo")]
     // `devEngines.packageManager.version` is a semver range; the variant is
     // selected from the range's minimum satisfying version.
     #[test_case("pnpm", "^9.0.0", PackageManager::Pnpm9 ; "pnpm9 caret range")]

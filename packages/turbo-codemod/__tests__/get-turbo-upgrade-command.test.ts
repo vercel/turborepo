@@ -570,7 +570,8 @@ describe("get-turbo-upgrade-command", () => {
           yarn: undefined,
           bun: undefined,
           nub: undefined,
-          aube: undefined
+          aube: undefined,
+          utoo: undefined
         });
       const mockGetAvailablePackageManagers = jest
         .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -580,7 +581,8 @@ describe("get-turbo-upgrade-command", () => {
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
           bun: packageManager === "bun" ? packageManagerVersion : undefined,
           nub: packageManager === "nub" ? packageManagerVersion : undefined,
-          aube: packageManager === "aube" ? packageManagerVersion : undefined
+          aube: packageManager === "aube" ? packageManagerVersion : undefined,
+          utoo: packageManager === "utoo" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -636,7 +638,8 @@ describe("get-turbo-upgrade-command", () => {
           yarn: `/global/yarn/bin`,
           bun: `/global/bun/bin`,
           nub: `/global/nub/bin`,
-          aube: `/global/aube/bin`
+          aube: `/global/aube/bin`,
+          utoo: `/global/ut/bin`
         });
 
       const mockGetAvailablePackageManagers = jest
@@ -647,7 +650,8 @@ describe("get-turbo-upgrade-command", () => {
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
           bun: packageManager === "bun" ? packageManagerVersion : undefined,
           nub: packageManager === "nub" ? packageManagerVersion : undefined,
-          aube: packageManager === "aube" ? packageManagerVersion : undefined
+          aube: packageManager === "aube" ? packageManagerVersion : undefined,
+          utoo: packageManager === "utoo" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -786,7 +790,8 @@ describe("get-turbo-upgrade-command", () => {
           yarn: undefined,
           bun: undefined,
           nub: undefined,
-          aube: undefined
+          aube: undefined,
+          utoo: undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -846,7 +851,8 @@ describe("get-turbo-upgrade-command", () => {
             yarn: undefined,
             bun: undefined,
             nub: undefined,
-            aube: undefined
+            aube: undefined,
+            utoo: undefined
           });
 
         const project = getWorkspaceDetailsMockReturnValue({

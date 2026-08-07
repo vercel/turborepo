@@ -83,7 +83,9 @@ export async function convertCommand(
         { pm: "pnpm", label: "pnpm" },
         { pm: "yarn", label: "yarn" },
         { pm: "bun", label: "bun" },
-        { pm: "nub", label: "nub" }
+        { pm: "nub", label: "nub" },
+        { pm: "aube", label: "aube" },
+        { pm: "utoo", label: "utoo" }
       ].map(({ pm, label }) => ({
         name: label,
         value: pm as PackageManager,
