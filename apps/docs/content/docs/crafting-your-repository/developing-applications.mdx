@@ -69,6 +69,8 @@ You may also want to run scripts that set up your development environment or pre
 
 In this example, we're using a [Root Task](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) but you can use the same idea for [arbitrary tasks in packages](/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
 
+If a development task needs another long-running service to be available before it starts, visit the [coordinating runtime dependencies guide](/docs/guides/coordinating-runtime-dependencies).
+
 ### Running a specific application
 
 The `--filter` flag allows you to pick a subset of your [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) so you can run your `dev` task for a specific application and its dependencies:
