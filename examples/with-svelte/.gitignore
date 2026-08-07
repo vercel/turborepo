@@ -12,8 +12,15 @@ coverage
 .svelte-kit
 
 # misc
-.DS_Store
 *.pem
+.DS_Store
+.netlify
+.output
+.vercel
+.wrangler
+Thumbs.db
+build/
+package/
 
 # debug
 npm-debug.log*
@@ -25,8 +32,19 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+!.env.example
+!.env.test
 
 # turbo
-.turbo
+.turbo/
 
-dist
+dist/
+
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws

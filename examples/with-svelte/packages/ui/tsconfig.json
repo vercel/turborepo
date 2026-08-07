@@ -1,12 +1,8 @@
 {
-  "extends": ["@repo/typescript-config/svelte.json", "./.svelte-kit/tsconfig.json"],
-  "compilerOptions": {
-    "declaration": true,
-    "declarationMap": true,
-    "allowArbitraryExtensions": true,
-    "strictNullChecks": true,
-    "types": ["svelte"]
-  },
-  "include": ["dist", "./src/**/*.svelte", "./src/**/*.ts"],
-  "exclude": ["node_modules", ".svelte-kit"]
+	"compilerOptions": {
+		"rootDir": "./src"
+	},
+	"exclude": ["./.svelte-kit", "./.turbo", "./dist", "./node_modules"],
+	"extends": ["./.svelte-kit/tsconfig.json", "@repo/typescript-config/svelte.json"],
+	"include": ["./src/**/*.ts"]
 }

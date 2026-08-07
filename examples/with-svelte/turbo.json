@@ -1,21 +1,36 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalDependencies": [
+    ".gitignore",
+    ".prettierrc",
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "packages/eslint-config/index.js"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".svelte-kit/**", ".vercel/**", "dist/**"]
-    },
-    "lint": {
-      "dependsOn": ["^lint"]
+      "outputs": [".svelte-kit/**", ".turbo/**", ".vercel/**", "dist/**"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["build", "^check-types"]
     },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "inputs": ["$TURBO_DEFAULT$", "eslint.config.js", "eslint.config.mjs"],
+      "outputs": []
+    },
+    "lint:package": {
+      "dependsOn": ["build", "^lint:package"]
+    },
+    "test:unit": {
+      "dependsOn": ["build", "^test:unit"]
     }
   }
 }
