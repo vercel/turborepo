@@ -13,6 +13,9 @@ use turborepo_repository::{package_json::PackageJson, package_manager::PackageMa
 use super::Error;
 
 pub(crate) fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+    if version == "*" {
+        return Some(name);
+    }
     let specifier = version.strip_prefix("workspace:")?;
     match specifier.rsplit_once('@') {
         Some((target, "*" | "^" | "~")) if !target.is_empty() => Some(target),
