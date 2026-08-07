@@ -37,7 +37,7 @@ pub(crate) fn descendants(
                 continue;
             };
 
-            if child_times.creation <= parent_times.creation
+            if child_times.creation < parent_times.creation
                 || parent_times
                     .exit
                     .is_some_and(|exit| child_times.creation > exit)
