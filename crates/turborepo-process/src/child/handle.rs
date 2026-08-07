@@ -28,6 +28,8 @@ pub(super) struct ChildHandle {
     graceful_descendant_pids: Vec<libc::pid_t>,
     #[cfg(windows)]
     _job: Option<crate::job_object::JobObject>,
+    #[cfg(windows)]
+    root_identity: Option<std::sync::Arc<crate::job_object::ProcessIdentity>>,
     /// Shared handle to the ConPTY input pipe, used to deliver a Ctrl-C
     /// keystroke during graceful shutdown. ConPTY children are attached to a
     /// pseudoconsole rather than turbo's console, so console Ctrl-C events
@@ -293,6 +295,20 @@ impl ChildHandle {
         };
         let pid = child.id();
 
+        #[cfg(windows)]
+        let root_identity = match (pid, child.raw_handle()) {
+            (Some(pid), Some(handle)) => {
+                match crate::job_object::ProcessIdentity::duplicate_from(pid, handle) {
+                    Ok(identity) => Some(std::sync::Arc::new(identity)),
+                    Err(err) => {
+                        debug!("failed to retain process identity for child {pid}: {err}");
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
 
@@ -339,6 +355,8 @@ impl ChildHandle {
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
+                root_identity: root_identity.clone(),
+                #[cfg(windows)]
                 pty_input: None,
             },
             io: ChildIO {
@@ -346,6 +364,8 @@ impl ChildHandle {
                 output: Some(ChildOutput::Std { stdout, stderr }),
             },
             controller: None,
+            #[cfg(windows)]
+            root_identity,
         })
     }
 
@@ -402,6 +422,20 @@ impl ChildHandle {
             })?;
 
         let pid = child.process_id();
+
+        #[cfg(windows)]
+        let root_identity = match (pid, child.as_raw_handle()) {
+            (Some(pid), Some(handle)) => {
+                match crate::job_object::ProcessIdentity::duplicate_from(pid, handle) {
+                    Ok(identity) => Some(std::sync::Arc::new(identity)),
+                    Err(err) => {
+                        debug!("failed to retain process identity for PTY child {pid}: {err}");
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
 
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
@@ -474,10 +508,14 @@ impl ChildHandle {
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
+                root_identity: root_identity.clone(),
+                #[cfg(windows)]
                 pty_input,
             },
             io: ChildIO { stdin, output },
             controller: Some(controller),
+            #[cfg(windows)]
+            root_identity,
         })
     }
 
@@ -819,8 +857,8 @@ impl ChildHandle {
 
     #[cfg(windows)]
     fn has_running_windows_descendants(&self) -> bool {
-        match self.pid {
-            Some(pid) => match crate::job_object::has_descendant_processes(pid) {
+        match &self.root_identity {
+            Some(identity) => match crate::job_object::has_descendant_processes(identity) {
                 Ok(has_descendants) => has_descendants,
                 Err(err) => {
                     debug!("failed to query descendant processes: {err}");
@@ -839,8 +877,8 @@ impl ChildHandle {
             debug!("failed to terminate job object: {err}");
         }
 
-        if let Some(pid) = self.pid
-            && let Err(err) = crate::job_object::terminate_descendant_processes(pid)
+        if let Some(identity) = &self.root_identity
+            && let Err(err) = crate::job_object::terminate_descendant_processes(identity)
         {
             debug!("failed to terminate descendant process tree: {err}");
         }
@@ -979,4 +1017,6 @@ pub(super) struct SpawnResult {
     pub(super) handle: ChildHandle,
     pub(super) io: ChildIO,
     pub(super) controller: Option<Box<dyn PtyController + Send>>,
+    #[cfg(windows)]
+    pub(super) root_identity: Option<std::sync::Arc<crate::job_object::ProcessIdentity>>,
 }
