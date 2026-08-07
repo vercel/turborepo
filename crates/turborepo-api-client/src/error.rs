@@ -23,6 +23,8 @@ pub enum Error {
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing '{url}' as URL: {err}")]
     InvalidUrl { url: String, err: url::ParseError },
+    #[error("incremental artifact key must be 64 lowercase hexadecimal characters")]
+    InvalidIncrementalArtifactKey,
     #[error("Unknown caching status: {0}")]
     UnknownCachingStatus(String, #[backtrace] Backtrace),
     #[error("Unknown status {code}: {message}")]

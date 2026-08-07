@@ -32,6 +32,33 @@ pub enum CachingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachingStatusResponse {
     pub status: CachingStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<CachingCapabilities>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CachingCapabilities {
+    #[serde(
+        rename = "incremental-artifacts-v1",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub incremental_artifacts_v1: Option<IncrementalArtifactsCapability>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IncrementalArtifactsCapability {
+    pub max_artifact_size: u64,
+}
+
+impl CachingStatusResponse {
+    pub fn incremental_artifacts_v1(&self) -> Option<&IncrementalArtifactsCapability> {
+        self.capabilities
+            .as_ref()?
+            .incremental_artifacts_v1
+            .as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +181,29 @@ mod tests {
     use turborepo_types::SecretString;
 
     use crate::{AnalyticsEvent, CacheEvent, CacheSource, VerificationResponse, VerifiedSsoUser};
+
+    #[test]
+    fn status_without_capabilities_remains_compatible() {
+        let status: crate::CachingStatusResponse =
+            serde_json::from_str(r#"{"status":"enabled"}"#).unwrap();
+
+        assert!(status.incremental_artifacts_v1().is_none());
+    }
+
+    #[test]
+    fn status_exposes_incremental_artifact_limit() {
+        let status: crate::CachingStatusResponse = serde_json::from_str(
+            r#"{"status":"enabled","capabilities":{"incremental-artifacts-v1":{"maxArtifactSize":1048576}}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            status
+                .incremental_artifacts_v1()
+                .map(|capability| capability.max_artifact_size),
+            Some(1_048_576)
+        );
+    }
 
     #[test]
     fn verified_sso_user_debug_redacts_token() {

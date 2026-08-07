@@ -121,6 +121,32 @@ pub trait CacheClient {
     ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
 }
 
+pub trait IncrementalCacheClient {
+    fn fetch_incremental_artifact(
+        &self,
+        key: &str,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn incremental_artifact_exists(
+        &self,
+        key: &str,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn put_incremental_artifact(
+        &self,
+        key: &str,
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
+        body_len: usize,
+        publish_token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
 pub trait TokenClient {
     fn get_metadata(
         &self,
@@ -463,6 +489,83 @@ impl CacheClient for APIClient {
     }
 }
 
+impl IncrementalCacheClient for APIClient {
+    #[tracing::instrument(skip_all)]
+    async fn fetch_incremental_artifact(
+        &self,
+        key: &str,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_incremental_artifact(key, token, team_id, team_slug, Method::GET)
+            .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn incremental_artifact_exists(
+        &self,
+        key: &str,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_incremental_artifact(key, token, team_id, team_slug, Method::HEAD)
+            .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn put_incremental_artifact(
+        &self,
+        key: &str,
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
+        body_length: usize,
+        publish_token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<()> {
+        Self::validate_incremental_artifact_key(key)?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/incremental/{key}"))?;
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    publish_token,
+                    request_url.clone(),
+                    "PUT",
+                    "Authorization, Content-Length, Content-Type, User-Agent",
+                )
+                .await?;
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location;
+        }
+
+        let mut request_builder = self
+            .upload_request(Method::PUT, request_url)
+            .header("Content-Type", "application/octet-stream")
+            .header("Content-Length", body_length)
+            .header("User-Agent", self.user_agent.clone())
+            .body(Body::wrap_stream(artifact_body));
+        if allow_auth {
+            request_builder = request_builder.bearer_auth(publish_token.expose());
+        }
+        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Connection)
+                .await?
+                .into_response();
+
+        if response.status() == StatusCode::FORBIDDEN {
+            return Err(Self::handle_403(response).await);
+        }
+
+        response.error_for_status()?;
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Debug)]
 struct VercelAppTokenIntrospectionResponse {
     active: bool,
@@ -611,6 +714,62 @@ impl TokenClient for APIClient {
 }
 
 impl APIClient {
+    fn validate_incremental_artifact_key(key: &str) -> Result<()> {
+        if key.len() == 64
+            && key
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            Ok(())
+        } else {
+            Err(Error::InvalidIncrementalArtifactKey)
+        }
+    }
+
+    async fn get_incremental_artifact(
+        &self,
+        key: &str,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+        method: Method,
+    ) -> Result<Option<Response>> {
+        Self::validate_incremental_artifact_key(key)?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/incremental/{key}"))?;
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    request_url.clone(),
+                    method.as_str(),
+                    "Authorization, User-Agent",
+                )
+                .await?;
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location;
+        }
+
+        let mut request_builder = self
+            .api_request(method, request_url)
+            .header("User-Agent", self.user_agent.clone());
+        if allow_auth {
+            request_builder = request_builder.bearer_auth(token.expose());
+        }
+        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = response.into_response();
+
+        match response.status() {
+            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
+            StatusCode::NOT_FOUND => Ok(None),
+            _ => Ok(Some(response.error_for_status()?)),
+        }
+    }
+
     /// Create a new APIClient.
     ///
     /// # Arguments
@@ -1199,8 +1358,8 @@ mod test {
     use url::Url;
 
     use crate::{
-        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString, TokenClient,
-        telemetry::TelemetryClient,
+        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, IncrementalCacheClient,
+        SecretString, TokenClient, telemetry::TelemetryClient,
     };
 
     #[test]
@@ -1568,6 +1727,135 @@ mod test {
             response.status,
             turborepo_vercel_api::CachingStatus::Enabled
         ));
+        assert_eq!(
+            response
+                .incremental_artifacts_v1()
+                .map(|capability| capability.max_artifact_size),
+            Some(turborepo_vercel_api_mock::MAX_INCREMENTAL_ARTIFACT_SIZE)
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_incremental_artifact_protocol() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let client = APIClient::new(
+            format!("http://localhost:{port}"),
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(10)),
+            "2.0.0",
+            true,
+        )?;
+        let read_token = SecretString::new(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string());
+        let publish_token = SecretString::new(
+            turborepo_vercel_api_mock::EXPECTED_INCREMENTAL_PUBLISH_TOKEN.to_string(),
+        );
+        let key = "a".repeat(64);
+        let initial = Bytes::from_static(b"initial incremental artifact");
+
+        client
+            .put_incremental_artifact(
+                &key,
+                tokio_stream::once(Ok(initial.clone())),
+                initial.len(),
+                &publish_token,
+                None,
+                None,
+            )
+            .await?;
+
+        let head = client
+            .incremental_artifact_exists(&key, &read_token, None, None)
+            .await?
+            .expect("uploaded artifact should exist");
+        assert_eq!(
+            head.headers()
+                .get("content-length")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<usize>().ok()),
+            Some(initial.len())
+        );
+        assert!(
+            head.headers()
+                .get("content-digest")
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| value.starts_with("sha-256=:"))
+        );
+
+        let replacement = Bytes::from_static(b"replacement incremental artifact");
+        client
+            .put_incremental_artifact(
+                &key,
+                tokio_stream::once(Ok(replacement.clone())),
+                replacement.len(),
+                &publish_token,
+                None,
+                None,
+            )
+            .await?;
+        let fetched = client
+            .fetch_incremental_artifact(&key, &read_token, None, None)
+            .await?
+            .expect("replacement artifact should exist")
+            .bytes()
+            .await?;
+        assert_eq!(fetched, replacement);
+
+        let oversized =
+            usize::try_from(turborepo_vercel_api_mock::MAX_INCREMENTAL_ARTIFACT_SIZE + 1).unwrap();
+        let oversized_body = Bytes::from(vec![0; oversized]);
+        assert!(
+            client
+                .put_incremental_artifact(
+                    &key,
+                    tokio_stream::once(Ok(oversized_body)),
+                    oversized,
+                    &publish_token,
+                    None,
+                    None,
+                )
+                .await
+                .is_err()
+        );
+        let preserved = client
+            .fetch_incremental_artifact(&key, &read_token, None, None)
+            .await?
+            .expect("failed replacement should preserve the artifact")
+            .bytes()
+            .await?;
+        assert_eq!(preserved, replacement);
+
+        assert!(
+            client
+                .put_incremental_artifact(
+                    &key,
+                    tokio_stream::once(Ok(Bytes::new())),
+                    0,
+                    &read_token,
+                    None,
+                    None,
+                )
+                .await
+                .is_err()
+        );
+        assert!(
+            client
+                .fetch_incremental_artifact(&key, &publish_token, None, None)
+                .await
+                .is_err()
+        );
+        assert!(
+            client
+                .incremental_artifact_exists(&"A".repeat(64), &read_token, None, None)
+                .await
+                .is_err()
+        );
 
         handle.abort();
         Ok(())
