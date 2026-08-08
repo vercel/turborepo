@@ -192,6 +192,7 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::aube::LOCKFILE,
     "pnpm-workspace.yaml",
     package_manager::nub::LOCKFILE,
+    package_manager::nub::LEGACY_LOCKFILE,
     package_manager::pnpm::LOCKFILE,
     package_manager::npm::LOCKFILE,
     package_manager::yarn::LOCKFILE,

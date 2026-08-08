@@ -465,22 +465,54 @@ function expandWorkspaces({
 
 type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
 
-const LOCKFILE_PROBE_ORDER: Array<{
+const FOREIGN_LOCKFILE_PROBE_ORDER: Array<{
   manager: LockfilePackageManager;
   lockfiles: Array<string>;
 }> = [
   { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
-  { manager: "pnpm", lockfiles: ["aube-lock.yaml", "pnpm-lock.yaml"] },
   { manager: "yarn", lockfiles: ["yarn.lock"] },
   { manager: "npm", lockfiles: ["package-lock.json"] }
 ];
+
+function getPnpmLockfileNames({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  const packageManager = getWorkspacePackageManager({ workspaceRoot });
+
+  if (packageManager === "nub") {
+    return ["nub.lock", "lock.yaml", "aube-lock.yaml", "pnpm-lock.yaml"];
+  }
+  if (packageManager === "aube") {
+    return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+  }
+  return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+}
 
 function getUnderlyingLockfileManager({
   workspaceRoot
 }: {
   workspaceRoot: string;
 }): LockfilePackageManager {
-  for (const { manager, lockfiles } of LOCKFILE_PROBE_ORDER) {
+  const [bun, ...remainingManagers] = FOREIGN_LOCKFILE_PROBE_ORDER;
+  if (
+    bun.lockfiles.some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return bun.manager;
+  }
+
+  if (
+    getPnpmLockfileNames({ workspaceRoot }).some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return "pnpm";
+  }
+
+  for (const { manager, lockfiles } of remainingManagers) {
     if (
       lockfiles.some((lockfile) =>
         existsSync(path.join(workspaceRoot, lockfile))
@@ -508,10 +540,11 @@ function getUnderlyingLockfileName({
       return "bun.lockb";
     }
     case "pnpm": {
-      if (existsSync(path.join(workspaceRoot, "aube-lock.yaml"))) {
-        return "aube-lock.yaml";
-      }
-      return "pnpm-lock.yaml";
+      return (
+        getPnpmLockfileNames({ workspaceRoot }).find((lockfile) =>
+          existsSync(path.join(workspaceRoot, lockfile))
+        ) ?? "pnpm-lock.yaml"
+      );
     }
     case "yarn": {
       return "yarn.lock";

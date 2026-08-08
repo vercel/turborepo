@@ -2,13 +2,12 @@
 //!
 //! nub (<https://nub.dev>) is a Rust CLI that augments the user's installed
 //! Node and ships a pnpm-compatible package-manager command surface. Unlike the
-//! other supported package managers, nub does not define its own lockfile
-//! format: it is lockfile-compatible with whatever the project already uses
-//! (npm, pnpm, yarn, or bun). For that reason nub is recognized ONLY through
-//! the `packageManager` field in `package.json` (`"nub@x.y.z"`) or
-//! `devEngines.packageManager` — never from the presence of a lockfile. nub's
-//! `lock.yaml` name is deliberately neutral, so its presence is not a reliable
-//! nub signal; a bare lockfile (nub's or any other) alone does not imply nub.
+//! other supported package managers, nub's native `nub.lock` uses the pnpm v9
+//! format, and nub is also lockfile-compatible with whatever package manager
+//! the project already uses (npm, pnpm, yarn, or bun). For that reason nub is
+//! recognized ONLY through the `packageManager` field in `package.json`
+//! (`"nub@x.y.z"`) or `devEngines.packageManager` — never from the presence of
+//! a lockfile. A bare lockfile (nub's or any other) alone does not imply nub.
 //!
 //! Because Turborepo needs a parsed lockfile for pruning and cache hashing, the
 //! [`PackageManager::Nub`] variant carries the concrete package manager whose
@@ -16,11 +15,21 @@
 //! delegate to it. That parsing happens once nub is detected via the field;
 //! the lockfile name is never itself a detection signal.
 
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::package_manager::{PackageManager, bun, pnpm, yarn, yarn::YarnDetector};
 
-pub const LOCKFILE: &str = "lock.yaml";
+pub const LOCKFILE: &str = "nub.lock";
+pub const LEGACY_LOCKFILE: &str = "lock.yaml";
+
+/// Returns the native nub lockfile present in the repository, preferring the
+/// current filename over the legacy filename.
+pub fn native_lockfile_path(repo_root: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    [LOCKFILE, LEGACY_LOCKFILE]
+        .into_iter()
+        .map(|lockfile| repo_root.join_component(lockfile))
+        .find(|lockfile| lockfile.exists())
+}
 
 /// Determine which package manager's lockfile is present in the repository
 /// root, in priority order. Defaults to npm when no lockfile is found yet (e.g.
@@ -29,9 +38,8 @@ pub const LOCKFILE: &str = "lock.yaml";
 pub fn underlying_lockfile_manager(repo_root: &AbsoluteSystemPath) -> PackageManager {
     if repo_root.join_component(bun::LOCKFILE).exists() {
         PackageManager::Bun
-    } else if repo_root.join_component(LOCKFILE).exists() {
-        repo_root
-            .join_component(LOCKFILE)
+    } else if let Some(lockfile_path) = native_lockfile_path(repo_root) {
+        lockfile_path
             .read()
             .map(|contents| pnpm::detect_from_lockfile_contents(&contents))
             .unwrap_or(PackageManager::Pnpm)
@@ -83,7 +91,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
 
-        // A native `lock.yaml` with NO `packageManager` field must NOT be
+        // A native `nub.lock` with NO `packageManager` field must NOT be
         // detected as nub: nub is recognized only via the field. With no other
         // recognized lockfile present, detection finds no package manager.
         repo_root
@@ -93,7 +101,7 @@ mod tests {
         let detected = PackageManager::detect_package_manager(&repo_root);
         assert!(
             !matches!(detected, Ok(PackageManager::Nub { .. })),
-            "a bare lock.yaml must not be detected as nub, got {detected:?}"
+            "a bare nub.lock must not be detected as nub, got {detected:?}"
         );
 
         // The same repo IS nub once the field is present.
@@ -172,6 +180,36 @@ mod tests {
         assert_eq!(
             underlying_lockfile_manager(&repo_root),
             PackageManager::Pnpm9
+        );
+    }
+
+    #[test]
+    fn test_nub_underlying_legacy_lockfile_detects_pnpm9() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root
+            .join_component(LEGACY_LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+
+        assert_eq!(
+            underlying_lockfile_manager(&repo_root),
+            PackageManager::Pnpm9
+        );
+    }
+
+    #[test]
+    fn test_native_lockfile_path_prefers_current_filename() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root.join_component(LEGACY_LOCKFILE).create().unwrap();
+        repo_root.join_component(LOCKFILE).create().unwrap();
+
+        assert_eq!(
+            native_lockfile_path(&repo_root),
+            Some(repo_root.join_component(LOCKFILE))
         );
     }
 }
