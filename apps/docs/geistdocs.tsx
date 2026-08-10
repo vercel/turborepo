@@ -1,7 +1,16 @@
 import type { GeistdocsAgentReadinessConfig } from "@vercel/geistdocs/config";
 import { LogoTurborepo } from "@vercel/geistdocs/assets/logos/logo-turborepo";
+import { TurborepoLogo } from "@/components/logos";
 
-export const Logo = () => <LogoTurborepo />;
+export const Logo = () => (
+  <>
+    <TurborepoLogo
+      className="size-[22px] text-gray-1000 @min-[640px]:hidden"
+      monochrome
+    />
+    <LogoTurborepo className="hidden @min-[640px]:block" />
+  </>
+);
 
 export const github = {
   branch: "main",

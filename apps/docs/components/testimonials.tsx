@@ -14,33 +14,31 @@ export const Card = ({ name, alias, avatar, url, children }: CardProps) => {
     <Link
       href={url}
       target="_blank"
-      className="drop-shadow-xs rounded-xl border border-border/50 bg-card px-6 py-5 hover:bg-accent/50 hover:drop-shadow-sm"
+      className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-background-100 p-4 transition-colors hover:border-gray-500 md:p-5"
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2.5">
         <Image
           src={avatar}
           alt={name}
           width={40}
           height={40}
-          className="h-12 w-12 rounded-full bg-gray-200"
+          className="size-9 rounded-full bg-gray-200"
         />
         <div className="flex flex-col">
-          <div className="font-medium text-foreground text-base leading-5">
-            {name}
-          </div>
-          <div className="text-muted-foreground text-base leading-6">
-            {alias}
-          </div>
+          <div className="font-medium text-gray-1000 text-sm">{name}</div>
+          <div className="text-gray-900 text-sm">{alias}</div>
         </div>
       </div>
-      <div className="mt-4 text-foreground text-base leading-6">{children}</div>
+      <div className="flex flex-col gap-2.5 text-gray-900 text-sm leading-relaxed [&_p]:m-0">
+        {children}
+      </div>
     </Link>
   );
 };
 
 export const Testimonials = () => {
   return (
-    <div className="mb-6 mt-7 grid grid-cols-1 gap-4 min-[780px]:grid-cols-3">
+    <div className="mb-6 mt-16 grid grid-cols-1 gap-4 min-[780px]:grid-cols-3">
       <div className="grid gap-4">
         <Card
           name="Matt Pocock"
