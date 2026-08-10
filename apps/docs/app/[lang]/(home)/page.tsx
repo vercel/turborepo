@@ -71,7 +71,8 @@ export default function HomePage() {
             The build system that scales with your codebase
           </h1>
           <p className="mt-6 max-w-[380px] font-normal text-gray-900 text-copy-18">
-            Turborepo is the build system for coding agents
+            Turborepo is the build system for JavaScript and TypeScript
+            codebases
           </p>
           <CommandPromptRoot className="items-start mt-4" defaultValue="agents">
             <CommandPromptList>
@@ -133,7 +134,7 @@ export default function HomePage() {
         <h2 className="mb-1 text-heading-32 lg:text-heading-40">
           Scale your workflows
         </h2>
-        <p className="max-w-prose text-balance text-muted-foreground text-base">
+        <p className="max-w-prose text-balance text-gray-900 text-copy-18">
           Optimize your local and CI tasks to save years of engineering time and
           compute.
         </p>
