@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   CommandPromptContent,
   CommandPromptCopy,
@@ -18,8 +19,19 @@ import { HighlightedCode } from "./highlighted-code";
 import { ProviderBadges } from "./graphics/provider-badges";
 import { RemoteCacheVisual } from "./graphics/remote-cache-visual";
 import { MonorepoVisual } from "./graphics/monorepo-visual";
+import {
+  AgentSkillsVisual,
+  TurboDocsVisual,
+  ValidationLoopsVisual,
+} from "./graphics/agent-workflow-visuals";
 
-const FEATURES = [
+type HomepageFeature = {
+  title: string;
+  description: ReactNode;
+  illustration: ReactNode;
+};
+
+const FEATURES: HomepageFeature[] = [
   {
     title: "Works with any provider",
     description:
@@ -37,6 +49,35 @@ const FEATURES = [
     description:
       "Define dependable workflows once, then run them consistently across local development and CI.",
     illustration: <MonorepoVisual />,
+  },
+];
+
+const AGENT_FEATURES: HomepageFeature[] = [
+  {
+    title: "Faster validation loops",
+    description:
+      "Run only the checks affected by each change, so agents can verify their work and iterate without waiting on the entire repository.",
+    illustration: <ValidationLoopsVisual />,
+  },
+  {
+    title: "Monorepo expertise, on demand",
+    description:
+      "Agent Skills give your coding agent Turborepo best practices and the context it needs to make confident changes across your monorepo.",
+    illustration: <AgentSkillsVisual />,
+  },
+  {
+    title: "Docs, right when they’re needed",
+    description: (
+      <>
+        The{" "}
+        <code className="px-1.5 py-0.5 bg-gray-200 rounded-md text-copy-14-mono">
+          turbo docs
+        </code>{" "}
+        command lets agents search current Turborepo documentation from the
+        terminal, without interrupting their work.
+      </>
+    ),
+    illustration: <TurboDocsVisual />,
   },
 ];
 
@@ -68,11 +109,11 @@ export default function HomePage() {
       <section className="relative grid grid-cols-1 items-center gap-12 py-16 sm:py-40 lg:grid-cols-12 lg:gap-0">
         <div className="relative z-1 flex flex-col justify-center lg:col-span-7 lg:pr-16">
           <h1 className="lg:max-w-[700px] text-heading-40 sm:text-heading-48 xl:text-heading-64">
-            The build system that scales with your codebase
+            Your entire codebase, working at full speed
           </h1>
-          <p className="mt-6 max-w-[380px] font-normal text-gray-900 text-copy-18">
-            Turborepo is the build system for JavaScript and TypeScript
-            codebases
+          <p className="mt-6 text-balance  text-gray-900 text-copy-18">
+            Turborepo is a build system for JavaScript and TypeScript that runs
+            and caches tasks so developers, CI, and agents never repeat work.
           </p>
           <CommandPromptRoot className="items-start mt-4" defaultValue="agents">
             <CommandPromptList>
@@ -84,7 +125,7 @@ export default function HomePage() {
                 For agents
               </CommandPromptTrigger>
             </CommandPromptList>
-            <CommandPromptSurface className="h-10 py-0 pr-1.5">
+            <CommandPromptSurface>
               <CommandPromptPrefix>$</CommandPromptPrefix>
               <CommandPromptViewport>
                 <CommandPromptContent copyValue="npm i turbo" value="humans">
@@ -130,32 +171,16 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-      <section className="py-10 sm:py-14">
-        <h2 className="mb-1 text-heading-32 lg:text-heading-40">
-          Scale your workflows
-        </h2>
-        <p className="max-w-prose text-balance text-gray-900 text-copy-18">
-          Optimize your local and CI tasks to save years of engineering time and
-          compute.
-        </p>
-        <ul className="my-8 grid list-none gap-x-6 gap-y-6 md:grid-cols-2 md:gap-y-10 lg:grid-cols-3 lg:gap-y-12">
-          {FEATURES.map((feature) => (
-            <li key={feature.title} className="flex w-full flex-col gap-8">
-              <div className="aspect-[40/27] overflow-hidden rounded-xs border border-solid border-gray-300">
-                {feature.illustration}
-              </div>
-              <div className="flex flex-col gap-2">
-                <h3 className="font-[450] text-copy-16 text-gray-1000">
-                  {feature.title}
-                </h3>
-                <p className="text-balance text-copy-16 text-gray-900">
-                  {feature.description}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <FeatureSection
+        description="Optimize your local and CI tasks to save years of engineering time and compute."
+        features={FEATURES}
+        title="Scale your workflows"
+      />
+      <FeatureSection
+        description="Give coding agents the context and fast feedback they need to work confidently across your monorepo."
+        features={AGENT_FEATURES}
+        title="Built for coding agents"
+      />
       <section className="py-10 sm:py-14">
         <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
           <div className="flex flex-col gap-y-1">
@@ -215,5 +240,41 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function FeatureSection({
+  description,
+  features,
+  title,
+}: {
+  description: string;
+  features: HomepageFeature[];
+  title: string;
+}) {
+  return (
+    <section className="py-10 sm:py-14">
+      <h2 className="mb-1 text-heading-32 lg:text-heading-40">{title}</h2>
+      <p className="max-w-prose text-balance text-gray-900 text-copy-18">
+        {description}
+      </p>
+      <ul className="my-8 grid list-none gap-x-6 gap-y-6 md:grid-cols-2 md:gap-y-10 lg:grid-cols-3 lg:gap-y-12">
+        {features.map((feature) => (
+          <li key={feature.title} className="flex w-full flex-col gap-8">
+            <div className="aspect-[40/27] overflow-hidden rounded-xs border border-solid border-gray-300">
+              {feature.illustration}
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="font-[450] text-copy-16 text-gray-1000">
+                {feature.title}
+              </h3>
+              <p className="text-balance text-copy-16 text-gray-900">
+                {feature.description}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

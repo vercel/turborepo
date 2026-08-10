@@ -3,6 +3,7 @@
 import { motion, useSpring, useTransform } from "motion/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { REMOTE_CACHE_COUNTER_START_HOURS } from "./constants";
 import { useTurborepoMinutesSaved } from "./use-turborepo-minutes-saved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
@@ -11,7 +12,7 @@ const counterFormatter = Intl.NumberFormat(undefined, {
 
 // A number to start the counter at that is lower than the actual time saved
 // to make the counter not start at 0
-const ARBITRARY_START_NUMBER = 12_434_353;
+const ARBITRARY_START_NUMBER = REMOTE_CACHE_COUNTER_START_HOURS;
 
 export function RemoteCacheCounterClient({
   className,
@@ -30,7 +31,7 @@ export function RemoteCacheCounterClient({
   });
 
   const display = useTransform(springValue, (val) =>
-    counterFormatter.format(val),
+    counterFormatter.format(val)
   );
 
   useEffect(() => {
@@ -39,10 +40,7 @@ export function RemoteCacheCounterClient({
 
   return (
     <motion.p
-      className={cn(
-        "inline-block tabular-nums min-w-[94.6875px]",
-        className,
-      )}
+      className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}
     >
       {display}
     </motion.p>
