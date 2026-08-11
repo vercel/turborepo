@@ -1,7 +1,7 @@
 import { SiNextdotjs, SiNuxt, SiSvelte } from "@icons-pack/react-simple-icons";
 
 const tasks = [
-  { label: "apps/web", Logo: SiNextdotjs, themeAware: true },
+  { label: "apps/web", Logo: SiNextdotjs },
   { label: "apps/docs", Logo: SiSvelte },
   { label: "app/blog", Logo: SiNuxt },
 ];
@@ -17,15 +17,15 @@ export function MonorepoVisual() {
           <span className="text-gray-600">$</span> turbo run build
         </div>
         <div className="flex flex-col gap-2.5 px-4 py-3.5 text-label-13-mono">
-          {tasks.map(({ label, Logo, themeAware }, index) => (
+          {tasks.map(({ label, Logo }, index) => (
             <div className="flex items-center gap-2" key={label}>
               <span className="text-gray-600">
                 {index === tasks.length - 1 ? "└─" : "├─"}
               </span>
               <Logo
                 aria-hidden="true"
-                className={themeAware ? "text-gray-1000" : undefined}
-                color={themeAware ? "currentColor" : "default"}
+                className="text-gray-1000"
+                color="currentColor"
                 size={14}
               />
               <span className="flex-1 text-gray-900">{label}</span>

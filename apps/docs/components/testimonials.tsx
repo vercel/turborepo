@@ -38,8 +38,8 @@ export const Card = ({ name, alias, avatar, url, children }: CardProps) => {
 
 export const Testimonials = () => {
   return (
-    <div className="mb-6 mt-16 grid grid-cols-1 gap-4 min-[780px]:grid-cols-3">
-      <div className="grid gap-4">
+    <div className="mb-6 mt-16 grid grid-cols-1 gap-6 min-[780px]:grid-cols-3">
+      <div className="grid gap-6">
         <Card
           name="Matt Pocock"
           alias="@mattpocockuk"
@@ -67,7 +67,7 @@ export const Testimonials = () => {
         </Card>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-6">
         <Card
           name="Cory House"
           alias="@housecor"
@@ -106,7 +106,7 @@ export const Testimonials = () => {
           </p>
         </Card>
       </div>
-      <div className="grid gap-4">
+      <div className="grid gap-6">
         <Card
           name="ALIAS"
           alias="LoadingALIAS"

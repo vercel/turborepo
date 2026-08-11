@@ -1,10 +1,6 @@
 "use client";
 
-import { easeOutCubic } from "phase/ease";
-import { useTween } from "phase/react";
-import { useEffect, useState } from "react";
-
-import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
+import { useEffect, useRef, useState } from "react";
 
 const GAUGE_SEGMENTS = [
   { length: 14.285714, start: 0 },
@@ -17,24 +13,71 @@ const GAUGE_SEGMENTS = [
 ] as const;
 
 const GAUGE_GAP = 0.35;
-const GAUGE_INDICATOR_START = 61.905;
-const GAUGE_INDICATOR_REST = 78.571;
+const GAUGE_INDICATOR_REST = 80.952;
 
-const roundSvgCoordinate = (value: number) => Math.round(value * 1000) / 1000;
+const roundSvgValue = (value: number) => Math.round(value * 100) / 100;
+const GAUGE_GAP_STROKE_WIDTH = roundSvgValue(GAUGE_GAP * 7.9);
 
-const GAUGE_GAP_LINES = GAUGE_SEGMENTS.slice(0, -1).map(
-  ({ length, start }) => {
-    const progress = (start + length) / 100;
-    const angle = ((160 + progress * 220) * Math.PI) / 180;
+function useSpring(target: number) {
+  const [value, setValue] = useState(target);
+  const valueRef = useRef(target);
+  const velocityRef = useRef(0);
 
-    return {
-      x1: roundSvgCoordinate(240 + Math.cos(angle) * 140),
-      x2: roundSvgCoordinate(240 + Math.cos(angle) * 270),
-      y1: roundSvgCoordinate(240 + Math.sin(angle) * 140),
-      y2: roundSvgCoordinate(240 + Math.sin(angle) * 270),
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      valueRef.current = target;
+      velocityRef.current = 0;
+      setValue(target);
+      return;
+    }
+
+    let animationFrame: number;
+    let previousTime: number | undefined;
+
+    const update = (time: number) => {
+      const delta = previousTime
+        ? Math.min((time - previousTime) / 1000, 1 / 30)
+        : 1 / 60;
+      const displacement = target - valueRef.current;
+      const acceleration = displacement * 520 - velocityRef.current * 22;
+
+      velocityRef.current += acceleration * delta;
+      valueRef.current += velocityRef.current * delta;
+      previousTime = time;
+
+      if (
+        Math.abs(target - valueRef.current) < 0.01 &&
+        Math.abs(velocityRef.current) < 0.01
+      ) {
+        valueRef.current = target;
+        velocityRef.current = 0;
+        setValue(target);
+        return;
+      }
+
+      setValue(valueRef.current);
+      animationFrame = requestAnimationFrame(update);
     };
-  },
-);
+
+    animationFrame = requestAnimationFrame(update);
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [target]);
+
+  return value;
+}
+
+const GAUGE_GAP_LINES = GAUGE_SEGMENTS.slice(0, -1).map(({ length, start }) => {
+  const progress = (start + length) / 100;
+  const angle = ((160 + progress * 220) * Math.PI) / 180;
+
+  return {
+    x1: roundSvgValue(240 + Math.cos(angle) * 140),
+    x2: roundSvgValue(240 + Math.cos(angle) * 270),
+    y1: roundSvgValue(240 + Math.sin(angle) * 140),
+    y2: roundSvgValue(240 + Math.sin(angle) * 270),
+  };
+});
 
 const GAUGE_TICKS = GAUGE_SEGMENTS.flatMap(({ length, start }, segmentIndex) =>
   Array.from(
@@ -44,10 +87,10 @@ const GAUGE_TICKS = GAUGE_SEGMENTS.flatMap(({ length, start }, segmentIndex) =>
       const angle = ((160 + progress * 220) * Math.PI) / 180;
 
       return {
-        x1: roundSvgCoordinate(240 + Math.cos(angle) * 188),
-        x2: roundSvgCoordinate(240 + Math.cos(angle) * 196),
-        y1: roundSvgCoordinate(240 + Math.sin(angle) * 188),
-        y2: roundSvgCoordinate(240 + Math.sin(angle) * 196),
+        x1: roundSvgValue(240 + Math.cos(angle) * 188),
+        x2: roundSvgValue(240 + Math.cos(angle) * 196),
+        y1: roundSvgValue(240 + Math.sin(angle) * 188),
+        y2: roundSvgValue(240 + Math.sin(angle) * 196),
       };
     },
   ),
@@ -55,20 +98,37 @@ const GAUGE_TICKS = GAUGE_SEGMENTS.flatMap(({ length, start }, segmentIndex) =>
 
 export function RemoteCacheGauge() {
   const [isAccelerating, setIsAccelerating] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const indicatorProgress = useTween({
-    duration: 1200,
-    easing: easeOutCubic,
-    target: isAccelerating
-      ? 100
-      : hasStarted
-        ? GAUGE_INDICATOR_REST
-        : GAUGE_INDICATOR_START,
-  });
-  const indicatorDasharray = `${indicatorProgress} ${100 - indicatorProgress}`;
-  const indicatorRemainderDasharray = `0 ${indicatorProgress} ${100 - indicatorProgress} 0`;
+  const [springTarget, setSpringTarget] = useState(GAUGE_INDICATOR_REST);
+  const indicatorProgress = useSpring(springTarget);
+  const roundedIndicatorProgress = roundSvgValue(
+    Math.min(100, Math.max(0, indicatorProgress)),
+  );
+  const indicatorRemainder = roundSvgValue(100 - roundedIndicatorProgress);
+  const indicatorDasharray = `${roundedIndicatorProgress} ${indicatorRemainder}`;
+  const indicatorRemainderDasharray = `0 ${roundedIndicatorProgress} ${indicatorRemainder} 0`;
+  const needleRotation = roundSvgValue(roundedIndicatorProgress * 2.2);
 
-  useEffect(() => setHasStarted(true), []);
+  useEffect(() => {
+    if (!isAccelerating) {
+      setSpringTarget(GAUGE_INDICATOR_REST);
+      return;
+    }
+
+    let timeout: ReturnType<typeof setTimeout>;
+
+    setSpringTarget(98);
+
+    const oscillate = (towardLimit: boolean) => {
+      const duration = towardLimit ? 80 : 65;
+
+      setSpringTarget(towardLimit ? 97.8 : 96.2);
+      timeout = setTimeout(() => oscillate(!towardLimit), duration + 5);
+    };
+
+    timeout = setTimeout(() => oscillate(false), 280);
+
+    return () => clearTimeout(timeout);
+  }, [isAccelerating]);
 
   return (
     <div
@@ -104,6 +164,32 @@ export function RemoteCacheGauge() {
             <stop offset="0" stopColor="var(--remote-cache-inner-start)" />
             <stop offset="1" stopColor="var(--remote-cache-inner-end)" />
           </linearGradient>
+          <linearGradient
+            id="remote-cache-gauge-pointer-gradient"
+            gradientUnits="userSpaceOnUse"
+            x1="240"
+            x2="127.24"
+            y1="240"
+            y2="281.04"
+          >
+            <stop offset="0" stopColor="var(--ds-gray-1000)" />
+            <stop
+              offset="1"
+              stopColor="var(--ds-gray-1000)"
+              stopOpacity="0.35"
+            />
+          </linearGradient>
+          <linearGradient
+            id="remote-cache-gauge-dot-gradient"
+            gradientUnits="userSpaceOnUse"
+            x1="240"
+            x2="240"
+            y1="258"
+            y2="222"
+          >
+            <stop offset="0" stopColor="var(--ds-gray-900)" />
+            <stop offset="1" stopColor="var(--ds-gray-1000)" />
+          </linearGradient>
           <radialGradient
             id="remote-cache-gauge-fade"
             cx="240"
@@ -129,7 +215,7 @@ export function RemoteCacheGauge() {
               strokeLinecap="butt"
               strokeWidth="120"
             />
-            <g stroke="black" strokeWidth={GAUGE_GAP * 7.9}>
+            <g stroke="black" strokeWidth={GAUGE_GAP_STROKE_WIDTH}>
               {GAUGE_GAP_LINES.map(({ x1, x2, y1, y2 }, index) => (
                 <line key={index} x1={x1} x2={x2} y1={y1} y2={y2} />
               ))}
@@ -239,14 +325,25 @@ export function RemoteCacheGauge() {
             <line key={index} x1={x1} x2={x2} y1={y1} y2={y2} />
           ))}
         </g>
-      </svg>
 
-      <div className="absolute inset-x-8 top-[50%] flex flex-col items-center text-center">
-        <RemoteCacheCounterClient className="min-w-0 bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text pr-1 font-semibold [--font-weight-semibold:450] text-[44px] text-transparent leading-none tracking-[-0.055em] sm:text-[52px] lg:text-[56px]" />
-        <p className="mt-2 text-balance max-w-[300px] text-copy-14 text-gray-900">
-          compute hours saved with Remote Caching
-        </p>
-      </div>
+        <g transform={`rotate(${needleRotation} 240 240)`}>
+          <path
+            className="drop-shadow-xs"
+            d="M236.58 230.6 127.24 281.04 243.42 249.4Z"
+            fill="url(#remote-cache-gauge-pointer-gradient)"
+          />
+        </g>
+
+        <g>
+          <circle
+            cx="240"
+            cy="240"
+            fill="url(#remote-cache-gauge-dot-gradient)"
+            r="18"
+          />
+          <circle cx="240" cy="240" fill="var(--ds-gray-100)" r="7" />
+        </g>
+      </svg>
     </div>
   );
 }

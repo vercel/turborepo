@@ -30,7 +30,9 @@ export const HighlightedCode = async ({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="*:mb-0 *:h-full flex-1">{rendered}</div>
+      <div className="*:mb-0 *:flex *:h-full *:flex-col flex-1">
+        {rendered}
+      </div>
       <span className="mt-2 block text-copy-14 text-gray-900">{caption}</span>
     </div>
   );

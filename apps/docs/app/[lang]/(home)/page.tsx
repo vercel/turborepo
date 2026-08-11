@@ -15,6 +15,7 @@ import { Button } from "@vercel/geistdocs/components/button";
 import { Testimonials } from "@/components/testimonials";
 import { createMetadata } from "@/lib/create-metadata";
 import { HighlightedCode } from "./highlighted-code";
+import { OpenSourceMetrics } from "./open-source-metrics";
 import { ProviderBadges } from "./graphics/provider-badges";
 import { RemoteCacheVisual } from "./graphics/remote-cache-visual";
 import { RemoteCacheGauge } from "./graphics/remote-cache-gauge";
@@ -97,6 +98,9 @@ turbo link
 # Run tasks
 turbo run build`;
 
+const affectedTasksCommand = `# Run tasks affected by your changes
+turbo run build test lint --affected`;
+
 export const metadata = createMetadata({
   description:
     "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
@@ -146,6 +150,7 @@ export default function HomePage() {
           <RemoteCacheGauge />
         </div>
       </section>
+      <OpenSourceMetrics />
       <FeatureSection
         description="Optimize your local and CI tasks to save years of engineering time and compute."
         features={FEATURES}
@@ -169,7 +174,7 @@ export default function HomePage() {
             <Link href="/repo/docs">Read the docs</Link>
           </Button>
         </div>
-        <div className="mt-6 grid w-full grid-cols-1 gap-6 md:gap-44 md:grid-cols-2">
+        <div className="mt-6 grid w-full auto-rows-fr grid-cols-1 items-stretch gap-x-6 gap-y-6 md:grid-cols-3 md:gap-y-10 lg:gap-y-12">
           <HighlightedCode
             caption="Declaring a build task"
             lang="json"
@@ -179,6 +184,11 @@ export default function HomePage() {
             caption="Linking to Remote Cache and running tasks"
             lang="bash"
             code={remoteCachingCommands}
+          />
+          <HighlightedCode
+            caption="Running affected tasks"
+            lang="bash"
+            code={affectedTasksCommand}
           />
         </div>
       </section>
@@ -193,17 +203,17 @@ export default function HomePage() {
           <h2 className="text-heading-32 lg:text-heading-40">
             Deploy your Turborepo today
           </h2>
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center md:justify-end">
-            <Button asChild className="rounded-full" size="lg">
+          <div className="flex flex-col w-full items-start gap-3 sm:flex-row sm:items-center md:justify-end">
+            <Button asChild className="w-full sm:w-fit rounded-full" size="lg">
               <Link href="/docs">Get started</Link>
             </Button>
             <CommandPromptRoot
-              className="w-auto items-start"
+              className="w-full sm:w-auto items-start"
               defaultValue="install"
             >
-              <CommandPromptSurface className="h-10 pr-1.5">
+              <CommandPromptSurface className="h-10 w-full sm:w-fit max-w-none pr-1.5">
                 <CommandPromptPrefix>$</CommandPromptPrefix>
-                <CommandPromptViewport>
+                <CommandPromptViewport className="w-full sm:w-fit">
                   <CommandPromptContent copyValue="npm i turbo" value="install">
                     npm i turbo
                   </CommandPromptContent>
@@ -228,7 +238,7 @@ function FeatureSection({
   title: string;
 }) {
   return (
-    <section className="py-10 sm:py-14">
+    <section className="py-10 sm:py-20">
       <h2 className="mb-1 text-heading-32 lg:text-heading-40">{title}</h2>
       <p className="max-w-prose text-balance text-gray-900 text-copy-18">
         {description}
