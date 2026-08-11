@@ -13,11 +13,11 @@ import {
 } from "@vercel/geistdocs/components/command-prompt";
 import { Button } from "@vercel/geistdocs/components/button";
 import { Testimonials } from "@/components/testimonials";
-import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 import { createMetadata } from "@/lib/create-metadata";
 import { HighlightedCode } from "./highlighted-code";
 import { ProviderBadges } from "./graphics/provider-badges";
 import { RemoteCacheVisual } from "./graphics/remote-cache-visual";
+import { RemoteCacheGauge } from "./graphics/remote-cache-gauge";
 import { MonorepoVisual } from "./graphics/monorepo-visual";
 import {
   AgentSkillsVisual,
@@ -115,7 +115,7 @@ export default function HomePage() {
             Turborepo is a build system for JavaScript and TypeScript that runs
             and caches tasks so developers, CI, and agents never repeat work.
           </p>
-          <CommandPromptRoot className="items-start mt-4" defaultValue="agents">
+          <CommandPromptRoot className="items-start mt-4" defaultValue="humans">
             <CommandPromptList>
               <CommandPromptTrigger value="humans">
                 For humans
@@ -142,33 +142,8 @@ export default function HomePage() {
             </CommandPromptSurface>
           </CommandPromptRoot>
         </div>
-        <div className="relative order-first flex min-h-56 items-start border-gray-800 pt-10 lg:order-last lg:col-span-5 lg:min-h-80 lg:pt-0 mx-auto">
-          <div className="relative isolate w-fit rounded-t-[12px] bg-background-100 p-6 pb-20">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 right-full h-[75%] w-7 -translate-y-1/2 opacity-85 [mask-image:radial-gradient(49.27%_54.88%_at_100%_50%,#000_0%,transparent_100%)]"
-            >
-              <span className="block h-full w-full [background:linear-gradient(180deg,#FF1E56_30%,#0196FF_70%)]" />
-            </span>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-full h-[75%] w-7 -translate-y-1/2 opacity-85 [mask-image:radial-gradient(49.27%_54.88%_at_0%_50%,#000_0%,transparent_100%)]"
-            >
-              <span className="block h-full w-full [background:linear-gradient(180deg,#FF1E56_30%,#0196FF_70%)]" />
-            </span>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 rounded-t-[12px] bg-background-200 shadow-[0px_0px_0px_1px_var(--ds-gray-alpha-300),0px_1px_1px_rgba(0,0,0,0.02),0px_16px_24px_-4px_rgba(0,0,0,0.04),0px_32px_48px_-8px_rgba(0,0,0,0.06)]"
-            />
-            <RemoteCacheCounterClient className="min-w-0 bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text pr-2 font-semibold [--font-weight-semibold:450] text-[70px] lg:text-[80px] xl:text-[95px] text-transparent leading-none tracking-[-0.06em]" />
-            <p className="mt-1 text-balance text-copy-18 text-gray-1000">
-              hours of compute saved due to remote caching
-            </p>
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-5 -bottom-[68px] -left-5 h-[110px] bg-linear-to-b from-transparent from-0% to-background-200 to-36%"
-            />
-          </div>
+        <div className="relative order-first mx-auto flex min-h-56 w-full items-center justify-center pt-10 lg:order-last lg:col-span-5 lg:min-h-80 lg:pt-0">
+          <RemoteCacheGauge />
         </div>
       </section>
       <FeatureSection
@@ -177,7 +152,7 @@ export default function HomePage() {
         title="Scale your workflows"
       />
       <FeatureSection
-        description="Give coding agents the context and fast feedback they need to work confidently across your monorepo."
+        description="Give coding agents the context and fast feedback they need to work confidently across your respository."
         features={AGENT_FEATURES}
         title="Built for coding agents"
       />

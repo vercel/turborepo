@@ -1,7 +1,6 @@
 "use client";
 
-import { motion, useSpring, useTransform } from "motion/react";
-import { useEffect, useState } from "react";
+import { useTween } from "phase/react";
 import { cn } from "@/lib/utils";
 import { REMOTE_CACHE_COUNTER_START_HOURS } from "./constants";
 import { useTurborepoMinutesSaved } from "./use-turborepo-minutes-saved";
@@ -20,29 +19,12 @@ export function RemoteCacheCounterClient({
   className?: string;
 }) {
   const timeSaved = useTurborepoMinutesSaved()?.total;
-  const [displayValue] = useState(ARBITRARY_START_NUMBER);
-
   const targetValue = timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER;
-
-  const springValue = useSpring(displayValue, {
-    mass: 1,
-    stiffness: 170,
-    damping: 60,
-  });
-
-  const display = useTransform(springValue, (val) =>
-    counterFormatter.format(val)
-  );
-
-  useEffect(() => {
-    springValue.set(targetValue);
-  }, [targetValue, springValue]);
+  const displayValue = useTween({ target: targetValue, duration: 1200 });
 
   return (
-    <motion.p
-      className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}
-    >
-      {display}
-    </motion.p>
+    <p className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}>
+      {counterFormatter.format(displayValue)}
+    </p>
   );
 }
