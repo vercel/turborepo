@@ -112,7 +112,7 @@ export async function resolveAutomatedSelection(
   if (typeof requested !== "string") return automatic;
 
   const index = examples.indexOf(requested);
-  if (index < 0) throw new Error(`Unknown example: ${requested}`);
+  if (index === -1) throw new Error(`Unknown example: ${requested}`);
   return { ...automatic, example: requested, index };
 }
 
@@ -127,7 +127,7 @@ export function sessionDate(sessionId: string): Date {
   let timestamp = 0;
   for (const character of encoded) {
     const value = ULID_ALPHABET.indexOf(character.toUpperCase());
-    if (value < 0) throw new Error(`Invalid Eve session id: ${sessionId}`);
+    if (value === -1) throw new Error(`Invalid Eve session id: ${sessionId}`);
     timestamp = timestamp * 32 + value;
   }
   return new Date(timestamp);
