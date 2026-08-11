@@ -88,8 +88,12 @@
         "docs#check-openapi"
       ]
     },
+    // oxlint reads every workspace, so the whole repository is an input.
+    // $TURBO_DEFAULT$ has to be listed explicitly: a bare exclusion replaces
+    // the default input set instead of subtracting from it, which would leave
+    // the task hashing only the root package.json and turbo.json.
     "//#lint": {
-      "inputs": ["!pnpm-lock.yaml"],
+      "inputs": ["$TURBO_DEFAULT$", "!pnpm-lock.yaml"],
       "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."]
     },
     "//#lint:fix": {
