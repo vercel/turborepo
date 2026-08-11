@@ -1,5 +1,6 @@
 "use client";
 
+import { easeOutCubic } from "phase/ease";
 import { useTween } from "phase/react";
 import { cn } from "@/lib/utils";
 import { REMOTE_CACHE_COUNTER_START_HOURS } from "./constants";
@@ -20,7 +21,11 @@ export function RemoteCacheCounterClient({
 }) {
   const timeSaved = useTurborepoMinutesSaved()?.total;
   const targetValue = timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER;
-  const displayValue = useTween({ target: targetValue, duration: 1200 });
+  const displayValue = useTween({
+    duration: 1200,
+    easing: easeOutCubic,
+    target: targetValue,
+  });
 
   return (
     <p className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}>

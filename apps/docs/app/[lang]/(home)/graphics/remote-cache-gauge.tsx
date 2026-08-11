@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { easeOutCubic } from "phase/ease";
+import { useTween } from "phase/react";
+import { useEffect, useState } from "react";
 
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 
@@ -15,6 +17,8 @@ const GAUGE_SEGMENTS = [
 ] as const;
 
 const GAUGE_GAP = 0.35;
+const GAUGE_INDICATOR_START = 61.905;
+const GAUGE_INDICATOR_REST = 78.571;
 
 const roundSvgCoordinate = (value: number) => Math.round(value * 1000) / 1000;
 
@@ -51,10 +55,20 @@ const GAUGE_TICKS = GAUGE_SEGMENTS.flatMap(({ length, start }, segmentIndex) =>
 
 export function RemoteCacheGauge() {
   const [isAccelerating, setIsAccelerating] = useState(false);
-  const indicatorDasharray = isAccelerating ? "100 0" : "78.571 21.429";
-  const indicatorRemainderDasharray = isAccelerating
-    ? "0 100 0 0"
-    : "0 78.571 21.429 0";
+  const [hasStarted, setHasStarted] = useState(false);
+  const indicatorProgress = useTween({
+    duration: 1200,
+    easing: easeOutCubic,
+    target: isAccelerating
+      ? 100
+      : hasStarted
+        ? GAUGE_INDICATOR_REST
+        : GAUGE_INDICATOR_START,
+  });
+  const indicatorDasharray = `${indicatorProgress} ${100 - indicatorProgress}`;
+  const indicatorRemainderDasharray = `0 ${indicatorProgress} ${100 - indicatorProgress} 0`;
+
+  useEffect(() => setHasStarted(true), []);
 
   return (
     <div
@@ -130,10 +144,6 @@ export function RemoteCacheGauge() {
               strokeDasharray={indicatorDasharray}
               strokeLinecap="butt"
               strokeWidth="394"
-              style={{
-                transition:
-                  "stroke-dasharray 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
             />
           </mask>
           <mask id="remote-cache-gauge-inner-remainder-mask" mask-type="alpha">
@@ -145,10 +155,6 @@ export function RemoteCacheGauge() {
               strokeDasharray={indicatorRemainderDasharray}
               strokeLinecap="butt"
               strokeWidth="394"
-              style={{
-                transition:
-                  "stroke-dasharray 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
             />
           </mask>
           <linearGradient
@@ -192,10 +198,6 @@ export function RemoteCacheGauge() {
               strokeDasharray={indicatorDasharray}
               strokeLinecap="butt"
               strokeWidth="21"
-              style={{
-                transition:
-                  "stroke-dasharray 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
             />
             <path
               d="M46.4 310.5a206 206 0 1 1 387.2 0"
@@ -228,10 +230,6 @@ export function RemoteCacheGauge() {
               strokeDasharray={indicatorDasharray}
               strokeLinecap="butt"
               strokeWidth="18"
-              style={{
-                transition:
-                  "stroke-dasharray 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
             />
           </g>
         </g>
