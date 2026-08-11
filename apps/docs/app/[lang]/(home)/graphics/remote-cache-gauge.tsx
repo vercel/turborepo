@@ -294,7 +294,7 @@ export function RemoteCacheGauge() {
             />
             <g mask="url(#remote-cache-gauge-inner-indicator-mask)">
               <path
-                className="opacity-30 dark:opacity-80"
+                className="opacity-30 dark:opacity-25"
                 d="M54.9 307.4a197 197 0 1 1 370.2 0L240 240Z"
                 fill="url(#remote-cache-gauge-inner-gradient)"
                 mask="url(#remote-cache-gauge-fade-mask)"
