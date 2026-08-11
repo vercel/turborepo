@@ -196,6 +196,7 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let workspaces = prune.internal_dependencies()?;
+    prune.plan_package_copies(&workspaces)?;
     let retained_workspace_names: HashSet<_> = workspaces
         .iter()
         .filter_map(|workspace| match workspace {
@@ -474,6 +475,9 @@ struct Prune<'a> {
     scope: &'a [String],
     use_gitignore: bool,
     uses_per_workspace_lockfiles: bool,
+    /// The contents of the package directories being copied, resolved by a
+    /// single walk of the repository. See [`Prune::plan_package_copies`].
+    copy_plan: OnceLock<turborepo_fs::CopyPlan>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -602,7 +606,43 @@ impl<'a> Prune<'a> {
             scope,
             use_gitignore,
             uses_per_workspace_lockfiles,
+            copy_plan: OnceLock::new(),
         })
+    }
+
+    /// Resolve the contents of every package directory this prune will copy in
+    /// one walk of the repository.
+    ///
+    /// Copying a package has to honor the ignore files above it, which anchors
+    /// its walk at the repository root. Doing that once per package makes the
+    /// cost of a prune grow with `packages * repository fan-out`, which is
+    /// most of the runtime in a repository with hundreds of packages.
+    fn plan_package_copies(&self, workspaces: &[PackageName]) -> Result<(), Error> {
+        let directories: Vec<AbsoluteSystemPathBuf> = workspaces
+            .iter()
+            .filter(|workspace| !matches!(workspace, PackageName::Root))
+            .filter_map(|workspace| self.package_graph.package_task_context(workspace))
+            // A package anchored at the repository root has no directory of
+            // its own and is never copied as a unit.
+            .filter(|context| context.directory().components().next().is_some())
+            .map(|context| self.root.resolve(context.directory()))
+            .collect();
+
+        let plan = turborepo_fs::CopyPlan::new(
+            directories.iter().map(|directory| directory.as_ref()),
+            self.use_gitignore,
+            Some(&self.root),
+        )?;
+        let _ = self.copy_plan.set(plan);
+
+        Ok(())
+    }
+
+    /// The planned copies, falling back to walking each source on demand for
+    /// directories that were not known ahead of time.
+    fn copy_plan(&self) -> &turborepo_fs::CopyPlan {
+        self.copy_plan
+            .get_or_init(|| turborepo_fs::CopyPlan::unplanned(self.use_gitignore, Some(&self.root)))
     }
 
     fn docker_directory(&self) -> AbsoluteSystemPathBuf {
@@ -766,10 +806,10 @@ impl<'a> Prune<'a> {
             return Ok(());
         }
         let full_to = self.full_directory.resolve(path);
-        turborepo_fs::recursive_copy(&from_path, full_to, self.use_gitignore, Some(&self.root))?;
+        self.copy_plan().copy(&from_path, full_to)?;
         if matches!(destination, Some(CopyDestination::All)) {
             let out_to = self.out_directory.resolve(path);
-            turborepo_fs::recursive_copy(&from_path, out_to, self.use_gitignore, Some(&self.root))?;
+            self.copy_plan().copy(&from_path, out_to)?;
         }
         if self.docker
             && matches!(
@@ -778,12 +818,7 @@ impl<'a> Prune<'a> {
             )
         {
             let docker_to = self.docker_directory().resolve(path);
-            turborepo_fs::recursive_copy(
-                &from_path,
-                docker_to,
-                self.use_gitignore,
-                Some(&self.root),
-            )?;
+            self.copy_plan().copy(&from_path, docker_to)?;
         }
         Ok(())
     }
@@ -808,12 +843,7 @@ impl<'a> Prune<'a> {
         let target_dir = self.full_directory.resolve(package_directory);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
-        turborepo_fs::recursive_copy(
-            &original_dir,
-            &target_dir,
-            self.use_gitignore,
-            Some(&self.root),
-        )?;
+        self.copy_plan().copy(&original_dir, &target_dir)?;
 
         if self.docker {
             let docker_package_dir = self.docker_directory().resolve(package_directory);
@@ -871,12 +901,7 @@ impl<'a> Prune<'a> {
         let target_dir = self.full_directory.resolve(workspace_directory);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
-        turborepo_fs::recursive_copy(
-            &original_dir,
-            &target_dir,
-            self.use_gitignore,
-            Some(&self.root),
-        )?;
+        self.copy_plan().copy(&original_dir, &target_dir)?;
         if let Some(contents) = &pruned_package_json {
             target_dir
                 .join_component(definition_name)
@@ -1167,6 +1192,7 @@ mod tests {
     use std::{
         collections::{BTreeMap, HashMap, HashSet},
         fs,
+        sync::OnceLock,
     };
 
     use serde_json::json;
@@ -1441,6 +1467,7 @@ mod tests {
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
         };
 
         assert_eq!(
@@ -1501,6 +1528,7 @@ mod tests {
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
         };
 
         let context = prune.package_context(&web).unwrap();
@@ -1635,6 +1663,7 @@ mod tests {
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
         };
 
         assert_eq!(
@@ -1713,6 +1742,7 @@ mod tests {
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
         };
 
         assert_eq!(
@@ -1792,6 +1822,7 @@ mod tests {
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
         };
 
         assert_eq!(
