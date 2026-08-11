@@ -41,6 +41,7 @@ When making changes to the codebase, check if the following docs need updates:
 ### CI task scheduling
 
 - Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
+- The root quality task includes the uv workspace's format and check tasks; its CI job installs the pinned uv version before running the graph.
 - Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
 - Rust CI restores full Cargo target state on Ubuntu, macOS, and Windows from trusted `main` snapshots; only `main` writes. Repository sccache dogfooding is disabled.
 - Linux Rust shards include `terminal-control` black-box TUI integration tests; known regressions remain explicitly ignored.

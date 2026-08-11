@@ -1,0 +1,6 @@
+[tool.turbo]
+name = "turborepo-python"
+
+[tool.uv.workspace]
+# Reuse the mixed-workspace fixture packages to dogfood Python support.
+members = ["turborepo-tests/integration/fixtures/uv_monorepo/python/*"]

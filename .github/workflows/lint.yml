@@ -101,6 +101,12 @@ jobs:
           - name: "Setup Node"
             uses: ./.github/actions/setup-node
 
+          - name: Setup uv
+            uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+            with:
+              version: "0.12.0"
+              enable-cache: false
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 

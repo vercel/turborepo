@@ -28,6 +28,7 @@ You will need to have these dependencies installed on your machine to work on th
 - [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [Node.js](https://nodejs.org/en) v22
 - [pnpm](https://pnpm.io/) v10
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) for the root Python workspace and its quality tasks
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 - [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
@@ -35,7 +36,6 @@ You will need to have these dependencies installed on your machine to work on th
 ### Optional dependencies
 
 - [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) is required to run the Python workspace integration tests (`crates/turborepo/tests/uv_workspace_test.rs`); tests that execute uv skip when it is not installed.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`
