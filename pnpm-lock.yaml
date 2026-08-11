@@ -47,12 +47,24 @@ importers:
       '@vercel/connect':
         specifier: 0.4.2
         version: 0.4.2(ai@7.0.0-beta.178(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3))
+      '@vercel/oidc':
+        specifier: 3.8.0
+        version: 3.8.0
       ai:
         specifier: 7.0.0-beta.178
         version: 7.0.0-beta.178(zod@4.4.3)
       eve:
         specifier: ^0.22.5
         version: 0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3)
+      next:
+        specifier: 16.3.0
+        version: 16.3.0(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: ^19.2.3
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.3
+        version: 19.2.4(react@19.2.4)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -60,9 +72,18 @@ importers:
       '@types/node':
         specifier: 24.x
         version: 24.10.11
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.13)
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260523.1
         version: 7.0.0-dev.20260523.1
+      typescript:
+        specifier: ^6.0.1
+        version: 6.0.3
 
   apps/docs:
     dependencies:

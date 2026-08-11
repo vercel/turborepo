@@ -1,4 +1,4 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -9,7 +9,8 @@ import {
   getRepoRoot,
   isJsonObject,
   packageManagerName,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 const dependencyFields = [
@@ -77,24 +78,29 @@ export default defineTool({
         "Whether to include the latest active Node LTS version for engines.node review."
       )
   }),
-  async execute({
-    example,
-    includeDependencies,
-    includePackageManager,
-    includeNode
-  }) {
-    const repoRoot = await getRepoRoot();
-    const auditRoot = example
-      ? await getExamplePath(example)
+  async execute(
+    { example, includeDependencies, includePackageManager, includeNode },
+    ctx
+  ) {
+    const sandbox = await ctx.getSandbox();
+    const effectiveExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id,
+      example
+    );
+    const repoRoot = await getRepoRoot(sandbox);
+    const auditRoot = effectiveExample
+      ? await getExamplePath(sandbox, effectiveExample)
       : path.join(repoRoot, "examples");
-    const packageJsonFiles = await findPackageJsonFiles(auditRoot);
+    const packageJsonFiles = await findPackageJsonFiles(sandbox, auditRoot);
     const latestNodeLts = includeNode ? await fetchLatestNodeLts() : null;
     const dependencies: PackageVersionFinding[] = [];
     const packageManagers: PackageManagerFinding[] = [];
     const nodeEngines: NodeFinding[] = [];
 
     for (const packageJsonFile of packageJsonFiles) {
-      const packageJson = await readJsonFile(packageJsonFile);
+      const packageJson = await readJsonFile(sandbox, packageJsonFile);
       const relativePath = path.relative(repoRoot, packageJsonFile);
 
       if (includePackageManager) {

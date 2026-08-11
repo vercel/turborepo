@@ -1,4 +1,4 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -7,7 +7,8 @@ import {
   getExamplePath,
   isJsonObject,
   pickJsonObject,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 interface TaskFinding {
@@ -29,13 +30,25 @@ export default defineTool({
       .min(1)
       .describe("Directory name under examples/, for example 'basic'.")
   }),
-  async execute({ example }) {
-    const examplePath = await getExamplePath(example);
+  async execute({ example }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const packageJson = await readJsonFile(
+      sandbox,
       path.join(examplePath, "package.json")
     );
     const scripts = pickJsonObject(packageJson.scripts) ?? {};
-    const turboJson = await readJsonFile(path.join(examplePath, "turbo.json"));
+    const turboJson = await readJsonFile(
+      sandbox,
+      path.join(examplePath, "turbo.json")
+    );
     const tasks = collectTasks(turboJson);
     const scriptNames = Object.keys(scripts).sort();
     const turboTasks = Object.entries(tasks).map(
@@ -61,7 +74,7 @@ export default defineTool({
     );
 
     return {
-      example,
+      example: effectiveExample,
       turboTasks: turboTasks.sort((a, b) => a.name.localeCompare(b.name)),
       scriptOnlyValidationTasks,
       recommendedScriptsToRun: [
