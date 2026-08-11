@@ -13,8 +13,8 @@ export default function OperatorPage() {
           <span>control plane</span>
         </h1>
         <p className="intro">
-          Keep every Turborepo example current, consistent, and verified from
-          one durable agent run.
+          Keep Turborepo examples current through one focused, rotating
+          maintenance run each day.
         </p>
       </header>
 
@@ -22,22 +22,22 @@ export default function OperatorPage() {
         <div className="operationHeader">
           <div>
             <p className="eyebrow">Scheduled operation</p>
-            <h2 id="operation-title">Weekly examples maintenance</h2>
+            <h2 id="operation-title">Daily example maintenance</h2>
           </div>
-          <span className="schedule">MON · 14:00 UTC</span>
+          <span className="schedule">DAILY · 14:00 UTC</span>
         </div>
 
         <p className="description">
-          Audits stale versions and task configuration, applies migrations,
-          regenerates lockfiles, validates each example, and opens a draft pull
-          request when changes exist.
+          Selects one example by UTC date, audits and upgrades only that
+          example, validates it, and opens a focused draft pull request when
+          changes exist.
         </p>
 
         <dl className="facts">
           <div>
             <dt>Scope</dt>
             <dd>
-              <code>examples/**</code>
+              <code>one example/day</code>
             </dd>
           </div>
           <div>

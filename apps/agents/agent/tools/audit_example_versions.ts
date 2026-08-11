@@ -9,7 +9,8 @@ import {
   getRepoRoot,
   isJsonObject,
   packageManagerName,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 const dependencyFields = [
@@ -82,9 +83,15 @@ export default defineTool({
     ctx
   ) {
     const sandbox = await ctx.getSandbox();
+    const effectiveExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id,
+      example
+    );
     const repoRoot = await getRepoRoot(sandbox);
-    const auditRoot = example
-      ? await getExamplePath(sandbox, example)
+    const auditRoot = effectiveExample
+      ? await getExamplePath(sandbox, effectiveExample)
       : path.join(repoRoot, "examples");
     const packageJsonFiles = await findPackageJsonFiles(sandbox, auditRoot);
     const latestNodeLts = includeNode ? await fetchLatestNodeLts() : null;

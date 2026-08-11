@@ -45,7 +45,7 @@ export function RunMaintenance({ agentRunsUrl }: RunMaintenanceProps) {
         body: "{}",
         headers: {
           "content-type": "application/json",
-          "x-operator-action": "run-weekly-maintenance"
+          "x-operator-action": "run-daily-maintenance"
         },
         method: "POST"
       });

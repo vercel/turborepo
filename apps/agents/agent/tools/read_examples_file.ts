@@ -3,7 +3,11 @@ import path from "node:path/posix";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getRepoRoot, resolveExamplesFile } from "../lib/repo.js";
+import {
+  getRepoRoot,
+  resolveAutomatedExample,
+  resolveExamplesFile
+} from "../lib/repo.js";
 
 export default defineTool({
   description:
@@ -17,8 +21,22 @@ export default defineTool({
   }),
   async execute({ path: relativePath, maxLines }, ctx) {
     const sandbox = await ctx.getSandbox();
+    const automatedExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id
+    );
+    const normalizedPath = path.normalize(relativePath);
+    if (
+      automatedExample &&
+      !normalizedPath.startsWith(`examples/${automatedExample}/`)
+    ) {
+      throw new Error(
+        `Automated maintenance can only read examples/${automatedExample}/.`
+      );
+    }
     const repoRoot = await getRepoRoot(sandbox);
-    const filePath = await resolveExamplesFile(sandbox, relativePath);
+    const filePath = await resolveExamplesFile(sandbox, normalizedPath);
     const content = await sandbox.readTextFile({
       path: filePath,
       startLine: 1,

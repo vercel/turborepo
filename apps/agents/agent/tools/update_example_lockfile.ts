@@ -7,6 +7,7 @@ import {
   getExamplePath,
   packageManagerName,
   readJsonFile,
+  resolveAutomatedExample,
   runCommand
 } from "../lib/repo.js";
 
@@ -22,7 +23,14 @@ export default defineTool({
   }),
   async execute({ example, timeoutSeconds }, ctx) {
     const sandbox = await ctx.getSandbox();
-    const examplePath = await getExamplePath(sandbox, example);
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const packageJson = await readJsonFile(
       sandbox,
       path.join(examplePath, "package.json")

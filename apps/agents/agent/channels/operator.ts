@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { defineChannel, GET, POST } from "eve/channels";
 
-import { WEEKLY_EXAMPLES_MAINTENANCE_PROMPT } from "../lib/weekly-examples-maintenance.js";
+import { DAILY_EXAMPLE_MAINTENANCE_PROMPT } from "../lib/daily-example-maintenance.js";
 
 const APP_AUTH = {
   attributes: {},
@@ -17,7 +17,7 @@ export default defineChannel({
       const origin = request.headers.get("origin");
       if (
         origin !== new URL(request.url).origin ||
-        request.headers.get("x-operator-action") !== "run-weekly-maintenance" ||
+        request.headers.get("x-operator-action") !== "run-daily-maintenance" ||
         !request.headers.get("content-type")?.startsWith("application/json")
       ) {
         return Response.json(
@@ -29,11 +29,11 @@ export default defineChannel({
         );
       }
 
-      const session = await send(WEEKLY_EXAMPLES_MAINTENANCE_PROMPT, {
+      const session = await send(DAILY_EXAMPLE_MAINTENANCE_PROMPT, {
         auth: APP_AUTH,
         continuationToken: randomUUID(),
         mode: "task",
-        title: "Weekly examples maintenance"
+        title: "Daily example maintenance"
       });
 
       return Response.json(

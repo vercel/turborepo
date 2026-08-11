@@ -20,6 +20,8 @@ export interface DirectoryEntry {
 
 const REPO_ROOT = "turborepo";
 const MAX_OUTPUT_LENGTH = 20_000;
+const MILLISECONDS_PER_DAY = 86_400_000;
+const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const lockfileNames = new Set([
   "bun.lock",
   "bun.lockb",
@@ -54,6 +56,85 @@ export async function listExampleNames(
       })
     )
   ].sort();
+}
+
+export function selectDailyExample(
+  examples: string[],
+  date = new Date()
+): { date: string; example: string; index: number; total: number } {
+  if (examples.length === 0) {
+    throw new Error("No Turborepo examples are available for maintenance.");
+  }
+  const sortedExamples = [...examples].sort();
+  const dayNumber = Math.floor(date.getTime() / MILLISECONDS_PER_DAY);
+  const index = dayNumber % sortedExamples.length;
+  return {
+    date: date.toISOString().slice(0, 10),
+    example: sortedExamples[index] as string,
+    index,
+    total: sortedExamples.length
+  };
+}
+
+export async function resolveAutomatedExample(
+  sandbox: SandboxSession,
+  auth:
+    | {
+        authenticator: string;
+        principalId: string;
+        principalType: string;
+      }
+    | null
+    | undefined,
+  sessionId: string,
+  requestedExample?: string
+): Promise<string | undefined> {
+  if (!isAppPrincipal(auth)) return requestedExample;
+
+  const selected = selectDailyExample(
+    await listExampleNames(sandbox),
+    sessionDate(sessionId)
+  ).example;
+  if (requestedExample && requestedExample !== selected) {
+    throw new Error(
+      `Today's automated maintenance target is '${selected}', not '${requestedExample}'.`
+    );
+  }
+  return selected;
+}
+
+export function sessionDate(sessionId: string): Date {
+  const encoded = sessionId.startsWith("wrun_")
+    ? sessionId.slice(5, 15)
+    : sessionId.slice(0, 10);
+  if (encoded.length !== 10) {
+    throw new Error(`Invalid Eve session id: ${sessionId}`);
+  }
+
+  let timestamp = 0;
+  for (const character of encoded) {
+    const value = ULID_ALPHABET.indexOf(character.toUpperCase());
+    if (value < 0) throw new Error(`Invalid Eve session id: ${sessionId}`);
+    timestamp = timestamp * 32 + value;
+  }
+  return new Date(timestamp);
+}
+
+export function isAppPrincipal(
+  auth:
+    | {
+        authenticator: string;
+        principalId: string;
+        principalType: string;
+      }
+    | null
+    | undefined
+): boolean {
+  return (
+    auth?.authenticator === "app" &&
+    auth.principalId === "eve:app" &&
+    auth.principalType === "runtime"
+  );
 }
 
 export async function getExamplePath(

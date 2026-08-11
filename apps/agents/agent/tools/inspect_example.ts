@@ -11,7 +11,8 @@ import {
   packageManagerName,
   pickJsonObject,
   readJsonFile,
-  readTextIfExists
+  readTextIfExists,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 export default defineTool({
@@ -25,7 +26,14 @@ export default defineTool({
   }),
   async execute({ example }, ctx) {
     const sandbox = await ctx.getSandbox();
-    const examplePath = await getExamplePath(sandbox, example);
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const repoRoot = await getRepoRoot(sandbox);
     const packageJson = await readJsonFile(
       sandbox,
@@ -35,7 +43,7 @@ export default defineTool({
     const entries = await listDirectory(sandbox, examplePath);
 
     return {
-      example,
+      example: effectiveExample,
       path: path.relative(repoRoot, examplePath),
       packageManager: packageJson.packageManager,
       packageManagerName: packageManagerName(packageJson.packageManager),

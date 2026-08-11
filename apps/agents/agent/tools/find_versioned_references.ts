@@ -3,7 +3,12 @@ import path from "node:path/posix";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getExamplePath, getRepoRoot, listTrackedFiles } from "../lib/repo.js";
+import {
+  getExamplePath,
+  getRepoRoot,
+  listTrackedFiles,
+  resolveAutomatedExample
+} from "../lib/repo.js";
 
 interface VersionReference {
   path: string;
@@ -54,9 +59,15 @@ export default defineTool({
   }),
   async execute({ example }, ctx) {
     const sandbox = await ctx.getSandbox();
+    const effectiveExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id,
+      example
+    );
     const repoRoot = await getRepoRoot(sandbox);
-    const scanRoot = example
-      ? await getExamplePath(sandbox, example)
+    const scanRoot = effectiveExample
+      ? await getExamplePath(sandbox, effectiveExample)
       : path.join(repoRoot, "examples");
     const relativeRoot = path.relative(repoRoot, scanRoot);
     const files = (await listTrackedFiles(sandbox, relativeRoot))
