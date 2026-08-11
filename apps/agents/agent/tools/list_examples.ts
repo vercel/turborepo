@@ -7,10 +7,11 @@ export default defineTool({
   description:
     "List Turborepo examples available under the repository's examples/ directory.",
   inputSchema: z.object({}),
-  async execute() {
+  async execute(_input, ctx) {
+    const sandbox = await ctx.getSandbox();
     return {
-      repoRoot: await getRepoRoot(),
-      examples: await listExampleNames()
+      repoRoot: await getRepoRoot(sandbox),
+      examples: await listExampleNames(sandbox)
     };
   }
 });

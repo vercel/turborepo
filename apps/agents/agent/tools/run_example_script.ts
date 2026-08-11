@@ -1,4 +1,4 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -27,9 +27,11 @@ export default defineTool({
       ),
     timeoutSeconds: z.number().int().positive().max(600).default(120)
   }),
-  async execute({ example, script, timeoutSeconds }) {
-    const examplePath = await getExamplePath(example);
+  async execute({ example, script, timeoutSeconds }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const examplePath = await getExamplePath(sandbox, example);
     const packageJson = await readJsonFile(
+      sandbox,
       path.join(examplePath, "package.json")
     );
     const scripts = pickJsonObject(packageJson.scripts);
@@ -41,6 +43,7 @@ export default defineTool({
 
     const manager = packageManagerName(packageJson.packageManager) ?? "pnpm";
     return runCommand(
+      sandbox,
       manager,
       ["run", script],
       examplePath,

@@ -1,19 +1,24 @@
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
+import path from "node:path/posix";
+
+import type { SandboxSession } from "eve/sandbox";
 
 export type JsonObject = Record<string, unknown>;
 
 export interface CommandResult {
   command: string;
   cwd: string;
-  exitCode: number | null;
+  exitCode: number;
   timedOut: boolean;
   stdout: string;
   stderr: string;
 }
 
+export interface DirectoryEntry {
+  name: string;
+  type: "directory" | "file" | "other";
+}
+
+const REPO_ROOT = "turborepo";
 const MAX_OUTPUT_LENGTH = 20_000;
 const lockfileNames = new Set([
   "bun.lock",
@@ -23,66 +28,58 @@ const lockfileNames = new Set([
   "yarn.lock"
 ]);
 
-export async function getRepoRoot(): Promise<string> {
-  if (process.env.TURBO_REPO_ROOT) {
-    return process.env.TURBO_REPO_ROOT;
+export async function getRepoRoot(sandbox: SandboxSession): Promise<string> {
+  const result = await sandbox.run({
+    command: "test -f package.json && test -d examples",
+    workingDirectory: REPO_ROOT
+  });
+  if (result.exitCode !== 0) {
+    throw new Error("The Turborepo sandbox checkout is unavailable.");
   }
-
-  let current = process.cwd();
-  while (true) {
-    const packageJsonPath = path.join(current, "package.json");
-    const examplesPath = path.join(current, "examples");
-    if (existsSync(packageJsonPath) && existsSync(examplesPath)) {
-      const packageJson = await readJsonFile(packageJsonPath);
-      if (packageJson.name === "turbo-monorepo") {
-        return current;
-      }
-    }
-
-    const parent = path.dirname(current);
-    if (parent === current) {
-      throw new Error("Could not locate the Turborepo repository root.");
-    }
-    current = parent;
-  }
+  return REPO_ROOT;
 }
 
-export async function listExampleNames(): Promise<string[]> {
-  const repoRoot = await getRepoRoot();
-  const examplesRoot = path.join(repoRoot, "examples");
-  const entries = await readdir(examplesRoot, { withFileTypes: true });
-  const names = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map(async (entry) => {
-        const packageJsonPath = path.join(
-          examplesRoot,
-          entry.name,
-          "package.json"
-        );
-        return existsSync(packageJsonPath) ? entry.name : null;
+export async function listExampleNames(
+  sandbox: SandboxSession
+): Promise<string[]> {
+  const repoRoot = await getRepoRoot(sandbox);
+  const files = await listTrackedFiles(sandbox, "examples");
+  return [
+    ...new Set(
+      files.flatMap((file) => {
+        const segments = file.split("/");
+        return segments.length === 3 && segments[2] === "package.json"
+          ? [segments[1] as string]
+          : [];
       })
-  );
-
-  return names.filter((name): name is string => name !== null).sort();
+    )
+  ].sort();
 }
 
-export async function getExamplePath(example: string): Promise<string> {
+export async function getExamplePath(
+  sandbox: SandboxSession,
+  example: string
+): Promise<string> {
   if (example.includes("/") || example.includes("\\") || example === "..") {
     throw new Error(`Invalid example name: ${example}`);
   }
 
-  const examples = await listExampleNames();
+  const examples = await listExampleNames(sandbox);
   if (!examples.includes(example)) {
     throw new Error(`Unknown example: ${example}`);
   }
 
-  const repoRoot = await getRepoRoot();
-  return path.join(repoRoot, "examples", example);
+  return path.join(await getRepoRoot(sandbox), "examples", example);
 }
 
-export async function readJsonFile(filePath: string): Promise<JsonObject> {
-  const content = await readFile(filePath, "utf8");
+export async function readJsonFile(
+  sandbox: SandboxSession,
+  filePath: string
+): Promise<JsonObject> {
+  const content = await sandbox.readTextFile({ path: filePath });
+  if (content === null) {
+    throw new Error(`${filePath} does not exist.`);
+  }
   const value: unknown = JSON.parse(content);
   if (!isJsonObject(value)) {
     throw new Error(`${filePath} must contain a JSON object.`);
@@ -91,144 +88,156 @@ export async function readJsonFile(filePath: string): Promise<JsonObject> {
 }
 
 export async function readTextIfExists(
+  sandbox: SandboxSession,
   filePath: string,
   maxLines = 120
 ): Promise<string | null> {
-  if (!existsSync(filePath)) {
-    return null;
-  }
-
-  const content = await readFile(filePath, "utf8");
-  return content.split("\n").slice(0, maxLines).join("\n");
+  return sandbox.readTextFile({
+    path: filePath,
+    startLine: 1,
+    endLine: maxLines
+  });
 }
 
-export async function findPackageJsonFiles(root: string): Promise<string[]> {
-  const results: string[] = [];
-
-  async function walk(directory: string): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true });
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (
-          entry.name === "node_modules" ||
-          entry.name === ".turbo" ||
-          entry.name === "dist"
-        ) {
-          return;
-        }
-
-        const entryPath = path.join(directory, entry.name);
-        if (entry.isDirectory()) {
-          await walk(entryPath);
-          return;
-        }
-
-        if (entry.isFile() && entry.name === "package.json") {
-          results.push(entryPath);
-        }
-      })
-    );
-  }
-
-  await walk(root);
-  return results.sort();
+export async function findPackageJsonFiles(
+  sandbox: SandboxSession,
+  root: string
+): Promise<string[]> {
+  const repoRoot = await getRepoRoot(sandbox);
+  const relativeRoot = path.relative(repoRoot, root);
+  const files = await listTrackedFiles(sandbox, relativeRoot);
+  return files
+    .filter((file) => path.basename(file) === "package.json")
+    .map((file) => path.join(repoRoot, file));
 }
 
-export function packageManagerName(packageManager: unknown): string | null {
+export async function listTrackedFiles(
+  sandbox: SandboxSession,
+  relativeRoot: string
+): Promise<string[]> {
+  const repoRoot = await getRepoRoot(sandbox);
+  const result = await sandbox.run({
+    command: `git ls-files --cached --others --exclude-standard -- ${shellQuote(relativeRoot)}`,
+    workingDirectory: repoRoot
+  });
+  assertCommandSucceeded(result, "List tracked repository files");
+  const deleted = await sandbox.run({
+    command: `git ls-files --deleted -- ${shellQuote(relativeRoot)}`,
+    workingDirectory: repoRoot
+  });
+  assertCommandSucceeded(deleted, "List deleted repository files");
+  const deletedFiles = new Set(deleted.stdout.split("\n").filter(Boolean));
+  return result.stdout
+    .split("\n")
+    .filter((file) => file !== "" && !deletedFiles.has(file))
+    .sort();
+}
+
+export async function listDirectory(
+  sandbox: SandboxSession,
+  directory: string
+): Promise<DirectoryEntry[]> {
+  const result = await sandbox.run({
+    command: "find . -mindepth 1 -maxdepth 1 -printf '%f\\t%y\\n'",
+    workingDirectory: directory
+  });
+  assertCommandSucceeded(result, `List ${directory}`);
+  return result.stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", type = ""] = line.split("\t");
+      return {
+        name,
+        type: type === "d" ? "directory" : type === "f" ? "file" : "other"
+      };
+    });
+}
+
+export async function fileExists(
+  sandbox: SandboxSession,
+  filePath: string
+): Promise<boolean> {
+  const result = await sandbox.run({
+    command: `test -f ${shellQuote(filePath)}`
+  });
+  return result.exitCode === 0;
+}
+
+export function packageManagerName(
+  packageManager: unknown
+): "bun" | "npm" | "pnpm" | "yarn" | null {
   if (typeof packageManager !== "string") {
     return null;
   }
-  return packageManager.split("@")[0] ?? null;
+  const name = packageManager.split("@")[0];
+  return name === "bun" || name === "npm" || name === "pnpm" || name === "yarn"
+    ? name
+    : null;
 }
 
 export async function resolveExamplesFile(
+  sandbox: SandboxSession,
   relativePath: string
 ): Promise<string> {
-  const repoRoot = await getRepoRoot();
+  const repoRoot = await getRepoRoot(sandbox);
   if (path.isAbsolute(relativePath)) {
     throw new Error("Use a repository-relative path under examples/.");
   }
 
-  const resolved = path.resolve(repoRoot, relativePath);
-  const relative = path.relative(repoRoot, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  const normalized = path.normalize(relativePath);
+  if (normalized === ".." || normalized.startsWith("../")) {
     throw new Error("Path must stay inside the repository.");
   }
-  if (relative !== "examples" && !relative.startsWith(`examples${path.sep}`)) {
+  if (normalized !== "examples" && !normalized.startsWith("examples/")) {
     throw new Error(
       "Only files under examples/ can be modified by this agent."
     );
   }
 
-  return resolved;
+  return path.join(repoRoot, normalized);
 }
 
 export async function writeExamplesFile(
+  sandbox: SandboxSession,
   relativePath: string,
   content: string
 ): Promise<{ path: string; bytes: number }> {
-  const filePath = await resolveExamplesFile(relativePath);
-  const fileStat = existsSync(filePath) ? await stat(filePath) : null;
-  if (fileStat?.isDirectory()) {
-    throw new Error("Cannot overwrite a directory.");
-  }
+  const filePath = await resolveExamplesFile(sandbox, relativePath);
   if (lockfileNames.has(path.basename(filePath))) {
     throw new Error(
       "Lockfiles must be updated by running the package manager, not by direct writes."
     );
   }
 
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
+  await sandbox.writeTextFile({ path: filePath, content });
   return {
-    path: path.relative(await getRepoRoot(), filePath),
+    path: path.relative(await getRepoRoot(sandbox), filePath),
     bytes: Buffer.byteLength(content)
   };
 }
 
 export async function runCommand(
+  sandbox: SandboxSession,
   command: string,
   args: string[],
   cwd: string,
   timeoutMs: number
 ): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: false });
-    const commandLine = [command, ...args].join(" ");
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeoutMs);
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout = truncateOutput(stdout + chunk.toString("utf8"));
-    });
-
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr = truncateOutput(stderr + chunk.toString("utf8"));
-    });
-
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-
-    child.on("close", (exitCode) => {
-      clearTimeout(timeout);
-      resolve({
-        command: commandLine,
-        cwd,
-        exitCode,
-        timedOut,
-        stdout,
-        stderr
-      });
-    });
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1_000));
+  const commandLine = [command, ...args].map(shellQuote).join(" ");
+  const result = await sandbox.run({
+    command: `timeout --signal=TERM ${timeoutSeconds}s ${commandLine}`,
+    workingDirectory: cwd
   });
+  return {
+    command: commandLine,
+    cwd,
+    exitCode: result.exitCode,
+    timedOut: result.exitCode === 124,
+    stdout: truncateOutput(result.stdout),
+    stderr: truncateOutput(result.stderr)
+  };
 }
 
 export function isJsonObject(value: unknown): value is JsonObject {
@@ -237,6 +246,19 @@ export function isJsonObject(value: unknown): value is JsonObject {
 
 export function pickJsonObject(value: unknown): JsonObject | null {
   return isJsonObject(value) ? value : null;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function assertCommandSucceeded(
+  result: { exitCode: number; stderr: string },
+  operation: string
+): void {
+  if (result.exitCode !== 0) {
+    throw new Error(`${operation} failed: ${result.stderr}`);
+  }
 }
 
 function truncateOutput(output: string): string {

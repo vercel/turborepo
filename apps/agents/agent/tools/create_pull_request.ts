@@ -1,49 +1,40 @@
-import { createSign } from "node:crypto";
+import type { SandboxSession } from "eve/sandbox";
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 
-const filePathSchema = z
-  .string()
-  .min(1)
-  .refine((path) => !path.startsWith("/") && !path.includes(".."), {
-    message: "Use a relative path without '..'."
-  });
+import { getGitHubToken } from "../lib/github.js";
+
+const owner = "vercel";
+const repo = "turborepo";
+const baseBranch = "main";
+const checkout = "turborepo";
 
 const inputSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  baseBranch: z.string().min(1).default("main"),
   branchName: z
     .string()
-    .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/"),
-  title: z.string().min(1),
-  body: z.string().default(""),
-  commitMessage: z.string().min(1),
-  draft: z.boolean().default(false),
-  files: z
-    .array(
-      z.object({
-        path: filePathSchema.describe(
-          "Path to write in the GitHub repository."
-        ),
-        sandboxPath: filePathSchema
-          .optional()
-          .describe("Path to read from the sandbox. Defaults to path.")
-      })
-    )
-    .min(1)
+    .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/")
+    .optional()
+    .describe(
+      "Branch for an interactive run. Scheduled runs always use the current UTC date."
+    ),
+  body: z.string().default("")
 });
 
 type RefResponse = { object?: { sha?: string } };
 type CommitResponse = { tree?: { sha?: string } };
+type CompareResponse = { merge_base_commit?: { sha?: string } };
 type ShaResponse = { sha?: string };
-type InstallationTokenResponse = { expires_at?: string; token?: string };
-type PullRequestResponse = { html_url?: string; number?: number };
-
-let cachedInstallationToken:
-  | { expiresAt: number; installationId: number; token: string }
-  | undefined;
+type PullRequestResponse = {
+  head?: { sha?: string };
+  html_url?: string;
+  number?: number;
+};
+type TreeEntry = {
+  path: string;
+  mode: "100644" | "100755";
+  type: "blob";
+  sha: string | null;
+};
 
 class GitHubApiError extends Error {
   constructor(
@@ -54,22 +45,6 @@ class GitHubApiError extends Error {
   }
 }
 
-function installationId() {
-  const value = process.env.GITHUB_INSTALLATION_ID;
-  if (!value) {
-    throw new Error(
-      "Set GITHUB_INSTALLATION_ID before creating pull requests."
-    );
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) {
-    throw new TypeError("GITHUB_INSTALLATION_ID must be an integer.");
-  }
-
-  return parsed;
-}
-
 function repoPath(owner: string, repo: string, path: string) {
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${path}`;
 }
@@ -77,77 +52,6 @@ function repoPath(owner: string, repo: string, path: string) {
 function requireSha(value: string | undefined, label: string) {
   if (!value) throw new Error(`GitHub response did not include ${label}.`);
   return value;
-}
-
-function requireEnv(name: string) {
-  const value = process.env[name];
-  if (!value) throw new Error(`Set ${name} before creating pull requests.`);
-  return value;
-}
-
-function base64Url(value: Buffer | string) {
-  return Buffer.from(value)
-    .toString("base64")
-    .replace(/[=]/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-}
-
-function createGitHubAppJwt() {
-  const now = Math.floor(Date.now() / 1000);
-  const privateKey = requireEnv("GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n");
-  const payload = {
-    iat: now - 60,
-    exp: now + 9 * 60,
-    iss: requireEnv("GITHUB_APP_ID")
-  };
-  const unsigned = `${base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64Url(JSON.stringify(payload))}`;
-  const signature = createSign("RSA-SHA256").update(unsigned).sign(privateKey);
-
-  return `${unsigned}.${base64Url(signature)}`;
-}
-
-async function getInstallationToken() {
-  const id = installationId();
-  if (
-    cachedInstallationToken?.installationId === id &&
-    cachedInstallationToken.expiresAt > Date.now() + 60_000
-  ) {
-    return cachedInstallationToken.token;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/app/installations/${id}/access_tokens`,
-    {
-      method: "POST",
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${createGitHubAppJwt()}`,
-        "x-github-api-version": "2022-11-28"
-      }
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `GitHub token request failed with ${response.status}: ${await response.text()}`
-    );
-  }
-
-  const body = (await response.json()) as InstallationTokenResponse;
-  if (!body.token || !body.expires_at) {
-    throw new Error(
-      "GitHub token response did not include token and expires_at."
-    );
-  }
-
-  cachedInstallationToken = {
-    expiresAt: Date.parse(body.expires_at),
-    installationId: id,
-    token: body.token
-  };
-
-  return body.token;
 }
 
 async function github<T>(input: {
@@ -163,7 +67,7 @@ async function github<T>(input: {
       method: input.method,
       headers: {
         accept: "application/vnd.github+json",
-        authorization: `Bearer ${await getInstallationToken()}`,
+        authorization: `Bearer ${await getGitHubToken()}`,
         "content-type": "application/json",
         "x-github-api-version": "2022-11-28"
       },
@@ -183,69 +87,86 @@ async function github<T>(input: {
 
 export default defineTool({
   description:
-    "Create a GitHub pull request from selected sandbox files. Use only after editing files in the sandbox and choosing an agents/* branch name.",
+    "Create a vercel/turborepo pull request containing every sandbox change under examples/. Returns without creating a PR when there are no changes.",
   inputSchema,
-  approval: always(),
+  approval: ({ session }) => {
+    return isAppPrincipal(session.auth.current)
+      ? "not-applicable"
+      : "user-approval";
+  },
   async execute(input, ctx) {
     const sandbox = await ctx.getSandbox();
-    const baseRef = await github<RefResponse>({
+    const branchName = isAppPrincipal(ctx.session.auth.current)
+      ? scheduledBranchName()
+      : input.branchName;
+    if (!branchName) {
+      throw new Error("Interactive pull requests require an agents/* branch.");
+    }
+    const changedFiles = await listChangedFiles(sandbox);
+    if (changedFiles.length === 0) {
+      return { created: false, reason: "No changes under examples/." };
+    }
+
+    const existingPullRequests = await github<PullRequestResponse[]>({
       method: "GET",
-      owner: input.owner,
-      repo: input.repo,
-      path: `/git/ref/heads/${input.baseBranch}`
+      owner,
+      repo,
+      path: `/pulls?state=open&head=${owner}%3A${encodeURIComponent(branchName)}`
     });
-    const baseCommitSha = requireSha(baseRef.object?.sha, "base ref SHA");
+    const existingPullRequest = existingPullRequests[0];
 
-    let branchCommitSha = baseCommitSha;
-    try {
-      const branchRef = await github<RefResponse>({
-        method: "GET",
-        owner: input.owner,
-        repo: input.repo,
-        path: `/git/ref/heads/${input.branchName}`
-      });
-      branchCommitSha = requireSha(branchRef.object?.sha, "branch ref SHA");
-    } catch (error) {
-      if (!(error instanceof GitHubApiError) || error.status !== 404) {
-        throw error;
-      }
-
-      await github({
-        method: "POST",
-        owner: input.owner,
-        repo: input.repo,
-        path: "/git/refs",
-        body: {
-          ref: `refs/heads/${input.branchName}`,
-          sha: baseCommitSha
-        }
-      });
+    const checkoutSha = (await runGit(sandbox, "git rev-parse HEAD")).trim();
+    const comparison = await github<CompareResponse>({
+      method: "GET",
+      owner,
+      repo,
+      path: `/compare/${checkoutSha}...${baseBranch}`
+    });
+    if (comparison.merge_base_commit?.sha !== checkoutSha) {
+      throw new Error(
+        "The sandbox checkout is not based on vercel/turborepo main."
+      );
     }
 
     const branchCommit = await github<CommitResponse>({
       method: "GET",
-      owner: input.owner,
-      repo: input.repo,
-      path: `/git/commits/${branchCommitSha}`
+      owner,
+      repo,
+      path: `/git/commits/${checkoutSha}`
     });
     const baseTreeSha = requireSha(branchCommit.tree?.sha, "base tree SHA");
 
-    const tree = await Promise.all(
-      input.files.map(async (file) => {
-        const content = await sandbox.readTextFile({
-          path: file.sandboxPath ?? file.path
+    const tree: TreeEntry[] = await Promise.all(
+      changedFiles.map(async (file) => {
+        if (file.deleted) {
+          return {
+            path: file.path,
+            mode: file.mode,
+            type: "blob",
+            sha: null
+          };
+        }
+
+        const content = await sandbox.readBinaryFile({
+          path: `${checkout}/${file.path}`
         });
+        if (content === null) {
+          throw new Error(`Changed file ${file.path} does not exist.`);
+        }
         const blob = await github<ShaResponse>({
           method: "POST",
-          owner: input.owner,
-          repo: input.repo,
+          owner,
+          repo,
           path: "/git/blobs",
-          body: { content, encoding: "utf-8" }
+          body: {
+            content: Buffer.from(content).toString("base64"),
+            encoding: "base64"
+          }
         });
 
         return {
           path: file.path,
-          mode: "100644",
+          mode: file.mode,
           type: "blob",
           sha: requireSha(blob.sha, "blob SHA")
         };
@@ -254,8 +175,8 @@ export default defineTool({
 
     const newTree = await github<ShaResponse>({
       method: "POST",
-      owner: input.owner,
-      repo: input.repo,
+      owner,
+      repo,
       path: "/git/trees",
       body: {
         base_tree: baseTreeSha,
@@ -263,46 +184,209 @@ export default defineTool({
       }
     });
 
-    const commit = await github<ShaResponse>({
-      method: "POST",
-      owner: input.owner,
-      repo: input.repo,
-      path: "/git/commits",
-      body: {
-        message: input.commitMessage,
-        tree: requireSha(newTree.sha, "tree SHA"),
-        parents: [branchCommitSha]
-      }
-    });
-    const newCommitSha = requireSha(commit.sha, "commit SHA");
+    const newTreeSha = requireSha(newTree.sha, "tree SHA");
+    if (newTreeSha === baseTreeSha) {
+      return {
+        created: false,
+        reason: "No effective changes under examples/."
+      };
+    }
 
-    await github({
-      method: "PATCH",
-      owner: input.owner,
-      repo: input.repo,
-      path: `/git/refs/heads/${input.branchName}`,
-      body: { sha: newCommitSha, force: false }
-    });
+    if (existingPullRequest) {
+      const existingCommit = await github<CommitResponse>({
+        method: "GET",
+        owner,
+        repo,
+        path: `/git/commits/${requireSha(existingPullRequest.head?.sha, "pull request head SHA")}`
+      });
+      if (existingCommit.tree?.sha !== newTreeSha) {
+        throw new Error(
+          `Pull request ${existingPullRequest.html_url ?? existingPullRequest.number} already uses ${branchName} with different changes.`
+        );
+      }
+      return {
+        created: false,
+        existing: true,
+        number: existingPullRequest.number,
+        url: existingPullRequest.html_url,
+        branch: branchName,
+        commit: existingPullRequest.head?.sha
+      };
+    }
+
+    let newCommitSha: string;
+    try {
+      const branchRef = await github<RefResponse>({
+        method: "GET",
+        owner,
+        repo,
+        path: `/git/ref/heads/${branchName}`
+      });
+      newCommitSha = requireSha(branchRef.object?.sha, "branch ref SHA");
+      const existingCommit = await github<CommitResponse>({
+        method: "GET",
+        owner,
+        repo,
+        path: `/git/commits/${newCommitSha}`
+      });
+      if (existingCommit.tree?.sha !== newTreeSha) {
+        throw new Error(
+          `Branch ${branchName} already exists with different changes.`
+        );
+      }
+    } catch (error) {
+      if (!(error instanceof GitHubApiError) || error.status !== 404) {
+        throw error;
+      }
+
+      const commit = await github<ShaResponse>({
+        method: "POST",
+        owner,
+        repo,
+        path: "/git/commits",
+        body: {
+          message: "chore: Update Turborepo examples",
+          tree: newTreeSha,
+          parents: [checkoutSha]
+        }
+      });
+      newCommitSha = requireSha(commit.sha, "commit SHA");
+
+      await github({
+        method: "POST",
+        owner,
+        repo,
+        path: "/git/refs",
+        body: {
+          ref: `refs/heads/${branchName}`,
+          sha: newCommitSha
+        }
+      });
+    }
 
     const pullRequest = await github<PullRequestResponse>({
       method: "POST",
-      owner: input.owner,
-      repo: input.repo,
+      owner,
+      repo,
       path: "/pulls",
       body: {
-        title: input.title,
+        title: "chore: Update Turborepo examples",
         body: input.body,
-        head: input.branchName,
-        base: input.baseBranch,
-        draft: input.draft
+        head: branchName,
+        base: baseBranch,
+        draft: true
       }
     });
 
     return {
+      created: true,
       number: pullRequest.number,
       url: pullRequest.html_url,
-      branch: input.branchName,
+      branch: branchName,
       commit: newCommitSha
     };
   }
 });
+
+async function listChangedFiles(
+  sandbox: SandboxSession
+): Promise<
+  Array<{ path: string; deleted: boolean; mode: "100644" | "100755" }>
+> {
+  const modified = await runGit(
+    sandbox,
+    "git diff --no-renames --name-only --diff-filter=ACMRTUXB HEAD -- examples"
+  );
+  const deleted = await runGit(
+    sandbox,
+    "git diff --no-renames --name-only --diff-filter=D HEAD -- examples"
+  );
+  const untracked = await runGit(
+    sandbox,
+    "git ls-files --others --exclude-standard -- examples"
+  );
+  const deletedFiles = new Set(deleted.split("\n").filter(Boolean));
+  const paths = [
+    ...new Set(
+      [modified, deleted, untracked].flatMap((output) =>
+        output.split("\n").filter(Boolean)
+      )
+    )
+  ].sort();
+
+  return Promise.all(
+    paths.map(async (file) => ({
+      path: file,
+      deleted: deletedFiles.has(file),
+      mode: await fileMode(sandbox, file)
+    }))
+  );
+}
+
+async function fileMode(
+  sandbox: SandboxSession,
+  file: string
+): Promise<"100644" | "100755"> {
+  const deleted = await runGit(
+    sandbox,
+    `git diff --no-renames --name-only --diff-filter=D HEAD -- ${shellQuote(file)}`
+  );
+  if (deleted.trim() === "") {
+    const validation = await sandbox.run({
+      command: `resolved=$(realpath -- ${shellQuote(file)}) && case "$resolved" in /workspace/turborepo/examples/*) test -f "$resolved" && test ! -L ${shellQuote(file)} ;; *) exit 1 ;; esac`,
+      workingDirectory: checkout
+    });
+    if (validation.exitCode !== 0) {
+      throw new Error(`Changed path ${file} is not a regular examples file.`);
+    }
+    const executable = await sandbox.run({
+      command: `test -x ${shellQuote(file)}`,
+      workingDirectory: checkout
+    });
+    return executable.exitCode === 0 ? "100755" : "100644";
+  }
+  const output = await runGit(
+    sandbox,
+    `git ls-files --stage -- ${shellQuote(file)}`
+  );
+  if (output.startsWith("120000 ")) {
+    throw new Error(`Changed path ${file} is a symbolic link.`);
+  }
+  return output.startsWith("100755 ") ? "100755" : "100644";
+}
+
+async function runGit(
+  sandbox: SandboxSession,
+  command: string
+): Promise<string> {
+  const result = await sandbox.run({ command, workingDirectory: checkout });
+  if (result.exitCode !== 0) {
+    throw new Error(`${command} failed: ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function scheduledBranchName(): string {
+  return `agents/weekly-examples-${new Date().toISOString().slice(0, 10)}`;
+}
+
+function isAppPrincipal(
+  auth:
+    | {
+        authenticator: string;
+        principalId: string;
+        principalType: string;
+      }
+    | null
+    | undefined
+): boolean {
+  return (
+    auth?.authenticator === "app" &&
+    auth.principalId === "eve:app" &&
+    auth.principalType === "runtime"
+  );
+}

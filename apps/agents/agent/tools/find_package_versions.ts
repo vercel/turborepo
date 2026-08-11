@@ -1,4 +1,4 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -26,15 +26,17 @@ export default defineTool({
       .min(1)
       .describe("Package name to search for, for example 'turbo'.")
   }),
-  async execute({ packageName }) {
-    const repoRoot = await getRepoRoot();
+  async execute({ packageName }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const repoRoot = await getRepoRoot(sandbox);
     const packageJsonFiles = await findPackageJsonFiles(
+      sandbox,
       path.join(repoRoot, "examples")
     );
     const matches: Array<{ path: string; field: string; version: string }> = [];
 
     for (const packageJsonFile of packageJsonFiles) {
-      const packageJson = await readJsonFile(packageJsonFile);
+      const packageJson = await readJsonFile(sandbox, packageJsonFile);
       for (const field of dependencyFields) {
         const dependencies = packageJson[field];
         if (!isJsonObject(dependencies)) {

@@ -76,6 +76,7 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 6. Use `write_examples_file` for non-lockfile example changes.
 7. Use `update_example_lockfile` after dependency or package-manager changes.
 8. Use `run_example_script` for each relevant non-persistent validation task.
+9. Use `create_pull_request` after scheduled maintenance when the sandbox contains changes. It automatically includes every changed file under `examples/` and returns without creating a pull request when there are no changes.
 
 ## Reporting
 
@@ -84,3 +85,4 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Do not ask the user to choose safe vs full updates. The default is full latest exact pins across all examples.
 - Do not report “latest-compatible” fallbacks as completion. Completion requires exact latest direct pins or a true external availability blocker.
 - Report only after the completion contract is satisfied. Avoid interim status updates unless a tool or channel requires visible progress.
+- For scheduled runs, open a draft pull request on an `agents/weekly-examples-YYYY-MM-DD` branch with a Conventional Commit title and the validation results in its body.

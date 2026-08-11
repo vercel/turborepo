@@ -1,12 +1,13 @@
-import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import {
+  fileExists,
   getExamplePath,
+  getRepoRoot,
+  listDirectory,
   packageManagerName,
   pickJsonObject,
   readJsonFile,
@@ -22,31 +23,38 @@ export default defineTool({
       .min(1)
       .describe("Directory name under examples/, for example 'basic'.")
   }),
-  async execute({ example }) {
-    const examplePath = await getExamplePath(example);
+  async execute({ example }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const examplePath = await getExamplePath(sandbox, example);
+    const repoRoot = await getRepoRoot(sandbox);
     const packageJson = await readJsonFile(
+      sandbox,
       path.join(examplePath, "package.json")
     );
     const turboJsonPath = path.join(examplePath, "turbo.json");
-    const entries = await readdir(examplePath, { withFileTypes: true });
+    const entries = await listDirectory(sandbox, examplePath);
 
     return {
       example,
-      path: path.relative(process.cwd(), examplePath),
+      path: path.relative(repoRoot, examplePath),
       packageManager: packageJson.packageManager,
       packageManagerName: packageManagerName(packageJson.packageManager),
       scripts: pickJsonObject(packageJson.scripts),
       dependencies: pickJsonObject(packageJson.dependencies),
       devDependencies: pickJsonObject(packageJson.devDependencies),
       workspaces: packageJson.workspaces ?? null,
-      turboJson: existsSync(turboJsonPath)
-        ? await readJsonFile(turboJsonPath)
+      turboJson: (await fileExists(sandbox, turboJsonPath))
+        ? await readJsonFile(sandbox, turboJsonPath)
         : null,
-      readme: await readTextIfExists(path.join(examplePath, "README.md"), 80),
+      readme: await readTextIfExists(
+        sandbox,
+        path.join(examplePath, "README.md"),
+        80
+      ),
       lockfiles: entries
         .filter(
           (entry) =>
-            entry.isFile() &&
+            entry.type === "file" &&
             ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"].includes(
               entry.name
             )
@@ -54,7 +62,7 @@ export default defineTool({
         .map((entry) => entry.name)
         .sort(),
       topLevelDirectories: entries
-        .filter((entry) => entry.isDirectory())
+        .filter((entry) => entry.type === "directory")
         .map((entry) => entry.name)
         .sort()
     };
