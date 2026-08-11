@@ -2,5 +2,5 @@ packages:
   - "apps/*"
   - "packages/*"
 
-allowBuilds:
-  "@swc/core": true
+onlyBuiltDependencies:
+  - "@swc/core"
