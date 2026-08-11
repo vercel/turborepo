@@ -4,6 +4,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
+  - [Examples maintenance agent](#examples-maintenance-agent)
   - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
 - [Running Rust checks](#running-rust-checks)
@@ -55,6 +56,18 @@ In general, there are two major areas in the repository:
 
 1. Run `pnpm install` at the root of the repository
 2. Run `cargo build`
+
+### Examples maintenance agent
+
+`apps/agents` hosts the Eve examples maintenance agent inside a Next.js application. Run its commands from the repository root:
+
+```bash
+pnpm --dir apps/agents dev
+pnpm --dir apps/agents check-types
+pnpm --dir apps/agents build
+```
+
+The production build compiles the Eve runtime before building the Next.js application.
 
 ### TLS Implementation
 
