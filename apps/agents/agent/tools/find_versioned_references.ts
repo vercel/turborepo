@@ -1,11 +1,9 @@
-import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getExamplePath, getRepoRoot } from "../lib/repo.js";
+import { getExamplePath, getRepoRoot, listTrackedFiles } from "../lib/repo.js";
 
 interface VersionReference {
   path: string;
@@ -54,16 +52,23 @@ export default defineTool({
         "Optional directory name under examples/. Omit to scan every example."
       )
   }),
-  async execute({ example }) {
-    const repoRoot = await getRepoRoot();
+  async execute({ example }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const repoRoot = await getRepoRoot(sandbox);
     const scanRoot = example
-      ? await getExamplePath(example)
+      ? await getExamplePath(sandbox, example)
       : path.join(repoRoot, "examples");
-    const files = await findTextFiles(scanRoot);
+    const relativeRoot = path.relative(repoRoot, scanRoot);
+    const files = (await listTrackedFiles(sandbox, relativeRoot))
+      .filter(isTextFile)
+      .map((file) => path.join(repoRoot, file));
     const references: VersionReference[] = [];
 
     for (const file of files) {
-      const content = await readFile(file, "utf8");
+      const content = await sandbox.readTextFile({ path: file });
+      if (content === null) {
+        continue;
+      }
       const relativePath = path.relative(repoRoot, file);
       const lines = content.split("\n");
       for (const [index, line] of lines.entries()) {
@@ -75,38 +80,14 @@ export default defineTool({
   }
 });
 
-async function findTextFiles(directory: string): Promise<string[]> {
-  if (!existsSync(directory)) {
-    return [];
-  }
-
-  const results: string[] = [];
-  const entries = await readdir(directory, { withFileTypes: true });
-  await Promise.all(
-    entries.map(async (entry) => {
-      if (skippedDirectories.has(entry.name) || skippedFiles.has(entry.name)) {
-        return;
-      }
-
-      const entryPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...(await findTextFiles(entryPath)));
-        return;
-      }
-
-      if (!entry.isFile()) {
-        return;
-      }
-
-      if (
-        entry.name === "Dockerfile" ||
-        textFileExtensions.has(path.extname(entry.name))
-      ) {
-        results.push(entryPath);
-      }
-    })
+function isTextFile(file: string): boolean {
+  const parts = file.split("/");
+  return (
+    !parts.some((part) => skippedDirectories.has(part)) &&
+    !skippedFiles.has(path.basename(file)) &&
+    (path.basename(file) === "Dockerfile" ||
+      textFileExtensions.has(path.extname(file)))
   );
-  return results.sort();
 }
 
 function findReferencesInLine(

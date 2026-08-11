@@ -13,7 +13,7 @@ export default defineTool({
       .describe("Repository-relative file path under examples/."),
     content: z.string().describe("Complete file contents to write.")
   }),
-  async execute({ path, content }) {
-    return writeExamplesFile(path, content);
+  async execute({ path, content }, ctx) {
+    return writeExamplesFile(await ctx.getSandbox(), path, content);
   }
 });
