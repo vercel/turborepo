@@ -2,10 +2,15 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".eve/**", ".vercel/**"]
+      "env": ["VERCEL", "VERCEL_DEPLOYMENT_ID"],
+      "outputs": [
+        ".eve/**",
+        ".next/**",
+        "!.next/cache/**",
+        ".output/**",
+        ".vercel/**"
+      ]
     },
-    "check-types": {
-      "command": ["pnpm", "exec", "tsgo"]
-    }
+    "check-types": {}
   }
 }
