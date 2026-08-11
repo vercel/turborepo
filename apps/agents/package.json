@@ -9,8 +9,7 @@
   "scripts": {
     "build": "eve build && next build",
     "dev": "next dev",
-    "start": "next start",
-    "check-types": "tsgo --noEmit"
+    "start": "next start"
   },
   "dependencies": {
     "@vercel/connect": "0.4.2",
@@ -26,8 +25,8 @@
     "@types/node": "24.x",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "7.0.0-dev.20260523.1",
-    "typescript": "^6.0.1"
+    "typescript": "^6.0.3",
+    "typescript-7": "npm:typescript@7.0.2"
   },
   "engines": {
     "node": "24.x"
