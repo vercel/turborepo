@@ -77,14 +77,12 @@ export default defineChannel({
         ).getReader();
         let cursor = startIndex;
         let state: "running" | "done" | "error" = "running";
-        let polling = true;
         const timeout = setTimeout(() => {
-          polling = false;
           void reader.cancel();
         }, 250);
 
         try {
-          while (polling) {
+          while (true) {
             const { done, value: event } = await reader.read();
             if (done) break;
             cursor += 1;

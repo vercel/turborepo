@@ -56,7 +56,7 @@ export async function getGitHubToken(): Promise<string> {
   }
   const expiresAt = Date.parse(String(body.expires_at));
   if (Number.isNaN(expiresAt)) {
-    throw new Error(
+    throw new TypeError(
       `GitHub token exchange had invalid expires_at: ${String(body.expires_at)}`
     );
   }
