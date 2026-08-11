@@ -18,8 +18,10 @@
 //! packages register `format` and `check`. A synthetic package
 //! anchored at the root `pyproject.toml` and depending on every member
 //! represents the workspace itself; it registers workspace-wide versions of the
-//! same quality tasks. Every other task comes from normal task definitions (via
-//! the `command` map's `python` key). The
+//! same quality tasks. A root pytest declaration registers one workspace-wide
+//! `test` task, while a member pytest declaration registers `test` only for
+//! that member. Every other task comes from normal task definitions (via the
+//! `command` map's `python` key). The
 //! workspace package's name is declared by the user in the root manifest —
 //! using Turborepo with Python requires naming the workspace:
 //!
@@ -410,6 +412,7 @@ enum PythonTool {
     Mypy,
     Ty,
     Pyright,
+    Pytest,
 }
 
 impl PythonTool {
@@ -420,6 +423,7 @@ impl PythonTool {
             Self::Mypy => "mypy",
             Self::Ty => "ty",
             Self::Pyright => "pyright",
+            Self::Pytest => "pytest",
         }
     }
 
@@ -433,6 +437,7 @@ impl PythonTool {
             "mypy" => Some(Self::Mypy),
             "ty" => Some(Self::Ty),
             "pyright" => Some(Self::Pyright),
+            "pytest" => Some(Self::Pytest),
             _ => None,
         }
     }
@@ -442,6 +447,7 @@ impl PythonTool {
             Self::Ruff => matches!(role, ToolRole::Lint | ToolRole::Format),
             Self::Black => role == ToolRole::Format,
             Self::Mypy | Self::Ty | Self::Pyright => role == ToolRole::Check,
+            Self::Pytest => false,
         }
     }
 }
@@ -507,6 +513,17 @@ impl ToolDeclarations {
                 .map(|(tool, declaration)| (*tool, declaration.clone()))
                 .collect(),
         )
+    }
+
+    fn execution(&self, tool: PythonTool) -> Option<ToolExecution> {
+        let declaration = self.0.get(&tool)?;
+        Some(ToolExecution {
+            owner: match declaration.owner {
+                DeclarationOwner::Root => ExecutionOwner::Root,
+                DeclarationOwner::Member => ExecutionOwner::Member,
+            },
+            group: declaration.group.clone(),
+        })
     }
 }
 
@@ -718,6 +735,7 @@ pub struct UvPackage {
     /// Whether uv can build this member as a Python distribution.
     pub buildable: bool,
     quality_plan: QualityPlan,
+    pytest: Option<ToolExecution>,
 }
 
 /// The result of uv workspace discovery: the member packages plus the
@@ -739,6 +757,7 @@ pub struct DiscoveredWorkspace {
     pub root_project_name: Option<String>,
     #[allow(dead_code, reason = "consumed by native task synthesis layer")]
     quality_plan: QualityPlan,
+    pytest: Option<ToolExecution>,
 }
 
 /// Discover the uv workspace rooted at `repo_root` by parsing
@@ -760,6 +779,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             packages: Vec::new(),
             root_project_name: None,
             quality_plan: QualityPlan::default(),
+            pytest: None,
         });
     };
     let name = workspace_name(&root_manifest)?;
@@ -773,6 +793,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             packages: Vec::new(),
             root_project_name: None,
             quality_plan: QualityPlan::default(),
+            pytest: None,
         });
     };
 
@@ -830,7 +851,9 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         .map(normalize_name)
         .filter(|name| !name.is_empty());
     let member_names: HashSet<String> = parsed.iter().map(|(name, _, _)| name.clone()).collect();
-    let packages = connect_packages(parsed, &member_names, &root_manifest);
+    let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
+    let pytest = root_tools.execution(PythonTool::Pytest);
+    let packages = connect_packages(parsed, &member_names, &root_manifest, &root_tools);
     let quality_plan = QualityPlan::homogeneous(
         &packages
             .iter()
@@ -865,6 +888,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         packages,
         root_project_name,
         quality_plan,
+        pytest,
     })
 }
 
@@ -943,8 +967,8 @@ fn connect_packages(
     parsed: Vec<(String, AbsoluteSystemPathBuf, PyProjectManifest)>,
     member_names: &HashSet<String>,
     root_manifest: &PyProjectManifest,
+    root_tools: &ToolDeclarations,
 ) -> Vec<UvPackage> {
-    let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let mut graph = petgraph::Graph::<(), ()>::new();
     let node_indices: HashMap<&str, petgraph::graph::NodeIndex> = parsed
         .iter()
@@ -1018,6 +1042,7 @@ fn connect_packages(
     parsed
         .into_iter()
         .map(|(name, manifest_path, manifest)| {
+            let member_tools = manifest.tool_declarations(DeclarationOwner::Member);
             let mut package_relationships = relationships.remove(name.as_str()).unwrap_or_default();
             package_relationships
                 .sort_by(|left, right| left.declaration_name().cmp(right.declaration_name()));
@@ -1027,10 +1052,8 @@ fn connect_packages(
                 manifest_path,
                 relationships: package_relationships,
                 buildable: manifest.is_buildable(),
-                quality_plan: QualityPlan::effective(
-                    &root_tools,
-                    &manifest.tool_declarations(DeclarationOwner::Member),
-                ),
+                quality_plan: QualityPlan::effective(root_tools, &member_tools),
+                pytest: member_tools.execution(PythonTool::Pytest),
             }
         })
         .collect()
@@ -1103,6 +1126,7 @@ fn uv_task_entrypoint(kind: UvPackageKind) -> crate::native_tasks::TaskEntrypoin
 enum UvTaskClass {
     Build,
     Quality,
+    Test,
 }
 
 fn fallback_task_class(kind: UvPackageKind, task: &str) -> Option<UvTaskClass> {
@@ -1113,6 +1137,7 @@ fn fallback_task_class(kind: UvPackageKind, task: &str) -> Option<UvTaskClass> {
             "lint:ruff" | "format" | "format:ruff" | "format:black" | "check" | "check:mypy"
             | "check:ty" | "check:pyright",
         ) => Some(UvTaskClass::Quality),
+        (_, "test") => Some(UvTaskClass::Test),
         _ => None,
     }
 }
@@ -1212,6 +1237,7 @@ fn declared_tool_task(
     execution: &ToolExecution,
     package: &str,
     targets: &[String],
+    serial_group: Option<String>,
 ) -> crate::native_tasks::NativeTask {
     let mut prefix = vec!["run".to_string(), "--frozen".to_string()];
     match execution.owner {
@@ -1239,9 +1265,32 @@ fn declared_tool_task(
             .to_string(),
         ),
         PythonTool::Ty => prefix.push("check".to_string()),
-        PythonTool::Black | PythonTool::Mypy | PythonTool::Pyright => {}
+        PythonTool::Black | PythonTool::Mypy | PythonTool::Pyright | PythonTool::Pytest => {}
     }
-    uv_command_task(kind, task, prefix, targets.to_vec(), Some("uv".to_string()))
+    uv_command_task(kind, task, prefix, targets.to_vec(), serial_group)
+}
+
+fn pytest_task(
+    kind: UvPackageKind,
+    execution: &ToolExecution,
+    package: &str,
+    package_directory: &str,
+) -> crate::native_tasks::NativeTask {
+    let targets = match kind {
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => {
+            vec![package_directory.to_string()]
+        }
+        UvPackageKind::Workspace => Vec::new(),
+    };
+    declared_tool_task(
+        kind,
+        "test",
+        PythonTool::Pytest,
+        execution,
+        package,
+        &targets,
+        None,
+    )
 }
 
 fn warn_formatter_precedence(scope: &str, formatters: &[PythonTool], selected: PythonTool) {
@@ -1266,13 +1315,14 @@ fn warn_formatter_precedence(scope: &str, formatters: &[PythonTool], selected: P
     );
 }
 
-/// Layer resolved quality tools over the built-in uv fallback tasks.
-fn quality_tasks_for_package(
+/// Layer declared tools over the built-in uv fallback tasks.
+fn python_tasks_for_package(
     kind: UvPackageKind,
     package: &str,
     package_directory: &str,
     workspace_directories: &[String],
     plan: &QualityPlan,
+    pytest: Option<&ToolExecution>,
     emit_formatter_warning: bool,
 ) -> Vec<crate::native_tasks::NativeTask> {
     let targets = match kind {
@@ -1291,7 +1341,13 @@ fn quality_tasks_for_package(
             .map(|(tool, execution)| {
                 let name = format!("lint:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind, &name, *tool, execution, package, &targets,
+                    kind,
+                    &name,
+                    *tool,
+                    execution,
+                    package,
+                    &targets,
+                    Some("uv".to_string()),
                 ));
                 name
             })
@@ -1311,7 +1367,13 @@ fn quality_tasks_for_package(
             for (tool, execution) in &plan.format {
                 let name = format!("format:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind, &name, *tool, execution, package, &targets,
+                    kind,
+                    &name,
+                    *tool,
+                    execution,
+                    package,
+                    &targets,
+                    Some("uv".to_string()),
                 ));
             }
             if emit_formatter_warning {
@@ -1324,6 +1386,7 @@ fn quality_tasks_for_package(
                 &plan.format[&selected],
                 package,
                 &targets,
+                Some("uv".to_string()),
             ));
         }
     } else {
@@ -1337,7 +1400,13 @@ fn quality_tasks_for_package(
             .map(|(tool, execution)| {
                 let name = format!("check:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind, &name, *tool, execution, package, &targets,
+                    kind,
+                    &name,
+                    *tool,
+                    execution,
+                    package,
+                    &targets,
+                    Some("uv".to_string()),
                 ));
                 name
             })
@@ -1348,6 +1417,10 @@ fn quality_tasks_for_package(
         }
     } else {
         tasks.retain(|task| task.name() != "check");
+    }
+
+    if let Some(execution) = pytest {
+        tasks.push(pytest_task(kind, execution, package, package_directory));
     }
 
     const CLASSIFIED_TASKS: &[&str] = &[
@@ -1493,16 +1566,24 @@ pub fn hash_input_globs(prefix: &str) -> Vec<String> {
         "mypy.ini",
         ".mypy.ini",
         "pyrightconfig.json",
+        ".pytest.ini",
+        ".pytest.toml",
+        "pytest.ini",
+        "pytest.toml",
+        "setup.py",
         "setup.cfg",
+        "tox.ini",
         "ty.toml",
+        "conftest.py",
     ]
     .iter()
     .map(|rel| join_prefix(prefix, rel))
     .collect()
 }
 
-const PYTHON_CACHE_GLOBS: [&str; 6] = [
+const PYTHON_CACHE_GLOBS: [&str; 7] = [
     ".venv/**",
+    ".pytest_cache/**",
     ".ruff_cache/**",
     ".mypy_cache/**",
     ".pyright/**",
@@ -1589,7 +1670,7 @@ impl UvTaskContract {
             UvPackageKind::Package | UvPackageKind::VirtualPackage => {
                 if wants_automatic_inputs {
                     io.package_default_inputs = Some(true);
-                    if task == "check" || task.starts_with("check:") {
+                    if task == "test" || task == "check" || task.starts_with("check:") {
                         let mut globs: Vec<String> = dependencies
                             .iter()
                             .filter(|dependency| {
@@ -1631,24 +1712,32 @@ impl UvTaskContract {
             }
             UvPackageKind::Workspace => {
                 if wants_automatic_inputs {
-                    // The aggregate is anchored at the repository root;
-                    // default-hashing the entire repository would be wrong.
-                    io.package_default_inputs = Some(false);
-                    let mut globs: Vec<String> = self
-                        .workspace_directories
-                        .iter()
-                        .flat_map(|directory| {
-                            let directory = join_prefix(path_to_root, directory);
-                            std::iter::once(format!("{directory}/**"))
-                                .chain(std::iter::once(format!("!{directory}/.turbo/**")))
-                                .chain(
-                                    PYTHON_CACHE_GLOBS.map(|cache| format!("!{directory}/{cache}")),
-                                )
-                        })
-                        .collect();
-                    globs.sort();
-                    globs.dedup();
-                    io.input_globs.extend(globs);
+                    if task_class == UvTaskClass::Test {
+                        // Bare pytest can collect root tests and files outside
+                        // uv members, so the workspace test hashes the whole
+                        // repository rather than guessing collection roots.
+                        io.package_default_inputs = Some(true);
+                    } else {
+                        // Quality aggregates target only discovered members;
+                        // default-hashing the entire repository would be wrong.
+                        io.package_default_inputs = Some(false);
+                        let mut globs: Vec<String> = self
+                            .workspace_directories
+                            .iter()
+                            .flat_map(|directory| {
+                                let directory = join_prefix(path_to_root, directory);
+                                std::iter::once(format!("{directory}/**"))
+                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                    .chain(
+                                        PYTHON_CACHE_GLOBS
+                                            .map(|cache| format!("!{directory}/{cache}")),
+                                    )
+                            })
+                            .collect();
+                        globs.sort();
+                        globs.dedup();
+                        io.input_globs.extend(globs);
+                    }
                 }
             }
         }
@@ -1877,6 +1966,7 @@ fn uv_change_observation(package_directories: &[String]) -> ChangeObservation {
     for directory in std::iter::once("").chain(package_directories.iter().map(String::as_str)) {
         for cache in [
             ".ruff_cache",
+            ".pytest_cache",
             ".mypy_cache",
             ".pyright",
             ".ty",
@@ -2008,12 +2098,13 @@ impl RepositoryContributor for UvContributor {
                 let package_directory = package_directories
                     .get(&package.name)
                     .map_or(".", String::as_str);
-                let native_tasks = quality_tasks_for_package(
+                let native_tasks = python_tasks_for_package(
                     kind,
                     &package.name,
                     package_directory,
                     &[],
                     &package.quality_plan,
+                    package.pytest.as_ref(),
                     !workspace.quality_plan.format_homogeneous,
                 );
                 let task_contract = UvTaskContract::new(kind, &package.name);
@@ -2045,12 +2136,13 @@ impl RepositoryContributor for UvContributor {
             // and named by the user via `[tool.turbo] name`. It depends on
             // every package so `--affected` and dependent-filters propagate
             // package changes to it.
-            let workspace_native_tasks = quality_tasks_for_package(
+            let workspace_native_tasks = python_tasks_for_package(
                 UvPackageKind::Workspace,
                 &workspace_name,
                 ".",
                 &workspace_directories,
                 &workspace.quality_plan,
+                workspace.pytest.as_ref(),
                 true,
             );
             let workspace_task_contract =
@@ -2274,6 +2366,7 @@ dependencies = [
   "MyPy (>=1.0)",
   "TY",
   "PyRight",
+  "PyTest",
   "not-a-tool",
 ]
 "#,
@@ -2289,6 +2382,7 @@ dependencies = [
                 PythonTool::Mypy,
                 PythonTool::Ty,
                 PythonTool::Pyright,
+                PythonTool::Pytest,
             ]
         );
     }
@@ -2298,7 +2392,7 @@ dependencies = [
         let manifest: PyProjectManifest = toml::from_str(
             r#"
 [project.optional-dependencies]
-quality = ["ruff", "black", "mypy"]
+quality = ["ruff", "black", "mypy", "pytest"]
 "#,
         )
         .unwrap();
@@ -2316,7 +2410,7 @@ quality = ["ruff", "black", "mypy"]
         let manifest: PyProjectManifest = toml::from_str(
             r#"
 [project]
-dependencies = ["ruff; python_version >= '3.12'"]
+dependencies = ["ruff; python_version >= '3.12'", "pytest; python_version >= '3.12'"]
 
 [dependency-groups]
 types = ["mypy ; platform_system == 'Linux'"]
@@ -2606,6 +2700,12 @@ version = "0.1.0"
             py_app.quality_plan.lint[&PythonTool::Ruff].owner,
             ExecutionOwner::Member
         );
+        assert_eq!(
+            py_app.pytest.as_ref().unwrap().owner,
+            ExecutionOwner::Member
+        );
+        assert!(workspace.packages[1].pytest.is_none());
+        assert!(workspace.pytest.is_none());
         assert!(!workspace.quality_plan.lint_homogeneous);
         assert!(!workspace.quality_plan.format_homogeneous);
         assert!(workspace.quality_plan.check_homogeneous);
@@ -2946,12 +3046,13 @@ overridden = { index = "private" }
 
     #[test]
     fn test_quality_task_fallbacks_preserve_build() {
-        let tasks = quality_tasks_for_package(
+        let tasks = python_tasks_for_package(
             UvPackageKind::Package,
             "py-app",
             "packages/py-app",
             &[],
             &QualityPlan::effective(&ToolDeclarations::default(), &ToolDeclarations::default()),
+            None,
             true,
         );
         let display = |name| {
@@ -2977,6 +3078,85 @@ overridden = { index = "private" }
             lint.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Excluded)
         );
+        assert!(!tasks.iter().any(|task| task.name() == "test"));
+    }
+
+    #[test]
+    fn test_exact_root_and_member_pytest_commands() {
+        let root: PyProjectManifest =
+            toml::from_str("[project]\ndependencies=['pytest']\n").unwrap();
+        let root_execution = root
+            .tool_declarations(DeclarationOwner::Root)
+            .execution(PythonTool::Pytest)
+            .unwrap();
+        let root_tasks = python_tasks_for_package(
+            UvPackageKind::Workspace,
+            "acme",
+            ".",
+            &["packages/app".to_string()],
+            &QualityPlan::default(),
+            Some(&root_execution),
+            true,
+        );
+        let root_test = root_tasks
+            .iter()
+            .find(|task| task.name() == "test")
+            .unwrap();
+        assert_eq!(root_test.display(), Some("uv run --frozen pytest"));
+        assert_eq!(
+            root_test.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::PreferredOnly)
+        );
+
+        let member: PyProjectManifest =
+            toml::from_str("[dependency-groups]\ntests=['pytest']\n[tool.uv]\ndefault-groups=[]\n")
+                .unwrap();
+        let member_execution = member
+            .tool_declarations(DeclarationOwner::Member)
+            .execution(PythonTool::Pytest)
+            .unwrap();
+        let member_tasks = python_tasks_for_package(
+            UvPackageKind::VirtualPackage,
+            "app",
+            "packages/app",
+            &[],
+            &QualityPlan::default(),
+            Some(&member_execution),
+            true,
+        );
+        let member_test = member_tasks
+            .iter()
+            .find(|task| task.name() == "test")
+            .unwrap();
+        assert_eq!(
+            member_test.display(),
+            Some(
+                "uv run --frozen --package app --no-default-groups --group tests pytest \
+                 packages/app"
+            )
+        );
+        assert_eq!(
+            member_test.contract().entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        assert!(member_test.command().unwrap().serial_group.is_none());
+        assert_eq!(
+            resolved_args(member_test, &["-k", "smoke"]),
+            [
+                "run",
+                "--frozen",
+                "--package",
+                "app",
+                "--no-default-groups",
+                "--group",
+                "tests",
+                "pytest",
+                "-k",
+                "smoke",
+                "packages/app",
+            ]
+            .map(OsString::from)
+        );
     }
 
     #[test]
@@ -2991,12 +3171,13 @@ overridden = { index = "private" }
             &root.tool_declarations(DeclarationOwner::Root),
             &member.tool_declarations(DeclarationOwner::Member),
         );
-        let tasks = quality_tasks_for_package(
+        let tasks = python_tasks_for_package(
             UvPackageKind::VirtualPackage,
             "app",
             "packages/app",
             &[],
             &plan,
+            None,
             true,
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
@@ -3046,12 +3227,13 @@ overridden = { index = "private" }
         let declarations = manifest.tool_declarations(DeclarationOwner::Member);
         let member = QualityPlan::effective(&ToolDeclarations::default(), &declarations);
         let plan = QualityPlan::homogeneous(&[member.clone(), member]);
-        let tasks = quality_tasks_for_package(
+        let tasks = python_tasks_for_package(
             UvPackageKind::Workspace,
             "acme",
             ".",
             &["packages/one".to_string(), "packages/two".to_string()],
             &plan,
+            None,
             true,
         );
         let lint = tasks
@@ -3086,12 +3268,13 @@ overridden = { index = "private" }
                 .unwrap();
         let declarations = manifest.tool_declarations(DeclarationOwner::Member);
         let plan = QualityPlan::effective(&ToolDeclarations::default(), &declarations);
-        let tasks = quality_tasks_for_package(
+        let tasks = python_tasks_for_package(
             UvPackageKind::VirtualPackage,
             "app",
             "app",
             &[],
             &plan,
+            None,
             true,
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
@@ -3164,8 +3347,15 @@ overridden = { index = "private" }
                 "mypy.ini",
                 ".mypy.ini",
                 "pyrightconfig.json",
+                ".pytest.ini",
+                ".pytest.toml",
+                "pytest.ini",
+                "pytest.toml",
+                "setup.py",
                 "setup.cfg",
+                "tox.ini",
                 "ty.toml",
+                "conftest.py",
             ]
             .map(|path| format!("../../{path}"))
         );
@@ -3220,6 +3410,58 @@ overridden = { index = "private" }
                 .contains(&"!../../packages/lib/.mypy_cache/**".to_string())
         );
         assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
+        assert!(io.input_globs.contains(&"!.pytest_cache/**".to_string()));
+    }
+
+    #[test]
+    fn test_pytest_inputs_follow_collection_scope() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let package = PackageTaskContext::new_for_test(
+            PackageName::from("app"),
+            &root,
+            turbopath::AnchoredSystemPath::new("packages/app").unwrap(),
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let dependency = PackageTaskContext::new_for_test_with_native_tasks(
+            PackageName::from("lib"),
+            &root,
+            turbopath::AnchoredSystemPath::new("packages/lib").unwrap(),
+            PackageTaskContextKind::Package,
+            None,
+            None,
+            Some(crate::task_contracts::ScopeTaskContract::python(
+                UvTaskContract::new(UvPackageKind::Package, "lib"),
+            )),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let member_io = UvTaskContract::new(UvPackageKind::VirtualPackage, "app")
+            .derived_task_io(&package, "test", "../..", &[dependency], true, &context)
+            .unwrap();
+        assert_eq!(member_io.package_default_inputs, Some(true));
+        assert!(
+            member_io
+                .input_globs
+                .contains(&"../../packages/lib/**".to_string())
+        );
+
+        let workspace_io = UvTaskContract::workspace(
+            "acme",
+            vec!["packages/app".to_string(), "packages/lib".to_string()],
+        )
+        .derived_task_io(&package, "test", "", &[], true, &context)
+        .unwrap();
+        assert_eq!(workspace_io.package_default_inputs, Some(true));
+        assert!(
+            !workspace_io
+                .input_globs
+                .contains(&"packages/app/**".to_string())
+        );
     }
 
     #[test]
@@ -3235,6 +3477,7 @@ overridden = { index = "private" }
             .fold(expected, |observation, dir| {
                 [
                     ".ruff_cache",
+                    ".pytest_cache",
                     ".mypy_cache",
                     ".pyright",
                     ".ty",

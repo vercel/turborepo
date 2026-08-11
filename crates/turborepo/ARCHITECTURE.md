@@ -673,6 +673,11 @@ the shared repository graph.
   default. For each role, a member's declarations replace the root
   declarations; an empty member role inherits the root role. Ruff supplies both
   lint and format roles.
+- **Pytest discovery** uses the same declaration sources and precedence but not
+  quality-role inheritance. A root declaration belongs only to the synthetic
+  workspace package, while a member declaration belongs only to that member.
+  Dependency ownership therefore distinguishes a repository-wide suite from
+  independently runnable package suites without reproducing pytest collection.
 - **Execution** registers `build` for buildable members. Without a recognized
   tool, all members receive fallback `format` and `check` commands. Recognized
   tools add qualified `lint:<tool>`, `format:<tool>`, and `check:<tool>` tasks;
@@ -682,7 +687,12 @@ the shared repository graph.
   explicit choice. If every member has the same tools, owner, and non-default
   activation group for a role, unfiltered runs use the workspace scope;
   member-owned tools add `--all-packages`. Otherwise, member scopes are the
-  entrypoints for that role. Filtered runs use member commands.
+  entrypoints for that role. Filtered runs use member commands. A root pytest
+  declaration registers a preferred-only workspace `test`; direct member
+  declarations register candidate member `test` tasks. The root task wins an
+  unfiltered run, while a package filter can select only a directly declaring
+  member. Member pytest tasks have no shared serial group and can run in
+  parallel.
 - **Command shapes** are `uv build --package=<name>`, or `uv run --frozen`
   followed by owner selection (`--package <name>` for a member,
   `--all-packages` for homogeneous member ownership, and no owner flag for a
@@ -696,11 +706,17 @@ the shared repository graph.
   creates or updates `uv.lock`. Pass-through arguments are inserted before path
   targets. Active aggregates reject them and name the package-qualified child
   tasks that can receive them.
+  Pytest commands are `uv run --frozen pytest` for the workspace or `uv run
+  --frozen --package <name> pytest <member-dir>` for members, with non-default
+  group activation inserted before pytest and pass-through arguments inserted
+  before the member target.
 - **Hashing and affectedness** include member sources, relevant workspace
   files, supported tool configuration, and uv/pip environment variables;
-  `check` and `check:*` also include internal source closures. Workspace tasks
-  include every member's sources. Quality caches, `.venv`, and `__pycache__`
-  are excluded. Path-valued uv settings and active user/system uv configuration
+  `check`, `check:*`, and member `test` also include internal source closures.
+  Quality workspace tasks include every member's sources; a bare workspace
+  pytest task hashes the full repository because pytest controls collection.
+  Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
+  Path-valued uv settings and active user/system uv configuration
   make automatic inputs untracked. Each scope also hashes its external
   dependency closure from `uv.lock`; root-owned tools conservatively add the
   workspace closure. Package identities include version, source, and artifact
