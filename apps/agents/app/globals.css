@@ -184,6 +184,40 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
+.examplePicker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.examplePicker span {
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.examplePicker select {
+  width: min(100%, 430px);
+  min-height: 46px;
+  padding: 0 40px 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--panel);
+  font:
+    0.86rem "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+.examplePicker select:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 3px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

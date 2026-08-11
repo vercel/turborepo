@@ -1,11 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import {
-  listExampleNames,
-  selectDailyExample,
-  sessionDate
-} from "../lib/repo.js";
+import { resolveAutomatedSelection } from "../lib/repo.js";
 
 export default defineTool({
   description:
@@ -13,9 +9,8 @@ export default defineTool({
   inputSchema: z.object({}),
   async execute(_input, ctx) {
     const sandbox = await ctx.getSandbox();
-    return selectDailyExample(
-      await listExampleNames(sandbox),
-      sessionDate(ctx.session.id)
-    );
+    const auth = ctx.session.auth.current;
+    if (!auth) throw new Error("Automated maintenance requires app auth.");
+    return resolveAutomatedSelection(sandbox, auth, ctx.session.id);
   }
 });

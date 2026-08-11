@@ -1,9 +1,25 @@
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
+
 import { RunMaintenance } from "./run-maintenance";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
 
+function listExamples(): string[] {
+  const examplesRoot = path.resolve(process.cwd(), "../../examples");
+  return readdirSync(examplesRoot, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        existsSync(path.join(examplesRoot, entry.name, "package.json"))
+    )
+    .map((entry) => entry.name)
+    .sort();
+}
+
 export default function OperatorPage() {
+  const examples = listExamples();
   return (
     <main>
       <header className="hero">
@@ -50,7 +66,7 @@ export default function OperatorPage() {
           </div>
         </dl>
 
-        <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} />
+        <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
       </section>
 
       <footer>

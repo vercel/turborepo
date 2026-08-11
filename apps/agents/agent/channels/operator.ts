@@ -29,8 +29,27 @@ export default defineChannel({
         );
       }
 
+      const body: unknown = await request.json().catch(() => null);
+      const example =
+        typeof body === "object" &&
+        body !== null &&
+        "example" in body &&
+        typeof body.example === "string" &&
+        /^[A-Za-z0-9._-]+$/.test(body.example)
+          ? body.example
+          : null;
+      if (!example) {
+        return Response.json(
+          { ok: false, error: "A valid example is required." },
+          { status: 400, headers: { "cache-control": "no-store" } }
+        );
+      }
+
       const session = await send(DAILY_EXAMPLE_MAINTENANCE_PROMPT, {
-        auth: APP_AUTH,
+        auth: {
+          ...APP_AUTH,
+          attributes: { maintenanceExample: example }
+        },
         continuationToken: randomUUID(),
         mode: "task",
         title: "Daily example maintenance"

@@ -18,6 +18,13 @@ export interface DirectoryEntry {
   type: "directory" | "file" | "other";
 }
 
+interface AppPrincipal {
+  attributes?: Readonly<Record<string, string | readonly string[]>>;
+  authenticator: string;
+  principalId: string;
+  principalType: string;
+}
+
 const REPO_ROOT = "turborepo";
 const MAX_OUTPUT_LENGTH = 20_000;
 const MILLISECONDS_PER_DAY = 86_400_000;
@@ -78,29 +85,35 @@ export function selectDailyExample(
 
 export async function resolveAutomatedExample(
   sandbox: SandboxSession,
-  auth:
-    | {
-        authenticator: string;
-        principalId: string;
-        principalType: string;
-      }
-    | null
-    | undefined,
+  auth: AppPrincipal | null | undefined,
   sessionId: string,
   requestedExample?: string
 ): Promise<string | undefined> {
   if (!isAppPrincipal(auth)) return requestedExample;
 
-  const selected = selectDailyExample(
-    await listExampleNames(sandbox),
-    sessionDate(sessionId)
-  ).example;
+  const selected = (await resolveAutomatedSelection(sandbox, auth, sessionId))
+    .example;
   if (requestedExample && requestedExample !== selected) {
     throw new Error(
       `Today's automated maintenance target is '${selected}', not '${requestedExample}'.`
     );
   }
   return selected;
+}
+
+export async function resolveAutomatedSelection(
+  sandbox: SandboxSession,
+  auth: AppPrincipal,
+  sessionId: string
+): Promise<{ date: string; example: string; index: number; total: number }> {
+  const examples = await listExampleNames(sandbox);
+  const automatic = selectDailyExample(examples, sessionDate(sessionId));
+  const requested = auth.attributes?.maintenanceExample;
+  if (typeof requested !== "string") return automatic;
+
+  const index = examples.indexOf(requested);
+  if (index < 0) throw new Error(`Unknown example: ${requested}`);
+  return { ...automatic, example: requested, index };
 }
 
 export function sessionDate(sessionId: string): Date {
@@ -121,15 +134,8 @@ export function sessionDate(sessionId: string): Date {
 }
 
 export function isAppPrincipal(
-  auth:
-    | {
-        authenticator: string;
-        principalId: string;
-        principalType: string;
-      }
-    | null
-    | undefined
-): boolean {
+  auth: AppPrincipal | null | undefined
+): auth is AppPrincipal {
   return (
     auth?.authenticator === "app" &&
     auth.principalId === "eve:app" &&

@@ -3,12 +3,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { getGitHubToken } from "../lib/github.js";
-import {
-  isAppPrincipal,
-  listExampleNames,
-  selectDailyExample,
-  sessionDate
-} from "../lib/repo.js";
+import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 
 const owner = "vercel";
 const repo = "turborepo";
@@ -104,12 +99,11 @@ export default defineTool({
     const sandbox = await ctx.getSandbox();
     const changedFiles = await listChangedFiles(sandbox);
     const automated = isAppPrincipal(ctx.session.auth.current);
-    const selection = automated
-      ? selectDailyExample(
-          await listExampleNames(sandbox),
-          sessionDate(ctx.session.id)
-        )
-      : null;
+    const auth = ctx.session.auth.current;
+    const selection =
+      automated && auth
+        ? await resolveAutomatedSelection(sandbox, auth, ctx.session.id)
+        : null;
     if (selection) {
       const expectedPrefix = `examples/${selection.example}/`;
       const unexpectedFile = (await listAllChangedPaths(sandbox)).find(
