@@ -5,9 +5,11 @@ import { z } from "zod";
 
 import {
   findPackageJsonFiles,
+  getExamplePath,
   getRepoRoot,
   isJsonObject,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 const dependencyFields = [
@@ -29,9 +31,16 @@ export default defineTool({
   async execute({ packageName }, ctx) {
     const sandbox = await ctx.getSandbox();
     const repoRoot = await getRepoRoot(sandbox);
+    const automatedExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id
+    );
     const packageJsonFiles = await findPackageJsonFiles(
       sandbox,
-      path.join(repoRoot, "examples")
+      automatedExample
+        ? await getExamplePath(sandbox, automatedExample)
+        : path.join(repoRoot, "examples")
     );
     const matches: Array<{ path: string; field: string; version: string }> = [];
 

@@ -1,7 +1,11 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getRepoRoot, listExampleNames } from "../lib/repo.js";
+import {
+  getRepoRoot,
+  listExampleNames,
+  resolveAutomatedExample
+} from "../lib/repo.js";
 
 export default defineTool({
   description:
@@ -9,9 +13,15 @@ export default defineTool({
   inputSchema: z.object({}),
   async execute(_input, ctx) {
     const sandbox = await ctx.getSandbox();
+    const examples = await listExampleNames(sandbox);
+    const automatedExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id
+    );
     return {
       repoRoot: await getRepoRoot(sandbox),
-      examples: await listExampleNames(sandbox)
+      examples: automatedExample ? [automatedExample] : examples
     };
   }
 });

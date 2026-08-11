@@ -12,6 +12,15 @@ interface RunStatus {
 
 interface RunMaintenanceProps {
   readonly agentRunsUrl: string;
+  readonly examples: string[];
+}
+
+const MILLISECONDS_PER_DAY = 86_400_000;
+
+function dailyExample(examples: string[]): string {
+  if (examples.length === 0) return "";
+  const dayNumber = Math.floor(Date.now() / MILLISECONDS_PER_DAY);
+  return examples[dayNumber % examples.length] ?? "";
 }
 
 function isRunStatus(value: unknown): value is RunStatus {
@@ -33,8 +42,14 @@ function isRunStatus(value: unknown): value is RunStatus {
   );
 }
 
-export function RunMaintenance({ agentRunsUrl }: RunMaintenanceProps) {
+export function RunMaintenance({
+  agentRunsUrl,
+  examples
+}: RunMaintenanceProps) {
   const [status, setStatus] = useState<RunStatus | null>(null);
+  const [selectedExample, setSelectedExample] = useState(() =>
+    dailyExample(examples)
+  );
   const isBusy = status?.state === "starting" || status?.state === "running";
 
   async function startRun() {
@@ -42,10 +57,10 @@ export function RunMaintenance({ agentRunsUrl }: RunMaintenanceProps) {
 
     try {
       const response = await fetch("/eve/v1/operator/runs", {
-        body: "{}",
+        body: JSON.stringify({ example: selectedExample }),
         headers: {
           "content-type": "application/json",
-          "x-operator-action": "run-weekly-maintenance"
+          "x-operator-action": "run-daily-maintenance"
         },
         method: "POST"
       });
@@ -90,8 +105,27 @@ export function RunMaintenance({ agentRunsUrl }: RunMaintenanceProps) {
 
   return (
     <div className="controls">
+      <label className="examplePicker">
+        <span>Example</span>
+        <select
+          disabled={isBusy}
+          onChange={(event) => setSelectedExample(event.target.value)}
+          value={selectedExample}
+        >
+          {examples.map((example) => (
+            <option key={example} value={example}>
+              {example}
+              {example === dailyExample(examples) ? " — today's rotation" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="actions">
-        <button disabled={isBusy} onClick={() => void startRun()} type="button">
+        <button
+          disabled={isBusy || !selectedExample}
+          onClick={() => void startRun()}
+          type="button"
+        >
           {status?.state === "starting"
             ? "Starting…"
             : status?.state === "running"

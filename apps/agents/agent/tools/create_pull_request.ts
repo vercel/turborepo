@@ -3,6 +3,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { getGitHubToken } from "../lib/github.js";
+import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 
 const owner = "vercel";
 const repo = "turborepo";
@@ -15,7 +16,7 @@ const inputSchema = z.object({
     .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/")
     .optional()
     .describe(
-      "Branch for an interactive run. Scheduled runs always use the current UTC date."
+      "Branch for an interactive run. Automated runs use today's selected example and UTC date."
     ),
   body: z.string().default("")
 });
@@ -87,7 +88,7 @@ async function github<T>(input: {
 
 export default defineTool({
   description:
-    "Create a vercel/turborepo pull request containing every sandbox change under examples/. Returns without creating a PR when there are no changes.",
+    "Create a vercel/turborepo pull request from sandbox changes. Automated runs reject changes outside today's selected example. Returns without creating a PR when there are no changes.",
   inputSchema,
   approval: ({ session }) => {
     return isAppPrincipal(session.auth.current)
@@ -96,16 +97,36 @@ export default defineTool({
   },
   async execute(input, ctx) {
     const sandbox = await ctx.getSandbox();
-    const branchName = isAppPrincipal(ctx.session.auth.current)
-      ? scheduledBranchName()
+    const changedFiles = await listChangedFiles(sandbox);
+    const automated = isAppPrincipal(ctx.session.auth.current);
+    const auth = ctx.session.auth.current;
+    const selection =
+      automated && auth
+        ? await resolveAutomatedSelection(sandbox, auth, ctx.session.id)
+        : null;
+    if (selection) {
+      const expectedPrefix = `examples/${selection.example}/`;
+      const unexpectedFile = (await listAllChangedPaths(sandbox)).find(
+        (file) => !file.startsWith(expectedPrefix)
+      );
+      if (unexpectedFile) {
+        throw new Error(
+          `Automated maintenance for ${selection.example} cannot publish ${unexpectedFile}.`
+        );
+      }
+    }
+    if (changedFiles.length === 0) {
+      return { created: false, reason: "No changes under examples/." };
+    }
+    const branchName = selection
+      ? `agents/examples-${selection.example}-${selection.date}`
       : input.branchName;
     if (!branchName) {
       throw new Error("Interactive pull requests require an agents/* branch.");
     }
-    const changedFiles = await listChangedFiles(sandbox);
-    if (changedFiles.length === 0) {
-      return { created: false, reason: "No changes under examples/." };
-    }
+    const changeTitle = selection
+      ? `chore: Update ${selection.example} example`
+      : "chore: Update Turborepo examples";
 
     const existingPullRequests = await github<PullRequestResponse[]>({
       method: "GET",
@@ -245,7 +266,7 @@ export default defineTool({
         repo,
         path: "/git/commits",
         body: {
-          message: "chore: Update Turborepo examples",
+          message: changeTitle,
           tree: newTreeSha,
           parents: [checkoutSha]
         }
@@ -270,7 +291,7 @@ export default defineTool({
       repo,
       path: "/pulls",
       body: {
-        title: "chore: Update Turborepo examples",
+        title: changeTitle,
         body: input.body,
         head: branchName,
         base: baseBranch,
@@ -323,6 +344,24 @@ async function listChangedFiles(
   );
 }
 
+async function listAllChangedPaths(sandbox: SandboxSession): Promise<string[]> {
+  const tracked = await runGit(
+    sandbox,
+    "git diff --no-renames --name-only HEAD"
+  );
+  const untracked = await runGit(
+    sandbox,
+    "git ls-files --others --exclude-standard"
+  );
+  return [
+    ...new Set(
+      [tracked, untracked].flatMap((output) =>
+        output.split("\n").filter(Boolean)
+      )
+    )
+  ].sort();
+}
+
 async function fileMode(
   sandbox: SandboxSession,
   file: string
@@ -368,25 +407,4 @@ async function runGit(
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
-}
-
-function scheduledBranchName(): string {
-  return `agents/weekly-examples-${new Date().toISOString().slice(0, 10)}`;
-}
-
-function isAppPrincipal(
-  auth:
-    | {
-        authenticator: string;
-        principalId: string;
-        principalType: string;
-      }
-    | null
-    | undefined
-): boolean {
-  return (
-    auth?.authenticator === "app" &&
-    auth.principalId === "eve:app" &&
-    auth.principalType === "runtime"
-  );
 }

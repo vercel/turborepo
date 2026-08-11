@@ -7,7 +7,8 @@ import {
   getExamplePath,
   isJsonObject,
   pickJsonObject,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 interface TaskFinding {
@@ -31,7 +32,14 @@ export default defineTool({
   }),
   async execute({ example }, ctx) {
     const sandbox = await ctx.getSandbox();
-    const examplePath = await getExamplePath(sandbox, example);
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const packageJson = await readJsonFile(
       sandbox,
       path.join(examplePath, "package.json")
@@ -66,7 +74,7 @@ export default defineTool({
     );
 
     return {
-      example,
+      example: effectiveExample,
       turboTasks: turboTasks.sort((a, b) => a.name.localeCompare(b.name)),
       scriptOnlyValidationTasks,
       recommendedScriptsToRun: [

@@ -8,6 +8,7 @@ import {
   packageManagerName,
   pickJsonObject,
   readJsonFile,
+  resolveAutomatedExample,
   runCommand
 } from "../lib/repo.js";
 
@@ -29,7 +30,14 @@ export default defineTool({
   }),
   async execute({ example, script, timeoutSeconds }, ctx) {
     const sandbox = await ctx.getSandbox();
-    const examplePath = await getExamplePath(sandbox, example);
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const packageJson = await readJsonFile(
       sandbox,
       path.join(examplePath, "package.json")
@@ -37,7 +45,7 @@ export default defineTool({
     const scripts = pickJsonObject(packageJson.scripts);
     if (!scripts || typeof scripts[script] !== "string") {
       throw new Error(
-        `Example '${example}' does not define a '${script}' script.`
+        `Example '${effectiveExample}' does not define a '${script}' script.`
       );
     }
 
