@@ -2,7 +2,13 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "env": ["VERCEL", "VERCEL_DEPLOYMENT_ID"],
+      "env": [
+        "SLACK_CHANNEL_ID",
+        "SLACK_CONNECT_UID",
+        "SLACK_INSTALLATION_ID",
+        "VERCEL",
+        "VERCEL_DEPLOYMENT_ID"
+      ],
       "outputs": [
         ".eve/**",
         ".next/**",
