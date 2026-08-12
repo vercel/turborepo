@@ -27,7 +27,8 @@ Do not claim a percentage that the captured output does not support. Report the 
 
 - `turbo run ... --profile=<path>.trace` writes an instrumented Chrome trace and an LLM-readable `<path>.trace.md` summary. Capture comparable baseline and candidate profiles to localize changed spans. Tracing can include wait time and omit uninstrumented work, so it is diagnostic rather than a CPU profiler and must not replace uninstrumented timing or a targeted benchmark.
 - Turborepo has DHAT heap profiling. Build both binaries identically with `cargo build --profile release-turborepo -p turbo --features heap-dhat`, then invoke each with `--heap=<path>.json`. Compare the generated summary files for total allocations, allocated bytes, and peak requested live heap bytes. DHAT replaces the production allocator and excludes allocator overhead, fragmentation, mappings, and stacks; use an uninstrumented RSS measurement for production peak-memory claims. DHAT's overhead also makes it unsuitable for wall-clock claims.
-- Use both tools when a timing improvement might trade CPU time for allocations or memory. Preserve profiler artifacts and summarize the relevant spans or allocation sites in the review evidence.
+- On Linux, use `strace -f -c` to compare syscall counts and time, or a narrowly filtered `strace -f -e trace=<calls>` to investigate filesystem, process, or network overhead. Capture comparable baseline and candidate summaries. `strace` changes process timing substantially, so use it to explain syscall behavior rather than as wall-clock benchmark evidence.
+- Combine the relevant tools when a timing improvement might trade CPU time for allocations, memory, or system calls. Preserve diagnostic artifacts and summarize the relevant spans, allocation sites, or syscall changes in the review evidence.
 
 # Workload corpus
 
