@@ -11,9 +11,10 @@ async function runOrThrow(sandbox: SandboxSession, command: string) {
 }
 
 export default defineSandbox({
-  revalidationKey: () => "turborepo-main-v1",
+  revalidationKey: () => "turborepo-main-opencode-1.18.16-v1",
   async bootstrap({ use }) {
     const sandbox = await use();
+    await runOrThrow(sandbox, "npm install --global opencode-ai@1.18.16");
     await runOrThrow(
       sandbox,
       `git clone --depth=1 --branch=main ${repository} ${checkout}`
