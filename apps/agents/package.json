@@ -9,7 +9,8 @@
   "scripts": {
     "build": "eve build && next build",
     "dev": "next dev",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "@vercel/connect": "0.4.2",

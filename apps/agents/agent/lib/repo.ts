@@ -327,6 +327,27 @@ export async function runCommand(
   };
 }
 
+export async function runCommandOrThrow(
+  sandbox: SandboxSession,
+  command: string,
+  args: string[],
+  cwd: string,
+  timeoutMs: number
+): Promise<CommandResult> {
+  const result = await runCommand(sandbox, command, args, cwd, timeoutMs);
+  if (result.exitCode === 0) {
+    return result;
+  }
+
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const reason = result.timedOut
+    ? "timed out"
+    : `failed with exit code ${result.exitCode}`;
+  throw new Error(
+    `Command ${result.command} ${reason} in ${result.cwd}${output ? `:\n${output}` : "."}`
+  );
+}
+
 export function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -352,5 +373,5 @@ function truncateOutput(output: string): string {
   if (output.length <= MAX_OUTPUT_LENGTH) {
     return output;
   }
-  return `${output.slice(0, MAX_OUTPUT_LENGTH)}\n[output truncated]`;
+  return `[output truncated]\n${output.slice(-MAX_OUTPUT_LENGTH)}`;
 }

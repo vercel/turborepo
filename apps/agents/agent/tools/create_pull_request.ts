@@ -2,6 +2,7 @@ import type { SandboxSession } from "eve/sandbox";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { requireSuccessfulValidation } from "../lib/example-validation.js";
 import { getGitHubToken } from "../lib/github.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 
@@ -117,6 +118,13 @@ export default defineTool({
     }
     if (changedFiles.length === 0) {
       return { created: false, reason: "No changes under examples/." };
+    }
+    if (selection) {
+      await requireSuccessfulValidation(
+        sandbox,
+        ctx.session.id,
+        selection.example
+      );
     }
     const branchName = selection
       ? `agents/examples-${selection.example}-${selection.date}`
