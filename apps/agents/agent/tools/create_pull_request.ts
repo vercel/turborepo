@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireSuccessfulValidation } from "../lib/example-validation.js";
 import { getGitHubToken } from "../lib/github.js";
+import { buildDraftPullRequest } from "../lib/pull-request.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 
 const owner = "vercel";
@@ -298,13 +299,12 @@ export default defineTool({
       owner,
       repo,
       path: "/pulls",
-      body: {
+      body: buildDraftPullRequest({
         title: changeTitle,
         body: input.body,
         head: branchName,
-        base: baseBranch,
-        draft: true
-      }
+        base: baseBranch
+      })
     });
 
     return {
