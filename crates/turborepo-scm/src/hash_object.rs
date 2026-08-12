@@ -95,6 +95,13 @@ pub(crate) fn hash_objects(
                         Ok(Some((package_relative_path, hash)))
                     }
                     Err(e) => {
+                        // The filesystem can change between candidate discovery and
+                        // hashing. A vanished candidate is no longer part of this
+                        // snapshot and should not force the package onto the manual
+                        // fallback path.
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            return Ok(None);
+                        }
                         // Gracefully skip non-regular files (symlinks, sockets,
                         // FIFOs, device nodes) that can't be read as normal files.
                         if full_file_path
@@ -180,26 +187,23 @@ mod test {
             hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
+    }
 
-        // paths for files here are relative to the package path.
-        let error_tests: Vec<(Vec<&str>, &AbsoluteSystemPathBuf)> = vec![
-            // skipping test for outside of git repo, we now error earlier in the process
-            (vec!["nonexistent.json"], &fixture_path),
-        ];
+    #[test]
+    fn test_vanished_candidate_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let candidate = git_root.join_component("transient.lock");
+        candidate.create_with_contents("lock").unwrap();
 
-        for (to_hash, pkg_path) in error_tests {
-            let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix();
+        // Model a glob walk finding a transient file that disappears before
+        // the parallel blob-hashing phase starts.
+        let to_hash = vec![RelativeUnixPathBuf::new("transient.lock").unwrap()];
+        candidate.remove().unwrap();
 
-            let to_hash = to_hash
-                .into_iter()
-                .map(|k| pkg_prefix.join(&RelativeUnixPathBuf::new(k).unwrap()))
-                .collect();
-
-            let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None);
-            assert!(result.is_err());
-        }
+        let mut hashes = GitHashes::new();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        assert!(hashes.is_empty());
     }
 
     /// Verify that our blob hashing produces OIDs identical to `git

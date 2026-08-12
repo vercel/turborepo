@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
+use std::{backtrace::Backtrace, borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
 
 use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
@@ -67,6 +67,13 @@ pub(crate) fn hash_files(
             {
                 continue;
             }
+            Err(Error::Io(io_error, _)) => {
+                return Err(Error::HashFile {
+                    path,
+                    source: io_error,
+                    backtrace: Backtrace::capture(),
+                });
+            }
             Err(e) => return Err(e),
         };
     }
@@ -90,6 +97,35 @@ fn hash_file_with_attrs(
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
 
     crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
+}
+
+fn hash_glob_candidate(
+    path: &AbsoluteSystemPath,
+    attr_path: &str,
+    attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<Option<OidHash>, Error> {
+    match hash_file_with_attrs(path, attr_path, attrs) {
+        Ok(hash) => Ok(Some(hash)),
+        Err(Error::Io(io_error, _)) if io_error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(Error::Io(io_error, _)) => {
+            // Match hash_objects: file symlinks can be read and hashed, while
+            // directory symlinks and other non-regular entries are skipped.
+            if path
+                .symlink_metadata()
+                .map(|metadata| !metadata.is_file())
+                .unwrap_or(false)
+            {
+                Ok(None)
+            } else {
+                Err(Error::HashFile {
+                    path: path.to_owned(),
+                    source: io_error,
+                    backtrace: Backtrace::capture(),
+                })
+            }
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
@@ -151,8 +187,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                     .to_unix();
             // Use attrs-root-relative path for .gitattributes pattern matching.
             let attr_path = effective_attrs_root.anchor(file_path)?.to_unix();
-            let hash = hash_file_with_attrs(file_path, attr_path.as_str(), attrs)?;
-            hashes.insert(relative_path, hash);
+            if let Some(hash) = hash_glob_candidate(file_path, attr_path.as_str(), attrs)? {
+                hashes.insert(relative_path, hash);
+            }
         }
     }
 
@@ -210,7 +247,17 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
     for dirent in walker {
         let dirent = dirent?;
-        let metadata = dirent.metadata()?;
+        let metadata = match dirent.metadata() {
+            Ok(metadata) => metadata,
+            Err(error)
+                if error
+                    .io_error()
+                    .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         // Skip anything that isn't a regular file (directories, symlinks,
         // sockets, FIFOs, device nodes). This must be here rather than as a
         // walker filter because the root directory is always yielded.
@@ -237,8 +284,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         }
 
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-        let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
-        hashes.insert(relative_path, hash);
+        if let Some(hash) = hash_glob_candidate(path, attr_path.as_str(), attrs)? {
+            hashes.insert(relative_path, hash);
+        }
     }
 
     // If we're including default files, we need to walk again, but this time with
@@ -253,7 +301,17 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
         for dirent in walker {
             let dirent = dirent?;
-            let metadata = dirent.metadata()?;
+            let metadata = match dirent.metadata() {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if error
+                        .io_error()
+                        .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            };
             // Skip anything that isn't a regular file. Must be here rather
             // than as a walker filter because the root directory is always
             // yielded.
@@ -280,8 +338,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             }
 
             let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-            let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
-            default_file_hashes.insert(relative_path, hash);
+            if let Some(hash) = hash_glob_candidate(path, attr_path.as_str(), attrs)? {
+                default_file_hashes.insert(relative_path, hash);
+            }
         }
     }
 
@@ -391,7 +450,10 @@ mod tests {
                 None,
             );
             match out.err().unwrap() {
-                Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+                Error::HashFile { path, source, .. } => {
+                    assert_eq!(path, from_to_dir);
+                    assert_eq!(source.kind(), ErrorKind::IsADirectory);
+                }
                 _ => panic!("wrong error"),
             };
         }
@@ -408,7 +470,11 @@ mod tests {
         let expected_err_kind = ErrorKind::PermissionDenied;
         #[cfg(not(windows))]
         let expected_err_kind = ErrorKind::IsADirectory;
-        assert_matches!(out.unwrap_err(), Error::Io(io_error, _) if io_error.kind() == expected_err_kind);
+        assert_matches!(
+            out.unwrap_err(),
+            Error::HashFile { path, source, .. }
+                if path == from_to_dir && source.kind() == expected_err_kind
+        );
 
         // Broken symlink with allow_missing = true.
         let out = hash_files(
@@ -431,9 +497,54 @@ mod tests {
             None,
         );
         match out.err().unwrap() {
-            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
+            Error::HashFile { path, source, .. } => {
+                assert_eq!(path, broken);
+                assert_eq!(source.kind(), ErrorKind::NotFound);
+            }
             _ => panic!("wrong error"),
         };
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_external_recursive_input_skips_directory_symlink() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/app").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let store_dir = turbo_root.join_components(&[".pnpm", "dep"]);
+        store_dir.create_dir_all().unwrap();
+        store_dir
+            .join_component("index.js")
+            .create_with_contents("module.exports = 1")
+            .unwrap();
+        let node_modules = turbo_root.join_component("node_modules");
+        node_modules.create_dir_all().unwrap();
+        node_modules
+            .join_component("dep")
+            .symlink_to_dir(store_dir.to_string())
+            .unwrap();
+
+        // This is the manual-fallback shape of `$TURBO_ROOT$/**/*` for a
+        // package two levels below the repository root. globwalk yields the
+        // pnpm-style directory symlink as a file candidate.
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../**/*"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()));
     }
 
     #[test]

@@ -55,6 +55,14 @@ pub enum Error {
     GitVersion(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error("I/O error while hashing {path}: {source}")]
+    HashFile {
+        path: AbsoluteSystemPathBuf,
+        #[source]
+        source: std::io::Error,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("Could not find git binary")]
@@ -128,6 +136,7 @@ impl Error {
     pub fn is_resource_exhaustion(&self) -> bool {
         match self {
             Error::Io(e, _) => is_os_resource_error(e),
+            Error::HashFile { source, .. } => is_os_resource_error(source),
             Error::Walk(e) => walk_error_is_resource_exhaustion(e),
             _ => false,
         }
