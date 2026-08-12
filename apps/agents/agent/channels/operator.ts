@@ -11,6 +11,7 @@ import {
 } from "../lib/operator-runs.js";
 import { selectPerformanceModels } from "../lib/performance-models.js";
 import { sessionDate } from "../lib/repo.js";
+import { deliverSlackMessage } from "../lib/slack.js";
 
 const APP_AUTH = {
   attributes: {},
@@ -22,7 +23,7 @@ const APP_AUTH = {
 function operatorAction(request: Request): OperatorRunAction | null {
   if (
     request.headers.get("origin") !== new URL(request.url).origin ||
-    !request.headers.get("content-type")?.startsWith("application/json")
+    request.headers.get("content-type")?.split(";", 1)[0] !== "application/json"
   ) {
     return null;
   }
@@ -58,6 +59,15 @@ function startedRun(
   return Response.json(
     { cursor: 0, models, sessionId, state: "running" },
     { status: 202, headers: { "cache-control": "no-store" } }
+  );
+}
+
+function isOperatorRequest(request: Request, action: string): boolean {
+  // Vercel Deployment Protection authenticates operators; this validates CSRF intent.
+  return (
+    request.headers.get("origin") === new URL(request.url).origin &&
+    request.headers.get("x-operator-action") === action &&
+    request.headers.get("content-type")?.split(";", 1)[0] === "application/json"
   );
 }
 
@@ -99,6 +109,26 @@ export default defineChannel({
       });
 
       return startedRun(session.id);
+    }),
+    POST("/eve/v1/operator/slack/test", async (request) => {
+      if (!isOperatorRequest(request, "test-slack-delivery")) {
+        return Response.json(
+          { ok: false, error: "Invalid operator request." },
+          {
+            status: 403,
+            headers: { "cache-control": "no-store" }
+          }
+        );
+      }
+
+      const result = await deliverSlackMessage(
+        `Turborepo Eve operator test at ${new Date().toISOString()}.`,
+        { event: "operator_slack_test" }
+      );
+      return Response.json(result, {
+        status: result.ok ? 200 : 502,
+        headers: { "cache-control": "no-store" }
+      });
     }),
     GET(
       "/eve/v1/operator/runs/:sessionId/status",

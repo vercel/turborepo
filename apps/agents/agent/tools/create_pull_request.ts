@@ -8,7 +8,9 @@ import {
   readPerformanceState,
   requirePublishablePerformanceChange
 } from "../lib/performance-validation.js";
+import { buildDraftPullRequest } from "../lib/pull-request.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
+import { deliverSlackMessage } from "../lib/slack.js";
 
 const owner = "vercel";
 const repo = "turborepo";
@@ -43,6 +45,10 @@ type PullRequestResponse = {
   html_url?: string;
   number?: number;
 };
+type ValidatedPullRequest = {
+  number: number;
+  url: string;
+};
 type TreeEntry = {
   path: string;
   mode: "100644" | "100755";
@@ -66,6 +72,59 @@ function repoPath(owner: string, repo: string, path: string) {
 function requireSha(value: string | undefined, label: string) {
   if (!value) throw new Error(`GitHub response did not include ${label}.`);
   return value;
+}
+
+function requirePullRequest(
+  response: PullRequestResponse
+): ValidatedPullRequest {
+  if (
+    typeof response.number !== "number" ||
+    !Number.isSafeInteger(response.number) ||
+    response.number <= 0
+  ) {
+    throw new Error(
+      "GitHub response did not include a valid pull request number."
+    );
+  }
+
+  const number = response.number;
+  const expectedUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+  if (response.html_url !== expectedUrl) {
+    throw new Error(
+      "GitHub response did not include the expected pull request URL."
+    );
+  }
+
+  return { number, url: expectedUrl };
+}
+
+async function findOpenPullRequests(branchName: string) {
+  return github<PullRequestResponse[]>({
+    method: "GET",
+    owner,
+    repo,
+    path: `/pulls?state=open&head=${owner}%3A${encodeURIComponent(branchName)}`
+  });
+}
+
+async function reconcileCreatedPullRequest(
+  response: PullRequestResponse,
+  branchName: string,
+  headSha: string
+): Promise<ValidatedPullRequest> {
+  try {
+    return requirePullRequest(response);
+  } catch {
+    const pullRequest = (await findOpenPullRequests(branchName)).find(
+      (candidate) => candidate.head?.sha === headSha
+    );
+    if (!pullRequest) {
+      throw new Error(
+        "GitHub pull request response was invalid and could not be reconciled."
+      );
+    }
+    return requirePullRequest(pullRequest);
+  }
 }
 
 async function github<T>(input: {
@@ -171,12 +230,7 @@ export default defineTool({
       throw new Error("Performance pull requests require a perf title.");
     }
 
-    const existingPullRequests = await github<PullRequestResponse[]>({
-      method: "GET",
-      owner,
-      repo,
-      path: `/pulls?state=open&head=${owner}%3A${encodeURIComponent(branchName)}`
-    });
+    const existingPullRequests = await findOpenPullRequests(branchName);
     const existingPullRequest = existingPullRequests[0];
 
     const checkoutSha = (await runGit(sandbox, "git rev-parse HEAD")).trim();
@@ -257,24 +311,29 @@ export default defineTool({
     }
 
     if (existingPullRequest) {
+      const validatedPullRequest = requirePullRequest(existingPullRequest);
+      const headSha = requireSha(
+        existingPullRequest.head?.sha,
+        "pull request head SHA"
+      );
       const existingCommit = await github<CommitResponse>({
         method: "GET",
         owner,
         repo,
-        path: `/git/commits/${requireSha(existingPullRequest.head?.sha, "pull request head SHA")}`
+        path: `/git/commits/${headSha}`
       });
       if (existingCommit.tree?.sha !== newTreeSha) {
         throw new Error(
-          `Pull request ${existingPullRequest.html_url ?? existingPullRequest.number} already uses ${branchName} with different changes.`
+          `Pull request ${validatedPullRequest.url} already uses ${branchName} with different changes.`
         );
       }
       return {
         created: false,
         existing: true,
-        number: existingPullRequest.number,
-        url: existingPullRequest.html_url,
+        number: validatedPullRequest.number,
+        url: validatedPullRequest.url,
         branch: branchName,
-        commit: existingPullRequest.head?.sha
+        commit: headSha
       };
     }
 
@@ -333,21 +392,34 @@ export default defineTool({
       owner,
       repo,
       path: "/pulls",
-      body: {
+      body: buildDraftPullRequest({
         title: changeTitle,
         body: input.body,
         head: branchName,
-        base: baseBranch,
-        draft: true
-      }
+        base: baseBranch
+      })
     });
+    const validatedPullRequest = await reconcileCreatedPullRequest(
+      pullRequest,
+      branchName,
+      newCommitSha
+    );
+
+    const slackNotification = await deliverSlackMessage(
+      `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
+      {
+        event: "pull_request_notification",
+        metadata: { pullRequestNumber: validatedPullRequest.number }
+      }
+    );
 
     return {
       created: true,
-      number: pullRequest.number,
-      url: pullRequest.html_url,
+      number: validatedPullRequest.number,
+      url: validatedPullRequest.url,
       branch: branchName,
-      commit: newCommitSha
+      commit: newCommitSha,
+      slackNotification
     };
   }
 });
