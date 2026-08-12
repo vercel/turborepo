@@ -22,12 +22,25 @@ export function auditExampleTasks(
     .map(([name, config]): TurboTaskFinding => {
       const taskConfig = asObject(config) ?? {};
       const persistent = taskConfig.persistent === true;
+      const cache =
+        typeof taskConfig.cache === "boolean" ? taskConfig.cache : null;
       return {
         name,
         persistent,
-        cache: typeof taskConfig.cache === "boolean" ? taskConfig.cache : null,
+        cache,
         scriptExists: typeof scripts[name] === "string",
-        shouldValidate: !persistent && !longRunningTaskNames.has(name)
+        // Only treat a task as a mandatory pass/fail validation target when it
+        // can actually run to completion in an ephemeral sandbox. Persistent
+        // and long-running server tasks never terminate, and tasks that opt
+        // out of Turbo caching (`cache: false`) are declaring themselves
+        // non-deterministic or side-effecting: database migrations/seeds
+        // (e.g. `db:migrate:deploy`, `db:push`, `db:seed`), destructive tasks
+        // (`clean`), storybook/preview servers (`preview-storybook`), and code
+        // fixers (`//#fix`). Those need external services, hang, or mutate the
+        // checkout, so they can never succeed in the sandbox and must not gate
+        // automated pull-request creation.
+        shouldValidate:
+          !persistent && !longRunningTaskNames.has(name) && cache !== false
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
