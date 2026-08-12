@@ -180,6 +180,7 @@ impl GitRepo {
             &full_pkg_path,
             to_hash,
             &mut hashes,
+            true,
             self.git_attrs(),
             self.slowest_files.as_ref(),
         )?;
@@ -206,6 +207,7 @@ impl GitRepo {
             process_relative_to,
             to_hash,
             &mut hashes,
+            false,
             self.git_attrs(),
             self.slowest_files.as_ref(),
         )?;
@@ -260,6 +262,7 @@ impl GitRepo {
                 full_pkg_path,
                 to_hash,
                 &mut new_hashes,
+                true,
                 self.git_attrs(),
                 self.slowest_files.as_ref(),
             )?;
@@ -309,6 +312,7 @@ impl GitRepo {
                 inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
         }
+        exclusions.push(self.git_metadata_exclusion(turbo_root)?);
         let files = globwalk::globwalk(
             turbo_root,
             &inclusions,
@@ -387,6 +391,7 @@ impl GitRepo {
                 glob_buf.push_str(exclude.trim_start_matches('/'));
                 glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
+            glob_exclusions.push(self.git_metadata_exclusion(turbo_root)?);
 
             let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
             for raw_glob in all {
@@ -498,6 +503,15 @@ impl GitRepo {
 
         Ok(hashes)
     }
+
+    fn git_metadata_exclusion(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+    ) -> Result<ValidatedGlob, Error> {
+        let dot_git = self.root.join_component(".git");
+        let relative = AnchoredSystemPathBuf::relative_path_between(turbo_root, &dot_git).to_unix();
+        Ok(ValidatedGlob::from_str(relative.as_str())?)
+    }
 }
 
 #[cfg(test)]
@@ -555,7 +569,16 @@ mod tests {
         let mut hashes = GitHashes::new();
         // FIXME: This test verifies a bug: we don't hash symlinks.
         // TODO: update this test to point at get_package_file_hashes
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        hash_objects(
+            &git_root,
+            &git_root,
+            to_hash,
+            &mut hashes,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(hashes.is_empty());
 
         let pkg_path = git_root.anchor(&git_root).unwrap();
@@ -563,6 +586,112 @@ mod tests {
             get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
                 .unwrap();
         assert!(manual_hashes.is_empty());
+    }
+
+    #[test]
+    fn test_missing_explicit_file_errors_with_git() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+        let scm = SCM::new(&repo_root);
+        let missing = AnchoredSystemPathBuf::from_raw("missing-global-dependency.txt").unwrap();
+
+        let error = scm
+            .get_hashes_for_files(&repo_root, &[missing], false)
+            .unwrap_err();
+
+        assert!(
+            error.to_string().contains("missing-global-dependency.txt"),
+            "missing explicit dependency should fail with path context: {error}"
+        );
+    }
+
+    #[test]
+    fn test_repo_wide_inputs_exclude_git_metadata() -> Result<(), Error> {
+        let (_tmp, repo_root) = tmp_dir();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        repo_root
+            .join_component("source.js")
+            .create_with_contents("export {}")?;
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        let SCM::Git(git) = SCM::new(&repo_root) else {
+            panic!("expected git SCM");
+        };
+        let root_package = AnchoredSystemPathBuf::from_raw("")?;
+
+        let git_hashes =
+            git.get_package_file_hashes(&repo_root, &root_package, &["**/*"], false, None)?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &["**/*"],
+            false,
+            Some(&repo_root),
+            None,
+        )?;
+
+        for hashes in [&git_hashes, &manual_hashes] {
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
+            assert!(
+                hashes.keys().all(|path| !path.as_str().starts_with(".git")),
+                "active Git metadata must not be hashed: {hashes:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_repo_wide_inputs_exclude_linked_worktree_metadata() -> Result<(), Error> {
+        let (_tmp_main, main_root) = tmp_dir();
+        let (_tmp_worktree, worktree_parent) = tmp_dir();
+        main_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        main_root
+            .join_component("source.js")
+            .create_with_contents("export {}")?;
+        setup_repository(&main_root);
+        commit_all(&main_root);
+
+        let worktree_root = worktree_parent.join_component("linked");
+        require_git_cmd(
+            &main_root,
+            &[
+                "worktree",
+                "add",
+                worktree_root.as_str(),
+                "-b",
+                "repo-wide-input-test",
+            ],
+        );
+
+        let SCM::Git(git) = SCM::new(&worktree_root) else {
+            panic!("expected git SCM");
+        };
+        let root_package = AnchoredSystemPathBuf::from_raw("")?;
+
+        let git_hashes =
+            git.get_package_file_hashes(&worktree_root, &root_package, &["**/*"], false, None)?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &worktree_root,
+            &root_package,
+            &["**/*"],
+            false,
+            Some(&worktree_root),
+            None,
+        )?;
+
+        for hashes in [&git_hashes, &manual_hashes] {
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
+            assert!(
+                !hashes.contains_key(&RelativeUnixPathBuf::new(".git").unwrap()),
+                "linked worktree .git pointer must not be hashed: {hashes:?}"
+            );
+        }
+        Ok(())
     }
 
     #[test]

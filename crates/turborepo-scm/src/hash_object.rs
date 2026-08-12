@@ -46,6 +46,7 @@ pub(crate) fn hash_objects(
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
+    allow_missing: bool,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
@@ -95,11 +96,9 @@ pub(crate) fn hash_objects(
                         Ok(Some((package_relative_path, hash)))
                     }
                     Err(e) => {
-                        // The filesystem can change between candidate discovery and
-                        // hashing. A vanished candidate is no longer part of this
-                        // snapshot and should not force the package onto the manual
-                        // fallback path.
-                        if e.kind() == std::io::ErrorKind::NotFound {
+                        // Discovery-driven candidates can disappear before hashing.
+                        // Explicitly named files remain strict.
+                        if allow_missing && e.kind() == std::io::ErrorKind::NotFound {
                             return Ok(None);
                         }
                         // Gracefully skip non-regular files (symlinks, sockets,
@@ -184,7 +183,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, false, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
     }
@@ -202,8 +201,29 @@ mod test {
         candidate.remove().unwrap();
 
         let mut hashes = GitHashes::new();
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes, true, None, None).unwrap();
         assert!(hashes.is_empty());
+    }
+
+    #[test]
+    fn test_missing_explicit_file_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let missing = RelativeUnixPathBuf::new("missing.json").unwrap();
+
+        let mut hashes = GitHashes::new();
+        let error = hash_objects(
+            &git_root,
+            &git_root,
+            vec![missing],
+            &mut hashes,
+            false,
+            None,
+            None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("missing.json"));
     }
 
     /// Verify that our blob hashing produces OIDs identical to `git
@@ -272,7 +292,16 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None, None).unwrap();
+        hash_objects(
+            &tmp_path,
+            &tmp_path,
+            to_hash,
+            &mut actual,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }

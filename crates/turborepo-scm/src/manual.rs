@@ -141,6 +141,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut hashes = GitHashes::new();
 
     let effective_attrs_root = attrs_root.unwrap_or(turbo_root);
+    let git_metadata_path = attrs_root.map(|root| root.join_component(".git"));
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut default_file_hashes = GitHashes::new();
@@ -153,6 +154,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut local_inputs: Vec<&str> = Vec::new();
     let mut external_inclusions = Vec::new();
     let mut external_exclusions = Vec::new();
+    if let Some(git_metadata_path) = git_metadata_path.as_ref() {
+        let relative =
+            AnchoredSystemPathBuf::relative_path_between(turbo_root, git_metadata_path).to_unix();
+        external_exclusions.push(ValidatedGlob::from_str(relative.as_str())?);
+    }
     for pattern in inputs {
         let pattern = pattern.as_ref();
         let is_exclusion = pattern.starts_with('!');
@@ -243,6 +249,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         .git_ignore(local_inputs.is_empty() && external_inclusions.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
+        .filter_entry(move |entry| {
+            git_metadata_path
+                .as_ref()
+                .is_none_or(|git_metadata_path| entry.path() != git_metadata_path.as_std_path())
+        })
         .build();
 
     for dirent in walker {
