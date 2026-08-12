@@ -90,7 +90,7 @@ async function notifyPullRequestCreated(pullRequest: ValidatedPullRequest) {
   const attempt = Promise.resolve()
     .then(() =>
       callSlackApi({
-        botToken: slackCredentials().botToken,
+        botToken: slackCredentials.botToken,
         operation: "chat.postMessage",
         body: {
           channel: slackDestinationChannel(),
