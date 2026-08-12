@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { RunMaintenance } from "./run-maintenance";
+import { RunPerformance } from "./run-performance";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
@@ -23,14 +24,14 @@ export default function OperatorPage() {
   return (
     <main>
       <header className="hero">
-        <p className="eyebrow">Examples agent / operator</p>
+        <p className="eyebrow">Turborepo agent / operator</p>
         <h1>
-          Maintenance
+          Automation
           <span>control plane</span>
         </h1>
         <p className="intro">
-          Keep Turborepo examples current through one focused, rotating
-          maintenance run each day.
+          Trigger the daily runs that keep Turborepo examples current and its
+          hot paths measurably faster.
         </p>
       </header>
 
@@ -67,6 +68,43 @@ export default function OperatorPage() {
         </dl>
 
         <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
+      </section>
+
+      <section className="operation" aria-labelledby="performance-title">
+        <div className="operationHeader">
+          <div>
+            <p className="eyebrow">Scheduled operation</p>
+            <h2 id="performance-title">Daily performance improvement</h2>
+          </div>
+          <span className="schedule">DAILY · 15:30 UTC</span>
+        </div>
+
+        <p className="description">
+          Finds one focused Turborepo performance win, records a baseline and an
+          identical after measurement plus correctness validation, and publishes
+          a draft pull request only once the opposite model approves the exact
+          final diff. GPT 5.6 Sol authors on even UTC days and Claude Fable 5
+          authors on odd UTC days; the other model reviews.
+        </p>
+
+        <dl className="facts">
+          <div>
+            <dt>Scope</dt>
+            <dd>
+              <code>one measured change/day</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Review</dt>
+            <dd>Adversarial opposite-model subagent</dd>
+          </div>
+          <div>
+            <dt>Output</dt>
+            <dd>Draft PR or no change</dd>
+          </div>
+        </dl>
+
+        <RunPerformance agentRunsUrl={AGENT_RUNS_URL} />
       </section>
 
       <footer>
