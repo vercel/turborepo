@@ -15,15 +15,24 @@ const stateDirectory = ".performance-validation";
 export interface CommandEvidence {
   command: string;
   exitCode: number;
+  inputs?: PerformanceInput[];
   stderr: string;
   stdout: string;
+}
+
+export interface PerformanceInput {
+  fingerprint: string;
+  kind: "file" | "repository";
+  path: string;
 }
 
 export interface PerformanceState extends PerformanceModelSelection {
   date: string;
   baseline?: CommandEvidence;
   after?: CommandEvidence;
+  comparisons: CommandEvidence[];
   validations: CommandEvidence[];
+  comparedFingerprint?: string;
   validatedFingerprint?: string;
   review?: {
     approved: boolean;
@@ -42,6 +51,7 @@ export async function beginPerformanceRun(
   const state: PerformanceState = {
     date: date.toISOString().slice(0, 10),
     ...selectPerformanceModels(date),
+    comparisons: [],
     validations: []
   };
   await writeState(sandbox, sessionId, state);
@@ -64,7 +74,7 @@ export async function readPerformanceState(
 export async function recordCommandEvidence(
   sandbox: SandboxSession,
   sessionId: string,
-  phase: "after" | "baseline" | "validation",
+  phase: "after" | "baseline" | "comparison" | "validation",
   evidence: CommandEvidence
 ): Promise<PerformanceState> {
   const state = await requireState(sandbox, sessionId);
@@ -81,7 +91,17 @@ export async function recordCommandEvidence(
       );
     }
     state.after = evidence;
+    state.comparisons = [];
     state.validations = [];
+    state.review = undefined;
+    state.comparedFingerprint = undefined;
+    state.validatedFingerprint = undefined;
+    state.reviewedFingerprint = undefined;
+  } else if (phase === "comparison") {
+    if (!state.after) throw new Error("Run the after measurement first.");
+    state.comparisons.push(evidence);
+    state.validations = [];
+    state.comparedFingerprint = await repositoryChangeFingerprint(sandbox);
     state.review = undefined;
     state.validatedFingerprint = undefined;
     state.reviewedFingerprint = undefined;
@@ -176,6 +196,40 @@ async function requireMeasurementsAndValidation(
     throw new Error("Successful baseline and after measurements are required.");
   }
   if (
+    state.comparisons.length < 4 ||
+    state.comparisons.some((item) => !validComparisonEvidence(item))
+  ) {
+    throw new Error(
+      "At least four successful comparisons must bind the same two binaries and corpus revision."
+    );
+  }
+  const comparisonBinaries = inputSignature(
+    state.comparisons[0]?.inputs?.filter(({ kind }) => kind === "file") ?? []
+  );
+  if (
+    state.comparisons.some(
+      ({ inputs }) =>
+        inputSignature(inputs?.filter(({ kind }) => kind === "file") ?? []) !==
+        comparisonBinaries
+    )
+  ) {
+    throw new Error("Every comparison must use the same two binaries.");
+  }
+  const blocksByInput = new Map<string, number>();
+  for (const { inputs } of state.comparisons) {
+    const signature = inputSignature(inputs ?? []);
+    blocksByInput.set(signature, (blocksByInput.get(signature) ?? 0) + 1);
+  }
+  if ([...blocksByInput.values()].some((blocks) => blocks < 4)) {
+    throw new Error("Every benchmark corpus requires at least four blocks.");
+  }
+  const fingerprint = await repositoryChangeFingerprint(sandbox);
+  if (state.comparedFingerprint !== fingerprint) {
+    throw new Error(
+      "Performance comparisons are stale because the diff changed."
+    );
+  }
+  if (
     state.validations.length === 0 ||
     state.validations.some((item) => item.exitCode !== 0)
   ) {
@@ -183,10 +237,32 @@ async function requireMeasurementsAndValidation(
       "At least one successful correctness validation is required."
     );
   }
-  const fingerprint = await repositoryChangeFingerprint(sandbox);
   if (state.validatedFingerprint !== fingerprint) {
     throw new Error("Validation is stale because the diff changed.");
   }
+}
+
+function validComparisonEvidence(evidence: CommandEvidence): boolean {
+  if (evidence.exitCode !== 0 || !evidence.inputs) return false;
+  const files = evidence.inputs.filter(({ kind }) => kind === "file");
+  const repositories = evidence.inputs.filter(
+    ({ kind }) => kind === "repository"
+  );
+  return (
+    files.length === 2 &&
+    new Set(files.map(({ path }) => path)).size === 2 &&
+    new Set(files.map(({ fingerprint }) => fingerprint)).size === 2 &&
+    repositories.length > 0 &&
+    evidence.inputs.every(({ path }) => evidence.command.includes(path))
+  );
+}
+
+function inputSignature(inputs: PerformanceInput[]): string {
+  return JSON.stringify(
+    [...inputs].sort((left, right) =>
+      `${left.kind}:${left.path}`.localeCompare(`${right.kind}:${right.path}`)
+    )
+  );
 }
 
 async function requireState(sandbox: SandboxSession, sessionId: string) {
@@ -242,6 +318,7 @@ function isPerformanceState(value: unknown): value is PerformanceState {
     typeof state.reviewerModel === "string" &&
     (state.reviewer === "fable_performance_reviewer" ||
       state.reviewer === "gpt_performance_reviewer") &&
+    Array.isArray(state.comparisons) &&
     Array.isArray(state.validations)
   );
 }
