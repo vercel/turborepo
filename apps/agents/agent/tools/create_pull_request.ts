@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import { requireSuccessfulValidation } from "../lib/example-validation.js";
 import { getGitHubToken } from "../lib/github.js";
+import {
+  readPerformanceState,
+  requirePublishablePerformanceChange
+} from "../lib/performance-validation.js";
 import { buildDraftPullRequest } from "../lib/pull-request.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 import { deliverSlackMessage } from "../lib/slack.js";
@@ -19,9 +23,17 @@ const inputSchema = z.object({
     .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/")
     .optional()
     .describe(
-      "Branch for an interactive run. Automated runs use today's selected example and UTC date."
+      "Branch for an interactive run. Automated runs derive an idempotent daily branch."
     ),
-  body: z.string().default("")
+  body: z.string().default(""),
+  title: z
+    .string()
+    .regex(
+      /^perf: [A-Z].+$/,
+      "Use 'perf: Description' with an uppercase description."
+    )
+    .optional()
+    .describe("Required title for an automated performance pull request.")
 });
 
 type RefResponse = { object?: { sha?: string } };
@@ -148,7 +160,7 @@ async function github<T>(input: {
 
 export default defineTool({
   description:
-    "Create a vercel/turborepo pull request from sandbox changes. Automated runs reject changes outside today's selected example. Returns without creating a PR when there are no changes.",
+    "Create a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates.",
   inputSchema,
   approval: ({ session }) => {
     return isAppPrincipal(session.auth.current)
@@ -157,16 +169,19 @@ export default defineTool({
   },
   async execute(input, ctx) {
     const sandbox = await ctx.getSandbox();
-    const changedFiles = await listChangedFiles(sandbox);
     const automated = isAppPrincipal(ctx.session.auth.current);
     const auth = ctx.session.auth.current;
+    const performanceState = automated
+      ? await readPerformanceState(sandbox, ctx.session.id)
+      : null;
     const selection =
-      automated && auth
+      automated && auth && !performanceState
         ? await resolveAutomatedSelection(sandbox, auth, ctx.session.id)
         : null;
+    const changedPaths = await listAllChangedPaths(sandbox);
     if (selection) {
       const expectedPrefix = `examples/${selection.example}/`;
-      const unexpectedFile = (await listAllChangedPaths(sandbox)).find(
+      const unexpectedFile = changedPaths.find(
         (file) => !file.startsWith(expectedPrefix)
       );
       if (unexpectedFile) {
@@ -175,8 +190,21 @@ export default defineTool({
         );
       }
     }
+    if (performanceState) {
+      const forbidden = changedPaths.find(isForbiddenPerformancePath);
+      if (forbidden) {
+        throw new Error(
+          `Automated performance improvements cannot publish ${forbidden}.`
+        );
+      }
+      await requirePublishablePerformanceChange(sandbox, ctx.session.id);
+    }
+    const changedFiles = await listChangedFiles(
+      sandbox,
+      Boolean(performanceState)
+    );
     if (changedFiles.length === 0) {
-      return { created: false, reason: "No changes under examples/." };
+      return { created: false, reason: "No publishable changes." };
     }
     if (selection) {
       await requireSuccessfulValidation(
@@ -185,15 +213,22 @@ export default defineTool({
         selection.example
       );
     }
-    const branchName = selection
-      ? `agents/examples-${selection.example}-${selection.date}`
-      : input.branchName;
+    const branchName = performanceState
+      ? `agents/performance-${performanceState.date}`
+      : selection
+        ? `agents/examples-${selection.example}-${selection.date}`
+        : input.branchName;
     if (!branchName) {
       throw new Error("Interactive pull requests require an agents/* branch.");
     }
-    const changeTitle = selection
-      ? `chore: Update ${selection.example} example`
-      : "chore: Update Turborepo examples";
+    const changeTitle = performanceState
+      ? input.title
+      : selection
+        ? `chore: Update ${selection.example} example`
+        : "chore: Update Turborepo examples";
+    if (!changeTitle) {
+      throw new Error("Performance pull requests require a perf title.");
+    }
 
     const existingPullRequests = await findOpenPullRequests(branchName);
     const existingPullRequest = existingPullRequests[0];
@@ -390,21 +425,23 @@ export default defineTool({
 });
 
 async function listChangedFiles(
-  sandbox: SandboxSession
+  sandbox: SandboxSession,
+  repositoryWide = false
 ): Promise<
   Array<{ path: string; deleted: boolean; mode: "100644" | "100755" }>
 > {
+  const scope = repositoryWide ? "" : " -- examples";
   const modified = await runGit(
     sandbox,
-    "git diff --no-renames --name-only --diff-filter=ACMRTUXB HEAD -- examples"
+    `git diff --no-renames --name-only --diff-filter=ACMRTUXB HEAD${scope}`
   );
   const deleted = await runGit(
     sandbox,
-    "git diff --no-renames --name-only --diff-filter=D HEAD -- examples"
+    `git diff --no-renames --name-only --diff-filter=D HEAD${scope}`
   );
   const untracked = await runGit(
     sandbox,
-    "git ls-files --others --exclude-standard -- examples"
+    `git ls-files --others --exclude-standard${scope}`
   );
   const deletedFiles = new Set(deleted.split("\n").filter(Boolean));
   const paths = [
@@ -452,11 +489,11 @@ async function fileMode(
   );
   if (deleted.trim() === "") {
     const validation = await sandbox.run({
-      command: `resolved=$(realpath -- ${shellQuote(file)}) && case "$resolved" in /workspace/turborepo/examples/*) test -f "$resolved" && test ! -L ${shellQuote(file)} ;; *) exit 1 ;; esac`,
+      command: `root=$(realpath .) && resolved=$(realpath -- ${shellQuote(file)}) && case "$resolved" in "$root"/*) test -f "$resolved" && test ! -L ${shellQuote(file)} ;; *) exit 1 ;; esac`,
       workingDirectory: checkout
     });
     if (validation.exitCode !== 0) {
-      throw new Error(`Changed path ${file} is not a regular examples file.`);
+      throw new Error(`Changed path ${file} is not a regular repository file.`);
     }
     const executable = await sandbox.run({
       command: `test -x ${shellQuote(file)}`,
@@ -483,6 +520,18 @@ async function runGit(
     throw new Error(`${command} failed: ${result.stderr}`);
   }
   return result.stdout;
+}
+
+function isForbiddenPerformancePath(file: string): boolean {
+  return (
+    file === "Cargo.lock" ||
+    file === "pnpm-lock.yaml" ||
+    file.startsWith(".github/") ||
+    file.startsWith("apps/agents/") ||
+    file.startsWith(".changeset/") ||
+    file.startsWith("target/") ||
+    file === "version.txt"
+  );
 }
 
 function shellQuote(value: string): string {

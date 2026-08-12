@@ -117,9 +117,12 @@ export async function resolveAutomatedSelection(
 }
 
 export function sessionDate(sessionId: string): Date {
-  const encoded = sessionId.startsWith("wrun_")
-    ? sessionId.slice(5, 15)
-    : sessionId.slice(0, 10);
+  const prefixLength = sessionId.startsWith("wrun_")
+    ? 5
+    : sessionId.startsWith("ses_")
+      ? 4
+      : 0;
+  const encoded = sessionId.slice(prefixLength, prefixLength + 10);
   if (encoded.length !== 10) {
     throw new Error(`Invalid Eve session id: ${sessionId}`);
   }

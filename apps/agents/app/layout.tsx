@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  description: "Operate scheduled Turborepo examples maintenance.",
+  description:
+    "Operate scheduled Turborepo examples maintenance and performance improvements.",
   title: "Turborepo Eve Operator"
 };
 
