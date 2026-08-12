@@ -8,7 +8,7 @@ import {
   packageManagerName,
   readJsonFile,
   resolveAutomatedExample,
-  runCommand
+  runCommandOrThrow
 } from "../lib/repo.js";
 
 export default defineTool({
@@ -36,7 +36,7 @@ export default defineTool({
       path.join(examplePath, "package.json")
     );
     const manager = packageManagerName(packageJson.packageManager) ?? "pnpm";
-    return runCommand(
+    return runCommandOrThrow(
       sandbox,
       manager,
       ["install"],

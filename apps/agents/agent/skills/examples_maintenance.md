@@ -57,7 +57,8 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Use `audit_example_tasks` before validation to identify persistent and non-persistent tasks.
 - Persistent tasks such as `dev`, `start`, `serve`, and `preview` are not pass/fail validation tasks.
 - Non-persistent tasks such as `build`, `lint`, `test`, `check-types`, and framework-specific compile checks must pass after updates when present.
-- Run the narrowest relevant verification commands for each changed example using `run_example_script`.
+- Pass every relevant non-persistent task to one `run_example_turbo_tasks` call. It runs them together through Turbo with `--continue=always` so every failure surfaces.
+- Treat a failed validation tool call as a failed example. Fix the failures and rerun the full task set; never report a nonzero command as successful validation.
 - If a version bump breaks an example, fix the breakage in the same pass instead of leaving the example half-updated.
 
 ## Completion Contract
@@ -76,7 +77,7 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 5. Use `read_examples_file` before modifying existing files.
 6. Use `write_examples_file` for non-lockfile example changes.
 7. Use `update_example_lockfile` after dependency or package-manager changes.
-8. Use `run_example_script` for each relevant non-persistent validation task.
+8. Use `run_example_turbo_tasks` once with every task in `recommendedTurboTasksToRun`.
 9. Use `create_pull_request` after automated maintenance when the sandbox contains changes. It rejects changes outside the selected example and returns without creating a pull request when there are no changes.
 
 ## Reporting
