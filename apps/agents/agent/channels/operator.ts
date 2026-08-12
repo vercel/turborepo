@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { defineChannel, GET, POST } from "eve/channels";
 
 import { DAILY_EXAMPLE_MAINTENANCE_PROMPT } from "../lib/daily-example-maintenance.js";
+import { deliverSlackMessage } from "../lib/slack.js";
 
 const APP_AUTH = {
   attributes: {},
@@ -11,15 +12,19 @@ const APP_AUTH = {
   principalType: "runtime"
 } as const;
 
+function isOperatorRequest(request: Request, action: string): boolean {
+  // Vercel Deployment Protection authenticates operators; this validates CSRF intent.
+  return (
+    request.headers.get("origin") === new URL(request.url).origin &&
+    request.headers.get("x-operator-action") === action &&
+    request.headers.get("content-type")?.split(";", 1)[0] === "application/json"
+  );
+}
+
 export default defineChannel({
   routes: [
     POST("/eve/v1/operator/runs", async (request, { send }) => {
-      const origin = request.headers.get("origin");
-      if (
-        origin !== new URL(request.url).origin ||
-        request.headers.get("x-operator-action") !== "run-daily-maintenance" ||
-        !request.headers.get("content-type")?.startsWith("application/json")
-      ) {
+      if (!isOperatorRequest(request, "run-daily-maintenance")) {
         return Response.json(
           { ok: false, error: "Invalid operator request." },
           {
@@ -59,6 +64,26 @@ export default defineChannel({
         { cursor: 0, sessionId: session.id, state: "running" },
         { status: 202, headers: { "cache-control": "no-store" } }
       );
+    }),
+    POST("/eve/v1/operator/slack/test", async (request) => {
+      if (!isOperatorRequest(request, "test-slack-delivery")) {
+        return Response.json(
+          { ok: false, error: "Invalid operator request." },
+          {
+            status: 403,
+            headers: { "cache-control": "no-store" }
+          }
+        );
+      }
+
+      const result = await deliverSlackMessage(
+        `Turborepo Eve operator test at ${new Date().toISOString()}.`,
+        { event: "operator_slack_test" }
+      );
+      return Response.json(result, {
+        status: result.ok ? 200 : 502,
+        headers: { "cache-control": "no-store" }
+      });
     }),
     GET(
       "/eve/v1/operator/runs/:sessionId/status",

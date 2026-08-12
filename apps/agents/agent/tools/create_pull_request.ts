@@ -1,5 +1,4 @@
 import type { SandboxSession } from "eve/sandbox";
-import { callSlackApi } from "eve/channels/slack";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
@@ -7,13 +6,12 @@ import { requireSuccessfulValidation } from "../lib/example-validation.js";
 import { getGitHubToken } from "../lib/github.js";
 import { buildDraftPullRequest } from "../lib/pull-request.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
-import { slackCredentials, slackDestinationChannel } from "../lib/slack.js";
+import { deliverSlackMessage } from "../lib/slack.js";
 
 const owner = "vercel";
 const repo = "turborepo";
 const baseBranch = "main";
 const checkout = "turborepo";
-const slackNotificationTimeoutMs = 5000;
 
 const inputSchema = z.object({
   branchName: z
@@ -86,41 +84,6 @@ function requirePullRequest(
   }
 
   return { number, url: expectedUrl };
-}
-
-async function notifyPullRequestCreated(pullRequest: ValidatedPullRequest) {
-  const attempt = Promise.resolve()
-    .then(() =>
-      callSlackApi({
-        botToken: slackCredentials().botToken,
-        operation: "chat.postMessage",
-        body: {
-          channel: slackDestinationChannel(),
-          text: `A new Turborepo pull request was created: #${pullRequest.number} ${pullRequest.url}`
-        }
-      })
-    )
-    .then((response) => response.ok)
-    .catch(() => false);
-  let timeout: NodeJS.Timeout | undefined;
-  const succeeded = await Promise.race([
-    attempt,
-    new Promise<false>((resolve) => {
-      timeout = setTimeout(resolve, slackNotificationTimeoutMs, false);
-    })
-  ]);
-  if (timeout) clearTimeout(timeout);
-
-  if (!succeeded) {
-    logSlackNotificationFailure(pullRequest.number);
-  }
-}
-
-function logSlackNotificationFailure(pullRequestNumber: number) {
-  console.warn("Slack pull request notification failed.", {
-    event: "pull_request_notification_failed",
-    pullRequestNumber
-  });
 }
 
 async function findOpenPullRequests(branchName: string) {
@@ -407,14 +370,21 @@ export default defineTool({
       newCommitSha
     );
 
-    await notifyPullRequestCreated(validatedPullRequest);
+    const slackNotification = await deliverSlackMessage(
+      `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
+      {
+        event: "pull_request_notification",
+        metadata: { pullRequestNumber: validatedPullRequest.number }
+      }
+    );
 
     return {
       created: true,
       number: validatedPullRequest.number,
       url: validatedPullRequest.url,
       branch: branchName,
-      commit: newCommitSha
+      commit: newCommitSha,
+      slackNotification
     };
   }
 });
