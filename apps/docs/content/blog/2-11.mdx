@@ -117,13 +117,13 @@ Turborepo can now discover packages and dependency relationships from Cargo and 
 
 You can use any of these languages by themselves or bring JavaScript, Rust, and Python together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
 
-| Turborepo command  | Task examples                                        |
-| ------------------ | ---------------------------------------------------- |
-| `turbo run build`  | `tsc build` + `cargo build` + `uv build`             |
-| `turbo run test`   | `vitest run` + `cargo test` + `uv tool run pytest`   |
-| `turbo run check`  | `tsc` + `cargo check` + `uv check`                   |
-| `turbo run lint`   | `eslint` + `cargo clippy` + `uv tool run ruff check` |
-| `turbo run format` | `prettier` + `cargo fmt` + `uv tool run ruff format` |
+| Turborepo command  | Task examples                                   |
+| ------------------ | ----------------------------------------------- |
+| `turbo run build`  | `tsc build` + `cargo build` + `uv build`        |
+| `turbo run test`   | `vitest run` + `cargo test` + `uv run pytest`   |
+| `turbo run check`  | `tsc` + `cargo check` + `uv run mypy`           |
+| `turbo run lint`   | `eslint` + `cargo clippy` + `uv run ruff check` |
+| `turbo run format` | `prettier` + `cargo fmt` + `uv run ruff format` |
 
 Native Rust and Python support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback on this expanded language support in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
 
@@ -165,15 +165,29 @@ Enable uv workspace support with `experimentalPythonWorkspaces` in your root `tu
 }
 ```
 
-Turborepo infers common tasks and maps them to uv commands:
+Turborepo reads the tools your `pyproject.toml` manifests already declare and maps common tasks to them:
 
-| Turborepo command  | uv-native task            |
-| ------------------ | ------------------------- |
-| `turbo run build`  | `uv build`                |
-| `turbo run test`   | `uv tool run pytest`      |
-| `turbo run check`  | `uv check`                |
-| `turbo run lint`   | `uv tool run ruff check`  |
-| `turbo run format` | `uv tool run ruff format` |
+| Turborepo command  | uv-native task                |
+| ------------------ | ----------------------------- |
+| `turbo run build`  | `uv build --package=<name>`   |
+| `turbo run test`   | `uv run --frozen pytest`      |
+| `turbo run check`  | `uv run --frozen mypy`        |
+| `turbo run lint`   | `uv run --frozen ruff check`  |
+| `turbo run format` | `uv run --frozen ruff format` |
+
+Ruff, Black, mypy, ty, Pyright, and pytest are detected from direct, unconditional declarations in `[project].dependencies`, `[dependency-groups]`, and legacy `[tool.uv].dev-dependencies`. `lint` and `check` fan out to every tool detected for that role, like `lint:ruff` and `check:mypy`. When a role has no detected tool, `check` and `format` fall back to `uv check` and `uv format`.
+
+`turbo run test` is a native task, too. Where you declare pytest decides how your suites are scheduled. A declaration in the root manifest creates one repository-wide `test` task, so pytest collects the whole suite in a single process. A declaration on a member creates `test` for that package only, and those suites run in parallel:
+
+```bash title="Terminal"
+# Root declaration: one repository-wide suite
+uv run --frozen pytest
+
+# Member declaration: one suite per declaring package, in parallel
+uv run --frozen --package py-api pytest packages/py-api
+```
+
+Turborepo hands the package directory to pytest instead of collecting tests itself, so `tests/` directories, colocated tests, and `conftest.py` files keep behaving exactly as pytest defines them. Non-default dependency groups are activated for the run, arguments after `--` are forwarded ahead of the target (`turbo run test --filter=py-api -- -k smoke`), and pytest's exit code `5` for an empty selection is preserved.
 
 To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
 
@@ -266,8 +280,9 @@ This works across all natively supported languages, including the Experimental o
 
 <Accordions>
 
-  <Accordion title="Features (43)">
+  <Accordion title="Features (44)">
 
+    - feat: Add pytest task discovery ([#13720](https://github.com/vercel/turborepo/pull/13720))
     - feat: Prune uv workspaces ([#13613](https://github.com/vercel/turborepo/pull/13613))
     - feat: Watch uv workspace changes ([#13612](https://github.com/vercel/turborepo/pull/13612))
     - feat: Hash uv lockfile closures ([#13611](https://github.com/vercel/turborepo/pull/13611))
