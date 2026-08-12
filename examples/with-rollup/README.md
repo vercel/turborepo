@@ -17,7 +17,7 @@ This Turborepo includes the following packages/apps:
 ### Apps and Packages
 
 - `web`: a [Next.js](https://nextjs.org) app
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/eslint-config`: `eslint` flat configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
 - `@repo/ui`: a React component library used by the `web` application, compiled with Rollup
 
@@ -78,6 +78,3 @@ Learn more about the power of Turborepo:
 - [Pipelines](https://turborepo.org/docs/core-concepts/pipelines)
 - [Caching](https://turborepo.org/docs/core-concepts/caching)
 - [Remote Caching](https://turborepo.org/docs/core-concepts/remote-caching)
-- [Scoped Tasks](https://turborepo.org/docs/core-concepts/scopes)
-- [Configuration Options](https://turborepo.org/docs/reference/configuration)
-- [CLI Usage](https://turborepo.org/docs/reference/command-line-reference)
