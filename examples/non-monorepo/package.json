@@ -30,5 +30,8 @@
   "engines": {
     "node": "24.x"
   },
-  "packageManager": "pnpm@11.21.0"
+  "packageManager": "pnpm@11.21.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["unrs-resolver"]
+  }
 }
