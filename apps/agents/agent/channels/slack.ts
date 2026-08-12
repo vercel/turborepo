@@ -1,8 +1,7 @@
-import { connectSlackCredentials } from "@vercel/connect/eve";
 import { slackChannel } from "eve/channels/slack";
 
+import { slackCredentials } from "../lib/slack.js";
+
 export default slackChannel({
-  credentials: connectSlackCredentials(
-    process.env.SLACK_CONNECT_UID ?? "slack/my-agent"
-  )
+  credentials: slackCredentials()
 });

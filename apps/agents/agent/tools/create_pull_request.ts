@@ -1,15 +1,18 @@
 import type { SandboxSession } from "eve/sandbox";
+import { callSlackApi } from "eve/channels/slack";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { requireSuccessfulValidation } from "../lib/example-validation.js";
 import { getGitHubToken } from "../lib/github.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
+import { slackCredentials, slackDestinationChannel } from "../lib/slack.js";
 
 const owner = "vercel";
 const repo = "turborepo";
 const baseBranch = "main";
 const checkout = "turborepo";
+const slackNotificationTimeoutMs = 5000;
 
 const inputSchema = z.object({
   branchName: z
@@ -30,6 +33,10 @@ type PullRequestResponse = {
   head?: { sha?: string };
   html_url?: string;
   number?: number;
+};
+type ValidatedPullRequest = {
+  number: number;
+  url: string;
 };
 type TreeEntry = {
   path: string;
@@ -54,6 +61,94 @@ function repoPath(owner: string, repo: string, path: string) {
 function requireSha(value: string | undefined, label: string) {
   if (!value) throw new Error(`GitHub response did not include ${label}.`);
   return value;
+}
+
+function requirePullRequest(
+  response: PullRequestResponse
+): ValidatedPullRequest {
+  if (
+    typeof response.number !== "number" ||
+    !Number.isSafeInteger(response.number) ||
+    response.number <= 0
+  ) {
+    throw new Error(
+      "GitHub response did not include a valid pull request number."
+    );
+  }
+
+  const number = response.number;
+  const expectedUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+  if (response.html_url !== expectedUrl) {
+    throw new Error(
+      "GitHub response did not include the expected pull request URL."
+    );
+  }
+
+  return { number, url: expectedUrl };
+}
+
+async function notifyPullRequestCreated(pullRequest: ValidatedPullRequest) {
+  const attempt = Promise.resolve()
+    .then(() =>
+      callSlackApi({
+        botToken: slackCredentials().botToken,
+        operation: "chat.postMessage",
+        body: {
+          channel: slackDestinationChannel(),
+          text: `A new Turborepo pull request was created: #${pullRequest.number} ${pullRequest.url}`
+        }
+      })
+    )
+    .then((response) => response.ok)
+    .catch(() => false);
+  let timeout: NodeJS.Timeout | undefined;
+  const succeeded = await Promise.race([
+    attempt,
+    new Promise<false>((resolve) => {
+      timeout = setTimeout(resolve, slackNotificationTimeoutMs, false);
+    })
+  ]);
+  if (timeout) clearTimeout(timeout);
+
+  if (!succeeded) {
+    logSlackNotificationFailure(pullRequest.number);
+  }
+}
+
+function logSlackNotificationFailure(pullRequestNumber: number) {
+  console.warn("Slack pull request notification failed.", {
+    event: "pull_request_notification_failed",
+    pullRequestNumber
+  });
+}
+
+async function findOpenPullRequests(branchName: string) {
+  return github<PullRequestResponse[]>({
+    method: "GET",
+    owner,
+    repo,
+    path: `/pulls?state=open&head=${owner}%3A${encodeURIComponent(branchName)}`
+  });
+}
+
+async function reconcileCreatedPullRequest(
+  response: PullRequestResponse,
+  branchName: string,
+  headSha: string
+): Promise<ValidatedPullRequest> {
+  try {
+    return requirePullRequest(response);
+  } catch {
+    const pullRequest = (await findOpenPullRequests(branchName)).find(
+      (candidate) => candidate.head?.sha === headSha
+    );
+    if (!pullRequest) {
+      throw new Error(
+        "GitHub pull request response was invalid and could not be reconciled."
+      );
+    }
+    return requirePullRequest(pullRequest);
+  }
 }
 
 async function github<T>(input: {
@@ -136,12 +231,7 @@ export default defineTool({
       ? `chore: Update ${selection.example} example`
       : "chore: Update Turborepo examples";
 
-    const existingPullRequests = await github<PullRequestResponse[]>({
-      method: "GET",
-      owner,
-      repo,
-      path: `/pulls?state=open&head=${owner}%3A${encodeURIComponent(branchName)}`
-    });
+    const existingPullRequests = await findOpenPullRequests(branchName);
     const existingPullRequest = existingPullRequests[0];
 
     const checkoutSha = (await runGit(sandbox, "git rev-parse HEAD")).trim();
@@ -222,24 +312,29 @@ export default defineTool({
     }
 
     if (existingPullRequest) {
+      const validatedPullRequest = requirePullRequest(existingPullRequest);
+      const headSha = requireSha(
+        existingPullRequest.head?.sha,
+        "pull request head SHA"
+      );
       const existingCommit = await github<CommitResponse>({
         method: "GET",
         owner,
         repo,
-        path: `/git/commits/${requireSha(existingPullRequest.head?.sha, "pull request head SHA")}`
+        path: `/git/commits/${headSha}`
       });
       if (existingCommit.tree?.sha !== newTreeSha) {
         throw new Error(
-          `Pull request ${existingPullRequest.html_url ?? existingPullRequest.number} already uses ${branchName} with different changes.`
+          `Pull request ${validatedPullRequest.url} already uses ${branchName} with different changes.`
         );
       }
       return {
         created: false,
         existing: true,
-        number: existingPullRequest.number,
-        url: existingPullRequest.html_url,
+        number: validatedPullRequest.number,
+        url: validatedPullRequest.url,
         branch: branchName,
-        commit: existingPullRequest.head?.sha
+        commit: headSha
       };
     }
 
@@ -306,11 +401,18 @@ export default defineTool({
         draft: true
       }
     });
+    const validatedPullRequest = await reconcileCreatedPullRequest(
+      pullRequest,
+      branchName,
+      newCommitSha
+    );
+
+    await notifyPullRequestCreated(validatedPullRequest);
 
     return {
       created: true,
-      number: pullRequest.number,
-      url: pullRequest.html_url,
+      number: validatedPullRequest.number,
+      url: validatedPullRequest.url,
       branch: branchName,
       commit: newCommitSha
     };
