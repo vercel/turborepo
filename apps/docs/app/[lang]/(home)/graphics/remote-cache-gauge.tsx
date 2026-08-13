@@ -171,29 +171,36 @@ export function RemoteCacheGauge() {
           <linearGradient
             id="remote-cache-gauge-pointer-gradient"
             gradientUnits="userSpaceOnUse"
-            x1="240"
-            x2="103.74"
-            y1="240"
-            y2="289.59"
+            x1="236.58"
+            x2="243.42"
+            y1="230.6"
+            y2="249.4"
           >
-            <stop offset="0" stopColor="var(--ds-gray-1000)" />
-            <stop
-              offset="1"
-              stopColor="var(--ds-gray-1000)"
-              stopOpacity="0.35"
-            />
+            <stop offset="0" stopColor="var(--ds-gray-700)" />
+            <stop offset="0.42" stopColor="var(--ds-gray-1000)" />
+            <stop offset="1" stopColor="var(--ds-gray-800)" />
           </linearGradient>
-          <linearGradient
+          <radialGradient
             id="remote-cache-gauge-dot-gradient"
             gradientUnits="userSpaceOnUse"
-            x1="240"
-            x2="240"
-            y1="258"
-            y2="222"
+            cx="234"
+            cy="233"
+            fx="234"
+            fy="233"
+            r="27"
           >
-            <stop offset="0" stopColor="var(--ds-gray-900)" />
-            <stop offset="1" stopColor="var(--ds-gray-1000)" />
-          </linearGradient>
+            <stop offset="0" stopColor="var(--ds-gray-700)" />
+            <stop offset="0.48" stopColor="var(--ds-gray-1000)" />
+            <stop offset="1" stopColor="var(--ds-gray-700)" />
+          </radialGradient>
+          <radialGradient
+            id="remote-cache-gauge-pin-gradient"
+            cx="35%"
+            cy="30%"
+          >
+            <stop offset="0" stopColor="var(--ds-gray-100)" />
+            <stop offset="1" stopColor="var(--ds-gray-400)" />
+          </radialGradient>
           <radialGradient
             id="remote-cache-gauge-fade"
             cx="240"
@@ -278,6 +285,15 @@ export function RemoteCacheGauge() {
           >
             <feGaussianBlur stdDeviation="2.5" />
           </filter>
+          <filter
+            id="remote-cache-gauge-pointer-shadow-blur"
+            height="140%"
+            width="140%"
+            x="-20%"
+            y="-20%"
+          >
+            <feGaussianBlur stdDeviation="1.2" />
+          </filter>
         </defs>
 
         <g mask="url(#remote-cache-gauge-end-fade-mask)">
@@ -341,22 +357,56 @@ export function RemoteCacheGauge() {
           ))}
         </g>
 
+        <g transform="translate(1 2)">
+          <g transform={`rotate(${needleRotation} 240 240)`}>
+            <path
+              d="M236.58 230.6 103.74 289.59 243.42 249.4Z"
+              fill="black"
+              fillOpacity="0.22"
+              filter="url(#remote-cache-gauge-pointer-shadow-blur)"
+            />
+          </g>
+        </g>
+
         <g transform={`rotate(${needleRotation} 240 240)`}>
           <path
-            className="drop-shadow-xs"
             d="M236.58 230.6 103.74 289.59 243.42 249.4Z"
             fill="url(#remote-cache-gauge-pointer-gradient)"
+          />
+          <path
+            d="M236.58 230.6 103.74 289.59"
+            fill="none"
+            stroke="white"
+            strokeOpacity="0.16"
+            strokeWidth="0.75"
           />
         </g>
 
         <g>
+          <circle cx="240" cy="240" fill="var(--ds-gray-alpha-500)" r="20" />
           <circle
             cx="240"
             cy="240"
             fill="url(#remote-cache-gauge-dot-gradient)"
             r="18"
           />
-          <circle cx="240" cy="240" fill="var(--ds-gray-100)" r="7" />
+          <ellipse
+            cx="235"
+            cy="233.5"
+            fill="white"
+            fillOpacity="0.16"
+            rx="7"
+            ry="3"
+            transform="rotate(-25 235 233.5)"
+          />
+          <circle
+            cx="240"
+            cy="240"
+            fill="url(#remote-cache-gauge-pin-gradient)"
+            r="7"
+            stroke="var(--ds-gray-alpha-500)"
+            strokeWidth="1"
+          />
         </g>
       </svg>
     </div>
