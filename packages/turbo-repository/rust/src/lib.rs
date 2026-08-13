@@ -12,7 +12,7 @@ use turborepo_repository::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
         LockfileContents, PackageChangeMapper, PackageChanges,
     },
-    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME, WorkspacePackage},
+    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage},
 };
 use turborepo_scm::SCM;
 mod internal;
@@ -92,6 +92,7 @@ impl Package {
         };
 
         pkgs.iter()
+            .filter(|node| graph.is_real_package(node.as_package_name()))
             .filter_map(|node| {
                 let context = graph.package_task_context(node.as_package_name())?;
                 let package_path = workspace_path.resolve(context.directory());
@@ -113,6 +114,7 @@ impl Package {
 
         pkgs.iter()
             .filter(|node| !matches!(node, PackageNode::Root))
+            .filter(|node| graph.is_real_package(node.as_package_name()))
             .filter_map(|node| {
                 let context = graph.package_task_context(node.as_package_name())?;
                 let package_path = workspace_path.resolve(context.directory());
@@ -204,26 +206,27 @@ impl Workspace {
         workspace_root: &AbsoluteSystemPath,
         from_commit: &str,
     ) -> LockfileContents {
-        let Some(package_manager) = self.graph.package_manager() else {
-            return LockfileContents::Unchanged;
-        };
-        let lockfile_name = package_manager.lockfile_name();
-        let Ok(lockfile_path) = AnchoredSystemPath::new(&lockfile_name) else {
+        let Some(lockfile_path) = self
+            .graph
+            .change_knowledge()
+            .resolution_paths()
+            .iter()
+            .find_map(|path| {
+                let path = AnchoredSystemPath::new(path).ok()?;
+                changed_files.contains(path).then_some(path)
+            })
+        else {
             return LockfileContents::Unchanged;
         };
 
-        if changed_files.contains(lockfile_path) {
-            let git = SCM::new(workspace_root);
-            let anchored_path = workspace_root.join_component(lockfile_name);
-            match git.previous_content(Some(from_commit), &anchored_path) {
-                Ok(contents) => LockfileContents::Changed(contents),
-                Err(e) => {
-                    debug!("{e}");
-                    LockfileContents::UnknownChange
-                }
+        let git = SCM::new(workspace_root);
+        let anchored_path = workspace_root.resolve(lockfile_path);
+        match git.previous_content(Some(from_commit), &anchored_path) {
+            Ok(contents) => LockfileContents::Changed(contents),
+            Err(e) => {
+                debug!("{e}");
+                LockfileContents::UnknownChange
             }
-        } else {
-            LockfileContents::Unchanged
         }
     }
 
@@ -268,12 +271,14 @@ impl Workspace {
 
         let lockfile_contents = if let Some(base) = base {
             self.get_lockfile_contents(&changed_files, workspace_root, base)
-        } else if matches!(
-            self.graph
-                .package_manager()
-                .map(|pm| AnchoredSystemPath::new(pm.lockfile_name())),
-            Some(Ok(path)) if changed_files.contains(path)
-        ) {
+        } else if self
+            .graph
+            .change_knowledge()
+            .resolution_paths()
+            .iter()
+            .filter_map(|path| AnchoredSystemPath::new(path).ok())
+            .any(|path| changed_files.contains(path))
+        {
             LockfileContents::UnknownChange
         } else {
             LockfileContents::Unchanged
@@ -296,22 +301,7 @@ impl Workspace {
             PackageChanges::Some(packages) => packages.into_keys().collect(),
         };
 
-        let mut serializable_packages: Vec<Package> = packages
-            .into_iter()
-            .filter(|p| match &p.name {
-                PackageName::Root => false,
-                PackageName::Other(name) => name != ROOT_PKG_NAME,
-            })
-            .map(|p| {
-                let package_path = workspace_root.resolve(&p.path);
-                Package::new(p.name.to_string(), workspace_root, &package_path)
-            })
-            .collect::<Result<Vec<Package>, _>>()
-            .map_err(|e| Error::from_reason(e.to_string()))?;
-
-        serializable_packages.sort_by_key(|p| p.name.clone());
-
-        Ok(serializable_packages)
+        self.serialize_packages(packages)
     }
 
     /// Given a path (relative to the workspace root), returns the
@@ -344,5 +334,24 @@ impl Workspace {
                     .map_err(|e| Error::from_reason(e.to_string()))
             }
         }
+    }
+
+    fn serialize_packages(
+        &self,
+        packages: impl IntoIterator<Item = WorkspacePackage>,
+    ) -> Result<Vec<Package>, Error> {
+        let workspace_root = AbsoluteSystemPath::new(&self.absolute_path)
+            .map_err(|error| Error::from_reason(error.to_string()))?;
+        let mut packages = packages
+            .into_iter()
+            .filter(|package| self.graph.is_real_package(&package.name))
+            .map(|package| {
+                let package_path = workspace_root.resolve(&package.path);
+                Package::new(package.name.to_string(), workspace_root, &package_path)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::from_reason(error.to_string()))?;
+        packages.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        Ok(packages)
     }
 }

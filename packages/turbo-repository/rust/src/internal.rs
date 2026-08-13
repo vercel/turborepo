@@ -7,6 +7,9 @@ use turborepo_repository::{
     package_json::PackageJson,
     package_manager,
 };
+use turborepo_turbo_json::{
+    RawTurboJson, TurboJson, TurboJsonPath, TurboJsonReader, load_from_path,
+};
 
 use crate::{Package, PackageManager, Workspace};
 
@@ -33,6 +36,8 @@ pub(crate) enum Error {
     PackageGraph(#[from] turborepo_repository::package_graph::Error),
     #[error("package.json error: {0}")]
     PackageJson(#[from] turborepo_repository::package_json::Error),
+    #[error("turbo.json error: {0}")]
+    TurboJson(#[from] turborepo_turbo_json::Error),
 }
 
 impl From<Error> for napi::Error<Status> {
@@ -90,12 +95,43 @@ impl Workspace {
         let package_manager_name = package_manager.name();
 
         let workspace_root = &workspace_state.root;
+        let initial_turbo_json = match load_from_path(
+            &TurboJsonReader::new(workspace_root.clone()),
+            TurboJsonPath::Dir(workspace_root),
+            true,
+        ) {
+            Ok(turbo_json) => turbo_json,
+            Err(turborepo_turbo_json::Error::NoTurboJSON) => TurboJson::default(),
+            Err(error) => return Err(error.into()),
+        };
+        let future_flags = initial_turbo_json
+            .path()
+            .map(|path| workspace_root.join_component(path.as_ref()))
+            .map(|path| RawTurboJson::read(workspace_root, &path, true))
+            .transpose()?
+            .flatten()
+            .and_then(|raw| raw.future_flags.map(|flags| flags.into_inner()))
+            .unwrap_or_default();
+        let turbo_json = if initial_turbo_json.path().is_some() {
+            load_from_path(
+                &TurboJsonReader::new(workspace_root.clone()).with_future_flags(future_flags),
+                TurboJsonPath::Dir(workspace_root),
+                true,
+            )?
+        } else {
+            initial_turbo_json
+        };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
-        let package_graph = PackageGraphBuilder::new(workspace_root, root_package_json)
+        let mut package_graph_builder = PackageGraphBuilder::new(workspace_root, root_package_json)
             .with_single_package_mode(!is_multi_package)
-            .with_package_manager(package_manager.clone())
-            .build()
-            .await?;
+            .with_package_manager(package_manager.clone());
+        if turbo_json.future_flags.experimental_cargo_workspaces {
+            package_graph_builder = package_graph_builder.with_cargo();
+        }
+        if turbo_json.future_flags.experimental_python_workspaces {
+            package_graph_builder = package_graph_builder.with_uv();
+        }
+        let package_graph = package_graph_builder.build().await?;
 
         Ok(Self {
             absolute_path: workspace_state.root.to_string(),
@@ -115,9 +151,7 @@ impl Workspace {
 fn packages_from_graph(graph: &PackageGraph) -> Result<Vec<Package>, Error> {
     let mut packages = graph
         .package_task_contexts()
-        .filter(|context| {
-            graph.is_real_package(context.package()) && context.is_package_json_scope()
-        })
+        .filter(|context| graph.is_real_package(context.package()))
         .map(|context| {
             let path = graph.repo_root().resolve(context.directory());
             Package::new(
