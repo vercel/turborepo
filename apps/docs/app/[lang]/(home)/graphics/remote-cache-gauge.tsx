@@ -109,29 +109,7 @@ export function RemoteCacheGauge() {
   const needleRotation = roundSvgValue(roundedIndicatorProgress * 2.2);
 
   useEffect(() => {
-    if (!isAccelerating) {
-      setSpringTarget(GAUGE_INDICATOR_REST);
-      return;
-    }
-
-    let flickerTimeout: ReturnType<typeof setTimeout>;
-    let flickerStep = 0;
-    const flickerDurations = [70, 95, 80, 110] as const;
-
-    setSpringTarget(98);
-
-    const flicker = (towardLimit: boolean) => {
-      setSpringTarget(towardLimit ? 97.8 : 96.2);
-      const duration = flickerDurations[flickerStep % flickerDurations.length];
-      flickerStep += 1;
-      flickerTimeout = setTimeout(() => flicker(!towardLimit), duration);
-    };
-
-    flickerTimeout = setTimeout(() => flicker(false), 280);
-
-    return () => {
-      clearTimeout(flickerTimeout);
-    };
+    setSpringTarget(isAccelerating ? 98 : GAUGE_INDICATOR_REST);
   }, [isAccelerating]);
 
   return (
