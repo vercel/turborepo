@@ -4,6 +4,25 @@ packages:
   - shared-ui
 
 catalog:
-  "@module-federation/rsbuild-plugin": ^2.5.0
-  "@rsbuild/core": ^2.0.7
-  "@rsbuild/plugin-react": ^2.0.0
+  "@module-federation/rsbuild-plugin": 2.8.2
+  "@rsbuild/core": 2.1.13
+  "@rsbuild/plugin-react": 2.1.0
+
+minimumReleaseAgeExclude:
+  - '@rsbuild/core@2.1.13'
+  - '@rspack/binding-darwin-arm64@2.1.10'
+  - '@rspack/binding-darwin-x64@2.1.10'
+  - '@rspack/binding-linux-arm64-gnu@2.1.10'
+  - '@rspack/binding-linux-arm64-musl@2.1.10'
+  - '@rspack/binding-linux-ppc64-gnu@2.1.10'
+  - '@rspack/binding-linux-riscv64-gnu@2.1.10'
+  - '@rspack/binding-linux-riscv64-musl@2.1.10'
+  - '@rspack/binding-linux-s390x-gnu@2.1.10'
+  - '@rspack/binding-linux-x64-gnu@2.1.10'
+  - '@rspack/binding-linux-x64-musl@2.1.10'
+  - '@rspack/binding-wasm32-wasi@2.1.10'
+  - '@rspack/binding-win32-arm64-msvc@2.1.10'
+  - '@rspack/binding-win32-ia32-msvc@2.1.10'
+  - '@rspack/binding-win32-x64-msvc@2.1.10'
+  - '@rspack/binding@2.1.10'
+  - '@rspack/core@2.1.10'
