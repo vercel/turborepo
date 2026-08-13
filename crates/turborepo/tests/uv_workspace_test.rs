@@ -340,6 +340,112 @@ fn test_uv_compatible_member_tools_use_all_packages_entrypoint() {
 }
 
 #[test]
+fn test_uv_root_pytest_is_workspace_only_and_member_filter_uses_direct_declaration() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"pytest\"]\n",
+    );
+    append_manifest(
+        tempdir.path(),
+        "packages/py-app/pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"pytest\"]\n",
+    );
+
+    let workspace = dry_run_tasks(tempdir.path(), &["test"]);
+    assert_eq!(task_ids(&workspace), ["acme#test"]);
+    assert_eq!(
+        find_task(&workspace, "acme#test")["command"],
+        "uv run --frozen pytest"
+    );
+
+    let app = dry_run_tasks(tempdir.path(), &["test", "--filter=py-app"]);
+    assert_eq!(task_ids(&app), ["py-app#test"]);
+    assert_eq!(
+        find_task(&app, "py-app#test")["command"],
+        "uv run --frozen --package py-app pytest packages/py-app"
+    );
+
+    let lib = dry_run_tasks(tempdir.path(), &["test", "--filter=py-lib"]);
+    assert!(task_ids(&lib).is_empty());
+}
+
+#[test]
+fn test_uv_member_pytest_tasks_run_per_declaring_package() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "packages/py-app/pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"pytest\"]\n",
+    );
+    append_manifest(
+        tempdir.path(),
+        "packages/py-lib/pyproject.toml",
+        "\n[dependency-groups]\ntests = [\"pytest\"]\n\n[tool.uv]\ndefault-groups = []\n",
+    );
+
+    let test = dry_run_tasks(tempdir.path(), &["test"]);
+    assert_eq!(task_ids(&test), ["py-app#test", "py-lib#test"]);
+    assert_eq!(
+        find_task(&test, "py-app#test")["command"],
+        "uv run --frozen --package py-app pytest packages/py-app"
+    );
+    assert_eq!(
+        find_task(&test, "py-lib#test")["command"],
+        "uv run --frozen --package py-lib --no-default-groups --group tests pytest packages/py-lib"
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "test",
+            "--filter=py-app",
+            "--dry-run=json",
+            "--",
+            "-k",
+            "smoke",
+        ],
+    );
+    assert_command_success(&output, "member pytest pass-through dry-run");
+    let filtered: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        find_task(&filtered, "py-app#test")["command"],
+        "uv run --frozen --package py-app pytest packages/py-app"
+    );
+}
+
+#[test]
+fn test_uv_explicit_test_command_does_not_require_pytest_declaration() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "futureFlags": {
+    "experimentalPythonWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "test": {
+      "command": { "python": ["echo", "configured-python-test"] }
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let test = dry_run_tasks(tempdir.path(), &["test", "--filter=py-app"]);
+    assert_eq!(task_ids(&test), ["py-app#test"]);
+    assert_eq!(
+        find_task(&test, "py-app#test")["command"],
+        "echo configured-python-test"
+    );
+}
+
+#[test]
 fn test_uv_multi_child_check_rejects_pass_through_args() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());

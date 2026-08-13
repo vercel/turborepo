@@ -11,6 +11,7 @@ minimumReleaseAge: 2880
 minimumReleaseAgeExclude:
   - next
   - "@next/*"
+  - "@vercel/geistdocs"
 
 onlyBuiltDependencies:
   - "@swc/core"
@@ -18,3 +19,6 @@ onlyBuiltDependencies:
   - core-js-pure
   - esbuild
   - sharp
+
+overrides:
+  esbuild: 0.28.1

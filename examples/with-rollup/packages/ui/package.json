@@ -13,21 +13,22 @@
     }
   },
   "scripts": {
-    "lint": "eslint *.ts*",
+    "lint": "eslint . --max-warnings 0",
     "build": "rollup --config",
     "dev": "pnpm build --watch"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@rollup/plugin-typescript": "^11.1.6",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
-    "eslint": "^8.57.0",
-    "rollup": "^4.12.0",
-    "typescript": "5.5.4"
+    "@rollup/plugin-swc": "0.4.1",
+    "@swc/core": "1.15.47",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "eslint": "10.8.1",
+    "rollup": "4.62.4",
+    "typescript": "7.0.2"
   },
   "dependencies": {
-    "react": "^18.2.0"
+    "react": "19.2.8"
   }
 }

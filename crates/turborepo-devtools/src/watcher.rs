@@ -42,6 +42,8 @@ const RELEVANT_FILES: &[&str] = &[
     "package-lock.json",
     "yarn.lock",
     "pnpm-lock.yaml",
+    "nub.lock",
+    "lock.yaml",
     "bun.lockb",
     "Cargo.toml",
     "Cargo.lock",
@@ -221,6 +223,8 @@ mod tests {
         assert!(is_relevant_file(Path::new("turbo.json")));
         assert!(is_relevant_file(Path::new("turbo.jsonc")));
         assert!(is_relevant_file(Path::new("pnpm-workspace.yaml")));
+        assert!(is_relevant_file(Path::new("nub.lock")));
+        assert!(is_relevant_file(Path::new("lock.yaml")));
         assert!(is_relevant_file(Path::new("crates/app/Cargo.toml")));
         assert!(is_relevant_file(Path::new("Cargo.lock")));
         assert!(!is_relevant_file(Path::new("index.ts")));

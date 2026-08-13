@@ -638,7 +638,7 @@ pub enum Command {
     Scan,
     #[clap(hide = true)]
     Config,
-    /// EXPERIMENTAL: List packages in your monorepo.
+    /// List packages in your monorepo.
     Ls {
         /// Show only packages that are affected by changes between
         /// the current branch and `main`
@@ -653,7 +653,7 @@ pub enum Command {
         /// Get insight into a specific package, such as
         /// its dependencies and tasks
         packages: Vec<String>,
-        /// Output format
+        /// EXPERIMENTAL: Output format
         #[clap(long, value_enum)]
         output: Option<OutputFormat>,
     },

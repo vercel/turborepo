@@ -35,7 +35,7 @@ import { bun } from "./bun";
 
 const PACKAGE_MANAGER_DETAILS: Manager = {
   name: "nub",
-  lock: "package-lock.json"
+  lock: "nub.lock"
 };
 
 const UNDERLYING_MANAGERS = {

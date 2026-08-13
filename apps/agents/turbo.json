@@ -2,10 +2,22 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".eve/**", ".vercel/**"]
+      "env": [
+        "SLACK_CHANNEL_ID",
+        "SLACK_CONNECT_UID",
+        "SLACK_INSTALLATION_ID",
+        "VERCEL",
+        "VERCEL_DEPLOYMENT_ID"
+      ],
+      "outputs": [
+        ".eve/**",
+        ".next/**",
+        "!.next/cache/**",
+        ".output/**",
+        ".vercel/**"
+      ]
     },
-    "check-types": {
-      "command": ["pnpm", "exec", "tsgo"]
-    }
+    "check-types": {},
+    "test": {}
   }
 }

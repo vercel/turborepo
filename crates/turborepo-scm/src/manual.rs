@@ -567,6 +567,54 @@ mod tests {
     }
 
     #[test]
+    fn test_nested_package_paths_in_parent_gitignore_are_applied() {
+        // A root .gitignore can ignore a path nested more than one level inside
+        // a package (e.g. "child-dir/libA/logs/exec"). Git-based hashing applies
+        // such patterns, and the manual walk must match: with ignore 0.4.22 they
+        // were silently dropped when the walk was rooted at the package
+        // directory, so per-run files under the "ignored" path leaked into the
+        // package's hashes and the affected tasks missed the cache on every run.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
+
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("child-dir/libA/logs/exec\nchild-dir/libA/shallow\n")
+            .unwrap();
+
+        for raw_unix_path in [
+            "child-dir/libA/keep.txt",
+            "child-dir/libA/shallow/run.log",
+            "child-dir/libA/logs/exec/run.log",
+        ] {
+            let file_path =
+                turbo_root.join_unix_path(RelativeUnixPath::new(raw_unix_path).unwrap());
+            file_path.ensure_dir().unwrap();
+            file_path.create_with_contents("contents").unwrap();
+        }
+
+        let hashes = get_package_file_hashes_without_git::<&str>(
+            &turbo_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("keep.txt").unwrap()));
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("shallow/run.log").unwrap()),
+            "one-level-deep parent gitignore pattern must be applied"
+        );
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("logs/exec/run.log").unwrap()),
+            "nested parent gitignore pattern must be applied"
+        );
+    }
+
+    #[test]
     fn test_include_default_files_deduplicates_with_explicit_includes() {
         // When include_default_files=true AND explicit includes are provided,
         // the first walk collects files matching the includes, and the second
