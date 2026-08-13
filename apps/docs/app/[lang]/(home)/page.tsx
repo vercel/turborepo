@@ -200,7 +200,7 @@ export default function HomePage() {
       </section>
       <section className="py-10 sm:py-14">
         <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
-          <h2 className="text-heading-32 lg:text-heading-40">
+          <h2 className="text-heading-32 md:whitespace-nowrap lg:text-heading-40">
             Deploy your Turborepo today
           </h2>
           <div className="flex flex-col w-full items-start gap-3 sm:flex-row sm:items-center md:justify-end">

@@ -114,25 +114,29 @@ export function RemoteCacheGauge() {
       return;
     }
 
-    let timeout: ReturnType<typeof setTimeout>;
+    let flickerTimeout: ReturnType<typeof setTimeout>;
+    let flickerStep = 0;
+    const flickerDurations = [70, 95, 80, 110] as const;
 
     setSpringTarget(98);
 
-    const oscillate = (towardLimit: boolean) => {
-      const duration = towardLimit ? 80 : 65;
-
+    const flicker = (towardLimit: boolean) => {
       setSpringTarget(towardLimit ? 97.8 : 96.2);
-      timeout = setTimeout(() => oscillate(!towardLimit), duration + 5);
+      const duration = flickerDurations[flickerStep % flickerDurations.length];
+      flickerStep += 1;
+      flickerTimeout = setTimeout(() => flicker(!towardLimit), duration);
     };
 
-    timeout = setTimeout(() => oscillate(false), 280);
+    flickerTimeout = setTimeout(() => flicker(false), 280);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(flickerTimeout);
+    };
   }, [isAccelerating]);
 
   return (
     <div
-      className="relative w-full max-w-[500px] aspect-[24/17] [--remote-cache-inner-end:#0196FF] [--remote-cache-inner-start:#FF1E56] dark:[--remote-cache-inner-end:#52C7FF] dark:[--remote-cache-inner-start:#FF5C9A]"
+      className="relative w-full max-w-[500px] aspect-[24/17] [--remote-cache-inner-end:#FF1E56] [--remote-cache-inner-start:#0196FF] [--remote-cache-tick-color:var(--ds-gray-alpha-500)] dark:[--remote-cache-inner-end:#FF5C9A] dark:[--remote-cache-inner-start:#52C7FF] dark:[--remote-cache-tick-color:var(--ds-gray-alpha-600)]"
       onMouseEnter={() => setIsAccelerating(true)}
       onMouseLeave={() => setIsAccelerating(false)}
     >
@@ -150,8 +154,8 @@ export function RemoteCacheGauge() {
             y1="310.5"
             y2="310.5"
           >
-            <stop offset="0" stopColor="#FF1E56" />
-            <stop offset="1" stopColor="#0196FF" />
+            <stop offset="0" stopColor="#0196FF" />
+            <stop offset="1" stopColor="#FF1E56" />
           </linearGradient>
           <linearGradient
             id="remote-cache-gauge-inner-gradient"
@@ -168,9 +172,9 @@ export function RemoteCacheGauge() {
             id="remote-cache-gauge-pointer-gradient"
             gradientUnits="userSpaceOnUse"
             x1="240"
-            x2="127.24"
+            x2="103.74"
             y1="240"
-            y2="281.04"
+            y2="289.59"
           >
             <stop offset="0" stopColor="var(--ds-gray-1000)" />
             <stop
@@ -197,7 +201,11 @@ export function RemoteCacheGauge() {
             gradientUnits="userSpaceOnUse"
             r="197"
           >
-            <stop offset="80%" stopColor="white" stopOpacity="0" />
+            <stop offset="75%" stopColor="white" stopOpacity="0" />
+            <stop offset="81%" stopColor="white" stopOpacity="0.03" />
+            <stop offset="87%" stopColor="white" stopOpacity="0.12" />
+            <stop offset="92%" stopColor="white" stopOpacity="0.32" />
+            <stop offset="95%" stopColor="white" stopOpacity="0.64" />
             <stop offset="100%" stopColor="white" stopOpacity="1" />
           </radialGradient>
           <mask id="remote-cache-gauge-fade-mask" mask-type="alpha">
@@ -272,19 +280,22 @@ export function RemoteCacheGauge() {
           </filter>
         </defs>
 
+        <g mask="url(#remote-cache-gauge-end-fade-mask)">
+          <path
+            className="opacity-25 dark:mix-blend-screen dark:opacity-40"
+            d="M46.4 310.5a206 206 0 1 1 387.2 0"
+            fill="none"
+            filter="url(#remote-cache-gauge-glow)"
+            pathLength="100"
+            stroke="url(#remote-cache-gauge-gradient)"
+            strokeDasharray={indicatorDasharray}
+            strokeLinecap="butt"
+            strokeWidth="21"
+          />
+        </g>
+
         <g mask="url(#remote-cache-gauge-segment-mask)">
           <g mask="url(#remote-cache-gauge-end-fade-mask)">
-            <path
-              className="opacity-25 dark:mix-blend-screen dark:opacity-40"
-              d="M46.4 310.5a206 206 0 1 1 387.2 0"
-              fill="none"
-              filter="url(#remote-cache-gauge-glow)"
-              pathLength="100"
-              stroke="url(#remote-cache-gauge-gradient)"
-              strokeDasharray={indicatorDasharray}
-              strokeLinecap="butt"
-              strokeWidth="21"
-            />
             <path
               d="M46.4 310.5a206 206 0 1 1 387.2 0"
               fill="none"
@@ -320,7 +331,11 @@ export function RemoteCacheGauge() {
           </g>
         </g>
 
-        <g stroke="var(--ds-gray-alpha-500)" strokeWidth="1">
+        <g
+          className="mix-blend-multiply dark:mix-blend-normal"
+          stroke="var(--remote-cache-tick-color)"
+          strokeWidth="1"
+        >
           {GAUGE_TICKS.map(({ x1, x2, y1, y2 }, index) => (
             <line key={index} x1={x1} x2={x2} y1={y1} y2={y2} />
           ))}
@@ -329,7 +344,7 @@ export function RemoteCacheGauge() {
         <g transform={`rotate(${needleRotation} 240 240)`}>
           <path
             className="drop-shadow-xs"
-            d="M236.58 230.6 127.24 281.04 243.42 249.4Z"
+            d="M236.58 230.6 103.74 289.59 243.42 249.4Z"
             fill="url(#remote-cache-gauge-pointer-gradient)"
           />
         </g>

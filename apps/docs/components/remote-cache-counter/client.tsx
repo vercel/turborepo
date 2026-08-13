@@ -28,8 +28,10 @@ export function RemoteCacheCounterClient({
   });
 
   return (
-    <p className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}>
+    <span
+      className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}
+    >
       {counterFormatter.format(displayValue)}
-    </p>
+    </span>
   );
 }
