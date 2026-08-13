@@ -1,0 +1,17 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "py-api"
+version = "0.1.0"
+source = { virtual = "python/api" }
+dependencies = [{ name = "py-shared" }]
+
+[package.metadata]
+requires-dist = [{ name = "py-shared", editable = "python/shared" }]
+
+[[package]]
+name = "py-shared"
+version = "0.1.0"
+source = { virtual = "python/shared" }
