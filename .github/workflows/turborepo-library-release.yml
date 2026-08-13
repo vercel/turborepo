@@ -87,7 +87,7 @@ jobs:
               export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup show active-toolchain
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install --frozen-lockfile
+              pnpm install --filter @turbo/repository --frozen-lockfile
 
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-musl
@@ -104,7 +104,7 @@ jobs:
               rustup show active-toolchain
               rustup target add aarch64-unknown-linux-musl
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install --frozen-lockfile
+              pnpm install --filter @turbo/repository --frozen-lockfile
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
           - host: windows-2022
