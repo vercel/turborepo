@@ -406,7 +406,7 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. After validating the exact generated manifest, skill, and version changes, it approves only the held release review, Turborepo test, and JavaScript package test workflows for the pinned staging head. The release workflow waits for their required checks, revalidates the PR metadata and immutable SHAs, and squash-merges the pinned head.
+For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. After validating the exact generated manifest, skill, and version changes, it approves only the held release review, Turborepo test, and JavaScript package test workflows for the pinned staging head. Those workflows validate the generated file set but skip their test matrices for release PRs. The release workflow waits for their required summary checks, revalidates the PR metadata and immutable SHAs, and squash-merges the pinned head.
 
 The PR includes:
 

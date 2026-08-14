@@ -285,7 +285,7 @@ jobs:
   create-release-pr:
     name: Create Release PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: write
