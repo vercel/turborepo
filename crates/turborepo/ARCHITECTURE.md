@@ -657,8 +657,11 @@ tasks, external resolution, change observations, and a prune domain through
 the shared repository graph.
 
 - **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
-  in-process, so graph construction does not require the `uv` binary. Names
-  are PEP 503-normalized. Dependencies become internal graph edges only when
+  in-process, so graph construction does not require the `uv` binary. When uv
+  is available, discovery probes its version and the Python interpreter selected
+  by `uv python find` for cache identity. Missing identities and repository-local
+  uv executables fail closed to uncached tasks. Names are PEP 503-normalized.
+  Dependencies become internal graph edges only when
   their effective `[tool.uv.sources]` entry selects `workspace = true`.
   Development edges that would create a cycle become non-ordering input
   edges. A root `[project]` participates in hashing and pruning but is not a
@@ -700,12 +703,18 @@ the shared repository graph.
   --group <group>`), the tool and subcommand, pass-through arguments, and the
   member-directory targets. Ruff uses `check`/`format`; ty uses `check`.
   Fallbacks remain `uv format -- <dirs...>` and either
-  `uv check --package=<name>` or `uv check --all-packages`. Detected-tool and
-  fallback `check` commands use the `uv` serial group. All command tasks default
-  to uncached. Detected-tool commands use `--frozen`; Turborepo itself never
-  creates or updates `uv.lock`. Pass-through arguments are inserted before path
-  targets. Active aggregates reject them and name the package-qualified child
-  tasks that can receive them.
+  `uv check --frozen --package=<name>` or `uv check --frozen --all-packages`.
+  Detected-tool and
+  fallback `check` commands use the `uv` serial group. Detected lint, check, and
+  test commands default to cacheable when uv and Python identities resolve;
+  otherwise they fail closed to uncached. The fallback `uv check` stays uncached
+  because its bundled checker is not represented in `uv.lock`. Builds using
+  `uv_build` cache when their sole build requirement accepts the identified uv
+  executable's bundled backend version. Other PEP 517 builds remain uncached,
+  and format commands remain uncached because they mutate source. Detected-tool commands use `--frozen`;
+  Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
+  inserted before path targets. Active aggregates reject them and name the
+  package-qualified child tasks that can receive them.
   Pytest commands are `uv run --frozen pytest` for the workspace or `uv run
   --frozen --package <name> pytest <member-dir>` for members, with non-default
   group activation inserted before pytest and pass-through arguments inserted
@@ -716,15 +725,18 @@ the shared repository graph.
   Quality workspace tasks include every member's sources; a bare workspace
   pytest task hashes the full repository because pytest controls collection.
   Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
-  Path-valued uv settings and active user/system uv configuration
-  make automatic inputs untracked. Each scope also hashes its external
+  Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
+  configuration, and any pass-through arguments make automatic inputs
+  untracked. Each scope also hashes its external
   dependency closure from `uv.lock`; root-owned tools conservatively add the
   workspace closure. Package identities include version, source, and artifact
-  hashes. A `uv.lock` change across git refs conservatively affects all uv
-  packages. Build output inference covers the bare command's matching `dist/`
-  artifacts and becomes unavailable when arguments are present.
-- **Watch mode** rediscoveries follow any `pyproject.toml` and the root
-  `uv.lock`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
+  hashes. Every scope also includes path-independent uv and Python identities
+  containing executable content hashes, Python implementation and version,
+  operating system, architecture, libc, variant, and host compatibility. A `uv.lock` change across git refs conservatively affects
+  all uv packages. Build output inference covers the bare command's matching
+  `dist/` artifacts and becomes unavailable when arguments are present.
+- **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
+  `.python-version`, and `uv.toml`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
   directories at the root and member scopes, are ignored as task byproducts.
 - **Prune** walks `uv.lock` reachability, including dependency groups and
   optional extras, and preserves retained package metadata through
