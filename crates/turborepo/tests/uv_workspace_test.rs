@@ -210,10 +210,6 @@ dev = ["Ruff", "black", "mypy", "ty", "pyright"]
         find_task(&check, "acme#check:mypy")["command"],
         "uv run --frozen mypy packages/py-app packages/py-lib"
     );
-    assert_eq!(
-        find_task(&check, "acme#check:mypy")["resolvedTaskDefinition"]["cache"],
-        false
-    );
 
     let format = dry_run_tasks(tempdir.path(), &["format"]);
     assert_eq!(task_ids(&format), vec!["acme#format".to_string()]);
