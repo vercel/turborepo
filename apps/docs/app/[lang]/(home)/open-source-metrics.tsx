@@ -1,11 +1,5 @@
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 
-const FALLBACK = {
-  downloads: "17.5M",
-  openIssues: 1,
-  stars: "30.5K",
-};
-
 const formatNumber = (value: number): string => {
   if (value >= 1_000_000) {
     const millions = value / 1_000_000;
@@ -33,64 +27,49 @@ const getOpenIssuesLabel = (count: number): string => {
 };
 
 const fetchDownloads = async (): Promise<string> => {
-  try {
-    const response = await fetch(
-      "https://api.npmjs.org/downloads/point/last-week/turbo",
-      { next: { revalidate: 3600 } },
-    );
+  const response = await fetch(
+    "https://api.npmjs.org/downloads/point/last-week/turbo",
+  );
 
-    if (!response.ok) {
-      return FALLBACK.downloads;
-    }
-
-    const data = (await response.json()) as { downloads: number };
-    return formatNumber(data.downloads);
-  } catch {
-    return FALLBACK.downloads;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch npm downloads: ${response.status}`);
   }
+
+  const data = (await response.json()) as { downloads: number };
+  return formatNumber(data.downloads);
 };
 
 const fetchRepositoryMetrics = async (): Promise<{
   stars: string;
 }> => {
-  try {
-    const response = await fetch(
-      "https://api.github.com/repos/vercel/turborepo",
-      { next: { revalidate: 3600 } },
-    );
+  const response = await fetch(
+    "https://api.github.com/repos/vercel/turborepo",
+  );
 
-    if (!response.ok) {
-      return { stars: FALLBACK.stars };
-    }
-
-    const data = (await response.json()) as {
-      stargazers_count: number;
-    };
-
-    return {
-      stars: formatNumber(data.stargazers_count),
-    };
-  } catch {
-    return { stars: FALLBACK.stars };
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub stars: ${response.status}`);
   }
+
+  const data = (await response.json()) as {
+    stargazers_count: number;
+  };
+
+  return {
+    stars: formatNumber(data.stargazers_count),
+  };
 };
 
 const fetchOpenIssues = async (): Promise<number> => {
-  try {
-    const response = await fetch(
-      "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen",
-      { next: { revalidate: 3600 } },
-    );
+  const response = await fetch(
+    "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen",
+  );
 
-    if (!response.ok) {
-      return FALLBACK.openIssues;
-    }
-
-    const data = (await response.json()) as { total_count: number };
-    return data.total_count;
-  } catch {
-    return FALLBACK.openIssues;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub issues: ${response.status}`);
   }
+
+  const data = (await response.json()) as { total_count: number };
+  return data.total_count;
 };
 
 export async function OpenSourceMetrics() {

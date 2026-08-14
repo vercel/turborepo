@@ -107,6 +107,12 @@ export const metadata = createMetadata({
   canonicalPath: "/",
 });
 
+export const revalidate = 3600;
+
+export function generateStaticParams(): Array<{ lang: string }> {
+  return [{ lang: "en" }, { lang: "cn" }];
+}
+
 export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1448px] px-4 sm:px-6">
