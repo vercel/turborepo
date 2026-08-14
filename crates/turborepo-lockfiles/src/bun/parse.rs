@@ -40,9 +40,21 @@ impl FromStr for BunLockfile {
         let strict_json = format.print().map_err(Error::from)?;
         let data: BunLockfileData = serde_json::from_str(strict_json.as_code())?;
 
-        // Validate that we support this lockfile version
-        let _version = LockfileVersion::from_i32(data.lockfile_version)
-            .ok_or(crate::Error::UnsupportedBunVersion(data.lockfile_version))?;
+        if LockfileVersion::from_i32(data.lockfile_version).is_none() {
+            if data.lockfile_version < LockfileVersion::LATEST.as_i32() {
+                return Err(crate::Error::UnsupportedBunVersion(data.lockfile_version));
+            }
+            // Bun lockfile revisions have only ever added to the schema, and the
+            // deserialization above already succeeded, so treat a newer version
+            // like the latest one we know instead of discarding the lockfile.
+            tracing::warn!(
+                "bun.lock has lockfileVersion {}, newer than the latest supported version {}; \
+                 treating it as version {}",
+                data.lockfile_version,
+                LockfileVersion::LATEST.as_i32(),
+                LockfileVersion::LATEST.as_i32()
+            );
+        }
 
         // Build key_to_entry map
         // When there are multiple lockfile keys with the same ident (e.g., nested

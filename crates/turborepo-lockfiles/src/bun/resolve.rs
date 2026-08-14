@@ -168,10 +168,12 @@ impl BunLockfile {
     }
 
     pub(super) fn apply_overrides<'a>(&'a self, name: &str, version: &'a str) -> &'a str {
+        // Keys carrying a parent range (`"webpack@^4"`) never match a bare
+        // name, so only unscoped rules (and their `"."` entry) apply here.
         self.data
             .overrides
             .get(name)
-            .map(|s| s.as_str())
+            .and_then(|rule| rule.version())
             .unwrap_or(version)
     }
 
