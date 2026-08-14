@@ -250,12 +250,15 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
         repo_root: &'a AbsoluteSystemPath,
         root_package_json: Option<PackageJson>,
     ) -> Self {
+        let mut package_discovery = LocalPackageDiscoveryBuilder::new(
+            repo_root.to_owned(),
+            None,
+            root_package_json.clone(),
+        );
+        package_discovery.with_turbo_json_discovery(false);
+
         Self {
-            package_discovery: LocalPackageDiscoveryBuilder::new(
-                repo_root.to_owned(),
-                None,
-                root_package_json.clone(),
-            ),
+            package_discovery,
             repo_root,
             root_package_json,
             is_single_package: false,
