@@ -94,9 +94,9 @@ When no supported formatter or checker is detected for a role, Turborepo retains
 | Package           | Turbo task | uv command                      |
 | ----------------- | ---------- | ------------------------------- |
 | Member            | `format`   | `uv format -- <member-dir>`      |
-| Member            | `check`    | `uv check --package=<name>`      |
+| Member            | `check`    | `uv check --frozen --package=<name>`      |
 | Workspace package | `format`   | `uv format -- <member-dirs...>`  |
-| Workspace package | `check`    | `uv check --all-packages`        |
+| Workspace package | `check`    | `uv check --frozen --all-packages`        |
 
 ### Tool declarations and inheritance
 
@@ -154,7 +154,7 @@ uv run --frozen pytest
 uv run --frozen --package py-api pytest packages/py-api
 ```
 
-Detected quality-tool and fallback `check` commands run serially in the `uv` execution group. Build, fallback format, and member pytest commands can run in parallel. All mapped uv commands default to `cache: false` and run at the repository root. Detected-tool commands use `--frozen`. Turborepo does not invoke uv during discovery and never creates or updates `uv.lock`; refresh it explicitly with `uv lock`.
+Detected quality-tool and fallback `check` commands run serially in the `uv` execution group. Build, fallback format, and member pytest commands can run in parallel. Commands run at the repository root. Detected-tool commands use `--frozen`. Turborepo never creates or updates `uv.lock`; refresh it explicitly with `uv lock`.
 
 Turborepo passes the member directory to pytest instead of searching for tests itself. Pytest's own collection rules therefore cover conventional `tests/` directories and colocated tests. The workspace command has no target so pytest can collect the repository-wide suite. Pytest's standard exit code `5` is preserved when a selected scope collects no tests.
 
@@ -199,7 +199,9 @@ Additionally, [`turbo query`](/docs/reference/query) can be used to understand y
 
 ## Caching behavior
 
-All built-in uv command tasks default to uncached because the uv, Python, tool, and isolated build-backend identities are not yet represented in their hashes. You can opt in with an explicit `cache: true` only when your repository pins the relevant toolchain.
+Turborepo identifies the installed uv frontend and the Python interpreter selected by `uv python find`. The identity includes the uv and Python executable content, Python implementation and version, operating system, architecture, libc, variant, and host compatibility details without including installation paths. When both identities are available, detected lint, check, and test tasks are cacheable by default. If identity resolution fails, requires downloading Python, or finds a repository-local uv executable, these tasks remain uncached so graph discovery continues safely.
+
+Format tasks remain uncached because they mutate source files. Build tasks also remain uncached because uv can resolve isolated PEP 517 build backends independently of `uv.lock`; those backend identities are not yet represented in the task hash. The fallback `uv check` task remains uncached because uv resolves its bundled checker independently of the workspace lockfile.
 
 Turborepo creates task hashes using:
 
@@ -209,8 +211,9 @@ Turborepo creates task hashes using:
 - Root `pyproject.toml`, `uv.toml`, `.python-version`, `ruff.toml`, `.ruff.toml`, `mypy.ini`, `.mypy.ini`, `pyrightconfig.json`, `pytest.ini`, `.pytest.ini`, `pytest.toml`, `.pytest.toml`, `setup.py`, `setup.cfg`, `tox.ini`, `ty.toml`, and `conftest.py`, when present
 - Relevant uv and pip environment variables (index selection, resolution mode, Python selection)
 - The resolved external dependency closure from `uv.lock`, scoped to each member. Root-owned tools conservatively include the workspace closure
+- The resolved uv and Python interpreter identities
 
-Automatic inputs exclude `.venv`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.pyright`, `.ty`, and `__pycache__`. Path-valued uv environment settings and active user or system uv configuration cannot yet be content-hashed safely, so they make automatic inputs untracked and disable caching unless you explicitly configure `cache`.
+Automatic inputs exclude `.venv`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.pyright`, `.ty`, and `__pycache__`. Path-valued uv environment settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user or system uv configuration, and any pass-through arguments cannot be content-hashed safely, so they disable automatic caching unless you explicitly configure `cache`.
 
 Project-specific hashing inputs must be accounted for manually. This includes:
 
@@ -223,7 +226,7 @@ For a bare `uv build`, Turborepo detects the matching sdist and wheel in the wor
 
 ## Watch mode
 
-Changes to any `pyproject.toml` or the root `uv.lock` trigger workspace rediscovery. Watch mode ignores root `.venv/` and `dist/` events and known Python and quality-tool cache directories at the root and member scopes.
+Changes to any `pyproject.toml`, the root `uv.lock`, `.python-version`, or `uv.toml` trigger workspace rediscovery. Watch mode ignores root `.venv/` and `dist/` events and known Python and quality-tool cache directories at the root and member scopes.
 
 ## Pruning
 
@@ -236,4 +239,4 @@ Changes to any `pyproject.toml` or the root `uv.lock` trigger workspace rediscov
 - Reachable local path, directory, editable, or virtual dependencies must be discovered workspace members at the same path recorded in `uv.lock`. Other local sources prevent graph construction because Turborepo cannot yet content-hash or prune them safely.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune a member instead.
 - Automatic tool discovery is limited to Ruff, Black, mypy, ty, Pyright, and pytest. Unsupported tools require normal task configuration; they are not inferred from Python metadata.
-- Tool versions, the Python interpreter, and build-backend identities are not yet hashed, so built-in command tasks remain uncached by default.
+- Isolated build-backend identities are not yet hashed, so built-in build tasks remain uncached by default.

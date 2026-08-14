@@ -132,7 +132,7 @@ fn test_pure_uv_workspace_task_graph() {
     assert_eq!(task_ids(&json), vec!["acme#check".to_string()]);
     assert_eq!(
         find_task(&json, "acme#check")["command"],
-        "uv check --all-packages"
+        "uv check --frozen --all-packages"
     );
 }
 
@@ -158,7 +158,7 @@ fn test_uv_filter_by_package() {
     assert_eq!(task_ids(&json), vec!["py-app#check".to_string()]);
     assert_eq!(
         find_task(&json, "py-app#check")["command"],
-        "uv check --package=py-app"
+        "uv check --frozen --package=py-app"
     );
 
     let json = dry_run_tasks(tempdir.path(), &["build"]);
@@ -589,6 +589,60 @@ fn test_uv_build_executes_without_caching() {
     assert!(
         !stdout.contains("FULL TURBO"),
         "build must be uncached: {stdout}"
+    );
+}
+
+#[test]
+fn test_uv_quality_tasks_cache_with_toolchain_identity() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"ruff\"]\n",
+    );
+    let lock = std::process::Command::new("uv")
+        .arg("lock")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv lock runs");
+    assert_command_success(&lock, "uv lock");
+
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let mut command = common::turbo_command(tempdir.path());
+    let output = command
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+        .env("UV_NO_CONFIG", "1")
+        .args(["lint:ruff", "--filter=py-lib", "--dry-run=json"])
+        .output()
+        .expect("failed to execute turbo");
+    assert_command_success(&output, "cacheable quality dry-run");
+    let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
+        true
+    );
+
+    let run = || {
+        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+        let mut command = common::turbo_command(tempdir.path());
+        command
+            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+            .env("UV_NO_CONFIG", "1")
+            .args(["lint:ruff", "--filter=py-lib", "--log-order=grouped"])
+            .output()
+            .expect("failed to execute turbo")
+    };
+    assert_command_success(&run(), "first cacheable quality run");
+    let second = run();
+    assert_command_success(&second, "second cacheable quality run");
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
     );
 }
 
