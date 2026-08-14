@@ -36,7 +36,7 @@ const FEATURES: HomepageFeature[] = [
   {
     title: "Works with any provider",
     description:
-      "Integrate with any CI provider to keep every workflow fast as your team and codebase grow.",
+      "Integrate with any CI provider to keep workflows fast as your team and codebase grow.",
     illustration: <ProviderBadges />,
   },
   {
