@@ -514,6 +514,8 @@ pub(crate) fn retain_strict_task_graph(
     let mut retained = command_entrypoints.clone();
     retained.extend(engine.collect_task_dependencies(&command_entrypoints));
 
+    let mut reaches_command = HashMap::new();
+
     for entrypoints in orchestration.values() {
         let selected_entrypoints: HashSet<_> =
             entrypoints.intersection(&selected).cloned().collect();
@@ -521,14 +523,20 @@ pub(crate) fn retain_strict_task_graph(
             continue;
         }
 
-        let has_command_path = entrypoints
-            .iter()
-            .any(|entrypoint| orchestration_branch(&engine, pkg_dep_graph, entrypoint).is_some());
+        let has_command_path = entrypoints.iter().any(|entrypoint| {
+            orchestration_reaches_command(&engine, pkg_dep_graph, entrypoint, &mut reaches_command)
+        });
         let mut paths_to_commands = HashSet::new();
+        let mut visited = HashSet::new();
         for entrypoint in &selected_entrypoints {
-            if let Some(branch) = orchestration_branch(&engine, pkg_dep_graph, entrypoint) {
-                paths_to_commands.extend(branch);
-            }
+            collect_orchestration_branch(
+                &engine,
+                pkg_dep_graph,
+                entrypoint,
+                &mut reaches_command,
+                &mut visited,
+                &mut paths_to_commands,
+            );
         }
 
         if !has_command_path {
@@ -545,32 +553,66 @@ pub(crate) fn retain_strict_task_graph(
     engine.retain_task_subset(&retained)
 }
 
-fn orchestration_branch(
+fn orchestration_reaches_command(
     engine: &Engine,
     pkg_dep_graph: &PackageGraph,
     task_id: &TaskId<'static>,
-) -> Option<HashSet<TaskId<'static>>> {
-    if task_has_command(engine, pkg_dep_graph, task_id) {
-        let entrypoint = HashSet::from([task_id.clone()]);
-        let mut retained = entrypoint.clone();
-        retained.extend(engine.collect_task_dependencies(&entrypoint));
-        return Some(retained);
+    memo: &mut HashMap<TaskId<'static>, bool>,
+) -> bool {
+    if let Some(reaches_command) = memo.get(task_id) {
+        return *reaches_command;
     }
 
-    let mut retained = HashSet::new();
+    let reaches_command = task_has_command(engine, pkg_dep_graph, task_id)
+        || engine
+            .dependencies(task_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|dependency| match dependency {
+                TaskNode::Task(task) => Some(task),
+                TaskNode::Root => None,
+            })
+            .any(|dependency| {
+                orchestration_reaches_command(engine, pkg_dep_graph, dependency, memo)
+            });
+    memo.insert(task_id.clone(), reaches_command);
+    reaches_command
+}
+
+fn collect_orchestration_branch(
+    engine: &Engine,
+    pkg_dep_graph: &PackageGraph,
+    task_id: &TaskId<'static>,
+    reaches_command: &mut HashMap<TaskId<'static>, bool>,
+    visited: &mut HashSet<TaskId<'static>>,
+    retained: &mut HashSet<TaskId<'static>>,
+) {
+    if !orchestration_reaches_command(engine, pkg_dep_graph, task_id, reaches_command)
+        || !visited.insert(task_id.clone())
+    {
+        return;
+    }
+
+    retained.insert(task_id.clone());
+    if task_has_command(engine, pkg_dep_graph, task_id) {
+        let command = HashSet::from([task_id.clone()]);
+        retained.extend(engine.collect_task_dependencies(&command));
+        return;
+    }
+
     for dependency in engine.dependencies(task_id).into_iter().flatten() {
         let TaskNode::Task(dependency) = dependency else {
             continue;
         };
-        if let Some(branch) = orchestration_branch(engine, pkg_dep_graph, dependency) {
-            retained.extend(branch);
-        }
+        collect_orchestration_branch(
+            engine,
+            pkg_dep_graph,
+            dependency,
+            reaches_command,
+            visited,
+            retained,
+        );
     }
-
-    (!retained.is_empty()).then(|| {
-        retained.insert(task_id.clone());
-        retained
-    })
 }
 
 #[cfg(test)]
@@ -827,6 +869,67 @@ mod tests {
         let result = super::retain_strict_task_graph(engine, &pkg_graph, selected, &orchestration);
 
         assert!(result.task_ids().next().is_none());
+    }
+
+    #[tokio::test]
+    async fn orchestration_branch_handles_converging_dependency_dag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["app"]).await;
+
+        let entrypoint = TaskId::new("app", "entrypoint");
+        let layers: Vec<Vec<_>> = (0..64)
+            .map(|layer| {
+                (0..2)
+                    .map(|node| TaskId::new("app", &format!("layer-{layer}-{node}")).into_owned())
+                    .collect()
+            })
+            .collect();
+        let mut tasks = vec![(entrypoint.clone(), TaskDefinition::default())];
+        for (layer, task_ids) in layers.iter().enumerate() {
+            tasks.extend(task_ids.iter().cloned().map(|task_id| {
+                let definition = if layer == layers.len() - 1 {
+                    command_def()
+                } else {
+                    TaskDefinition::default()
+                };
+                (task_id, definition)
+            }));
+        }
+
+        let mut edges = Vec::new();
+        edges.extend(
+            layers[0]
+                .iter()
+                .cloned()
+                .map(|dependency| (entrypoint.clone(), dependency)),
+        );
+        for adjacent_layers in layers.windows(2) {
+            for task_id in &adjacent_layers[0] {
+                edges.extend(
+                    adjacent_layers[1]
+                        .iter()
+                        .cloned()
+                        .map(|dependency| (task_id.clone(), dependency)),
+                );
+            }
+        }
+        let engine = make_engine(&tasks, &edges);
+        let mut reaches_command = HashMap::new();
+        let mut visited = HashSet::new();
+        let mut retained = HashSet::new();
+
+        super::collect_orchestration_branch(
+            &engine,
+            &pkg_graph,
+            &entrypoint,
+            &mut reaches_command,
+            &mut visited,
+            &mut retained,
+        );
+
+        assert_eq!(retained.len(), tasks.len());
+        assert!(reaches_command.len() <= tasks.len());
     }
 
     /// `--filter=web...` should pick up cross-package task deps.
