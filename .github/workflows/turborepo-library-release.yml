@@ -285,7 +285,7 @@ jobs:
   create-release-pr:
     name: Create Release PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     permissions:
       actions: write
       contents: write
@@ -325,39 +325,37 @@ jobs:
           PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
           BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
           HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_CREATED_AT=$(jq -r '.created_at' <<< "$PR")
           PR_BASE_SHA="$BASE_SHA" \
           PR_HEAD_SHA="$HEAD_SHA" \
           PR_HEAD_REF="$BRANCH" \
           PR_TITLE="chore: Release Turbo repository packages ${VERSION}" \
             node scripts/validate-release-pr.mjs
 
-          DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
-          gh workflow run release-pr-checks.yml \
-            --ref "$BRANCH" \
-            -f pr-number="$PR_NUM" \
-            -f expected-head-sha="$HEAD_SHA" \
-            -f run-id="$DISPATCH_ID"
-
-          CHECK_RUN_ID=""
-          for _ in $(seq 1 30); do
-            CHECK_RUN_ID=$(gh run list \
-              --workflow release-pr-checks.yml \
-              --branch "$BRANCH" \
-              --event workflow_dispatch \
-              --limit 20 \
-              --json databaseId,displayTitle,headSha \
-              --jq "[.[] | select(.displayTitle == \"Release PR checks ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
-            if [ -n "$CHECK_RUN_ID" ]; then
-              break
+          for WORKFLOW in release-review-gate.yml turborepo-test.yml test-js-packages.yml; do
+            RUN_ID=""
+            for _ in $(seq 1 30); do
+              RUN_ID=$(gh api --method GET \
+                "repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs" \
+                -f event=pull_request \
+                -f per_page=20 \
+                --jq "[.workflow_runs[] | select(.event == \"pull_request\" and .head_sha == \"${HEAD_SHA}\" and .head_branch == \"${BRANCH}\" and .head_repository.full_name == \"${{ github.repository }}\" and .actor.login == \"github-actions[bot]\" and .triggering_actor.login == \"github-actions[bot]\" and .created_at >= \"${PR_CREATED_AT}\" and (([.pull_requests[].number] | length) == 0 or ([.pull_requests[].number] | index(${PR_NUM})) != null))][0].id // \"\"")
+              if [ -n "$RUN_ID" ]; then
+                break
+              fi
+              sleep 2
+            done
+            if [ -z "$RUN_ID" ]; then
+              echo "::error::Unable to find approval-required ${WORKFLOW} run for ${HEAD_SHA}"
+              exit 1
             fi
-            sleep 2
+            RUN_CONCLUSION=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" --jq '.conclusion // ""')
+            if [ "$RUN_CONCLUSION" = "action_required" ]; then
+              gh api --method POST "repos/${{ github.repository }}/actions/runs/${RUN_ID}/approve" --silent
+            fi
           done
-          if [ -z "$CHECK_RUN_ID" ]; then
-            echo "::error::Unable to find dispatched release PR checks run"
-            exit 1
-          fi
 
-          gh run watch "$CHECK_RUN_ID" --exit-status
+          gh pr checks "$PR_NUM" --repo "${{ github.repository }}" --required --watch --fail-fast
           CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
           if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
                 "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \
