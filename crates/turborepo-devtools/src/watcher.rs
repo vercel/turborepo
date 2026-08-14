@@ -44,6 +44,7 @@ const RELEVANT_FILES: &[&str] = &[
     "pnpm-lock.yaml",
     "nub.lock",
     "lock.yaml",
+    "bun.lock",
     "bun.lockb",
     "Cargo.toml",
     "Cargo.lock",
@@ -225,6 +226,8 @@ mod tests {
         assert!(is_relevant_file(Path::new("pnpm-workspace.yaml")));
         assert!(is_relevant_file(Path::new("nub.lock")));
         assert!(is_relevant_file(Path::new("lock.yaml")));
+        assert!(is_relevant_file(Path::new("bun.lock")));
+        assert!(is_relevant_file(Path::new("bun.lockb")));
         assert!(is_relevant_file(Path::new("crates/app/Cargo.toml")));
         assert!(is_relevant_file(Path::new("Cargo.lock")));
         assert!(!is_relevant_file(Path::new("index.ts")));

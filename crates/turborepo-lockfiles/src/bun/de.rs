@@ -15,11 +15,11 @@ use crate::bun::RootInfo;
 // symlink     -> [ "name@link:path", INFO ]
 // folder      -> [ "name@file:path", INFO ]
 // workspace   -> [ "name@workspace:path", INFO ]
-// tarball     -> [ "name@tarball", INFO ]
+// local tarball -> [ "name@./path.tgz", INFO, integrity? ]
+// remote tarball -> [ "name@https://host/path.tgz", INFO, integrity? ]
 // root        -> [ "name@root:", { bin, binDir } ]
-// git         -> [ "name@git+repo", INFO, .bun-tag string (TODO: remove this) ]
-// github      -> [ "name@github:user/repo", INFO, .bun-tag string (TODO: remove
-// this) ]
+// git         -> [ "name@git+repo", INFO, .bun-tag string, integrity? ]
+// github      -> [ "name@github:user/repo", INFO, .bun-tag string, integrity? ]
 impl<'de> Deserialize<'de> for PackageEntry {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -65,6 +65,7 @@ impl<'de> Deserialize<'de> for PackageEntry {
                 info,
                 registry,
                 checksum: None,
+                integrity: None,
                 root,
             });
         }
@@ -88,17 +89,26 @@ impl<'de> Deserialize<'de> for PackageEntry {
             info = vals.pop_front().and_then(val_to_info);
         }
 
-        // Checksum is last
-        let checksum = vals.pop_front().and_then(|val| match val {
-            Vals::Str(sha) => Some(sha),
-            Vals::Info(_) => None,
-        });
+        let mut next_string = || {
+            vals.pop_front().and_then(|val| match val {
+                Vals::Str(s) => Some(s),
+                Vals::Info(_) => None,
+            })
+        };
+        let checksum = next_string();
+        // Only git/github entries carry a further element after the checksum.
+        let integrity = if is_git_or_github_package(&key) {
+            next_string()
+        } else {
+            None
+        };
 
         Ok(Self {
             ident: key,
             info,
             registry,
             checksum,
+            integrity,
             root: None,
         })
     }
@@ -170,6 +180,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("sha".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -187,6 +198,7 @@ mod test {
             }),
             registry: None,
             checksum: None,
+            integrity: None,
             root: None,
         }
     );
@@ -203,6 +215,7 @@ mod test {
             info: None,
             registry: None,
             checksum: None,
+            integrity: None,
         }
     );
 
@@ -220,6 +233,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("24a971c".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -241,6 +255,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("24a971c".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -259,6 +274,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("abc123".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -277,6 +293,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: None,
+            integrity: None,
             root: None,
         }
     );
@@ -290,6 +307,98 @@ mod test {
             registry: None,
             info: Some(PackageInfo::default()),
             checksum: None,
+            integrity: None,
+            root: None,
+        }
+    );
+
+    fixture!(
+        workspace_with_bin,
+        WorkspaceEntry,
+        WorkspaceEntry {
+            name: "cli".into(),
+            bin: Some(json!({"cli": "bin/cli.js"})),
+            ..Default::default()
+        }
+    );
+
+    fixture!(
+        workspace_with_bin_dir,
+        WorkspaceEntry,
+        WorkspaceEntry {
+            name: "scripts".into(),
+            bin_dir: Some("bin".into()),
+            ..Default::default()
+        }
+    );
+
+    fixture!(
+        root_workspace_without_name,
+        WorkspaceEntry,
+        WorkspaceEntry {
+            dependencies: Some(
+                Some(("is-odd".to_string(), "3.0.1".to_string()))
+                    .into_iter()
+                    .collect()
+            ),
+            ..Default::default()
+        }
+    );
+
+    fixture!(
+        root_pkg_with_object_bin,
+        PackageEntry,
+        PackageEntry {
+            ident: "some-package@root:".into(),
+            root: Some(RootInfo {
+                bin: Some(json!({"some-package": "cli.js"})),
+                bin_dir: None,
+            }),
+            info: None,
+            registry: None,
+            checksum: None,
+            integrity: None,
+        }
+    );
+
+    fixture!(
+        root_pkg_without_bins,
+        PackageEntry,
+        PackageEntry {
+            ident: "some-package@root:".into(),
+            root: Some(RootInfo {
+                bin: None,
+                bin_dir: None,
+            }),
+            info: None,
+            registry: None,
+            checksum: None,
+            integrity: None,
+        }
+    );
+
+    fixture!(
+        git_pkg_with_integrity,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-package@git+https://github.com/user/repo#abc123".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: Some("abc123".into()),
+            integrity: Some("sha512-integrity".into()),
+            root: None,
+        }
+    );
+
+    fixture!(
+        local_tarball_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "bar@./vendor/bar-0.0.2.tgz".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: Some("sha512-bar".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -304,6 +413,13 @@ mod test {
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", "", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_corrupted_input() ; "github package with corrupted 4-element input")]
     #[test_case(json!(["@api/sdk@file:apps/api/.api/apis/sdk", {"dependencies": {"is-odd": "^3.0.1"}}]), file_pkg() ; "file package")]
     #[test_case(json!(["my-pkg@link:../../local-pkg", {}]), link_pkg() ; "link package")]
+    #[test_case(json!({"name": "cli", "bin": {"cli": "bin/cli.js"}}), workspace_with_bin() ; "workspace entry with bin")]
+    #[test_case(json!({"name": "scripts", "binDir": "bin"}), workspace_with_bin_dir() ; "workspace entry with binDir")]
+    #[test_case(json!({"dependencies": {"is-odd": "3.0.1"}}), root_workspace_without_name() ; "root workspace entry without name")]
+    #[test_case(json!(["some-package@root:", {"bin": {"some-package": "cli.js"}}]), root_pkg_with_object_bin() ; "root package with object bin")]
+    #[test_case(json!(["some-package@root:", {}]), root_pkg_without_bins() ; "root package without bins")]
+    #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {}, "abc123", "sha512-integrity"]), git_pkg_with_integrity() ; "git package with integrity")]
+    #[test_case(json!(["bar@./vendor/bar-0.0.2.tgz", {}, "sha512-bar"]), local_tarball_pkg() ; "local tarball package")]
     fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
         input: serde_json::Value,
         expected: &T,
