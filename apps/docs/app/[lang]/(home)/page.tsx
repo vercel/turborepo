@@ -63,7 +63,7 @@ const AGENT_FEATURES: HomepageFeature[] = [
   {
     title: "Monorepo expertise, on demand",
     description:
-      "Agent Skills give your coding agent Turborepo best practices and the context it needs to make confident changes across your monorepo.",
+      "Agent Skills give your coding agent Turborepo best practices and the context it needs to make the right changes across your monorepo.",
     illustration: <AgentSkillsVisual />,
   },
   {

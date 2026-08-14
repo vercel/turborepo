@@ -10,9 +10,9 @@ export function RemoteCacheVisual() {
           <span className="text-green-900">129 cached</span>, 129 total
         </p>
         <p className="text-gray-900">
-          80ms &gt;&gt;&gt;{" "}
+          80ms{" "}
           <span className="bg-gradient-to-r from-[#FF1E56] to-[#0096FF] bg-clip-text text-transparent">
-            FULL TURBO
+            &gt;&gt;&gt; FULL TURBO
           </span>
         </p>
       </div>
