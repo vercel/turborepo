@@ -708,8 +708,9 @@ the shared repository graph.
   fallback `check` commands use the `uv` serial group. Detected lint, check, and
   test commands default to cacheable when uv and Python identities resolve;
   otherwise they fail closed to uncached. The fallback `uv check` stays uncached
-  because its bundled checker is not represented in `uv.lock`. Build commands
-  remain uncached because isolated PEP 517 backend identities are not represented,
+  because its bundled checker is not represented in `uv.lock`. Builds using
+  `uv_build` cache when their sole build requirement accepts the identified uv
+  executable's bundled backend version. Other PEP 517 builds remain uncached,
   and format commands remain uncached because they mutate source. Detected-tool commands use `--frozen`;
   Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
   inserted before path targets. Active aggregates reject them and name the

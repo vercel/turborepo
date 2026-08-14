@@ -556,23 +556,32 @@ fn test_uv_lock_change_affects_all_packages() {
 }
 
 #[test]
-fn test_uv_build_executes_without_caching() {
+fn test_uv_build_caches_bundled_backend() {
     if !uv_available() {
         return;
     }
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
-    let dry_run = dry_run_tasks(tempdir.path(), &["build", "--filter=py-app"]);
+    let run = |args: &[&str]| {
+        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+        let mut command = common::turbo_command(tempdir.path());
+        command
+            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+            .env("UV_NO_CONFIG", "1")
+            .args(args)
+            .output()
+            .expect("failed to execute turbo")
+    };
+    let output = run(&["build", "--filter=py-app", "--dry-run=json"]);
+    assert_command_success(&output, "build dry-run");
+    let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(
         find_task(&dry_run, "py-app#build")["resolvedTaskDefinition"]["cache"],
-        false
+        true
     );
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["build", "--filter=py-app", "--log-order", "grouped"],
-    );
+    let output = run(&["build", "--filter=py-app", "--log-order", "grouped"]);
     assert_command_success(&output, "first build");
     let wheel_exists = || {
         fs::read_dir(tempdir.path().join("dist"))
@@ -585,11 +594,15 @@ fn test_uv_build_executes_without_caching() {
     };
     assert!(wheel_exists(), "uv build must produce a wheel in dist/");
 
+    fs::remove_dir_all(tempdir.path().join("dist")).unwrap();
+    let output = run(&["build", "--filter=py-app", "--log-order", "grouped"]);
+    assert_command_success(&output, "cached build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("FULL TURBO"),
-        "build must be uncached: {stdout}"
+        stdout.contains("FULL TURBO"),
+        "expected build cache hit: {stdout}"
     );
+    assert!(wheel_exists(), "cache hit must restore the wheel");
 }
 
 #[test]

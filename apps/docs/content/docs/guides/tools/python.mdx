@@ -201,7 +201,7 @@ Additionally, [`turbo query`](/docs/reference/query) can be used to understand y
 
 Turborepo identifies the installed uv frontend and the Python interpreter selected by `uv python find`. The identity includes the uv and Python executable content, Python implementation and version, operating system, architecture, libc, variant, and host compatibility details without including installation paths. When both identities are available, detected lint, check, and test tasks are cacheable by default. If identity resolution fails, requires downloading Python, or finds a repository-local uv executable, these tasks remain uncached so graph discovery continues safely.
 
-Format tasks remain uncached because they mutate source files. Build tasks also remain uncached because uv can resolve isolated PEP 517 build backends independently of `uv.lock`; those backend identities are not yet represented in the task hash. The fallback `uv check` task remains uncached because uv resolves its bundled checker independently of the workspace lockfile.
+Format tasks remain uncached because they mutate source files. Builds using `uv_build` are cacheable when the package's sole build requirement accepts the bundled backend version in the identified uv executable. Other PEP 517 builds remain uncached because uv can resolve isolated backend dependencies independently of `uv.lock`. The fallback `uv check` task remains uncached because uv resolves its bundled checker independently of the workspace lockfile.
 
 Turborepo creates task hashes using:
 
@@ -239,4 +239,4 @@ Changes to any `pyproject.toml`, the root `uv.lock`, `.python-version`, or `uv.t
 - Reachable local path, directory, editable, or virtual dependencies must be discovered workspace members at the same path recorded in `uv.lock`. Other local sources prevent graph construction because Turborepo cannot yet content-hash or prune them safely.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune a member instead.
 - Automatic tool discovery is limited to Ruff, Black, mypy, ty, Pyright, and pytest. Unsupported tools require normal task configuration; they are not inferred from Python metadata.
-- Isolated build-backend identities are not yet hashed, so built-in build tasks remain uncached by default.
+- Non-bundled isolated build-backend identities are not yet hashed, so those build tasks remain uncached by default.

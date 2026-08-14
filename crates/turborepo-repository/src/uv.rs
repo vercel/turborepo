@@ -196,10 +196,18 @@ pub fn is_valid_workspace_name(name: &str) -> bool {
 struct PyProjectManifest {
     project: Option<ProjectTable>,
     #[serde(rename = "build-system")]
-    build_system: Option<toml::Value>,
+    build_system: Option<BuildSystemTable>,
     #[serde(default, rename = "dependency-groups")]
     dependency_groups: BTreeMap<String, toml::Value>,
     tool: Option<ToolTable>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct BuildSystemTable {
+    #[serde(default)]
+    requires: Vec<String>,
+    #[serde(rename = "build-backend")]
+    build_backend: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -283,6 +291,14 @@ impl PyProjectManifest {
 
     fn is_buildable(&self) -> bool {
         self.build_system.is_some() || self.uv().and_then(|uv| uv.package) == Some(true)
+    }
+
+    fn bundled_uv_build_requirement(&self) -> Option<&str> {
+        let build_system = self.build_system.as_ref()?;
+        (build_system.build_backend.as_deref() == Some("uv_build")
+            && build_system.requires.len() == 1
+            && normalize_name(pep508_name(&build_system.requires[0])?) == "uv-build")
+            .then(|| build_system.requires[0].as_str())
     }
 
     /// All declared dependency strings, tagged with their semantic role.
@@ -736,6 +752,7 @@ pub struct UvPackage {
     pub relationships: Vec<Relationship>,
     /// Whether uv can build this member as a Python distribution.
     pub buildable: bool,
+    bundled_uv_build_requirement: Option<String>,
     quality_plan: QualityPlan,
     pytest: Option<ToolExecution>,
 }
@@ -1054,6 +1071,9 @@ fn connect_packages(
                 manifest_path,
                 relationships: package_relationships,
                 buildable: manifest.is_buildable(),
+                bundled_uv_build_requirement: manifest
+                    .bundled_uv_build_requirement()
+                    .map(str::to_string),
                 quality_plan: QualityPlan::effective(root_tools, &member_tools),
                 pytest: member_tools.execution(PythonTool::Pytest),
             }
@@ -1166,6 +1186,7 @@ pub fn native_tasks_for_package(
     package: &str,
     package_directory: &str,
     workspace_directories: &[String],
+    build_cacheable: bool,
 ) -> Vec<crate::native_tasks::NativeTask> {
     let mut tasks = Vec::with_capacity(3);
     if kind == UvPackageKind::Package {
@@ -1175,7 +1196,7 @@ pub fn native_tasks_for_package(
             vec!["build".to_string(), format!("--package={package}")],
             Vec::new(),
             None,
-            false,
+            build_cacheable,
         ));
     }
 
@@ -1351,6 +1372,7 @@ fn python_tasks_for_package(
     pytest: Option<&ToolExecution>,
     emit_formatter_warning: bool,
     toolchain_identified: bool,
+    build_cacheable: bool,
 ) -> Vec<crate::native_tasks::NativeTask> {
     let targets = match kind {
         UvPackageKind::Package | UvPackageKind::VirtualPackage => {
@@ -1358,8 +1380,13 @@ fn python_tasks_for_package(
         }
         UvPackageKind::Workspace => workspace_directories.to_vec(),
     };
-    let mut tasks =
-        native_tasks_for_package(kind, package, package_directory, workspace_directories);
+    let mut tasks = native_tasks_for_package(
+        kind,
+        package,
+        package_directory,
+        workspace_directories,
+        build_cacheable,
+    );
 
     if plan.lint_homogeneous {
         let children: Vec<_> = plan
@@ -1830,6 +1857,56 @@ struct UvPythonIdentity {
     host: String,
 }
 
+struct UvToolchainIdentity {
+    packages: [turborepo_lockfiles::Package; 2],
+    uv_version: node_semver::Version,
+}
+
+fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version) -> bool {
+    let Some(name) = pep508_name(requirement) else {
+        return false;
+    };
+    if normalize_name(name) != "uv-build" {
+        return false;
+    }
+    let specifier = requirement[name.len()..].trim();
+    if specifier.is_empty() {
+        return true;
+    }
+    let mut range = Vec::new();
+    for clause in specifier.split(',').map(str::trim) {
+        let Some((operator, version)) =
+            [">=", "<=", "==", ">", "<"]
+                .into_iter()
+                .find_map(|operator| {
+                    clause
+                        .strip_prefix(operator)
+                        .map(|version| (operator, version))
+                })
+        else {
+            return false;
+        };
+        if version.is_empty()
+            || !version
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || byte == b'.')
+        {
+            return false;
+        }
+        let mut release = version.split('.').collect::<Vec<_>>();
+        if release.len() > 3 || release.iter().any(|component| component.is_empty()) {
+            return false;
+        }
+        release.resize(3, "0");
+        let version = release.join(".");
+        range.push(format!(
+            "{}{version}",
+            if operator == "==" { "=" } else { operator }
+        ));
+    }
+    node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
+}
+
 fn parse_python_identity(stdout: &str, binary_sha256: String, host: String) -> Option<String> {
     let [mut identity]: [UvPythonIdentity; 1] = serde_json::from_str::<Vec<_>>(stdout)
         .ok()?
@@ -1903,9 +1980,7 @@ fn successful_stdout(mut command: Command) -> Option<String> {
 /// Resolve the exact uv frontend and Python interpreter selected for this
 /// workspace. Discovery remains available without either binary, but native
 /// command tasks stay uncached until both identities can be proven.
-fn toolchain_identities(
-    repo_root: &AbsoluteSystemPath,
-) -> Option<[turborepo_lockfiles::Package; 2]> {
+fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIdentity> {
     let uv = std::fs::canonicalize(which::which("uv").ok()?).ok()?;
     if uv.starts_with(repo_root.as_std_path()) {
         return None;
@@ -1916,7 +1991,15 @@ fn toolchain_identities(
     uv_version
         .arg("--version")
         .current_dir(repo_root.as_std_path());
-    let uv_version = format!("{}\nsha256:{uv_sha256}", successful_stdout(uv_version)?);
+    let uv_version_output = successful_stdout(uv_version)?;
+    let uv_version = node_semver::Version::parse(
+        uv_version_output
+            .strip_prefix("uv ")?
+            .split_whitespace()
+            .next()?,
+    )
+    .ok()?;
+    let uv_identity = format!("{uv_version_output}\nsha256:{uv_sha256}");
 
     let mut python = Command::new(&uv);
     python
@@ -1941,16 +2024,19 @@ fn toolchain_identities(
     let python_identity = successful_stdout(python_identity)?;
     let python_identity = parse_python_identity(&python_identity, python_sha256, host)?;
 
-    Some([
-        turborepo_lockfiles::Package {
-            key: "uv".to_string(),
-            version: uv_version,
-        },
-        turborepo_lockfiles::Package {
-            key: "python".to_string(),
-            version: python_identity,
-        },
-    ])
+    Some(UvToolchainIdentity {
+        packages: [
+            turborepo_lockfiles::Package {
+                key: "uv".to_string(),
+                version: uv_identity,
+            },
+            turborepo_lockfiles::Package {
+                key: "python".to_string(),
+                version: python_identity,
+            },
+        ],
+        uv_version,
+    })
 }
 
 /// Per-package external dependency closures from uv.lock, for the packages'
@@ -2286,9 +2372,13 @@ impl RepositoryContributor for UvContributor {
             )
             .map_err(Error::from)
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
-            let toolchain_identities =
+            let toolchain_identity =
                 turborepo_rayon_compat::block_in_place(|| toolchain_identities(&self.repo_root));
-            let toolchain_identified = toolchain_identities.is_some();
+            let toolchain_identified = toolchain_identity.is_some();
+            let toolchain_packages = toolchain_identity
+                .as_ref()
+                .map(|identity| identity.packages.as_slice())
+                .unwrap_or_default();
 
             // The workspace-scoped closure covers every member plus the root
             // project's own dependencies (when the root is a package).
@@ -2296,7 +2386,7 @@ impl RepositoryContributor for UvContributor {
                 .values()
                 .flatten()
                 .cloned()
-                .chain(toolchain_identities.iter().flatten().cloned())
+                .chain(toolchain_packages.iter().cloned())
                 .collect();
 
             let mut discovered = Vec::with_capacity(packages.len() + 1);
@@ -2311,6 +2401,14 @@ impl RepositoryContributor for UvContributor {
                 let package_directory = package_directories
                     .get(&package.name)
                     .map_or(".", String::as_str);
+                let build_cacheable = toolchain_identity.as_ref().is_some_and(|identity| {
+                    package
+                        .bundled_uv_build_requirement
+                        .as_deref()
+                        .is_some_and(|requirement| {
+                            bundled_uv_build_matches(requirement, &identity.uv_version)
+                        })
+                });
                 let native_tasks = python_tasks_for_package(
                     kind,
                     &package.name,
@@ -2320,6 +2418,7 @@ impl RepositoryContributor for UvContributor {
                     package.pytest.as_ref(),
                     !workspace.quality_plan.format_homogeneous,
                     toolchain_identified,
+                    build_cacheable,
                 );
                 let task_contract = UvTaskContract::new(kind, &package.name);
                 let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
@@ -2327,7 +2426,7 @@ impl RepositoryContributor for UvContributor {
                     // Root-owned tools execute against the root environment.
                     external_dependencies.extend(workspace_externals.iter().cloned());
                 }
-                external_dependencies.extend(toolchain_identities.iter().flatten().cloned());
+                external_dependencies.extend(toolchain_packages.iter().cloned());
                 resolutions.push(package_resolution(
                     package.name.clone(),
                     &external_dependencies,
@@ -2360,6 +2459,7 @@ impl RepositoryContributor for UvContributor {
                 workspace.pytest.as_ref(),
                 true,
                 toolchain_identified,
+                false,
             );
             let workspace_task_contract =
                 UvTaskContract::workspace(&workspace_name, workspace_directories);
@@ -2977,6 +3077,31 @@ version = "0.1.0"
         )
         .unwrap();
         assert!(explicit_build.is_buildable());
+
+        let bundled: PyProjectManifest = toml::from_str(
+            "[project]\nname = \"app\"\n[build-system]\nrequires = \
+             [\"uv_build>=0.12,<0.13\"]\nbuild-backend = \"uv_build\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            bundled.bundled_uv_build_requirement(),
+            Some("uv_build>=0.12,<0.13")
+        );
+    }
+
+    #[test]
+    fn test_bundled_uv_build_version_compatibility() {
+        let version = node_semver::Version::parse("0.12.1").unwrap();
+        assert!(bundled_uv_build_matches("uv_build>=0.12,<0.13", &version));
+        assert!(bundled_uv_build_matches("uv-build==0.12.1", &version));
+        assert!(!bundled_uv_build_matches("uv-build==0.12", &version));
+        assert!(bundled_uv_build_matches(
+            "uv-build==0.12",
+            &node_semver::Version::parse("0.12.0").unwrap()
+        ));
+        assert!(!bundled_uv_build_matches("uv_build>=0.13", &version));
+        assert!(!bundled_uv_build_matches("uv_build~=0.12", &version));
+        assert!(!bundled_uv_build_matches("hatchling>=1", &version));
     }
 
     #[test]
@@ -3293,6 +3418,7 @@ overridden = { index = "private" }
             None,
             true,
             true,
+            false,
         );
         let display = |name| {
             tasks
@@ -3341,6 +3467,7 @@ overridden = { index = "private" }
             Some(&root_execution),
             true,
             true,
+            false,
         );
         let root_test = root_tasks
             .iter()
@@ -3368,6 +3495,7 @@ overridden = { index = "private" }
             Some(&member_execution),
             true,
             true,
+            false,
         );
         let member_test = member_tasks
             .iter()
@@ -3425,6 +3553,7 @@ overridden = { index = "private" }
             None,
             true,
             true,
+            false,
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
@@ -3482,6 +3611,7 @@ overridden = { index = "private" }
             None,
             true,
             true,
+            false,
         );
         let lint = tasks
             .iter()
@@ -3524,6 +3654,7 @@ overridden = { index = "private" }
             None,
             true,
             true,
+            false,
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
@@ -3582,8 +3713,13 @@ overridden = { index = "private" }
 
     #[test]
     fn test_uv_commands_stay_uncached_without_toolchain_identity() {
-        let tasks =
-            native_tasks_for_package(UvPackageKind::Package, "py-app", "packages/py-app", &[]);
+        let tasks = native_tasks_for_package(
+            UvPackageKind::Package,
+            "py-app",
+            "packages/py-app",
+            &[],
+            false,
+        );
 
         for task in tasks.iter().filter(|task| task.command().is_some()) {
             assert_eq!(
