@@ -119,11 +119,11 @@ export default function HomePage() {
       <section className="relative grid grid-cols-1 items-center gap-12 py-16 sm:py-40 lg:grid-cols-12 lg:gap-0">
         <div className="relative z-1 flex flex-col justify-center lg:col-span-7 lg:pr-16">
           <h1 className="lg:max-w-[700px] text-heading-40 sm:text-heading-48 xl:text-heading-64">
-            Your entire codebase, working at full speed
+            Your codebase, faster
           </h1>
           <p className="mt-6 text-balance  text-gray-900 text-copy-18">
-            Turborepo is a build system for JavaScript and TypeScript that runs
-            and caches tasks so developers, CI, and agents never repeat work.
+            Turborepo is the build system for agentic coding. Developers, CI,
+            and agents never do the same work twice.
           </p>
           <CommandPromptRoot className="items-start mt-4" defaultValue="humans">
             <CommandPromptList>
