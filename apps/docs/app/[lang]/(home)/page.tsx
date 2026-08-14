@@ -163,7 +163,7 @@ export default function HomePage() {
         title="Scale your workflows"
       />
       <FeatureSection
-        description="Give coding agents the context and fast feedback they need to work confidently across your respository."
+        description="Give coding agents the context and immediate feedback they need to work accurately across your repository."
         features={AGENT_FEATURES}
         title="Built for coding agents"
       />
