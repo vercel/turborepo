@@ -158,6 +158,77 @@ fn test_monorepo_missing_task_error() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[test]
+fn test_monorepo_dry_json_estimated_uncached_duration_all_misses() -> Result<(), anyhow::Error> {
+    let tempdir = tempfile::tempdir()?;
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false)?;
+    let json = turbo_dry_json(tempdir.path(), &["run", "build", "--dry=json"])?;
+
+    // Dry runs never execute tasks, so cache misses have no timing signal
+    // and the estimate is 0.
+    let tasks = json["tasks"].as_array().unwrap();
+    assert!(
+        tasks.iter().all(|t| t["cache"]["status"] == "MISS"),
+        "expected all cache misses in a fresh repo"
+    );
+    assert_eq!(json["estimatedUncachedDuration"], serde_json::json!(0));
+    Ok(())
+}
+
+#[test]
+fn test_monorepo_dry_json_estimated_uncached_duration_cache_hits() -> Result<(), anyhow::Error> {
+    let tempdir = tempfile::tempdir()?;
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false)?;
+
+    // Populate the cache with a real run, then dry-run against it.
+    let output = run_turbo(tempdir.path(), &["run", "build"]);
+    assert!(output.status.success());
+
+    // Scope to the cacheable build tasks; `another` has no build script and
+    // never caches.
+    let json = turbo_dry_json(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--dry=json",
+            "--filter=my-app",
+            "--filter=util",
+        ],
+    )?;
+
+    let tasks = json["tasks"].as_array().unwrap();
+    assert!(
+        tasks.iter().all(|t| t["cache"]["status"] == "HIT"),
+        "expected all cache hits after a real run, got: {tasks:?}"
+    );
+
+    // With no dependsOn wiring, my-app#build and util#build are parallel,
+    // so the estimate is the max of their timeSaved values, not the sum.
+    let max_saved = tasks
+        .iter()
+        .map(|t| t["cache"]["timeSaved"].as_u64().unwrap())
+        .max()
+        .unwrap();
+    assert!(
+        max_saved > 0,
+        "echo tasks should record a nonzero timeSaved, got: {tasks:?}"
+    );
+    let sum_saved: u64 = tasks
+        .iter()
+        .map(|t| t["cache"]["timeSaved"].as_u64().unwrap())
+        .sum();
+    assert_eq!(
+        json["estimatedUncachedDuration"].as_u64().unwrap(),
+        max_saved,
+    );
+    assert!(
+        max_saved < sum_saved,
+        "max ({max_saved}) should be less than the sum ({sum_saved}) for parallel tasks"
+    );
+    Ok(())
+}
+
 // === monorepo no changes ===
 
 #[test]

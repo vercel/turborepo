@@ -123,6 +123,90 @@ fn test_run_summary_monorepo() {
     // another#build not present (no build script)
     let another = get_task(first, "another#build");
     assert!(another.is_null());
+
+    // === estimatedUncachedDuration ===
+
+    // First run: both tasks were cache misses that executed, so the
+    // estimate is derived from measured execution durations. my-app#build
+    // and util#build are independent (my-app's `util: *` dependency has no
+    // `^build` wiring in turbo.json), so the estimate is the slower of the
+    // two tasks, not the sum.
+    let estimate = first["estimatedUncachedDuration"].as_u64().unwrap();
+    let app_duration = first_app["execution"]["endTime"].as_i64().unwrap()
+        - first_app["execution"]["startTime"].as_i64().unwrap();
+    let util_duration = first_util["execution"]["endTime"].as_i64().unwrap()
+        - first_util["execution"]["startTime"].as_i64().unwrap();
+    assert_eq!(estimate, app_duration.max(util_duration) as u64);
+    let wall_clock = first["execution"]["endTime"].as_i64().unwrap()
+        - first["execution"]["startTime"].as_i64().unwrap();
+    assert!(
+        estimate as i64 <= wall_clock,
+        "critical path estimate ({estimate}) should not exceed wall clock ({wall_clock})"
+    );
+
+    // Second run: both tasks were cache hits, so the estimate comes from
+    // each artifact's recorded timeSaved (the duration of the execution
+    // that produced it), again taking the max for parallel tasks.
+    let second_util = get_task(second, "util#build");
+    let hit_estimate = second["estimatedUncachedDuration"].as_u64().unwrap();
+    let app_saved = second_app["cache"]["timeSaved"].as_u64().unwrap();
+    let util_saved = second_util["cache"]["timeSaved"].as_u64().unwrap();
+    assert_eq!(hit_estimate, app_saved.max(util_saved));
+
+    // Cache hits restore nearly instantly, so the uncached estimate must
+    // far exceed the actual wall clock of the fully cached run.
+    let hit_wall_clock = second["execution"]["endTime"].as_i64().unwrap()
+        - second["execution"]["startTime"].as_i64().unwrap();
+    assert!(
+        hit_estimate as i64 > hit_wall_clock,
+        "estimate ({hit_estimate}) should exceed cached-run wall clock ({hit_wall_clock})"
+    );
+}
+
+#[test]
+fn test_run_summary_estimated_uncached_duration_dependency_chain() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
+
+    // Wire my-app#build to depend on ^build so the two tasks form a chain
+    // instead of running in parallel. The fixture turbo.json contains
+    // comments, so rewrite it wholesale instead of parsing it as JSON.
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "globalDependencies": ["foo.txt"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    run_turbo(tempdir.path(), &["run", "build", "--summarize"]);
+
+    let summaries = read_run_summaries(tempdir.path());
+    assert_eq!(summaries.len(), 1);
+    let summary = &summaries[0];
+
+    let app = get_task(summary, "my-app#build");
+    let util = get_task(summary, "util#build");
+    assert_eq!(app["cache"]["status"], "MISS");
+    assert_eq!(util["cache"]["status"], "MISS");
+
+    let app_duration = app["execution"]["endTime"].as_i64().unwrap()
+        - app["execution"]["startTime"].as_i64().unwrap();
+    let util_duration = util["execution"]["endTime"].as_i64().unwrap()
+        - util["execution"]["startTime"].as_i64().unwrap();
+
+    // A chain sums: util must finish before my-app starts.
+    let estimate = summary["estimatedUncachedDuration"].as_u64().unwrap();
+    assert_eq!(estimate, (app_duration + util_duration) as u64);
 }
 
 #[test]

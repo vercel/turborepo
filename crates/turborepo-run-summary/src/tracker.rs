@@ -76,6 +76,10 @@ pub struct RunSummary<'a> {
     packages: Vec<&'a PackageName>,
     env_mode: EnvMode,
     framework_inference: bool,
+    /// Estimated wall-clock duration, in milliseconds, of the critical path
+    /// through the task graph if no cache had existed. See
+    /// `estimated_duration` module docs for semantics and dry-run caveats.
+    estimated_uncached_duration: u64,
     tasks: Vec<TaskSummary>,
     user: String,
     scm: SCMState,
@@ -185,6 +189,7 @@ impl RunTracker {
             self.started_at,
             end_time,
         );
+        let estimated_uncached_duration = crate::estimated_uncached_duration(&tasks);
 
         Ok(RunSummary {
             id: Ksuid::new(None, None),
@@ -194,6 +199,7 @@ impl RunTracker {
             execution: Some(execution_summary),
             env_mode: global_env_mode,
             framework_inference: run_opts.framework_inference(),
+            estimated_uncached_duration,
             tasks,
             global_hash_summary,
             scm: scm_state,
@@ -342,6 +348,7 @@ pub struct SinglePackageRunSummary<'a> {
     global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
+    estimated_uncached_duration: u64,
     tasks: Vec<SinglePackageTaskSummary>,
     user: &'a str,
     pub scm: &'a SCMState,
@@ -365,6 +372,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
             global_hash_summary: &run_summary.global_hash_summary,
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
+            estimated_uncached_duration: run_summary.estimated_uncached_duration,
             tasks,
             user: &run_summary.user,
             scm: &run_summary.scm,

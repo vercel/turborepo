@@ -1095,6 +1095,14 @@ The summary module is responsible for any time of summary:
 
 - Stitches together result from visitor and the task tracker
 - Constructs final summary depending on user ask e.g. `--dry=json`/`--summarize`
+- Computes `estimatedUncachedDuration`
+  (`crates/turborepo-run-summary/src/estimated_duration.rs`): the critical
+  path through the task DAG as if nothing had been cached, in milliseconds.
+  Executed cache misses contribute their measured execution duration; cache
+  hits contribute the artifact's `timeSaved` metadata (0 when absent); tasks
+  with no timing information (e.g. dry-run misses) contribute 0. Parallel
+  branches are not summed; the estimate is the longest dependency chain and
+  ignores scheduling constraints like `--concurrency`.
 
 ### 8. Query Subsystem
 

@@ -51,7 +51,7 @@ pub struct TaskCacheSummary {
     dirty_hash: Option<String>,
 }
 
-#[derive(Debug, Serialize, Copy, Clone)]
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum CacheStatus {
     Hit,
@@ -171,6 +171,13 @@ impl TaskCacheSummary {
     // Used in observability/otel.rs to populate TaskMetricsPayload.cache_status
     pub(crate) fn status(&self) -> CacheStatus {
         self.status
+    }
+
+    /// Milliseconds saved by a cache hit, i.e. the duration of the execution
+    /// that originally produced the cache artifact. 0 for a cache miss and
+    /// for hits whose artifacts lack valid timing metadata.
+    pub(crate) fn time_saved(&self) -> u64 {
+        self.time_saved
     }
 
     // Used in observability/otel.rs to populate TaskMetricsPayload.cache_source

@@ -4,6 +4,7 @@
 //! and generating run summaries.
 
 mod duration;
+mod estimated_duration;
 mod execution;
 mod global_hash;
 pub mod observability;
@@ -13,6 +14,7 @@ mod task_factory;
 mod tracker;
 
 pub use duration::TurboDuration;
+pub use estimated_duration::estimated_uncached_duration;
 pub use execution::{
     ExecutionSummary, ExecutionTracker, IncrementalCacheSummary, SummaryState, TaskState,
     TaskSummaryInfo, TaskTracker,
