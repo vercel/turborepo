@@ -24,6 +24,7 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Resolve versions programmatically from their source of truth. Use npm registry metadata for npm packages and JavaScript package managers, Node release metadata for Node.js, and the relevant registry or release API for non-JavaScript toolchains.
 - Update direct dependencies, package managers, and versioned toolchain values to exact latest stable versions from registry or release metadata. Never write the literal `latest` tag into manifests. Do not introduce loose ranges like `^` or `~` when updating examples.
 - Major-version upgrades are expected. Apply them, then fix resulting breakage. Do not downgrade to the previous major to make validation easier.
+- Publication recency is never a reason to pick an older version. Take whatever the registry reports as `latest`, even when it was published minutes ago, and never use a release-age exclusion to get there. See "Release-Age Settings".
 - Treat `engines.node` as a versioned value to update to the latest stable Node release line unless a package manager literally cannot run on it. If the framework breaks on the latest Node, update or replace the framework/tooling usage until it works.
 - Prefer the repository's current Turborepo version and documented task naming conventions.
 
@@ -45,6 +46,14 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - For ESLint specifically, if `eslint-plugin-react` or legacy `.eslintrc` config blocks latest ESLint, migrate the example to flat config and either replace the incompatible plugin usage, drop nonessential React lint rules, or use framework/native lint coverage that works with latest ESLint. Do not pin ESLint 9 just because a plugin breaks on ESLint 10.
 - External package patching is a last resort, but it is allowed if there is no viable migration or replacement and it is required to keep latest direct dependencies working. Keep patches small, documented in package-manager-native patch metadata, and generated programmatically where the package manager supports it.
 - The only acceptable blocker is an unpublished package/version, unavailable registry/service, or missing credentials. Compatibility failures are not blockers; they are migration work.
+
+## Release-Age Settings
+
+- Never add or extend a release-age exclusion list: `minimumReleaseAgeExclude` (pnpm), `minimumReleaseAgeExcludes` (Bun), or `minimum-release-age-exclude` (npm). Upgrade dependencies to the latest published versions without that setting.
+- Do not add, raise, lower, or remove `minimumReleaseAge` either. Leave every example's release-age configuration exactly as it already is.
+- These settings only gate how fresh a published version may be. They are not a compatibility, safety, or validation tool, and excluding a package from them is never part of an upgrade.
+- `write_examples_file` and `create_pull_request` reject an example `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `bunfig.toml`, or `package.json` that contains an exclusion list. A rejection means remove the setting, not rename or relocate it.
+- If an install is blocked by a release-age gate the example does not own, report the failing install command as a blocker instead of excluding packages from the gate.
 
 ## Lockfiles
 
