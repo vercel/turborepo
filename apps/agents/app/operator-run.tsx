@@ -102,7 +102,8 @@ export function useOperatorRun(
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       const query = new URLSearchParams({ cursor: String(cursor) });
       const response = await fetch(
-        statusPath ?? `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?${query}`,
+        statusPath ??
+          `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?${query}`,
         { cache: "no-store" }
       );
       if (!response.ok) {

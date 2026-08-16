@@ -7,7 +7,8 @@ const AGENT_RUNS_URL =
 
 export default function OperatorPage() {
   const examples = listExamples();
-  const openCodeAuthConfigured = Boolean(process.env.OPENCODE_SERVER_TOKEN) !==
+  const openCodeAuthConfigured =
+    Boolean(process.env.OPENCODE_SERVER_TOKEN) !==
     Boolean(process.env.OPENCODE_SERVER_PASSWORD);
   const openCodeEnabled = Boolean(
     process.env.OPENCODE_SERVER_URL &&

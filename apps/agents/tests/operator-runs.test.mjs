@@ -11,7 +11,10 @@ test("workflow run capabilities bind a run to its OpenCode session", () => {
     { sessionID: "ses_eve_one", workflowRunID: "wrun_one" },
     "test-secret"
   );
-  assert.equal(verifyWorkflowRun(token, "ses_eve_one", "test-secret"), "wrun_one");
+  assert.equal(
+    verifyWorkflowRun(token, "ses_eve_one", "test-secret"),
+    "wrun_one"
+  );
   assert.equal(verifyWorkflowRun(token, "ses_eve_two", "test-secret"), null);
   assert.equal(verifyWorkflowRun(token, "ses_eve_one", "wrong-secret"), null);
 });

@@ -10,7 +10,9 @@ function serverHeaders(): HeadersInit {
   const token = process.env.OPENCODE_SERVER_TOKEN;
   const password = process.env.OPENCODE_SERVER_PASSWORD;
   if ((token ? 1 : 0) + (password ? 1 : 0) !== 1) {
-    throw new Error("Configure exactly one of OPENCODE_SERVER_TOKEN or OPENCODE_SERVER_PASSWORD");
+    throw new Error(
+      "Configure exactly one of OPENCODE_SERVER_TOKEN or OPENCODE_SERVER_PASSWORD"
+    );
   }
   if (token) headers.set("authorization", `Bearer ${token}`);
   if (password) {

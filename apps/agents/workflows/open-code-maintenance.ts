@@ -14,9 +14,8 @@ async function runOpenCodeMaintenance(
 ): Promise<OpenCodeMaintenanceResult> {
   "use step";
 
-  const { createRemoteOpenCodeAgent } = await import(
-    "../agent/lib/remote-opencode-agent"
-  );
+  const { createRemoteOpenCodeAgent } =
+    await import("../agent/lib/remote-opencode-agent");
   const agent = createRemoteOpenCodeAgent(input.title);
   const session = await agent.createSession({ sessionId: input.sessionID });
   try {
