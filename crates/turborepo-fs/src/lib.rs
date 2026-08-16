@@ -169,6 +169,7 @@ fn collect_entries(
     builder
         .hidden(false)
         .parents(false)
+        .require_git(false)
         .git_ignore(use_gitignore)
         .git_global(false)
         .git_exclude(use_gitignore);
@@ -787,6 +788,22 @@ mod tests {
                 .join_components(&["coverage", "report.txt"])
                 .exists()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_plan_honors_ignore_files_without_git_metadata() -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        root.join_component(".git").remove_dir_all()?;
+        let web = root.join_components(&["apps", "web"]);
+
+        let plan = CopyPlan::new([web.as_ref()], true, Some(&root))?;
+        let (_web_tmp, web_dst) = tmp_dir()?;
+        plan.copy(&web, &web_dst)?;
+
+        assert!(web_dst.join_components(&["src", "index.ts"]).exists());
+        assert!(!web_dst.join_component("node_modules").exists());
 
         Ok(())
     }
