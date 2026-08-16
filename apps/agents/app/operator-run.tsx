@@ -16,6 +16,7 @@ export interface RunStatus {
   readonly models?: RunModels;
   readonly sessionId?: string;
   readonly state: RunState;
+  readonly statusPath?: string;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -45,6 +46,8 @@ function isRunStatus(value: unknown): value is RunStatus {
     (candidate.sessionId === undefined ||
       typeof candidate.sessionId === "string") &&
     (candidate.models === undefined || isRunModels(candidate.models)) &&
+    (candidate.statusPath === undefined ||
+      typeof candidate.statusPath === "string") &&
     (candidate.cursor === undefined ||
       (typeof candidate.cursor === "number" &&
         Number.isInteger(candidate.cursor) &&
@@ -60,14 +63,17 @@ export function runLabel(status: RunStatus | null, idleLabel: string): string {
       : idleLabel;
 }
 
-export function useOperatorRun(action: OperatorRunAction) {
+export function useOperatorRun(
+  action: OperatorRunAction,
+  startPath = "/eve/v1/operator/runs"
+) {
   const [status, setStatus] = useState<RunStatus | null>(null);
 
   async function start(body: Record<string, string> = {}) {
     setStatus({ state: "starting" });
 
     try {
-      const response = await fetch("/eve/v1/operator/runs", {
+      const response = await fetch(startPath, {
         body: JSON.stringify(body),
         headers: {
           "content-type": "application/json",
@@ -84,18 +90,19 @@ export function useOperatorRun(action: OperatorRunAction) {
         throw new Error("The run returned an invalid session.");
       }
       setStatus(initialStatus);
-      await pollRun(initialStatus.sessionId);
+      await pollRun(initialStatus.sessionId, initialStatus.statusPath);
     } catch {
       setStatus((current) => ({ ...current, state: "error" }));
     }
   }
 
-  async function pollRun(sessionId: string) {
+  async function pollRun(sessionId: string, statusPath?: string) {
     let cursor = 0;
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      const query = new URLSearchParams({ cursor: String(cursor) });
       const response = await fetch(
-        `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?cursor=${cursor}`,
+        statusPath ?? `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?${query}`,
         { cache: "no-store" }
       );
       if (!response.ok) {

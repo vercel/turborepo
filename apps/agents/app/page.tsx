@@ -1,26 +1,19 @@
-import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
-
+import { listExamples } from "../agent/lib/examples";
 import { RunMaintenance } from "./run-maintenance";
 import { RunPerformance } from "./run-performance";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
 
-function listExamples(): string[] {
-  const examplesRoot = path.resolve(process.cwd(), "../../examples");
-  return readdirSync(examplesRoot, { withFileTypes: true })
-    .filter(
-      (entry) =>
-        entry.isDirectory() &&
-        existsSync(path.join(examplesRoot, entry.name, "package.json"))
-    )
-    .map((entry) => entry.name)
-    .sort();
-}
-
 export default function OperatorPage() {
   const examples = listExamples();
+  const openCodeAuthConfigured = Boolean(process.env.OPENCODE_SERVER_TOKEN) !==
+    Boolean(process.env.OPENCODE_SERVER_PASSWORD);
+  const openCodeEnabled = Boolean(
+    process.env.OPENCODE_SERVER_URL &&
+    process.env.OPERATOR_RUN_SECRET &&
+    openCodeAuthConfigured
+  );
   return (
     <main>
       <header className="hero">
@@ -67,7 +60,11 @@ export default function OperatorPage() {
           </div>
         </dl>
 
-        <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
+        <RunMaintenance
+          agentRunsUrl={AGENT_RUNS_URL}
+          examples={examples}
+          openCodeEnabled={openCodeEnabled}
+        />
       </section>
 
       <section className="operation" aria-labelledby="performance-title">

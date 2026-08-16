@@ -21,6 +21,7 @@ type SlackTestState =
 interface RunMaintenanceProps {
   readonly agentRunsUrl: string;
   readonly examples: string[];
+  readonly openCodeEnabled: boolean;
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
@@ -64,9 +65,13 @@ function isSlackTestResult(value: unknown): value is
 
 export function RunMaintenance({
   agentRunsUrl,
-  examples
+  examples,
+  openCodeEnabled
 }: RunMaintenanceProps) {
-  const { isBusy, start, status } = useOperatorRun(MAINTENANCE_RUN_ACTION);
+  const { isBusy, start, status } = useOperatorRun(
+    MAINTENANCE_RUN_ACTION,
+    openCodeEnabled ? "/api/open-code/runs" : undefined
+  );
   const [slackTest, setSlackTest] = useState<SlackTestState>({ state: "idle" });
   const [selectedExample, setSelectedExample] = useState(() =>
     dailyExample(examples)
