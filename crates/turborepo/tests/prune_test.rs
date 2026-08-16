@@ -579,8 +579,12 @@ fn test_prune_respects_root_gitignore_in_workspaces() {
         "module.exports = {};\n",
     )
     .unwrap();
+    fs::remove_dir_all(tempdir.path().join(".git")).unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--docker", "--use-gitignore"],
+    );
     assert!(
         output.status.success(),
         "prune failed: {}",
