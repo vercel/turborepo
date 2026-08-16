@@ -1,4 +1,5 @@
 import prettier from 'eslint-config-prettier';
+import turbo from 'eslint-config-turbo/flat';
 import path from 'node:path';
 import { includeIgnoreFile } from '@eslint/compat';
 import js from '@eslint/js';
@@ -13,6 +14,7 @@ export const config = defineConfig(
   includeIgnoreFile(gitignorePath),
   js.configs.recommended,
   ...ts.configs.recommended,
+  ...turbo,
   ...svelte.configs.recommended,
   prettier,
   ...svelte.configs.prettier,

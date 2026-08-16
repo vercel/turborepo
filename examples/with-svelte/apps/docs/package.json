@@ -8,9 +8,9 @@
 		"build": "svelte-kit sync && vite build",
 		"preview": "vite preview",
 		"test": "npm run test:integration && npm run test:unit",
-		"check-types": "tsc --noEmit",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"check-types": "svelte-kit sync && tsc --noEmit",
+		"check": "svelte-kit sync && tsc --noEmit",
+		"check:watch": "svelte-kit sync && tsc --noEmit --watch",
 		"lint": "eslint .",
 		"test:integration": "playwright test",
 		"test:unit": "vitest"
@@ -19,20 +19,20 @@
 		"@repo/ui": "workspace:*"
 	},
 	"devDependencies": {
+		"@playwright/test": "1.62.1",
 		"@repo/eslint-config": "workspace:*",
 		"@repo/typescript-config": "workspace:*",
-		"@sveltejs/adapter-auto": "^7.0.1",
-		"@types/node": "^24.12.0",
-		"@sveltejs/kit": "^2.55.0",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"eslint": "^9.39.4",
-		"prettier": "^3.8.1",
-		"prettier-plugin-svelte": "^3.5.1",
-		"svelte": "^5.54.1",
-		"svelte-check": "^4.4.5",
-		"tslib": "^2.8.1",
-		"typescript": "5.9.3",
-		"vite": "^8.0.1",
-		"vitest": "^4.1.0"
+		"@sveltejs/adapter-auto": "7.0.1",
+		"@sveltejs/kit": "2.70.2",
+		"@sveltejs/vite-plugin-svelte": "7.3.0",
+		"@types/node": "26.2.0",
+		"eslint": "10.8.1",
+		"prettier": "3.9.6",
+		"prettier-plugin-svelte": "4.1.1",
+		"svelte": "5.56.9",
+		"tslib": "2.8.1",
+		"typescript": "7.0.2",
+		"vite": "8.2.1",
+		"vitest": "4.1.10"
 	}
 }
