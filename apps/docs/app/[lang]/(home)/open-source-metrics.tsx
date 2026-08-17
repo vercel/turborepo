@@ -1,5 +1,11 @@
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 
+const FALLBACK = {
+  downloads: "17.5M",
+  openIssues: 0,
+  stars: "30.5K",
+};
+
 const formatNumber = (value: number): string => {
   if (value >= 1_000_000) {
     const millions = value / 1_000_000;
@@ -74,9 +80,9 @@ const fetchOpenIssues = async (): Promise<number> => {
 
 export async function OpenSourceMetrics() {
   const [downloads, repository, openIssues] = await Promise.all([
-    fetchDownloads(),
-    fetchRepositoryMetrics(),
-    fetchOpenIssues(),
+    fetchDownloads().catch(() => FALLBACK.downloads),
+    fetchRepositoryMetrics().catch(() => ({ stars: FALLBACK.stars })),
+    fetchOpenIssues().catch(() => FALLBACK.openIssues),
   ]);
 
   const metrics = [
