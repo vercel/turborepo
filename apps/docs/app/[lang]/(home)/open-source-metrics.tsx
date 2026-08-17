@@ -34,15 +34,29 @@ const getOpenIssuesLabel = (count: number): string => {
 
 const fetchDownloads = async (): Promise<string> => {
   const response = await fetch(
-    "https://api.npmjs.org/downloads/point/last-week/turbo",
+    "https://api.npmjs.org/downloads/range/last-month/turbo",
   );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch npm downloads: ${response.status}`);
   }
 
-  const data = (await response.json()) as { downloads: number };
-  return formatNumber(data.downloads);
+  const data = (await response.json()) as {
+    downloads: Array<{ downloads: number }>;
+  };
+
+  if (data.downloads.length < 21) {
+    throw new Error("Failed to fetch three weeks of npm downloads");
+  }
+
+  const recentDownloads = data.downloads.slice(-21);
+  const weeklyTotals = [0, 7, 14].map((start) =>
+    recentDownloads
+      .slice(start, start + 7)
+      .reduce((total, day) => total + day.downloads, 0),
+  );
+
+  return formatNumber(Math.max(...weeklyTotals));
 };
 
 const fetchRepositoryMetrics = async (): Promise<{
