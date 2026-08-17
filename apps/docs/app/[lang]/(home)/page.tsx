@@ -103,7 +103,7 @@ turbo run build test lint --affected`;
 
 export const metadata = createMetadata({
   description:
-    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
+    "Turborepo is the build system for coding agents.",
   canonicalPath: "/",
 });
 
@@ -122,7 +122,7 @@ export default function HomePage() {
             Your codebase, faster
           </h1>
           <p className="mt-6 text-balance  text-gray-900 text-copy-18">
-            Turborepo is the build system for agentic coding. Developers, CI,
+            Turborepo is the build system for coding agents. Developers, CI,
             and agents never do the same work twice.
           </p>
           <CommandPromptRoot className="items-start mt-4" defaultValue="humans">
