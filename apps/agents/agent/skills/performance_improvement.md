@@ -6,6 +6,8 @@ description: Use when finding, measuring, implementing, reviewing, and publishin
 
 Make one focused performance change that can be defended with repeatable measurements. Avoid dependency-only changes, broad refactors, generated files, release machinery, credentials, `.github/`, and this agent's own `apps/agents/` implementation.
 
+Prioritize end-to-end improvements that make representative Turborepo workflows faster, leaner, or more responsive for real users. Start with real repositories and realistic commands, then use synthetic workloads or microbenchmarks to isolate and corroborate the mechanism. A microbenchmark-only win is insufficient unless the measured hot path is demonstrably material to real-world usage.
+
 # Measurement
 
 1. From code inspection, state a falsifiable hypothesis, the affected code path, one primary workload and metric, and likely tradeoffs before editing.
@@ -29,6 +31,17 @@ Do not claim a percentage that the captured output does not support. Report the 
 - Turborepo has DHAT heap profiling. Build both binaries identically with `cargo build --profile release-turborepo -p turbo --features heap-dhat`, then invoke each with `--heap=<path>.json`. Compare the generated summary files for total allocations, allocated bytes, and peak requested live heap bytes. DHAT replaces the production allocator and excludes allocator overhead, fragmentation, mappings, and stacks; use an uninstrumented RSS measurement for production peak-memory claims. DHAT's overhead also makes it unsuitable for wall-clock claims.
 - On Linux, use `strace -f -c` to compare syscall counts and time, or a narrowly filtered `strace -f -e trace=<calls>` to investigate filesystem, process, or network overhead. Capture comparable baseline and candidate summaries. `strace` changes process timing substantially, so use it to explain syscall behavior rather than as wall-clock benchmark evidence.
 - Combine the relevant tools when a timing improvement might trade CPU time for allocations, memory, or system calls. Preserve diagnostic artifacts and summarize the relevant spans, allocation sites, or syscall changes in the review evidence.
+
+# Performance toolbox
+
+Select tools based on the hypothesis; do not run every tool mechanically or treat instrumented timings as end-to-end evidence.
+
+- Use Divan for statistically rigorous Rust microbenchmarks of hot paths after a representative workload identifies or motivates the path. Keep the end-to-end workload as the primary evidence.
+- Use Loom to exhaustively explore thread interleavings when changing hand-rolled synchronization. Its model validates concurrency behavior, not production performance.
+- Use Rust's ThreadSanitizer to detect data races in threaded code under representative tests or workloads. Record the nightly toolchain and sanitizer flags, and do not use sanitizer timings for performance claims.
+- Use `cargo-bloat` for native Rust binary contribution analysis and `twiggy` for WebAssembly size analysis. Compare identical release profiles and report both absolute and relative size changes.
+- Use `tokio-console` to inspect live async tasks, resources, wakeups, and stalls when the hypothesis involves the Turborepo daemon. Treat console output as diagnostic evidence and corroborate it with an end-to-end daemon workload.
+- Use Linux `perf` for CPU profiles and hardware counters such as cache misses and branch mispredictions. Keep builds, workloads, and counter collection comparable, and use the counters to explain rather than replace uninstrumented timing results.
 
 # Workload corpus
 
