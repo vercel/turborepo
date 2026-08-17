@@ -7,9 +7,9 @@ import {
 } from "@icons-pack/react-simple-icons";
 
 const providers = [
+  { label: "Vercel", Logo: SiVercel },
   { label: "GitHub", Logo: SiGithub },
   { label: "GitLab", Logo: SiGitlab },
-  { label: "Vercel", Logo: SiVercel },
   { label: "Jenkins", Logo: SiJenkins },
   { label: "CircleCI", Logo: SiCircleci },
 ];
