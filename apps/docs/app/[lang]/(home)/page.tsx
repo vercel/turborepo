@@ -90,16 +90,21 @@ const simpleTurboJson = `{
   }
 }`;
 
-const remoteCachingCommands = `# Login to Remote Cache
+const remoteCachingCommands = `# Link to Remote Cache
 turbo login
-# Link to Remote Cache
 turbo link
 
 # Run tasks
-turbo run build`;
+turbo run build
+turbo run build --affected`;
 
-const affectedTasksCommand = `# Run tasks affected by your changes
-turbo run build test lint --affected`;
+const intelligenceCommands = `# Find tasks
+turbo run
+# Find packages
+turbo ls
+
+# Get deep repository context
+turbo query --schema`;
 
 export const metadata = createMetadata({
   description:
@@ -182,19 +187,19 @@ export default function HomePage() {
         </div>
         <div className="mt-6 grid w-full auto-rows-fr grid-cols-1 items-stretch gap-x-6 gap-y-6 md:grid-cols-3 md:gap-y-10 lg:gap-y-12">
           <HighlightedCode
-            caption="Declaring a build task"
+            caption="Declare a build task"
             lang="json"
             code={simpleTurboJson}
           />
           <HighlightedCode
-            caption="Linking to Remote Cache and running tasks"
+            caption="Link to Remote Cache and run tasks"
             lang="bash"
             code={remoteCachingCommands}
           />
           <HighlightedCode
-            caption="Running affected tasks"
+            caption="Streamline monorepo intelligence"
             lang="bash"
-            code={affectedTasksCommand}
+            code={intelligenceCommands}
           />
         </div>
       </section>
