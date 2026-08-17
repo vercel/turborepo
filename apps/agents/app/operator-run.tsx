@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 
+import {
+  isHarnessId,
+  isSandboxId,
+  type HarnessId,
+  type SandboxId
+} from "../agent/lib/harnesses";
 import type { OperatorRunAction } from "../agent/lib/operator-runs";
 
 type RunState = "starting" | "running" | "done" | "error";
@@ -13,7 +19,9 @@ interface RunModels {
 
 export interface RunStatus {
   readonly cursor?: number;
+  readonly harness?: HarnessId;
   readonly models?: RunModels;
+  readonly sandbox?: SandboxId;
   readonly sessionId?: string;
   readonly state: RunState;
   readonly statusPath?: string;
@@ -43,9 +51,11 @@ function isRunStatus(value: unknown): value is RunStatus {
     (candidate.state === "running" ||
       candidate.state === "done" ||
       candidate.state === "error") &&
+    (candidate.harness === undefined || isHarnessId(candidate.harness)) &&
     (candidate.sessionId === undefined ||
       typeof candidate.sessionId === "string") &&
     (candidate.models === undefined || isRunModels(candidate.models)) &&
+    (candidate.sandbox === undefined || isSandboxId(candidate.sandbox)) &&
     (candidate.statusPath === undefined ||
       typeof candidate.statusPath === "string") &&
     (candidate.cursor === undefined ||
@@ -147,6 +157,8 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
       <div>
         <strong>{status.state}</strong>
         {status.sessionId ? <code>{status.sessionId}</code> : null}
+        {status.harness ? <code>harness {status.harness}</code> : null}
+        {status.sandbox ? <code>sandbox {status.sandbox}</code> : null}
         {status.models ? (
           <>
             <code>author {status.models.authorModel}</code>

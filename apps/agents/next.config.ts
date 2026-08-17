@@ -4,6 +4,11 @@ import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: [
+    "@ai-sdk/harness-claude-code",
+    "@ai-sdk/harness-codex",
+    "@ai-sdk/harness-opencode"
+  ],
   async headers() {
     return [
       {

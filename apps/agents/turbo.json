@@ -3,15 +3,16 @@
   "tasks": {
     "build": {
       "env": [
+        "BLOB_READ_WRITE_TOKEN",
+        "BLOB_STORE_ID",
+        "GITHUB_TOKEN_EXCHANGE_URL",
         "SLACK_CHANNEL_ID",
         "SLACK_CONNECT_UID",
         "SLACK_INSTALLATION_ID",
-        "OPENCODE_SERVER_PASSWORD",
-        "OPENCODE_SERVER_TOKEN",
-        "OPENCODE_SERVER_URL",
-        "OPERATOR_RUN_SECRET",
         "VERCEL",
-        "VERCEL_DEPLOYMENT_ID"
+        "VERCEL_DEPLOYMENT_ID",
+        "VERCEL_GIT_COMMIT_SHA",
+        "VERCEL_OIDC_TOKEN"
       ],
       "outputs": [
         ".eve/**",

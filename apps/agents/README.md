@@ -1,15 +1,17 @@
 # Turborepo Agents
 
-## Remote OpenCode maintenance
+The operator page and its API routes rely on Vercel Deployment Protection for access control. Keep Deployment Protection enabled for every deployed environment that exposes them.
 
-Manual daily-example maintenance can run in the shared OpenCode control plane. Performance runs and scheduled Eve automation are unchanged.
+## Harness maintenance
 
-Set all of the following to enable it:
+Manual daily-example maintenance runs with `HarnessAgent`. Operators can choose Claude Code, Codex, or OpenCode; each runs in an isolated Vercel Sandbox. Performance runs and scheduled Eve automation are unchanged.
 
-- `OPENCODE_SERVER_URL`: HTTPS origin of the shewbox master Sandbox proxy.
-- `OPENCODE_SERVER_TOKEN`: bearer token matching shewbox's `OPENCODE_HARNESS_TOKEN`.
-- `OPERATOR_RUN_SECRET`: random secret used to sign status URLs.
+Configure `GITHUB_TOKEN_EXCHANGE_URL`. The exchange endpoint receives Vercel OIDC bearer authentication and must return `{ "token": string, "expires_at": string }` for the requested `vercel/turborepo` write permissions. Vercel OIDC authenticates Vercel Sandbox and AI Gateway. GitHub authorization is injected by the sandbox network policy and is not exposed to agent processes.
 
-`OPENCODE_SERVER_PASSWORD` is supported instead of `OPENCODE_SERVER_TOKEN` for a direct OpenCode server, but not for shewbox. Configure exactly one authentication method. Incomplete configuration leaves manual maintenance on the existing Eve path.
+The workflow clones Turborepo into the selected sandbox and runs the chosen official Harness SDK adapter there. The adapter and sandbox registries in `agent/lib/harness-agent.ts` are independent, so another provider can be added without changing the workflow or run API.
 
-The current slice accepts text prompts, fixes the workspace at `/workspace/projects/turborepo`, and executes tools inside OpenCode. It does not support Harness host tools or suspended-turn continuation. Inspect the shared OpenCode UI for the transcript, tool activity, and file changes.
+## Unified run dashboard
+
+Connect a private Vercel Blob store to the project to enable the operator page's unified run dashboard. The recommended OIDC configuration provides `BLOB_STORE_ID` and `VERCEL_OIDC_TOKEN`; `BLOB_READ_WRITE_TOKEN` can provide local ledger access, but Harness execution and Sandbox inventory still require Vercel OIDC.
+
+Eve lifecycle hooks and Harness workflow steps write the same normalized ledger containing the latest 100 runs by start time. Collection begins after this version is deployed; it does not backfill older Agent Runs. The page polls that ledger and displays the eight most recently updated `ai-sdk-harness*` resources from the Vercel Sandbox API. Detailed transcripts remain in Agent Runs for Eve and Workflow observability for Harness.

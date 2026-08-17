@@ -5,8 +5,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   description:
-    "Operate scheduled Turborepo examples maintenance and performance improvements.",
-  title: "Turborepo Eve Operator"
+    "Observe and operate Turborepo agent runs across Eve, Harness, and Vercel Sandbox.",
+  title: "Turborepo Agent Control Plane"
 };
 
 interface RootLayoutProps {

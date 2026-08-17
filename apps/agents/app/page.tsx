@@ -1,20 +1,18 @@
 import { listExamples } from "../agent/lib/examples";
+import { listControlPlaneSnapshot } from "../agent/lib/run-registry";
 import { RunMaintenance } from "./run-maintenance";
+import { RunObservatory } from "./run-observatory";
 import { RunPerformance } from "./run-performance";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
 
-export default function OperatorPage() {
+export const dynamic = "force-dynamic";
+
+export default async function OperatorPage() {
   const examples = listExamples();
-  const openCodeAuthConfigured =
-    Boolean(process.env.OPENCODE_SERVER_TOKEN) !==
-    Boolean(process.env.OPENCODE_SERVER_PASSWORD);
-  const openCodeEnabled = Boolean(
-    process.env.OPENCODE_SERVER_URL &&
-    process.env.OPERATOR_RUN_SECRET &&
-    openCodeAuthConfigured
-  );
+  const snapshot = await listControlPlaneSnapshot();
+  const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
     <main>
       <header className="hero">
@@ -28,6 +26,8 @@ export default function OperatorPage() {
           hot paths measurably faster.
         </p>
       </header>
+
+      <RunObservatory initialSnapshot={snapshot} />
 
       <section className="operation" aria-labelledby="operation-title">
         <div className="operationHeader">
@@ -64,7 +64,7 @@ export default function OperatorPage() {
         <RunMaintenance
           agentRunsUrl={AGENT_RUNS_URL}
           examples={examples}
-          openCodeEnabled={openCodeEnabled}
+          harnessEnabled={harnessEnabled}
         />
       </section>
 
@@ -106,7 +106,7 @@ export default function OperatorPage() {
       </section>
 
       <footer>
-        Detailed output and diagnostics remain in Vercel Agent Runs.
+        Detailed output is linked from each run in the unified ledger.
       </footer>
     </main>
   );
