@@ -196,7 +196,7 @@ export function TurboDocsVisual() {
           </div>
           <div className="h-[150px] px-4 py-4 text-label-13-mono">
             <p className="text-gray-1000">
-              <span className="text-gray-600">$</span> turbo docs remote caching
+              <span className="text-gray-600">$</span> turbo docs "remote caching"
             </p>
             <div className="mt-4 flex flex-col gap-1.5">
               <p className="text-gray-600">Searching Turborepo docs...</p>
