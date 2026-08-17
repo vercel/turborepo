@@ -3,8 +3,7 @@ import { createMetadata } from "@/lib/create-metadata";
 
 export const metadata = createMetadata({
   title: "Showcase",
-  description:
-    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
+  description: "Turborepo is the build system for coding agents.",
   canonicalPath: "/showcase"
 });
 
