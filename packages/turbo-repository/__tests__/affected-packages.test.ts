@@ -75,6 +75,33 @@ describe("affectedPackages", () => {
     assert.deepEqual(reduced, [{ name: "app-a", relativePath: "apps/app" }]);
   });
 
+  it("maps changed files to active toolchain packages", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/polyglot-monorepo");
+    const workspace = await Workspace.find(dir);
+    const reduced = (
+      await workspace.affectedPackages(["python/shared/py_shared.py"])
+    ).map(({ name, relativePath }) => ({ name, relativePath }));
+
+    assert.deepEqual(reduced, [
+      { name: "py-shared", relativePath: "python/shared" }
+    ]);
+  });
+
+  it("treats active toolchain lockfiles as global changes", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/polyglot-monorepo");
+    const workspace = await Workspace.find(dir);
+    const reduced = (await workspace.affectedPackages(["uv.lock"])).map(
+      ({ name, relativePath }) => ({ name, relativePath })
+    );
+
+    assert.deepEqual(reduced, [
+      { name: "web", relativePath: "apps/web" },
+      { name: "core", relativePath: "crates/core" },
+      { name: "py-api", relativePath: "python/api" },
+      { name: "py-shared", relativePath: "python/shared" }
+    ]);
+  });
+
   describe("optimizedLockfileUpdates", () => {
     it("errors if not provided comparison ref", async () => {
       const dir = path.resolve(__dirname, "./fixtures/monorepo");

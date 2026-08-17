@@ -235,6 +235,7 @@ mod tests {
             registry: Some("".to_string()),
             info: Some(PackageInfo::default()),
             checksum: Some("sha512".to_string()),
+            integrity: None,
             root: None,
         }
     }
@@ -247,6 +248,7 @@ mod tests {
             registry: Some("".to_string()),
             info: Some(info),
             checksum: Some("sha512".to_string()),
+            integrity: None,
             root: None,
         }
     }

@@ -45,13 +45,17 @@ jobs:
             exit 0
           fi
 
-          if [[ "$PR_AUTHOR" != "github-actions[bot]" || "$PR_TITLE" != "chore: Release Turborepo "* ]]; then
+          if [[ "$PR_AUTHOR" != "github-actions[bot]" || "$PR_HEAD_REPO" != "$REPOSITORY" ]]; then
             echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
             echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
             exit 0
           fi
 
-          if [[ "$PR_HEAD_REPO" != "$REPOSITORY" || ! "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+          if [[ "$PR_TITLE" == "chore: Release Turborepo "* && "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
+          elif [[ "$PR_TITLE" == "chore: Release Turbo repository packages "* && "$PR_HEAD_REF" =~ ^library-release/[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            ALLOWED_PATTERN="^packages/turbo-repository/(js|npm/(darwin-arm64|darwin-x64|linux-arm64-gnu|linux-arm64-musl|linux-x64-gnu|linux-x64-musl|win32-arm64-msvc|win32-x64-msvc))/package\.json$"
+          else
             echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
             echo "Not a release PR branch (head: $PR_HEAD_REPO:$PR_HEAD_REF)"
             exit 0
@@ -66,7 +70,6 @@ jobs:
           echo "Changed files in release PR:"
           printf '%s\n' "$CHANGED_FILES"
 
-          ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
           INVALID_FILES=""
           while IFS= read -r file; do
             if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then

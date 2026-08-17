@@ -3,6 +3,7 @@ import path from "node:path/posix";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { assertNoReleaseAgeExclusion } from "../lib/release-age.js";
 import { resolveAutomatedExample, writeExamplesFile } from "../lib/repo.js";
 
 export default defineTool({
@@ -31,6 +32,7 @@ export default defineTool({
         `Automated maintenance can only write examples/${automatedExample}/.`
       );
     }
+    assertNoReleaseAgeExclusion(normalizedPath, content);
     return writeExamplesFile(sandbox, normalizedPath, content);
   }
 });
