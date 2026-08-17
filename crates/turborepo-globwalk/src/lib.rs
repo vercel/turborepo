@@ -572,19 +572,22 @@ enum SimplePattern {
     Complex,
 }
 
+/// A path segment made purely of bytes that wax treats literally. Used both
+/// to classify simple patterns and to find the literal directory prefix of a
+/// complex pattern.
+fn plain_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'@' | b'+' | b' ')
+        })
+}
+
 /// Classify a preprocessed (absolute) glob pattern string. Deliberately
 /// conservative: every byte outside a small known-plain set (or a segment
 /// that is anything other than exactly `*`) sends the pattern to wax, so
 /// escapes, character classes, alternations, and wax's extended syntax are
 /// never reinterpreted here.
 fn classify_simple_pattern(pattern: &str) -> SimplePattern {
-    fn plain_segment(segment: &str) -> bool {
-        !segment.is_empty()
-            && segment.bytes().all(|b| {
-                b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'@' | b'+' | b' ')
-            })
-    }
-
     // Windows drive prefixes (`C:`) contain a colon; the leading empty
     // segment from the root `/` is skipped.
     let segments: Vec<&str> = pattern.split('/').skip_while(|s| s.is_empty()).collect();
@@ -659,6 +662,133 @@ fn simple_path(pattern: &str) -> PathBuf {
     }
 }
 
+/// Split a complex pattern into `(literal_prefix, rest)` when its first
+/// wildcard segment is exactly `**`, e.g.
+/// `/repo/packages/app-store/**/api/**` becomes
+/// `("/repo/packages/app-store", "**/api/**")`. `rest` is either `**` or
+/// `**/<tail>`.
+///
+/// A `**` segment can absorb any number of path components, so a wax walk
+/// for such a pattern can never prune below the literal prefix: it always
+/// visits the *entire* prefix subtree. That makes patterns with the same
+/// prefix perfectly redundant to walk separately, which is what
+/// [`compile_complex_globs`] exploits.
+///
+/// Deliberately conservative, mirroring [`classify_simple_pattern`]:
+/// - the prefix must consist of [`plain_segment`]s (plus an optional leading
+///   Windows drive), so escapes and metacharacters never end up in the literal
+///   prefix;
+/// - patterns containing `,` anywhere are rejected: a literal comma (or a comma
+///   inside wax's repetition syntax) would be reinterpreted as an alternative
+///   separator inside a synthesized alternation.
+fn tree_walk_split(pattern: &str) -> Option<(&str, &str)> {
+    if pattern.contains(',') {
+        return None;
+    }
+    let mut offset = 0;
+    let mut literal_end = None;
+    let mut leading = true;
+    for segment in pattern.split('/') {
+        let start = offset;
+        offset += segment.len() + 1;
+        if segment.is_empty() {
+            // Only the leading empty segment of an absolute unix path is
+            // expected; anything else (`a//b`, trailing `/`) is left to wax.
+            if start == 0 {
+                continue;
+            }
+            return None;
+        }
+        if segment == "**" {
+            return literal_end.map(|end| (&pattern[..end], &pattern[start..]));
+        }
+        if !(plain_segment(segment) || (leading && is_plain_windows_drive(segment))) {
+            return None;
+        }
+        literal_end = Some(start + segment.len());
+        leading = false;
+    }
+    None
+}
+
+/// Compile the complex include patterns, merging patterns that would walk
+/// the same subtree into a single wax alternation.
+///
+/// Each compiled include pattern gets its own full directory walk in
+/// [`walk_compiled_globs`]. Patterns of the shape `<literal-prefix>/**/<tail>`
+/// always traverse the entire prefix subtree (see [`tree_walk_split`]), so
+/// several of them sharing one prefix re-read identical directories once per
+/// pattern — e.g. cal.com's `packages/app-store/**/{api,components,lib,…}`
+/// task inputs walk a ~470-directory tree six times. Rewriting such a group
+/// as `<literal-prefix>/**/{tail1,…,tailN}` walks the subtree once and
+/// matches each entry against the alternation, whose matches are exactly the
+/// union of the individual patterns' matches — and the walk results are
+/// unioned into a set anyway. The tree wildcard is hoisted out of the group
+/// because wax rejects alternatives that begin at a component boundary.
+///
+/// Patterns whose first wildcard segment is not `**` are never merged: their
+/// dedicated walkers may prune differently, and separate walks of disjoint
+/// subtrees keep their rayon parallelism. If a synthesized alternation fails
+/// to compile (wax enforces rules this conservative split cannot fully
+/// prove), the group falls back to individual compilation, preserving both
+/// behavior and per-pattern error reporting.
+fn compile_complex_globs(complex_paths: Vec<String>) -> Result<Vec<Glob<'static>>, WalkError> {
+    // Compile every original pattern exactly as before merging existed, so an
+    // invalid pattern surfaces the identical contextual error. Validating the
+    // synthesized alternation alone would not be equivalent: the inserted
+    // commas and braces can "heal" malformed patterns across alternative
+    // boundaries (e.g. tails `[` and `]x` forming a valid character class
+    // around the separator), silently accepting an invalid configuration.
+    let compiled_originals: Vec<Glob<'static>> = complex_paths
+        .par_iter()
+        .map(glob_with_contextual_error)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Group merge-eligible patterns by literal prefix. BTreeMap keeps the
+    // synthesized patterns deterministic.
+    let mut groups: std::collections::BTreeMap<&str, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    for (index, path) in complex_paths.iter().enumerate() {
+        // `rest` is `**` or `**/<tail>`; only the latter can donate a
+        // non-empty alternative to a synthesized group.
+        if let Some((prefix, rest)) = tree_walk_split(path)
+            && rest.len() > 3
+        {
+            groups.entry(prefix).or_default().push(index);
+        }
+    }
+
+    let mut compiled: Vec<Glob<'static>> = Vec::new();
+    let mut replaced = vec![false; complex_paths.len()];
+    for (prefix, indices) in groups {
+        if indices.len() < 2 {
+            continue;
+        }
+        let tails = indices
+            .iter()
+            // Skip the leading `<prefix>/**/` to get the tail.
+            .map(|&index| &complex_paths[index][prefix.len() + 4..])
+            .join(",");
+        // The group's original globs were already validated above; if wax
+        // rejects the synthesized alternation itself, keep them as-is.
+        if let Ok(glob) = glob_with_contextual_error(format!("{prefix}/**/{{{tails}}}")) {
+            compiled.push(glob);
+            for index in indices {
+                replaced[index] = true;
+            }
+        }
+    }
+
+    compiled.extend(
+        compiled_originals
+            .into_iter()
+            .zip(&replaced)
+            .filter(|(_, replaced)| !**replaced)
+            .map(|(glob, _)| glob),
+    );
+    Ok(compiled)
+}
+
 #[tracing::instrument(skip(include, exclude, settings))]
 fn compile_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
@@ -700,10 +830,7 @@ fn compile_globs<S: AsRef<str>>(
         }
     }
 
-    let include_patterns = complex_paths
-        .into_par_iter()
-        .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, _>>()?;
+    let include_patterns = compile_complex_globs(complex_paths)?;
 
     Ok(CompiledGlobs {
         base_path: base_path_new,
@@ -2740,5 +2867,192 @@ mod test {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod combine_test {
+    use std::str::FromStr;
+
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+
+    use super::{ValidatedGlob, WalkType, compile_complex_globs, globwalk, tree_walk_split};
+
+    #[test]
+    fn test_tree_walk_split() {
+        assert_eq!(
+            tree_walk_split("/repo/packages/app-store/**/api/**"),
+            Some(("/repo/packages/app-store", "**/api/**"))
+        );
+        assert_eq!(
+            tree_walk_split("/repo/src/**/*.ts"),
+            Some(("/repo/src", "**/*.ts"))
+        );
+        assert_eq!(
+            tree_walk_split("C\\:/repo/src/**/*.ts"),
+            Some(("C\\:/repo/src", "**/*.ts"))
+        );
+        // First wildcard segment is `*`, not `**`: a dedicated walker may
+        // prune, so never merge.
+        assert_eq!(tree_walk_split("/repo/*/src/**"), None);
+        assert_eq!(tree_walk_split("/repo/src/*.ts"), None);
+        // Comma anywhere: could be reinterpreted as an alternative separator.
+        assert_eq!(tree_walk_split("/repo/a{b,c}/**"), None);
+        assert_eq!(tree_walk_split("/repo/src/**/a,b.ts"), None);
+        // Non-plain segment before the tree wildcard.
+        assert_eq!(tree_walk_split("/repo/sr?c/**/*.ts"), None);
+        assert_eq!(tree_walk_split("/repo/s\\*rc/**/*.ts"), None);
+        // No literal prefix, or no tree wildcard at all.
+        assert_eq!(tree_walk_split("/**/foo"), None);
+        assert_eq!(tree_walk_split("/repo/src/foo.ts"), None);
+    }
+
+    /// A malformed pattern must fail with its own contextual error even when
+    /// merging could synthesize a *valid* alternation around it (e.g. tails
+    /// `[` and `]x` form a valid character class across the `,` separator).
+    #[test]
+    fn malformed_patterns_are_not_healed_by_merging() {
+        let err = compile_complex_globs(vec![
+            "/repo/src/**/[".to_owned(),
+            "/repo/src/**/]x".to_owned(),
+            "/repo/src/**/z".to_owned(),
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("/repo/src/**/["),
+            "error should reference the malformed original pattern: {err}"
+        );
+    }
+
+    /// The synthesized alternation must actually compile: a wax rule
+    /// rejection here would silently fall back to one walk per pattern.
+    #[test]
+    fn same_prefix_tree_patterns_compile_to_one_glob() {
+        let compiled = compile_complex_globs(vec![
+            "/repo/packages/app-store/**/api/**".to_owned(),
+            "/repo/packages/app-store/**/components/**".to_owned(),
+            "/repo/packages/app-store/**/config.json".to_owned(),
+            "/repo/packages/app-store/**/static/**/*".to_owned(),
+            "/repo/src/**/*.ts".to_owned(),
+            "/repo/src/**/*.tsx".to_owned(),
+            "/repo/*/mixed/**".to_owned(),
+        ])
+        .unwrap();
+        // app-store group + src group + the unmergeable `*` pattern.
+        assert_eq!(compiled.len(), 3);
+    }
+
+    fn setup_files(files: &[&str]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix("globwalk-combine").unwrap();
+        for file in files {
+            let path = tmp.path().join(file.trim_start_matches('/'));
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::File::create(path).unwrap();
+        }
+        tmp
+    }
+
+    fn walk(
+        root: &AbsoluteSystemPathBuf,
+        include: &[&str],
+        exclude: &[&str],
+        walk_type: WalkType,
+    ) -> Vec<String> {
+        let include = include
+            .iter()
+            .map(|s| ValidatedGlob::from_str(s).unwrap())
+            .collect::<Vec<_>>();
+        let exclude = exclude
+            .iter()
+            .map(|s| ValidatedGlob::from_str(s).unwrap())
+            .collect::<Vec<_>>();
+        let mut results = globwalk(root, &include, &exclude, walk_type)
+            .unwrap()
+            .into_iter()
+            .map(|path| {
+                AnchoredSystemPathBuf::relative_path_between(root, &path)
+                    .to_unix()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        results.sort();
+        results
+    }
+
+    const FILES: &[&str] = &[
+        "store/zoom/api/webhook.ts",
+        "store/zoom/lib/util.ts",
+        "store/zoom/config.json",
+        "store/zoom/node_modules/dep/api/index.ts",
+        "store/cal/deep/nested/api/handler.ts",
+        "store/cal/lib/a.ts",
+        "store/readme.md",
+        "src/index.ts",
+        "src/component.tsx",
+        "src/inner/util.ts",
+        "other/file.ts",
+    ];
+
+    const INCLUDES: &[&str] = &[
+        // Three merge-eligible patterns sharing the `store` prefix.
+        "store/**/api/**",
+        "store/**/lib/**",
+        "store/**/config.json",
+        // Merge-eligible with a different prefix: stays a lone group.
+        "src/**/*.ts",
+        // Not merge-eligible (first wildcard segment is `*`).
+        "src/*.tsx",
+    ];
+
+    /// One globwalk over all patterns (which merges same-prefix `**`
+    /// patterns into an alternation) must return exactly the union of
+    /// walking each pattern individually (which never merges).
+    #[test]
+    fn combined_walk_equals_individual_walks() {
+        let tmp = setup_files(FILES);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let exclude = &["**/node_modules/**"];
+
+        for walk_type in [WalkType::Files, WalkType::All, WalkType::Folders] {
+            let combined = walk(&root, INCLUDES, exclude, walk_type);
+            let mut individual: Vec<String> = INCLUDES
+                .iter()
+                .flat_map(|include| walk(&root, &[include], exclude, walk_type))
+                .collect();
+            individual.sort();
+            individual.dedup();
+            assert_eq!(combined, individual, "walk_type: {walk_type:?}");
+        }
+
+        assert_eq!(
+            walk(&root, INCLUDES, exclude, WalkType::Files),
+            vec![
+                "src/component.tsx",
+                "src/index.ts",
+                "src/inner/util.ts",
+                "store/cal/deep/nested/api/handler.ts",
+                "store/cal/lib/a.ts",
+                "store/zoom/api/webhook.ts",
+                "store/zoom/config.json",
+                "store/zoom/lib/util.ts",
+            ]
+        );
+    }
+
+    /// Patterns containing commas (wax only accepts escaped ones) are never
+    /// merged into an alternation, where a comma separates alternatives.
+    #[test]
+    fn comma_patterns_are_not_reinterpreted() {
+        let tmp = setup_files(&["src/a,b.ts", "src/inner/x.ts", "src/b.ts"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        assert_eq!(
+            walk(
+                &root,
+                &["src/**/a\\,b.ts", "src/**/x.ts"],
+                &[],
+                WalkType::Files
+            ),
+            vec!["src/a,b.ts", "src/inner/x.ts"]
+        );
     }
 }
