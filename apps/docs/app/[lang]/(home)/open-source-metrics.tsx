@@ -21,15 +21,7 @@ const formatNumber = (value: number): string => {
 };
 
 const getOpenIssuesLabel = (count: number): string => {
-  if (count === 1) {
-    return "Open issue";
-  }
-
-  if (count > 1) {
-    return "Open issues";
-  }
-
-  return "Open issue count";
+  return count === 1 ? "Open issue" : "Open issues";
 };
 
 const fetchDownloads = async (): Promise<string> => {
