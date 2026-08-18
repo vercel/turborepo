@@ -256,6 +256,32 @@ mod test {
         assert!(error.to_string().contains("missing.json"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_non_regular_symlink_is_skipped() {
+        use std::os::unix::net::UnixListener;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let socket = git_root.join_component("server.sock");
+        let _listener = UnixListener::bind(socket.as_std_path()).unwrap();
+        let link = git_root.join_component("socket-link");
+        link.symlink_to_file(socket.to_string()).unwrap();
+
+        let mut hashes = GitHashes::new();
+        hash_objects(
+            &git_root,
+            &git_root,
+            vec![RelativeUnixPathBuf::new("socket-link").unwrap()],
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.is_empty());
+    }
+
     /// Verify that our blob hashing produces OIDs identical to `git
     /// hash-object`. This is critical because changing the hash algorithm
     /// would silently invalidate every turbo cache entry.

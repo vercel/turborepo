@@ -436,8 +436,8 @@ pub(crate) fn hash_file_as_git_blob(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
-    // Windows cannot open directories for handle-based metadata inspection.
-    #[cfg(windows)]
+    // Avoid opening sockets, FIFOs, devices, and directories. Metadata from the
+    // opened handle below remains authoritative if the path changes afterward.
     if !std::fs::metadata(path)?.is_file() {
         return Ok(None);
     }
