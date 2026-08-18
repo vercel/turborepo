@@ -32,9 +32,7 @@ const createOgImagePath = ({
 
   return createSignedOgUrl(
     ogTitle,
-    canonicalPath === "/blog" || canonicalPath.startsWith("/blog/")
-      ? "Blog"
-      : undefined
+    canonicalPath.startsWith("/blog/") ? "Blog" : undefined
   );
 };
 
