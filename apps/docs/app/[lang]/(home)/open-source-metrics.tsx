@@ -54,9 +54,7 @@ const fetchDownloads = async (): Promise<string> => {
 const fetchRepositoryMetrics = async (): Promise<{
   stars: string;
 }> => {
-  const response = await fetch(
-    "https://api.github.com/repos/vercel/turborepo",
-  );
+  const response = await fetch("https://api.github.com/repos/vercel/turborepo");
 
   if (!response.ok) {
     throw new Error(`Failed to fetch GitHub stars: ${response.status}`);
@@ -119,7 +117,10 @@ export async function OpenSourceMetrics() {
         const isFeatured = index === 0;
 
         return (
-          <div className="min-w-0" key={metric.id}>
+          <div
+            className={isFeatured ? "min-w-0" : "min-w-0 lg:translate-x-28"}
+            key={metric.id}
+          >
             <dt
               className={
                 isFeatured
