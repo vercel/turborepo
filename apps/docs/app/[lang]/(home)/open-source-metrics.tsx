@@ -26,7 +26,7 @@ const getOpenIssuesLabel = (count: number): string => {
 
 const fetchDownloads = async (): Promise<string> => {
   const response = await fetch(
-    "https://api.npmjs.org/downloads/range/last-month/turbo"
+    "https://api.npmjs.org/downloads/range/last-month/turbo",
   );
 
   if (!response.ok) {
@@ -45,7 +45,7 @@ const fetchDownloads = async (): Promise<string> => {
   const weeklyTotals = [0, 7, 14].map((start) =>
     recentDownloads
       .slice(start, start + 7)
-      .reduce((total, day) => total + day.downloads, 0)
+      .reduce((total, day) => total + day.downloads, 0),
   );
 
   return formatNumber(Math.max(...weeklyTotals));
@@ -71,7 +71,7 @@ const fetchRepositoryMetrics = async (): Promise<{
 
 const fetchOpenIssues = async (): Promise<number> => {
   const response = await fetch(
-    "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen"
+    "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen",
   );
 
   if (!response.ok) {
@@ -118,7 +118,7 @@ export async function OpenSourceMetrics() {
 
         return (
           <div
-            className={isFeatured ? "min-w-0" : "min-w-0 lg:translate-x-4"}
+            className={isFeatured ? "min-w-0" : "min-w-0 lg:translate-x-28"}
             key={metric.id}
           >
             <dt
