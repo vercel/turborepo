@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import { blog } from "@/lib/geistdocs/source";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
-import { createSignedBlogOgUrl } from "@/lib/og/sign";
+import { createSignedOgUrl } from "@/lib/og/sign";
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return blog.getPages().map((page) => ({
@@ -20,35 +20,11 @@ export async function generateMetadata(props: {
 
   if (!page) notFound();
 
-  const version = params.slug?.[0] || "";
-
-  const createOgUrl = () => {
-    const groups = /^(?:turbo-)?(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(
-      version
-    );
-    if (groups) {
-      const { major, minor } = groups.groups as {
-        major: string;
-        minor: string;
-      };
-      return createSignedBlogOgUrl(`${major}.${minor}`);
-    }
-
-    return "";
-  };
-
   return {
     title: page.data.title,
     description: page.data.description,
     openGraph: {
-      images:
-        page.data.ogImage || createOgUrl()
-          ? [
-              {
-                url: page.data.ogImage ?? createOgUrl(),
-              },
-            ]
-          : undefined,
+      images: [{ url: createSignedOgUrl(page.data.title, "Blog") }],
     },
   };
 }

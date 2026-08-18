@@ -15,7 +15,7 @@ const getBaseURL = (): URL => {
 
 /**
  * Creates a signed OG image URL for the given title.
- * For index pages (home, /repo), the title is omitted to show just the logo.
+ * For index pages (home, /repo), the title is omitted.
  */
 const createOgImagePath = ({
   title,
@@ -27,10 +27,15 @@ const createOgImagePath = ({
   const isIndex = canonicalPath === "" || canonicalPath === "/";
   const isRepoIndex = canonicalPath === "/repo";
 
-  // For index pages, use empty title (logo only)
+  // For index pages, use an empty title.
   const ogTitle = isIndex || isRepoIndex ? "" : title || "";
 
-  return createSignedOgUrl(ogTitle);
+  return createSignedOgUrl(
+    ogTitle,
+    canonicalPath === "/blog" || canonicalPath.startsWith("/blog/")
+      ? "Blog"
+      : undefined
+  );
 };
 
 /**

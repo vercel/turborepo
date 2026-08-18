@@ -1,10 +1,11 @@
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
-import { RepoLogo } from "@/components/logos/og/repo-logo";
-import { VercelLogo } from "@/components/logos/og/vercel-logo";
 import { verifyOgSignatureEdge } from "@/lib/og/sign-edge";
 
 export const runtime = "edge";
+
+const OG_BACKGROUND_URL =
+  "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/docs-og-background.png";
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
@@ -21,10 +22,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
 
     const title = searchParams.get("title") || "";
+    const section = searchParams.get("section") || "Turborepo";
     const sig = searchParams.get("sig") || "";
 
     // Verify signature - title can be empty for home page
-    const isValid = await verifyOgSignatureEdge({ title }, sig);
+    const isValid = await verifyOgSignatureEdge(
+      searchParams.has("section") ? { title, section } : { title },
+      sig
+    );
     if (!isValid) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -37,9 +42,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         res.arrayBuffer()
       ),
       arrayBufferToBase64(
-        await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
-          res.arrayBuffer()
-        )
+        await fetch(OG_BACKGROUND_URL).then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to load OG background: ${res.status}`);
+          }
+          return res.arrayBuffer();
+        })
       )
     ]);
 
@@ -48,34 +56,28 @@ export async function GET(req: NextRequest): Promise<Response> {
         style={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
+          position: "relative",
           width: "100%",
           height: "100%",
-          fontFamily: "Geist Mono",
-          fontWeight: 700,
-          fontSize: 60,
-          backgroundImage: `url(data:image/jpeg;base64,${bg})`,
-          backgroundSize: "1200px 630px",
+          fontFamily: "Geist Sans",
+          backgroundImage: `url(data:image/png;base64,${bg})`,
+          backgroundPosition: "center",
+          backgroundSize: "cover",
           color: "#fff"
         }}
       >
-        <div
-          style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
-        >
-          <RepoLogo />
-        </div>
         {title ? (
           <div
             style={{
-              fontFamily: "Geist Mono",
-              fontSize: 36,
-              letterSpacing: -1.5,
-              padding: "40px 20px 30px",
-              textAlign: "center",
-              backgroundImage: "linear-gradient(to bottom, #fff, #aaa)",
-              backgroundClip: "text",
-              color: "transparent"
+              position: "absolute",
+              top: 198,
+              left: 55,
+              width: 420,
+              fontSize: 54,
+              fontWeight: 400,
+              letterSpacing: -2.7,
+              lineHeight: 1,
+              color: "#fff"
             }}
           >
             {title}
@@ -83,16 +85,18 @@ export async function GET(req: NextRequest): Promise<Response> {
         ) : null}
         <div
           style={{
+            position: "absolute",
+            top: 330,
+            left: 55,
             fontFamily: "Geist Mono",
-            fontSize: 18,
-            marginTop: 80,
-            display: "flex",
-            color: "#fff",
-            alignItems: "center"
+            fontSize: 28,
+            fontWeight: 400,
+            letterSpacing: -1,
+            lineHeight: 1,
+            color: "#888"
           }}
         >
-          <div style={{ marginRight: 12 }}>by</div>
-          <VercelLogo fill="white" height={25} />
+          {section}
         </div>
       </div>,
       {
@@ -102,7 +106,7 @@ export async function GET(req: NextRequest): Promise<Response> {
           {
             name: "Geist Mono",
             data: geistMono,
-            weight: 700 as const,
+            weight: 400 as const,
             style: "normal" as const
           },
           {
