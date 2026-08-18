@@ -21,7 +21,7 @@ function Showcase() {
         </div>
       </div>
 
-      <div className="mb-8 px-0 min-h-screen sm:px-8 grid grid-cols-3 items-center gap-16 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 ">
+      <div className="mb-8 grid min-h-screen grid-cols-3 items-center gap-16 px-0 sm:grid-cols-4 sm:px-8 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 [&_img]:max-w-none">
         <Clients linked />
       </div>
     </main>
