@@ -118,7 +118,9 @@ export async function OpenSourceMetrics() {
 
         return (
           <div
-            className={isFeatured ? "min-w-0" : "min-w-0 lg:translate-x-28"}
+            className={
+              isFeatured ? "min-w-0" : "min-w-0 lg:justify-self-end"
+            }
             key={metric.id}
           >
             <dt
