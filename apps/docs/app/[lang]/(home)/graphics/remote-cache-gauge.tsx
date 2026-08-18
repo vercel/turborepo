@@ -112,20 +112,27 @@ export function RemoteCacheGauge() {
     setSpringTarget(isAccelerating ? 98 : GAUGE_INDICATOR_REST);
   }, [isAccelerating]);
 
-  const resetOnMobilePointerEnd = () => {
-    if (window.matchMedia("(max-width: 767px)").matches) {
-      setIsAccelerating(false);
-    }
-  };
+  const isMobileViewport = () =>
+    window.matchMedia("(max-width: 767px)").matches;
 
   return (
     <div
       className="relative w-full max-w-[500px] aspect-[24/17] [--remote-cache-inner-end:#FF1E56] [--remote-cache-inner-start:#0196FF] [--remote-cache-tick-color:var(--ds-gray-alpha-500)] dark:[--remote-cache-inner-end:#FF5C9A] dark:[--remote-cache-inner-start:#52C7FF] dark:[--remote-cache-tick-color:var(--ds-gray-alpha-600)]"
-      onClick={resetOnMobilePointerEnd}
-      onMouseEnter={() => setIsAccelerating(true)}
-      onMouseLeave={() => setIsAccelerating(false)}
-      onPointerCancel={resetOnMobilePointerEnd}
-      onPointerUp={resetOnMobilePointerEnd}
+      onClick={() => {
+        if (isMobileViewport()) {
+          setIsAccelerating((isActive) => !isActive);
+        }
+      }}
+      onMouseEnter={() => {
+        if (!isMobileViewport()) {
+          setIsAccelerating(true);
+        }
+      }}
+      onMouseLeave={() => {
+        if (!isMobileViewport()) {
+          setIsAccelerating(false);
+        }
+      }}
     >
       <svg
         aria-hidden="true"
