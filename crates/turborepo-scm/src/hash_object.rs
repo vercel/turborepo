@@ -8,6 +8,12 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
+#[derive(Clone, Copy)]
+enum MissingFiles {
+    Error,
+    Ignore,
+}
+
 pub(crate) fn with_emfile_retry<T>(
     f: impl Fn() -> Result<T, std::io::Error>,
 ) -> Result<T, std::io::Error> {
@@ -46,7 +52,45 @@ pub(crate) fn hash_objects(
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
-    allow_missing: bool,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
+) -> Result<(), Error> {
+    hash_objects_inner(
+        git_root,
+        pkg_path,
+        to_hash,
+        hashes,
+        MissingFiles::Error,
+        cached_attrs,
+        slowest_files,
+    )
+}
+
+pub(crate) fn hash_discovered_objects(
+    git_root: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
+    to_hash: Vec<RelativeUnixPathBuf>,
+    hashes: &mut GitHashes,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
+) -> Result<(), Error> {
+    hash_objects_inner(
+        git_root,
+        pkg_path,
+        to_hash,
+        hashes,
+        MissingFiles::Ignore,
+        cached_attrs,
+        slowest_files,
+    )
+}
+
+fn hash_objects_inner(
+    git_root: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
+    to_hash: Vec<RelativeUnixPathBuf>,
+    hashes: &mut GitHashes,
+    missing_files: MissingFiles,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
@@ -73,12 +117,12 @@ pub(crate) fn hash_objects(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
+                    crate::crlf::hash_regular_file_maybe_normalized(&full_file_path, text_attr)
                 });
                 drop(_guard);
 
                 match hash_result {
-                    Ok(hash) => {
+                    Ok(Some(hash)) => {
                         let package_relative_path = pkg_prefix
                             .as_ref()
                             .and_then(|prefix| {
@@ -95,24 +139,14 @@ pub(crate) fn hash_objects(
                             });
                         Ok(Some((package_relative_path, hash)))
                     }
-                    Err(e) => {
-                        // Discovery-driven candidates can disappear before hashing.
-                        // Explicitly named files remain strict.
-                        if allow_missing && e.kind() == std::io::ErrorKind::NotFound {
-                            return Ok(None);
-                        }
-                        // Gracefully skip non-regular files (symlinks, sockets,
-                        // FIFOs, device nodes) that can't be read as normal files.
-                        if full_file_path
-                            .symlink_metadata()
-                            .map(|md| !md.is_file())
-                            .unwrap_or(false)
-                        {
-                            Ok(None)
-                        } else {
-                            Err(Error::git_error(format!("{}: {}", full_file_path, e)))
-                        }
+                    Ok(None) => Ok(None),
+                    Err(error)
+                        if matches!(missing_files, MissingFiles::Ignore)
+                            && error.kind() == std::io::ErrorKind::NotFound =>
+                    {
+                        Ok(None)
                     }
+                    Err(error) => Err(Error::hash_file(full_file_path, error)),
                 }
             },
         )
@@ -130,7 +164,7 @@ pub(crate) fn hash_objects(
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-    use super::hash_objects;
+    use super::{hash_discovered_objects, hash_objects};
     use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
@@ -183,7 +217,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, false, None, None).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
     }
@@ -201,7 +235,7 @@ mod test {
         candidate.remove().unwrap();
 
         let mut hashes = GitHashes::new();
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, true, None, None).unwrap();
+        hash_discovered_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
         assert!(hashes.is_empty());
     }
 
@@ -212,16 +246,8 @@ mod test {
         let missing = RelativeUnixPathBuf::new("missing.json").unwrap();
 
         let mut hashes = GitHashes::new();
-        let error = hash_objects(
-            &git_root,
-            &git_root,
-            vec![missing],
-            &mut hashes,
-            false,
-            None,
-            None,
-        )
-        .unwrap_err();
+        let error =
+            hash_objects(&git_root, &git_root, vec![missing], &mut hashes, None, None).unwrap_err();
 
         assert!(error.to_string().contains("missing.json"));
     }
@@ -292,16 +318,7 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(
-            &tmp_path,
-            &tmp_path,
-            to_hash,
-            &mut actual,
-            false,
-            None,
-            None,
-        )
-        .unwrap();
+        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None, None).unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }

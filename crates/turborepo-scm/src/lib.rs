@@ -131,6 +131,14 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        Error::HashFile {
+            path,
+            source,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
     /// Returns true if this error indicates OS resource exhaustion (e.g. too
     /// many open files) where a fallback to manual hashing would also fail.
     pub fn is_resource_exhaustion(&self) -> bool {

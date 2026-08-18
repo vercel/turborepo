@@ -432,6 +432,7 @@ fn hash_file_normalized(
 /// place a crafted collision pair in the repo can already modify the build
 /// itself. Outputs are bit-identical to git for all non-colliding inputs,
 /// enforced by differential tests against `git hash-object` below.
+#[cfg(test)]
 pub(crate) fn hash_file_maybe_normalized(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
@@ -442,8 +443,28 @@ pub(crate) fn hash_file_maybe_normalized(
     Ok(hash_file_normalized(&mut file, metadata.len(), attr)?.0)
 }
 
-/// Like [`hash_file_maybe_normalized`], but also reports how the hash was
-/// produced. Used by the repo-index verification pass.
+pub(crate) fn hash_regular_file_maybe_normalized(
+    path: &AbsoluteSystemPath,
+    attr: TextAttr,
+) -> Result<Option<OidHash>, std::io::Error> {
+    // Windows cannot open directories for handle-based metadata inspection.
+    #[cfg(windows)]
+    if !std::fs::metadata(path)?.is_file() {
+        return Ok(None);
+    }
+
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    Ok(Some(
+        hash_file_normalized(&mut file, metadata.len(), attr)?.0,
+    ))
+}
+
+/// Hash a working-tree file and report how the hash was produced. Used by the
+/// repo-index verification pass.
 pub(crate) fn hash_file_for_verification(
     path: &AbsoluteSystemPath,
     attr: TextAttr,

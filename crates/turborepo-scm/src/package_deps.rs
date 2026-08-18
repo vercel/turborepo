@@ -5,7 +5,10 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM, hash_object::hash_objects};
+use crate::{
+    Error, GitHashes, GitRepo, RepoGitIndex, SCM,
+    hash_object::{hash_discovered_objects, hash_objects},
+};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -175,12 +178,11 @@ impl GitRepo {
         };
 
         // Note: to_hash is *git repo relative*
-        hash_objects(
+        hash_discovered_objects(
             &self.root,
             &full_pkg_path,
             to_hash,
             &mut hashes,
-            true,
             self.git_attrs(),
             self.slowest_files.as_ref(),
         )?;
@@ -207,7 +209,6 @@ impl GitRepo {
             process_relative_to,
             to_hash,
             &mut hashes,
-            false,
             self.git_attrs(),
             self.slowest_files.as_ref(),
         )?;
@@ -257,12 +258,11 @@ impl GitRepo {
 
         if !to_hash.is_empty() {
             let mut new_hashes = GitHashes::with_capacity(to_hash.len());
-            hash_objects(
+            hash_discovered_objects(
                 &self.root,
                 full_pkg_path,
                 to_hash,
                 &mut new_hashes,
-                true,
                 self.git_attrs(),
                 self.slowest_files.as_ref(),
             )?;
@@ -377,6 +377,7 @@ impl GitRepo {
             let mut glob_exclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
             let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
+            let git_metadata_path = self.root.join_component(".git");
 
             // Exclusions must apply to the filesystem walk itself, not just
             // the in-memory filter below: the walk can discover files the
@@ -401,6 +402,12 @@ impl GitRepo {
                     // compiling a glob and walking directories.
                     let resolved =
                         full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
+                    if resolved
+                        .as_std_path()
+                        .starts_with(git_metadata_path.as_std_path())
+                    {
+                        continue;
+                    }
                     match resolved.symlink_metadata() {
                         Ok(meta) if meta.is_dir() => {
                             // Directory literal — fall through to the glob
@@ -569,16 +576,7 @@ mod tests {
         let mut hashes = GitHashes::new();
         // FIXME: This test verifies a bug: we don't hash symlinks.
         // TODO: update this test to point at get_package_file_hashes
-        hash_objects(
-            &git_root,
-            &git_root,
-            to_hash,
-            &mut hashes,
-            false,
-            None,
-            None,
-        )
-        .unwrap();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
         assert!(hashes.is_empty());
 
         let pkg_path = git_root.anchor(&git_root).unwrap();
@@ -621,19 +619,28 @@ mod tests {
             panic!("expected git SCM");
         };
         let root_package = AnchoredSystemPathBuf::from_raw("")?;
+        let inputs = ["**/*", ".git/config"];
 
         let git_hashes =
-            git.get_package_file_hashes(&repo_root, &root_package, &["**/*"], false, None)?;
-        let manual_hashes = get_package_file_hashes_without_git(
+            git.get_package_file_hashes(&repo_root, &root_package, &inputs, true, None)?;
+        let fallback_hashes = get_package_file_hashes_without_git(
             &repo_root,
             &root_package,
-            &["**/*"],
-            false,
+            &inputs,
+            true,
             Some(&repo_root),
             None,
         )?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &inputs,
+            true,
+            None,
+            None,
+        )?;
 
-        for hashes in [&git_hashes, &manual_hashes] {
+        for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
             assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
             assert!(
                 hashes.keys().all(|path| !path.as_str().starts_with(".git")),
@@ -672,19 +679,28 @@ mod tests {
             panic!("expected git SCM");
         };
         let root_package = AnchoredSystemPathBuf::from_raw("")?;
+        let inputs = ["**/*", ".git"];
 
         let git_hashes =
-            git.get_package_file_hashes(&worktree_root, &root_package, &["**/*"], false, None)?;
-        let manual_hashes = get_package_file_hashes_without_git(
+            git.get_package_file_hashes(&worktree_root, &root_package, &inputs, true, None)?;
+        let fallback_hashes = get_package_file_hashes_without_git(
             &worktree_root,
             &root_package,
-            &["**/*"],
-            false,
+            &inputs,
+            true,
             Some(&worktree_root),
             None,
         )?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &worktree_root,
+            &root_package,
+            &inputs,
+            true,
+            None,
+            None,
+        )?;
 
-        for hashes in [&git_hashes, &manual_hashes] {
+        for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
             assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
             assert!(
                 !hashes.contains_key(&RelativeUnixPathBuf::new(".git").unwrap()),
