@@ -104,7 +104,7 @@ fn hash_discovered_file(
     let text_attr = attrs
         .map(|attrs| attrs.resolve_text_attr(attr_path))
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
-    match crate::crlf::hash_regular_file_maybe_normalized(path, text_attr) {
+    match crate::crlf::hash_file_maybe_normalized(path, text_attr) {
         Ok(Some(hash)) => Ok(Some(hash)),
         Ok(None) => {
             info!(%path, "skipping non-regular hash candidate");

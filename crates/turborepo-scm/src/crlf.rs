@@ -432,18 +432,7 @@ fn hash_file_normalized(
 /// place a crafted collision pair in the repo can already modify the build
 /// itself. Outputs are bit-identical to git for all non-colliding inputs,
 /// enforced by differential tests against `git hash-object` below.
-#[cfg(test)]
 pub(crate) fn hash_file_maybe_normalized(
-    path: &AbsoluteSystemPath,
-    attr: TextAttr,
-) -> Result<OidHash, std::io::Error> {
-    let mut file = std::fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    validate_file_type(path, &metadata)?;
-    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?.0)
-}
-
-pub(crate) fn hash_regular_file_maybe_normalized(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
@@ -742,7 +731,9 @@ mod tests {
             let expected = expected.trim();
 
             let path = root.join_component(name);
-            let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+            let actual = hash_file_maybe_normalized(&path, TextAttr::Auto)
+                .unwrap()
+                .unwrap();
 
             assert_eq!(
                 &*actual, expected,
@@ -825,7 +816,7 @@ mod tests {
             let expected = String::from_utf8(output.stdout).unwrap();
             let expected = expected.trim();
 
-            let fast_result = hash_file_maybe_normalized(&path, *attr).unwrap();
+            let fast_result = hash_file_maybe_normalized(&path, *attr).unwrap().unwrap();
             let manual_result = manual_hash_file_maybe_normalized(&path, *attr).unwrap();
 
             assert_eq!(
@@ -874,10 +865,14 @@ mod tests {
         std::fs::write(path.as_std_path(), &content).unwrap();
 
         // With Auto, binary should be hashed raw (no normalization)
-        let auto_result = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+        let auto_result = hash_file_maybe_normalized(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
 
         // With Unspecified, should also be raw
-        let raw_result = hash_file_maybe_normalized(&path, TextAttr::Unspecified).unwrap();
+        let raw_result = hash_file_maybe_normalized(&path, TextAttr::Unspecified)
+            .unwrap()
+            .unwrap();
 
         // Both should produce the same hash (raw bytes)
         assert_eq!(
@@ -892,14 +887,20 @@ mod tests {
         let path = root.join_component("text.txt");
         std::fs::write(path.as_std_path(), b"a\r\nb\r\n").unwrap();
 
-        let auto_hash = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-        let set_hash = hash_file_maybe_normalized(&path, TextAttr::Set).unwrap();
+        let auto_hash = hash_file_maybe_normalized(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
+        let set_hash = hash_file_maybe_normalized(&path, TextAttr::Set)
+            .unwrap()
+            .unwrap();
 
         // Both Auto and Set should normalize CRLF for a text file
         assert_eq!(auto_hash, set_hash);
 
         // Unspecified should hash raw (different from normalized)
-        let raw_hash = hash_file_maybe_normalized(&path, TextAttr::Unspecified).unwrap();
+        let raw_hash = hash_file_maybe_normalized(&path, TextAttr::Unspecified)
+            .unwrap()
+            .unwrap();
         assert_ne!(
             auto_hash, raw_hash,
             "normalized hash should differ from raw for CRLF content"
@@ -945,7 +946,9 @@ mod tests {
         let expected = expected.trim();
 
         let path = root.join_component(name);
-        let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+        let actual = hash_file_maybe_normalized(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(
             &*actual, expected,

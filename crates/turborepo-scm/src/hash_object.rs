@@ -117,7 +117,7 @@ fn hash_objects_inner(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_regular_file_maybe_normalized(&full_file_path, text_attr)
+                    crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
                 });
                 drop(_guard);
 
