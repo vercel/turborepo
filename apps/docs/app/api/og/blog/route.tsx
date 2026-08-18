@@ -1,18 +1,9 @@
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
+import { RepoLogo } from "@/components/logos/og/repo-logo";
 import { verifyOgSignatureEdge } from "@/lib/og/sign-edge";
 
 export const runtime = "edge";
-
-function _arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
 
 export async function GET(req: NextRequest): Promise<Response> {
   try {
@@ -27,57 +18,66 @@ export async function GET(req: NextRequest): Promise<Response> {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const [geistSemiBold, bg] = await Promise.all([
-      fetch(new URL("./Geist-SemiBold.ttf", import.meta.url)).then((res) =>
-        res.arrayBuffer()
-      ),
-      _arrayBufferToBase64(
-        await fetch(new URL("./bg.jpg", import.meta.url)).then((res) =>
-          res.arrayBuffer()
-        )
-      )
-    ]);
+    const geistSans = await fetch(
+      new URL("../Geist-Regular.ttf", import.meta.url)
+    ).then((res) => res.arrayBuffer());
 
     return new ImageResponse(
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          fontFamily: "Geist Mono",
-          fontWeight: 600,
-          fontSize: 60,
-          backgroundImage: `url(data:image/jpeg;base64,${bg})`,
-          backgroundSize: "1200px 630px",
-          color: "#fff"
-        }}
-      >
+      (
         <div
           style={{
             display: "flex",
-            fontFamily: "Geist Semibold",
-            fontSize: 52,
-            marginTop: "-40",
-            marginLeft: "-76",
-            fontWeight: "600",
-            color: "#fff"
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            height: "100%",
+            background: "#000",
+            color: "#fff",
           }}
         >
-          {version}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              transform: "translateY(-29px)",
+            }}
+          >
+            <RepoLogo height={88} width={653} />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginLeft: 42,
+                padding: "9px 14px",
+                border: "1.3px solid #fff",
+                borderRadius: 7,
+                fontFamily: "Geist Sans",
+                fontSize: 68,
+                fontWeight: 450,
+                letterSpacing: "-3px",
+                lineHeight: 0.9,
+                transform: "translateY(3.5px)",
+              }}
+            >
+              <div style={{ display: "flex", transform: "translateY(0.5px)" }}>
+                {version}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>,
+      ),
       {
+        width: 1200,
+        height: 630,
         fonts: [
           {
-            name: "Geist Semibold",
-            data: geistSemiBold,
+            name: "Geist Sans",
+            data: geistSans,
             weight: 400 as const,
-            style: "normal" as const
-          }
-        ]
+            style: "normal" as const,
+          },
+        ],
       }
     );
   } catch (err: unknown) {
@@ -85,13 +85,13 @@ export async function GET(req: NextRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turborepo.dev/og-image.png"
-        }
+          Location: "https://turborepo.dev/og-image.png",
+        },
       });
     }
 
     return new Response(undefined, {
-      status: 500
+      status: 500,
     });
   }
 }

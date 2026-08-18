@@ -106,11 +106,20 @@ turbo ls
 # Get deep repository context
 turbo query --schema`;
 
-export const metadata = createMetadata({
-  description:
-    "Turborepo is the build system for coding agents.",
+const baseMetadata = createMetadata({
+  description: "Turborepo is the build system for coding agents.",
   canonicalPath: "/",
 });
+
+export const metadata = {
+  ...baseMetadata,
+  openGraph: {
+    ...baseMetadata.openGraph,
+    images: [
+      "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/og-homepage.png",
+    ],
+  },
+};
 
 export const revalidate = 3600;
 
@@ -127,8 +136,8 @@ export default function HomePage() {
             Your codebase, faster
           </h1>
           <p className="mt-6 text-balance  text-gray-900 text-copy-18">
-            Turborepo is the build system for coding agents. Developers, CI,
-            and agents never do the same work twice.
+            Turborepo is the build system for coding agents. Developers, CI, and
+            agents never do the same work twice.
           </p>
           <CommandPromptRoot className="items-start mt-4" defaultValue="humans">
             <CommandPromptList>
