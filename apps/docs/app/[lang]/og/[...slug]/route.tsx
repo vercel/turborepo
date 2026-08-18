@@ -94,8 +94,8 @@ export const GET = async (
           {title ? (
             <div
               style={{
-                width: 420,
-                fontSize: 54,
+                width: 550,
+                fontSize: 64,
                 fontWeight: 400,
                 letterSpacing: -2.7,
                 lineHeight: 1,
@@ -107,7 +107,7 @@ export const GET = async (
           ) : null}
           <div
             style={{
-              marginTop: 78,
+              marginTop: 32,
               fontFamily: "Geist Mono",
               fontSize: 28,
               fontWeight: 400,
