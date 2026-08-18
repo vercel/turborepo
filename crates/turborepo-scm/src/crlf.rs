@@ -286,7 +286,7 @@ fn stream_normalized(reader: &mut impl Read, mut update: impl FnMut(&[u8])) -> s
 
 /// Incrementally computes a git blob oid using the `sha1` crate, which
 /// dispatches to hardware SHA extensions at runtime (SHA-NI on x86, the
-/// crypto extensions on aarch64). Both [`hash_file_maybe_normalized`] and
+/// crypto extensions on aarch64). Both [`hash_file_as_git_blob`] and
 /// [`manual_hash_file_maybe_normalized`] delegate to
 /// [`hash_file_normalized`], which drives this hasher.
 struct BlobHasher(Sha1);
@@ -432,7 +432,7 @@ fn hash_file_normalized(
 /// place a crafted collision pair in the repo can already modify the build
 /// itself. Outputs are bit-identical to git for all non-colliding inputs,
 /// enforced by differential tests against `git hash-object` below.
-pub(crate) fn hash_file_maybe_normalized(
+pub(crate) fn hash_file_as_git_blob(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
@@ -731,7 +731,7 @@ mod tests {
             let expected = expected.trim();
 
             let path = root.join_component(name);
-            let actual = hash_file_maybe_normalized(&path, TextAttr::Auto)
+            let actual = hash_file_as_git_blob(&path, TextAttr::Auto)
                 .unwrap()
                 .unwrap();
 
@@ -816,7 +816,7 @@ mod tests {
             let expected = String::from_utf8(output.stdout).unwrap();
             let expected = expected.trim();
 
-            let fast_result = hash_file_maybe_normalized(&path, *attr).unwrap().unwrap();
+            let fast_result = hash_file_as_git_blob(&path, *attr).unwrap().unwrap();
             let manual_result = manual_hash_file_maybe_normalized(&path, *attr).unwrap();
 
             assert_eq!(
@@ -855,7 +855,7 @@ mod tests {
         assert!(GitAttrs::load(&root).is_none());
     }
 
-    // -- hash_file_maybe_normalized edge-case tests --
+    // -- hash_file_as_git_blob edge-case tests --
 
     #[test]
     fn test_hash_binary_file_with_auto_is_raw() {
@@ -865,12 +865,12 @@ mod tests {
         std::fs::write(path.as_std_path(), &content).unwrap();
 
         // With Auto, binary should be hashed raw (no normalization)
-        let auto_result = hash_file_maybe_normalized(&path, TextAttr::Auto)
+        let auto_result = hash_file_as_git_blob(&path, TextAttr::Auto)
             .unwrap()
             .unwrap();
 
         // With Unspecified, should also be raw
-        let raw_result = hash_file_maybe_normalized(&path, TextAttr::Unspecified)
+        let raw_result = hash_file_as_git_blob(&path, TextAttr::Unspecified)
             .unwrap()
             .unwrap();
 
@@ -887,10 +887,10 @@ mod tests {
         let path = root.join_component("text.txt");
         std::fs::write(path.as_std_path(), b"a\r\nb\r\n").unwrap();
 
-        let auto_hash = hash_file_maybe_normalized(&path, TextAttr::Auto)
+        let auto_hash = hash_file_as_git_blob(&path, TextAttr::Auto)
             .unwrap()
             .unwrap();
-        let set_hash = hash_file_maybe_normalized(&path, TextAttr::Set)
+        let set_hash = hash_file_as_git_blob(&path, TextAttr::Set)
             .unwrap()
             .unwrap();
 
@@ -898,7 +898,7 @@ mod tests {
         assert_eq!(auto_hash, set_hash);
 
         // Unspecified should hash raw (different from normalized)
-        let raw_hash = hash_file_maybe_normalized(&path, TextAttr::Unspecified)
+        let raw_hash = hash_file_as_git_blob(&path, TextAttr::Unspecified)
             .unwrap()
             .unwrap();
         assert_ne!(
@@ -946,7 +946,7 @@ mod tests {
         let expected = expected.trim();
 
         let path = root.join_component(name);
-        let actual = hash_file_maybe_normalized(&path, TextAttr::Auto)
+        let actual = hash_file_as_git_blob(&path, TextAttr::Auto)
             .unwrap()
             .unwrap();
 
