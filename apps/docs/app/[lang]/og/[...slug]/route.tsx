@@ -82,37 +82,42 @@ export const GET = async (
           color: "#fff",
         }}
       >
-        {title ? (
-          <div
-            style={{
-              position: "absolute",
-              top: 198,
-              left: 55,
-              width: 420,
-              fontSize: 54,
-              fontWeight: 400,
-              letterSpacing: -2.7,
-              lineHeight: 1,
-              color: "#fff",
-            }}
-          >
-            {title}
-          </div>
-        ) : null}
         <div
           style={{
             position: "absolute",
-            top: 330,
+            top: 198,
             left: 55,
-            fontFamily: "Geist Mono",
-            fontSize: 28,
-            fontWeight: 400,
-            letterSpacing: -1,
-            lineHeight: 1,
-            color: "#888",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          {section}
+          {title ? (
+            <div
+              style={{
+                width: 420,
+                fontSize: 54,
+                fontWeight: 400,
+                letterSpacing: -2.7,
+                lineHeight: 1,
+                color: "#fff",
+              }}
+            >
+              {title}
+            </div>
+          ) : null}
+          <div
+            style={{
+              marginTop: 78,
+              fontFamily: "Geist Mono",
+              fontSize: 28,
+              fontWeight: 400,
+              letterSpacing: -1,
+              lineHeight: 1,
+              color: "#888",
+            }}
+          >
+            {section}
+          </div>
         </div>
       </div>
     ),
