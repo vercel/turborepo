@@ -130,7 +130,7 @@ export function generateStaticParams(): Array<{ lang: string }> {
 export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1448px] px-4 sm:px-6">
-      <section className="relative grid grid-cols-1 items-center gap-12 py-16 sm:py-40 lg:grid-cols-12 lg:gap-0">
+      <section className="relative grid grid-cols-1 items-center gap-12 py-0 sm:py-40 lg:grid-cols-12 lg:gap-0">
         <div className="relative z-1 flex flex-col justify-center lg:col-span-7 lg:pr-16">
           <h1 className="lg:max-w-[700px] text-heading-40 sm:text-heading-48 xl:text-heading-64">
             Your codebase, faster
