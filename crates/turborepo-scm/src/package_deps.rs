@@ -5,7 +5,10 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM, hash_object::hash_objects};
+use crate::{
+    Error, GitHashes, GitRepo, RepoGitIndex, SCM,
+    hash_object::{hash_discovered_objects, hash_objects},
+};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -116,11 +119,18 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        let (attrs_root, cached_attrs) = match self {
-            SCM::Git(git) => (Some(git.root.as_ref()), git.git_attrs()),
-            SCM::Manual => (None, None),
-        };
-        crate::manual::hash_files(turbo_root, files, true, attrs_root, cached_attrs)
+        self.hash_discovered_files(turbo_root, files)
+    }
+
+    pub fn hash_discovered_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<GitHashes, Error> {
+        match self {
+            SCM::Manual => crate::manual::hash_discovered_files(turbo_root, files, None, None),
+            SCM::Git(git) => git.hash_discovered_files(turbo_root, files),
+        }
     }
 }
 
@@ -175,7 +185,7 @@ impl GitRepo {
         };
 
         // Note: to_hash is *git repo relative*
-        hash_objects(
+        hash_discovered_objects(
             &self.root,
             &full_pkg_path,
             to_hash,
@@ -192,14 +202,7 @@ impl GitRepo {
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
-        let to_hash = files
-            .map(|f| {
-                Ok(self
-                    .root
-                    .anchor(process_relative_to.resolve(f.as_ref()))?
-                    .to_unix())
-            })
-            .collect::<Result<Vec<_>, PathError>>()?;
+        let to_hash = self.repo_relative_paths(process_relative_to, files)?;
         // Note: to_hash is *git repo relative*
         hash_objects(
             &self.root,
@@ -210,6 +213,39 @@ impl GitRepo {
             self.slowest_files.as_ref(),
         )?;
         Ok(hashes)
+    }
+
+    fn hash_discovered_files(
+        &self,
+        process_relative_to: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<GitHashes, Error> {
+        let mut hashes = GitHashes::new();
+        let to_hash = self.repo_relative_paths(process_relative_to, files)?;
+        hash_discovered_objects(
+            &self.root,
+            process_relative_to,
+            to_hash,
+            &mut hashes,
+            self.git_attrs(),
+            self.slowest_files.as_ref(),
+        )?;
+        Ok(hashes)
+    }
+
+    fn repo_relative_paths(
+        &self,
+        process_relative_to: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<Vec<turbopath::RelativeUnixPathBuf>, PathError> {
+        files
+            .map(|file| {
+                Ok(self
+                    .root
+                    .anchor(process_relative_to.resolve(file.as_ref()))?
+                    .to_unix())
+            })
+            .collect()
     }
 
     fn git_relative_to_package_relative(
@@ -255,7 +291,7 @@ impl GitRepo {
 
         if !to_hash.is_empty() {
             let mut new_hashes = GitHashes::with_capacity(to_hash.len());
-            hash_objects(
+            hash_discovered_objects(
                 &self.root,
                 full_pkg_path,
                 to_hash,
@@ -563,6 +599,170 @@ mod tests {
             get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
                 .unwrap();
         assert!(manual_hashes.is_empty());
+    }
+
+    #[test]
+    fn test_missing_explicit_file_errors_with_git() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+        let scm = SCM::new(&repo_root);
+        let missing = AnchoredSystemPathBuf::from_raw("missing-global-dependency.txt").unwrap();
+
+        let error = scm
+            .get_hashes_for_files(&repo_root, std::slice::from_ref(&missing), false)
+            .unwrap_err();
+
+        assert!(
+            error.to_string().contains("missing-global-dependency.txt"),
+            "missing explicit dependency should fail with path context: {error}"
+        );
+
+        let hashes = scm
+            .hash_discovered_files(&repo_root, std::slice::from_ref(&missing).iter())
+            .unwrap();
+        assert!(hashes.is_empty());
+
+        let directory = AnchoredSystemPathBuf::from_raw("directory").unwrap();
+        repo_root.resolve(&directory).create_dir_all().unwrap();
+        let hashes = SCM::Manual
+            .hash_discovered_files(&repo_root, [missing, directory].iter())
+            .unwrap();
+        assert!(hashes.is_empty());
+    }
+
+    #[test]
+    fn test_repo_wide_inputs_include_configured_git_metadata() -> Result<(), Error> {
+        let (_tmp, repo_root) = tmp_dir();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        repo_root
+            .join_component("source.js")
+            .create_with_contents("export {}")?;
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        let SCM::Git(git) = SCM::new(&repo_root) else {
+            panic!("expected git SCM");
+        };
+        let root_package = AnchoredSystemPathBuf::from_raw("")?;
+        let inputs = ["**/*", ".git/config"];
+
+        let git_hashes =
+            git.get_package_file_hashes(&repo_root, &root_package, &inputs, true, None)?;
+        let fallback_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &inputs,
+            true,
+            Some(&repo_root),
+            None,
+        )?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &inputs,
+            true,
+            None,
+            None,
+        )?;
+        let default_manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &repo_root,
+            &root_package,
+            &[],
+            false,
+            Some(&repo_root),
+            None,
+        )?;
+        let exclusion_only_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &["!source.js"],
+            true,
+            Some(&repo_root),
+            None,
+        )?;
+
+        for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
+            assert!(
+                hashes.contains_key(&RelativeUnixPathBuf::new(".git/config").unwrap()),
+                "configured Git metadata must be hashed: {hashes:?}"
+            );
+        }
+        assert!(
+            default_manual_hashes
+                .keys()
+                .all(|path| !path.as_str().starts_with(".git")),
+            "default inputs must not hash Git metadata: {default_manual_hashes:?}"
+        );
+        assert!(
+            exclusion_only_hashes
+                .keys()
+                .all(|path| !path.as_str().starts_with(".git")),
+            "exclusions must not opt into Git metadata: {exclusion_only_hashes:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_repo_wide_inputs_include_configured_worktree_metadata() -> Result<(), Error> {
+        let (_tmp_main, main_root) = tmp_dir();
+        let (_tmp_worktree, worktree_parent) = tmp_dir();
+        main_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        main_root
+            .join_component("source.js")
+            .create_with_contents("export {}")?;
+        setup_repository(&main_root);
+        commit_all(&main_root);
+
+        let worktree_root = worktree_parent.join_component("linked");
+        require_git_cmd(
+            &main_root,
+            &[
+                "worktree",
+                "add",
+                worktree_root.as_str(),
+                "-b",
+                "repo-wide-input-test",
+            ],
+        );
+
+        let SCM::Git(git) = SCM::new(&worktree_root) else {
+            panic!("expected git SCM");
+        };
+        let root_package = AnchoredSystemPathBuf::from_raw("")?;
+        let inputs = ["**/*", ".git"];
+
+        let git_hashes =
+            git.get_package_file_hashes(&worktree_root, &root_package, &inputs, true, None)?;
+        let fallback_hashes = get_package_file_hashes_without_git(
+            &worktree_root,
+            &root_package,
+            &inputs,
+            true,
+            Some(&worktree_root),
+            None,
+        )?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &worktree_root,
+            &root_package,
+            &inputs,
+            true,
+            None,
+            None,
+        )?;
+
+        for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
+            assert!(
+                hashes.contains_key(&RelativeUnixPathBuf::new(".git").unwrap()),
+                "configured linked-worktree .git pointer must be hashed: {hashes:?}"
+            );
+        }
+        Ok(())
     }
 
     #[test]
