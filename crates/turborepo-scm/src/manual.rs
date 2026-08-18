@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
 
 use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
+use tracing::info;
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
 };
@@ -104,27 +105,38 @@ fn hash_discovered_file(
         .map(|attrs| attrs.resolve_text_attr(attr_path))
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
     match crate::crlf::hash_regular_file_maybe_normalized(path, text_attr) {
-        Ok(hash) => Ok(hash),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Ok(Some(hash)) => Ok(Some(hash)),
+        Ok(None) => {
+            info!(%path, "skipping non-regular hash candidate");
+            Ok(None)
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            info!(%path, "discovered hash candidate disappeared");
+            Ok(None)
+        }
         Err(error) => Err(Error::hash_file(path.to_owned(), error)),
     }
 }
 
-fn git_metadata_path(
-    turbo_root: &AbsoluteSystemPath,
-    git_root: Option<&AbsoluteSystemPath>,
-) -> turbopath::AbsoluteSystemPathBuf {
-    let mut current = git_root.unwrap_or(turbo_root).to_owned();
-    loop {
-        let dot_git = current.join_component(".git");
-        if dot_git.symlink_metadata().is_ok() {
-            return dot_git;
+pub(crate) fn hash_discovered_files(
+    root_path: &AbsoluteSystemPath,
+    files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<GitHashes, Error> {
+    let effective_attrs_root = attrs_root.unwrap_or(root_path);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
+    let mut hashes = GitHashes::new();
+    for file in files {
+        let anchored = file.as_ref();
+        let path = root_path.resolve(anchored);
+        let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
+        if let Some(hash) = hash_discovered_file(&path, attr_path.as_str(), attrs)? {
+            hashes.insert(anchored.to_unix(), hash);
         }
-        let Some(parent) = current.parent() else {
-            return turbo_root.join_component(".git");
-        };
-        current = parent.to_owned();
     }
+    Ok(hashes)
 }
 
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
@@ -140,7 +152,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut hashes = GitHashes::new();
 
     let effective_attrs_root = git_root.unwrap_or(turbo_root);
-    let git_metadata_path = git_metadata_path(turbo_root, git_root);
+    let git_metadata_path = effective_attrs_root.join_component(".git");
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut default_file_hashes = GitHashes::new();
@@ -153,9 +165,6 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut local_inputs: Vec<&str> = Vec::new();
     let mut external_inclusions = Vec::new();
     let mut external_exclusions = Vec::new();
-    let relative =
-        AnchoredSystemPathBuf::relative_path_between(turbo_root, &git_metadata_path).to_unix();
-    external_exclusions.push(ValidatedGlob::from_str(relative.as_str())?);
     for pattern in inputs {
         let pattern = pattern.as_ref();
         let is_exclusion = pattern.starts_with('!');
@@ -176,6 +185,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             local_inputs.push(pattern);
         }
     }
+    let has_local_inclusions = local_inputs.iter().any(|pattern| !pattern.starts_with('!'));
 
     if !external_inclusions.is_empty() {
         let files = globwalk::globwalk(
@@ -189,7 +199,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                 AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
                     .to_unix();
             // Use attrs-root-relative path for .gitattributes pattern matching.
-            let attr_path = effective_attrs_root.anchor(file_path)?.to_unix();
+            let attr_path =
+                AnchoredSystemPathBuf::relative_path_between(effective_attrs_root, file_path)
+                    .to_unix();
             if let Some(hash) = hash_discovered_file(file_path, attr_path.as_str(), attrs)? {
                 hashes.insert(relative_path, hash);
             }
@@ -239,6 +251,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         Some(any(excludes)?)
     };
 
+    if !has_local_inclusions {
+        let git_metadata_path = git_metadata_path.clone();
+        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+    }
+
     let walker = walker_builder
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
@@ -246,7 +263,6 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         .git_ignore(local_inputs.is_empty() && external_inclusions.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-        .filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path())
         .build();
 
     for dirent in walker {
@@ -258,6 +274,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                     .io_error()
                     .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
             {
+                info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
                 continue;
             }
             Err(error) => return Err(error.into()),
@@ -296,6 +313,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     // If we're including default files, we need to walk again, but this time with
     // git_ignore enabled
     if include_default_files {
+        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
         let walker = walker_builder
             .follow_links(false)
             .git_ignore(true)
@@ -312,6 +330,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                         .io_error()
                         .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
                 {
+                    info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
                     continue;
                 }
                 Err(error) => return Err(error.into()),
@@ -549,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_input_excludes_ancestor_git_metadata() {
+    fn test_parent_input_includes_configured_ancestor_git_metadata() {
         let (_tmp, repo_root) = tmp_dir();
         let git_dir = repo_root.join_component(".git");
         git_dir.create_dir_all().unwrap();
@@ -576,7 +595,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(hashes.keys().all(|path| !path.as_str().contains(".git")));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("../../.git/index.lock").unwrap()));
     }
 
     #[test]

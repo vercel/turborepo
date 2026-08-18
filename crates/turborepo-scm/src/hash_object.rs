@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use tracing::debug;
+use tracing::{debug, info};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes, OidHash};
@@ -139,11 +139,15 @@ fn hash_objects_inner(
                             });
                         Ok(Some((package_relative_path, hash)))
                     }
-                    Ok(None) => Ok(None),
+                    Ok(None) => {
+                        info!(path = %full_file_path, "skipping non-regular hash candidate");
+                        Ok(None)
+                    }
                     Err(error)
                         if matches!(missing_files, MissingFiles::Ignore)
                             && error.kind() == std::io::ErrorKind::NotFound =>
                     {
+                        info!(path = %full_file_path, "discovered hash candidate disappeared");
                         Ok(None)
                     }
                     Err(error) => Err(Error::hash_file(full_file_path, error)),

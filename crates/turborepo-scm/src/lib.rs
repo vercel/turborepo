@@ -132,6 +132,7 @@ impl Error {
     }
 
     pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        tracing::info!(%path, error = %source, "file hashing failed");
         Error::HashFile {
             path,
             source,

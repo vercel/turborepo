@@ -119,11 +119,18 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        let (attrs_root, cached_attrs) = match self {
-            SCM::Git(git) => (Some(git.root.as_ref()), git.git_attrs()),
-            SCM::Manual => (None, None),
-        };
-        crate::manual::hash_files(turbo_root, files, true, attrs_root, cached_attrs)
+        self.hash_discovered_files(turbo_root, files)
+    }
+
+    pub fn hash_discovered_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<GitHashes, Error> {
+        match self {
+            SCM::Manual => crate::manual::hash_discovered_files(turbo_root, files, None, None),
+            SCM::Git(git) => git.hash_discovered_files(turbo_root, files),
+        }
     }
 }
 
@@ -195,14 +202,7 @@ impl GitRepo {
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
-        let to_hash = files
-            .map(|f| {
-                Ok(self
-                    .root
-                    .anchor(process_relative_to.resolve(f.as_ref()))?
-                    .to_unix())
-            })
-            .collect::<Result<Vec<_>, PathError>>()?;
+        let to_hash = self.repo_relative_paths(process_relative_to, files)?;
         // Note: to_hash is *git repo relative*
         hash_objects(
             &self.root,
@@ -213,6 +213,39 @@ impl GitRepo {
             self.slowest_files.as_ref(),
         )?;
         Ok(hashes)
+    }
+
+    fn hash_discovered_files(
+        &self,
+        process_relative_to: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<GitHashes, Error> {
+        let mut hashes = GitHashes::new();
+        let to_hash = self.repo_relative_paths(process_relative_to, files)?;
+        hash_discovered_objects(
+            &self.root,
+            process_relative_to,
+            to_hash,
+            &mut hashes,
+            self.git_attrs(),
+            self.slowest_files.as_ref(),
+        )?;
+        Ok(hashes)
+    }
+
+    fn repo_relative_paths(
+        &self,
+        process_relative_to: &AbsoluteSystemPath,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    ) -> Result<Vec<turbopath::RelativeUnixPathBuf>, PathError> {
+        files
+            .map(|file| {
+                Ok(self
+                    .root
+                    .anchor(process_relative_to.resolve(file.as_ref()))?
+                    .to_unix())
+            })
+            .collect()
     }
 
     fn git_relative_to_package_relative(
@@ -312,7 +345,6 @@ impl GitRepo {
                 inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
         }
-        exclusions.push(self.git_metadata_exclusion(turbo_root)?);
         let files = globwalk::globwalk(
             turbo_root,
             &inclusions,
@@ -377,7 +409,6 @@ impl GitRepo {
             let mut glob_exclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
             let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
-            let git_metadata_path = self.root.join_component(".git");
 
             // Exclusions must apply to the filesystem walk itself, not just
             // the in-memory filter below: the walk can discover files the
@@ -392,7 +423,6 @@ impl GitRepo {
                 glob_buf.push_str(exclude.trim_start_matches('/'));
                 glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
-            glob_exclusions.push(self.git_metadata_exclusion(turbo_root)?);
 
             let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
             for raw_glob in all {
@@ -402,12 +432,6 @@ impl GitRepo {
                     // compiling a glob and walking directories.
                     let resolved =
                         full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
-                    if resolved
-                        .as_std_path()
-                        .starts_with(git_metadata_path.as_std_path())
-                    {
-                        continue;
-                    }
                     match resolved.symlink_metadata() {
                         Ok(meta) if meta.is_dir() => {
                             // Directory literal — fall through to the glob
@@ -510,15 +534,6 @@ impl GitRepo {
 
         Ok(hashes)
     }
-
-    fn git_metadata_exclusion(
-        &self,
-        turbo_root: &AbsoluteSystemPath,
-    ) -> Result<ValidatedGlob, Error> {
-        let dot_git = self.root.join_component(".git");
-        let relative = AnchoredSystemPathBuf::relative_path_between(turbo_root, &dot_git).to_unix();
-        Ok(ValidatedGlob::from_str(relative.as_str())?)
-    }
 }
 
 #[cfg(test)]
@@ -594,17 +609,29 @@ mod tests {
         let missing = AnchoredSystemPathBuf::from_raw("missing-global-dependency.txt").unwrap();
 
         let error = scm
-            .get_hashes_for_files(&repo_root, &[missing], false)
+            .get_hashes_for_files(&repo_root, std::slice::from_ref(&missing), false)
             .unwrap_err();
 
         assert!(
             error.to_string().contains("missing-global-dependency.txt"),
             "missing explicit dependency should fail with path context: {error}"
         );
+
+        let hashes = scm
+            .hash_discovered_files(&repo_root, std::slice::from_ref(&missing).iter())
+            .unwrap();
+        assert!(hashes.is_empty());
+
+        let directory = AnchoredSystemPathBuf::from_raw("directory").unwrap();
+        repo_root.resolve(&directory).create_dir_all().unwrap();
+        let hashes = SCM::Manual
+            .hash_discovered_files(&repo_root, [missing, directory].iter())
+            .unwrap();
+        assert!(hashes.is_empty());
     }
 
     #[test]
-    fn test_repo_wide_inputs_exclude_git_metadata() -> Result<(), Error> {
+    fn test_repo_wide_inputs_include_configured_git_metadata() -> Result<(), Error> {
         let (_tmp, repo_root) = tmp_dir();
         repo_root
             .join_component("package.json")
@@ -639,19 +666,47 @@ mod tests {
             None,
             None,
         )?;
+        let default_manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &repo_root,
+            &root_package,
+            &[],
+            false,
+            Some(&repo_root),
+            None,
+        )?;
+        let exclusion_only_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &root_package,
+            &["!source.js"],
+            true,
+            Some(&repo_root),
+            None,
+        )?;
 
         for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
             assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
             assert!(
-                hashes.keys().all(|path| !path.as_str().starts_with(".git")),
-                "active Git metadata must not be hashed: {hashes:?}"
+                hashes.contains_key(&RelativeUnixPathBuf::new(".git/config").unwrap()),
+                "configured Git metadata must be hashed: {hashes:?}"
             );
         }
+        assert!(
+            default_manual_hashes
+                .keys()
+                .all(|path| !path.as_str().starts_with(".git")),
+            "default inputs must not hash Git metadata: {default_manual_hashes:?}"
+        );
+        assert!(
+            exclusion_only_hashes
+                .keys()
+                .all(|path| !path.as_str().starts_with(".git")),
+            "exclusions must not opt into Git metadata: {exclusion_only_hashes:?}"
+        );
         Ok(())
     }
 
     #[test]
-    fn test_repo_wide_inputs_exclude_linked_worktree_metadata() -> Result<(), Error> {
+    fn test_repo_wide_inputs_include_configured_worktree_metadata() -> Result<(), Error> {
         let (_tmp_main, main_root) = tmp_dir();
         let (_tmp_worktree, worktree_parent) = tmp_dir();
         main_root
@@ -703,8 +758,8 @@ mod tests {
         for hashes in [&git_hashes, &fallback_hashes, &manual_hashes] {
             assert!(hashes.contains_key(&RelativeUnixPathBuf::new("source.js").unwrap()));
             assert!(
-                !hashes.contains_key(&RelativeUnixPathBuf::new(".git").unwrap()),
-                "linked worktree .git pointer must not be hashed: {hashes:?}"
+                hashes.contains_key(&RelativeUnixPathBuf::new(".git").unwrap()),
+                "configured linked-worktree .git pointer must be hashed: {hashes:?}"
             );
         }
         Ok(())
