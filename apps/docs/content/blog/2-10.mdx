@@ -272,7 +272,7 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
 
 <Accordions>
 
-  <Accordion title="Feat (12)">
+  <Accordion title="Feat (13)">
 
     - feat: Add deferred hashing for task inputs ([#13125](https://github.com/vercel/turborepo/pull/13125))
     - feat: Add JIT task input hashing ([#13043](https://github.com/vercel/turborepo/pull/13043))
@@ -283,6 +283,7 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
     - feat: Add circular package dependency detection to boundaries ([#12567](https://github.com/vercel/turborepo/pull/12567))
     - feat: Replace package manager commands in scaffolded README files ([#6747](https://github.com/vercel/turborepo/pull/6747))
     - feat: Allow `--affected` and `--filter` to be combined ([#12543](https://github.com/vercel/turborepo/pull/12543))
+    - feat: Add incremental task caching ([#12531](https://github.com/vercel/turborepo/pull/12531))
     - feat: Add Next.js + Elysia full-stack starter template ([#12414](https://github.com/vercel/turborepo/pull/12414))
     - feat: Add `cacheMaxAge` and `cacheMaxSize` for local cache eviction ([#12487](https://github.com/vercel/turborepo/pull/12487))
     - feat: Handle package manager catalogs in migration codemod ([#12496](https://github.com/vercel/turborepo/pull/12496))
@@ -300,7 +301,7 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
 
   </Accordion>
 
-  <Accordion title="Fix (246)">
+  <Accordion title="Fix (247)">
 
     - fix: Hash selected dependency outputs instead of tasks ([#13129](https://github.com/vercel/turborepo/pull/13129))
     - fix: Improve watch graceful shutdown ([#13128](https://github.com/vercel/turborepo/pull/13128))
@@ -338,6 +339,7 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
     - fix: Separate artifact signature fields ([#13059](https://github.com/vercel/turborepo/pull/13059))
     - fix: Preserve vt100 cell byte counts ([#13058](https://github.com/vercel/turborepo/pull/13058))
     - fix: Normalize Windows daemon path hash ([#13020](https://github.com/vercel/turborepo/pull/13020))
+    - fix: Contain incremental cache outputs ([#13057](https://github.com/vercel/turborepo/pull/13057))
     - fix: Strip special mode bits from cache restore ([#13056](https://github.com/vercel/turborepo/pull/13056))
     - fix: Prevent git argument injection in SCM refs ([#13055](https://github.com/vercel/turborepo/pull/13055))
     - fix: Confine prune patch paths ([#13054](https://github.com/vercel/turborepo/pull/13054))
