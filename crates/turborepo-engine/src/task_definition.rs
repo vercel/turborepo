@@ -8,7 +8,7 @@ use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::{
     ProcessedTaskDefinition, TOPOLOGICAL_PIPELINE_DELIMITER, TaskInputsFromProcessed,
-    incremental_partitions_from_processed, task_outputs_from_processed,
+    task_outputs_from_processed,
 };
 use turborepo_types::{TaskDefinition, TaskInputs};
 
@@ -103,12 +103,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
 
         let with = processed.with.map(|with_tasks| with_tasks.tasks);
 
-        let incremental = processed
-            .incremental
-            .map(|partitions| incremental_partitions_from_processed(partitions, path_to_repo_root))
-            .transpose()
-            .map_err(BuilderError::TurboJson)?;
-
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -123,7 +117,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
             interactive,
             env_mode: processed.env_mode.map(|mode| *mode.as_inner()),
             with,
-            incremental,
             experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
             // Deliberately not converted here: the engine builder resolves
             // the override across the whole chain (scoped vs unscoped

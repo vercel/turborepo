@@ -139,7 +139,6 @@ mod tests {
             env_mode: None,
             with: None,
             experimental_ci: None,
-            incremental: None,
             command: None,
         },
         TaskDefinition {
@@ -159,7 +158,6 @@ mod tests {
           interruptible: true,
           env_mode: None,
           with: None,
-          incremental: None,
           experimental_ci: None,
           command: None,
         }
@@ -193,7 +191,6 @@ mod tests {
             env_mode: None,
             with: None,
             experimental_ci: None,
-            incremental: None,
             command: None,
         },
         TaskDefinition {
@@ -213,7 +210,6 @@ mod tests {
             interactive: false,
             env_mode: None,
             with: None,
-            incremental: None,
             experimental_ci: None,
             command: None,
         }
