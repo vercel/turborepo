@@ -1,6 +1,6 @@
 # Solid-Turborepo Starter
 
-A modern Turborepo starter for building SolidJS applications with a complete development setup. This starter comes equipped with the pnpm package manager, Vinxi Bundler for optimized builds, Tailwind CSS v4 for styling and ESLint for code quality.
+A modern Turborepo starter for building SolidJS applications with a complete development setup. This starter comes equipped with the pnpm package manager, SolidStart v2 on Vite and Nitro for optimized builds, Tailwind CSS v4 for styling and ESLint for code quality.
 
 ---
 
@@ -16,9 +16,11 @@ A modern Turborepo starter for building SolidJS applications with a complete dev
 
 ## Overview
 
-This starter project leverages Turborepo to manage a monorepo structure that combines a SolidJS application with shared component libraries and configuration packages. It provides a robust setup for modern web development:
+This starter project leverages Turborepo to manage a monorepo structure that combines SolidStart applications with shared component libraries and configuration packages. It provides a robust setup for modern web development:
 
 ## Getting Started
+
+This example requires Node.js 24 or newer.
 
 To bootstrap your new turborepo using this starter, simply run:
 
@@ -32,12 +34,13 @@ This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `docs`: a [Solid Start](https://start.solidjs.com/) app
-- `web`: a [Solid Start](https://start.solidjs.com/) app
+- `docs`: a [SolidStart](https://docs.solidjs.com/solid-start) app with [Vitest](https://vitest.dev/) component tests
+- `web`: a [SolidStart](https://docs.solidjs.com/solid-start) app
 - `@repo/ui`: a stub Solid component library shared by both `solid` applications
-- `@repo/eslint-config`: `eslint` configurations
+- `@repo/eslint-config`: shared [ESLint](https://eslint.org/) flat configurations
 - `@repo/tailwind-config`: [Tailwind](https://tailwindcss.com/) v4 configurations
-- `vinxi`: [Vinxi](https://vinxi.vercel.app/) Bundler\*\* for efficient bundling.
+
+Both applications are built with [SolidStart v2](https://docs.solidjs.com/solid-start/v2), which runs on [Vite](https://vite.dev/) and the [Nitro](https://nitro.build/) Vite plugin.
 
 ## Build & Develop
 
@@ -57,6 +60,15 @@ To develop all apps and packages, run the following command:
 ```
 cd with-solid
 pnpm run dev
+```
+
+### Test
+
+To run the Vitest component tests, run the following command:
+
+```
+cd with-solid
+pnpm run test
 ```
 
 ### Remote Caching
@@ -94,4 +106,4 @@ Learn more about the power of Turborepo:
 
 ## License
 
-This project is licensed under the MIT License.
+MIT
