@@ -72,6 +72,7 @@ pub trait PackageDiscoveryBuilder {
 pub struct LocalPackageDiscovery {
     repo_root: AbsoluteSystemPathBuf,
     package_manager: PackageManager,
+    discover_turbo_json: bool,
 }
 
 impl LocalPackageDiscovery {
@@ -79,6 +80,7 @@ impl LocalPackageDiscovery {
         Self {
             repo_root,
             package_manager,
+            discover_turbo_json: true,
         }
     }
 }
@@ -88,6 +90,7 @@ pub struct LocalPackageDiscoveryBuilder {
     package_manager: Option<PackageManager>,
     package_json: Option<PackageJson>,
     allow_missing_package_manager: bool,
+    discover_turbo_json: bool,
 }
 
 impl LocalPackageDiscoveryBuilder {
@@ -101,6 +104,7 @@ impl LocalPackageDiscoveryBuilder {
             package_manager,
             package_json,
             allow_missing_package_manager: false,
+            discover_turbo_json: true,
         }
     }
 
@@ -110,6 +114,11 @@ impl LocalPackageDiscoveryBuilder {
 
     pub fn with_package_manager(&mut self, package_manager: Option<PackageManager>) -> &mut Self {
         self.package_manager = package_manager;
+        self
+    }
+
+    pub(crate) fn with_turbo_json_discovery(&mut self, discover_turbo_json: bool) -> &mut Self {
+        self.discover_turbo_json = discover_turbo_json;
         self
     }
 }
@@ -137,6 +146,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
         Ok(LocalPackageDiscovery {
             repo_root: self.repo_root,
             package_manager,
+            discover_turbo_json: self.discover_turbo_json,
         })
     }
 }
@@ -160,6 +170,20 @@ impl PackageDiscovery for LocalPackageDiscovery {
         };
 
         drop(glob_span);
+
+        if !self.discover_turbo_json {
+            return Ok(DiscoveryResponse {
+                workspaces: package_paths
+                    .into_iter()
+                    .map(|package_json| WorkspaceData {
+                        package_json,
+                        turbo_json: None,
+                    })
+                    .collect(),
+                package_manager: self.package_manager.clone(),
+            });
+        }
+
         // `buffered` keeps discovery order deterministic while letting the
         // per-workspace turbo.json stats run concurrently — sequentially
         // these 1-per-workspace syscalls cost ~20ms on large monorepos.
@@ -308,6 +332,53 @@ impl<P: PackageDiscovery + Send + Sync> PackageDiscovery for CachingPackageDisco
             })
             .await
             .map(ToOwned::to_owned)
+    }
+}
+
+#[cfg(test)]
+mod local_tests {
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPath;
+
+    use super::*;
+
+    fn npm_workspace() -> (TempDir, AbsoluteSystemPathBuf) {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join("apps/web")).unwrap();
+        std::fs::write(
+            dir.path().join("package.json"),
+            r#"{"workspaces":["apps/*"]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("apps/web/package.json"),
+            r#"{"name":"web"}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("apps/web/turbo.json"), "{}").unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())
+            .unwrap()
+            .to_owned();
+        (dir, repo_root)
+    }
+
+    #[tokio::test]
+    async fn turbo_json_discovery_can_be_disabled() {
+        let (_dir, repo_root) = npm_workspace();
+
+        let with_turbo_json = LocalPackageDiscovery::new(repo_root.clone(), PackageManager::Npm)
+            .discover_packages()
+            .await
+            .unwrap();
+        assert_eq!(with_turbo_json.workspaces.len(), 1);
+        assert!(with_turbo_json.workspaces[0].turbo_json.is_some());
+
+        let mut builder =
+            LocalPackageDiscoveryBuilder::new(repo_root, Some(PackageManager::Npm), None);
+        builder.with_turbo_json_discovery(false);
+        let without_turbo_json = builder.build().unwrap().discover_packages().await.unwrap();
+        assert_eq!(without_turbo_json.workspaces.len(), 1);
+        assert!(without_turbo_json.workspaces[0].turbo_json.is_none());
     }
 }
 
