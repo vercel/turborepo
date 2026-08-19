@@ -6,9 +6,6 @@
 //! - Log file handling and output mode management
 //! - Integration with output watchers for output tracking
 //! - Task definition-aware output glob handling
-//! - Incremental cache management for tool-specific artifacts
-
-pub mod incremental;
 
 use std::{
     collections::HashSet,
@@ -50,8 +47,6 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error("Error with output watcher: {0}")]
     OutputWatcher(#[from] OutputWatcherError),
-    #[error("Task spawn failed: {0}")]
-    SpawnBlocking(String),
     #[error("Task output resolves outside of repository root: {0}")]
     OutputOutsideRepo(String),
     #[error(
@@ -130,9 +125,6 @@ pub struct RunCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
-    /// True when `--remote-only` is active, skips on-disk file checks for
-    /// incremental.
-    remote_only: bool,
 }
 
 /// Trait used to output cache information to user
@@ -151,8 +143,6 @@ impl RunCache {
         } else {
             run_cache_opts.task_output_logs_override
         };
-        let remote_only = cache_opts.cache == turborepo_cache::CacheConfig::remote_only()
-            || cache_opts.cache == turborepo_cache::CacheConfig::remote_read_only();
         RunCache {
             task_output_logs,
             cache,
@@ -163,7 +153,6 @@ impl RunCache {
             output_watcher,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
-            remote_only,
         }
     }
 
@@ -202,19 +191,6 @@ impl RunCache {
 
         let caching_disabled = !task_definition.cache;
 
-        let incremental_cache = task_definition.incremental.as_ref().map(|partitions| {
-            let package_dir = self.repo_root.resolve(package_directory);
-            incremental::IncrementalTaskCache::new(
-                partitions.clone(),
-                task_id.package().to_string(),
-                task_id.task().to_string(),
-                self.cache.clone(),
-                self.repo_root.clone(),
-                package_dir,
-                self.remote_only,
-            )
-        });
-
         Ok(TaskCache {
             expanded_outputs: Vec::new(),
             run_cache: self.clone(),
@@ -228,7 +204,6 @@ impl RunCache {
             ui: self.ui,
             warnings: self.warnings.clone(),
             errors_only_show_hash: self.errors_only_show_hash,
-            incremental_cache,
         })
     }
 
@@ -363,7 +338,6 @@ fn exclusions_for_symlinked_prefix(
 /// Created by `RunCache::task_cache()`, this handles:
 /// - Checking and restoring cached outputs
 /// - Saving outputs after task execution
-/// - Incremental cache fetch/upload for tool-specific artifacts
 pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
     run_cache: Arc<RunCache>,
@@ -380,9 +354,6 @@ pub struct TaskCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
-    /// Incremental cache for tool-specific artifacts, present only when the
-    /// task has `incremental` partitions configured.
-    incremental_cache: Option<incremental::IncrementalTaskCache>,
 }
 
 impl TaskCache {
@@ -775,63 +746,6 @@ impl TaskCache {
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
     }
-
-    /// Returns true if this task has incremental cache partitions configured
-    /// AND caching is not fully disabled. Read/write flag checks are handled
-    /// independently by `fetch_incremental` and `upload_incremental`.
-    pub fn has_incremental(&self) -> bool {
-        self.incremental_cache.is_some() && !self.caching_disabled
-    }
-
-    /// Fetch incremental artifacts for all partitions. Must complete before
-    /// task execution begins. Returns the restore status for summary output.
-    /// Respects --force (reads disabled) and --no-cache flags. Times out
-    /// after 30 seconds to prevent blocking task execution on slow remote
-    /// cache.
-    pub async fn fetch_incremental(&self) -> incremental::IncrementalRestoreStatus {
-        if self.caching_disabled || self.run_cache.reads_disabled {
-            return incremental::IncrementalRestoreStatus::default();
-        }
-        let Some(incremental) = &self.incremental_cache else {
-            return incremental::IncrementalRestoreStatus::default();
-        };
-        match tokio::time::timeout(std::time::Duration::from_secs(30), incremental.fetch_all())
-            .await
-        {
-            Ok(status) => status,
-            Err(_) => {
-                warn!(
-                    "incremental fetch timed out after 30s, proceeding without incremental state"
-                );
-                incremental::IncrementalRestoreStatus::default()
-            }
-        }
-    }
-
-    /// Upload incremental artifacts for all partitions after successful
-    /// task execution. Failures are logged as warnings but do not affect
-    /// the task result. Respects --no-cache flag (skips when writes are
-    /// disabled). Not affected by --force (which only disables reads).
-    /// Times out after 60 seconds to prevent hanging process exit on slow
-    /// remote cache. Returns the number of partition upload failures
-    /// (0 = all succeeded or none configured).
-    pub async fn upload_incremental(&self) -> usize {
-        if self.caching_disabled || self.run_cache.writes_disabled {
-            return 0;
-        }
-        let Some(incremental) = &self.incremental_cache else {
-            return 0;
-        };
-        match tokio::time::timeout(std::time::Duration::from_secs(60), incremental.upload_all())
-            .await
-        {
-            Ok(failures) => failures,
-            Err(_) => {
-                warn!("incremental upload timed out after 60s, skipping remaining uploads");
-                1
-            }
-        }
-    }
 }
 
 /// Cache for configuration files (like task access tracing config).
@@ -962,9 +876,7 @@ mod test {
     };
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
-    use turborepo_types::{
-        IncrementalPartition, OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs,
-    };
+    use turborepo_types::{OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs};
     use turborepo_ui::ColorConfig;
 
     use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
@@ -1065,16 +977,6 @@ mod test {
         ))
     }
 
-    async fn assert_incremental_roundtrip(task_cache: &TaskCache, output: &AbsoluteSystemPathBuf) {
-        output.ensure_dir().unwrap();
-        output.create_with_contents("state").unwrap();
-        assert_eq!(task_cache.upload_incremental().await, 0);
-        task_cache.run_cache.cache.wait().await.unwrap();
-        output.remove_file().unwrap();
-        assert!(task_cache.fetch_incremental().await.any_restored());
-        assert!(output.exists());
-    }
-
     #[tokio::test]
     async fn task_cache_uses_authoritative_context() {
         let tmp = tempdir().unwrap();
@@ -1082,16 +984,7 @@ mod test {
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
         let graph = javascript_graph(&repo_root, "packages").await;
         let cache = run_cache(&repo_root);
-        let definition = TaskDefinition {
-            incremental: Some(vec![IncrementalPartition {
-                outputs: TaskOutputs {
-                    inclusions: vec![".incremental/**".to_string()],
-                    exclusions: Vec::new(),
-                },
-                inputs: Vec::new(),
-            }]),
-            ..Default::default()
-        };
+        let definition = TaskDefinition::default();
 
         let root = cache
             .task_cache(
@@ -1128,12 +1021,6 @@ mod test {
                     .starts_with(&format!("packages{MAIN_SEPARATOR}app{MAIN_SEPARATOR}")))
         );
         assert_eq!(app.task_id, app_task);
-        assert_incremental_roundtrip(
-            &app,
-            &repo_root.join_components(&["packages", "app", ".incremental", "state.bin"]),
-        )
-        .await;
-
         assert!(matches!(
             cache.task_cache(
                 &definition,
@@ -1172,13 +1059,6 @@ mod test {
                 inclusions: vec!["dist/**".to_string()],
                 exclusions: Vec::new(),
             },
-            incremental: Some(vec![IncrementalPartition {
-                outputs: TaskOutputs {
-                    inclusions: vec![".incremental/**".to_string()],
-                    exclusions: Vec::new(),
-                },
-                inputs: Vec::new(),
-            }]),
             ..Default::default()
         };
 
@@ -1202,11 +1082,6 @@ mod test {
                     exclusions: Vec::new(),
                 }
             );
-            assert_incremental_roundtrip(
-                &task_cache,
-                &repo_root.join_components(&[".incremental", "state.bin"]),
-            )
-            .await;
         }
     }
 
@@ -1278,7 +1153,6 @@ mod test {
             output_watcher: None,
             ui,
             errors_only_show_hash,
-            remote_only: false,
         });
 
         TaskCache {
@@ -1297,7 +1171,6 @@ mod test {
             ui,
             warnings,
             errors_only_show_hash,
-            incremental_cache: None,
         }
     }
 

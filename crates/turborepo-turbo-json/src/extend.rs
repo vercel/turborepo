@@ -162,7 +162,6 @@ impl ProcessedTaskDefinition {
         set_field!(self, other, interruptible);
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
-        set_field!(self, other, incremental);
         set_field!(self, other, experimental_ci);
         // A command is atomic: the most specific definition's whole value
         // wins (array, opt-out, or map — maps never deep-merge, and
@@ -218,7 +217,6 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
-            incremental: None,
             experimental_ci: None,
             command: None,
         }
@@ -258,7 +256,6 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
-            incremental: None,
             experimental_ci: None,
             command: None,
         }
@@ -280,7 +277,6 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
-            incremental: None,
             experimental_ci: None,
             command: None,
         }

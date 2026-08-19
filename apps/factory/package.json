@@ -1,0 +1,43 @@
+{
+  "name": "examples-agent",
+  "version": "0.0.0",
+  "type": "module",
+  "imports": {
+    "#*": "./agent/*",
+    "#evals/*": "./evals/*"
+  },
+  "scripts": {
+    "build": "eve build && next build",
+    "dev": "next dev",
+    "start": "next start",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/harness": "1.0.71",
+    "@ai-sdk/harness-claude-code": "1.0.71",
+    "@ai-sdk/harness-codex": "1.0.71",
+    "@ai-sdk/harness-opencode": "1.0.71",
+    "@ai-sdk/sandbox-vercel": "1.0.71",
+    "@vercel/blob": "2.7.0",
+    "@vercel/connect": "0.4.2",
+    "@vercel/oidc": "3.8.0",
+    "@vercel/sandbox": "2.5.0",
+    "ai": "7.0.65",
+    "eve": "^0.22.5",
+    "next": "16.3.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "workflow": "5.0.0-beta.30",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3",
+    "typescript-7": "npm:typescript@7.0.2"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

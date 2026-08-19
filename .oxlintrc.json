@@ -145,11 +145,29 @@
     "unicorn/prefer-string-slice": "off",
     "typescript/ban-tslint-comment": "off",
     "unicorn/prefer-module": "off",
-    "unicorn/prefer-ternary": "off"
+    "unicorn/prefer-ternary": "off",
+    "func-name-matching": "off",
+    "logical-assignment-operators": "off",
+    "no-underscore-dangle": "off",
+    "one-var": "off",
+    "prefer-named-capture-group": "off",
+    "require-unicode-regexp": "off",
+    "import/newline-after-import": "off",
+    "node/no-sync": "off",
+    "typescript/explicit-member-accessibility": "off",
+    "typescript/method-signature-style": "off",
+    "unicorn/custom-error-definition": "off",
+    "unicorn/import-style": "off",
+    "unicorn/max-nested-calls": "off",
+    "unicorn/no-negated-condition": "off",
+    "unicorn/prefer-export-from": "off",
+    "unicorn/prefer-import-meta-properties": "off",
+    "unicorn/prefer-number-coercion": "off",
+    "unicorn/prefer-single-call": "off"
   },
   "overrides": [
     {
-      "files": ["apps/agents/agent/**/*.ts"],
+      "files": ["apps/factory/agent/**/*.ts"],
       "rules": {
         "unicorn/filename-case": "off"
       }
@@ -162,6 +180,7 @@
       "plugins": ["jest", "vitest"],
       "rules": {
         "jest/consistent-test-it": "off",
+        "jest/expect-expect": "off",
         "jest/max-expects": "off",
         "jest/no-conditional-expect": "off",
         "jest/no-conditional-in-test": "off",
@@ -171,18 +190,37 @@
         "jest/no-untyped-mock-factory": "off",
         "jest/prefer-called-with": "off",
         "jest/prefer-each": "off",
+        "jest/prefer-ending-with-an-expect": "off",
+        "jest/prefer-expect-assertions": "off",
         "jest/prefer-lowercase-title": "off",
         "jest/prefer-strict-equal": "off",
         "jest/prefer-to-be": "off",
         "jest/require-hook": "off",
         "jest/require-top-level-describe": "off",
         "jest/valid-title": "off",
+        "vitest/consistent-test-it": "off",
+        "vitest/expect-expect": "off",
+        "vitest/max-expects": "off",
+        "vitest/no-conditional-expect": "off",
+        "vitest/no-conditional-in-test": "off",
+        "vitest/no-hooks": "off",
         "vitest/no-import-node-test": "off",
+        "vitest/prefer-called-with": "off",
         "vitest/prefer-called-once": "off",
         "vitest/prefer-describe-function-title": "off",
+        "vitest/prefer-each": "off",
+        "vitest/prefer-expect-assertions": "off",
+        "vitest/prefer-importing-vitest-globals": "off",
         "vitest/prefer-import-in-mock": "off",
+        "vitest/prefer-lowercase-title": "off",
+        "vitest/prefer-strict-equal": "off",
+        "vitest/prefer-to-be": "off",
         "vitest/prefer-to-be-falsy": "off",
-        "vitest/prefer-to-be-truthy": "off"
+        "vitest/prefer-to-be-truthy": "off",
+        "vitest/require-hook": "off",
+        "vitest/require-test-timeout": "off",
+        "vitest/require-top-level-describe": "off",
+        "vitest/valid-title": "off"
       }
     }
   ]

@@ -94,13 +94,6 @@ pub struct FutureFlags {
     /// `globalPassThroughEnv` becomes `global.passThroughEnv`.
     #[serde(default)]
     pub global_configuration: bool,
-    /// Enable incremental task caching. When enabled, Turborepo persists
-    /// tool-managed incremental build artifacts (e.g. `.tsbuildinfo`) across
-    /// runs via the remote cache, restoring them before execution on cache
-    /// misses to speed up rebuilds.
-    #[serde(default)]
-    #[schemars(skip)]
-    pub incremental_tasks: bool,
     /// Treat the crates of a Cargo workspace as Turborepo packages.
     ///
     /// When enabled, Rust crates are discovered via `cargo metadata` and
