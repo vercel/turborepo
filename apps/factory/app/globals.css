@@ -171,35 +171,10 @@ main {
   border-left: 8px solid transparent;
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 8fr) minmax(240px, 4fr);
-  gap: 48px;
-  align-items: end;
-  padding: clamp(72px, 12vw, 152px) 0 clamp(64px, 10vw, 120px);
-}
-
-h1,
 h2,
 h3,
 p {
   text-wrap: pretty;
-}
-
-h1 {
-  max-width: 840px;
-  margin: 0;
-  font-size: clamp(3rem, 7.5vw, 6.5rem);
-  font-weight: 600;
-  letter-spacing: -0.07em;
-  line-height: 0.95;
-}
-
-.intro {
-  max-width: 42ch;
-  margin: 0 0 5px;
-  color: var(--muted-foreground);
-  font-size: 1rem;
 }
 
 h2 {
@@ -218,19 +193,8 @@ h3 {
 }
 
 .observatory {
-  padding: clamp(32px, 5vw, 56px) 0;
-  border-top: 1px solid var(--border);
+  padding: 32px 0 clamp(32px, 5vw, 56px);
   border-bottom: 1px solid var(--border);
-}
-
-.observatoryHeader {
-  max-width: 680px;
-}
-
-.observatoryHeader p {
-  max-width: 58ch;
-  margin: 12px 0 0;
-  color: var(--muted-foreground);
 }
 
 .registryNotice {
@@ -251,7 +215,6 @@ h3 {
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 40px;
 }
 
 .sourceFilters {
@@ -703,15 +666,6 @@ select:focus-visible {
 }
 
 @media (max-width: 980px) {
-  .hero {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-
-  .intro {
-    max-width: 58ch;
-  }
-
   .runBoard {
     grid-template-columns: repeat(3, 300px);
     width: max-content;
@@ -734,14 +688,6 @@ select:focus-visible {
 @media (max-width: 720px) {
   main {
     width: min(100% - 32px, 1200px);
-  }
-
-  .hero {
-    padding-top: 64px;
-  }
-
-  h1 {
-    font-size: clamp(3rem, 14vw, 4.5rem);
   }
 
   .runToolbar {

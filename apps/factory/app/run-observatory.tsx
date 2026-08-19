@@ -204,17 +204,7 @@ export function RunObservatory({
   ).sort();
 
   return (
-    <section className="observatory" aria-labelledby="runs-title">
-      <div className="observatoryHeader">
-        <div>
-          <h2 id="runs-title">Every ticket, from intake to finish.</h2>
-          <p>
-            Work enters from manual and scheduled triggers, then moves across
-            the board as its agent and sandbox make progress.
-          </p>
-        </div>
-      </div>
-
+    <section className="observatory" aria-label="Factory activity">
       {!snapshot.configured ? (
         <div className="registryNotice" role="status">
           Connect a private Vercel Blob store to enable durable run history.

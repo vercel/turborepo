@@ -23,13 +23,7 @@ export default async function OperatorPage() {
         <p>Agent operations</p>
       </header>
 
-      <header className="hero">
-        <h1>Keep examples current and hot paths fast.</h1>
-        <p className="intro">
-          Observe every agent run, inspect its sandbox, and start the two daily
-          operations that maintain the Turborepo repository.
-        </p>
-      </header>
+      <h1 className="visuallyHidden">Turborepo Factory</h1>
 
       <RunObservatory initialSnapshot={snapshot} />
 
