@@ -14,16 +14,20 @@ export default async function OperatorPage() {
   const snapshot = await listControlPlaneSnapshot();
   const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
-    <main>
+    <main id="main-content">
+      <header className="masthead">
+        <div className="brand" aria-label="Turborepo Factory">
+          <span className="brandMark" aria-hidden="true" />
+          <span>Turborepo Factory</span>
+        </div>
+        <p>Agent operations</p>
+      </header>
+
       <header className="hero">
-        <p className="eyebrow">Turborepo agent / operator</p>
-        <h1>
-          Automation
-          <span>control plane</span>
-        </h1>
+        <h1>Keep examples current and hot paths fast.</h1>
         <p className="intro">
-          Trigger the daily runs that keep Turborepo examples current and its
-          hot paths measurably faster.
+          Observe every agent run, inspect its sandbox, and start the two daily
+          operations that maintain the Turborepo repository.
         </p>
       </header>
 
@@ -32,7 +36,6 @@ export default async function OperatorPage() {
       <section className="operation" aria-labelledby="operation-title">
         <div className="operationHeader">
           <div>
-            <p className="eyebrow">Scheduled operation</p>
             <h2 id="operation-title">Daily example maintenance</h2>
           </div>
           <span className="schedule">DAILY · 14:00 UTC</span>
@@ -71,7 +74,6 @@ export default async function OperatorPage() {
       <section className="operation" aria-labelledby="performance-title">
         <div className="operationHeader">
           <div>
-            <p className="eyebrow">Scheduled operation</p>
             <h2 id="performance-title">Daily performance improvement</h2>
           </div>
           <span className="schedule">DAILY · 15:30 UTC</span>
@@ -105,8 +107,9 @@ export default async function OperatorPage() {
         <RunPerformance agentRunsUrl={AGENT_RUNS_URL} />
       </section>
 
-      <footer>
-        Detailed output is linked from each run in the unified ledger.
+      <footer className="siteFooter">
+        <span className="brandMark" aria-hidden="true" />
+        <span>Detailed output is linked from each run.</span>
       </footer>
     </main>
   );

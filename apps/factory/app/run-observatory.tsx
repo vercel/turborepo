@@ -13,6 +13,7 @@ import type {
   ControlPlaneSnapshot,
   SandboxResource
 } from "../agent/lib/run-types";
+import { Button } from "../components/ui/button";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
@@ -91,7 +92,8 @@ function RunFlightStrip({ run }: { readonly run: AgentRunRecord }) {
           rel="noreferrer"
           target="_blank"
         >
-          Inspect <span aria-hidden="true">↗</span>
+          Inspect <span className="visuallyHidden">in a new tab</span>
+          <span aria-hidden="true">↗</span>
         </a>
       </article>
     </li>
@@ -191,8 +193,7 @@ export function RunObservatory({
     <section className="observatory" aria-labelledby="runs-title">
       <div className="observatoryHeader">
         <div>
-          <p className="eyebrow">Unified telemetry</p>
-          <h2 id="runs-title">Agent runway</h2>
+          <h2 id="runs-title">All agent activity, in one ledger.</h2>
           <p>
             Eve and Harness sessions, their execution state, and the sandboxes
             underneath them.
@@ -223,27 +224,35 @@ export function RunObservatory({
       ) : null}
 
       <div className="runToolbar">
-        <div className="sourceFilters" aria-label="Filter runs by source">
+        <div
+          className="sourceFilters"
+          role="group"
+          aria-label="Filter runs by source"
+        >
           {(["all", "eve", "harness"] as const).map((value) => (
-            <button
+            <Button
               aria-pressed={source === value}
               className="filterButton"
               key={value}
               onClick={() => setSource(value)}
+              size="sm"
               type="button"
+              variant="ghost"
             >
               {value}
-            </button>
+            </Button>
           ))}
         </div>
-        <button
+        <Button
           className="refreshButton"
           disabled={refreshing}
           onClick={() => void refresh()}
+          size="sm"
           type="button"
+          variant="outline"
         >
           {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        </Button>
       </div>
 
       {visibleRuns.length > 0 ? (

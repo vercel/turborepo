@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { HARNESS_IDS, type HarnessId } from "../agent/lib/harnesses";
 import { MAINTENANCE_RUN_ACTION } from "../agent/lib/operator-runs";
+import { Button } from "../components/ui/button";
 import { RunStatusPanel, runLabel, useOperatorRun } from "./operator-run";
 type SlackTestState =
   | { readonly state: "idle" }
@@ -155,7 +156,7 @@ export function RunMaintenance({
         </label>
       ) : null}
       <div className="actions">
-        <button
+        <Button
           disabled={isBusy || !selectedExample}
           onClick={() =>
             void start({
@@ -167,19 +168,20 @@ export function RunMaintenance({
           type="button"
         >
           {runLabel(status, "Run maintenance now")}
-        </button>
-        <button
-          className="secondaryButton"
+        </Button>
+        <Button
           disabled={slackTest.state === "sending"}
           onClick={() => void testSlackDelivery()}
           type="button"
+          variant="outline"
         >
           {slackTest.state === "sending"
             ? "Sending Slack test…"
             : "Send Slack test"}
-        </button>
+        </Button>
         <a href={agentRunsUrl} rel="noreferrer" target="_blank">
-          Open Agent Runs <span aria-hidden="true">↗</span>
+          Open Agent Runs <span className="visuallyHidden">in a new tab</span>
+          <span aria-hidden="true">↗</span>
         </a>
       </div>
 

@@ -18,13 +18,18 @@
     "allowJs": true,
     "incremental": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": [
     "agent/**/*.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.tsx",
     "evals/**/*.ts",
+    "lib/**/*.ts",
     "workflows/**/*.ts",
     ".eve/**/*.d.ts",
     ".next/types/**/*.ts",
