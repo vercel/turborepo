@@ -1,97 +1,42 @@
-import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { includeIgnoreFile } from '@eslint/compat';
 import prettier from 'eslint-config-prettier';
-import { includeIgnoreFile } from '@eslint/config-helpers';
+import turbo from 'eslint-config-turbo/flat';
 import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
-import svelteParser from 'svelte-eslint-parser';
+import { defineConfig } from 'eslint/config';
 import globals from 'globals';
-import tseslint from 'typescript-eslint';
+import ts from 'typescript-eslint';
 
-/**
- * Traverses up directories to find the nearest .gitignore file.
- * @param {string} startDir - The path to start searching from.
- * @param {number} maxDepth - How many parent directories to check.
- * @returns {string|null} The resolved absolute path to .gitignore, or null if not found.
- */
-function findGitignore(startDir, maxDepth = 2) {
-	let currentDir = path.resolve(startDir);
+const gitignorePath = path.resolve(import.meta.dirname, '../../.gitignore');
 
-	for (let depth = 0; depth <= maxDepth; depth++) {
-		const potentialPath = path.join(currentDir, '.gitignore');
-
-		if (existsSync(potentialPath)) {
-			return potentialPath;
+export const config = defineConfig(
+	includeIgnoreFile(gitignorePath),
+	js.configs.recommended,
+	...ts.configs.recommended,
+	...turbo,
+	...svelte.configs.recommended,
+	prettier,
+	...svelte.configs.prettier,
+	{
+		languageOptions: {
+			globals: { ...globals.browser, ...globals.node }
+		},
+		rules: {
+			// typescript-eslint strongly recommend that you do not use the no-undef lint rule on TypeScript projects.
+			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
+			'no-undef': 'off',
+			'prefer-const': 'warn'
 		}
-
-		const parentDir = path.dirname(currentDir);
-		// Stop if we reach the system root directory
-		if (parentDir === currentDir) {
-			break;
+	},
+	{
+		files: ['**/*.svelte', '**/*.svelte.js', '**/*.svelte.ts'],
+		languageOptions: {
+			parserOptions: {
+				projectService: true,
+				extraFileExtensions: ['.svelte'],
+				parser: ts.parser
+			}
 		}
-		currentDir = parentDir;
 	}
-
-	return null;
-}
-
-/**
- * Creates a type-safe ESLint configuration tailored for Svelte 5 Monorepos.
- * @param {string} packageDir - The directory of the workspace executing the configuration.
- * @param {number} [maxIgnoreDepth=2] - Maximum parent directory depth to search for a .gitignore.
- */
-export function createConfig(packageDir, maxIgnoreDepth = 2) {
-	const gitignorePath = findGitignore(packageDir, maxIgnoreDepth);
-
-	return tseslint.config(
-		...(gitignorePath ? [includeIgnoreFile(gitignorePath)] : []),
-		js.configs.recommended,
-		...tseslint.configs.recommended,
-		...svelte.configs.recommended,
-		prettier,
-		svelte.configs.prettier,
-		{
-			languageOptions: {
-				globals: { ...globals.browser, ...globals.node }
-			},
-			rules: {
-				// typescript-eslint strongly recommend that you do not use the no-undef lint rule on TypeScript projects.
-				// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
-				'no-undef': 'off',
-				// SVELTE 5 OPTIMIZATION: Prevent prefer-const from breaking bindable runes
-				'prefer-const': 'warn'
-			}
-		},
-		{
-			files: [
-				'**/*.svelte',
-				'*.svelte',
-				// Need to specify the file extension for Svelte 5 with rune symbols
-				'**/*.svelte.js',
-				'**/*.svelte.ts',
-				'*.svelte.js',
-				'*.svelte.ts'
-			],
-			languageOptions: {
-				parser: svelteParser,
-				parserOptions: {
-					parser: tseslint.parser
-				}
-			}
-		},
-		{
-			rules: {
-				'sort-imports': [
-					'error',
-					{
-						ignoreCase: false,
-						ignoreDeclarationSort: false,
-						ignoreMemberSort: false,
-						memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single'],
-						allowSeparatedGroups: false
-					}
-				]
-			}
-		}
-	);
-}
+);

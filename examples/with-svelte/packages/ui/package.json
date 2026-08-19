@@ -1,55 +1,43 @@
 {
   "name": "@repo/ui",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "dev": "svelte-kit sync && svelte-package --watch --input=src",
-    "build": "svelte-kit sync && svelte-package --input=src",
+    "dev": "svelte-kit sync --watch",
+    "build": "svelte-kit sync && tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "lint:package": "publint",
-    "check-types": "svelte-check --tsconfig ./tsconfig.json",
+    "check-types": "svelte-kit sync && tsc --noEmit",
     "test:unit": "vitest run"
   },
-  "files": [
-    "dist",
-    "!dist/**/*.test.*",
-    "!dist/**/*.spec.*",
-    "src",
-    "!src/**/*.test.*",
-    "!src/**/*.spec.*"
-  ],
   "sideEffects": [
     "**/*.css"
   ],
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "peerDependencies": {
-    "svelte": "^5.0.0"
+    "svelte": "5.56.9"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@sveltejs/kit": "catalog:sveltejs",
-    "@sveltejs/package": "catalog:sveltejs",
     "@sveltejs/vite-plugin-svelte": "catalog:sveltejs",
-    "@types/node": "^24.13.3",
-    "@vitest/browser-playwright": "^4.1.10",
-    "eslint": "^10.6.0",
-    "globals": "^17.7.0",
-    "playwright": "^1.61.1",
-    "publint": "^0.3.21",
+    "@types/node": "26.2.0",
+    "@vitest/browser-playwright": "4.1.10",
+    "eslint": "10.8.1",
+    "globals": "17.11.0",
+    "playwright": "1.62.1",
     "svelte": "catalog:sveltejs",
-    "svelte-check": "catalog:sveltejs",
-    "typescript": "^6.0.3",
-    "vite": "^8.1.4",
-    "vitest": "^4.1.10",
-    "vitest-browser-svelte": "^2.2.1"
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10",
+    "vitest-browser-svelte": "3.0.0"
   }
 }

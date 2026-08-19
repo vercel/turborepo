@@ -26,9 +26,6 @@
       "inputs": ["$TURBO_DEFAULT$", "eslint.config.js", "eslint.config.mjs"],
       "outputs": []
     },
-    "lint:package": {
-      "dependsOn": ["build", "^lint:package"]
-    },
     "test:unit": {
       "dependsOn": ["build", "^test:unit"]
     }
