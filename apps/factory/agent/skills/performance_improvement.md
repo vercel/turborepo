@@ -4,7 +4,7 @@ description: Use when finding, measuring, implementing, reviewing, and publishin
 
 # Scope
 
-Make one focused performance change that can be defended with repeatable measurements. Avoid dependency-only changes, broad refactors, generated files, release machinery, credentials, `.github/`, and this agent's own `apps/agents/` implementation.
+Make one focused performance change that can be defended with repeatable measurements. Avoid dependency-only changes, broad refactors, generated files, release machinery, credentials, `.github/`, and this agent's own `apps/factory/` implementation.
 
 Prioritize end-to-end improvements that make representative Turborepo workflows faster, leaner, or more responsive for real users. Start with real repositories and realistic commands, then use synthetic workloads or microbenchmarks to isolate and corroborate the mechanism. A microbenchmark-only win is insufficient unless the measured hot path is demonstrably material to real-world usage.
 

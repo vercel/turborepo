@@ -540,7 +540,7 @@ function isForbiddenPerformancePath(file: string): boolean {
     file === "Cargo.lock" ||
     file === "pnpm-lock.yaml" ||
     file.startsWith(".github/") ||
-    file.startsWith("apps/agents/") ||
+    file.startsWith("apps/factory/") ||
     file.startsWith(".changeset/") ||
     file.startsWith("target/") ||
     file === "version.txt"
