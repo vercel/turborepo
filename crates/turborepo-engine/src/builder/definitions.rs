@@ -415,10 +415,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        if !self.future_flags.incremental_tasks {
-            task_def.incremental = None;
-        }
-
         // Whether this task will actually execute. A command override is
         // authoritative in both directions: an argv executes even where the
         // toolchain defines nothing, and an opt-out never executes even

@@ -143,18 +143,6 @@ pub struct TaskSummaryTaskDefinition {
     interactive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     env_mode: Option<EnvMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    incremental: Option<Vec<IncrementalPartitionSummary>>,
-}
-
-/// Summary of a single incremental partition for `--summarize` and `--dry`
-/// output.
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct IncrementalPartitionSummary {
-    pub outputs: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub inputs: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -409,7 +397,6 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             interactive,
             env_mode,
             with: _,
-            incremental,
             // Not surfaced in the run summary; queryable via `turbo query`.
             experimental_ci: _,
             // Surfaced through the summary's `command` display string
@@ -439,23 +426,6 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
         env.sort();
         inputs.globs.sort();
 
-        let incremental_summary = incremental.map(|partitions| {
-            partitions
-                .into_iter()
-                .map(|p| {
-                    let mut partition_outputs = p.outputs.inclusions;
-                    for exclusion in p.outputs.exclusions {
-                        partition_outputs.push(format!("!{exclusion}"));
-                    }
-                    partition_outputs.sort();
-                    IncrementalPartitionSummary {
-                        outputs: partition_outputs,
-                        inputs: p.inputs,
-                    }
-                })
-                .collect()
-        });
-
         Self {
             outputs,
             cache,
@@ -468,7 +438,6 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             env,
             pass_through_env,
             env_mode,
-            incremental: incremental_summary,
         }
     }
 }
