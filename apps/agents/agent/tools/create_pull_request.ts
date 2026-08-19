@@ -9,6 +9,10 @@ import {
   requirePublishablePerformanceChange
 } from "../lib/performance-validation.js";
 import { buildDraftPullRequest } from "../lib/pull-request.js";
+import {
+  assertNoReleaseAgeExclusion,
+  isReleaseAgeConfigFile
+} from "../lib/release-age.js";
 import { isAppPrincipal, resolveAutomatedSelection } from "../lib/repo.js";
 import { deliverSlackMessage } from "../lib/slack.js";
 
@@ -270,6 +274,15 @@ export default defineTool({
         });
         if (content === null) {
           throw new Error(`Changed file ${file.path} does not exist.`);
+        }
+        if (
+          file.path.startsWith("examples/") &&
+          isReleaseAgeConfigFile(file.path)
+        ) {
+          assertNoReleaseAgeExclusion(
+            file.path,
+            Buffer.from(content).toString("utf8")
+          );
         }
         const blob = await github<ShaResponse>({
           method: "POST",

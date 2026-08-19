@@ -1,5 +1,6 @@
 import { Feed } from "feed";
 import { blog } from "@/lib/geistdocs/source";
+import { createSignedOgUrl } from "@/lib/og/sign";
 
 const BASE_URL = "https://turborepo.dev";
 
@@ -11,7 +12,7 @@ export const GET = async () => {
     description: "Turborepo news, updates, and announcements.",
     id: BASE_URL,
     link: BASE_URL,
-    image: `${BASE_URL}/api/og`,
+    image: `${BASE_URL}${createSignedOgUrl("", "Turborepo")}`,
     favicon: `${BASE_URL}/favicon.ico`,
     copyright: `All rights reserved ${new Date().getFullYear()}, Vercel Inc.`,
     feedLinks: {
@@ -26,21 +27,7 @@ export const GET = async () => {
   for (const post of posts) {
     const slug = post.slugs.join("/");
 
-    const createOgUrl = () => {
-      const groups = /^turbo-(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(slug);
-      if (groups?.groups) {
-        const { major, minor } = groups.groups;
-        return `/api/og/blog?version=${encodeURIComponent(`${major}.${minor}`)}`;
-      }
-      return undefined;
-    };
-
-    const ogUrl = createOgUrl();
-    const imageUrl = post.data.ogImage
-      ? `${BASE_URL}${post.data.ogImage}`
-      : ogUrl
-        ? `${BASE_URL}${ogUrl}`
-        : undefined;
+    const imageUrl = `${BASE_URL}${createSignedOgUrl(post.data.title, "Blog")}`;
 
     feed.addItem({
       title: post.data.title,
@@ -48,9 +35,7 @@ export const GET = async () => {
       link: `${BASE_URL}/blog/${slug}`,
       date: new Date(post.data.date),
       description: post.data.description,
-      ...(imageUrl && {
-        enclosure: { url: imageUrl, length: 0, type: "image/png" }
-      })
+      enclosure: { url: imageUrl, length: 0, type: "image/png" }
     });
   }
 

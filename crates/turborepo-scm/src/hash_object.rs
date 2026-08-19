@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use tracing::debug;
+use tracing::{debug, info};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes, OidHash};
@@ -7,6 +7,12 @@ use crate::{Error, GitHashes, OidHash};
 const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
+
+#[derive(Clone, Copy)]
+enum MissingFiles {
+    Error,
+    Ignore,
+}
 
 pub(crate) fn with_emfile_retry<T>(
     f: impl Fn() -> Result<T, std::io::Error>,
@@ -49,6 +55,45 @@ pub(crate) fn hash_objects(
     cached_attrs: Option<&crate::crlf::GitAttrs>,
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
+    hash_objects_inner(
+        git_root,
+        pkg_path,
+        to_hash,
+        hashes,
+        MissingFiles::Error,
+        cached_attrs,
+        slowest_files,
+    )
+}
+
+pub(crate) fn hash_discovered_objects(
+    git_root: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
+    to_hash: Vec<RelativeUnixPathBuf>,
+    hashes: &mut GitHashes,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
+) -> Result<(), Error> {
+    hash_objects_inner(
+        git_root,
+        pkg_path,
+        to_hash,
+        hashes,
+        MissingFiles::Ignore,
+        cached_attrs,
+        slowest_files,
+    )
+}
+
+fn hash_objects_inner(
+    git_root: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
+    to_hash: Vec<RelativeUnixPathBuf>,
+    hashes: &mut GitHashes,
+    missing_files: MissingFiles,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
+) -> Result<(), Error> {
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
     let mut owned_attrs = None;
@@ -72,12 +117,12 @@ pub(crate) fn hash_objects(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
+                    crate::crlf::hash_file_as_git_blob(&full_file_path, text_attr)
                 });
                 drop(_guard);
 
                 match hash_result {
-                    Ok(hash) => {
+                    Ok(Some(hash)) => {
                         let package_relative_path = pkg_prefix
                             .as_ref()
                             .and_then(|prefix| {
@@ -94,19 +139,18 @@ pub(crate) fn hash_objects(
                             });
                         Ok(Some((package_relative_path, hash)))
                     }
-                    Err(e) => {
-                        // Gracefully skip non-regular files (symlinks, sockets,
-                        // FIFOs, device nodes) that can't be read as normal files.
-                        if full_file_path
-                            .symlink_metadata()
-                            .map(|md| !md.is_file())
-                            .unwrap_or(false)
-                        {
-                            Ok(None)
-                        } else {
-                            Err(Error::git_error(format!("{}: {}", full_file_path, e)))
-                        }
+                    Ok(None) => {
+                        info!(path = %full_file_path, "skipping non-regular hash candidate");
+                        Ok(None)
                     }
+                    Err(error)
+                        if matches!(missing_files, MissingFiles::Ignore)
+                            && error.kind() == std::io::ErrorKind::NotFound =>
+                    {
+                        info!(path = %full_file_path, "discovered hash candidate disappeared");
+                        Ok(None)
+                    }
+                    Err(error) => Err(Error::hash_file(full_file_path, error)),
                 }
             },
         )
@@ -124,7 +168,7 @@ pub(crate) fn hash_objects(
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-    use super::hash_objects;
+    use super::{hash_discovered_objects, hash_objects};
     use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
@@ -180,26 +224,62 @@ mod test {
             hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
+    }
 
-        // paths for files here are relative to the package path.
-        let error_tests: Vec<(Vec<&str>, &AbsoluteSystemPathBuf)> = vec![
-            // skipping test for outside of git repo, we now error earlier in the process
-            (vec!["nonexistent.json"], &fixture_path),
-        ];
+    #[test]
+    fn test_vanished_candidate_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let candidate = git_root.join_component("transient.lock");
+        candidate.create_with_contents("lock").unwrap();
 
-        for (to_hash, pkg_path) in error_tests {
-            let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix();
+        // Model a glob walk finding a transient file that disappears before
+        // the parallel blob-hashing phase starts.
+        let to_hash = vec![RelativeUnixPathBuf::new("transient.lock").unwrap()];
+        candidate.remove().unwrap();
 
-            let to_hash = to_hash
-                .into_iter()
-                .map(|k| pkg_prefix.join(&RelativeUnixPathBuf::new(k).unwrap()))
-                .collect();
+        let mut hashes = GitHashes::new();
+        hash_discovered_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        assert!(hashes.is_empty());
+    }
 
-            let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None);
-            assert!(result.is_err());
-        }
+    #[test]
+    fn test_missing_explicit_file_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let missing = RelativeUnixPathBuf::new("missing.json").unwrap();
+
+        let mut hashes = GitHashes::new();
+        let error =
+            hash_objects(&git_root, &git_root, vec![missing], &mut hashes, None, None).unwrap_err();
+
+        assert!(error.to_string().contains("missing.json"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_non_regular_symlink_is_skipped() {
+        use std::os::unix::net::UnixListener;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let socket = git_root.join_component("server.sock");
+        let _listener = UnixListener::bind(socket.as_std_path()).unwrap();
+        let link = git_root.join_component("socket-link");
+        link.symlink_to_file(socket.to_string()).unwrap();
+
+        let mut hashes = GitHashes::new();
+        hash_objects(
+            &git_root,
+            &git_root,
+            vec![RelativeUnixPathBuf::new("socket-link").unwrap()],
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.is_empty());
     }
 
     /// Verify that our blob hashing produces OIDs identical to `git

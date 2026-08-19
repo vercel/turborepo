@@ -19,7 +19,7 @@ const BADGE_COMPONENTS: Record<
   string,
   React.ComponentType<{ children?: string }>
 > = {
-  ExperimentalBadge
+  ExperimentalBadge,
 };
 
 function HeadingWithBadges({
@@ -54,7 +54,7 @@ function HeadingWithBadges({
 
 interface GetMDXComponentsOptions {
   components?: MDXComponents;
-  /** Use the old site's typography styling for H1 elements (centered, semibold) */
+  /** Center blog article titles while using the shared heading typography. */
   isBlog?: boolean;
 }
 
@@ -86,14 +86,14 @@ export const getMDXComponents = (
         return (
           <HeadingWithBadges
             className={cn(
-              "font-semibold text-center text-4xl tracking-wide!",
+              "text-center text-heading-32 lg:text-heading-40",
               className
             )}
             as="h1"
             {...rest}
           />
         );
-      }
+      },
     }),
     a: ({ href, ...props }: React.ComponentProps<"a">) =>
       href?.startsWith("/") ? (
@@ -125,6 +125,6 @@ export const getMDXComponents = (
     Accordions,
     ThemeAwareImage,
     InVersion,
-    ExperimentalBadge
+    ExperimentalBadge,
   });
 };
