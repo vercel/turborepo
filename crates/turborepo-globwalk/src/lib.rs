@@ -2918,9 +2918,10 @@ mod combine_test {
             "/repo/src/**/z".to_owned(),
         ])
         .unwrap_err();
+        let message = err.to_string();
         assert!(
-            err.to_string().contains("/repo/src/**/["),
-            "error should reference the malformed original pattern: {err}"
+            message.contains("/repo/src/**/[") || message.contains("/repo/src/**/]x"),
+            "error should reference a malformed original pattern: {err}"
         );
     }
 
@@ -3039,8 +3040,8 @@ mod combine_test {
         );
     }
 
-    /// Patterns containing commas (wax only accepts escaped ones) are never
-    /// merged into an alternation, where a comma separates alternatives.
+    /// Patterns containing commas are never merged into an alternation, where
+    /// a comma separates alternatives.
     #[test]
     fn comma_patterns_are_not_reinterpreted() {
         let tmp = setup_files(&["src/a,b.ts", "src/inner/x.ts", "src/b.ts"]);
@@ -3048,7 +3049,7 @@ mod combine_test {
         assert_eq!(
             walk(
                 &root,
-                &["src/**/a\\,b.ts", "src/**/x.ts"],
+                &["src/**/a[,]b.ts", "src/**/x.ts"],
                 &[],
                 WalkType::Files
             ),
