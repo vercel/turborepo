@@ -150,8 +150,8 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
   return (
     <div
       className={`status status-${status.state}`}
-      role="status"
-      aria-live="polite"
+      role={status.state === "error" ? "alert" : "status"}
+      aria-live={status.state === "error" ? "assertive" : "polite"}
     >
       <span className="statusDot" aria-hidden="true" />
       <div>

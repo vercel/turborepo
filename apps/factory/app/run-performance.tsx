@@ -1,6 +1,7 @@
 "use client";
 
 import { PERFORMANCE_RUN_ACTION } from "../agent/lib/operator-runs";
+import { Button } from "../components/ui/button";
 import { RunStatusPanel, runLabel, useOperatorRun } from "./operator-run";
 
 interface RunPerformanceProps {
@@ -13,11 +14,12 @@ export function RunPerformance({ agentRunsUrl }: RunPerformanceProps) {
   return (
     <div className="controls">
       <div className="actions">
-        <button disabled={isBusy} onClick={() => void start()} type="button">
+        <Button disabled={isBusy} onClick={() => void start()} type="button">
           {runLabel(status, "Run performance improvement now")}
-        </button>
+        </Button>
         <a href={agentRunsUrl} rel="noreferrer" target="_blank">
-          Open Agent Runs <span aria-hidden="true">↗</span>
+          Open Agent Runs <span className="visuallyHidden">in a new tab</span>
+          <span aria-hidden="true">↗</span>
         </a>
       </div>
 
