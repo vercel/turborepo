@@ -79,7 +79,7 @@ turbo query ls web
 
 #### `--filter` (`-F`)
 
-Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/command-line-reference/run#--filter).
+Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/run#--filter-string).
 
 ```bash title="Terminal"
 turbo query ls --filter=web...
@@ -191,6 +191,59 @@ turbo query affected --packages web docs
   }
 }
 ```
+
+#### Understanding affected-package reasons
+
+The `reason` object explains why a package is included. Its `__typename` is
+diagnostic output, not a `turbo.json` configuration value.
+
+Most results are package-specific: a source file or a package's resolved
+dependencies changed. Some changes must be handled repository-wide because
+they change a shared input or Turborepo cannot safely determine a narrower
+scope. A repository-wide reason includes every package in the result.
+
+This is related to, but distinct from, cache behavior. For example,
+`RootInternalDepChanged` means that a workspace package used by the root
+package changed. It selects every package when comparing Git revisions and
+also changes the global hash, so every cacheable task misses cache. For the
+complete cache model, see [Caching](/docs/crafting-your-repository/caching#root-workspace-dependencies).
+
+Use the reason to diagnose why a package was selected:
+
+```bash title="Terminal"
+turbo query affected --packages --base main --head HEAD
+```
+
+##### Change-detection reason types
+
+| `reason.__typename` | Meaning |
+| ------------------- | ------- |
+| `FileChanged` | A file in this package changed. |
+| `LockfileChanged` | The lockfile comparison found added or removed external dependencies for this package. |
+| `ConservativeRootLockfileChanged` | The root package is included after a lockfile change because it may depend on a workspace package. |
+| `RootInternalDepChanged` | A direct or transitive internal workspace dependency of the root package changed. All packages are selected and the global hash changes. |
+| `GlobalDepsChanged` | A file configured in `globalDependencies` changed. All packages are selected. |
+| `DefaultGlobalFileChanged` | `turbo.json` or `turbo.jsonc` changed. All packages are selected. |
+| `LockfileChangeDetectionFailed` | Turborepo could not safely compare the lockfile versions, so all packages are selected. |
+| `LockfileChangedWithoutDetails` | The lockfile changed but its previous content was unavailable, so all packages are selected. |
+| `GitRefNotFound` | The requested Git range could not be resolved, so all packages are selected. |
+| `ScmError` | Source-control change detection failed, so all packages are selected. |
+
+##### Package-selection reason types
+
+These types describe graph or filter expansion rather than a direct cache
+invalidation:
+
+| `reason.__typename` | Meaning |
+| ------------------- | ------- |
+| `DependencyChanged` | This package was included because one of its dependencies changed. |
+| `DependentChanged` | This package was included because an included package depends on it. |
+| `InFilteredDirectory` | The package was selected by a directory filter. |
+| `IncludedByFilter` | The package was selected explicitly by a filter or package-qualified task. |
+| `RootTask` | A root task was included in the run. |
+
+Run `turbo query --schema` to inspect the exact GraphQL schema supported by
+your installed Turborepo version.
 
 #### `--base`
 

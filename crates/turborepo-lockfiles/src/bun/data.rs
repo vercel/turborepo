@@ -142,20 +142,25 @@ pub(crate) enum LockfileVersion {
     // `resolve_package`'s workspace-direct optimization checks
     // `lockfile_version >= 1`, which V2 satisfies.
     V2 = 2,
+    // V3 is stamped only when the `overrides` section contains nested rules,
+    // i.e. object values (`"parent@range": { "child": "range", ".": "range" }`).
+    // Everything else is identical to V2.
+    V3 = 3,
 }
 
 impl LockfileVersion {
-    #[allow(dead_code)]
+    pub(super) const LATEST: Self = Self::V3;
+
     pub(super) fn from_i32(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::V0),
             1 => Some(Self::V1),
             2 => Some(Self::V2),
+            3 => Some(Self::V3),
             _ => None,
         }
     }
 
-    #[allow(dead_code)]
     pub(super) fn as_i32(self) -> i32 {
         self as i32
     }
@@ -178,7 +183,7 @@ pub struct BunLockfileData {
     #[serde(default)]
     pub(super) trusted_dependencies: Vec<String>,
     #[serde(default)]
-    pub(super) overrides: Map<String, String>,
+    pub(super) overrides: Map<String, OverrideValue>,
     #[serde(default)]
     pub(super) catalog: Map<String, String>,
     #[serde(default)]
@@ -188,12 +193,48 @@ pub struct BunLockfileData {
     pub(super) patched_dependencies: Map<String, String>,
 }
 
+/// A value in the top-level `overrides` section.
+///
+/// Flat rules are strings (`"lodash": "4.17.21"`). A rule can also be an
+/// object scoping overrides to the dependencies of one parent package
+/// (`"webpack@^4": { "terser": "4.8.1" }`); inside such an object the special
+/// `"."` key is a flat rule for the parent itself. Bun stamps a lockfile
+/// containing object rules as version 3 but accepts them at any version.
+/// Nested rules are materialized by Bun as nested lockfile keys
+/// (`webpack/terser`), which the regular resolution path already follows, so
+/// turbo only needs to carry them through unchanged and apply the `"."` entry.
+#[derive(Debug, Deserialize, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
+pub(crate) enum OverrideValue {
+    Version(String),
+    Nested(Map<String, Value>),
+}
+
+impl OverrideValue {
+    /// The version to use for a dependency on the package named by this
+    /// rule's key, if the rule specifies one.
+    pub(super) fn version(&self) -> Option<&str> {
+        match self {
+            Self::Version(version) => Some(version),
+            Self::Nested(rules) => rules.get(".").and_then(Value::as_str),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceEntry {
+    // Bun omits the root workspace's name when the root package.json has none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(super) name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) version: Option<String>,
+    // `bin` is a string or an object; the installer links workspace bins from
+    // the lockfile, so these must survive a prune.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) bin: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) bin_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) dependencies: Option<Map<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -212,8 +253,10 @@ pub(crate) struct PackageEntry {
     pub(super) registry: Option<String>,
     // Present for all package types except root deps
     pub(super) info: Option<PackageInfo>,
-    // Present on registry
+    // Registry/tarball: integrity. Git/github: the `.bun-tag` string.
     pub(super) checksum: Option<String>,
+    // Git/github only: the optional 4th element pinning the packed checkout.
+    pub(super) integrity: Option<String>,
     pub(super) root: Option<RootInfo>,
 }
 
@@ -244,7 +287,10 @@ pub(crate) struct PackageInfo {
 #[derive(Debug, Deserialize, PartialEq, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RootInfo {
-    pub(super) bin: Option<String>,
+    // A string or an object, like `bin` in package.json.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) bin: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) bin_dir: Option<String>,
 }
 impl PackageEntry {

@@ -3,14 +3,18 @@
 //! Watches the repository for changes to relevant files (package.json,
 //! turbo.json, etc.) and emits events when changes are detected.
 
-use std::{path::Path, time::Duration};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
-use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
 use tracing::{debug, trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_filewatch::{FileSystemWatcher, NotifyError, OptionalWatch};
+use turborepo_filewatch::{FileSystemWatcher, WatchInterest, WatchScope, WatchSource};
 
 /// Errors that can occur during file watching
 #[derive(Debug, Error)]
@@ -38,7 +42,12 @@ const RELEVANT_FILES: &[&str] = &[
     "package-lock.json",
     "yarn.lock",
     "pnpm-lock.yaml",
+    "nub.lock",
+    "lock.yaml",
+    "bun.lock",
     "bun.lockb",
+    "Cargo.toml",
+    "Cargo.lock",
 ];
 
 /// Directories to ignore entirely
@@ -55,8 +64,18 @@ pub struct DevtoolsWatcher {
 impl DevtoolsWatcher {
     /// Creates a new devtools watcher for the given repository root.
     pub fn new(repo_root: AbsoluteSystemPathBuf) -> Result<Self, WatchError> {
+        Self::new_with_paths(repo_root, Vec::new())
+    }
+
+    /// Creates a watcher with exact paths that bypass filename and ignored
+    /// directory filtering.
+    pub fn new_with_paths(
+        repo_root: AbsoluteSystemPathBuf,
+        exact_paths: Vec<AbsoluteSystemPathBuf>,
+    ) -> Result<Self, WatchError> {
         // Create file system watcher
         let file_watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?;
+        let exact_paths = exact_watch_paths(&repo_root, exact_paths);
 
         // Set up channels
         let (exit_tx, exit_rx) = oneshot::channel();
@@ -65,7 +84,8 @@ impl DevtoolsWatcher {
         // Spawn watcher task
         tokio::spawn(watch_loop(
             repo_root,
-            file_watcher.watch(),
+            file_watcher.source(),
+            exact_paths,
             event_tx,
             exit_rx,
         ));
@@ -81,6 +101,23 @@ impl DevtoolsWatcher {
     pub fn subscribe(&self) -> broadcast::Receiver<WatchEvent> {
         self.event_rx.resubscribe()
     }
+}
+
+fn exact_watch_paths(
+    repo_root: &AbsoluteSystemPathBuf,
+    paths: Vec<AbsoluteSystemPathBuf>,
+) -> HashSet<PathBuf> {
+    let mut paths: HashSet<PathBuf> = paths
+        .into_iter()
+        .map(|path| path.as_std_path().to_owned())
+        .collect();
+    paths.insert(
+        repo_root
+            .join_components(&[".turbo", "config.json"])
+            .as_std_path()
+            .to_owned(),
+    );
+    paths
 }
 
 /// Check if a path is in an ignored directory
@@ -101,16 +138,24 @@ fn is_relevant_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn should_watch_path(path: &Path, exact_paths: &HashSet<PathBuf>) -> bool {
+    exact_paths.contains(path) || (!is_in_ignored_dir(path) && is_relevant_file(path))
+}
+
 /// Main watch loop that processes file events
 async fn watch_loop(
     _repo_root: AbsoluteSystemPathBuf,
-    mut file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    file_events: WatchSource,
+    exact_paths: HashSet<PathBuf>,
     event_tx: broadcast::Sender<WatchEvent>,
     exit_rx: oneshot::Receiver<()>,
 ) {
-    // Get the receiver and immediately resubscribe to drop the SomeRef
-    // (which is not Send) before entering the select loop
-    let Ok(mut file_events) = file_events_lazy.get().await.map(|r| r.resubscribe()) else {
+    let physical_interest = WatchInterest::new();
+    physical_interest.replace(exact_paths.iter().cloned());
+    let exact_paths = Arc::new(exact_paths);
+    let scope = WatchScope::predicate(move |path| should_watch_path(path, &exact_paths))
+        .with_physical_interest(physical_interest);
+    let Ok(mut file_events) = file_events.subscribe(scope).await else {
         warn!("File watching not available");
         return;
     };
@@ -143,28 +188,16 @@ async fn watch_loop(
             result = file_events.recv() => {
                 match result {
                     Ok(Ok(event)) => {
-                        // Check if any of the changed files are relevant
-                        let has_relevant_change = event.paths.iter().any(|path| {
-                            // Skip ignored directories
-                            if is_in_ignored_dir(path) {
-                                return false;
-                            }
-
-                            // Check if it's a relevant file
-                            if is_relevant_file(path) {
-                                trace!("Relevant file changed: {:?}", path);
-                                return true;
-                            }
-
-                            false
-                        });
+                        let has_relevant_change = !event.paths.is_empty();
 
                         if has_relevant_change {
+                            trace!(paths = ?event.paths, "Relevant files changed");
                             pending_rebuild = true;
                         }
                     }
                     Ok(Err(e)) => {
                         warn!("File watch error: {:?}", e);
+                        pending_rebuild = true;
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         warn!("File watcher lagged by {} events, triggering rebuild", n);
@@ -191,6 +224,12 @@ mod tests {
         assert!(is_relevant_file(Path::new("turbo.json")));
         assert!(is_relevant_file(Path::new("turbo.jsonc")));
         assert!(is_relevant_file(Path::new("pnpm-workspace.yaml")));
+        assert!(is_relevant_file(Path::new("nub.lock")));
+        assert!(is_relevant_file(Path::new("lock.yaml")));
+        assert!(is_relevant_file(Path::new("bun.lock")));
+        assert!(is_relevant_file(Path::new("bun.lockb")));
+        assert!(is_relevant_file(Path::new("crates/app/Cargo.toml")));
+        assert!(is_relevant_file(Path::new("Cargo.lock")));
         assert!(!is_relevant_file(Path::new("index.ts")));
         assert!(!is_relevant_file(Path::new("README.md")));
     }
@@ -206,5 +245,24 @@ mod tests {
             "/repo/packages/app/package.json"
         )));
         assert!(!is_in_ignored_dir(Path::new("turbo.json")));
+    }
+
+    #[test]
+    fn exact_config_paths_bypass_normal_ignore_and_filename_rules() {
+        let tempdir = tempfile::tempdir().expect("create temporary repository");
+        let repo_root = AbsoluteSystemPathBuf::new(tempdir.path().to_string_lossy().to_string())
+            .expect("absolute root");
+        let custom = repo_root.join_components(&[".turbo", "custom.config"]);
+        let arbitrary = repo_root.join_components(&["config", "devtools.conf"]);
+        let local_config = repo_root.join_components(&[".turbo", "config.json"]);
+        let unrelated = repo_root.join_components(&[".turbo", "unrelated.json"]);
+        let turbo_json = repo_root.join_components(&[".turbo", "turbo.json"]);
+        let exact_paths = exact_watch_paths(&repo_root, vec![custom.clone(), arbitrary.clone()]);
+
+        assert!(should_watch_path(custom.as_std_path(), &exact_paths));
+        assert!(should_watch_path(arbitrary.as_std_path(), &exact_paths));
+        assert!(should_watch_path(local_config.as_std_path(), &exact_paths));
+        assert!(!should_watch_path(unrelated.as_std_path(), &exact_paths));
+        assert!(!should_watch_path(turbo_json.as_std_path(), &exact_paths));
     }
 }

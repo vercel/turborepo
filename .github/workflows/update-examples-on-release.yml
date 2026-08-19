@@ -24,19 +24,15 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-node
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
 
-      - name: Upgrade corepack
-        shell: bash
-        run: |
-          npm install --force --global corepack@0.32.0
-          npm config get prefix >> $GITHUB_PATH
-
-      - name: Make branch
-        id: branch
-        run: |
-          git checkout -b post-release-bump-examples
-          echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
+          - name: Make branch
+            id: branch
+            run: |
+              git checkout -b post-release-bump-examples
+              echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
       - name: Run upgrade script
         run: bash scripts/update-examples-dep.sh

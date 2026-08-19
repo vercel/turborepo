@@ -12,12 +12,20 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 pub mod cargo;
+pub mod change_knowledge;
 pub mod change_mapper;
 pub mod discovery;
+pub mod external_resolution;
 pub mod inference;
+mod knowledge;
 mod manifest_parser;
+pub mod native_tasks;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;
+pub mod prune_knowledge;
+pub mod relationships;
+pub mod task_contracts;
 pub mod toolchain;
+pub mod uv;
 pub mod workspaces;

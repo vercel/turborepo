@@ -2,7 +2,6 @@
 
 pub mod builder;
 mod error;
-pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
 pub(crate) mod task_filter;
@@ -21,7 +20,6 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
-use futures::StreamExt;
 use itertools::Itertools;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
@@ -36,11 +34,10 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
-use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
+use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_hash::{
-    collect_global_file_hash_inputs, compute_external_deps_hashes, get_external_deps_hash,
-    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs,
-    PackageInputsHashes,
+    collect_global_file_hash_inputs, compute_external_deps_hashes, get_internal_deps_hash,
+    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
@@ -309,46 +306,35 @@ impl Run {
 
     async fn wait_for_forced_shutdown(
         force_shutdown_timeout: Option<Duration>,
-        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
     ) -> ForceShutdownReason {
-        let in_process_signal = async move {
-            let Some(mut in_process_signals) = in_process_signals else {
+        let signal = async move {
+            let Some(mut signals) = signals else {
                 std::future::pending::<()>().await;
                 return;
             };
 
             loop {
-                match in_process_signals.recv().await {
-                    Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        std::future::pending::<()>().await;
-                    }
+                if *signals.borrow_and_update() > 1 {
+                    return;
+                }
+                if signals.changed().await.is_err() {
+                    std::future::pending::<()>().await;
                 }
             }
         };
-        pin!(in_process_signal);
+        pin!(signal);
 
         match force_shutdown_timeout {
             Some(timeout) => {
                 select! {
                     _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
-                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                    _ = &mut signal => ForceShutdownReason::Signal,
                 }
             }
             None => {
-                let interrupt = async {
-                    if let Ok(fut) = get_signal() {
-                        pin!(fut);
-                        fut.next().await;
-                    } else {
-                        tracing::warn!("could not register ctrl-c handler");
-                        tokio::time::sleep(Duration::MAX).await;
-                    }
-                };
-                select! {
-                    _ = interrupt => ForceShutdownReason::Signal,
-                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
-                }
+                signal.await;
+                ForceShutdownReason::Signal
             }
         }
     }
@@ -356,7 +342,7 @@ impl Run {
     async fn wait_for_cache_shutdown<FClosed, FProgress>(
         shutdown_reason: Option<ShutdownReason>,
         force_shutdown_timeout: Option<Duration>,
-        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
         closed: FClosed,
         progress: FProgress,
     ) -> CacheShutdownOutcome
@@ -368,7 +354,7 @@ impl Run {
             select! {
                 _ = closed => CacheShutdownOutcome::Complete,
                 _ = progress => CacheShutdownOutcome::Complete,
-                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals) => {
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {
                     CacheShutdownOutcome::ForcedShutdown
                 }
             }
@@ -383,7 +369,7 @@ impl Run {
     async fn wait_for_process_manager_shutdown<F>(
         process_manager: ProcessManager,
         force_shutdown_timeout: Option<Duration>,
-        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
         graceful_shutdown: F,
     ) where
         F: Future<Output = ()> + Send,
@@ -394,8 +380,7 @@ impl Run {
             SLOW_SHUTDOWN_STATUS_INTERVAL,
         );
         shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let force_shutdown =
-            Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals);
+        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals);
         pin!(graceful_shutdown, force_shutdown);
 
         loop {
@@ -529,15 +514,21 @@ impl Run {
     // Used to print a list of potential tasks to run. Obeys the `--filter` flag
     pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
         let mut tasks = BTreeMap::new();
-        for (name, info) in self.pkg_dep_graph.packages() {
+        for context in self.pkg_dep_graph.package_task_contexts() {
+            let name = context.package();
             if !self.filtered_pkgs.contains(name) {
                 continue;
             }
-            for task_name in info.package_json.scripts.keys() {
+            // Authored scripts and registered native tasks both come from the
+            // native-task catalog produced at repository construction.
+            for native_task in context.native_tasks().tasks() {
+                if !native_task.participates() && !native_task.registered() {
+                    continue;
+                }
                 tasks
-                    .entry(task_name.clone())
+                    .entry(native_task.name().to_string())
                     .or_insert_with(Vec::new)
-                    .push(name.to_string())
+                    .push(name.to_string());
             }
         }
 
@@ -814,7 +805,7 @@ impl Run {
                 Self::wait_for_process_manager_shutdown(
                     process_manager.clone(),
                     force_shutdown_timeout,
-                    Some(signal_handler.subscribe_in_process_signals()),
+                    Some(signal_handler.subscribe_signals()),
                     graceful_shutdown,
                 )
                 .await;
@@ -911,7 +902,7 @@ impl Run {
                 if Self::wait_for_cache_shutdown(
                     shutdown_reason,
                     force_shutdown_timeout,
-                    Some(signal_handler.subscribe_in_process_signals()),
+                    Some(signal_handler.subscribe_signals()),
                     async {
                         let _ = closed.await;
                     },
@@ -965,7 +956,7 @@ impl Run {
             Self::wait_for_process_manager_shutdown(
                 process_manager.clone(),
                 force_shutdown_timeout,
-                Some(signal_handler.subscribe_in_process_signals()),
+                Some(signal_handler.subscribe_signals()),
                 graceful_shutdown,
             )
             .await;
@@ -1127,7 +1118,6 @@ impl Run {
             tokio::sync::oneshot::Receiver<()>,
         )>,
     ) -> Result<i32, Error> {
-        let workspaces = self.pkg_dep_graph.packages().collect();
         // Barrier for the untracked-file scan: file hashing below needs the
         // complete index. Nothing executes before this resolves, so hash
         // error semantics are unchanged from when `Run` construction waited.
@@ -1140,9 +1130,8 @@ impl Run {
         };
         let repo_index = repo_index_arc.as_ref().as_ref();
 
-        let root_workspace = self
-            .pkg_dep_graph
-            .package_info(&PackageName::Root)
+        self.pkg_dep_graph
+            .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
 
         let is_monorepo = !self.opts.run_opts.single_package;
@@ -1179,7 +1168,7 @@ impl Run {
                     file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                         &self.scm,
                         self.engine.tasks(),
-                        workspaces,
+                        &self.pkg_dep_graph,
                         self.engine.task_definitions(),
                         &self.repo_root,
                         &self.run_telemetry,
@@ -1205,11 +1194,17 @@ impl Run {
                 s.spawn(|_| {
                     let _span =
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    let resolution_file_fallback = self
+                        .pkg_dep_graph
+                        .external_resolution_global_file_fallback()
+                        .unwrap_or_default();
+                    let root_engines = self.pkg_dep_graph.root_engines();
+                    let root_engines = (!root_engines.is_empty()).then_some(root_engines);
                     global_file_result = Some(collect_global_file_hash_inputs(
-                        root_workspace,
+                        root_engines,
                         &self.repo_root,
                         self.pkg_dep_graph.package_manager(),
-                        self.pkg_dep_graph.lockfile(),
+                        &resolution_file_fallback,
                         self.root_turbo_json.global_deps_for_hash(),
                         &self.env_at_execution_start,
                         &self.root_turbo_json.global_env,
@@ -1221,7 +1216,7 @@ impl Run {
                         let _span =
                             tracing::info_span!("compute_external_deps_hashes_task").entered();
                         external_deps_hashes =
-                            Some(compute_external_deps_hashes(self.pkg_dep_graph.packages()));
+                            Some(compute_external_deps_hashes(&self.pkg_dep_graph));
                     });
                 }
             });
@@ -1236,13 +1231,23 @@ impl Run {
             internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
         let global_file_inputs =
             global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
+        let external_deps_hashes = external_deps_hashes.transpose()?;
 
-        let root_external_dependencies_hash = is_monorepo.then(|| {
-            root_workspace
-                .external_deps_hash
-                .clone()
-                .unwrap_or_else(|| get_external_deps_hash(&root_workspace.transitive_dependencies))
-        });
+        let root_external_dependencies_hash = if is_monorepo {
+            let cache = external_deps_hashes.as_ref().ok_or_else(|| {
+                turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+            })?;
+            Some(
+                cache
+                    .get(PackageName::Root.as_str())
+                    .cloned()
+                    .ok_or_else(|| {
+                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+                    })?,
+            )
+        } else {
+            None
+        };
 
         let pass_through_env = match env_mode {
             EnvMode::Loose => {
@@ -1318,7 +1323,7 @@ impl Run {
             external_deps_hashes,
             compile_cache_endpoint,
         )
-        .await;
+        .await?;
 
         if self.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
@@ -1454,7 +1459,7 @@ impl RunStopper {
     pub async fn shutdown(
         &self,
         force_shutdown_timeout: Option<Duration>,
-        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
     ) {
         let process_manager = self.manager.clone();
         let graceful_process_manager = process_manager.clone();
@@ -1464,19 +1469,34 @@ impl RunStopper {
         Run::wait_for_process_manager_shutdown(
             process_manager,
             force_shutdown_timeout,
-            in_process_signals,
+            signals,
             graceful_shutdown,
         )
         .await;
     }
 
-    pub async fn shutdown_cache(&self) {
+    pub async fn shutdown_cache(
+        &self,
+        shutdown_reason: Option<ShutdownReason>,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) {
         if self.skip_cache_writes {
             return;
         }
 
-        if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
-            let _ = closed.await;
+        let shutdown = async {
+            if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
+                let _ = closed.await;
+            }
+        };
+        if shutdown_reason == Some(ShutdownReason::Signal) {
+            select! {
+                _ = shutdown => {}
+                _ = Run::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {}
+            }
+        } else {
+            shutdown.await;
         }
     }
 
@@ -1564,6 +1584,7 @@ impl turborepo_query_api::QueryRun for Run {
             &self.scm,
             &self.root_turbo_json,
         )
+        .map(|(packages, _, _)| packages)
         .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
     }
 
@@ -1707,9 +1728,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn forced_shutdown_accepts_in_process_signal_before_timeout() {
-        let (tx, rx) = tokio::sync::broadcast::channel(1);
-        tx.send(()).unwrap();
+    async fn forced_shutdown_accepts_retained_second_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
 
         let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
 
@@ -1717,9 +1738,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cache_shutdown_signal_accepts_in_process_signal() {
-        let (tx, rx) = tokio::sync::broadcast::channel(1);
-        tx.send(()).unwrap();
+    async fn cache_shutdown_accepts_retained_second_signal() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
 
         let result = Run::wait_for_cache_shutdown(
             Some(ShutdownReason::Signal),

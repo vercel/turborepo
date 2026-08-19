@@ -465,9 +465,17 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
-            let rendered = self.format_json()?;
+            self.normalize();
 
-            println!("{rendered}");
+            let stdout = io::stdout();
+            let mut writer = io::BufWriter::new(stdout.lock());
+            if self.monorepo {
+                write_pretty_json(&mut writer, &*self)?;
+            } else {
+                let summary = SinglePackageRunSummary::from(&*self);
+                write_pretty_json(&mut writer, &summary)?;
+            }
+            writer.flush()?;
             return Ok(());
         }
 
@@ -491,9 +499,9 @@ impl<'a> RunSummary<'a> {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .package_info(pkg)
+                    .package_task_context(pkg)
                     .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
-                    .package_path();
+                    .directory();
 
                 writeln!(tab_writer, "{pkg}\t{dir}")?;
             }
@@ -843,5 +851,43 @@ impl<'a> RunSummary<'a> {
         .map_err(Error::StateThread)??;
 
         Ok(())
+    }
+}
+
+fn write_pretty_json(writer: &mut impl Write, value: &impl Serialize) -> Result<(), Error> {
+    serde_json::to_writer_pretty(&mut *writer, value)?;
+    // Match the two trailing newlines produced by `println!` and `format_json`.
+    writer.write_all(b"\n\n")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_json_preserves_terminator_bytes() {
+        let mut output = Vec::new();
+        write_pretty_json(&mut output, &serde_json::json!({ "key": "value" })).unwrap();
+
+        assert_eq!(output, b"{\n  \"key\": \"value\"\n}\n\n");
+    }
+
+    #[test]
+    fn pretty_json_propagates_write_errors() {
+        struct BrokenWriter;
+
+        impl Write for BrokenWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed stdout"))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let error = write_pretty_json(&mut BrokenWriter, &serde_json::json!({})).unwrap_err();
+        assert!(matches!(error, Error::Serde(_)));
     }
 }

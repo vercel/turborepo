@@ -1,0 +1,377 @@
+:root {
+  color-scheme: dark;
+  --background: #08090a;
+  --panel: #111315;
+  --panel-raised: #171a1d;
+  --line: #2b3035;
+  --text: #f4f1e9;
+  --muted: #9ca2a8;
+  --accent: #35d9f2;
+  --accent-strong: #8aeeff;
+  --pink: #f071b8;
+  --success: #72e6a0;
+  --danger: #ff7b89;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 80% 0%, rgb(53 217 242 / 9%), transparent 28rem),
+    radial-gradient(
+      circle at 10% 60%,
+      rgb(240 113 184 / 6%),
+      transparent 24rem
+    ),
+    var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
+}
+
+body::before {
+  position: fixed;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--pink));
+  content: "";
+}
+
+button,
+code,
+.eyebrow,
+.schedule,
+.status {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+main {
+  width: min(860px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(64px, 10vw, 112px) 0 32px;
+}
+
+.hero {
+  max-width: 720px;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  text-wrap: balance;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3.25rem, 10vw, 6.5rem);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 0.88;
+}
+
+h1 span {
+  display: block;
+  color: var(--muted);
+}
+
+.intro {
+  max-width: 580px;
+  margin: 28px 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.18rem);
+}
+
+.operation {
+  position: relative;
+  margin-top: clamp(48px, 8vw, 76px);
+  padding: clamp(24px, 5vw, 40px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(145deg, var(--panel-raised), var(--panel));
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+
+.operation::after {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--accent);
+  filter: blur(90px);
+  opacity: 0.12;
+  content: "";
+  pointer-events: none;
+}
+
+.operationHeader {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.schedule {
+  flex: none;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+.description {
+  max-width: 68ch;
+  margin: 22px 0 0;
+  color: var(--muted);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 34px 0;
+}
+
+.facts div {
+  min-width: 0;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 6px 0 0;
+  font-size: 0.93rem;
+}
+
+.controls {
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.examplePicker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.examplePicker span {
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.examplePicker select {
+  width: min(100%, 430px);
+  min-height: 46px;
+  padding: 0 40px 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--panel);
+  font:
+    0.86rem "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+.examplePicker select:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 3px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+button,
+.actions a {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 17px;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    filter 150ms ease,
+    transform 150ms ease;
+}
+
+button {
+  border: 1px solid var(--accent);
+  color: #051013;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+button.secondaryButton {
+  border-color: #596169;
+  color: var(--text);
+  background: rgb(255 255 255 / 2%);
+}
+
+.actions a {
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: rgb(255 255 255 / 2%);
+}
+
+button:hover:not(:disabled),
+.actions a:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+.actions a:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 22px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 18%);
+  font-size: 0.78rem;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.status strong {
+  display: block;
+  color: currentColor;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.status code {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.status-starting,
+.status-running {
+  color: var(--accent-strong);
+}
+
+.status-running .statusDot {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-done {
+  color: var(--success);
+}
+
+.status-error {
+  color: var(--danger);
+}
+
+footer {
+  padding: 24px 4px 0;
+  color: #6f757b;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 620px) {
+  main {
+    width: min(100% - 24px, 860px);
+  }
+
+  .operationHeader {
+    flex-direction: column-reverse;
+    gap: 18px;
+  }
+
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .actions,
+  button,
+  .actions a {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

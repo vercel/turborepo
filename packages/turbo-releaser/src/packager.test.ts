@@ -3,15 +3,19 @@ import assert from "node:assert/strict";
 import { packAndPublish } from "./packager";
 import type { Platform } from "./types";
 import operations from "./operations";
+import type { NpmPackageArtifact } from "./types";
 
 describe("packager", () => {
   describe("packAndPublish", () => {
     it("should pack and publish for all platforms when skipPublish is false", async (t) => {
-      const mockPackPlatform = mock.fn(() =>
-        Promise.resolve("/path/to/artifact.tgz")
-      );
-      const mockPublishArtifacts = mock.fn((_paths: Array<string>) =>
-        Promise.resolve()
+      const artifact: NpmPackageArtifact = {
+        packageName: "@turbo/darwin-64",
+        version: "1.0.0",
+        tarball: "/path/to/artifact.tgz"
+      };
+      const mockPackPlatform = mock.fn(() => Promise.resolve(artifact));
+      const mockPublishArtifacts = mock.fn(
+        (_artifacts: Array<NpmPackageArtifact>) => Promise.resolve()
       );
       t.mock.method(operations, "packPlatform", mockPackPlatform);
       t.mock.method(operations, "publishArtifacts", mockPublishArtifacts);
@@ -28,14 +32,18 @@ describe("packager", () => {
       assert.equal(mockPackPlatform.mock.calls.length, 2);
       assert.equal(mockPublishArtifacts.mock.calls.length, 1);
       assert.deepEqual(mockPublishArtifacts.mock.calls[0].arguments, [
-        ["/path/to/artifact.tgz", "/path/to/artifact.tgz"],
+        [artifact, artifact],
         "latest"
       ]);
     });
 
     it("should pack but not publish when skipPublish is true", async (t) => {
       const mockPackPlatform = mock.fn(() =>
-        Promise.resolve("/path/to/artifact.tgz")
+        Promise.resolve({
+          packageName: "@turbo/darwin-64",
+          version: "1.0.0",
+          tarball: "/path/to/artifact.tgz"
+        })
       );
       const mockPublishArtifacts = mock.fn();
 

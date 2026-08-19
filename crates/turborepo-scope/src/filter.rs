@@ -13,7 +13,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
-    package_graph::{self, PackageGraph, PackageName},
+    package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 use turborepo_types::FilterMode;
@@ -55,8 +55,14 @@ impl PackageInference {
         let mut best_match: Option<(String, AnchoredSystemPathBuf)> = None;
         let mut found_package_below = false;
 
-        for (workspace_name, workspace_entry) in pkg_graph.packages() {
-            let pkg_path = turbo_root.resolve(workspace_entry.package_path());
+        for (graph_name, package_path) in pkg_graph.package_scope_directories() {
+            if !pkg_graph.is_real_package(&graph_name) {
+                continue;
+            }
+            let PackageName::Other(package_name) = graph_name else {
+                continue;
+            };
+            let pkg_path = turbo_root.resolve(package_path);
 
             // Check if the inference path is inside this package (pkg_path is a prefix of
             // full_inference_path)
@@ -66,17 +72,14 @@ impl PackageInference {
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
                 // This package contains the inference path. Track it if it's a better
                 // (longer/more specific) match than what we've found so far.
-                let pkg_path_len = workspace_entry.package_path().as_str().len();
+                let package_depth = package_path.components().count();
                 let is_better_match = match &best_match {
                     None => true,
-                    Some((_, existing_path)) => pkg_path_len > existing_path.as_str().len(),
+                    Some((_, existing_path)) => package_depth > existing_path.components().count(),
                 };
 
                 if is_better_match {
-                    best_match = Some((
-                        workspace_name.to_string(),
-                        workspace_entry.package_path().to_owned(),
-                    ));
+                    best_match = Some((package_name, package_path.to_owned()));
                 }
             }
 
@@ -228,12 +231,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if is_all_packages {
             let packages = self
-                .pkg_graph
-                .packages()
-                .filter(|(name, _)| matches!(name, PackageName::Other(_)))
-                .map(|(name, _)| {
+                .selectable_packages()
+                .map(|name| {
                     (
-                        name.to_owned(),
+                        name,
                         PackageInclusionReason::IncludedByFilter {
                             filters: patterns.to_vec(),
                         },
@@ -336,7 +337,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         if pattern_selectors.iter().all(|s| s.exclude) {
             let root_excluded = pattern_selectors
                 .iter()
-                .any(|s| Self::selector_matches_root(s));
+                .any(|s| self.selector_matches_root(s));
             FilterMode::ExcludeOnly { root_excluded }
         } else {
             FilterMode::ExplicitSelection
@@ -347,7 +348,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ///
     /// Uses the same glob matching as `match_package_names` for name
     /// patterns, and checks `parent_dir` for the repo root directory.
-    fn selector_matches_root(selector: &TargetSelector) -> bool {
+    fn selector_matches_root(&self, selector: &TargetSelector) -> bool {
         if !selector.name_pattern.is_empty()
             && let Ok(matcher) = SimpleGlob::new(&selector.name_pattern)
             && matcher.is_match(PackageName::Root.as_ref())
@@ -415,13 +416,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             // TODO: add telemetry for each selector
             self.filter_graph_with_selectors(include_selectors)?
         } else {
-            self.pkg_graph
-                .packages()
-                // todo: a type-level way of dealing with non-root packages
-                .filter(|(name, _)| !PackageName::Root.eq(name)) // the root package has to be explicitly included
-                .map(|(name, _)| {
+            self.selectable_packages()
+                .map(|name| {
                     (
-                        name.to_owned(),
+                        name,
                         PackageInclusionReason::IncludedByFilter {
                             filters: exclude_selectors
                                 .iter()
@@ -464,16 +462,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             for (package, reason) in selector_packages {
-                let node = package_graph::PackageNode::Workspace(package.clone());
-
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.dependencies(&node);
-                    let dependencies = dependencies
-                        .iter()
-                        .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                        .map(|i| {
+                    let dependencies = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependencies(&package)?
+                        .into_iter()
+                        .map(|dependency| {
                             (
-                                i.as_package_name().to_owned(),
+                                dependency,
                                 // While we're adding dependencies, from their
                                 // perspective, they were changed because
                                 // of a *dependent*
@@ -484,13 +481,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         })
                         .collect::<Vec<_>>();
 
-                    // flatmap through the option, the set, and then the optional package name
+                    // Merge the explicit, validated filtering projection.
                     merge_changed_packages(&mut walked_dependencies, dependencies);
                 }
 
                 if selector.include_dependents {
-                    let dependents = self.pkg_graph.ancestors(&node);
-                    for dependent in dependents.iter().map(|i| i.as_package_name()) {
+                    let dependents = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependents(&package)?;
+                    for dependent in &dependents {
                         walked_dependents.insert(
                             dependent.clone(),
                             // While we're adding dependents, from their
@@ -507,29 +507,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     // dependent. The closure includes the dependents
                     // themselves, but they already carry the same inclusion
                     // reason via `walked_dependents`, which takes precedence
-                    // in the merge below. Like `dependencies`, the root
+                    // in the merge below. Like the dependency projection, the root
                     // package's own dependencies count as implied
                     // dependencies of every dependent.
                     if selector.include_dependencies && !dependents.is_empty() {
-                        let dependent_nodes: Vec<package_graph::PackageNode> = dependents
-                            .iter()
-                            .map(|i| {
-                                package_graph::PackageNode::Workspace(i.as_package_name().clone())
-                            })
-                            .collect();
-
                         let dependent_dependencies = self
                             .pkg_graph
-                            .transitive_closure(dependent_nodes.iter())
+                            .filtering_relationships()
+                            .dependency_closure(&dependents)?
                             .into_iter()
-                            .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                            .map(|i| i.as_package_name().to_owned())
-                            .chain(
-                                self.pkg_graph
-                                    .root_internal_package_dependencies()
-                                    .into_iter()
-                                    .map(|workspace| workspace.name),
-                            )
                             .map(|name| {
                                 (
                                     name,
@@ -606,17 +592,26 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             })
             .transpose()?;
 
-        for (name, info) in self.pkg_graph.packages() {
+        for name in self.all_packages() {
             if let Some((parent_dir, matcher)) = selector
                 .parent_dir
                 .as_ref()
                 .zip(parent_dir_matcher.as_ref())
             {
-                let matches = matcher.is_match(info.package_path().as_path());
+                let matches = if name == PackageName::Root {
+                    // Root-directory selectors address the root Turbo task
+                    // namespace even when no root JavaScript scope exists.
+                    matcher.matched(&Path::new(".").into()).is_some()
+                } else {
+                    self.pkg_graph
+                        .package_view(&name)
+                        .and_then(|view| view.directory())
+                        .is_some_and(|path| matcher.is_match(path.as_path()))
+                };
 
                 if matches {
                     entry_packages.insert(
-                        name.to_owned(),
+                        name,
                         PackageInclusionReason::InFilteredDirectory {
                             directory: parent_dir.to_owned(),
                         },
@@ -624,7 +619,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 }
             } else {
                 entry_packages.insert(
-                    name.to_owned(),
+                    name,
                     PackageInclusionReason::IncludedByFilter {
                         filters: vec![selector.raw.to_string()],
                     },
@@ -650,21 +645,20 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // latter with reverse traversals from the changed set is much cheaper
         // than computing a forward dependency closure for every candidate
         // package: the changed set is typically far smaller than the package
-        // count. `ancestors` also matches the semantics of `dependencies`
-        // here, including treating the root package's dependencies as implied
+        // count. The reverse filtering projection matches forward dependency
+        // semantics, including treating the root package's dependencies as implied
         // dependencies of every package.
         let mut dependent_on_changed = HashSet::new();
         for changed_package in changed_packages.keys() {
-            let changed_node = package_graph::PackageNode::Workspace(changed_package.to_owned());
-            for ancestor in self.pkg_graph.ancestors(&changed_node) {
-                // `dependencies` never includes the package itself, so a
+            for ancestor in self
+                .pkg_graph
+                .filtering_relationships()
+                .transitive_dependents(changed_package)?
+            {
+                // Filtering projections never include the package itself, so a
                 // package's own change must not mark it as depending on a
                 // changed package; self-selection is handled below.
-                if *ancestor != changed_node
-                    && !matches!(ancestor, package_graph::PackageNode::Root)
-                {
-                    dependent_on_changed.insert(ancestor.as_package_name().clone());
-                }
+                dependent_on_changed.insert(ancestor);
             }
         }
 
@@ -725,15 +719,14 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             let changed_packages = self.packages_changed_in_range(git_range)?;
             let package_path_lookup = self
                 .pkg_graph
-                .packages()
-                .map(|(name, entry)| (name, entry.package_path()))
+                .package_scope_directories()
                 .collect::<HashMap<_, _>>();
 
             for (package, reason) in changed_packages {
                 if let Some(parent_dir_globber) = parent_dir_globber.as_ref() {
                     if package == PackageName::Root {
-                        // The root package changed, only add it if
-                        // the parentDir is equivalent to the root
+                        // `{.}` addresses the root Turbo namespace even when
+                        // there is no root JavaScript package.
                         if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
                             entry_packages.insert(package, reason);
                         }
@@ -764,13 +757,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     },
                 );
             } else {
-                let packages = self.pkg_graph.packages();
-                for (name, _) in packages.filter(|(_name, info)| {
-                    let path = info.package_path().as_path();
-                    parent_dir_globber.is_match(path)
-                }) {
+                for (name, _) in self
+                    .pkg_graph
+                    .package_scope_directories()
+                    .filter(|(_, path)| parent_dir_globber.is_match(path.as_path()))
+                {
                     entry_packages.insert(
-                        name.to_owned(),
+                        name,
                         PackageInclusionReason::InFilteredDirectory {
                             directory: parent_dir.to_owned(),
                         },
@@ -825,13 +818,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     }
 
     fn all_packages(&self) -> HashSet<PackageName> {
-        let mut packages = self
-            .pkg_graph
-            .packages()
-            .map(|(name, _)| name.to_owned())
-            .collect::<HashSet<_>>();
+        let mut packages = self.selectable_packages().collect::<HashSet<_>>();
         packages.insert(PackageName::Root);
         packages
+    }
+
+    fn selectable_packages(&self) -> impl Iterator<Item = PackageName> + '_ {
+        self.pkg_graph
+            .real_package_names()
+            .chain(self.pkg_graph.aggregate_scope_names())
+            .map(|name| PackageName::Other(name.to_string()))
     }
 }
 
@@ -866,7 +862,7 @@ fn match_package_names(
 /// Errors that can occur during scope resolution.
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum ResolutionError {
-    #[error("missing info for package")]
+    #[error("missing path for package {0}")]
     MissingPackageInfo(String),
     #[error("No packages matched the provided filter")]
     NoPackagesMatched,
@@ -895,6 +891,10 @@ pub enum ResolutionError {
     DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
     GlobalDependenciesGlob(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    RelationshipProjection(
+        #[from] turborepo_repository::package_graph::RelationshipProjectionError,
+    ),
 }
 
 #[cfg(test)]
@@ -902,6 +902,7 @@ mod test {
     use std::{
         collections::{HashMap, HashSet},
         str::FromStr,
+        sync::Arc,
     };
 
     use pretty_assertions::assert_eq;
@@ -910,17 +911,21 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_errors::Spanned;
     use turborepo_repository::{
-        change_mapper::PackageInclusionReason,
+        change_mapper::{AllPackageChangeReason, PackageInclusionReason},
         discovery::PackageDiscovery,
         package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
         package_json::PackageJson,
         package_manager::PackageManager,
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
+        },
     };
 
     use super::{FilterResolver, PackageInference};
     use crate::{
         FilterMode,
-        change_detector::GitChangeDetector,
+        change_detector::{GitChangeDetector, all_package_changes},
         filter::ResolutionError,
         target_selector::{GitRange, TargetSelector},
     };
@@ -959,6 +964,34 @@ mod test {
             turborepo_repository::discovery::Error,
         > {
             self.discover_packages().await
+        }
+    }
+
+    struct AggregateContributor {
+        definition_path: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for AggregateContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("aggregate-test")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let root = self
+                    .definition_path
+                    .parent()
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| self.definition_path.clone());
+                Ok(DiscoveredPackages::new(
+                    vec![DiscoveredPackage::aggregate(
+                        "cargo-workspace".to_string(),
+                        PackageJson::default(),
+                        self.definition_path.clone(),
+                    )],
+                    vec![WorkspaceRoot::new("cargo", root)],
+                ))
+            })
         }
     }
 
@@ -1646,6 +1679,231 @@ mod test {
         };
 
         (temp_folder, turbo_root, graph)
+    }
+
+    fn make_aggregate_resolver_with_root(
+        root_package_json: Option<PackageJson>,
+    ) -> (
+        TempDir,
+        FilterResolver<'static, TestChangeDetector<'static>>,
+    ) {
+        make_aggregate_resolver_with_changes(root_package_json, TestChangeDetector::new(&[]))
+    }
+
+    fn make_aggregate_resolver_with_changes(
+        root_package_json: Option<PackageJson>,
+        change_detector: TestChangeDetector<'static>,
+    ) -> (
+        TempDir,
+        FilterResolver<'static, TestChangeDetector<'static>>,
+    ) {
+        let temp_folder = tempfile::tempdir().unwrap();
+        let turbo_root = Box::leak(Box::new(
+            AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
+        ));
+        let aggregate = Arc::new(AggregateContributor {
+            definition_path: turbo_root.join_component("Cargo.toml"),
+        });
+        let graph = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(
+                PackageGraph::builder_optional(turbo_root, root_package_json)
+                    .with_package_discovery(MockDiscovery)
+                    .with_package_jsons(Some(HashMap::new()))
+                    .with_contributor(aggregate)
+                    .build(),
+            )
+            .unwrap();
+        let graph = Box::leak(Box::new(graph));
+        let resolver =
+            FilterResolver::new_with_change_detector(graph, turbo_root, None, change_detector);
+        (temp_folder, resolver)
+    }
+
+    fn make_aggregate_resolver() -> (
+        TempDir,
+        FilterResolver<'static, TestChangeDetector<'static>>,
+    ) {
+        make_aggregate_resolver_with_root(Some(PackageJson::default()))
+    }
+
+    #[test]
+    fn aggregate_scope_preserves_name_and_root_directory_filter_semantics() {
+        let (_tempdir, resolver) = make_aggregate_resolver();
+
+        let (all_packages, mode) = resolver.resolve(&None, &[]).unwrap();
+        assert_eq!(mode, FilterMode::AllPackages);
+        assert_eq!(
+            all_packages.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::from("cargo-workspace")])
+        );
+
+        let by_name = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "cargo-workspace".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert_eq!(
+            by_name.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::from("cargo-workspace")])
+        );
+
+        let by_root_directory = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert_eq!(
+            by_root_directory.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root])
+        );
+
+        let inference = PackageInference::calculate(
+            resolver.turbo_root,
+            &AnchoredSystemPathBuf::default(),
+            resolver.pkg_graph,
+        );
+        assert_eq!(inference.package_name, None);
+        assert_eq!(inference.directory_root, AnchoredSystemPathBuf::default());
+    }
+
+    #[test]
+    fn native_root_scope_is_distinct_from_turbo_root_namespace() {
+        let (_tempdir, resolver) = make_aggregate_resolver_with_root(None);
+
+        assert!(!resolver.pkg_graph.has_root_javascript_scope());
+
+        let (all_packages, mode) = resolver.resolve(&None, &[]).unwrap();
+        assert_eq!(mode, FilterMode::AllPackages);
+        assert_eq!(
+            all_packages.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::from("cargo-workspace")]),
+            "default scope output contains the aggregate but not a synthetic root package"
+        );
+
+        let by_root_directory = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert_eq!(
+            by_root_directory.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root]),
+            "{{.}} selects the root Turbo namespace without creating a root package"
+        );
+
+        let aggregate = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "cargo-workspace".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert_eq!(
+            aggregate.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::from("cargo-workspace")]),
+            "aggregate scopes remain selectable without a JavaScript root"
+        );
+
+        let turbo_root_namespace = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "//".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert_eq!(
+            turbo_root_namespace.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root]),
+            "the root Turbo task namespace remains explicitly selectable"
+        );
+    }
+
+    #[test]
+    fn pure_native_root_filter_modes_follow_resolved_root_identity() {
+        let (_tempdir, resolver) = make_aggregate_resolver_with_root(None);
+        let aggregate = PackageName::from("cargo-workspace");
+
+        let (root_directory, mode) = resolver.resolve(&None, &["{.}".to_string()]).unwrap();
+        assert_eq!(
+            root_directory.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root])
+        );
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+
+        let (without_root_directory, mode) =
+            resolver.resolve(&None, &["!{.}".to_string()]).unwrap();
+        assert_eq!(
+            without_root_directory.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([aggregate.clone()])
+        );
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            },
+            "!{{.}} explicitly excludes the root Turbo namespace"
+        );
+
+        let (root_namespace, mode) = resolver.resolve(&None, &["//".to_string()]).unwrap();
+        assert_eq!(
+            root_namespace.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root])
+        );
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+
+        let (without_root_namespace, mode) = resolver.resolve(&None, &["!//".to_string()]).unwrap();
+        assert_eq!(
+            without_root_namespace.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([aggregate])
+        );
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            },
+            "explicitly excluding // suppresses root task injection"
+        );
+    }
+
+    #[test]
+    fn pure_native_root_git_dependency_selector_matches_root_namespace() {
+        let (_tempdir, resolver) = make_aggregate_resolver_with_changes(
+            None,
+            TestChangeDetector::new(&[("main", None, &["//", "cargo-workspace"])]),
+        );
+
+        let (packages, mode) = resolver
+            .resolve(&None, &["{.}...[main]".to_string()])
+            .unwrap();
+
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+        assert_eq!(
+            packages.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root]),
+            "root-directory git dependency filters preserve the root Turbo namespace"
+        );
+    }
+
+    #[test]
+    fn all_package_changes_include_pure_native_root_task_namespace() {
+        let (_tempdir, resolver) = make_aggregate_resolver_with_root(None);
+
+        let changed = all_package_changes(
+            resolver.pkg_graph,
+            AllPackageChangeReason::GitRefNotFound {
+                from_ref: None,
+                to_ref: None,
+            },
+        );
+
+        assert_eq!(
+            changed.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::Root, PackageName::from("cargo-workspace")])
+        );
     }
 
     /// Test that PackageInference::calculate is deterministic when invoked from

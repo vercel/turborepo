@@ -1324,10 +1324,7 @@ mod tests {
         // on windows the slash path doesn't escape the colon. to make
         // it a valid glob, we must
         #[cfg(windows)]
-        let slash_path = {
-            let regex = regex::Regex::new("([A-Z]):").unwrap();
-            regex.replace(&slash_path, "$1\\:")
-        };
+        let slash_path = { regex::regex!("([A-Z]):").replace(&slash_path, "$1\\:") };
 
         let glob_exp = format!("{}/{}", slash_path, "**/*.rs");
 

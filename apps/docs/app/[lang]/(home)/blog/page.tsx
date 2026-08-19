@@ -7,7 +7,7 @@ export function generateMetadata(): Metadata {
   const baseMetadata = createMetadata({
     title: "Blog",
     description: "Get the latest news and updates from the Turboverse.",
-    canonicalPath: "/blog"
+    canonicalPath: "/blog",
   });
 
   return {
@@ -15,9 +15,9 @@ export function generateMetadata(): Metadata {
     alternates: {
       ...baseMetadata.alternates,
       types: {
-        "application/rss+xml": `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/feed.xml`
-      }
-    }
+        "application/rss+xml": `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/feed.xml`,
+      },
+    },
   };
 }
 
@@ -31,23 +31,23 @@ function Page() {
   return (
     <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
       <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-100/10 border-opacity-20 pb-8 pt-4">
-        <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
+        <h1 className="mb-6 mt-2 text-center text-heading-48 text-slate-900 dark:text-slate-100 lg:text-heading-56">
           Blog
         </h1>
-        <p className="text-center text-gray-1000">
-          The latest updates and releases from the Turborepo team.
+        <p className="text-center text-copy-20 text-gray-900">
+          The latest updates and releases from the Turborepo team
         </p>
       </div>
       {posts.map((post) => {
         if ("isExternal" in post.data) {
           return (
             <Link
-              className="mb-10 block text-2xl font-semibold hover:underline"
+              className="mb-10 block hover:underline"
               href={post.data.href}
               key={post.data.title}
               target="_blank"
             >
-              <h2>{post.data.title}</h2>
+              <h2 className="text-heading-32">{post.data.title}</h2>
               <p className="mt-2 text-base font-normal opacity-80">
                 {post.data.description}
               </p>
@@ -64,12 +64,12 @@ function Page() {
 
         return (
           <Link
-            className="mb-10 block text-2xl font-semibold hover:underline"
+            className="mb-10 block hover:underline"
             href={`/blog/${post.slugs.join("/")}`}
             key={post.data.title}
             target={undefined}
           >
-            <h2>{post.data.title}</h2>
+            <h2 className="text-heading-32">{post.data.title}</h2>
             <p className="mt-2 text-base font-normal opacity-80">
               {post.data.description}
             </p>

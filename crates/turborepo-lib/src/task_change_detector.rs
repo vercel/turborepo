@@ -24,8 +24,9 @@ pub struct WatchTaskFilterResult {
     pub existing_files: HashSet<AnchoredSystemPathBuf>,
     /// Tasks whose `inputs` directly match the changed files.
     pub directly_affected: HashSet<TaskId<'static>>,
-    /// Full set of tasks that would execute, including dependents and
-    /// dependencies. Matches what `Engine::retain_affected_tasks` keeps.
+    /// Tasks that would execute in watch mode, including dependents and
+    /// cacheable dependencies. Persistent non-interruptible tasks are omitted.
+    /// Matches what `Engine::retain_watch_affected_tasks` keeps.
     pub execution_tasks: HashSet<TaskId<'static>>,
 }
 
@@ -43,7 +44,7 @@ pub fn resolve_watch_task_filter(
 ) -> WatchTaskFilterResult {
     let existing_files = filter_existing_changed_files(repo_root, changed_files);
     let directly_affected = affected_task_ids(engine, pkg_dep_graph, &existing_files, global_deps);
-    let execution_tasks = engine.execution_closure_for_affected(&directly_affected);
+    let execution_tasks = engine.watch_execution_closure_for_affected(&directly_affected);
 
     WatchTaskFilterResult {
         existing_files,
@@ -77,9 +78,9 @@ pub fn filter_existing_changed_files(
 const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
 
 /// Determines which tasks are directly affected by the given set of changed
-/// files. Does NOT expand to transitive dependents or dependencies — use
-/// `Engine::retain_affected_tasks` afterward to include downstream
-/// dependents and upstream dependencies needed for execution.
+/// files. Does NOT expand to transitive dependents or dependencies. Callers
+/// must use the closure appropriate to their mode: `retain_affected_tasks` for
+/// `--affected`, or `retain_watch_affected_tasks` for watch mode.
 ///
 /// Checks all tasks against all changed files regardless of package boundaries.
 /// This is what makes cross-package inputs (`$TURBO_ROOT$/schema/api.json`)
@@ -111,9 +112,14 @@ pub fn affected_task_ids(
         return engine.task_ids().cloned().collect();
     }
 
-    turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, changed_files)
-        .into_keys()
-        .collect()
+    match turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, changed_files)
+    {
+        Ok(matched) => matched.into_keys().collect(),
+        Err(error) => {
+            tracing::warn!(%error, "unable to project task affectedness; selecting all tasks");
+            engine.task_ids().cloned().collect()
+        }
+    }
 }
 
 /// Returns `true` if any changed file is a global dependency, meaning all
@@ -128,7 +134,7 @@ fn is_global_change(
     global_deps: &[String],
     pkg_dep_graph: &PackageGraph,
 ) -> bool {
-    let lockfile_name = pkg_dep_graph.package_manager().lockfile_name();
+    let lockfile_name = pkg_dep_graph.package_manager().map(|pm| pm.lockfile_name());
     let global_globs: Vec<_> = global_deps
         .iter()
         .filter_map(|g| match wax::Glob::new(g) {
@@ -152,7 +158,7 @@ fn is_global_change(
             return true;
         }
 
-        if file_str == lockfile_name {
+        if Some(file_str) == lockfile_name {
             return true;
         }
 
@@ -179,7 +185,7 @@ mod tests {
         package_manager::PackageManager,
     };
     use turborepo_task_id::TaskId;
-    use turborepo_types::TaskDefinition;
+    use turborepo_types::{TaskDefinition, TaskInputs};
 
     use super::*;
     use crate::engine::Building;
@@ -361,5 +367,43 @@ mod tests {
         );
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn unknown_task_package_conservatively_selects_all_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &[]).await;
+        let unknown = TaskId::new("missing", "build");
+        let engine = make_engine(&[(unknown.clone(), default_def())], &[]);
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["file.txt"]), &[]);
+        assert_eq!(result, HashSet::from([unknown]));
+    }
+
+    #[tokio::test]
+    async fn invalid_task_glob_conservatively_selects_all_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let task = TaskId::new("lib-a", "build");
+        let unaffected = TaskId::new("lib-a", "test");
+        let definition = TaskDefinition {
+            inputs: TaskInputs {
+                globs: vec!["[invalid".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let engine = make_engine(
+            &[
+                (task.clone(), definition),
+                (unaffected.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["file.txt"]), &[]);
+        assert_eq!(result, HashSet::from([task, unaffected]));
     }
 }

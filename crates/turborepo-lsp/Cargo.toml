@@ -6,8 +6,12 @@ license = "MIT"
 
 [features]
 default = ["rustls-tls"]
-native-tls = ["turborepo-lib/native-tls"]
-rustls-tls = ["turborepo-lib/rustls-tls"]
+# The language server itself performs no TLS I/O (it talks to the daemon over a
+# local socket). These features are retained as inert aliases so the workspace
+# and the `turborepo` crate's `turborepo-lsp/{native-tls,rustls-tls}` feature
+# references continue to resolve.
+native-tls = []
+rustls-tls = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,7 +19,10 @@ rustls-tls = ["turborepo-lib/rustls-tls"]
 workspace = true
 
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 crop = "0.4.0"
+go-parse-duration = "0.1.1"
+humantime = "2.1.0"
 itertools.workspace = true
 jsonc-parser = "0.23.0"
 pidlock = { version = "0.1.4", path = "../turborepo-pidlock" }
@@ -23,7 +30,13 @@ serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
 tokio-retry = "0.3.0"
 tower-lsp = "0.20.0"
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
 turbopath = { version = "0.1.0", path = "../turborepo-paths" }
-turborepo-lib = { version = "0.1.0", path = "../turborepo-lib" }
+turborepo-daemon = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
 wax.workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

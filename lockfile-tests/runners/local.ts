@@ -458,7 +458,7 @@ export class LocalRunner {
           // turbo prune
           const pruneCommand = `turbo prune ${targetWorkspace.name}${
             tc.docker ? " --docker" : ""
-          }`;
+          }${tc.production ? " --production" : ""}`;
           log(`[${label}] ${pruneCommand}`);
           const pruneResult = await exec(pruneCommand, tmpDir, {
             PATH: fullPath

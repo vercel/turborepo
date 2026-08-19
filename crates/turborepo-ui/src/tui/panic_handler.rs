@@ -73,11 +73,6 @@ pub fn set_raw_mode_disabled() {
     RAW_MODE_ENABLED.store(false, Ordering::SeqCst);
 }
 
-/// Check if raw mode is currently enabled.
-pub fn is_raw_mode_enabled() -> bool {
-    RAW_MODE_ENABLED.load(Ordering::SeqCst)
-}
-
 /// Attempts to restore terminal to a sane state if the TUI was active.
 ///
 /// This is called from the panic handler, and as a last-resort safety net

@@ -496,6 +496,43 @@ function assertSafeGitArgument(value: string, description: string): void {
   }
 }
 
+function formatError(error: unknown): string {
+  if (error && typeof error === "object" && "stderr" in error) {
+    const { stderr } = error as { stderr?: unknown };
+    if (typeof stderr === "string" || Buffer.isBuffer(stderr)) {
+      const output = stderr.toString().trim();
+      if (output) {
+        return output;
+      }
+    }
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
+function runGit(args: Array<string>, cwd?: string): void {
+  try {
+    execFileSync("git", args, { cwd, stdio: "pipe" });
+  } catch (error) {
+    throw new Error(`\`git ${args[0]}\` failed:\n${formatError(error)}`);
+  }
+}
+
+function cleanupCloneDirectory(tempDir: string): void {
+  try {
+    rmSync(tempDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100
+    });
+  } catch (error) {
+    warn(
+      `Unable to remove temporary directory ${tempDir}:\n${formatError(error)}`
+    );
+  }
+}
+
 export async function downloadAndExtractExample(root: string, name: string) {
   // Validate example name to prevent path traversal and argument injection
   // Only allow alphanumeric characters, hyphens, and underscores
@@ -512,45 +549,32 @@ export async function downloadAndExtractExample(root: string, name: string) {
 
   try {
     // Clone with partial clone (no blobs) and no checkout
-    execFileSync(
-      "git",
-      [
-        "clone",
-        "--filter=blob:none",
-        "--no-checkout",
-        "--depth",
-        "1",
-        "--sparse",
-        "https://github.com/vercel/turborepo.git",
-        tempDir
-      ],
-      { stdio: "pipe" }
-    );
+    runGit([
+      "clone",
+      "--filter=blob:none",
+      "--no-checkout",
+      "--depth",
+      "1",
+      "--sparse",
+      "https://github.com/vercel/turborepo.git",
+      tempDir
+    ]);
 
     // Set up sparse checkout for just the example we want
-    execFileSync("git", ["sparse-checkout", "set", `examples/${name}`], {
-      cwd: tempDir,
-      stdio: "pipe"
-    });
+    runGit(["sparse-checkout", "set", `examples/${name}`], tempDir);
 
     // Checkout the files
-    execFileSync("git", ["checkout"], {
-      cwd: tempDir,
-      stdio: "pipe"
-    });
+    runGit(["checkout"], tempDir);
 
     // Copy the example files to the root
     const examplePath = join(tempDir, "examples", name);
     cpSync(examplePath, normalizedRoot, { recursive: true });
   } catch (gitError) {
-    // Clean up temp directory if git clone failed partway through
-    rmSync(tempDir, { recursive: true, force: true });
-
-    // Fall back to tarball download if git is not available
     warn(
-      "Git is not available. Downloading example via tarball (slower).\n" +
-        "For faster downloads, install git: https://git-scm.com/downloads"
+      `Git download failed:\n${formatError(gitError)}\n` +
+        "Falling back to downloading the example via tarball."
     );
+    cleanupCloneDirectory(tempDir);
 
     await streamingExtract({
       url: "https://codeload.github.com/vercel/turborepo/tar.gz/main",
@@ -565,5 +589,5 @@ export async function downloadAndExtractExample(root: string, name: string) {
   }
 
   // Clean up the temp directory on success
-  rmSync(tempDir, { recursive: true, force: true });
+  cleanupCloneDirectory(tempDir);
 }

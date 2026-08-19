@@ -3,7 +3,7 @@ import { source } from "@/lib/geistdocs/source";
 export const revalidate = false;
 
 const TURBO_SLOGAN =
-  "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.";
+  "Turborepo is the build system for coding agents.";
 
 export const GET = async (
   _req: Request,
@@ -15,13 +15,13 @@ export const GET = async (
   const links = pages
     .sort((a, b) => a.url.localeCompare(b.url))
     .map((page) => {
-      let mdPath = page.url.replace(/^\/docs/, "");
-      // Handle index pages
-      if (mdPath === "" || mdPath.endsWith("/")) {
-        mdPath = mdPath + "index.md";
-      } else {
-        mdPath = mdPath + ".md";
-      }
+      // Link each page's .md route under its real URL (for example
+      // /docs/acknowledgments.md); stripping the /docs prefix produced
+      // links that 404.
+      const mdPath =
+        page.url === "/docs" || page.url.endsWith("/")
+          ? `${page.url.replace(/\/$/, "")}/index.md`
+          : `${page.url}.md`;
       return `- [${page.data.title}](${mdPath}): ${page.data.description ?? ""}`;
     });
 

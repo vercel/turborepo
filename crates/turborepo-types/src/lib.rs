@@ -201,17 +201,6 @@ impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
     }
-
-    /// Returns true if the UI mode has a sender,
-    /// i.e. tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui)
-    }
-
-    /// Returns true if this UI mode should include timestamps in the prefix
-    pub fn should_include_timestamps(&self) -> bool {
-        matches!(self, Self::StreamWithTimestamps)
-    }
 }
 
 /// Log ordering mode for task output.
@@ -956,16 +945,15 @@ pub struct TaskDefinition {
 }
 
 /// A task's resolved `command` override.
-///
-/// Replaces the process argv the toolchain would have constructed. The
-/// toolchain still owns the frame: working directory, serial grouping,
-/// hash wiring, and env composition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskCommandOverride {
     /// Explicitly no command: the task is a no-op for this package.
     OptOut,
-    /// The argv to execute: program first, arguments after. Executed
-    /// directly — no shell.
+    /// Replaces the process argv the toolchain would have constructed: program
+    /// first, arguments after, executed directly with no shell. The toolchain
+    /// still owns the working directory and serial grouping, but its derived
+    /// inputs, outputs, and hash environment do not apply; turbo.json is
+    /// authoritative for the arbitrary command's task-level hash wiring.
     Argv(Vec<String>),
 }
 
@@ -1101,6 +1089,9 @@ impl TaskDefinitionExt for TaskDefinition {
         workspace_dir: &AnchoredSystemPath,
     ) -> TaskOutputs {
         let make_glob_repo_relative = |glob: &str| -> String {
+            if workspace_dir.as_str().is_empty() {
+                return glob.to_owned();
+            }
             let mut repo_relative_glob = workspace_dir.to_string();
             repo_relative_glob.push(std::path::MAIN_SEPARATOR);
             repo_relative_glob.push_str(glob);

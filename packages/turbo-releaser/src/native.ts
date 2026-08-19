@@ -13,11 +13,21 @@ export const archToHuman: Record<SupportedArch, HumanArch> = {
   arm64: "arm64"
 };
 
-export const nodeOSLookup: Record<SupportedOS, NpmOs> = {
-  darwin: "darwin",
-  linux: "linux",
-  windows: "win32"
+/* The Linux binaries are also compatible with Android (e.g. Termux),
+   so allow npm/pnpm to install them there. */
+export const nodeOSLookup: Record<SupportedOS, ReadonlyArray<NpmOs>> = {
+  darwin: ["darwin"],
+  linux: ["android", "linux"],
+  windows: ["win32"]
 };
+
+export function getNativePackageName(
+  packagePrefix: string,
+  { os, arch }: Platform
+) {
+  const separator = packagePrefix.startsWith("@") ? "/" : "-";
+  return `${packagePrefix}${separator}${os}-${archToHuman[arch]}`;
+}
 
 const templateDir = path.join(__dirname, "..", "template");
 
@@ -61,9 +71,8 @@ async function generateNativePackage({
 
   console.log("Generating package.json...");
   const isScoped = packagePrefix.startsWith("@");
-  const separator = isScoped ? "/" : "-";
   const packageJson: Record<string, unknown> = {
-    name: `${packagePrefix}${separator}${os}-${archToHuman[arch]}`,
+    name: getNativePackageName(packagePrefix, platform),
     version,
     description:
       description ||
@@ -72,7 +81,7 @@ async function generateNativePackage({
     bugs: "https://github.com/vercel/turborepo/issues",
     homepage: "https://turborepo.dev",
     license: "MIT",
-    os: [nodeOSLookup[os]],
+    os: nodeOSLookup[os],
     cpu: [arch],
     preferUnplugged: true
   };
@@ -110,4 +119,4 @@ function resolveOutputDir(outputDir: string, outputBaseDir: string) {
 
 // Exported asn an object instead of export keyword, so that these functions
 // can be mocked in tests.
-export default { generateNativePackage, archToHuman };
+export default { generateNativePackage, getNativePackageName, archToHuman };

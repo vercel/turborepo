@@ -1821,6 +1821,7 @@ fn test_set_single_package() {
             None
         })
         .unwrap_or(false));
+    assert!(explicit_run.execution_args.is_none());
 
     let watch = Args::parse(
         ["turbo", "watch", "--single-package", "build"]
@@ -1838,6 +1839,7 @@ fn test_set_single_package() {
             None
         })
         .unwrap_or(false));
+    assert!(watch.execution_args.is_none());
 }
 
 #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]

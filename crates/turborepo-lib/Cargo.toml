@@ -28,6 +28,9 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -51,7 +54,7 @@ go-parse-duration = "0.1.1"
 human-panic = "1.2.1"
 human_format = "1.1.0"
 humantime = "2.1.0"
-ignore = "0.4.22"
+ignore = "0.4.24"
 indicatif = { workspace = true }
 itertools = { workspace = true }
 libc = "0.2.140"

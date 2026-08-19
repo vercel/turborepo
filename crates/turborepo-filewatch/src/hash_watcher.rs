@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        Arc,
+        Arc, RwLock,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -20,7 +20,7 @@ use turborepo_repository::discovery::DiscoveryResponse;
 use turborepo_scm::{Error as SCMError, GitHashes, SCM};
 
 use crate::{
-    NotifyError, OptionalWatch,
+    RepositoryIgnore, WatchInterest, WatchScope, WatchSource,
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
@@ -127,9 +127,10 @@ impl HashWatcher {
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         package_discovery: watch::Receiver<Option<DiscoveryData>>,
-        file_events: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        file_events: impl Into<WatchSource>,
         scm: SCM,
     ) -> Self {
+        let file_events = file_events.into();
         let (exit_tx, exit_rx) = oneshot::channel();
         let (query_tx, query_rx) = mpsc::channel(16);
         // Track the slowest-to-hash files so a stalled startup (e.g. a large
@@ -208,6 +209,164 @@ enum HashState {
 // conversion, if we decide we want to add the radix_trie dependency to
 // turbopath.
 struct FileHashes(Trie<String, HashMap<InputGlobs, HashState>>);
+
+struct PackageWatchScope {
+    inputs: HashSet<InputGlobs>,
+}
+
+struct WatchScopeState {
+    initialized: bool,
+    packages: Trie<String, PackageWatchScope>,
+}
+
+impl Default for WatchScopeState {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            packages: Trie::new(),
+        }
+    }
+}
+
+struct DynamicWatchScope {
+    repo_root: AbsoluteSystemPathBuf,
+    state: Arc<RwLock<WatchScopeState>>,
+    physical_interest: WatchInterest,
+}
+
+impl DynamicWatchScope {
+    fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        repository_ignore: RepositoryIgnore,
+    ) -> (Self, WatchScope) {
+        let state = Arc::new(RwLock::new(WatchScopeState::default()));
+        let dynamic = Self {
+            repo_root: repo_root.clone(),
+            state: state.clone(),
+            physical_interest: WatchInterest::new(),
+        };
+        let physical_interest = dynamic.physical_interest.clone();
+        let scope = WatchScope::predicate(move |path| {
+            let Ok(absolute_path) = AbsoluteSystemPathBuf::try_from(path) else {
+                return true;
+            };
+            let Ok(path) = repo_root.anchor(&absolute_path) else {
+                return false;
+            };
+            let state = state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !state.initialized {
+                // Subscribe conservatively until package discovery has been applied, avoiding
+                // a gap between subscription creation and the first dynamic scope update.
+                return repository_ignore.is_relevant(absolute_path.as_std_path(), false);
+            }
+            let Some(package_trie) = state.packages.get_ancestor(path.as_str()) else {
+                return false;
+            };
+            let Some(package) = package_trie.value() else {
+                return false;
+            };
+            let Some(package_path) = package_trie
+                .key()
+                .and_then(|path| AnchoredSystemPath::new(path).ok())
+            else {
+                return false;
+            };
+            let Some(path_in_package) = path.strip_prefix(package_path) else {
+                return false;
+            };
+            let path_in_package = path_in_package.to_unix();
+            let default_relevant =
+                repository_ignore.is_relevant(absolute_path.as_std_path(), false);
+
+            package.inputs.iter().any(|inputs| match inputs {
+                InputGlobs::Default => default_relevant,
+                InputGlobs::DefaultWithExtras(globs) => {
+                    globs.matches(&path_in_package) || default_relevant
+                }
+                InputGlobs::Specific(globs) => globs.matches(&path_in_package),
+            })
+        })
+        .with_physical_interest(physical_interest);
+        (dynamic, scope)
+    }
+
+    /// Replace the complete scope after package discovery changes the
+    /// repository layout. Queries should use `insert` so adding N input
+    /// specs remains O(N).
+    fn replace(&self, hashes: &FileHashes) {
+        let mut packages = Trie::new();
+        for package_path in hashes.0.keys() {
+            let Some(states) = hashes.0.get(package_path) else {
+                continue;
+            };
+            let package = PackageWatchScope {
+                inputs: states.keys().cloned().collect(),
+            };
+            packages.insert(package_path.clone(), package);
+        }
+        *self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = WatchScopeState {
+            initialized: true,
+            packages,
+        };
+
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.physical_interest
+            .replace(state.packages.iter().flat_map(|(package_path, package)| {
+                let package_root = self.repo_root.as_std_path().join(package_path);
+                package.inputs.iter().flat_map(move |inputs| match inputs {
+                    InputGlobs::Default => Vec::new(),
+                    InputGlobs::DefaultWithExtras(globs) | InputGlobs::Specific(globs) => globs
+                        .literal_prefixes()
+                        .map(|prefix| package_root.join(prefix))
+                        .collect(),
+                })
+            }));
+    }
+
+    fn insert(&self, spec: &HashSpec) {
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(package) = state.packages.get_mut(spec.package_path.as_str()) {
+            package.inputs.insert(spec.inputs.clone());
+        } else {
+            state.packages.insert(
+                spec.package_path.as_str().to_owned(),
+                PackageWatchScope {
+                    inputs: HashSet::from([spec.inputs.clone()]),
+                },
+            );
+        }
+    }
+
+    fn prepare_spec(&self, spec: &HashSpec) {
+        let package_root = self
+            .repo_root
+            .as_std_path()
+            .join(spec.package_path.as_str());
+        let paths = match &spec.inputs {
+            InputGlobs::Default => Vec::new(),
+            InputGlobs::DefaultWithExtras(globs) | InputGlobs::Specific(globs) => globs
+                .literal_prefixes()
+                .map(|prefix| package_root.join(prefix))
+                .collect(),
+        };
+        self.physical_interest.extend(paths);
+    }
+
+    async fn flush(&self) {
+        self.physical_interest.flush().await;
+    }
+}
 
 impl FileHashes {
     fn new() -> Self {
@@ -353,14 +512,15 @@ impl Subscriber {
         }
     }
 
-    async fn watch(
-        mut self,
-        mut exit_rx: oneshot::Receiver<()>,
-        mut file_events: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) {
+    async fn watch(mut self, mut exit_rx: oneshot::Receiver<()>, file_events: WatchSource) {
         debug!("starting file hash watcher");
-        let mut file_events_recv = match file_events.get().await {
-            Ok(r) => r.resubscribe(),
+        let repository_ignore = file_events
+            .repository_ignore()
+            .unwrap_or_else(|| RepositoryIgnore::new(self.repo_root.as_std_path()));
+        let (dynamic_scope, scope) =
+            DynamicWatchScope::new(self.repo_root.clone(), repository_ignore);
+        let mut file_events_recv = match file_events.subscribe(scope).await {
+            Ok(subscription) => subscription,
             Err(e) => {
                 debug!("file hash watcher exited: {:?}", e);
                 return;
@@ -371,6 +531,8 @@ impl Subscriber {
 
         let mut package_data = self.package_discovery.borrow().to_owned();
         self.handle_package_data_update(&package_data, &mut hashes, &hash_update_tx);
+        dynamic_scope.replace(&hashes);
+        let mut package_discovery_open = true;
         // We've gotten the ready signal from filewatching, and *some* state from
         // package discovery, but there is no guarantee that package discovery
         // is ready. This means that initial queries may be returned with errors
@@ -391,14 +553,35 @@ impl Subscriber {
                     debug!("file hash watcher exited");
                     return;
                 },
-                _ = self.package_discovery.changed() => {
-                    self.package_discovery.borrow().clone_into(&mut package_data);
-                    self.handle_package_data_update(&package_data, &mut hashes, &hash_update_tx);
+                package_discovery_result = self.package_discovery.changed(), if package_discovery_open => {
+                    if package_discovery_result.is_ok() {
+                        self.package_discovery.borrow().clone_into(&mut package_data);
+                        self.handle_package_data_update(&package_data, &mut hashes, &hash_update_tx);
+                        dynamic_scope.replace(&hashes);
+                    } else {
+                        // `changed()` remains immediately ready after all senders are dropped.
+                        // Disable this biased branch so it cannot starve the remaining inputs,
+                        // while retaining the most recently observed package and hash state.
+                        package_discovery_open = false;
+                    }
                 },
                 file_event = file_events_recv.recv() => {
                     match file_event {
                         Ok(Ok(event)) => {
-                            self.handle_file_event(event, &mut hashes, &hash_update_tx);
+                            if event
+                                .paths
+                                .iter()
+                                .any(|path| AbsoluteSystemPathBuf::try_from(path.as_path()).is_err())
+                            {
+                                self.flush_and_rehash(
+                                    &mut hashes,
+                                    &hash_update_tx,
+                                    &package_data,
+                                    "non-UTF-8 file event",
+                                );
+                            } else {
+                                self.handle_file_event(event, &mut hashes, &hash_update_tx);
+                            }
                         },
                         Ok(Err(e)) => {
                             debug!("file watcher error: {:?}", e);
@@ -424,7 +607,7 @@ impl Subscriber {
                     }
                 },
                 Some(query) = self.query_rx.recv() => {
-                    self.handle_query(query, &mut hashes, &hash_update_tx);
+                    self.handle_query(query, &mut hashes, &hash_update_tx, &dynamic_scope).await;
                 }
             }
         }
@@ -446,11 +629,12 @@ impl Subscriber {
 
     // We currently only support a single query, getting hashes for a given
     // HashSpec.
-    fn handle_query(
+    async fn handle_query(
         &self,
         query: Query,
         hashes: &mut FileHashes,
         hash_update_tx: &mpsc::Sender<HashUpdate>,
+        dynamic_scope: &DynamicWatchScope,
     ) {
         //trace!("handling query {query:?}");
         match query {
@@ -484,6 +668,13 @@ impl Subscriber {
                 {
                     // in this scenario, we know the package exists, but we aren't tracking these
                     // particular inputs. Queue a hash request for them.
+                    //
+                    // Ensure ignored literal roots are physically watched and the logical scope
+                    // includes the spec before taking its baseline hash. This closes the window
+                    // in which a change after the baseline could otherwise be filtered out.
+                    dynamic_scope.prepare_spec(&spec);
+                    dynamic_scope.flush().await;
+                    dynamic_scope.insert(&spec);
                     let (version, debouncer) = self.queue_package_hash(&spec, hash_update_tx, true);
                     // this request will likely time out. However, if the client has asked for
                     // this spec once, they might ask again, and we can start tracking it.
@@ -764,9 +955,9 @@ mod tests {
     };
     use turborepo_scm::{GitHashes, OidHash, SCM};
 
-    use super::{FileHashes, HashState, Subscriber, Version};
+    use super::{DynamicWatchScope, FileHashes, HashState, Query, Subscriber, Version};
     use crate::{
-        FileSystemWatcher,
+        FileSystemWatcher, RepositoryIgnore, WatchSource,
         cookies::CookieWriter,
         debouncer::Debouncer,
         globwatcher::GlobSet,
@@ -905,6 +1096,53 @@ mod tests {
         assert!(status.success(), "git checkout failed");
 
         commit_all(repo_root);
+    }
+
+    #[test]
+    fn dynamic_watch_scope_inserts_hash_specs_incrementally() {
+        let (_tmp, repo_root) = setup_fixture();
+        let foo_path = AnchoredSystemPathBuf::from_raw("packages/foo").unwrap();
+        let bar_path = AnchoredSystemPathBuf::from_raw("packages/bar").unwrap();
+        let mut hashes = FileHashes::new();
+        for package_path in [foo_path.clone(), bar_path.clone()] {
+            hashes.insert(
+                HashSpec {
+                    package_path,
+                    inputs: InputGlobs::Default,
+                },
+                HashState::Unavailable("test".to_owned()),
+            );
+        }
+
+        let (scope, _watch_scope) = DynamicWatchScope::new(
+            repo_root.clone(),
+            RepositoryIgnore::new(repo_root.as_std_path()),
+        );
+        scope.replace(&hashes);
+
+        let inputs =
+            InputGlobs::Specific(GlobSet::from_raw_unfiltered(vec!["out/**".to_owned()]).unwrap());
+        scope.insert(&HashSpec {
+            package_path: foo_path.clone(),
+            inputs: inputs.clone(),
+        });
+
+        let state = scope
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert!(
+            state
+                .packages
+                .get(foo_path.as_str())
+                .unwrap()
+                .inputs
+                .contains(&inputs)
+        );
+        assert_eq!(
+            state.packages.get(bar_path.as_str()).unwrap().inputs.len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -1237,6 +1475,52 @@ mod tests {
         let decoy = root.join_components(&["apps", "foodecoy"]);
         let result = hashes.get_changed_specs(&decoy);
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn closed_package_discovery_does_not_starve_queries_or_shutdown() {
+        let tmp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let (package_discovery_tx, package_discovery_rx) = tokio::sync::watch::channel(None);
+        let (query_tx, query_rx) = tokio::sync::mpsc::channel(1);
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+        let (file_event_tx, file_events) = WatchSource::channel();
+        let subscriber = Subscriber::new(repo_root, package_discovery_rx, SCM::Manual, query_rx);
+        let handle = tokio::spawn(subscriber.watch(exit_rx, file_events));
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while file_event_tx.receiver_count() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("subscriber should start");
+
+        drop(package_discovery_tx);
+        let unknown_spec = HashSpec {
+            package_path: AnchoredSystemPathBuf::from_raw("packages/unknown").unwrap(),
+            inputs: InputGlobs::Default,
+        };
+        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+        query_tx
+            .send(Query::GetHash(unknown_spec, response_tx))
+            .await
+            .unwrap();
+        let response = tokio::time::timeout(Duration::from_secs(1), response_rx)
+            .await
+            .expect("closed package discovery must not starve queries")
+            .unwrap();
+        assert_matches!(response, Err(super::Error::UnknownPackage(_)));
+
+        drop(file_event_tx);
+        tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("subscriber should stop when file watching closes")
+            .unwrap();
+        drop(exit_tx);
     }
 
     #[tokio::test]

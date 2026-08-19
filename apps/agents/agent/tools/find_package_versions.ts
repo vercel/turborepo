@@ -1,13 +1,15 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import {
   findPackageJsonFiles,
+  getExamplePath,
   getRepoRoot,
   isJsonObject,
-  readJsonFile
+  readJsonFile,
+  resolveAutomatedExample
 } from "../lib/repo.js";
 
 const dependencyFields = [
@@ -26,15 +28,24 @@ export default defineTool({
       .min(1)
       .describe("Package name to search for, for example 'turbo'.")
   }),
-  async execute({ packageName }) {
-    const repoRoot = await getRepoRoot();
+  async execute({ packageName }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const repoRoot = await getRepoRoot(sandbox);
+    const automatedExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id
+    );
     const packageJsonFiles = await findPackageJsonFiles(
-      path.join(repoRoot, "examples")
+      sandbox,
+      automatedExample
+        ? await getExamplePath(sandbox, automatedExample)
+        : path.join(repoRoot, "examples")
     );
     const matches: Array<{ path: string; field: string; version: string }> = [];
 
     for (const packageJsonFile of packageJsonFiles) {
-      const packageJson = await readJsonFile(packageJsonFile);
+      const packageJson = await readJsonFile(sandbox, packageJsonFile);
       for (const field of dependencyFields) {
         const dependencies = packageJson[field];
         if (!isJsonObject(dependencies)) {

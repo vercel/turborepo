@@ -5,12 +5,8 @@
 //! but these abstractions allow for decoupling and testing.
 
 use tokio::sync::mpsc;
-use turborepo_repository::package_graph::PackageInfo;
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::task::PackageTaskEventBuilder;
-use turborepo_types::{EnvMode, StopExecution, TaskDefinition};
-
-use crate::HashTrackerProvider;
+use turborepo_types::{StopExecution, TaskDefinition};
 
 /// Trait for providing task execution messages from the engine.
 pub trait EngineProvider: Send + Sync {
@@ -25,29 +21,6 @@ pub trait EngineProvider: Send + Sync {
 
     /// Returns the dependencies for a given task ID.
     fn dependencies(&self, task_id: &TaskId) -> Option<Vec<TaskId<'static>>>;
-}
-
-/// Trait for providing task hashing functionality.
-pub trait TaskHashProvider: Send {
-    /// The error type for hash calculation.
-    type Error: std::error::Error + Send;
-
-    /// The hash tracker type returned by this provider.
-    type HashTracker: HashTrackerProvider;
-
-    /// Calculate the hash for a task.
-    fn calculate_task_hash(
-        &self,
-        task_id: &TaskId,
-        task_definition: &TaskDefinition,
-        env_mode: EnvMode,
-        workspace_info: &PackageInfo,
-        dependency_set: Vec<TaskId<'static>>,
-        telemetry: PackageTaskEventBuilder,
-    ) -> Result<String, Self::Error>;
-
-    /// Get the hash tracker.
-    fn task_hash_tracker(&self) -> Self::HashTracker;
 }
 
 /// Callback for task completion.

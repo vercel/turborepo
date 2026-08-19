@@ -19,6 +19,8 @@ export const config = defineConfig({
   logo: <Logo />,
   github,
   nav,
+  // Drops Turborepo (this site) from geistdocs' default OSS products menu.
+  navbarActiveProduct: "turborepo",
   basePath,
   siteId,
   translations,

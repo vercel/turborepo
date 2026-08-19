@@ -55,6 +55,14 @@ pub enum Error {
     GitVersion(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error("I/O error while hashing {path}: {source}")]
+    HashFile {
+        path: AbsoluteSystemPathBuf,
+        #[source]
+        source: std::io::Error,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("Could not find git binary")]
@@ -123,11 +131,21 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        tracing::info!(%path, error = %source, "file hashing failed");
+        Error::HashFile {
+            path,
+            source,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
     /// Returns true if this error indicates OS resource exhaustion (e.g. too
     /// many open files) where a fallback to manual hashing would also fail.
     pub fn is_resource_exhaustion(&self) -> bool {
         match self {
             Error::Io(e, _) => is_os_resource_error(e),
+            Error::HashFile { source, .. } => is_os_resource_error(source),
             Error::Walk(e) => walk_error_is_resource_exhaustion(e),
             _ => false,
         }
@@ -231,6 +249,7 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
+    github_actions_remote_base_ref_fallback: bool,
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
@@ -250,6 +269,7 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
             slowest_files: self.slowest_files.clone(),
         }
     }
@@ -284,6 +304,7 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         })
     }
@@ -355,6 +376,7 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
+                github_actions_remote_base_ref_fallback: false,
                 slowest_files: None,
             }),
             Err(e) => {
@@ -365,6 +387,13 @@ impl SCM {
                 SCM::Manual
             }
         }
+    }
+
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.github_actions_remote_base_ref_fallback = enabled;
+        }
+        self
     }
 
     /// Attach a recorder that tracks the slowest-to-hash files. Long-running

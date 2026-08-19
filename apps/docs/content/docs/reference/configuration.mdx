@@ -43,7 +43,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 
 A list of globs that you want to include in all task hashes. **If any file matching these globs changes, all tasks will miss cache.** Globs are relative to the location of `turbo.json`.
 
-By default, only the root package.json and lockfile are included in [the global hash](/docs/crafting-your-repository/caching) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
+By default, the root `package.json`, lockfile, and source files in internal packages that the root package depends on are included in [the global hash](/docs/crafting-your-repository/caching#root-workspace-dependencies) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
 
 <Callout type="error">
   Globs must be in the repository's source control root. Globs outside of the
@@ -169,8 +169,12 @@ Specify the filesystem cache directory.
   When no `cacheDir` is specified and you're working in a [Git
   worktree](https://git-scm.com/docs/git-worktree), Turborepo automatically
   shares the cache with the main worktree. This allows cache hits across
-  different branches checked out in separate worktrees. Setting an explicit
-  `cacheDir` disables this behavior.
+  different branches checked out in separate worktrees. Cache artifacts are
+  restored without rewriting their contents, so outputs containing absolute
+  worktree paths can point to another checkout after a cache hit. Setting an
+  explicit relative `cacheDir`, such as `.turbo/cache`, resolves from the root
+  of the current worktree and disables sharing, giving each worktree its own
+  local cache.
 </Callout>
 
 ### `cacheMaxAge`
@@ -362,6 +366,22 @@ In this example, if only `README.md` changed in a package, `build` would not run
   selected, regardless of individual task `inputs`.
 </Callout>
 
+#### `githubActionsRemoteBaseRefFallback`
+
+Default: `false`
+
+When GitHub Actions reports a pull request's base branch but that branch is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts created by `actions/checkout`, where the base branch may only exist as a remote-tracking ref.
+
+Local refs continue to take precedence. This flag only affects base refs inferred from GitHub Actions. Explicit refs provided through `TURBO_SCM_BASE` and default `main` or `master` resolution are unchanged.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "githubActionsRemoteBaseRefFallback": true,
+  },
+}
+```
+
 #### `watchUsingTaskInputs`
 
 Default: `false`
@@ -440,6 +460,44 @@ In this example, `--filter=[main]` would not select `build` for a package if onl
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   selected, regardless of individual task `inputs`.
 </Callout>
+
+#### `strictTaskEntrypointSelection`
+
+Default: `false`
+
+Select requested tasks according to whether they resolve a command in the
+repository. When at least one package can run a requested task, packages
+without a command do not become entrypoints and their dependencies are not
+included merely because the task was requested.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "strictTaskEntrypointSelection": true,
+  },
+  "tasks": {
+    "test": {
+      "dependsOn": ["build"],
+    },
+  },
+}
+```
+
+If `web` has a `test` command and `docs` does not, `turbo run test` starts from
+`web#test` but not `docs#test`. Missing tasks reached from retained tasks remain
+in the Task Graph, preserving Transit Nodes and cache invalidation.
+
+When no package resolves a command for a configured or implicitly registered
+task, it remains available for graph-only orchestration. For example, a
+scriptless `ci:checks` task can continue to run its configured dependencies.
+When any of those dependency branches reaches a runnable command, branches that
+never reach runnable work are removed. A fully scriptless graph is preserved
+when none of its branches contains a runnable command.
+
+This flag is independent of [`filterUsingTasks`](#filterusingtasks). When both
+are enabled, a plain task-level filter drops a matching task without a command,
+while `...` can explicitly select executable dependencies or dependents through
+that missing task node.
 
 #### `globalConfiguration`
 

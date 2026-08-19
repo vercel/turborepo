@@ -73,7 +73,7 @@ pub struct Visitor<'a> {
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     /// The compile cache proxy endpoint for this run, when one is being
     /// served (`futureFlags.experimentalCargoSccache`). Toolchains translate
-    /// it into task env vars via `Toolchain::compile_cache_env`.
+    /// task-contract knowledge projects it into execution-only task env vars.
     compile_cache_endpoint: Option<CompileCacheEndpoint>,
 }
 
@@ -127,6 +127,8 @@ pub enum Error {
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] TaskHashError),
+    #[error(transparent)]
+    RunCache(#[from] turborepo_run_cache::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
     #[error("Internal errors encountered: {0}")]
@@ -229,7 +231,7 @@ impl<'a> Visitor<'a> {
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
         external_deps_hashes: Option<HashMap<String, String>>,
         compile_cache_endpoint: Option<CompileCacheEndpoint>,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
             let mut task_hasher = TaskHasher::new(
@@ -237,6 +239,7 @@ impl<'a> Visitor<'a> {
                 run_opts,
                 env_at_execution_start,
                 global_hash,
+                repo_root,
                 global_env,
                 global_env_patterns,
             );
@@ -247,8 +250,8 @@ impl<'a> Visitor<'a> {
             match external_deps_hashes {
                 Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
                 None => crate::rayon_compat::block_in_place(|| {
-                    task_hasher.precompute_external_deps_hashes(package_graph.packages());
-                }),
+                    task_hasher.precompute_external_deps_hashes(&package_graph)
+                })?,
             }
 
             let color_cache = ColorSelector::default();
@@ -275,7 +278,7 @@ impl<'a> Visitor<'a> {
             }
         }
 
-        Self {
+        Ok(Self {
             color_cache,
             dry: false,
             global_env_mode: run_opts.env_mode,
@@ -296,7 +299,7 @@ impl<'a> Visitor<'a> {
             warnings: Default::default(),
             micro_frontends_configs,
             compile_cache_endpoint,
-        }
+        })
     }
 
     /// Pre-compute task hashes and execution environments for all tasks in
@@ -310,9 +313,9 @@ impl<'a> Visitor<'a> {
         task_id: &TaskId<'static>,
     ) -> Result<PrecomputedTask, Error> {
         let package_name = PackageName::from(task_id.package());
-        let workspace_info = self
+        let package_context = self
             .package_graph
-            .package_info(&package_name)
+            .package_task_context(&package_name)
             .ok_or_else(|| Error::MissingPackage {
                 package_name: package_name.clone(),
                 task_id: task_id.clone(),
@@ -337,7 +340,7 @@ impl<'a> Visitor<'a> {
             task_id,
             task_definition,
             task_env_mode,
-            workspace_info,
+            &package_context,
             &dependency_set,
             task_hash_telemetry,
         )?;
@@ -398,13 +401,14 @@ impl<'a> Visitor<'a> {
         for producer_task_id in selected_tasks {
             selected_any = true;
             let producer_package = PackageName::from(producer_task_id.package());
-            let Some(producer_workspace) = self.package_graph.package_info(&producer_package)
+            let Some(producer_context) = self.package_graph.package_task_context(&producer_package)
             else {
                 return Err(Error::MissingPackage {
                     package_name: producer_package,
                     task_id: producer_task_id,
                 });
             };
+            let producer_directory = producer_context.directory();
             let Some(producer_definition) = engine.task_definition(&producer_task_id) else {
                 return Err(Error::MissingDefinition);
             };
@@ -427,7 +431,7 @@ impl<'a> Visitor<'a> {
                 turborepo_task_hash::file_hashes_for_inputs(
                     self.scm,
                     self.repo_root,
-                    producer_workspace.package_path(),
+                    producer_directory,
                     &declared_output_globs,
                     false,
                     self.repo_index,
@@ -436,7 +440,7 @@ impl<'a> Visitor<'a> {
                 let requested_hashes = turborepo_task_hash::file_hashes_for_inputs(
                     self.scm,
                     self.repo_root,
-                    producer_workspace.package_path(),
+                    producer_directory,
                     &dependency_outputs.globs,
                     false,
                     self.repo_index,
@@ -447,7 +451,7 @@ impl<'a> Visitor<'a> {
             for (path, hash) in output_hashes.0.iter() {
                 let full_output_path = self
                     .repo_root
-                    .resolve(producer_workspace.package_path())
+                    .resolve(producer_directory)
                     .join_unix_path(path);
                 let repo_relative_path =
                     AnchoredSystemPathBuf::relative_path_between(self.repo_root, &full_output_path)
@@ -604,10 +608,19 @@ impl<'a> Visitor<'a> {
 
                 if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
                     if self.dry {
+                        let package_name = PackageName::from(task_id.package());
+                        let package_context = self
+                            .package_graph
+                            .package_task_context(&package_name)
+                            .ok_or_else(|| Error::MissingPackage {
+                                package_name,
+                                task_id: task_id.clone(),
+                            })?;
                         self.task_hasher.insert_deferred_hash(
                             task_id,
                             task_definition,
                             task_env_mode,
+                            &package_context,
                         )?;
                     }
                     return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
@@ -689,35 +702,44 @@ impl<'a> Visitor<'a> {
             let crate::engine::Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
-            let Some(workspace_info) = self.package_graph.package_info(&package_name) else {
+            let Some(package_context) = self.package_graph.package_task_context(&package_name)
+            else {
                 dispatch_error = Some(Error::MissingPackage {
                     package_name: package_name.clone(),
                     task_id: info.clone(),
                 });
                 break;
             };
+            // Recursive turbo detection uses catalog authored display/source
+            // facts, not a live PackageJson::scripts read.
+            if info.package() == ROOT_PKG_NAME {
+                if let Some(native_task) = package_context.native_tasks().get(info.task()) {
+                    if let Some(cmd) = native_task.display().or_else(|| {
+                        native_task
+                            .script()
+                            .map(|script| script.as_inner().as_str())
+                    }) {
+                        if command_invokes_turbo(cmd) {
+                            let package_task_event =
+                                PackageTaskEventBuilder::new(info.package(), info.task())
+                                    .with_parent(telemetry);
+                            package_task_event.track_error(TrackedErrors::RecursiveError);
+                            let (span, text) = native_task
+                                .script()
+                                .map(|script| script.span_and_text("package.json"))
+                                .unwrap_or((None, NamedSource::new("", String::new())));
 
-            let command = workspace_info.package_json.scripts.get(info.task());
-
-            match command {
-                Some(cmd)
-                    if info.package() == ROOT_PKG_NAME && command_invokes_turbo(cmd.as_str()) =>
-                {
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(info.package(), info.task())
-                            .with_parent(telemetry);
-                    package_task_event.track_error(TrackedErrors::RecursiveError);
-                    let (span, text) = cmd.span_and_text("package.json");
-
-                    dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                        task_name: info.to_string(),
-                        command: cmd.to_string(),
-                        span,
-                        text,
-                    })));
-                    break;
+                            dispatch_error =
+                                Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                                    task_name: info.to_string(),
+                                    command: cmd.to_string(),
+                                    span,
+                                    text,
+                                })));
+                            break;
+                        }
+                    }
                 }
-                _ => (),
             }
 
             let Some(task_definition) = engine.task_definition(&info) else {
@@ -773,7 +795,7 @@ impl<'a> Visitor<'a> {
                                 &info,
                                 task_definition,
                                 task_env_mode,
-                                workspace_info,
+                                &package_context,
                                 &dependency_set,
                                 task_hash_telemetry,
                                 self.scm,
@@ -793,7 +815,7 @@ impl<'a> Visitor<'a> {
                                 &info,
                                 task_definition,
                                 task_env_mode,
-                                workspace_info,
+                                &package_context,
                                 &dependency_set,
                                 task_hash_telemetry,
                             ) {
@@ -829,8 +851,18 @@ impl<'a> Visitor<'a> {
 
             let task_cache = {
                 let _span = tracing::info_span!("task_cache_new").entered();
-                self.run_cache
-                    .task_cache(task_definition, workspace_info, info.clone(), &task_hash)
+                match self.run_cache.task_cache(
+                    task_definition,
+                    &package_context,
+                    info.clone(),
+                    &task_hash,
+                ) {
+                    Ok(task_cache) => task_cache,
+                    Err(err) => {
+                        dispatch_error = Some(Error::RunCache(err));
+                        break;
+                    }
+                }
             };
 
             // Drop to avoid holding the span across an await

@@ -49,8 +49,6 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "nub",
   "aube"
 ]);
-const DEV_ENGINES_VERSION_REGEX =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function getPackageJson({
   workspaceRoot
@@ -189,13 +187,35 @@ function getWorkspacePackageManager({
     );
   }
 
-  if (
-    !DEV_ENGINES_VERSION_REGEX.test(version) ||
-    semver.valid(version) === null
-  ) {
+  if (semver.validRange(version) === null) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.version` must be an exact semantic version"
+      "`devEngines.packageManager.version` must be a valid semantic version range"
     );
+  }
+
+  const minVersion = semver.minVersion(version);
+  if (minVersion === null) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must admit at least one version"
+    );
+  }
+
+  for (const disjunct of version.split("||")) {
+    const disjunctMinVersion = semver.minVersion(disjunct.trim());
+    if (disjunctMinVersion === null) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must admit at least one version"
+      );
+    }
+
+    if (
+      disjunctMinVersion.major !== minVersion.major ||
+      semver.satisfies(`${disjunctMinVersion.major + 1}.0.0`, disjunct.trim())
+    ) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must only allow versions within one major version"
+      );
+    }
   }
 
   return name;
@@ -445,22 +465,54 @@ function expandWorkspaces({
 
 type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
 
-const LOCKFILE_PROBE_ORDER: Array<{
+const FOREIGN_LOCKFILE_PROBE_ORDER: Array<{
   manager: LockfilePackageManager;
   lockfiles: Array<string>;
 }> = [
   { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
-  { manager: "pnpm", lockfiles: ["aube-lock.yaml", "pnpm-lock.yaml"] },
   { manager: "yarn", lockfiles: ["yarn.lock"] },
   { manager: "npm", lockfiles: ["package-lock.json"] }
 ];
+
+function getPnpmLockfileNames({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  const packageManager = getWorkspacePackageManager({ workspaceRoot });
+
+  if (packageManager === "nub") {
+    return ["nub.lock", "lock.yaml", "aube-lock.yaml", "pnpm-lock.yaml"];
+  }
+  if (packageManager === "aube") {
+    return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+  }
+  return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+}
 
 function getUnderlyingLockfileManager({
   workspaceRoot
 }: {
   workspaceRoot: string;
 }): LockfilePackageManager {
-  for (const { manager, lockfiles } of LOCKFILE_PROBE_ORDER) {
+  const [bun, ...remainingManagers] = FOREIGN_LOCKFILE_PROBE_ORDER;
+  if (
+    bun.lockfiles.some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return bun.manager;
+  }
+
+  if (
+    getPnpmLockfileNames({ workspaceRoot }).some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return "pnpm";
+  }
+
+  for (const { manager, lockfiles } of remainingManagers) {
     if (
       lockfiles.some((lockfile) =>
         existsSync(path.join(workspaceRoot, lockfile))
@@ -488,10 +540,11 @@ function getUnderlyingLockfileName({
       return "bun.lockb";
     }
     case "pnpm": {
-      if (existsSync(path.join(workspaceRoot, "aube-lock.yaml"))) {
-        return "aube-lock.yaml";
-      }
-      return "pnpm-lock.yaml";
+      return (
+        getPnpmLockfileNames({ workspaceRoot }).find((lockfile) =>
+          existsSync(path.join(workspaceRoot, lockfile))
+        ) ?? "pnpm-lock.yaml"
+      );
     }
     case "yarn": {
       return "yarn.lock";

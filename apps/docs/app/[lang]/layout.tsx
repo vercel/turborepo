@@ -1,9 +1,9 @@
 import "../global.css";
 import type { Metadata } from "next";
 import { VercelToolbar } from "@vercel/toolbar/next";
+import { Footer } from "@vercel/geistdocs/footer";
 import { Navbar } from "@vercel/geistdocs/navbar";
 import { FaviconHandler } from "@/components/favicon-handler";
-import { Footer } from "@/components/geistdocs/footer";
 import { GeistdocsProvider } from "@/components/geistdocs/provider";
 import { basePath } from "@/geistdocs";
 import { config } from "@/lib/geistdocs/config";

@@ -157,6 +157,10 @@ impl Opts {
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
+        let default_execution_args = Box::new(ExecutionArgs {
+            single_package: args.single_package,
+            ..Default::default()
+        });
         let (execution_args, run_args) = match &args.command {
             Some(Command::Run {
                 run_args,
@@ -194,7 +198,7 @@ impl Opts {
 
                 (&Box::new(execution_args), &Box::default())
             }
-            _ => (&Box::default(), &Box::default()),
+            _ => (&default_execution_args, &Box::default()),
         };
 
         // Resolve cache directory once to avoid duplicate git process spawning.
@@ -780,6 +784,23 @@ mod test {
         continue_on_error: ContinueMode,
         dry_run: Option<DryRunMode>,
         affected: Option<(String, String)>,
+    }
+
+    #[test]
+    fn devtools_preserves_global_single_package_option() {
+        let tempdir = TempDir::new().expect("create temporary repository");
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).expect("absolute path");
+        let args = Args::parse(
+            ["turbo", "--single-package", "devtools", "--no-open"]
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        )
+        .expect("parse devtools arguments");
+        let opts = Opts::new(&repo_root, &args, ConfigurationOptions::default())
+            .expect("resolve devtools options");
+
+        assert!(opts.run_opts.single_package);
     }
 
     #[test_case(TestCaseOpts{

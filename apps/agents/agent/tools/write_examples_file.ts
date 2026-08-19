@@ -1,7 +1,10 @@
+import path from "node:path/posix";
+
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { writeExamplesFile } from "../lib/repo.js";
+import { assertNoReleaseAgeExclusion } from "../lib/release-age.js";
+import { resolveAutomatedExample, writeExamplesFile } from "../lib/repo.js";
 
 export default defineTool({
   description:
@@ -13,7 +16,23 @@ export default defineTool({
       .describe("Repository-relative file path under examples/."),
     content: z.string().describe("Complete file contents to write.")
   }),
-  async execute({ path, content }) {
-    return writeExamplesFile(path, content);
+  async execute({ path: relativePath, content }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const automatedExample = await resolveAutomatedExample(
+      sandbox,
+      ctx.session.auth.current,
+      ctx.session.id
+    );
+    const normalizedPath = path.normalize(relativePath);
+    if (
+      automatedExample &&
+      !normalizedPath.startsWith(`examples/${automatedExample}/`)
+    ) {
+      throw new Error(
+        `Automated maintenance can only write examples/${automatedExample}/.`
+      );
+    }
+    assertNoReleaseAgeExclusion(normalizedPath, content);
+    return writeExamplesFile(sandbox, normalizedPath, content);
   }
 });

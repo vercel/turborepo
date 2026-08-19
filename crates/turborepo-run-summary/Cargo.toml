@@ -20,8 +20,6 @@ turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-config = { path = "../turborepo-config" }
 turborepo-env = { workspace = true }
-turborepo-hash = { workspace = true }
-turborepo-lockfiles = { workspace = true }
 turborepo-log = { path = "../turborepo-log" }
 turborepo-otel = { workspace = true }
 turborepo-rayon-compat = { workspace = true }
@@ -34,7 +32,9 @@ url = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 test-case = { workspace = true }
+turborepo-repository = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

@@ -17,7 +17,6 @@ either = { workspace = true }
 futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
-lazy-regex = "2.5.0"
 miette = { workspace = true }
 node-semver = "2.2.0"
 petgraph = { workspace = true }
@@ -27,13 +26,16 @@ rust-ini = "0.20.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio.workspace = true
+toml = { workspace = true }
 toml_edit = { workspace = true }
 tracing.workspace = true
 turbopath = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
+turborepo-lockfile-hash = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-rayon-compat = { workspace = true }
 wax = { workspace = true }
@@ -44,3 +46,6 @@ insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+
+[features]
+test-util = []

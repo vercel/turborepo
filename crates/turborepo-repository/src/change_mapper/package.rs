@@ -4,7 +4,7 @@ use wax::{BuildError, Program};
 
 use crate::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
-    package_graph::{PackageGraph, PackageName, WorkspacePackage},
+    package_graph::{PackageGraph, PackageName, PackageTaskContextKind, WorkspacePackage},
     package_manager::PackageManager,
 };
 
@@ -61,28 +61,37 @@ impl<'a> DefaultPackageChangeMapper<'a> {
 
 impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
-        for (name, entry) in self.pkg_dep_graph.packages() {
-            if name == &PackageName::Root {
-                continue;
-            }
-            if let Some(package_path) = entry.package_json_path.parent()
-                // A package whose directory is the repo root would vacuously
-                // match every file — the component zip below has nothing to
-                // compare. Only the Root package may claim root-level files,
-                // via the fallback.
-                && package_path.components().next().is_some()
-                && Self::is_file_in_package(file, package_path)
-            {
-                return PackageMapping::Package((
-                    WorkspacePackage {
-                        name: name.clone(),
-                        path: package_path.to_owned(),
-                    },
-                    PackageInclusionReason::FileChanged {
-                        file: file.to_owned(),
-                    },
-                ));
-            }
+        let package = self
+            .pkg_dep_graph
+            .package_task_contexts()
+            .filter_map(|context| {
+                let package_path = context.directory();
+                (context.kind() == PackageTaskContextKind::Package
+                    // A package whose directory is the repo root would
+                    // vacuously match every file. Only the Root package may
+                    // claim root-level files, via the fallback.
+                    && package_path.components().next().is_some()
+                    && Self::is_file_in_package(file, package_path))
+                .then_some((context.package().clone(), package_path))
+            })
+            .max_by(|(left_name, left_path), (right_name, right_path)| {
+                left_path
+                    .components()
+                    .count()
+                    .cmp(&right_path.components().count())
+                    .then_with(|| right_name.cmp(left_name))
+            });
+
+        if let Some((name, package_path)) = package {
+            return PackageMapping::Package((
+                WorkspacePackage {
+                    name,
+                    path: package_path.to_owned(),
+                },
+                PackageInclusionReason::FileChanged {
+                    file: file.to_owned(),
+                },
+            ));
         }
 
         PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
@@ -195,7 +204,10 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
+    use super::{
+        DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, PackageChangeMapper,
+        PackageMapping,
+    };
     use crate::{
         change_mapper::{
             AllPackageChangeReason, ChangeMapper, LockfileContents, PackageChanges,
@@ -225,6 +237,71 @@ mod tests {
         ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    #[tokio::test]
+    async fn nested_package_owns_its_files() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let parent_manifest = root.join_components(&["packages", "parent", "package.json"]);
+        let child_manifest = root.join_components(&["packages", "parent", "child", "package.json"]);
+        parent_manifest.ensure_dir()?;
+        parent_manifest.create_with_contents(r#"{"name":"parent"}"#)?;
+        child_manifest.ensure_dir()?;
+        child_manifest.create_with_contents(r#"{"name":"child"}"#)?;
+
+        struct NestedDiscovery {
+            parent_manifest: AbsoluteSystemPathBuf,
+            child_manifest: AbsoluteSystemPathBuf,
+        }
+        impl PackageDiscovery for NestedDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    // Parent first reproduces the observation order that used
+                    // to make it incorrectly claim the child's files.
+                    workspaces: vec![
+                        discovery::WorkspaceData {
+                            package_json: self.parent_manifest.clone(),
+                            turbo_json: None,
+                        },
+                        discovery::WorkspaceData {
+                            package_json: self.child_manifest.clone(),
+                            turbo_json: None,
+                        },
+                    ],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(NestedDiscovery {
+                parent_manifest,
+                child_manifest,
+            })
+            .build()
+            .await?;
+        let file = AnchoredSystemPathBuf::from_raw(
+            ["packages", "parent", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+
+        let PackageMapping::Package((package, _)) =
+            DefaultPackageChangeMapper::new(&graph).detect_package(&file)
+        else {
+            panic!("expected a package mapping");
+        };
+        assert_eq!(package.name.as_ref(), "child");
+        assert_eq!(package.path.to_unix().as_str(), "packages/parent/child");
+
+        Ok(())
     }
 
     /// A package whose directory is the repository root must never claim

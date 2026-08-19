@@ -125,6 +125,7 @@ pub enum Error {
     Canonicalize(capnp::Error),
     ReadTaskOutputs(capnp::Error),
     SetTaskOutputs(capnp::Error),
+    Lockfile(turborepo_lockfile_hash::Error),
 }
 
 impl fmt::Display for Error {
@@ -140,6 +141,7 @@ impl fmt::Display for Error {
                 write!(f, "unable to read Cap'n Proto task outputs: {err}")
             }
             Self::SetTaskOutputs(err) => write!(f, "unable to set Cap'n Proto task outputs: {err}"),
+            Self::Lockfile(err) => write!(f, "unable to hash lockfile packages: {err}"),
         }
     }
 }
@@ -151,6 +153,7 @@ impl std::error::Error for Error {
             | Self::Canonicalize(err)
             | Self::ReadTaskOutputs(err)
             | Self::SetTaskOutputs(err) => Some(err),
+            Self::Lockfile(err) => Some(err),
         }
     }
 }
@@ -212,54 +215,24 @@ impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
 impl HashableMessage for LockFilePackages {
     fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
         let LockFilePackages(packages) = self;
-        let mut message = ::capnp::message::TypedBuilder::<
-            proto_capnp::lock_file_packages::Owned,
-            HeapAllocator,
-        >::new_default();
-        let mut builder = message.init_root();
-
-        {
-            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
-            for (i, turborepo_lockfiles::Package { key, version }) in packages.iter().enumerate() {
-                let mut package = packages_builder.reborrow().get(i as u32);
-                package.set_key(key);
-                package.set_version(version);
-                // we don't track this in rust, set it to true
-                package.set_found(true);
-            }
-        }
-
-        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
-            builder.total_size(),
-            builder.reborrow_as_reader(),
+        turborepo_lockfile_hash::canonical_builder(
+            packages
+                .iter()
+                .map(|package| (package.key.as_str(), package.version.as_str())),
         )
+        .map_err(Error::Lockfile)
     }
 }
 
 impl HashableMessage for LockFilePackagesRef<'_> {
     fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
         let LockFilePackagesRef(packages) = self;
-        let mut message = ::capnp::message::TypedBuilder::<
-            proto_capnp::lock_file_packages::Owned,
-            HeapAllocator,
-        >::new_default();
-        let mut builder = message.init_root();
-
-        {
-            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
-            for (i, pkg) in packages.iter().enumerate() {
-                let mut package = packages_builder.reborrow().get(i as u32);
-                package.set_key(&pkg.key);
-                package.set_version(&pkg.version);
-                // we don't track this in rust, set it to true
-                package.set_found(true);
-            }
-        }
-
-        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
-            builder.total_size(),
-            builder.reborrow_as_reader(),
+        turborepo_lockfile_hash::canonical_builder(
+            packages
+                .into_iter()
+                .map(|package| (package.key.as_str(), package.version.as_str())),
         )
+        .map_err(Error::Lockfile)
     }
 }
 

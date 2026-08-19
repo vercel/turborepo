@@ -7,6 +7,17 @@ use super::{
     PackageInfo, PackageKey, data::WorkspaceEntry,
 };
 
+fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+    if version == "*" {
+        return Some(name);
+    }
+    let specifier = version.strip_prefix("workspace:")?;
+    match specifier.rsplit_once('@') {
+        Some((target, "*" | "^" | "~")) if !target.is_empty() => Some(target),
+        _ => Some(name),
+    }
+}
+
 impl BunLockfile {
     fn include_duplicate_alias_children(&self, pruned_data: &mut BunLockfileData) {
         loop {
@@ -72,10 +83,11 @@ impl BunLockfile {
             lockfile_version: self.data.lockfile_version,
             config_version: self.data.config_version,
             workspaces: Map::new(),
-            // trustedDependencies are intentionally left empty. turbo prune
-            // copies the root package.json which is the source of truth for
-            // trusted scripts; bun re-derives the set at install time.
-            trusted_dependencies: Vec::new(),
+            // Copied verbatim for the same reason as overrides below: turbo
+            // prune copies the root package.json unchanged, and bun diffs the
+            // lockfile's trustedDependencies against package.json's on install.
+            // Dropping the section makes every entry register as newly added.
+            trusted_dependencies: self.data.trusted_dependencies.clone(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
@@ -83,15 +95,48 @@ impl BunLockfile {
             patched_dependencies: Map::new(),
         };
 
+        let retained_workspace_names: HashSet<_> = workspace_packages
+            .iter()
+            .filter_map(|path| {
+                self.data
+                    .workspaces
+                    .get(path)
+                    .map(|workspace| workspace.name.as_str())
+            })
+            .collect();
+        let all_workspace_names: HashSet<_> = self
+            .data
+            .workspaces
+            .iter()
+            .filter_map(|(path, workspace)| (!path.is_empty()).then_some(workspace.name.as_str()))
+            .collect();
+        let prune_workspace_dev_dependencies = |entry: &WorkspaceEntry| {
+            let mut entry = entry.clone();
+            if let Some(dev_dependencies) = &mut entry.dev_dependencies {
+                dev_dependencies.retain(|name, version| {
+                    workspace_dependency_target(name, version).is_none_or(|target| {
+                        !all_workspace_names.contains(target)
+                            || retained_workspace_names.contains(target)
+                    })
+                });
+                if dev_dependencies.is_empty() {
+                    entry.dev_dependencies = None;
+                }
+            }
+            entry
+        };
+
         if let Some(root) = self.data.workspaces.get("") {
-            pruned_data.workspaces.insert("".to_string(), root.clone());
+            pruned_data
+                .workspaces
+                .insert("".to_string(), prune_workspace_dev_dependencies(root));
         }
 
         for ws_path in workspace_packages {
             if let Some(entry) = self.data.workspaces.get(ws_path) {
                 pruned_data
                     .workspaces
-                    .insert(ws_path.clone(), entry.clone());
+                    .insert(ws_path.clone(), prune_workspace_dev_dependencies(entry));
             }
         }
 
@@ -437,6 +482,7 @@ impl BunLockfile {
                             registry: None,
                             info: Some(info),
                             checksum: None,
+                            integrity: None,
                             root: None,
                         };
                         pruned_data.packages.insert(key.clone(), entry);

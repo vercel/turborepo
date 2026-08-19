@@ -19,6 +19,27 @@ fn test_ls_all_packages() {
 }
 
 #[test]
+fn test_ls_json_preserves_package_paths_and_order() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "--output", "json"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        json["packages"],
+        serde_json::json!({
+            "count": 3,
+            "items": [
+                { "name": "another", "path": "packages/another" },
+                { "name": "my-app", "path": "apps/my-app" },
+                { "name": "util", "path": "packages/util" }
+            ]
+        })
+    );
+}
+
+#[test]
 fn test_ls_with_filter() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();

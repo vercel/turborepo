@@ -36,6 +36,7 @@ pub struct TaskInheritanceResolver<'a, L: TurboJsonLoader> {
     /// Controls validation of `extends: false` usage.
     /// Set to `Validate` at entry point, `Skip` in recursive calls.
     validation_mode: ValidationMode,
+    implicit_tasks: HashSet<TaskName<'static>>,
 }
 
 /// Internal state for recursive resolution.
@@ -57,7 +58,16 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         Self {
             loader,
             validation_mode: ValidationMode::Validate,
+            implicit_tasks: HashSet::new(),
         }
+    }
+
+    pub fn with_implicit_tasks(
+        mut self,
+        tasks: impl IntoIterator<Item = TaskName<'static>>,
+    ) -> Self {
+        self.implicit_tasks.extend(tasks);
+        self
     }
 
     /// Resolves all tasks from the given workspace and its extends chain.
@@ -66,7 +76,7 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         workspace: &PackageName,
     ) -> Result<HashSet<TaskName<'static>>, BuilderError> {
         let mut state = ResolutionState {
-            tasks: HashSet::new(),
+            tasks: self.implicit_tasks.clone(),
             excluded_tasks: HashSet::new(),
             visited: HashSet::new(),
         };
@@ -136,6 +146,7 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
             let child_resolver = TaskInheritanceResolver {
                 loader: self.loader,
                 validation_mode: ValidationMode::Skip,
+                implicit_tasks: HashSet::new(),
             };
 
             // Use separate state for child to collect its tasks/exclusions,
@@ -161,6 +172,7 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
             let child_resolver = TaskInheritanceResolver {
                 loader: self.loader,
                 validation_mode: ValidationMode::Skip,
+                implicit_tasks: HashSet::new(),
             };
 
             // Use separate state for child, sharing visited set
@@ -219,7 +231,9 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         state: &mut ResolutionState,
     ) -> Result<(), BuilderError> {
         // Validate that the task exists in the extends chain (only at entry point)
-        if self.validation_mode == ValidationMode::Validate && !inherited_tasks.contains(task_name)
+        if self.validation_mode == ValidationMode::Validate
+            && !inherited_tasks.contains(task_name)
+            && !self.implicit_tasks.contains(task_name)
         {
             let Some(extends) = task_def.extends.as_ref() else {
                 return Ok(());
@@ -239,6 +253,8 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         if task_def.has_config_beyond_extends() {
             // Has other config - this is a fresh definition, add it
             state.tasks.insert(task_name.clone());
+        } else {
+            state.tasks.remove(task_name);
         }
         // Track as excluded (propagates to parent packages)
         state.excluded_tasks.insert(task_name.clone());

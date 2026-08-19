@@ -92,7 +92,6 @@ pub struct TerminalSink {
     ci_annotations: bool,
     color_selector: ColorSelector,
     tasks: Mutex<HashMap<String, TaskRenderState>>,
-    include_timestamps: bool,
     /// When `true`, the terminal is in raw mode (the TUI owns input while
     /// the user has switched to streamed logs). Output must then convert
     /// lone `\n` to `\r\n` to avoid staircased text.
@@ -117,16 +116,9 @@ impl TerminalSink {
             ci_annotations,
             color_selector: ColorSelector::default(),
             tasks: Mutex::new(HashMap::new()),
-            include_timestamps: false,
             raw_terminal: AtomicBool::new(false),
             stream_filter: Mutex::new(None),
         }
-    }
-
-    /// Enable timestamp prefixes on task output lines.
-    pub fn with_timestamps(mut self, include: bool) -> Self {
-        self.include_timestamps = include;
-        self
     }
 
     /// Suppress all output. Called before the TUI takes ownership of
@@ -187,18 +179,9 @@ impl TerminalSink {
         }
     }
 
-    /// Generate the current prefix string for a task, optionally with
-    /// timestamp.
+    /// Generate the current prefix string for a task.
     fn task_prefix(&self, base_prefix: &str) -> String {
-        if self.include_timestamps {
-            let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-            let grey_timestamp = self
-                .color_config
-                .apply(crate::GREY.apply_to(format!("[{timestamp}]")));
-            format!("{grey_timestamp} {base_prefix}")
-        } else {
-            base_prefix.to_string()
-        }
+        base_prefix.to_string()
     }
 
     /// Write task output bytes to stdout with per-line prefix.

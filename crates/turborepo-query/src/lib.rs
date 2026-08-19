@@ -56,6 +56,8 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("Failed to parse file: {0}")]
     Parse(String),
+    #[error("Failed to determine affected tasks.")]
+    AffectedTasks,
 }
 
 // Conversions from constituent error types into Error via the Api variant.
@@ -141,6 +143,9 @@ impl RepositoryQuery {
             }) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
             PackageInclusionReason::All(AllPackageChangeReason::ScmError { error }) => {
                 PackageChangeReason::ScmError(ScmError { error })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::ConservativeFallback) => {
+                PackageChangeReason::AllPackagesChanged(AllPackagesChanged { empty: false })
             }
             PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
                 task_name: task.to_string(),
@@ -379,7 +384,7 @@ impl PackagePredicate {
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
-            (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
+            (PackageFields::TaskName, Value::String(name)) => pkg.get_task_names().contains(name),
             _ => false,
         }
     }
@@ -471,6 +476,12 @@ struct ScmError {
 }
 
 #[derive(SimpleObject)]
+struct AllPackagesChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
 struct IncludedByFilter {
     filters: Vec<String>,
 }
@@ -524,6 +535,7 @@ enum PackageChangeReason {
     NonPackageFileChanged(NonPackageFileChanged),
     GitRefNotFound(GitRefNotFound),
     ScmError(ScmError),
+    AllPackagesChanged(AllPackagesChanged),
     IncludedByFilter(IncludedByFilter),
     RootTask(RootTask),
     ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),
@@ -629,6 +641,10 @@ impl RepositoryQuery {
             .run
             .calculate_affected_packages(base, head)?
             .into_iter()
+            .filter(|(package, _)| {
+                package != &PackageName::Root
+                    || self.run.pkg_dep_graph().package_view(package).is_some()
+            })
             .map(|(package, reason)| {
                 Ok(ChangedPackage {
                     package: Package::new(self.run.clone(), package)?,
@@ -672,14 +688,17 @@ impl RepositoryQuery {
         let mut changed_tasks: Array<ChangedTask> = results
             .into_iter()
             .map(|at| {
-                let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
+                let task = task::RepositoryTask::new(&at.task_id, &self.run).map_err(|error| {
+                    tracing::error!(?error, task = %at.task_id, "failed to represent affected task");
+                    Error::AffectedTasks
+                })?;
                 let reason = convert_task_change_reason(at.reason);
                 Ok(ChangedTask { reason, task })
             })
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .filter(|ct| {
-                let has_script = ct.task.script.is_some();
+                let executes = ct.task.executes();
                 let task_ok = tasks.as_ref().is_none_or(|names| {
                     if names.is_empty() {
                         true
@@ -691,7 +710,7 @@ impl RepositoryQuery {
                     }
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                has_script && task_ok && package_ok
+                executes && task_ok && package_ok
             })
             .collect();
 
@@ -752,8 +771,8 @@ impl RepositoryQuery {
             let mut packages = self
                 .run
                 .pkg_dep_graph()
-                .packages()
-                .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+                .package_scope_directories()
+                .map(|(name, _)| Package::new(self.run.clone(), name))
                 .collect::<Result<Array<_>, _>>()?;
             packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
             return Ok(packages);
@@ -762,8 +781,8 @@ impl RepositoryQuery {
         let mut packages = self
             .run
             .pkg_dep_graph()
-            .packages()
-            .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+            .package_scope_directories()
+            .map(|(name, _)| Package::new(self.run.clone(), name))
             .filter(|pkg| pkg.as_ref().is_ok_and(|pkg| filter.check(pkg)))
             .collect::<Result<Array<_>, _>>()?;
         packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
@@ -772,12 +791,13 @@ impl RepositoryQuery {
     }
 
     async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
-        let pkg_dep_graph = self.run.pkg_dep_graph();
-        let all_package_names: Vec<_> = pkg_dep_graph.packages().map(|(name, _)| name).collect();
-        let mut packages = pkg_dep_graph
-            .transitive_external_dependencies(all_package_names)
-            .into_iter()
-            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+        let mut packages = self
+            .run
+            .pkg_dep_graph()
+            .external_package_identities()
+            .iter()
+            .cloned()
+            .map(|identity| ExternalPackage::from_identity(self.run.clone(), identity))
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)

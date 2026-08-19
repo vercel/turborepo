@@ -1,9 +1,15 @@
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
+import { cp, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { Workspace, Package } from "../js/dist/index.js";
 
 const MONOREPO_PATH = path.resolve(__dirname, "./fixtures/monorepo");
+const POLYGLOT_MONOREPO_PATH = path.resolve(
+  __dirname,
+  "./fixtures/polyglot-monorepo"
+);
 
 describe("findPackages", () => {
   it("enumerates packages", async () => {
@@ -26,6 +32,31 @@ describe("findPackages", () => {
 
     assert.deepEqual(pkg2.dependencies, []);
     assert.deepEqual(pkg2.dependents, ["apps/app"]);
+  });
+
+  it("returns packages and dependencies across toolchains", async () => {
+    const workspace = await Workspace.find(POLYGLOT_MONOREPO_PATH);
+    const packages = await workspace.findPackagesWithGraph();
+
+    assert.deepEqual(Object.keys(packages).sort(), [
+      "apps/web",
+      "crates/core",
+      "python/api",
+      "python/shared"
+    ]);
+    assert.deepEqual(packages["python/api"].dependencies, ["python/shared"]);
+    assert.deepEqual(packages["python/shared"].dependents, ["python/api"]);
+  });
+
+  it("excludes toolchains that are not active", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "turbo-repository-"));
+    await cp(POLYGLOT_MONOREPO_PATH, dir, { recursive: true });
+    await writeFile(path.join(dir, "turbo.json"), '{"tasks": {}}\n');
+
+    const workspace = await Workspace.find(dir);
+    const packages = await workspace.findPackagesWithGraph();
+
+    assert.deepEqual(Object.keys(packages), ["apps/web"]);
   });
 
   it("returns the package for a given path", async () => {

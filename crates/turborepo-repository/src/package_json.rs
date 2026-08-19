@@ -6,12 +6,7 @@ use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DependencyKind {
-    Production,
-    Development,
-    Peer { optional: bool },
-}
+pub use crate::relationships::DependencyKind;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,8 +95,12 @@ impl PackageJson {
             .dependencies
             .iter()
             .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
             .map(|(name, version)| (name, version, DependencyKind::Production));
+        let optional = self
+            .optional_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Optional));
         let dev = self
             .dev_dependencies
             .iter()
@@ -120,7 +119,7 @@ impl PackageJson {
                     },
                 )
             });
-        normal.chain(dev).chain(peer)
+        normal.chain(optional).chain(dev).chain(peer)
     }
 
     pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
@@ -234,6 +233,7 @@ mod test {
         let json = json!({
             "name": "test",
             "dependencies": { "prod-pkg": "1.0.0", "shared-pkg": "2.0.0" },
+            "optionalDependencies": { "optional-pkg": "1.0.0" },
             "devDependencies": { "dev-pkg": "1.0.0", "shared-pkg": "1.0.0" }
         });
         let pkg: PackageJson = PackageJson::from_value(json).unwrap();
@@ -242,6 +242,7 @@ mod test {
             kinds.entry(name.as_str()).or_insert(kind);
         }
         assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Production));
+        assert_eq!(kinds.get("optional-pkg"), Some(&DependencyKind::Optional));
         assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Development));
         assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Production));
     }

@@ -10,6 +10,7 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 use turborepo_types::{TaskDefinition, UIMode};
 
 /// Type alias for Engine specialized with TaskDefinition.
@@ -70,6 +71,48 @@ pub trait EngineExt {
     ) -> Result<(), Vec<ValidateError>>;
 }
 
+pub(crate) fn task_has_command(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    if task.task() == "proxy" {
+        return true;
+    }
+
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context.native_tasks().defines(task.task()),
+    }
+}
+
+pub(crate) fn task_participates(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context.native_tasks().participates(task.task()),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -77,30 +120,15 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Root => None,
                 TaskNode::Task(task) => Some(task),
             })
-            .filter_map(|task| {
-                let pkg_name = PackageName::from(task.package());
-                let info = pkg_graph.package_info(&pkg_name)?;
-                // Ask the package's toolchain whether the task resolves to a
-                // runnable command — the same authority execution uses. For
-                // JS packages this is the package.json scripts lookup; for
-                // Cargo packages it consults the verb tables, so toolchain
-                // tasks appear in the TUI task list. A resolved `command`
-                // override is authoritative in both directions: an argv
-                // executes even where the toolchain defines nothing, and an
-                // opt-out never executes even where it does.
-                let has_command = match self
-                    .task_definition(task)
-                    .and_then(|def| def.command.as_ref())
-                {
-                    Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
-                    Some(turborepo_types::TaskCommandOverride::OptOut) => false,
-                    None => pkg_graph
-                        .toolchains()
-                        .get(&info.toolchain)
-                        .is_some_and(|toolchain| toolchain.defines_task(info, task.task())),
-                };
-                (task.task() == "proxy" || has_command).then(|| task.to_string())
+            .filter(|task| {
+                // Ask the native-task catalog whether the task resolves to a
+                // runnable command — the same authority execution uses. A
+                // resolved `command` override is authoritative in both
+                // directions: an argv executes even where the catalog defines
+                // nothing, and an opt-out never executes even where it does.
+                task_has_command(self, pkg_graph, task)
             })
+            .map(ToString::to_string)
             .collect()
     }
 
@@ -147,14 +175,14 @@ impl EngineExt for Engine<Built> {
                                 package_name: dep_id.package().to_string(),
                             })?;
 
-                    let package_json = package_graph
-                        .package_json(&PackageName::from(dep_id.package()))
-                        .ok_or_else(|| ValidateError::MissingPackageJson {
+                    let package_name = PackageName::from(dep_id.package());
+                    let Some(_dep_context) = package_graph.package_task_context(&package_name)
+                    else {
+                        return Err(ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
-                        })?;
-                    if task_definition.persistent
-                        && package_json.scripts.contains_key(dep_id.task())
-                    {
+                        });
+                    };
+                    if task_definition.persistent && task_has_command(self, package_graph, dep_id) {
                         let (span, text) = self
                             .task_locations()
                             .get(dep_id)
@@ -170,20 +198,15 @@ impl EngineExt for Engine<Built> {
                     }
                 }
 
-                // check if the package for the task has that task in its package.json
+                // check if the package for the task defines an executable native task
                 let package_name = PackageName::from(task_id.package().to_string());
-                let info = package_graph.package_info(&package_name).ok_or_else(|| {
-                    ValidateError::MissingPackageJson {
+                let Some(_context) = package_graph.package_task_context(&package_name) else {
+                    return Err(ValidateError::MissingPackageJson {
                         package: task_id.package().to_string(),
-                    }
-                })?;
+                    });
+                };
 
-                let package_has_task = info
-                    .package_json
-                    .scripts
-                    .get(task_id.task())
-                    // handle legacy behaviour from go where an empty string may appear
-                    .is_some_and(|script| !script.is_empty());
+                let package_has_task = task_has_command(self, package_graph, task_id);
 
                 let task_is_persistent = self
                     .task_definition(task_id)
@@ -374,9 +397,7 @@ mod test {
             .with_package_discovery(DummyDiscovery(
                 turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
             ))
-            .with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
-                root.to_owned(),
-            ))
+            .with_cargo()
             .build()
             .await
             .unwrap();

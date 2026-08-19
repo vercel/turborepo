@@ -16,11 +16,10 @@ use std::{
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
-use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::{SemverError, Version};
 use npm::NpmDetector;
-use regex::Regex;
+use regex::regex;
 use serde::Deserialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
@@ -248,10 +247,6 @@ impl From<std::convert::Infallible> for Error {
         unreachable!()
     }
 }
-
-static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
-    r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
-);
 
 impl PackageManager {
     /// Returns the package manager responsible for lockfile operations.
@@ -996,11 +991,10 @@ impl PackageManager {
                 });
         // nub is recognized ONLY through the `packageManager` field /
         // `devEngines.packageManager` (handled in `get_package_manager`), never
-        // from the presence of its `lock.yaml`: nub's lockfile name is
-        // deliberately neutral and nub is lockfile-compatible with whatever the
-        // project already uses, so the file's presence is not a reliable nub
-        // signal. Lockfile parsing still happens once nub is detected via the
-        // field — only the name-based *detection* is dropped here.
+        // from the presence of its lockfile: nub is lockfile-compatible with
+        // whatever the project already uses, so a file alone is not a reliable
+        // nub signal. Lockfile parsing still happens once nub is detected via
+        // the field — only name-based *detection* is excluded here.
         let detected_package_managers = native_aube
             .into_iter()
             .map(Ok)
@@ -1040,14 +1034,17 @@ impl PackageManager {
     pub(crate) fn parse_package_manager_string(
         manager: &Spanned<String>,
     ) -> Result<(&str, &str), Error> {
-        if let Some(captures) = PACKAGE_MANAGER_PATTERN.captures(manager) {
+        let package_manager_pattern = regex!(
+            r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
+        );
+        if let Some(captures) = package_manager_pattern.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
             let version = captures.name("version").unwrap().as_str();
             Ok((manager, version))
         } else {
             let (span, text) = manager.span_and_text("package.json");
             Err(Error::InvalidPackageManager {
-                pattern: PACKAGE_MANAGER_PATTERN.to_string(),
+                pattern: package_manager_pattern.to_string(),
                 span,
                 text,
             })
@@ -1099,14 +1096,19 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        if let PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } = self {
-            let native_lockfile = match self {
-                PackageManager::Nub { .. } => nub::LOCKFILE,
-                PackageManager::Aube { .. } => aube::LOCKFILE,
-                _ => unreachable!(),
-            };
-            if root_path.join_component(native_lockfile).exists() {
-                let contents = root_path.join_component(native_lockfile).read()?;
+        if let PackageManager::Nub { lockfile } = self {
+            if lockfile.is_pnpm_family()
+                && let Some(native_lockfile) = nub::native_lockfile_path(root_path)
+            {
+                let contents = native_lockfile.read()?;
+                return lockfile.parse_lockfile(root_package_json, &contents, None);
+            }
+            return lockfile.read_lockfile(root_path, root_package_json);
+        }
+        if let PackageManager::Aube { lockfile } = self {
+            let native_lockfile = root_path.join_component(aube::LOCKFILE);
+            if native_lockfile.exists() {
+                let contents = native_lockfile.read()?;
                 return lockfile.parse_lockfile(root_package_json, &contents, None);
             }
             return lockfile.read_lockfile(root_path, root_package_json);
@@ -1157,9 +1159,9 @@ impl PackageManager {
             }
             PackageManager::Berry => {
                 // Take ownership of yarnrc fields to avoid cloning
-                let (catalog, catalogs) = yarnrc
-                    .map(|y| (y.catalog, y.catalogs))
-                    .unwrap_or((None, None));
+                let (catalog, catalogs, package_extensions) = yarnrc
+                    .map(|y| (y.catalog, y.catalogs, y.package_extensions))
+                    .unwrap_or((None, None, None));
 
                 let manifest = turborepo_lockfiles::BerryManifest::new(
                     root_package_json
@@ -1169,6 +1171,14 @@ impl PackageManager {
                         .map(|(k, v)| (k.clone(), v.clone())),
                     catalog,
                     catalogs,
+                )
+                .with_package_extensions(
+                    package_extensions
+                        .into_iter()
+                        .flatten()
+                        .map(|(selector, extension)| {
+                            (selector, extension.dependencies.unwrap_or_default())
+                        }),
                 );
                 Box::new(turborepo_lockfiles::BerryLockfile::load(
                     contents,
@@ -1271,10 +1281,10 @@ impl PackageManager {
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        if matches!(self, PackageManager::Nub { .. })
-            && turbo_root.join_component(nub::LOCKFILE).exists()
+        if matches!(self, PackageManager::Nub { lockfile } if lockfile.is_pnpm_family())
+            && let Some(native_lockfile) = nub::native_lockfile_path(turbo_root)
         {
-            return turbo_root.join_component(nub::LOCKFILE);
+            return native_lockfile;
         }
         if matches!(self, PackageManager::Aube { .. })
             && turbo_root.join_component(aube::LOCKFILE).exists()
@@ -1474,6 +1484,83 @@ mod tests {
             let mut found = Vec::from_iter(found);
             found.sort();
             assert_eq!(found, basic_expected, "{}", mgr.name());
+        }
+    }
+
+    #[test]
+    fn workspace_discovery_is_consistent_across_javascript_package_managers() {
+        let (_dir, repo_root) = temp_repo_root().unwrap();
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{"workspaces":["packages/**"]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            repo_root
+                .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                .as_std_path(),
+            "packages:\n  - packages/**\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo_root
+                .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                .as_std_path(),
+            "packages:\n  - packages/**\n",
+        )
+        .unwrap();
+
+        for (components, name) in [
+            (&["packages", "app"][..], "app"),
+            (&["packages", "group", "nested"][..], "@scope/nested"),
+        ] {
+            let directory = repo_root.join_components(components);
+            std::fs::create_dir_all(directory.as_std_path()).unwrap();
+            std::fs::write(
+                directory.join_component("package.json").as_std_path(),
+                format!(r#"{{"name":"{name}"}}"#),
+            )
+            .unwrap();
+        }
+        // A matching directory without a manifest is not a package.
+        std::fs::create_dir_all(
+            repo_root
+                .join_components(&["packages", "missing"])
+                .as_std_path(),
+        )
+        .unwrap();
+
+        let package_managers = [
+            PackageManager::Npm,
+            PackageManager::Pnpm9,
+            PackageManager::Yarn,
+            PackageManager::Berry,
+            PackageManager::Bun,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Npm),
+            },
+            PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Npm),
+            },
+        ];
+
+        for package_manager in package_managers {
+            let mut manifests = package_manager
+                .get_package_jsons(&repo_root)
+                .unwrap()
+                .map(|path| repo_root.anchor(path).unwrap().to_unix().to_string())
+                .collect::<Vec<_>>();
+            manifests.sort();
+
+            assert_eq!(
+                manifests,
+                [
+                    "packages/app/package.json",
+                    "packages/group/nested/package.json",
+                ],
+                "{} workspace discovery",
+                package_manager.name()
+            );
         }
     }
 
@@ -1883,7 +1970,7 @@ mod tests {
     #[test]
     fn test_native_nub_lockfile_is_ignored_by_detection() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
-        // A native `lock.yaml` does not participate in detection (nub is
+        // A native `nub.lock` does not participate in detection (nub is
         // field-only), so a co-present `pnpm-lock.yaml` resolves cleanly to pnpm
         // rather than producing an ambiguous multi-manager result.
         std::fs::write(
@@ -2056,6 +2143,31 @@ mod tests {
             repo_root.join_component(nub::LOCKFILE)
         );
         package_manager.read_lockfile(&repo_root, &package_json)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_nub_prefers_selected_bun_lockfile_over_native_lockfile() -> Result<(), Error>
+    {
+        let (_dir, repo_root) = temp_repo_root()?;
+        repo_root.join_component(bun::LOCKFILE).create()?;
+        repo_root
+            .join_component(nub::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")?;
+        let package_json = dev_engines_package_manager(json!("nub"), json!("0.6.0"));
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+
+        assert_eq!(
+            package_manager,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Bun)
+            }
+        );
+        assert_eq!(
+            package_manager.lockfile_path(&repo_root),
+            repo_root.join_component(bun::LOCKFILE)
+        );
         Ok(())
     }
 

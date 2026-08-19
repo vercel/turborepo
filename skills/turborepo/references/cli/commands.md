@@ -73,10 +73,13 @@ turbo build --concurrency=50%    # 50% of CPU cores
 
 ### `--continue`
 
-Keep running other tasks when one fails.
+Control whether other tasks keep running when one fails. Value requires `=` — `--continue never` parses `never` as a task name and the flag becomes `--continue=always`.
 
 ```bash
-turbo build test --continue
+turbo build test --continue                          # bare flag = --continue=always
+turbo build test --continue=never                    # cancel remaining tasks on failure (default)
+turbo build test --continue=dependencies-successful  # continue tasks whose dependencies succeeded
+turbo build test --continue=always                   # continue all tasks, even with failed dependencies
 ```
 
 ### `--only`
@@ -87,9 +90,9 @@ Run only the specified task, skip its dependencies.
 turbo build --only  # skip running dependsOn tasks
 ```
 
-### `--parallel` (Discouraged)
+### `--parallel` (Deprecated)
 
-Ignores task graph dependencies, runs all tasks simultaneously. **Avoid using this flag**—if tasks need to run in parallel, configure `dependsOn` correctly instead. Using `--parallel` bypasses Turborepo's dependency graph, which can cause race conditions and incorrect builds.
+Ignores task graph dependencies, runs all tasks simultaneously. **Deprecated, will be removed in a future major version**—use task configuration (`persistent`, `with`) in `turbo.json` instead. Using `--parallel` bypasses Turborepo's dependency graph, which can cause race conditions and incorrect builds.
 
 ## Cache Control
 
@@ -118,12 +121,14 @@ turbo build --cache=local:,remote:
 Generate task graph visualization.
 
 ```bash
-turbo build --graph                # opens in browser
+turbo build --graph                # prints dot graph to stdout
 turbo build --graph=graph.svg      # SVG file
-turbo build --graph=graph.png      # PNG file
-turbo build --graph=graph.json     # JSON data
+turbo build --graph=graph.html     # HTML file
 turbo build --graph=graph.mermaid  # Mermaid diagram
+turbo build --graph=graph.dot      # DOT file
 ```
+
+`.png`, `.jpg`, `.pdf`, and `.json` are deprecated (removed in 3.0; require external Graphviz). For programmatic access, use `turbo query` instead.
 
 ### `--summarize`
 
@@ -140,6 +145,7 @@ Control log output verbosity.
 
 ```bash
 turbo build --output-logs=full        # all logs (default)
+turbo build --output-logs=hash-only   # only task hashes
 turbo build --output-logs=new-only    # only cache misses
 turbo build --output-logs=errors-only # only failures
 turbo build --output-logs=none        # silent
@@ -172,7 +178,7 @@ Control environment variable handling.
 
 ```bash
 turbo build --env-mode=strict  # only declared env vars (default)
-turbo build --env-mode=loose   # include all env vars in hash
+turbo build --env-mode=loose   # all env vars available at runtime; hashing still limited to declared vars
 ```
 
 ## UI
@@ -182,9 +188,25 @@ turbo build --env-mode=loose   # include all env vars in hash
 Select output interface.
 
 ```bash
-turbo build --ui=tui     # interactive terminal UI (default in TTY)
-turbo build --ui=stream  # streaming logs (default in CI)
+turbo build --ui=stream  # streaming logs (default)
+turbo build --ui=tui     # interactive terminal UI (opt-in; requires a TTY)
+turbo build --ui=stream-with-experimental-timestamps  # streaming logs with timestamps (experimental)
 ```
+
+### TUI keybinds
+
+| Key              | Action                                                   |
+| ---------------- | -------------------------------------------------------- |
+| `↑`/`k`, `↓`/`j` | Select previous/next task                                |
+| `h`              | Show selected task's logs full-screen, verbatim (toggle) |
+| `s`              | Stream all task logs (toggle)                            |
+| `Shift+H`        | Toggle task list sidebar                                 |
+| `i` or `Enter`   | Interact with selected task                              |
+| `Ctrl+Z`         | Stop interacting with task                               |
+| `/`              | Filter tasks to search term (`Esc` clears)               |
+| `p`              | Toggle pinned task selection                             |
+| `u` / `d`        | Scroll logs up/down                                      |
+| `m`              | Toggle keybind help popup                                |
 
 ---
 
@@ -222,7 +244,7 @@ npx turbo-ignore --task=test
   continue-on-error: true
 
 - name: Build
-  if: steps.turbo-ignore.outcome == 'failure'  # changes detected
+  if: steps.turbo-ignore.outcome == 'failure' # changes detected
   run: pnpm build
 ```
 
@@ -267,7 +289,10 @@ See `references/watch/` for details.
 Create sparse checkout for Docker.
 
 ```bash
-turbo prune web --docker
+turbo prune web --docker                # split output into json/ and full/ for layer caching
+turbo prune web --production            # exclude in-workspace devDependencies
+turbo prune web --out-dir=./custom-out  # output directory (default: ./out)
+turbo prune web --use-gitignore=false   # copy files ignored by .gitignore (default: true)
 ```
 
 ## turbo link / unlink
@@ -295,3 +320,41 @@ Scaffold new packages.
 ```bash
 turbo generate
 ```
+
+## turbo docs
+
+Search the Turborepo documentation.
+
+```bash
+turbo docs "how does caching work"
+turbo docs "prune" --docs-version=2.7.5  # override docs version (minimum: 2.7.5)
+```
+
+## turbo ls
+
+List packages in the monorepo (experimental).
+
+```bash
+turbo ls                 # all packages
+turbo ls web             # details for a specific package
+turbo ls --affected      # only packages changed vs main
+turbo ls --output=json   # machine-readable (default: pretty)
+```
+
+## turbo query
+
+Query the monorepo using GraphQL.
+
+```bash
+turbo query                                          # spins up GraphiQL server
+turbo query "query { packages { items { name } } }"  # run a query string
+turbo query ./query.gql                              # run a query from a file
+```
+
+## More
+
+- `turbo devtools` - visualize the package graph in the browser
+- `turbo info` - print debugging information
+- `turbo bin` - print the path to the turbo binary
+- `turbo daemon` - run/manage the background daemon
+- `turbo telemetry` - enable or disable anonymous telemetry

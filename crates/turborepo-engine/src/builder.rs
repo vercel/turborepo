@@ -17,7 +17,11 @@ use itertools::Itertools;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
+    task_contracts::TaskEnvironmentDomain,
+    toolchain::TaskIOEnvironment,
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
 use turborepo_types::TaskDefinition;
@@ -46,6 +50,7 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     workspaces: Vec<PackageName>,
     tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
+    entrypoint_exclusions: HashSet<TaskId<'static>>,
     tasks_only: bool,
     add_all_tasks: bool,
     should_validate_engine: bool,
@@ -55,6 +60,12 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     /// prepended to every task's inputs instead of being included in the
     /// global hash.
     global_deps: Vec<String>,
+    global_env: Vec<String>,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    /// Each contract domain receives only the startup environment keys it
+    /// declared.
+    environments: HashMap<TaskEnvironmentDomain, TaskIOEnvironment>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -72,12 +83,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             workspaces: Vec::new(),
             tasks: Vec::new(),
             root_enabled_tasks: HashSet::new(),
+            entrypoint_exclusions: HashSet::new(),
             tasks_only: false,
             add_all_tasks: false,
             should_validate_engine: true,
             validator: Validator::new(),
             future_flags: FutureFlags::default(),
             global_deps: Vec::new(),
+            global_env: Vec::new(),
+            pass_through_args: Vec::new(),
+            requested_tasks: Vec::new(),
+            environments: HashMap::new(),
         }
     }
 
@@ -89,6 +105,23 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
     pub fn with_global_deps(mut self, global_deps: Vec<String>) -> Self {
         self.global_deps = global_deps;
+        self
+    }
+
+    pub fn with_global_env(mut self, global_env: Vec<String>) -> Self {
+        self.global_env = global_env;
+        self
+    }
+
+    pub fn with_task_io_context(
+        mut self,
+        pass_through_args: Vec<String>,
+        requested_tasks: Vec<String>,
+        environments: HashMap<TaskEnvironmentDomain, TaskIOEnvironment>,
+    ) -> Self {
+        self.pass_through_args = pass_through_args;
+        self.requested_tasks = requested_tasks;
+        self.environments = environments;
         self
     }
 
@@ -119,6 +152,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         self
     }
 
+    pub fn with_entrypoint_exclusions(mut self, exclusions: HashSet<TaskId<'static>>) -> Self {
+        self.entrypoint_exclusions = exclusions;
+        self
+    }
+
     /// If set, we will include all tasks in the graph, even if they are not
     /// specified
     pub fn add_all_tasks(mut self) -> Self {
@@ -140,11 +178,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 self.workspaces
                     .iter()
                     .cartesian_product(self.tasks.iter())
-                    .map(|(package, task_name)| {
-                        task_name
+                    .filter_map(|(package, task_name)| {
+                        let task_id = task_name
                             .task_id()
                             .unwrap_or(TaskId::new(package.as_ref(), task_name.task()))
-                            .into_owned()
+                            .into_owned();
+                        (task_name.package().is_some()
+                            || !self.entrypoint_exclusions.contains(&task_id))
+                        .then_some(task_id)
                     })
                     .collect(),
             )
@@ -171,8 +212,21 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let workspace_tasks =
-                    TaskInheritanceResolver::new(turbo_json_loader).resolve(workspace)?;
+                let implicit_tasks =
+                    if let Some(context) = self.package_graph.package_task_context(workspace) {
+                        context
+                            .native_tasks()
+                            .tasks()
+                            .iter()
+                            .filter(|task| task.registered())
+                            .map(|task| TaskName::from(task.name().to_string()))
+                            .collect()
+                    } else {
+                        HashSet::new()
+                    };
+                let workspace_tasks = TaskInheritanceResolver::new(turbo_json_loader)
+                    .with_implicit_tasks(implicit_tasks)
+                    .resolve(workspace)?;
                 tasks_set.extend(workspace_tasks);
             }
 
@@ -196,8 +250,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let task_id = task
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
+            if task.package().is_none() && self.entrypoint_exclusions.contains(&task_id) {
+                continue;
+            }
 
-            if Self::has_task_definition_in_run(turbo_json_loader, workspace, task, &task_id)? {
+            if Self::has_task_definition_or_registered(
+                turbo_json_loader,
+                self.package_graph,
+                workspace,
+                task,
+                &task_id,
+            )? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -252,9 +315,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .keys()
                 .filter_map(|task| {
                     let pkg = task.package()?;
+                    if pkg == ROOT_PKG_NAME {
+                        return None;
+                    }
                     let missing_pkg = self
                         .package_graph
-                        .package_info(&PackageName::from(pkg))
+                        .package_view(&PackageName::from(pkg))
                         .is_none();
                     missing_pkg.then(|| (task.to_string(), pkg.to_string()))
                 })
@@ -318,8 +384,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     let task_name: TaskName<'static> =
                         TaskName::from(task_id.task().to_string()).into_owned();
                     let task_id_owned = task_id.as_inner().clone().into_owned();
-                    Self::has_task_definition_in_run(
+                    Self::has_task_definition_or_registered(
                         turbo_json_loader,
+                        self.package_graph,
                         &PackageName::Root,
                         &task_name,
                         &task_id_owned,
@@ -345,7 +412,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             if task_id.package() != ROOT_PKG_NAME
                 && self
                     .package_graph
-                    .package_json(&PackageName::from(task_id.package()))
+                    .package_view(&PackageName::from(task_id.package()))
                     .is_none()
             {
                 // If we have a pkg it should be in PackageGraph.
@@ -392,34 +459,35 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let to_task_id = task_id.as_inner().clone().into_owned();
             let to_task_index = engine.get_index(&to_task_id);
 
+            let package = PackageName::from(to_task_id.package());
             let dep_pkgs = self
                 .package_graph
-                .immediate_dependencies_iter(&PackageNode::Workspace(to_task_id.package().into()));
+                .ordering_relationships()
+                .direct_dependencies(&package)?;
 
             let mut has_deps = false;
             let mut has_topo_deps = false;
 
-            topo_deps
-                .iter()
-                .cartesian_product(dep_pkgs.into_iter().flatten())
-                .for_each(|((from, span), dependency_workspace)| {
-                    // We don't need to add an edge from the root node if we're in this branch
-                    if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
-                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
-                        if let Some(allowed_tasks) = &allowed_tasks
-                            && !allowed_tasks.contains(&from_task_id)
-                        {
-                            return;
-                        }
-                        let from_task_index = engine.get_index(&from_task_id);
-                        has_topo_deps = true;
-                        engine
-                            .task_graph_mut()
-                            .add_edge(to_task_index, from_task_index, ());
-                        let from_task_id = span.to(from_task_id);
-                        traversal_queue.push_back(from_task_id);
+            topo_deps.iter().cartesian_product(dep_pkgs).for_each(
+                |((from, span), dependency_workspace)| {
+                    let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                    if self.entrypoint_exclusions.contains(&from_task_id) {
+                        return;
                     }
-                });
+                    if let Some(allowed_tasks) = &allowed_tasks
+                        && !allowed_tasks.contains(&from_task_id)
+                    {
+                        return;
+                    }
+                    let from_task_index = engine.get_index(&from_task_id);
+                    has_topo_deps = true;
+                    engine
+                        .task_graph_mut()
+                        .add_edge(to_task_index, from_task_index, ());
+                    let from_task_id = span.to(from_task_id);
+                    traversal_queue.push_back(from_task_id);
+                },
+            );
 
             for (sibling, span) in task_definition
                 .with
@@ -431,6 +499,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&sibling_task_id) {
+                    continue;
+                }
                 traversal_queue.push_back(span.to(sibling_task_id));
             }
 
@@ -439,6 +510,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&from_task_id) {
+                    continue;
+                }
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {

@@ -17,10 +17,11 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 notify = { workspace = true }
 prost = "0.14"
 semver = { workspace = true }
+serde = { workspace = true }
 sha2 = { workspace = true }
 sysinfo = "0.27.7"
 thiserror = { workspace = true }
-time = "0.3.20"
+time = { version = "0.3.20", features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
@@ -28,6 +29,7 @@ tonic = { version = "0.14", features = ["transport"] }
 tonic-prost = "0.14"
 tower = "0.5"
 tracing = { workspace = true }
+which = { workspace = true }
 
 pidlock = { path = "../turborepo-pidlock" }
 turbopath = { workspace = true }

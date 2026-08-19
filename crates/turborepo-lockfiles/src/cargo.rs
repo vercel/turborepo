@@ -29,10 +29,11 @@ pub enum Error {
     #[error("Cargo.lock dependency '{0}' does not match any package entry.")]
     UnknownDependency(String),
     #[error(
-        "Cargo.lock dependency '{0}' is ambiguous: multiple versions exist and no version was \
-         specified."
+        "Cargo.lock dependency '{0}' is ambiguous: multiple package entries match its identity."
     )]
     AmbiguousDependency(String),
+    #[error("Cargo.lock dependency '{0}' has an invalid package identity.")]
+    InvalidDependency(String),
     #[error(
         "Workspace member '{0}' not found in Cargo.lock; the lockfile is stale. Run `cargo \
          metadata` or a build to refresh it."
@@ -179,6 +180,62 @@ struct LockIndex<'a> {
     by_name: HashMap<&'a str, Vec<usize>>,
 }
 
+struct DependencyRef<'a> {
+    name: &'a str,
+    version: Option<&'a str>,
+    source: Option<&'a str>,
+}
+
+impl<'a> DependencyRef<'a> {
+    fn parse(dependency: &'a str) -> Result<Self, Error> {
+        let mut parts = dependency.splitn(3, ' ');
+        let name = parts
+            .next()
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| Error::InvalidDependency(dependency.to_string()))?;
+        let version = parts.next();
+        let source = parts
+            .next()
+            .map(|source| {
+                source
+                    .strip_prefix('(')
+                    .and_then(|source| source.strip_suffix(')'))
+                    .filter(|source| !source.is_empty())
+                    .ok_or_else(|| Error::InvalidDependency(dependency.to_string()))
+            })
+            .transpose()?;
+        if version.is_some_and(str::is_empty) || (source.is_some() && version.is_none()) {
+            return Err(Error::InvalidDependency(dependency.to_string()));
+        }
+
+        Ok(Self {
+            name,
+            version,
+            source,
+        })
+    }
+}
+
+fn git_source_without_precise(source: &str, lock_version: Option<u32>) -> &str {
+    let source = source.rsplit_once('#').map_or(source, |(source, _)| source);
+    if lock_version.is_none_or(|version| version <= 2) {
+        source.strip_suffix("?branch=master").unwrap_or(source)
+    } else {
+        source
+    }
+}
+
+fn sources_match(package: Option<&str>, dependency: &str, lock_version: Option<u32>) -> bool {
+    package.is_some_and(|package| {
+        if package.starts_with("git+") && dependency.starts_with("git+") {
+            git_source_without_precise(package, lock_version)
+                == git_source_without_precise(dependency, lock_version)
+        } else {
+            package == dependency
+        }
+    })
+}
+
 impl<'a> LockIndex<'a> {
     fn new(lock: &'a CargoLock) -> Self {
         let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -203,23 +260,54 @@ impl<'a> LockIndex<'a> {
     /// Resolve a dependency string — `"name"`, `"name version"`, or
     /// `"name version (source)"` — to a package index.
     fn resolve(&self, dep: &str) -> Result<usize, Error> {
-        let mut parts = dep.split_whitespace();
-        let name = parts.next().unwrap_or(dep);
-        let version = parts.next();
+        let dependency = DependencyRef::parse(dep)?;
         let candidates = self
             .by_name
-            .get(name)
+            .get(dependency.name)
             .ok_or_else(|| Error::UnknownDependency(dep.to_string()))?;
-        match version {
-            Some(version) => candidates
-                .iter()
-                .copied()
-                .find(|&idx| self.lock.package[idx].version == version)
-                .ok_or_else(|| Error::UnknownDependency(dep.to_string())),
-            None => match candidates.as_slice() {
-                [only] => Ok(*only),
-                _ => Err(Error::AmbiguousDependency(dep.to_string())),
-            },
+
+        let version = match dependency.version {
+            Some(version) => version,
+            None => {
+                let first = &self.lock.package[candidates[0]].version;
+                if candidates
+                    .iter()
+                    .any(|&idx| self.lock.package[idx].version != *first)
+                {
+                    return Err(Error::AmbiguousDependency(dep.to_string()));
+                }
+                first
+            }
+        };
+
+        let candidates: Vec<usize> = candidates
+            .iter()
+            .copied()
+            .filter(|&idx| self.lock.package[idx].version == version)
+            .filter(|&idx| {
+                dependency.source.is_none_or(|source| {
+                    sources_match(
+                        self.lock.package[idx].source.as_deref(),
+                        source,
+                        self.lock.version,
+                    )
+                })
+            })
+            .collect();
+        match candidates.as_slice() {
+            [only] => Ok(*only),
+            [] => Err(Error::UnknownDependency(dep.to_string())),
+            _ if dependency.source.is_none() => {
+                let mut sourceless = candidates
+                    .iter()
+                    .copied()
+                    .filter(|&idx| self.lock.package[idx].source.is_none());
+                match (sourceless.next(), sourceless.next()) {
+                    (Some(only), None) => Ok(only),
+                    _ => Err(Error::AmbiguousDependency(dep.to_string())),
+                }
+            }
+            _ => Err(Error::AmbiguousDependency(dep.to_string())),
         }
     }
 
@@ -382,6 +470,167 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "#;
         let err = cargo_external_closures(lock, &["app".to_string()]).unwrap_err();
         assert!(matches!(err, Error::AmbiguousDependency(_)));
+    }
+
+    #[test]
+    fn test_source_qualified_dependencies_resolve_exact_packages() {
+        let lock = r#"
+version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "shared 1.0.0 (registry+https://registry.one/index)",
+ "shared 1.0.0 (git+https://example.com/shared?branch=main)",
+]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.one/index"
+checksum = "one"
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.two/index"
+checksum = "two"
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "git+https://example.com/shared?branch=main#deadbeef"
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "git+https://example.com/shared?branch=dev#cafebabe"
+"#;
+        let roots = ["app".to_string()];
+        let closures = cargo_external_closures(lock, &roots).unwrap();
+        assert_eq!(
+            names(&closures["app"]),
+            vec![
+                "shared@1.0.0 git+https://example.com/shared?branch=main#deadbeef",
+                "shared@1.0.0 registry+https://registry.one/index one",
+            ]
+        );
+
+        let pruned = cargo_prune_lock(lock, &roots).unwrap();
+        assert!(pruned.lockfile.contains("registry.one"));
+        assert!(pruned.lockfile.contains("branch=main"));
+        assert!(!pruned.lockfile.contains("registry.two"));
+        assert!(!pruned.lockfile.contains("branch=dev"));
+        let closures = cargo_external_closures(&pruned.lockfile, &roots).unwrap();
+        assert_eq!(
+            names(&closures["app"]),
+            vec![
+                "shared@1.0.0 git+https://example.com/shared?branch=main#deadbeef",
+                "shared@1.0.0 registry+https://registry.one/index one",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_version_only_dependency_with_multiple_sources_errors() {
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["shared 1.0.0"]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.one/index"
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.two/index"
+"#;
+        let error = cargo_external_closures(lock, &["app".to_string()]).unwrap_err();
+        assert!(matches!(error, Error::AmbiguousDependency(_)));
+    }
+
+    #[test]
+    fn test_version_only_dependency_prefers_sourceless_package() {
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["shared 1.0.0"]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.example/index"
+"#;
+        let closures = cargo_external_closures(lock, &["app".to_string()]).unwrap();
+        assert!(closures["app"].is_empty());
+    }
+
+    #[test]
+    fn test_name_only_dependency_requires_unique_version() {
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["shared"]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+
+[[package]]
+name = "shared"
+version = "2.0.0"
+source = "registry+https://registry.example/index"
+"#;
+        let error = cargo_external_closures(lock, &["app".to_string()]).unwrap_err();
+        assert!(matches!(error, Error::AmbiguousDependency(_)));
+    }
+
+    #[test]
+    fn test_v2_default_branch_matches_master_package_source() {
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["shared 1.0.0 (git+https://example.com/shared)"]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "git+https://example.com/shared?branch=master#deadbeef"
+"#;
+        let closures = cargo_external_closures(lock, &["app".to_string()]).unwrap();
+        assert_eq!(
+            names(&closures["app"]),
+            vec!["shared@1.0.0 git+https://example.com/shared?branch=master#deadbeef"]
+        );
+    }
+
+    #[test]
+    fn test_unknown_source_dependency_errors() {
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["shared 1.0.0 (registry+https://missing.example/index)"]
+
+[[package]]
+name = "shared"
+version = "1.0.0"
+source = "registry+https://registry.example/index"
+"#;
+        let error = cargo_external_closures(lock, &["app".to_string()]).unwrap_err();
+        assert!(matches!(error, Error::UnknownDependency(_)));
     }
 
     #[test]

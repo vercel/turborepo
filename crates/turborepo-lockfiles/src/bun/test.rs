@@ -107,7 +107,7 @@ fn test_new_fields_parsing() {
     assert_eq!(lockfile.data.overrides.len(), 1);
     assert_eq!(
         lockfile.data.overrides.get("foo"),
-        Some(&"1.0.0".to_string())
+        Some(&OverrideValue::Version("1.0.0".to_string()))
     );
 
     assert_eq!(lockfile.data.catalog.len(), 1);
@@ -2483,4 +2483,506 @@ fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
             );
         }
     }
+}
+
+/// Prunes `lockfile` down to `workspace` and the closure of `deps`, then
+/// encodes the result the way `turbo prune` writes bun.lock.
+fn prune_to_string(lockfile: &BunLockfile, workspace: &str, deps: &[(&str, &str)]) -> String {
+    let deps: std::collections::BTreeMap<String, String> = deps
+        .iter()
+        .map(|(name, version)| (name.to_string(), version.to_string()))
+        .collect();
+    let closure = crate::transitive_closure(lockfile, workspace, deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph =
+        <BunLockfile as crate::Lockfile>::subgraph(lockfile, &[workspace.into()], &package_idents)
+            .unwrap();
+    String::from_utf8(subgraph.encode().unwrap()).unwrap()
+}
+
+// Bun writes lockfileVersion 3 when `overrides` contains nested rules, which
+// are stored as object values. Bun's `--frozen-lockfile` compares the whole
+// overrides set against the root package.json (which prune copies verbatim),
+// so the section has to survive prune byte-for-byte, nested rules included.
+#[test]
+fn test_parses_v3_lockfile_with_nested_overrides() {
+    let overrides = json!({
+        "lodash": "4.17.21",
+        "micromatch": {
+            ".": "4.0.5",
+            "picomatch": "2.3.2",
+        },
+        "webpack@^4": {
+            "terser": "4.8.1",
+        },
+    });
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 3,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "root",
+                "dependencies": {
+                    "picomatch": "2.2.0",
+                },
+            },
+            "packages/app": {
+                "name": "app",
+                "dependencies": {
+                    "lodash": "^4.0.0",
+                    "micromatch": "^4.0.0",
+                    "webpack": "^4.0.0",
+                },
+            },
+            "packages/other": {
+                "name": "other",
+                "dependencies": {
+                    "is-odd": "3.0.1",
+                },
+            },
+        },
+        "overrides": overrides,
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "lodash": ["lodash@4.17.21", "", {}, "sha512-lodash"],
+            "micromatch": ["micromatch@4.0.5", "", { "dependencies": { "picomatch": "^2.2.0" } }, "sha512-micromatch"],
+            "micromatch/picomatch": ["picomatch@2.3.2", "", {}, "sha512-picomatch-232"],
+            "other": ["other@workspace:packages/other"],
+            "picomatch": ["picomatch@2.2.0", "", {}, "sha512-picomatch-220"],
+            "terser": ["terser@4.8.1", "", {}, "sha512-terser"],
+            "webpack": ["webpack@4.47.0", "", { "dependencies": { "terser": "^4.0.0" } }, "sha512-webpack"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("lockfileVersion 3 should parse");
+    assert_eq!(lockfile.data.lockfile_version, 3);
+    let expected_overrides: Map<String, OverrideValue> = serde_json::from_value(overrides).unwrap();
+    assert_eq!(lockfile.data.overrides, expected_overrides);
+
+    // Flat rules and the parent's own "." rule apply; a nested child rule and a
+    // rule keyed by a parent range do not (Bun materializes those as nested
+    // lockfile keys, which resolution follows on its own).
+    assert_eq!(lockfile.apply_overrides("lodash", "^4.0.0"), "4.17.21");
+    assert_eq!(lockfile.apply_overrides("micromatch", "^4.0.0"), "4.0.5");
+    assert_eq!(lockfile.apply_overrides("picomatch", "^2.2.0"), "^2.2.0");
+    assert_eq!(lockfile.apply_overrides("webpack", "^4.0.0"), "^4.0.0");
+    assert_eq!(lockfile.apply_overrides("terser", "^4.0.0"), "^4.0.0");
+
+    let micromatch = lockfile
+        .resolve_package("packages/app", "micromatch", "^4.0.0")
+        .unwrap()
+        .unwrap();
+    assert_eq!(micromatch.key, "micromatch@4.0.5");
+    let deps = lockfile
+        .all_dependencies("micromatch@4.0.5")
+        .unwrap()
+        .unwrap();
+    assert_eq!(deps.get("picomatch"), Some(&"=2.3.2".to_string()));
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "packages/app",
+        &[
+            ("lodash", "^4.0.0"),
+            ("micromatch", "^4.0.0"),
+            ("webpack", "^4.0.0"),
+        ],
+    );
+    assert!(
+        pruned.starts_with("{\n  \"lockfileVersion\": 3,\n"),
+        "pruned lockfile should keep version 3:\n{pruned}"
+    );
+    assert!(
+        pruned.contains(
+            "  \"overrides\": {\n    \"lodash\": \"4.17.21\",\n    \"micromatch\": {\n      \".\": \
+             \"4.0.5\",\n      \"picomatch\": \"2.3.2\",\n    },\n    \"webpack@^4\": {\n      \
+             \"terser\": \"4.8.1\",\n    },\n  },\n"
+        ),
+        "nested overrides should be written in bun's format:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).expect("pruned v3 lockfile should reparse");
+    assert_eq!(reparsed.data.lockfile_version, 3);
+    assert_eq!(reparsed.data.overrides, expected_overrides);
+    assert_eq!(
+        reparsed.data.packages["micromatch/picomatch"].ident,
+        "picomatch@2.3.2"
+    );
+    assert_eq!(reparsed.data.packages["picomatch"].ident, "picomatch@2.2.0");
+    assert!(!reparsed.data.packages.contains_key("is-odd"));
+}
+
+// Bun accepts object overrides at every lockfile version on read; a lockfile
+// that fails the version 2 invariants but has nested rules is written as
+// version 1 with objects in it.
+#[test]
+fn test_object_overrides_parse_at_older_lockfile_versions() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": { "": { "name": "root" } },
+        "overrides": { "webpack": { "terser": "4.8.1" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(lockfile.apply_overrides("webpack", "^4"), "^4");
+    assert_eq!(lockfile.apply_overrides("terser", "^4"), "^4");
+    let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+    assert!(encoded.contains("\"webpack\": {\n      \"terser\": \"4.8.1\",\n    },"));
+}
+
+#[test]
+fn test_newer_lockfile_versions_are_accepted_and_preserved() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 4,
+        "workspaces": { "": { "name": "root" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("newer versions should parse");
+    assert_eq!(lockfile.data.lockfile_version, 4);
+    let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+    assert!(encoded.starts_with("{\n  \"lockfileVersion\": 4,\n"));
+
+    let v3 =
+        BunLockfile::from_str(&contents.replace("\"lockfileVersion\":4", "\"lockfileVersion\":3"))
+            .unwrap();
+    assert!(
+        crate::Lockfile::global_change(&lockfile, &v3),
+        "a version change is still a global change"
+    );
+}
+
+#[test]
+fn test_negative_lockfile_version_is_rejected() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": -1,
+        "workspaces": { "": { "name": "root" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        BunLockfile::from_str(&contents),
+        Err(crate::Error::UnsupportedBunVersion(-1))
+    ));
+}
+
+// Bun diffs the lockfile's trustedDependencies against the ones declared in
+// package.json on every install; prune copies the root package.json verbatim,
+// so the lockfile section has to be copied verbatim too.
+#[test]
+fn test_prune_preserves_trusted_dependencies() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "packages/app": {
+                "name": "app",
+                "dependencies": { "esbuild": "0.25.0" },
+            },
+            "packages/other": {
+                "name": "other",
+                "dependencies": { "sharp": "0.34.0" },
+            },
+        },
+        "trustedDependencies": ["esbuild", "sharp"],
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "esbuild": ["esbuild@0.25.0", "", {}, "sha512-esbuild"],
+            "other": ["other@workspace:packages/other"],
+            "sharp": ["sharp@0.34.0", "", {}, "sha512-sharp"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let pruned = prune_to_string(&lockfile, "packages/app", &[("esbuild", "0.25.0")]);
+
+    assert!(
+        pruned.contains("  \"trustedDependencies\": [\n    \"esbuild\",\n    \"sharp\",\n  ],\n"),
+        "trustedDependencies should be copied verbatim:\n{pruned}"
+    );
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.trusted_dependencies, ["esbuild", "sharp"]);
+    assert!(!reparsed.data.packages.contains_key("sharp"));
+}
+
+// Bun links workspace bins from the `bin`/`binDir` fields of the workspace
+// entries, so a pruned lockfile without them installs the workspaces with no
+// bins.
+#[test]
+fn test_prune_preserves_workspace_bins() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {},
+            "packages/cli": {
+                "name": "cli",
+                "version": "1.0.0",
+                "bin": { "cli": "bin/cli.js", "cli-dev": "bin/dev.js" },
+                "dependencies": { "scripts": "workspace:*", "tool": "workspace:*" },
+            },
+            "packages/scripts": {
+                "name": "scripts",
+                "version": "1.0.0",
+                "binDir": "scripts",
+            },
+            "packages/tool": {
+                "name": "tool",
+                "version": "1.0.0",
+                "bin": "tool.js",
+            },
+            "packages/unrelated": {
+                "name": "unrelated",
+                "bin": "unrelated.js",
+            },
+        },
+        "packages": {
+            "cli": ["cli@workspace:packages/cli"],
+            "scripts": ["scripts@workspace:packages/scripts"],
+            "tool": ["tool@workspace:packages/tool"],
+            "unrelated": ["unrelated@workspace:packages/unrelated"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(lockfile.data.workspaces[""].name, "");
+    assert_eq!(
+        lockfile.data.workspaces["packages/tool"].bin,
+        Some(json!("tool.js"))
+    );
+
+    let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+        &lockfile,
+        &[
+            "packages/cli".into(),
+            "packages/scripts".into(),
+            "packages/tool".into(),
+        ],
+        &[],
+    )
+    .unwrap();
+    let pruned = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+
+    assert!(
+        pruned.contains(
+            "    \"packages/cli\": {\n      \"name\": \"cli\",\n      \"version\": \"1.0.0\",\n      \
+             \"bin\": {\n        \"cli\": \"bin/cli.js\",\n        \"cli-dev\": \"bin/dev.js\",\n      \
+             },\n      \"dependencies\": {\n"
+        ),
+        "object bin should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("      \"binDir\": \"scripts\",\n"),
+        "binDir should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("      \"bin\": \"tool.js\",\n"),
+        "string bin should be preserved:\n{pruned}"
+    );
+    assert!(
+        !pruned.contains("unrelated"),
+        "unrelated workspace should be pruned:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    for path in ["", "packages/cli", "packages/scripts", "packages/tool"] {
+        assert_eq!(
+            reparsed.data.workspaces[path], lockfile.data.workspaces[path],
+            "workspace entry for {path:?} should round-trip"
+        );
+    }
+}
+
+// Bun omits the root workspace's `name` when the root package.json has none.
+#[test]
+fn test_root_workspace_without_name_round_trips() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "dependencies": { "is-odd": "3.0.1" },
+            },
+        },
+        "packages": {
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("root workspace name is optional");
+    let resolved = lockfile
+        .resolve_package("", "is-odd", "3.0.1")
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.key, "is-odd@3.0.1");
+
+    let pruned = prune_to_string(&lockfile, "", &[("is-odd", "3.0.1")]);
+    assert!(
+        pruned.contains(
+            "  \"workspaces\": {\n    \"\": {\n      \"dependencies\": {\n        \"is-odd\": \
+             \"3.0.1\",\n      },\n    },\n  },\n"
+        ),
+        "root entry should be written without a name:\n{pruned}"
+    );
+    assert!(BunLockfile::from_str(&pruned).is_ok());
+}
+
+// git and github entries carry an optional 4th element pinning the packed
+// checkout: [ident, INFO, bun-tag, integrity]. Dropping it silently removes
+// the content pin from the pruned lockfile.
+#[test]
+fn test_prune_preserves_git_integrity() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "packages/app": {
+                "name": "app",
+                "dependencies": {
+                    "from-git": "git+https://github.com/user/from-git.git#v1",
+                    "from-github": "github:user/from-github#abc123",
+                    "legacy": "github:user/legacy#def456",
+                },
+            },
+        },
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "from-git": [
+                "from-git@git+https://github.com/user/from-git.git#0123456789abcdef",
+                { "dependencies": { "is-odd": "3.0.1" } },
+                "0123456789abcdef",
+                "sha512-from-git",
+            ],
+            "from-github": ["from-github@github:user/from-github#abc123", {}, "abc123", "sha512-from-github"],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "legacy": ["legacy@github:user/legacy#def456", {}, "def456"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let from_git = &lockfile.data.packages["from-git"];
+    assert_eq!(from_git.checksum.as_deref(), Some("0123456789abcdef"));
+    assert_eq!(from_git.integrity.as_deref(), Some("sha512-from-git"));
+    assert_eq!(lockfile.data.packages["legacy"].integrity, None);
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "packages/app",
+        &[
+            ("from-git", "git+https://github.com/user/from-git.git#v1"),
+            ("from-github", "github:user/from-github#abc123"),
+            ("legacy", "github:user/legacy#def456"),
+        ],
+    );
+    assert!(
+        pruned.contains(
+            "    \"from-git\": [\"from-git@git+https://github.com/user/from-git.git#0123456789abcdef\", \
+             { \"dependencies\": { \"is-odd\": \"3.0.1\" } }, \"0123456789abcdef\", \
+             \"sha512-from-git\"],"
+        ),
+        "git integrity should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains(
+            "    \"from-github\": [\"from-github@github:user/from-github#abc123\", {}, \
+             \"abc123\", \"sha512-from-github\"],"
+        ),
+        "github integrity should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("    \"legacy\": [\"legacy@github:user/legacy#def456\", {}, \"def456\"],"),
+        "entries without integrity should stay 3 elements:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.packages, lockfile.data.packages);
+}
+
+// Local tarballs are written as [ident, INFO, integrity?] and root
+// dependencies as [ident, { bin, binDir }]; Bun rejects either of them in the
+// registry 4-tuple shape with "Expected an object".
+#[test]
+fn test_prune_preserves_local_tarball_and_root_entry_shapes() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "mono",
+                "dependencies": {
+                    "bar": "./vendor/bar-0.0.2.tgz",
+                    "baz": "file:./vendor/baz.tar.gz",
+                    "mono-self": "npm:mono@root:",
+                    "remote": "https://example.com/remote-1.0.0.tgz",
+                    "@scope/self-dir": "*",
+                    "self-plain": "*",
+                },
+            },
+        },
+        "packages": {
+            "@scope/self-dir": ["@scope/self-dir@root:", { "binDir": "bin" }],
+            "bar": ["bar@./vendor/bar-0.0.2.tgz", { "dependencies": { "is-odd": "3.0.1" } }, "sha512-bar"],
+            "baz": ["baz@./vendor/baz.tar.gz", {}],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "mono-self": ["mono@root:", { "bin": { "mono": "cli.js" } }],
+            "remote": ["remote@https://example.com/remote-1.0.0.tgz", {}, "sha512-remote"],
+            "self-plain": ["self-plain@root:", {}],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(
+        lockfile.data.packages["mono-self"].root,
+        Some(RootInfo {
+            bin: Some(json!({ "mono": "cli.js" })),
+            bin_dir: None,
+        })
+    );
+    assert_eq!(
+        lockfile.data.packages["self-plain"].root,
+        Some(RootInfo {
+            bin: None,
+            bin_dir: None,
+        })
+    );
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "",
+        &[
+            ("bar", "./vendor/bar-0.0.2.tgz"),
+            ("baz", "file:./vendor/baz.tar.gz"),
+            ("mono-self", "npm:mono@root:"),
+            ("remote", "https://example.com/remote-1.0.0.tgz"),
+            ("@scope/self-dir", "*"),
+            ("self-plain", "*"),
+        ],
+    );
+
+    for expected in [
+        "    \"@scope/self-dir\": [\"@scope/self-dir@root:\", { \"binDir\": \"bin\" }],",
+        "    \"bar\": [\"bar@./vendor/bar-0.0.2.tgz\", { \"dependencies\": { \"is-odd\": \
+         \"3.0.1\" } }, \"sha512-bar\"],",
+        "    \"baz\": [\"baz@./vendor/baz.tar.gz\", {}],",
+        "    \"is-odd\": [\"is-odd@3.0.1\", \"\", {}, \"sha512-is-odd\"],",
+        "    \"mono-self\": [\"mono@root:\", { \"bin\": { \"mono\": \"cli.js\" } }],",
+        "    \"remote\": [\"remote@https://example.com/remote-1.0.0.tgz\", {}, \"sha512-remote\"],",
+        "    \"self-plain\": [\"self-plain@root:\", {}],",
+    ] {
+        assert!(
+            pruned.contains(expected),
+            "expected pruned lockfile to contain:\n{expected}\n\ngot:\n{pruned}"
+        );
+    }
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.packages, lockfile.data.packages);
 }

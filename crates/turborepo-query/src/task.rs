@@ -4,6 +4,7 @@ use async_graphql::{Json, Object};
 use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskId;
+use turborepo_types::TaskCommandOverride;
 
 use crate::{package::Package, Array, Error, QueryRun};
 
@@ -15,7 +16,7 @@ pub struct RepositoryTask {
 
 impl RepositoryTask {
     pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
-        let package = Package::new(run.clone(), task_id.package().into())?;
+        let package = Package::for_task(run.clone(), task_id.package().into())?;
         let script = package.get_tasks().get(task_id.task()).cloned();
 
         Ok(RepositoryTask {
@@ -23,6 +24,26 @@ impl RepositoryTask {
             package,
             script,
         })
+    }
+
+    pub fn executes(&self) -> bool {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        match self
+            .package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.command.as_ref())
+        {
+            Some(TaskCommandOverride::Argv(_)) => true,
+            Some(TaskCommandOverride::OptOut) => false,
+            None => self
+                .package
+                .run()
+                .pkg_dep_graph()
+                .package_task_context(self.package.get_name())
+                .is_some_and(|context| context.native_tasks().defines(&self.name)),
+        }
     }
 
     fn collect_and_sort<'a>(

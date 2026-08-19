@@ -2,6 +2,7 @@
 resolver = "3"
 
 members = [
+  "crates/libghostty-vt-sys",
   "crates/turbo-trace",
   "crates/turborepo*",
   "packages/turbo-repository/rust",
@@ -74,6 +75,7 @@ turborepo-frameworks = { path = "crates/turborepo-frameworks" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-gitignore = { path = "crates/turborepo-gitignore" }
 turborepo-hash = { path = "crates/turborepo-hash" }
+turborepo-lockfile-hash = { path = "crates/turborepo-lockfile-hash" }
 turborepo-json-rewrite = { path = "crates/turborepo-json-rewrite" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lsp = { path = "crates/turborepo-lsp", default-features = false }
@@ -111,7 +113,7 @@ turborepo-shim = { path = "crates/turborepo-shim" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
-libghostty-vt = "0.2.0"
+libghostty-vt = "0.2.1"
 
 reqwest = { version = "0.12.28", default-features = false }
 rustls-native-certs = "0.8.3"
@@ -184,7 +186,7 @@ pretty_assertions = "1.3.0"
 radix_trie = "0.2.1"
 rand = "0.9.3"
 ratatui = "0.30.0"
-regex = "1.7.0"
+regex = "1.13.0"
 secrecy = "0.10.3"
 semver = "1.0.16"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -214,5 +216,5 @@ schemars = "0.8.16"
 ts-rs = { version = "11.1.0", features = ["serde-compat"] }
 
 [patch.crates-io]
-# Upstream 0.2.0 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
+# Upstream 0.2.1 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
 libghostty-vt-sys = { path = "crates/libghostty-vt-sys" }

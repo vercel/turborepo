@@ -14,7 +14,7 @@ script_provided_flags="\
 for flag in $user_provided_flags; do
   if [[ $flag == --target=* ]]; then
     target=${flag#*=}
-    rustup toolchain install nightly-2026-04-10 --target "$target"
+    rustup toolchain install nightly-2026-05-22 --target "$target"
 
     # For we need to cross-compile some targets with Zig
     # Fortunately, napi comes with a `--zig` flag

@@ -108,6 +108,9 @@ pub fn calculate_affected_tasks(
             AllPackageChangeReason::ScmError { ref error } => {
                 format!("SCM error: {error}")
             }
+            AllPackageChangeReason::ConservativeFallback => {
+                "conservative affectedness fallback".to_string()
+            }
         };
 
         return Ok(engine
@@ -130,8 +133,25 @@ pub fn calculate_affected_tasks(
     // changed files. Uses the shared matching function that iterates ALL
     // engine tasks regardless of package, so tasks with $TURBO_ROOT$ inputs
     // in non-affected packages are correctly detected.
-    let matched =
-        turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, &changed_files);
+    let matched = match turborepo_engine::match_tasks_against_changed_files(
+        engine,
+        pkg_dep_graph,
+        &changed_files,
+    ) {
+        Ok(matched) => matched,
+        Err(error) => {
+            tracing::error!(?error, "failed to determine affected tasks");
+            return Ok(engine
+                .task_ids()
+                .map(|task_id| AffectedTask {
+                    task_id: task_id.clone(),
+                    reason: TaskChangeReason::AllTasksChanged {
+                        description: "conservative affectedness fallback".to_string(),
+                    },
+                })
+                .collect());
+        }
+    };
     let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = matched
         .into_iter()
         .map(|(task_id, file_path)| (task_id, TaskChangeReason::FileChanged { file_path }))
@@ -473,6 +493,49 @@ mod tests {
             "expected package dependency reason, got {:?}",
             b_task.reason
         );
+    }
+
+    #[tokio::test]
+    async fn invalid_input_glob_conservatively_changes_all_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let task_id = TaskId::new("lib-a", "build");
+        let unaffected_id = TaskId::new("lib-a", "test");
+        let engine = make_engine(&[
+            (
+                task_id.clone(),
+                TaskDefinition {
+                    inputs: TaskInputs {
+                        globs: vec!["[invalid".to_string()],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ),
+            (unaffected_id.clone(), TaskDefinition::default()),
+        ]);
+        let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph: pkg_graph,
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            repo_root: root.to_owned(),
+        });
+
+        let affected = calculate_affected_tasks(&mock, None, None).unwrap();
+        let affected: HashMap<_, _> = affected
+            .into_iter()
+            .map(|task| (task.task_id, task.reason))
+            .collect();
+        assert_eq!(affected.len(), 2);
+        for task_id in [task_id, unaffected_id] {
+            assert!(matches!(
+                affected.get(&task_id),
+                Some(TaskChangeReason::AllTasksChanged { description })
+                    if description == "conservative affectedness fallback"
+            ));
+        }
     }
 
     #[tokio::test]

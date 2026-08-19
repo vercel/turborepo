@@ -269,14 +269,14 @@ impl DeserializationVisitor for PipelineVisitor {
 
 impl WithMetadata for Pipeline {
     fn add_text(&mut self, text: Arc<str>) {
-        for (_, entry) in self.0.iter_mut() {
+        for entry in self.0.values_mut() {
             entry.add_text(text.clone());
             entry.value.add_text(text.clone());
         }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
-        for (_, entry) in self.0.iter_mut() {
+        for entry in self.0.values_mut() {
             entry.add_path(path.clone());
             entry.value.add_path(path.clone());
         }

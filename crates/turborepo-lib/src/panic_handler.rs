@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use human_panic::report::{Method, Report};
 
 use crate::get_version;
@@ -63,11 +65,10 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
         )
     };
 
-    eprintln!(
-        "Oops! Turbo has crashed.
-
-{report_message}"
-    );
+    // `eprintln!` panics if stderr is unwritable, and a panic in a panic hook
+    // aborts.
+    let _ = std::io::stderr()
+        .write_all(format!("Oops! Turbo has crashed.\n\n{report_message}\n").as_bytes());
 }
 
 #[cfg(test)]

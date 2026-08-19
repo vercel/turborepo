@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "2.10.5-canary.5",
+  "version": "2.10.11",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "eslint",
@@ -24,12 +24,6 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "scripts": {
-    "test": "jest",
-    "build": "tsdown && tsc -p tsconfig.build.json",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
-  },
   "dependencies": {
     "dotenv": "16.0.3"
   },
@@ -46,8 +40,8 @@
     "jest": "30.3.0",
     "json5": "2.2.3",
     "tsdown": "0.12.0",
-    "typescript": "npm:@typescript/typescript6@^6.0.1",
-    "typescript-7": "npm:typescript@7.0.1-rc"
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@7.0.2"
   },
   "peerDependencies": {
     "eslint": ">6.6.0",

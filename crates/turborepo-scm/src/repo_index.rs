@@ -91,11 +91,11 @@ impl RepoGitIndex {
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
 
-        let git_dir = git.root.join_component(".git");
+        let git_dir = crate::worktree::resolve_git_dir(&git.root)?;
         let index_path = git_dir.join_component("index");
 
         if !index_path.exists() {
-            return Err(Error::git_error("no .git/index file found"));
+            return Err(Error::git_error("no git index file found"));
         }
 
         let index = gix_index::File::at(
@@ -1691,6 +1691,7 @@ mod tests {
             root: root.clone(),
             bin: root,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         }
     }

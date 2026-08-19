@@ -169,6 +169,10 @@ impl Lockfile for NpmLockfile {
         Ok(Some(std::borrow::Cow::Owned(deps)))
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(NpmEdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -241,6 +245,36 @@ impl Lockfile for NpmLockfile {
         let version = npm_package.version.as_deref()?;
         let name = package.key.split("node_modules/").last()?;
         Some(format!("{name}@{version}"))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// npm transitive edges come from `all_dependencies`, which emits fully
+/// resolved lockfile keys (`find_dep_in_lockfile` only returns keys present
+/// in the packages map). `resolve_package`'s first candidate matches such a
+/// key directly without consulting the workspace, so every workspace
+/// resolves the edge identically. A name that is not a lockfile key would
+/// fall through to the workspace-scoped candidates, so report it sensitive
+/// (defensive; unreachable via `all_dependencies` output).
+struct NpmEdgeResolver<'a> {
+    lockfile: &'a NpmLockfile,
+}
+
+impl crate::TransitiveEdgeResolver for NpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        _version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(match self.lockfile.packages.get(name) {
+            // Mirrors the `name` candidate in `resolve_package`.
+            Some(pkg) => crate::TransitiveEdgeResolution::Global(Some(Package {
+                key: name.to_string(),
+                version: pkg.version.clone().unwrap_or_default(),
+            })),
+            None => crate::TransitiveEdgeResolution::WorkspaceSensitive,
+        })
     }
 }
 
@@ -615,13 +649,7 @@ impl NpmLockfile {
     fn npm_path_parent(key: &str) -> Option<&str> {
         key.rsplit_once("node_modules/")
             .map(|(first, _)| first)
-            .and_then(|parent| {
-                if parent.is_empty() {
-                    None
-                } else {
-                    Some(parent)
-                }
-            })
+            .filter(|&parent| !parent.is_empty())
     }
 }
 
@@ -635,27 +663,6 @@ impl NpmPackage {
     }
 }
 
-pub fn npm_subgraph(
-    contents: &[u8],
-    workspace_packages: &[String],
-    packages: &[String],
-) -> Result<Vec<u8>, Error> {
-    let lockfile = NpmLockfile::load(contents)?;
-    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.encode()?;
-
-    Ok(new_contents)
-}
-
-pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
-    let prev_lockfile = NpmLockfile::load(prev_contents)?;
-    let curr_lockfile = NpmLockfile::load(curr_contents)?;
-
-    Ok(
-        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
-            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
-    )
-}
 #[cfg(test)]
 mod test {
     use super::*;

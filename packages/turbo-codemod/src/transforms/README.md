@@ -12,7 +12,7 @@ New Transformers will be automatically surfaced to the `transform` CLI command a
 
 ## How it works
 
-Transformers are loaded automatically from the `src/transforms/` directory via the [`loadTransforms`](../utils/loadTransformers.ts) function.
+Transformers are loaded automatically from the `src/transforms/` directory via the [`loadTransformers`](../utils/load-transformers.ts) function.
 
 All new transformers must contain a default export that matches the [`Transformer`](../types.ts) type:
 

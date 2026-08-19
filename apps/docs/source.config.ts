@@ -46,12 +46,7 @@ export const { docs: blogDocs, meta: blogMeta } = defineDocs({
       .extend({
         description: z.string(),
         date: z.string(),
-        tag: z.string(),
-        ogImage: z
-          .string()
-          .startsWith("/images/blog/")
-          .endsWith("x-card.png")
-          .optional()
+        tag: z.string()
       })
       .strict()
   }

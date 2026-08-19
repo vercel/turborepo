@@ -9,6 +9,7 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 ## Scope
 
 - Treat examples as user-facing templates. Prefer simple, modern, copyable patterns over clever abstractions.
+- Automated schedule and operator runs maintain exactly one example selected by `select_daily_example`. Do not inspect or change other examples during those runs.
 - Preserve package-manager intent. Do not convert an npm, pnpm, Yarn, or Berry example to another manager unless asked.
 - Keep changes minimal except where latest-version migrations require broader code, config, or tooling changes.
 - Do not add compatibility shims as a way to avoid migration. Prefer real migration, package replacement, or configuration changes that make latest versions work cleanly.
@@ -23,6 +24,7 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Resolve versions programmatically from their source of truth. Use npm registry metadata for npm packages and JavaScript package managers, Node release metadata for Node.js, and the relevant registry or release API for non-JavaScript toolchains.
 - Update direct dependencies, package managers, and versioned toolchain values to exact latest stable versions from registry or release metadata. Never write the literal `latest` tag into manifests. Do not introduce loose ranges like `^` or `~` when updating examples.
 - Major-version upgrades are expected. Apply them, then fix resulting breakage. Do not downgrade to the previous major to make validation easier.
+- Publication recency is never a reason to pick an older version. Take whatever the registry reports as `latest`, even when it was published minutes ago, and never use a release-age exclusion to get there. See "Release-Age Settings".
 - Treat `engines.node` as a versioned value to update to the latest stable Node release line unless a package manager literally cannot run on it. If the framework breaks on the latest Node, update or replace the framework/tooling usage until it works.
 - Prefer the repository's current Turborepo version and documented task naming conventions.
 
@@ -45,6 +47,14 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - External package patching is a last resort, but it is allowed if there is no viable migration or replacement and it is required to keep latest direct dependencies working. Keep patches small, documented in package-manager-native patch metadata, and generated programmatically where the package manager supports it.
 - The only acceptable blocker is an unpublished package/version, unavailable registry/service, or missing credentials. Compatibility failures are not blockers; they are migration work.
 
+## Release-Age Settings
+
+- Never add or extend a release-age exclusion list: `minimumReleaseAgeExclude` (pnpm), `minimumReleaseAgeExcludes` (Bun), or `minimum-release-age-exclude` (npm). Upgrade dependencies to the latest published versions without that setting.
+- Do not add, raise, lower, or remove `minimumReleaseAge` either. Leave every example's release-age configuration exactly as it already is.
+- These settings only gate how fresh a published version may be. They are not a compatibility, safety, or validation tool, and excluding a package from them is never part of an upgrade.
+- `write_examples_file` and `create_pull_request` reject an example `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `bunfig.toml`, or `package.json` that contains an exclusion list. A rejection means remove the setting, not rename or relocate it.
+- If an install is blocked by a release-age gate the example does not own, report the failing install command as a blocker instead of excluding packages from the gate.
+
 ## Lockfiles
 
 - Never manually write lockfiles.
@@ -56,7 +66,8 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Use `audit_example_tasks` before validation to identify persistent and non-persistent tasks.
 - Persistent tasks such as `dev`, `start`, `serve`, and `preview` are not pass/fail validation tasks.
 - Non-persistent tasks such as `build`, `lint`, `test`, `check-types`, and framework-specific compile checks must pass after updates when present.
-- Run the narrowest relevant verification commands for each changed example using `run_example_script`.
+- Pass every relevant non-persistent task to one `run_example_turbo_tasks` call. It runs them together through Turbo with `--continue=always` so every failure surfaces.
+- Treat a failed validation tool call as a failed example. Fix the failures and rerun the full task set; never report a nonzero command as successful validation.
 - If a version bump breaks an example, fix the breakage in the same pass instead of leaving the example half-updated.
 
 ## Completion Contract
@@ -68,14 +79,15 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 
 ## Recommended Tool Flow
 
-1. Use `list_examples` or `inspect_example` to understand the target examples.
+1. For an automated run, call `select_daily_example`, then use `inspect_example` on only the returned example. For an interactive run, use `list_examples` or `inspect_example` to understand the requested targets.
 2. Use `audit_example_versions` to find stale `package.json`, `packageManager`, and Node engine values.
 3. Use `find_versioned_references` to find versioned references outside manifests.
 4. Use `audit_example_tasks` to identify validation scripts and persistent tasks.
 5. Use `read_examples_file` before modifying existing files.
 6. Use `write_examples_file` for non-lockfile example changes.
 7. Use `update_example_lockfile` after dependency or package-manager changes.
-8. Use `run_example_script` for each relevant non-persistent validation task.
+8. Use `run_example_turbo_tasks` once with every task in `recommendedTurboTasksToRun`.
+9. Use `create_pull_request` after automated maintenance when the sandbox contains changes. It rejects changes outside the selected example and returns without creating a pull request when there are no changes.
 
 ## Reporting
 
@@ -84,3 +96,4 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Do not ask the user to choose safe vs full updates. The default is full latest exact pins across all examples.
 - Do not report “latest-compatible” fallbacks as completion. Completion requires exact latest direct pins or a true external availability blocker.
 - Report only after the completion contract is satisfied. Avoid interim status updates unless a tool or channel requires visible progress.
+- For automated runs, let `create_pull_request` choose the example-specific branch and title, and include validation results in the body.

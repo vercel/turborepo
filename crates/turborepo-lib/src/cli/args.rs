@@ -108,6 +108,10 @@ pub struct Args {
     // DO NOT MAKE THIS VISIBLE
     // Instead use the getter method execution_args()
     pub(super) execution_args: Option<ExecutionArgs>,
+    /// The legacy flag is stripped before clap parsing. Non-run commands use
+    /// this field because they have no command-local `ExecutionArgs`.
+    #[clap(skip)]
+    pub(crate) single_package: bool,
     #[clap(subcommand)]
     pub command: Option<Command>,
 }
@@ -390,10 +394,11 @@ impl Args {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut args = Args::try_parse_from(single_package_free)?;
         // --single-package is stripped before clap parsing, so we need to
-        // propagate it back. The value can appear in two places in the struct.
-        // We defensively attempt to set both.
+        // propagate it back. Preserve clap's optional global execution args;
+        // creating them here conflicts with explicit run/watch arguments.
+        args.single_package = is_single_package;
         if let Some(ref mut execution_args) = args.execution_args {
-            execution_args.single_package = is_single_package
+            execution_args.single_package = is_single_package;
         }
 
         if let Some(
@@ -633,7 +638,7 @@ pub enum Command {
     Scan,
     #[clap(hide = true)]
     Config,
-    /// EXPERIMENTAL: List packages in your monorepo.
+    /// List packages in your monorepo.
     Ls {
         /// Show only packages that are affected by changes between
         /// the current branch and `main`
@@ -648,7 +653,7 @@ pub enum Command {
         /// Get insight into a specific package, such as
         /// its dependencies and tasks
         packages: Vec<String>,
-        /// Output format
+        /// EXPERIMENTAL: Output format
         #[clap(long, value_enum)]
         output: Option<OutputFormat>,
     },

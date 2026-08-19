@@ -563,7 +563,7 @@ pub struct ProcessedIncrementalPartition {
 /// The canonical toolchain ids accepted as `command` map keys, alongside
 /// their accepted aliases. Kept as literals: this crate sits below the
 /// toolchain registry, and these ids are stable public API.
-const KNOWN_TOOLCHAINS: [&str; 2] = ["javascript", "rust"];
+const KNOWN_TOOLCHAINS: [&str; 3] = ["javascript", "rust", "python"];
 const TOOLCHAIN_ALIASES: [(&str, &str); 1] = [("typescript", "javascript")];
 
 /// A task `command` after alias resolution and validation: the argv the
@@ -633,6 +633,8 @@ impl ProcessedCommand {
             let (span, text) = key.span_and_text("turbo.json");
             let hint = if raw_key == "cargo" {
                 r#"Rust crates are the "rust" toolchain."#.to_string()
+            } else if raw_key == "uv" {
+                r#"Python packages are the "python" toolchain."#.to_string()
             } else {
                 format!(
                     "Known toolchains: {}.",
@@ -650,10 +652,20 @@ impl ProcessedCommand {
                 text,
             });
         }
-        if canonical == "rust" && !future_flags.experimental_cargo_workspaces {
+        let missing_flag = match canonical {
+            "rust" if !future_flags.experimental_cargo_workspaces => {
+                Some("experimentalCargoWorkspaces")
+            }
+            "python" if !future_flags.experimental_python_workspaces => {
+                Some("experimentalPythonWorkspaces")
+            }
+            _ => None,
+        };
+        if let Some(flag) = missing_flag {
             let (span, text) = key.span_and_text("turbo.json");
             return Err(Error::TaskCommandToolchainRequiresFlag {
                 key: raw_key.to_string(),
+                flag,
                 span,
                 text,
             });

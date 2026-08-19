@@ -50,6 +50,259 @@ fn test_default_engine() {
     assert_eq!(all_dependencies(&engine), expected);
 }
 
+fn aggregate_engine(
+    repo_root: &AbsoluteSystemPathBuf,
+    root_config: serde_json::Value,
+    aggregate_config: Option<serde_json::Value>,
+    pass_through_args: Vec<String>,
+) -> Result<Engine<Built, TaskDefinition>, BuilderError> {
+    aggregate_engine_for_task(
+        repo_root,
+        root_config,
+        aggregate_config,
+        pass_through_args,
+        "all",
+    )
+}
+
+fn aggregate_engine_for_task(
+    repo_root: &AbsoluteSystemPathBuf,
+    root_config: serde_json::Value,
+    aggregate_config: Option<serde_json::Value>,
+    pass_through_args: Vec<String>,
+    task: &str,
+) -> Result<Engine<Built, TaskDefinition>, BuilderError> {
+    let package_graph = mock_aggregate_package_graph(repo_root);
+    let flags = FutureFlags {
+        experimental_task_command: true,
+        ..Default::default()
+    };
+    let mut root_config = turbo_json(root_config);
+    root_config.future_flags = flags;
+    let mut configs = HashMap::from([(PackageName::Root, root_config)]);
+    if let Some(config) = aggregate_config {
+        let mut config = turbo_json(config);
+        config.future_flags = flags;
+        configs.insert(PackageName::from("cargo-workspace"), config);
+    }
+    EngineBuilder::new(
+        repo_root,
+        &package_graph,
+        &TestTurboJsonLoader::new(configs),
+        false,
+    )
+    .with_tasks(Some(Spanned::new(TaskName::from(task).into_owned())))
+    .with_workspaces(vec![PackageName::from("cargo-workspace")])
+    .with_task_io_context(pass_through_args, vec![task.to_string()], HashMap::new())
+    .with_future_flags(flags)
+    .build()
+}
+
+#[test]
+fn native_aggregate_composes_same_scope_dependencies() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "all": { "dependsOn": ["check"] } } }),
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_deduplicates_by_effective_task_id() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({
+            "tasks": {
+                "all": {
+                    "dependsOn": ["cargo-workspace#check", "other-workspace#check"]
+                }
+            }
+        }),
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    let definition = task_definition(&engine, "cargo-workspace#all");
+    assert_eq!(definition.task_dependencies.len(), 3);
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => [
+                "cargo-workspace#check",
+                "cargo-workspace#lint",
+                "other-workspace#check"
+            ],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"],
+            "other-workspace#check" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_execution_is_part_of_definition_memoization() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let package_graph = mock_aggregate_package_graph(&repo_root);
+    let loader = TestTurboJsonLoader::new(HashMap::from([(
+        PackageName::Root,
+        turbo_json(json!({ "tasks": {} })),
+    )]));
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from("all"))))
+        .with_workspaces(vec![
+            PackageName::from("cargo-workspace"),
+            PackageName::from("other-workspace"),
+        ])
+        .build()
+        .unwrap();
+
+    assert_eq!(
+        all_dependencies(&engine),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"],
+            "other-workspace#all" => ["other-workspace#check"],
+            "other-workspace#check" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_dependencies_use_normal_cycle_validation() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let error = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "check": { "dependsOn": ["all"] } } }),
+        None,
+        Vec::new(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, BuilderError::Graph(_)), "got {error:?}");
+}
+
+#[test]
+fn command_override_and_opt_out_disable_native_aggregate_dependencies() {
+    for command in [json!(["echo", "all"]), serde_json::Value::Null] {
+        let repo = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+        let engine = aggregate_engine(
+            &repo_root,
+            json!({
+                "tasks": {
+                    "cargo-workspace#all": { "command": command }
+                }
+            }),
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            all_dependencies(&engine),
+            deps! { "cargo-workspace#all" => ["___ROOT___"] }
+        );
+    }
+}
+
+#[test]
+fn extends_false_preserves_native_aggregate_opt_out() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let engine = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": { "all": {} } }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": { "all": { "extends": false } }
+        })),
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert!(all_dependencies(&engine).is_empty());
+}
+
+#[test]
+fn qualified_extends_false_suppresses_and_scoped_config_readds_native_aggregate() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let suppressed = aggregate_engine_for_task(
+        &repo_root,
+        json!({ "tasks": {} }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": { "all": { "extends": false } }
+        })),
+        Vec::new(),
+        "cargo-workspace#all",
+    )
+    .unwrap();
+    assert!(all_dependencies(&suppressed).is_empty());
+
+    let readded = aggregate_engine_for_task(
+        &repo_root,
+        json!({ "tasks": {} }),
+        Some(json!({
+            "extends": ["//"],
+            "tasks": {
+                "all": {
+                    "extends": false,
+                    "dependsOn": ["check"]
+                }
+            }
+        })),
+        Vec::new(),
+        "cargo-workspace#all",
+    )
+    .unwrap();
+    assert_eq!(
+        all_dependencies(&readded),
+        deps! {
+            "cargo-workspace#all" => ["cargo-workspace#check", "cargo-workspace#lint"],
+            "cargo-workspace#check" => ["___ROOT___"],
+            "cargo-workspace#lint" => ["___ROOT___"]
+        }
+    );
+}
+
+#[test]
+fn native_aggregate_rejects_pass_through_with_qualified_children() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let error = aggregate_engine(
+        &repo_root,
+        json!({ "tasks": {} }),
+        None,
+        vec!["--fix".to_string()],
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, BuilderError::AggregatePassThrough { .. }));
+    let message = error.to_string();
+    assert!(message.contains("cargo-workspace#check"));
+    assert!(message.contains("cargo-workspace#lint"));
+}
+
 #[test]
 fn test_dependencies_on_unspecified_packages() {
     let repo_root_dir = TempDir::with_prefix("repo").unwrap();
@@ -943,4 +1196,198 @@ fn test_path_to_root() {
             .as_str(),
         "../.."
     );
+}
+
+fn stub_io_engine(
+    task_definition: serde_json::Value,
+    outputs: turborepo_repository::toolchain::DerivedOutputs,
+    task: &str,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    global_env: Vec<String>,
+) -> StubIOEngineResult {
+    stub_io_engine_with_safety(
+        task_definition,
+        outputs,
+        DerivedInputSafety::Tracked,
+        task,
+        pass_through_args,
+        requested_tasks,
+        global_env,
+    )
+}
+
+fn stub_io_engine_with_safety(
+    task_definition: serde_json::Value,
+    outputs: turborepo_repository::toolchain::DerivedOutputs,
+    input_safety: DerivedInputSafety,
+    task: &str,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    global_env: Vec<String>,
+) -> StubIOEngineResult {
+    let repo_root_dir = TempDir::with_prefix("stub-io").unwrap();
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+    let toolchain = Arc::new(StubIOContributor {
+        repo_root: repo_root.clone(),
+        outputs,
+        input_safety,
+        environment: vec!["STUB_LAYOUT"],
+    });
+    let package_graph = stub_io_package_graph(&repo_root, toolchain);
+    let loader = TestTurboJsonLoader::new(
+        vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "globalEnv": global_env.clone(),
+                "tasks": task_definition
+            })),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let environments = HashMap::from([(
+        turborepo_repository::task_contracts::TaskEnvironmentDomain::new("stub-io"),
+        turborepo_repository::toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "STUB_LAYOUT".to_string(),
+            "layout-value".to_string(),
+        )])),
+    )]);
+    EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from(task).into_owned())))
+        .with_workspaces(vec![PackageName::from("app")])
+        .with_global_env(global_env)
+        .with_task_io_context(pass_through_args, requested_tasks, environments)
+        .build()
+        .unwrap()
+}
+
+#[test]
+fn test_unavailable_outputs_respect_merged_task_configuration() {
+    for (definition, expected_cache, expected_outputs) in [
+        (json!({ "build": {} }), false, Vec::<String>::new()),
+        (json!({ "build": { "cache": true } }), true, Vec::new()),
+        (json!({ "build": { "cache": false } }), false, Vec::new()),
+        (
+            json!({ "build": { "outputs": ["configured/**"] } }),
+            true,
+            vec!["configured/**".to_string()],
+        ),
+        (json!({ "build": { "outputs": [] } }), true, Vec::new()),
+    ] {
+        let engine = stub_io_engine(
+            definition,
+            DerivedOutputs::Unavailable,
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert_eq!(task.cache, expected_cache);
+        assert_eq!(task.outputs.inclusions, expected_outputs);
+        assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+    }
+}
+
+#[test]
+fn test_untracked_inputs_respect_only_explicit_cache_configuration() {
+    for (definition, expected_cache, expected_outputs) in [
+        (json!({ "build": {} }), false, Vec::<String>::new()),
+        (json!({ "build": { "cache": true } }), true, Vec::new()),
+        (json!({ "build": { "cache": false } }), false, Vec::new()),
+        (
+            json!({ "build": { "outputs": ["configured/**"] } }),
+            false,
+            vec!["configured/**".to_string()],
+        ),
+        (
+            json!({ "build": { "cache": true, "outputs": ["configured/**"] } }),
+            true,
+            vec!["configured/**".to_string()],
+        ),
+    ] {
+        let engine = stub_io_engine_with_safety(
+            definition,
+            DerivedOutputs::Resolved(Vec::new()),
+            DerivedInputSafety::Untracked,
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert_eq!(task.cache, expected_cache);
+        assert_eq!(task.outputs.inclusions, expected_outputs);
+    }
+}
+
+#[test]
+fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
+    for env_mode in ["strict", "loose"] {
+        for exclusion in ["!STUB_LAYOUT", "!STUB_*"] {
+            let engine = stub_io_engine(
+                json!({
+                    "build": {
+                        "env": [exclusion],
+                        "envMode": env_mode
+                    }
+                }),
+                DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+                "build",
+                Vec::new(),
+                vec!["build".to_string()],
+                Vec::new(),
+            );
+            let task = engine
+                .task_definition(&TaskId::new("app", "build"))
+                .unwrap();
+            assert!(!task.cache, "{env_mode} {exclusion} must fail closed");
+            assert!(task.outputs.inclusions.is_empty());
+            assert!(task.env.contains(&exclusion.to_string()));
+            assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+        }
+    }
+
+    let engine = stub_io_engine(
+        json!({ "build": { "envMode": "loose" } }),
+        DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+        "build",
+        Vec::new(),
+        vec!["build".to_string()],
+        vec!["!STUB_*".to_string()],
+    );
+    let task = engine
+        .task_definition(&TaskId::new("app", "build"))
+        .unwrap();
+    assert!(!task.cache, "global env exclusions must also fail closed");
+    assert!(task.outputs.inclusions.is_empty());
+}
+
+#[test]
+fn test_nonconflicting_env_exclusions_keep_resolved_outputs() {
+    for env_mode in ["strict", "loose"] {
+        let engine = stub_io_engine(
+            json!({
+                "build": {
+                    "env": ["!UNRELATED_*"],
+                    "envMode": env_mode
+                }
+            }),
+            DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert!(task.cache);
+        assert_eq!(task.outputs.inclusions, ["automatic-output"]);
+    }
 }

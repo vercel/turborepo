@@ -242,7 +242,6 @@ pub static BOLD_YELLOW_REVERSE: LazyLock<Style> =
     LazyLock::new(|| Style::new().yellow().bold().reverse());
 pub static UNDERLINE: LazyLock<Style> = LazyLock::new(|| Style::new().underlined());
 pub static BOLD_CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan().bold());
-pub static BOLD_GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim().bold());
 pub static BOLD_GREEN: LazyLock<Style> = LazyLock::new(|| Style::new().green().bold());
 pub static BOLD_RED: LazyLock<Style> = LazyLock::new(|| Style::new().red().bold());
 

@@ -2,19 +2,38 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "check-types": {
+      "command": null
+    },
     "build": {
-      // The napi crate is a real Turborepo package: depending on its build
-      // task invalidates this one whenever the crate's transitive Rust
-      // sources change — a cross-toolchain edge scoped to the crate's
-      // actual closure rather than a global "any Rust changed" bit.
+      // The napi crate's build task is a hash-only dependency: it invalidates
+      // this task whenever the crate's transitive Rust sources change without
+      // running Cargo before the specialized N-API build runs it here.
       // CARGO_BUILD_JOBS only affects parallelism, not artifacts, so it no
       // longer participates in the hash.
       "dependsOn": ["turborepo-napi#build"],
       "env": ["NODE_VERSION", "RUSTFLAGS"],
-      "outputs": ["js/dist/**/*", "native/**/*"]
+      "outputs": ["js/dist/**/*", "native/**/*"],
+      "command": ["bash", "scripts/build.sh", "--dts", "../js/index.d.ts"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "__tests__/affected-packages.test.ts",
+        "__tests__/exports.test.ts",
+        "__tests__/find-packages.test.ts",
+        "__tests__/lockfile-packages.test.ts",
+        "__tests__/workspace.test.ts"
+      ]
+    },
+    "package": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "command": ["node", "scripts/publish.mjs"]
     }
   }
 }

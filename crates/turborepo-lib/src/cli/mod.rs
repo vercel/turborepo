@@ -428,7 +428,7 @@ async fn run_main(
             let event = CommandEventBuilder::new("devtools").with_parent(&root_telemetry);
             event.track_call();
 
-            crate::commands::devtools::run(repo_root, *port, *no_open).await?;
+            crate::commands::devtools::run(repo_root, cli_args.clone(), *port, *no_open).await?;
             Ok(0)
         }
         Command::Docs {

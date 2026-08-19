@@ -41,12 +41,8 @@ impl InputOptions<'_> {
         match event {
             crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => {
-                    Some(Event::ScrollWithMomentum(Direction::Down))
-                }
-                crossterm::event::MouseEventKind::ScrollUp => {
-                    Some(Event::ScrollWithMomentum(Direction::Up))
-                }
+                crossterm::event::MouseEventKind::ScrollDown
+                | crossterm::event::MouseEventKind::ScrollUp => Some(Event::Mouse(m)),
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
@@ -508,6 +504,21 @@ mod test {
         assert!(matches!(
             in_find().handle_crossterm_event(crossterm::event::Event::Mouse(event)),
             Some(Event::Mouse(_))
+        ));
+    }
+
+    #[test]
+    fn forwards_mouse_scroll_with_coordinates() {
+        let event = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::ScrollDown,
+            column: 7,
+            row: 3,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        assert!(matches!(
+            in_list().handle_crossterm_event(crossterm::event::Event::Mouse(event)),
+            Some(Event::Mouse(actual)) if actual == event
         ));
     }
 

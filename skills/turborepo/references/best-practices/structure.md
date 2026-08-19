@@ -13,7 +13,7 @@ packages:
   - "packages/*"
 ```
 
-### npm/yarn/bun
+### npm/yarn/bun/nub
 
 ```json
 // package.json
@@ -21,6 +21,17 @@ packages:
   "workspaces": ["apps/*", "packages/*"]
 }
 ```
+
+nub follows the repo's existing lockfile: with a pnpm-format lockfile (`pnpm-lock.yaml` or nub's `lock.yaml`) it reads `pnpm-workspace.yaml` when that file exists, otherwise `package.json` workspaces.
+
+### aube
+
+aube uses `aube-workspace.yaml` (same `packages:` format as pnpm), falling back to `pnpm-workspace.yaml` or `package.json` workspaces.
+
+### Polyglot workspaces (experimental)
+
+- `futureFlags.experimentalCargoWorkspaces` - Treat Cargo workspace crates as Turborepo packages
+- `futureFlags.experimentalPythonWorkspaces` - Treat uv workspace members as Turborepo packages
 
 ## Root package.json
 
@@ -95,7 +106,7 @@ Package tasks enable Turborepo to:
 
 ```json
 {
-  "$schema": "https://v2-10-5-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-10-11.turborepo.dev/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -117,7 +128,7 @@ With `futureFlags.globalConfiguration`, global settings move under a `global` ke
 
 ```json
 {
-  "$schema": "https://v2-10-5-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-10-11.turborepo.dev/schema.json",
   "futureFlags": { "globalConfiguration": true },
   "global": {
     "inputs": ["tsconfig.json"],
@@ -262,28 +273,34 @@ packages/
     ├── package.json
     ├── base.js
     ├── next.js
-    └── library.js
+    └── react-internal.js
 ```
 
 ```json
 // packages/eslint-config/package.json
 {
   "name": "@repo/eslint-config",
+  "type": "module",
   "exports": {
     "./base": "./base.js",
-    "./next": "./next.js",
-    "./library": "./library.js"
+    "./next-js": "./next.js",
+    "./react-internal": "./react-internal.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.1"
   }
 }
 ```
 
 ### Using in Packages
 
+ESLint 9 flat config:
+
 ```js
-// apps/web/.eslintrc.js
-module.exports = {
-  extends: ["@repo/eslint-config/next"]
-};
+// apps/web/eslint.config.js
+import { nextJsConfig } from "@repo/eslint-config/next-js";
+
+export default nextJsConfig;
 ```
 
 ## Lockfile

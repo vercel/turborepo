@@ -4,17 +4,25 @@
   "tasks": {
     "build:embed": {
       "outputs": ["src/templates/embedded.ts"],
-      "inputs": ["src/templates/simple-ts/**", "src/templates/simple-js/**"]
+      "inputs": ["src/templates/simple-ts/**", "src/templates/simple-js/**"],
+      "command": ["node", "scripts/embed-templates.mjs"]
     },
     "check-types": {
       "dependsOn": ["^build", "build:embed"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": ["pnpm", "exec", "jest"]
     },
     "build": {
+      "dependsOn": ["build:bundle"],
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.build.json"]
+    },
+    "build:bundle": {
+      "cache": false,
       "dependsOn": ["^build", "build:embed"],
-      "outputs": ["dist/**"]
+      "command": ["pnpm", "exec", "tsdown"]
     }
   }
 }

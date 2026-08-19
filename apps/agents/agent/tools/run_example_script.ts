@@ -1,4 +1,4 @@
-import path from "node:path";
+import path from "node:path/posix";
 
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import {
   packageManagerName,
   pickJsonObject,
   readJsonFile,
-  runCommand
+  resolveAutomatedExample,
+  runCommandOrThrow
 } from "../lib/repo.js";
 
 export default defineTool({
@@ -27,20 +28,30 @@ export default defineTool({
       ),
     timeoutSeconds: z.number().int().positive().max(600).default(120)
   }),
-  async execute({ example, script, timeoutSeconds }) {
-    const examplePath = await getExamplePath(example);
+  async execute({ example, script, timeoutSeconds }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
     const packageJson = await readJsonFile(
+      sandbox,
       path.join(examplePath, "package.json")
     );
     const scripts = pickJsonObject(packageJson.scripts);
     if (!scripts || typeof scripts[script] !== "string") {
       throw new Error(
-        `Example '${example}' does not define a '${script}' script.`
+        `Example '${effectiveExample}' does not define a '${script}' script.`
       );
     }
 
     const manager = packageManagerName(packageJson.packageManager) ?? "pnpm";
-    return runCommand(
+    return runCommandOrThrow(
+      sandbox,
       manager,
       ["run", script],
       examplePath,

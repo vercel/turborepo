@@ -13,11 +13,11 @@ use super::{PackageEntry, is_git_or_github_package, is_tarball_or_url_package};
 // symlink     -> [ "name@link:path", INFO ]
 // folder      -> [ "name@file:path", INFO ]
 // workspace   -> [ "name@workspace:path", INFO ]
-// tarball     -> [ "name@tarball", INFO ]
+// local tarball -> [ "name@./path.tgz", INFO, integrity? ]
+// remote tarball -> [ "name@https://host/path.tgz", INFO, integrity? ]
 // root        -> [ "name@root:", { bin, binDir } ]
-// git         -> [ "name@git+repo", INFO, .bun-tag string (TODO: remove this) ]
-// github      -> [ "name@github:user/repo", INFO, .bun-tag string (TODO: remove
-// this) ]
+// git         -> [ "name@git+repo", INFO, .bun-tag string, integrity? ]
+// github      -> [ "name@github:user/repo", INFO, .bun-tag string, integrity? ]
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let is_git = is_git_or_github_package(&self.ident);
@@ -37,6 +37,9 @@ impl Serialize for PackageEntry {
                 && (!is_url || !checksum.is_empty())
             {
                 len += 1;
+                if is_git && self.integrity.is_some() {
+                    len += 1;
+                }
             }
         }
 
@@ -63,6 +66,9 @@ impl Serialize for PackageEntry {
             && (!is_url || !checksum.is_empty())
         {
             tuple.serialize_element(checksum)?;
+            if is_git && let Some(integrity) = &self.integrity {
+                tuple.serialize_element(integrity)?;
+            }
         }
 
         tuple.end()
@@ -135,6 +141,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("sha".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -152,6 +159,7 @@ mod test {
             }),
             registry: None,
             checksum: None,
+            integrity: None,
             root: None,
         }
     );
@@ -168,6 +176,7 @@ mod test {
             info: None,
             registry: None,
             checksum: None,
+            integrity: None,
         }
     );
 
@@ -185,6 +194,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("24a971c".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -203,6 +213,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("abc123".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -221,6 +232,7 @@ mod test {
                 ..Default::default()
             }),
             checksum: None,
+            integrity: None,
             root: None,
         }
     );
@@ -234,6 +246,7 @@ mod test {
             registry: None,
             info: Some(PackageInfo::default()),
             checksum: None,
+            integrity: None,
             root: None,
         }
     );
@@ -254,6 +267,80 @@ mod test {
                 ..Default::default()
             }),
             checksum: Some("24a971c".into()),
+            integrity: None,
+            root: None,
+        }
+    );
+
+    fixture!(
+        workspace_with_bin,
+        WorkspaceEntry,
+        WorkspaceEntry {
+            name: "cli".into(),
+            bin: Some(json!({"cli": "bin/cli.js"})),
+            ..Default::default()
+        }
+    );
+
+    fixture!(
+        root_workspace_without_name,
+        WorkspaceEntry,
+        WorkspaceEntry::default()
+    );
+
+    fixture!(
+        root_pkg_with_object_bin,
+        PackageEntry,
+        PackageEntry {
+            ident: "some-package@root:".into(),
+            root: Some(RootInfo {
+                bin: Some(json!({"some-package": "cli.js"})),
+                bin_dir: None,
+            }),
+            info: None,
+            registry: None,
+            checksum: None,
+            integrity: None,
+        }
+    );
+
+    fixture!(
+        git_pkg_with_integrity,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-package@git+https://github.com/user/repo#abc123".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: Some("abc123".into()),
+            integrity: Some("sha512-integrity".into()),
+            root: None,
+        }
+    );
+
+    // The integrity element only exists for git/github entries; a stray value
+    // on a registry entry must not produce a 5-element tuple.
+    fixture!(
+        registry_pkg_ignores_integrity,
+        PackageEntry,
+        PackageEntry {
+            ident: "is-odd@3.0.1".into(),
+            registry: Some("".into()),
+            info: Some(PackageInfo::default()),
+            checksum: Some("sha".into()),
+            integrity: Some("ignored".into()),
+            root: None,
+        }
+    );
+
+    fixture!(
+        local_tarball_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "bar@./vendor/bar-0.0.2.tgz".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: Some("sha512-bar".into()),
+            integrity: None,
             root: None,
         }
     );
@@ -270,6 +357,12 @@ mod test {
     // Defense-in-depth test: corrupted registry should be stripped from github packages during
     // serialization
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_with_corrupted_registry() ; "github package with corrupted registry stripped")]
+    #[test_case(json!({"name": "cli", "bin": {"cli": "bin/cli.js"}}), workspace_with_bin() ; "workspace entry with bin")]
+    #[test_case(json!({}), root_workspace_without_name() ; "root workspace entry without name")]
+    #[test_case(json!(["some-package@root:", {"bin": {"some-package": "cli.js"}}]), root_pkg_with_object_bin() ; "root package with object bin")]
+    #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {}, "abc123", "sha512-integrity"]), git_pkg_with_integrity() ; "git package with integrity")]
+    #[test_case(json!(["is-odd@3.0.1", "", {}, "sha"]), registry_pkg_ignores_integrity() ; "registry package ignores integrity")]
+    #[test_case(json!(["bar@./vendor/bar-0.0.2.tgz", {}, "sha512-bar"]), local_tarball_pkg() ; "local tarball package")]
     fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(
         expected: serde_json::Value,
         input: &T,

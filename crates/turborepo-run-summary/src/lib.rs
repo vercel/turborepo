@@ -24,5 +24,5 @@ pub use task::{
     SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvConfiguration,
     TaskEnvVarSummary, TaskExecutionSummary, TaskSummary, TaskSummaryTaskDefinition,
 };
-pub use task_factory::{Error as TaskFactoryError, TaskSummaryFactory, get_external_deps_hash};
+pub use task_factory::{Error as TaskFactoryError, TaskSummaryFactory};
 pub use tracker::{Error, RunSummary, RunTracker, SinglePackageRunSummary};

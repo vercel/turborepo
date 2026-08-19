@@ -35,6 +35,7 @@ You will need to have these dependencies installed on your machine to work on th
 ### Optional dependencies
 
 - [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) is required to run the Python workspace integration tests (`crates/turborepo/tests/uv_workspace_test.rs`); tests that execute uv skip when it is not installed.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`
@@ -228,6 +229,14 @@ devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
+
+On Linux, the black-box Terminal UI tests run as part of the standard Rust suite. Run them directly with:
+
+```bash
+cargo nextest run --package turbo --test tui_test
+```
+
+Known TUI regressions are marked ignored. Reproduce them with `--run-ignored ignored-only`.
 
 ## Publishing `turbo` to the npm registry
 

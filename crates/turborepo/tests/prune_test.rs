@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use common::{combined_output, run_turbo, setup};
 
@@ -13,6 +13,65 @@ fn ls_dir(dir: &Path) -> Vec<String> {
         .collect();
     entries.sort();
     entries
+}
+
+/// Golden inventory of a pruned tree: relative path, content hash, and kind.
+///
+/// Directories are recorded as `dir`; files include a sha256 of their bytes
+/// and a portable permission class (`ro` / `rw`). Paths use forward slashes.
+fn inventory_tree(root: &Path) -> String {
+    fn walk(base: &Path, current: &Path, out: &mut BTreeMap<String, String>) {
+        let mut entries: Vec<_> = fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read_dir {}: {error}", current.display()))
+            .map(|entry| entry.expect("dir entry"))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let rel = path
+                .strip_prefix(base)
+                .expect("path under base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let meta = entry.metadata().expect("metadata");
+            if meta.is_dir() {
+                out.insert(rel, "dir".to_string());
+                walk(base, &path, out);
+            } else if meta.is_file() {
+                let bytes = fs::read(&path).expect("read file");
+                // Stable FNV-1a fingerprint — good enough for golden inventories
+                // without pulling a crypto hash into the turbo test crate.
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for byte in &bytes {
+                    hash ^= u64::from(*byte);
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                let perms = if meta.permissions().readonly() {
+                    "ro"
+                } else {
+                    "rw"
+                };
+                out.insert(rel, format!("file\t{hash:016x}\t{perms}"));
+            }
+        }
+    }
+
+    let mut inventory = BTreeMap::new();
+    walk(root, root, &mut inventory);
+    inventory
+        .into_iter()
+        .map(|(path, kind)| format!("{path}\t{kind}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn prune_retained_packages(stdout: &str) -> Vec<String> {
+    let mut packages: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix(" - Added ").map(str::to_string))
+        .collect();
+    packages.sort();
+    packages
 }
 
 #[test]
@@ -520,8 +579,12 @@ fn test_prune_respects_root_gitignore_in_workspaces() {
         "module.exports = {};\n",
     )
     .unwrap();
+    fs::remove_dir_all(tempdir.path().join(".git")).unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--docker", "--use-gitignore"],
+    );
     assert!(
         output.status.success(),
         "prune failed: {}",
@@ -1164,5 +1227,73 @@ fn test_prune_pnpm_v11_multi_document_lockfile() {
     assert!(
         !root_lockfile.contains("apps/docs:"),
         "pruned lockfile should still trim workspaces from the dependency document"
+    );
+}
+
+/// Golden fixture covering retained packages, relative file set, content
+/// hashes, and standard/Docker layer placement for the separated JS render +
+/// layout path.
+#[test]
+fn test_prune_docker_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_docker_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+
+    let out = tempdir.path().join("out");
+    insta::assert_snapshot!("prune_docker_out_top_level", ls_dir(&out).join("\n"));
+    insta::assert_snapshot!(
+        "prune_docker_full_inventory",
+        inventory_tree(&out.join("full"))
+    );
+    insta::assert_snapshot!(
+        "prune_docker_json_inventory",
+        inventory_tree(&out.join("json"))
+    );
+}
+
+#[test]
+fn test_prune_standard_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_standard_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+    insta::assert_snapshot!(
+        "prune_standard_out_inventory",
+        inventory_tree(&tempdir.path().join("out"))
     );
 }

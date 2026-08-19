@@ -1,0 +1,98 @@
+---
+source: crates/turborepo/tests/final_hash_contract.rs
+expression: contract
+---
+[npm]
+[a-initial]
+a#build hash=d4b1cd3a8d5b2ff6 external=2f9eaeffc415792b framework= envMode=strict
+
+[b-initial]
+b#build hash=2ec3b4bb5ab77395 external=e45a339e690c8cdd framework= envMode=strict
+
+[a-after-b-dep-bump]
+a#build hash=d4b1cd3a8d5b2ff6 external=2f9eaeffc415792b framework= envMode=strict
+
+[b-after-b-dep-bump]
+b#build hash=fed58b2bc9f6f784 external=f7da6585f881735f framework= envMode=strict
+
+[a-after-root-bump]
+a#build hash=81c095689914ba7d external=2f9eaeffc415792b framework= envMode=strict
+
+[b-after-root-bump]
+b#build hash=461c3f0b920acbbe external=f7da6585f881735f framework= envMode=strict
+
+[pnpm]
+[a-initial]
+a#build hash=fbffd1817b8291b1 external=90a19662f0d92148 framework= envMode=strict
+
+[b-initial]
+b#build hash=e91953ec6bf18657 external=10bf0b2e091dfa13 framework= envMode=strict
+
+[a-after-b-dep-bump]
+a#build hash=fbffd1817b8291b1 external=90a19662f0d92148 framework= envMode=strict
+
+[b-after-b-dep-bump]
+b#build hash=d457ff3f9eb03a6b external=e8ef69a904b0c979 framework= envMode=strict
+
+[a-after-root-bump]
+a#build hash=f7a9bd3264b0c08e external=90a19662f0d92148 framework= envMode=strict
+
+[b-after-root-bump]
+b#build hash=28d912aefb41c62d external=e8ef69a904b0c979 framework= envMode=strict
+
+[yarn]
+[a-initial]
+a#build hash=4023be0f85fc7cfd external=d20eda0e1c81598f framework= envMode=strict
+
+[b-initial]
+b#build hash=8d7e31f6a853b244 external=4c17488612645a61 framework= envMode=strict
+
+[a-after-b-dep-bump]
+a#build hash=4023be0f85fc7cfd external=d20eda0e1c81598f framework= envMode=strict
+
+[b-after-b-dep-bump]
+b#build hash=abadbbfd0b726ea9 external=ffa2014b2d5fef9e framework= envMode=strict
+
+[a-after-root-bump]
+a#build hash=4b0ac8e2d486c579 external=d20eda0e1c81598f framework= envMode=strict
+
+[b-after-root-bump]
+b#build hash=76cf84d8bce02c9d external=ffa2014b2d5fef9e framework= envMode=strict
+
+[berry]
+[a-initial]
+a#build hash=9722b68bc20b1b06 external=0a01c19e28f49c85 framework= envMode=strict
+
+[b-initial]
+b#build hash=ec20471c6af78305 external=e6ef56fa8bbb5617 framework= envMode=strict
+
+[a-after-b-dep-bump]
+a#build hash=9722b68bc20b1b06 external=0a01c19e28f49c85 framework= envMode=strict
+
+[b-after-b-dep-bump]
+b#build hash=4c904261dd72dbb4 external=467b572bfefafa0e framework= envMode=strict
+
+[a-after-root-bump]
+a#build hash=f644f86df0dfba96 external=0a01c19e28f49c85 framework= envMode=strict
+
+[b-after-root-bump]
+b#build hash=08914f87afaf6c79 external=467b572bfefafa0e framework= envMode=strict
+
+[bun]
+[a-initial]
+a#build hash=9fea5d309810b0b1 external=32853aeb33558d2e framework= envMode=strict
+
+[b-initial]
+b#build hash=7e0e3fe406fc51be external=5450a728600270ef framework= envMode=strict
+
+[a-after-b-dep-bump]
+a#build hash=9fea5d309810b0b1 external=32853aeb33558d2e framework= envMode=strict
+
+[b-after-b-dep-bump]
+b#build hash=78b5215e0322e58e external=eb4af93cc0145cc6 framework= envMode=strict
+
+[a-after-root-bump]
+a#build hash=1879890061c4eabe external=32853aeb33558d2e framework= envMode=strict
+
+[b-after-root-bump]
+b#build hash=8450771e2ff2ca9e external=eb4af93cc0145cc6 framework= envMode=strict

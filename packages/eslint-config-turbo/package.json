@@ -1,6 +1,6 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.10.5-canary.5",
+  "version": "2.10.11",
   "description": "ESLint config for Turborepo",
   "keywords": [
     "eslint",
@@ -47,11 +47,6 @@
       }
     }
   },
-  "scripts": {
-    "build": "bunchee",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
-    "package:types": "attw --profile node16 --pack"
-  },
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"
   },
@@ -62,7 +57,7 @@
     "@types/node": "20.11.30",
     "bunchee": "6.9.4",
     "eslint": "10.2.0",
-    "typescript": "npm:@typescript/typescript6@^6.0.1"
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "peerDependencies": {
     "eslint": ">6.6.0",
