@@ -21,7 +21,26 @@ const WORKFLOW_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/workflows";
 const POLL_INTERVAL_MS = 15_000;
 
-type SourceFilter = "all" | AgentRunRecord["source"];
+const BOARD_COLUMNS = [
+  {
+    empty: "No tickets are waiting.",
+    key: "queued",
+    statuses: ["waiting"],
+    title: "Queued"
+  },
+  {
+    empty: "No tickets are running.",
+    key: "running",
+    statuses: ["running"],
+    title: "In progress"
+  },
+  {
+    empty: "No tickets have finished.",
+    key: "finished",
+    statuses: ["completed", "failed"],
+    title: "Finished"
+  }
+] as const;
 
 function formatTimestamp(value: string | number): string {
   return `${new Intl.DateTimeFormat("en-US", {
@@ -41,17 +60,20 @@ function duration(run: AgentRunRecord): string {
   return `${Math.round(milliseconds / 60_000)}m`;
 }
 
-function RunFlightStrip({ run }: { readonly run: AgentRunRecord }) {
+function RunTicket({ run }: { readonly run: AgentRunRecord }) {
   const detailsUrl = run.source === "eve" ? AGENT_RUNS_URL : WORKFLOW_RUNS_URL;
   return (
-    <li>
-      <article className="runStrip">
-        <div className={`runState runState-${run.status}`}>
-          <span className="statusDot" aria-hidden="true" />
-          <span>{run.status}</span>
-        </div>
+    <li className={`runTicket runTicket-${run.status}`}>
+      <article aria-label={`${run.title}, ${run.status}`}>
+        <header className="runTicketHeader">
+          <span className="triggerLabel">{run.trigger}</span>
+          <span className={`runState runState-${run.status}`}>
+            <span className="statusDot" aria-hidden="true" />
+            <span>{run.status}</span>
+          </span>
+        </header>
         <div className="runIdentity">
-          <strong>{run.title}</strong>
+          <h4>{run.title}</h4>
           <code>{run.id}</code>
         </div>
         <dl className="runMetadata">
@@ -60,8 +82,8 @@ function RunFlightStrip({ run }: { readonly run: AgentRunRecord }) {
             <dd>{run.harness ?? run.agent}</dd>
           </div>
           <div>
-            <dt>Trigger</dt>
-            <dd>{run.trigger}</dd>
+            <dt>Duration</dt>
+            <dd>{duration(run)}</dd>
           </div>
           <div>
             <dt>Started</dt>
@@ -73,10 +95,6 @@ function RunFlightStrip({ run }: { readonly run: AgentRunRecord }) {
                 {formatTimestamp(run.startedAt)}
               </time>
             </dd>
-          </div>
-          <div>
-            <dt>Duration</dt>
-            <dd>{duration(run)}</dd>
           </div>
         </dl>
         <div className="sandboxTrack">
@@ -92,7 +110,7 @@ function RunFlightStrip({ run }: { readonly run: AgentRunRecord }) {
           rel="noreferrer"
           target="_blank"
         >
-          Inspect <span className="visuallyHidden">in a new tab</span>
+          Inspect ticket <span className="visuallyHidden">in a new tab</span>
           <span aria-hidden="true">↗</span>
         </a>
       </article>
@@ -134,7 +152,7 @@ export function RunObservatory({
   readonly initialSnapshot: ControlPlaneSnapshot;
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [source, setSource] = useState<SourceFilter>("all");
+  const [trigger, setTrigger] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
   const refreshController = useRef<AbortController | null>(null);
 
@@ -179,36 +197,21 @@ export function RunObservatory({
   }, []);
 
   const visibleRuns = snapshot.runs.filter(
-    (run) => source === "all" || run.source === source
+    (run) => trigger === "all" || run.trigger === trigger
   );
-  const active = snapshot.runs.filter(
-    (run) => run.status === "running" || run.status === "waiting"
-  ).length;
-  const failed = snapshot.runs.filter((run) => run.status === "failed").length;
-  const completed = snapshot.runs.filter(
-    (run) => run.status === "completed"
-  ).length;
+  const triggers = Array.from(
+    new Set(snapshot.runs.map((run) => run.trigger))
+  ).sort();
 
   return (
     <section className="observatory" aria-labelledby="runs-title">
       <div className="observatoryHeader">
         <div>
-          <h2 id="runs-title">All agent activity, in one ledger.</h2>
+          <h2 id="runs-title">Every ticket, from intake to finish.</h2>
           <p>
-            Eve and Harness sessions, their execution state, and the sandboxes
-            underneath them.
+            Work enters from manual and scheduled triggers, then moves across
+            the board as its agent and sandbox make progress.
           </p>
-        </div>
-        <div className="runCounters" aria-label="Run totals">
-          <span>
-            <strong>{active}</strong> active
-          </span>
-          <span>
-            <strong>{completed}</strong> complete
-          </span>
-          <span>
-            <strong>{failed}</strong> failed
-          </span>
         </div>
       </div>
 
@@ -227,19 +230,19 @@ export function RunObservatory({
         <div
           className="sourceFilters"
           role="group"
-          aria-label="Filter runs by source"
+          aria-label="Filter tickets by trigger"
         >
-          {(["all", "eve", "harness"] as const).map((value) => (
+          {["all", ...triggers].map((value) => (
             <Button
-              aria-pressed={source === value}
+              aria-pressed={trigger === value}
               className="filterButton"
               key={value}
-              onClick={() => setSource(value)}
+              onClick={() => setTrigger(value)}
               size="sm"
               type="button"
               variant="ghost"
             >
-              {value}
+              {value === "all" ? "All sources" : value}
             </Button>
           ))}
         </div>
@@ -255,17 +258,38 @@ export function RunObservatory({
         </Button>
       </div>
 
-      {visibleRuns.length > 0 ? (
-        <ol className="runList">
-          {visibleRuns.map((run) => (
-            <RunFlightStrip key={run.id} run={run} />
-          ))}
-        </ol>
-      ) : (
-        <div className="emptyRunway">
-          No {source === "all" ? "" : `${source} `}runs recorded yet.
+      <div className="runBoardViewport">
+        <div className="runBoard">
+          {BOARD_COLUMNS.map((column) => {
+            const runs = visibleRuns.filter((run) =>
+              column.statuses.some((status) => status === run.status)
+            );
+            return (
+              <section
+                className="runColumn"
+                aria-labelledby={`column-${column.key}`}
+                key={column.key}
+              >
+                <header className="runColumnHeader">
+                  <h3 id={`column-${column.key}`}>{column.title}</h3>
+                  <span aria-label={`${runs.length} tickets`}>
+                    {runs.length}
+                  </span>
+                </header>
+                {runs.length > 0 ? (
+                  <ol className="runList">
+                    {runs.map((run) => (
+                      <RunTicket key={run.id} run={run} />
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="emptyRunway">{column.empty}</p>
+                )}
+              </section>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       <div className="sandboxInventoryHeader">
         <h3>Sandbox inventory</h3>
