@@ -1,26 +1,18 @@
-import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
-
+import { listExamples } from "../agent/lib/examples";
+import { listControlPlaneSnapshot } from "../agent/lib/run-registry";
 import { RunMaintenance } from "./run-maintenance";
+import { RunObservatory } from "./run-observatory";
 import { RunPerformance } from "./run-performance";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
 
-function listExamples(): string[] {
-  const examplesRoot = path.resolve(process.cwd(), "../../examples");
-  return readdirSync(examplesRoot, { withFileTypes: true })
-    .filter(
-      (entry) =>
-        entry.isDirectory() &&
-        existsSync(path.join(examplesRoot, entry.name, "package.json"))
-    )
-    .map((entry) => entry.name)
-    .sort();
-}
+export const dynamic = "force-dynamic";
 
-export default function OperatorPage() {
+export default async function OperatorPage() {
   const examples = listExamples();
+  const snapshot = await listControlPlaneSnapshot();
+  const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
     <main>
       <header className="hero">
@@ -34,6 +26,8 @@ export default function OperatorPage() {
           hot paths measurably faster.
         </p>
       </header>
+
+      <RunObservatory initialSnapshot={snapshot} />
 
       <section className="operation" aria-labelledby="operation-title">
         <div className="operationHeader">
@@ -67,7 +61,11 @@ export default function OperatorPage() {
           </div>
         </dl>
 
-        <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
+        <RunMaintenance
+          agentRunsUrl={AGENT_RUNS_URL}
+          examples={examples}
+          harnessEnabled={harnessEnabled}
+        />
       </section>
 
       <section className="operation" aria-labelledby="performance-title">
@@ -108,7 +106,7 @@ export default function OperatorPage() {
       </section>
 
       <footer>
-        Detailed output and diagnostics remain in Vercel Agent Runs.
+        Detailed output is linked from each run in the unified ledger.
       </footer>
     </main>
   );

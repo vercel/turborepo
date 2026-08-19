@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 
+import {
+  isHarnessId,
+  isSandboxId,
+  type HarnessId,
+  type SandboxId
+} from "../agent/lib/harnesses";
 import type { OperatorRunAction } from "../agent/lib/operator-runs";
 
 type RunState = "starting" | "running" | "done" | "error";
@@ -13,9 +19,12 @@ interface RunModels {
 
 export interface RunStatus {
   readonly cursor?: number;
+  readonly harness?: HarnessId;
   readonly models?: RunModels;
+  readonly sandbox?: SandboxId;
   readonly sessionId?: string;
   readonly state: RunState;
+  readonly statusPath?: string;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -42,9 +51,13 @@ function isRunStatus(value: unknown): value is RunStatus {
     (candidate.state === "running" ||
       candidate.state === "done" ||
       candidate.state === "error") &&
+    (candidate.harness === undefined || isHarnessId(candidate.harness)) &&
     (candidate.sessionId === undefined ||
       typeof candidate.sessionId === "string") &&
     (candidate.models === undefined || isRunModels(candidate.models)) &&
+    (candidate.sandbox === undefined || isSandboxId(candidate.sandbox)) &&
+    (candidate.statusPath === undefined ||
+      typeof candidate.statusPath === "string") &&
     (candidate.cursor === undefined ||
       (typeof candidate.cursor === "number" &&
         Number.isInteger(candidate.cursor) &&
@@ -60,14 +73,17 @@ export function runLabel(status: RunStatus | null, idleLabel: string): string {
       : idleLabel;
 }
 
-export function useOperatorRun(action: OperatorRunAction) {
+export function useOperatorRun(
+  action: OperatorRunAction,
+  startPath = "/eve/v1/operator/runs"
+) {
   const [status, setStatus] = useState<RunStatus | null>(null);
 
   async function start(body: Record<string, string> = {}) {
     setStatus({ state: "starting" });
 
     try {
-      const response = await fetch("/eve/v1/operator/runs", {
+      const response = await fetch(startPath, {
         body: JSON.stringify(body),
         headers: {
           "content-type": "application/json",
@@ -84,18 +100,20 @@ export function useOperatorRun(action: OperatorRunAction) {
         throw new Error("The run returned an invalid session.");
       }
       setStatus(initialStatus);
-      await pollRun(initialStatus.sessionId);
+      await pollRun(initialStatus.sessionId, initialStatus.statusPath);
     } catch {
       setStatus((current) => ({ ...current, state: "error" }));
     }
   }
 
-  async function pollRun(sessionId: string) {
+  async function pollRun(sessionId: string, statusPath?: string) {
     let cursor = 0;
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      const query = new URLSearchParams({ cursor: String(cursor) });
       const response = await fetch(
-        `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?cursor=${cursor}`,
+        statusPath ??
+          `/eve/v1/operator/runs/${encodeURIComponent(sessionId)}/status?${query}`,
         { cache: "no-store" }
       );
       if (!response.ok) {
@@ -139,6 +157,8 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
       <div>
         <strong>{status.state}</strong>
         {status.sessionId ? <code>{status.sessionId}</code> : null}
+        {status.harness ? <code>harness {status.harness}</code> : null}
+        {status.sandbox ? <code>sandbox {status.sandbox}</code> : null}
         {status.models ? (
           <>
             <code>author {status.models.authorModel}</code>

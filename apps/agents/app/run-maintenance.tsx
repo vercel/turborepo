@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { HARNESS_IDS, type HarnessId } from "../agent/lib/harnesses";
 import { MAINTENANCE_RUN_ACTION } from "../agent/lib/operator-runs";
 import { RunStatusPanel, runLabel, useOperatorRun } from "./operator-run";
 type SlackTestState =
@@ -21,6 +22,7 @@ type SlackTestState =
 interface RunMaintenanceProps {
   readonly agentRunsUrl: string;
   readonly examples: string[];
+  readonly harnessEnabled: boolean;
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
@@ -64,9 +66,14 @@ function isSlackTestResult(value: unknown): value is
 
 export function RunMaintenance({
   agentRunsUrl,
-  examples
+  examples,
+  harnessEnabled
 }: RunMaintenanceProps) {
-  const { isBusy, start, status } = useOperatorRun(MAINTENANCE_RUN_ACTION);
+  const { isBusy, start, status } = useOperatorRun(
+    MAINTENANCE_RUN_ACTION,
+    harnessEnabled ? "/api/harness/runs" : undefined
+  );
+  const [harness, setHarness] = useState<HarnessId>("opencode");
   const [slackTest, setSlackTest] = useState<SlackTestState>({ state: "idle" });
   const [selectedExample, setSelectedExample] = useState(() =>
     dailyExample(examples)
@@ -131,10 +138,32 @@ export function RunMaintenance({
           ))}
         </select>
       </label>
+      {harnessEnabled ? (
+        <label className="examplePicker">
+          <span>Harness</span>
+          <select
+            disabled={isBusy}
+            onChange={(event) => setHarness(event.target.value as HarnessId)}
+            value={harness}
+          >
+            {HARNESS_IDS.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="actions">
         <button
           disabled={isBusy || !selectedExample}
-          onClick={() => void start({ example: selectedExample })}
+          onClick={() =>
+            void start({
+              example: selectedExample,
+              harness,
+              sandbox: "vercel"
+            })
+          }
           type="button"
         >
           {runLabel(status, "Run maintenance now")}
