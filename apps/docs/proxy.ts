@@ -9,7 +9,7 @@ const proxy = createProxy({
 
 export const config = {
   matcher: [
-    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml|robots.txt|schema\\.json|schema\\.v\\d+\\.json|microfrontends/schema\\.json).*)"
+    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml|robots.txt|schema\\.json|schema\\.v\\d+\\.json|microfrontends/schema\\.json|\\.well-known/security\\.txt).*)"
   ]
 };
 
