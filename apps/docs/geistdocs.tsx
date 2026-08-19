@@ -1,7 +1,16 @@
 import type { GeistdocsAgentReadinessConfig } from "@vercel/geistdocs/config";
 import { LogoTurborepo } from "@vercel/geistdocs/assets/logos/logo-turborepo";
+import { TurborepoLogo } from "@/components/logos";
 
-export const Logo = () => <LogoTurborepo />;
+export const Logo = () => (
+  <>
+    <TurborepoLogo
+      className="size-[22px] text-gray-1000 @min-[640px]:hidden"
+      monochrome
+    />
+    <LogoTurborepo className="hidden @min-[640px]:block" />
+  </>
+);
 
 export const github = {
   branch: "main",
@@ -63,13 +72,13 @@ export const suggestions = [
 
 export const title = "Turborepo Documentation";
 
-export const prompt = `You are a helpful assistant specializing in answering questions about Turborepo, a high-performance build system for JavaScript and TypeScript monorepos. You help users understand caching, task configuration, and monorepo best practices. Be concise.`;
+export const prompt = `You are a helpful assistant specializing in answering questions about Turborepo, the build system for coding agents. You help users understand caching, task configuration, and monorepo best practices. Be concise.`;
 
 export const agent = {
   product: {
     name: "Turborepo",
     description:
-      "Turborepo is a high-performance build system for JavaScript and TypeScript monorepos, written in Rust. It provides incremental task running, local and remote caching, and parallel execution.",
+      "Turborepo is the build system for coding agents. It provides incremental task running, local and remote caching, and parallel execution.",
     category: "Build system",
     audience: [
       "JavaScript and TypeScript developers",

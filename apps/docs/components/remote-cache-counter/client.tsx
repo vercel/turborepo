@@ -1,47 +1,37 @@
 "use client";
 
-import { motion, useSpring, useTransform } from "motion/react";
-import { useEffect, useState } from "react";
+import { easeOutCubic } from "phase/ease";
+import { useTween } from "phase/react";
 import { cn } from "@/lib/utils";
+import { REMOTE_CACHE_COUNTER_START_HOURS } from "./constants";
 import { useTurborepoMinutesSaved } from "./use-turborepo-minutes-saved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 0
+  maximumFractionDigits: 0,
 });
 
 // A number to start the counter at that is lower than the actual time saved
 // to make the counter not start at 0
-const ARBITRARY_START_NUMBER = 540070107 / 60;
+const ARBITRARY_START_NUMBER = REMOTE_CACHE_COUNTER_START_HOURS;
 
 export function RemoteCacheCounterClient({
-  className
+  className,
 }: {
   className?: string;
 }) {
   const timeSaved = useTurborepoMinutesSaved()?.total;
-  const [displayValue] = useState(ARBITRARY_START_NUMBER);
-
   const targetValue = timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER;
-
-  const springValue = useSpring(displayValue, {
-    mass: 1,
-    stiffness: 170,
-    damping: 60
+  const displayValue = useTween({
+    duration: 1200,
+    easing: easeOutCubic,
+    target: targetValue,
   });
 
-  const display = useTransform(springValue, (val) =>
-    counterFormatter.format(val)
-  );
-
-  useEffect(() => {
-    springValue.set(targetValue);
-  }, [targetValue, springValue]);
-
   return (
-    <motion.p
+    <span
       className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}
     >
-      {display}
-    </motion.p>
+      {counterFormatter.format(displayValue)}
+    </span>
   );
 }

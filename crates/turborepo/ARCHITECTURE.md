@@ -1032,6 +1032,14 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Global Hash**: Package manager lockfile, global dependencies, environment variables
 - **Task Hash**: Task definition, package dependencies, input files, environment variables
 - **File Hashing**: Uses git for tracking file changes efficiently
+- **Discovery Races**: Files requiring content hashing after repo-index or glob
+  discovery, including `globalDependencies`, are omitted if they disappear
+  before hashing. Required resolution fallback files remain strict. Verbose
+  tracing records final-stage candidates that disappear or are rejected as
+  non-regular, plus path-specific hashing failures.
+- **Configured Git Metadata**: Input patterns are respected literally. If a
+  configured task or global input matches `.git`, that metadata participates in
+  the hash and transient entries use the same discovery-race behavior.
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents

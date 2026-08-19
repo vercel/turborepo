@@ -16,6 +16,8 @@
 @theme inline {
   --breakpoint-xs: 400px;
   --breakpoint-2xs: 360px;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -84,10 +86,10 @@
   --sidebar-foreground: oklch(0.985 0 0);
 }
 
-/* Keep the site's body colors (the package defaults to bg-background-100). */
+/* Use the Geist secondary background across every page. */
 @layer base {
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background-200 text-foreground;
   }
 }
 

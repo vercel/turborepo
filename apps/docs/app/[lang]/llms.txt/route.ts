@@ -3,7 +3,7 @@ import { source } from "@/lib/geistdocs/source";
 export const revalidate = false;
 
 const TURBO_SLOGAN =
-  "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.";
+  "Turborepo is the build system for coding agents.";
 
 export const GET = async (
   _req: Request,
