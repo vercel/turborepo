@@ -200,7 +200,7 @@ importers:
         version: 2.7.0
       '@vercel/connect':
         specifier: 0.4.2
-        version: 0.4.2(ai@7.0.65(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3))
+        version: 0.4.2(ai@7.0.65(zod@4.4.3))(eve@0.39.3(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3))
       '@vercel/oidc':
         specifier: 3.8.0
         version: 3.8.0
@@ -217,8 +217,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       eve:
-        specifier: ^0.22.5
-        version: 0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3)
+        specifier: ^0.39.3
+        version: 0.39.3(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3)
       next:
         specifier: 16.3.0
         version: 16.3.0(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1488,14 +1488,8 @@ packages:
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
 
-  '@emnapi/core@1.9.2':
-    resolution: {integrity: sha512-UC+ZhH3XtczQYfOlu3lNEkdW/p4dsJ1r/bP7H8+rhao3TTTMO1ATq/4DdIi23XuGoFY+Cz0JmCbdVl0hz9jZcA==}
-
   '@emnapi/runtime@1.11.1':
     resolution: {integrity: sha512-vgj7R3y3Wgx24IQaGPA/R6YFXLHVMOZ0uVEyIQPaWs+rd1AzfEMXlAC22FYwO1XkKR6NPsq7mUandH8oIRdZFw==}
-
-  '@emnapi/wasi-threads@1.2.1':
-    resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
@@ -5130,9 +5124,6 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  '@tybys/wasm-util@0.10.1':
-    resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
-
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
@@ -7437,13 +7428,13 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
-  eve@0.22.5:
-    resolution: {integrity: sha512-lY3qHgvVNKuTwoH/0AQpztWS53Ub/xAk2KfV38fnfNfgd8idmN9FKbT2jUgs0lNGcFwTUR1/RYWl9JzpCsImeA==}
+  eve@0.39.3:
+    resolution: {integrity: sha512-BQqxp+htxisijebDyGGcKdB00Rlw+hD+AqbDX/XzZ429/RLH/k33LRsKrTq7kKNIOQ5E9xQTY2gmph1ppCIS/A==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
-      ai: ^7.0.0
+      ai: ^7.0.58
       braintrust: ^3.0.0
       just-bash: ^3.0.0
       microsandbox: ^0.5.0
@@ -11075,6 +11066,10 @@ packages:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
     engines: {node: '>=20.18.1'}
 
+  undici@8.9.0:
+    resolution: {integrity: sha512-aWZpUj7XoGonMClx4gdDRfgBjqeA+F473aDmROQQbM9n6PRfK/u1q/a0X4wMTgcHfT8H6fpbt98PFuDUwFg2YA==}
+    engines: {node: '>=22.19.0'}
+
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
 
@@ -12130,18 +12125,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@emnapi/core@1.9.2':
-    dependencies:
-      '@emnapi/wasi-threads': 1.2.1
-      tslib: 2.8.1
-    optional: true
-
   '@emnapi/runtime@1.11.1':
-    dependencies:
-      tslib: 2.8.1
-    optional: true
-
-  '@emnapi/wasi-threads@1.2.1':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -12953,9 +12937,9 @@ snapshots:
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
-      '@emnapi/core': 1.9.2
+      '@emnapi/core': 1.11.1
       '@emnapi/runtime': 1.11.1
-      '@tybys/wasm-util': 0.10.1
+      '@tybys/wasm-util': 0.10.2
     optional: true
 
   '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
@@ -15612,11 +15596,6 @@ snapshots:
   '@tsconfig/node16@1.0.4':
     optional: true
 
-  '@tybys/wasm-util@0.10.1':
-    dependencies:
-      tslib: 2.8.1
-    optional: true
-
   '@tybys/wasm-util@0.10.2':
     dependencies:
       tslib: 2.8.1
@@ -16118,12 +16097,12 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@0.4.2(ai@7.0.65(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3))':
+  '@vercel/connect@0.4.2(ai@7.0.65(zod@4.4.3))(eve@0.39.3(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3))':
     dependencies:
       '@vercel/oidc': 3.8.0
     optionalDependencies:
       ai: 7.0.65(zod@4.4.3)
-      eve: 0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3)
+      eve: 0.39.3(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3)
 
   '@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49)':
     dependencies:
@@ -18081,10 +18060,11 @@ snapshots:
 
   etag@1.8.1: {}
 
-  eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3):
+  eve@0.39.3(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(ai@7.0.65(zod@4.4.3))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3):
     dependencies:
       ai: 7.0.65(zod@4.4.3)
       nitro: 3.0.260610-beta(@azure/identity@4.13.1)(@vercel/blob@2.7.0)(@vercel/functions@3.4.4(@aws-sdk/credential-provider-web-identity@3.972.49))(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(lru-cache@11.3.3)
+      undici: 8.9.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
     transitivePeerDependencies:
@@ -22810,6 +22790,8 @@ snapshots:
   undici@6.27.0: {}
 
   undici@7.28.0: {}
+
+  undici@8.9.0: {}
 
   unenv@2.0.0-rc.24:
     dependencies:

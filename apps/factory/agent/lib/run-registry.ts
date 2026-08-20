@@ -47,6 +47,26 @@ export async function updateAgentRun(
   });
 }
 
+/**
+ * Records the model a run is actually using. `session.started` carries no
+ * model id, because a dynamic model resolves only once a step begins, so the
+ * caller reports it per turn and this writes only when the model changed.
+ */
+export async function recordAgentRunModel(
+  id: string,
+  model: string
+): Promise<void> {
+  if (!isRunRegistryConfigured()) return;
+  await mutateRuns((runs) => {
+    const current = runs.find((run) => run.id === id);
+    if (!current || current.model === model) return runs;
+    return [
+      { ...current, model, updatedAt: new Date().toISOString() },
+      ...runs.filter((run) => run.id !== id)
+    ];
+  });
+}
+
 export async function getAgentRun(id: string): Promise<AgentRunRecord | null> {
   if (!isRunRegistryConfigured()) return null;
   return (await readRunIndex()).runs.find((run) => run.id === id) ?? null;
@@ -108,7 +128,10 @@ async function mutateRuns(
 ): Promise<void> {
   for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
     const current = await readRunIndex();
-    const runs = mutation(current.runs)
+    const mutated = mutation(current.runs);
+    // A mutation that returns its input changed nothing worth writing.
+    if (mutated === current.runs) return;
+    const runs = mutated
       .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
       .slice(0, MAX_RUNS);
     try {

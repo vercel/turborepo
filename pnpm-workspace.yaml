@@ -12,6 +12,8 @@ minimumReleaseAgeExclude:
   - next
   - "@next/*"
   - "@vercel/geistdocs"
+  # Eve security and correctness releases must be adoptable immediately.
+  - eve
 
 onlyBuiltDependencies:
   - "@swc/core"

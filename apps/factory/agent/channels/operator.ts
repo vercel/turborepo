@@ -73,19 +73,22 @@ function isOperatorRequest(request: Request, action: string): boolean {
 
 export default defineChannel({
   routes: [
-    POST("/eve/v1/operator/runs", async (request, { send }) => {
+    POST("/eve/v1/operator/runs", async (request, { from }) => {
       const action = operatorAction(request);
       if (!action) {
         return operatorError("Invalid operator request.", 403);
       }
 
       if (action === PERFORMANCE_RUN_ACTION) {
-        const session = await send(DAILY_PERFORMANCE_IMPROVEMENT_PROMPT, {
-          auth: APP_AUTH,
-          continuationToken: randomUUID(),
-          mode: "task",
-          title: "Daily performance improvement"
-        });
+        // A fresh address is unowned, so `send` always starts a new session.
+        const session = await from(randomUUID()).send(
+          DAILY_PERFORMANCE_IMPROVEMENT_PROMPT,
+          {
+            auth: APP_AUTH,
+            mode: "task",
+            title: "Daily performance improvement"
+          }
+        );
         const { authorModel, reviewerModel } = selectPerformanceModels(
           sessionDate(session.id)
         );
@@ -98,15 +101,17 @@ export default defineChannel({
         return operatorError("A valid example is required.", 400);
       }
 
-      const session = await send(DAILY_EXAMPLE_MAINTENANCE_PROMPT, {
-        auth: {
-          ...APP_AUTH,
-          attributes: { maintenanceExample: example }
-        },
-        continuationToken: randomUUID(),
-        mode: "task",
-        title: "Daily example maintenance"
-      });
+      const session = await from(randomUUID()).send(
+        DAILY_EXAMPLE_MAINTENANCE_PROMPT,
+        {
+          auth: {
+            ...APP_AUTH,
+            attributes: { maintenanceExample: example }
+          },
+          mode: "task",
+          title: "Daily example maintenance"
+        }
+      );
 
       return startedRun(session.id);
     }),
@@ -132,7 +137,7 @@ export default defineChannel({
     }),
     GET(
       "/eve/v1/operator/runs/:sessionId/status",
-      async (request, { getSession, params }) => {
+      async (request, { attachSession, params }) => {
         const cursorValue = new URL(request.url).searchParams.get("cursor");
         const startIndex = cursorValue === null ? 0 : Number(cursorValue);
         if (!Number.isInteger(startIndex) || startIndex < 0) {
@@ -143,7 +148,7 @@ export default defineChannel({
         }
 
         const reader = (
-          await getSession(params.sessionId).getEventStream({ startIndex })
+          await attachSession(params.sessionId).getEventStream({ startIndex })
         ).getReader();
         let cursor = startIndex;
         let state: "running" | "done" | "error" = "running";
