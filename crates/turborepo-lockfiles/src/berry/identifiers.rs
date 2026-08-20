@@ -40,6 +40,11 @@ pub struct Locator<'a> {
 }
 
 impl Ident<'_> {
+    /// The unscoped package name, e.g. `core` for `@babel/core`.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Clones underlying strings and changes lifetime to represent this
     pub fn to_owned(&self) -> Ident<'static> {
         let Ident { scope, name } = self;
