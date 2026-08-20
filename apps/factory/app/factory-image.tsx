@@ -91,7 +91,10 @@ export function FactoryImage({
       });
       if (!response.ok) throw new Error("Could not read the factory image.");
       const value = (await response.json()) as FactoryImageView;
-      startTransition(() => setView(value));
+      startTransition(() => {
+        setView(value);
+        setError(null);
+      });
     } catch (failure) {
       if (!(failure instanceof DOMException && failure.name === "AbortError")) {
         startTransition(() =>
