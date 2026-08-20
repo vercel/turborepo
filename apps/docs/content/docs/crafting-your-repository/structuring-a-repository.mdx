@@ -222,6 +222,13 @@ First, your package manager needs to describe the locations of your packages. We
 
 </PackageManagerTabs>
 
+#### Nub and Aube workspaces
+
+Turborepo also supports [Nub](https://nub.dev) and [Aube](https://aube.jdx.dev), including repositories that use their native lockfiles or preserve an existing package manager's lockfile format.
+
+- **Nub**: Declare `nub` in `devEngines.packageManager` or the legacy `packageManager` field. A Nub lockfile alone does not identify the repository as a Nub project because Nub can use npm, pnpm, Yarn, or Bun lockfiles. Turborepo recognizes `nub.lock` and the legacy `lock.yaml` as pnpm v9 lockfiles. It reads `pnpm-workspace.yaml` when the repository uses a pnpm-family lockfile and that file exists; otherwise, define workspaces in the root `package.json`.
+- **Aube**: Turborepo recognizes Aube's native `aube-lock.yaml` and can also use existing npm, pnpm, Yarn, or Bun lockfiles. When preserving another package manager's lockfile, declare `aube` in `devEngines.packageManager` or the legacy `packageManager` field. Turborepo reads workspace globs from `aube-workspace.yaml` when present, then `pnpm-workspace.yaml` for pnpm-family lockfiles, and otherwise from the root `package.json`.
+
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
 <Callout type="error">
