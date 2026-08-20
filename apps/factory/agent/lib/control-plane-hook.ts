@@ -1,6 +1,10 @@
 import { defineHook } from "eve/hooks";
 
-import { updateAgentRun, writeAgentRun } from "./run-registry";
+import {
+  recordAgentRunModel,
+  updateAgentRun,
+  writeAgentRun
+} from "./run-registry";
 
 async function safely(task: Promise<void>): Promise<void> {
   try {
@@ -23,7 +27,6 @@ export const controlPlaneHook = defineHook({
         writeAgentRun({
           agent,
           id: ctx.session.id,
-          model: event.data.runtime?.modelId,
           sandbox: {
             id: ctx.session.id,
             provider: "eve",
@@ -40,6 +43,12 @@ export const controlPlaneHook = defineHook({
     },
     async "turn.started"(_event, ctx) {
       await safely(updateAgentRun(ctx.session.id, { status: "running" }));
+    },
+    async "step.started"(event, ctx) {
+      // The first step of each turn is enough to catch the selected model and
+      // any later change, without touching the ledger on every model call.
+      if (event.data.stepIndex !== 0) return;
+      await safely(recordAgentRunModel(ctx.session.id, event.data.modelId));
     },
     async "session.waiting"(_event, ctx) {
       await safely(updateAgentRun(ctx.session.id, { status: "waiting" }));
