@@ -1,39 +1,30 @@
+import { vercelOidc } from "eve/channels/auth";
+
 import { triggerFactoryImageBuild } from "../../../../agent/lib/factory-image-trigger";
 import {
-  githubWebhookSecret,
-  parseGitHubPush,
-  verifyGitHubSignature
+  isFactoryImageConnector,
+  parseGitHubPush
 } from "../../../../agent/lib/github-push";
+
+const authenticateConnect = vercelOidc();
 
 /**
  * GitHub push webhook. Every merge to `main` rebuilds the factory image
  * from here, so no GitHub Actions job is involved.
  *
- * Point a repository webhook (or the GitHub App, subscribed to `push`) at
- * `/api/github/push` with `FACTORY_IMAGE_WEBHOOK_SECRET` as its secret.
- * Deployment Protection must not cover this route; the HMAC signature is
- * what authenticates the delivery.
+ * Register `/api/github/push` as a Vercel Connect trigger destination for a
+ * GitHub connector subscribed to `push`. Connect verifies GitHub's signature;
+ * this route verifies the OIDC credential Connect adds while forwarding it.
  */
 export async function POST(request: Request): Promise<Response> {
-  const secret = githubWebhookSecret();
-  if (secret === undefined) {
-    return respond(
-      { error: "The factory image webhook is not configured." },
-      503
-    );
+  const auth = await Promise.resolve(authenticateConnect(request)).catch(
+    () => null
+  );
+  if (!isFactoryImageConnector(auth)) {
+    return respond({ error: "Unauthorized webhook." }, 401);
   }
 
   const body = await request.text();
-  if (
-    !verifyGitHubSignature(
-      body,
-      request.headers.get("x-hub-signature-256"),
-      secret
-    )
-  ) {
-    return respond({ error: "Invalid signature." }, 401);
-  }
-
   const outcome = parseGitHubPush(request.headers.get("x-github-event"), body);
   if (outcome.kind === "ping") return respond({ pong: true }, 200);
   if (outcome.kind === "ignored") {

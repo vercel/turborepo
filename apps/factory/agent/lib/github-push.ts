@@ -1,14 +1,12 @@
 /**
- * GitHub push webhook verification and filtering.
+ * GitHub push webhook filtering.
  *
  * The Eve GitHub channel serves `/eve/v1/github` and only dispatches
  * comment and CI events, so merges to `main` are handled by this
- * application's own endpoint instead of a GitHub Actions job. Everything
- * here is pure so `tests/github-push.test.mjs` can exercise signature
- * rejection and event filtering without a live delivery.
+ * application's own Connect-forwarded endpoint instead of a GitHub Actions
+ * job. Everything here is pure so `tests/github-push.test.mjs` can exercise
+ * event filtering without a live delivery.
  */
-
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const TURBOREPO_REPOSITORY = "vercel/turborepo";
 export const MAIN_REF = "refs/heads/main";
@@ -27,35 +25,20 @@ export type GitHubPushOutcome =
   | { readonly kind: "ping" }
   | { readonly kind: "push"; readonly push: GitHubPush };
 
-/**
- * Webhook secret shared with GitHub. `FACTORY_IMAGE_WEBHOOK_SECRET` lets
- * the image webhook use a dedicated repository webhook; otherwise the
- * GitHub App secret Eve already verifies with is reused.
- */
-export function githubWebhookSecret(): string | undefined {
-  return (
-    process.env.FACTORY_IMAGE_WEBHOOK_SECRET ||
-    process.env.GITHUB_WEBHOOK_SECRET ||
-    undefined
-  );
-}
-
-/**
- * Constant-time check of GitHub's `x-hub-signature-256` header over the
- * exact raw request body.
- */
-export function verifyGitHubSignature(
-  body: string,
-  signature: string | null | undefined,
-  secret: string
+/** Only the configured Connect connector may submit factory image pushes. */
+export function isFactoryImageConnector(
+  auth:
+    | {
+        readonly attributes: Readonly<
+          Record<string, string | readonly string[]>
+        >;
+      }
+    | null
+    | undefined,
+  connectorId = process.env.FACTORY_IMAGE_CONNECTOR_ID
 ): boolean {
-  if (!signature || !signature.startsWith("sha256=")) return false;
-  const expected = Buffer.from(
-    `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`
-  );
-  const received = Buffer.from(signature);
   return (
-    expected.length === received.length && timingSafeEqual(expected, received)
+    connectorId !== undefined && auth?.attributes.connector_id === connectorId
   );
 }
 
@@ -70,10 +53,10 @@ export function parseGitHubPush(
   repository = TURBOREPO_REPOSITORY
 ): GitHubPushOutcome {
   if (event === "ping") return { kind: "ping" };
-  if (event !== "push") {
+  if (event !== null && event !== undefined && event !== "push") {
     return {
       kind: "ignored",
-      reason: `Unsupported event: ${event ?? "none"}.`
+      reason: `Unsupported event: ${event}.`
     };
   }
 
@@ -92,6 +75,13 @@ export function parseGitHubPush(
   }
 
   const push = payload as Record<string, unknown>;
+  // Connect forwarding may omit GitHub's event header. Only infer a push
+  // from the two fields that identify its resulting revision.
+  if (event === null || event === undefined) {
+    if (!("ref" in push && "after" in push)) {
+      return { kind: "ignored", reason: "Unsupported event: none." };
+    }
+  }
   const fullName = (push.repository as { full_name?: unknown } | undefined)
     ?.full_name;
   if (fullName !== repository) {

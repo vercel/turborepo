@@ -1,20 +1,14 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
 import test from "node:test";
 
 import {
+  isFactoryImageConnector,
   MAIN_REF,
   parseGitHubPush,
-  TURBOREPO_REPOSITORY,
-  verifyGitHubSignature
+  TURBOREPO_REPOSITORY
 } from "../agent/lib/github-push.ts";
 
-const SECRET = "factory-image-secret";
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
-
-function sign(body, secret = SECRET) {
-  return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
-}
 
 function pushBody(overrides = {}) {
   return JSON.stringify({
@@ -26,21 +20,23 @@ function pushBody(overrides = {}) {
   });
 }
 
-test("only a matching signature is accepted", () => {
-  const body = pushBody();
-  assert.equal(verifyGitHubSignature(body, sign(body), SECRET), true);
+test("only the configured Connect connector is accepted", () => {
   assert.equal(
-    verifyGitHubSignature(body, sign(body, "other-secret"), SECRET),
+    isFactoryImageConnector(
+      { attributes: { connector_id: "scl_factory" } },
+      "scl_factory"
+    ),
+    true
+  );
+  assert.equal(
+    isFactoryImageConnector(
+      { attributes: { connector_id: "scl_other" } },
+      "scl_factory"
+    ),
     false
   );
-  assert.equal(verifyGitHubSignature(`${body} `, sign(body), SECRET), false);
-  assert.equal(verifyGitHubSignature(body, null, SECRET), false);
-  assert.equal(verifyGitHubSignature(body, "", SECRET), false);
-  assert.equal(verifyGitHubSignature(body, "sha256=short", SECRET), false);
-  assert.equal(
-    verifyGitHubSignature(body, sign(body).replace("sha256=", ""), SECRET),
-    false
-  );
+  assert.equal(isFactoryImageConnector({ attributes: {} }, undefined), false);
+  assert.equal(isFactoryImageConnector(null, "scl_factory"), false);
 });
 
 test("a merge to main starts a build", () => {
@@ -53,6 +49,10 @@ test("a merge to main starts a build", () => {
   });
 });
 
+test("a Connect-forwarded push does not require the GitHub event header", () => {
+  assert.equal(parseGitHubPush(undefined, pushBody()).kind, "push");
+});
+
 test("pings are acknowledged without building", () => {
   assert.equal(parseGitHubPush("ping", "{}").kind, "ping");
 });
@@ -60,7 +60,7 @@ test("pings are acknowledged without building", () => {
 test("everything else is ignored with a reason", () => {
   const cases = [
     ["issue_comment", pushBody(), /Unsupported event/],
-    [undefined, pushBody(), /Unsupported event/],
+    [undefined, JSON.stringify({ action: "opened" }), /Unsupported event/],
     ["push", "not json", /not valid JSON/],
     ["push", "[]", /not an object/],
     [

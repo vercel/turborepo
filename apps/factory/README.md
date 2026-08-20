@@ -23,8 +23,9 @@ sandbox stay on one toolchain.
 
 ### Rebuilding on every merge
 
-A push to `main` reaches `POST /api/github/push`, which verifies the
-GitHub HMAC signature and starts the `factory-image` workflow. The
+A push to `main` reaches `POST /api/github/push` through a Vercel Connect
+trigger. Connect verifies GitHub's signature, the route verifies Connect's
+Vercel OIDC credential, and then starts the `factory-image` workflow. The
 workflow creates a build sandbox, detaches the provisioning script inside
 it, polls the markers the script writes, snapshots the result, and
 publishes the snapshot id as the current image. No GitHub Actions job is
@@ -43,14 +44,15 @@ Configure it with:
 
 - A private Vercel Blob store (the ledger lives beside the run
   registry).
-- `FACTORY_IMAGE_WEBHOOK_SECRET` — the webhook secret. Falls back to
-  `GITHUB_WEBHOOK_SECRET`, the secret the Eve GitHub channel already
-  verifies with, when the same GitHub App also subscribes to `push`.
-- A webhook delivering `push` to `https://<deployment>/api/github/push`.
-  Deployment Protection covers that path, so append the automation
-  bypass token as a query parameter
-  (`?x-vercel-protection-bypass=<secret>`); the HMAC signature is what
-  authenticates the delivery. Other events are acknowledged and ignored.
+- A GitHub Vercel Connect connector subscribed to `push`.
+- `FACTORY_IMAGE_CONNECTOR_ID` set to that connector's stable `scl_...` ID.
+- A Production trigger destination for the `turborepo-factory` project at
+  `/api/github/push`. Because Deployment Protection covers that path, append
+  the automation bypass token as the `x-vercel-protection-bypass` query
+  parameter. Connect authenticates forwarded requests with Vercel OIDC, and
+  the route requires its signed connector ID; direct GitHub webhooks and
+  other same-project OIDC callers are rejected. Other events are acknowledged
+  and ignored.
 
 The operator page shows the published image, the toolchain fingerprint,
 and recent builds, and can start a build for the current `main` head with
