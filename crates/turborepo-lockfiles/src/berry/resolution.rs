@@ -89,6 +89,14 @@ fn parse_specifier(specifier: Pair<'_, Rule>) -> Result<Option<Specifier>, Error
 }
 
 impl Resolution {
+    /// The unscoped name of the dependency this resolution overrides.
+    /// [`Resolution::reduce_dependency`] can only match a dependency with
+    /// this exact ident, so callers may bucket resolutions by name instead
+    /// of scanning every resolution for every dependency edge.
+    pub fn target_name(&self) -> &str {
+        self.descriptor.ident.name()
+    }
+
     /// Returns a new descriptor if an override is applicable
     // reference: version that this resolution resolves to
     // locator: package that depends on the dependency
