@@ -420,6 +420,34 @@ h3 {
   font-size: 0.75rem;
 }
 
+.copyCommand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.copyCommand code {
+  overflow: hidden;
+  color: var(--foreground);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyCommandButton {
+  flex: none;
+  height: auto;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+
 .runDetails {
   display: inline-block;
   margin-top: 20px;
