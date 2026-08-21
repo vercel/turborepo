@@ -106,7 +106,7 @@ function RunTicket({ run }: { readonly run: AgentRunRecord }) {
           <span aria-hidden="true">→</span>
           <span>{run.sandbox?.status ?? run.status}</span>
         </div>
-        {run.sandbox ? (
+        {run.sandbox && run.sandbox.provider !== "eve" ? (
           <CopyCommand
             command={sandboxSshCommand(run.sandbox.id)}
             label="SSH command for this sandbox"
