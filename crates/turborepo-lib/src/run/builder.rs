@@ -115,6 +115,9 @@ pub struct RunBuilder {
     // the set of changed files that triggered the rebuild. Used to filter
     // the engine down to only tasks whose declared inputs match.
     changed_files_for_watch: Option<HashSet<turbopath::AnchoredSystemPathBuf>>,
+    // Package listing needs SCM queries for affected filters, but never hashes files or uses
+    // cache provenance. Skip the repository-wide work that only serves those consumers.
+    skip_repo_index_and_scm_state: bool,
 }
 
 impl RunBuilder {
@@ -155,7 +158,13 @@ impl RunBuilder {
             output_watcher: None,
             query_server: None,
             changed_files_for_watch: None,
+            skip_repo_index_and_scm_state: false,
         })
+    }
+
+    pub fn skip_repo_index_and_scm_state(mut self) -> Self {
+        self.skip_repo_index_and_scm_state = true;
+        self
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
@@ -495,6 +504,7 @@ impl RunBuilder {
                 .opts
                 .future_flags
                 .github_actions_remote_base_ref_fallback;
+            let skip_repo_index = self.skip_repo_index_and_scm_state;
             tokio::task::spawn_blocking(move || {
                 let scm = match git_root {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
@@ -503,6 +513,10 @@ impl RunBuilder {
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
+                if skip_repo_index {
+                    let _ = scm_tx.send(scm);
+                    return None;
+                }
                 // The tracked half of the repo index only needs `.git/index`.
                 let tracked_index = {
                     let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
@@ -681,14 +695,14 @@ impl RunBuilder {
             .unzip();
 
         let scm_state = LazyScmState::new();
-        let scm_state_task = {
+        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
                 let _span = tracing::info_span!("capture_scm_sha").entered();
                 scm.get_current_sha(&repo_root).ok()
             })
-        };
+        });
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
@@ -1123,7 +1137,7 @@ impl RunBuilder {
         // hashing overlap the scan.
         let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
 
-        {
+        if let Some(scm_state_task) = scm_state_task {
             let scm_state = scm_state.clone();
             let scm = scm.clone();
             let repo_index = repo_index.clone();
@@ -1148,6 +1162,8 @@ impl RunBuilder {
                 }
                 .instrument(tracing::info_span!("capture_scm_state")),
             );
+        } else {
+            scm_state.resolve(None);
         }
 
         Ok((
