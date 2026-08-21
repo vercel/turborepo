@@ -6,9 +6,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 use turborepo_types::{
-    APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, RepoOpts,
-    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, TaskArgs, TuiOpts,
-    UIMode,
+    APIClientOpts, ConfigurationSource, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder,
+    LogPrefix, RepoOpts, ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts,
+    TaskArgs, TuiOpts, UIMode,
 };
 
 use crate::{
@@ -27,7 +27,7 @@ pub enum RemoteCacheDisabledReason {
     /// TURBO_TOKEN env var is set but no team is configured.
     /// The token gets effectively ignored because `is_linked` returns false.
     TokenWithoutTeam,
-    /// `remoteCache.enabled: false` in turbo.json.
+    /// `remoteCache.enabled: false` in turbo.json or a config file.
     InConfig,
     /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
     InEnvVar,
@@ -246,11 +246,7 @@ impl Opts {
                     Some(RemoteCacheDisabledReason::NotLinked)
                 }
             } else if config.enabled == Some(false) {
-                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
-                    .ok()
-                    .filter(|v| v == "0")
-                    .is_some();
-                if disabled_by_env {
+                if config.enabled_source() == Some(ConfigurationSource::Environment) {
                     Some(RemoteCacheDisabledReason::InEnvVar)
                 } else {
                     Some(RemoteCacheDisabledReason::InConfig)
@@ -765,7 +761,7 @@ mod test {
     };
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts};
+    use super::{APIClientOpts, RemoteCacheDisabledReason, RepoOpts, RunOpts};
     use crate::{
         cli::{Command, RunArgs},
         commands::CommandBase,
@@ -1118,6 +1114,75 @@ mod test {
                         write: true
                     }
                 }
+            );
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_remote_cache_disabled_by_env_var() -> Result<(), anyhow::Error> {
+        with_clean_turbo_env(|| {
+            temp_env::with_var("TURBO_REMOTE_CACHE_ENABLED", Some("0"), || {
+                let tmpdir = TempDir::new()?;
+                let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+
+                repo_root.join_component(CONFIG_FILE).create_with_contents(
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "remoteCache": { "enabled": true }
+                    }))?,
+                )?;
+
+                let mut args = Args::default();
+                args.command = Some(Command::Run {
+                    execution_args: Box::default(),
+                    run_args: Box::default(),
+                });
+                // set token and team to simulate a logged in/linked user
+                args.token = Some("token".to_string());
+                args.team = Some("team".to_string());
+
+                let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+                let opts = base.opts();
+
+                assert!(!opts.cache_opts.cache.remote.should_use());
+                assert_eq!(
+                    opts.remote_cache_disabled_reason,
+                    Some(RemoteCacheDisabledReason::InEnvVar)
+                );
+
+                Ok(())
+            })
+        })
+    }
+
+    #[test]
+    fn test_remote_cache_disabled_by_config() -> Result<(), anyhow::Error> {
+        with_clean_turbo_env(|| {
+            let tmpdir = TempDir::new()?;
+            let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+
+            repo_root.join_component(CONFIG_FILE).create_with_contents(
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "remoteCache": { "enabled": false }
+                }))?,
+            )?;
+
+            let mut args = Args::default();
+            args.command = Some(Command::Run {
+                execution_args: Box::default(),
+                run_args: Box::default(),
+            });
+            args.token = Some("token".to_string());
+            args.team = Some("team".to_string());
+
+            let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+            let opts = base.opts();
+
+            assert!(!opts.cache_opts.cache.remote.should_use());
+            assert_eq!(
+                opts.remote_cache_disabled_reason,
+                Some(RemoteCacheDisabledReason::InConfig)
             );
 
             Ok(())

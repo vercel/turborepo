@@ -285,6 +285,8 @@ pub struct ConfigurationOptions {
     pub timeout: Option<u64>,
     pub upload_timeout: Option<u64>,
     pub enabled: Option<bool>,
+    #[serde(skip)]
+    pub enabled_source: Option<ConfigurationSource>,
     #[serde(rename = "ui")]
     pub ui: Option<UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
@@ -339,12 +341,15 @@ pub struct TurborepoConfigBuilder {
 
 // Getters
 impl ConfigurationOptions {
-    fn with_url_sources(mut self, source: ConfigurationSource) -> Self {
+    fn with_sources(mut self, source: ConfigurationSource) -> Self {
         if self.api_url.is_some() {
             self.api_url_source = Some(source);
         }
         if self.login_url.is_some() {
             self.login_url_source = Some(source);
+        }
+        if self.enabled.is_some() {
+            self.enabled_source = Some(source);
         }
 
         self
@@ -386,6 +391,10 @@ impl ConfigurationOptions {
 
     pub fn enabled(&self) -> bool {
         self.enabled.unwrap_or(true)
+    }
+
+    pub fn enabled_source(&self) -> Option<ConfigurationSource> {
+        self.enabled_source
     }
 
     pub fn preflight(&self) -> bool {
@@ -718,7 +727,7 @@ impl TurborepoConfigBuilder {
             ConfigurationOptions::default(),
             |mut acc, (source, current_source)| {
                 let current_source_config = current_source.get_configuration_options(&acc)?;
-                let current_source_config = current_source_config.with_url_sources(source);
+                let current_source_config = current_source_config.with_sources(source);
                 acc.merge(current_source_config);
                 Ok(acc)
             },
@@ -1412,6 +1421,77 @@ mod test {
         assert_eq!(
             config.login_url_source(),
             Some(ConfigurationSource::Environment)
+        );
+    }
+
+    #[test]
+    fn test_env_remote_cache_enabled_overrides_turbo_json() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                r#"{
+                    "remoteCache": {
+                        "enabled": true
+                    }
+                }"#,
+            )
+            .unwrap();
+
+        let mut env = HashMap::new();
+        env.insert(
+            OsString::from("turbo_remote_cache_enabled"),
+            OsString::from("0"),
+        );
+
+        let config = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(env),
+        }
+        .build()
+        .unwrap();
+
+        assert_eq!(config.enabled, Some(false));
+        assert!(!config.enabled());
+        assert_eq!(
+            config.enabled_source(),
+            Some(ConfigurationSource::Environment)
+        );
+    }
+
+    #[test]
+    fn test_turbo_json_remote_cache_enabled_source() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                r#"{
+                    "remoteCache": {
+                        "enabled": false
+                    }
+                }"#,
+            )
+            .unwrap();
+
+        let config = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::new()),
+        }
+        .build()
+        .unwrap();
+
+        assert_eq!(config.enabled, Some(false));
+        assert_eq!(
+            config.enabled_source(),
+            Some(ConfigurationSource::TurboJson)
         );
     }
 }

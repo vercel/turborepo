@@ -41,6 +41,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_log_order", "log_order"),
     ("turbo_remote_only", "remote_only"),
     ("turbo_remote_cache_read_only", "remote_cache_read_only"),
+    ("turbo_remote_cache_enabled", "enabled"),
     ("turbo_run_summary", "run_summary"),
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
     ("turbo_cache", "cache"),
@@ -141,6 +142,12 @@ impl ResolvedConfigurationOptions for EnvVars {
         let preflight = self
             .truthy_value("preflight")
             .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
+            .transpose()?;
+
+        // Process remote cache enabled
+        let enabled = self
+            .truthy_value("enabled")
+            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
             .transpose()?;
 
         let force = self.truthy_value("force").flatten();
@@ -315,7 +322,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             // Processed booleans
             signature,
             preflight,
-            enabled: None,
+            enabled,
+            enabled_source: None,
             ui,
             allow_no_package_manager,
             daemon,
@@ -429,6 +437,7 @@ mod test {
         env.insert("turbo_log_order".into(), "grouped".into());
         env.insert("turbo_remote_only".into(), "1".into());
         env.insert("turbo_remote_cache_read_only".into(), "1".into());
+        env.insert("turbo_remote_cache_enabled".into(), "0".into());
         env.insert("turbo_run_summary".into(), "true".into());
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
         env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
@@ -443,6 +452,8 @@ mod test {
         assert_eq!(config.log_order(), LogOrder::Grouped);
         assert!(config.remote_only());
         assert!(config.remote_cache_read_only());
+        assert_eq!(config.enabled, Some(false));
+        assert!(!config.enabled());
         assert!(config.run_summary());
         assert!(config.allow_no_turbo_json());
         assert_eq!(config.upload_timeout(), 200);
@@ -496,6 +507,7 @@ mod test {
         env.insert("turbo_log_order".into(), "".into());
         env.insert("turbo_remote_only".into(), "".into());
         env.insert("turbo_remote_cache_read_only".into(), "".into());
+        env.insert("turbo_remote_cache_enabled".into(), "".into());
         env.insert("turbo_run_summary".into(), "".into());
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
         env.insert("turbo_tui_scrollback_length".into(), "".into());
@@ -520,6 +532,8 @@ mod test {
         assert_eq!(config.log_order(), LogOrder::Auto);
         assert!(!config.remote_only());
         assert!(!config.remote_cache_read_only());
+        assert_eq!(config.enabled, None);
+        assert!(config.enabled());
         assert!(!config.run_summary());
         assert!(!config.allow_no_turbo_json());
         assert_eq!(
@@ -527,5 +541,29 @@ mod test {
             DEFAULT_TUI_SCROLLBACK_LENGTH
         );
         assert_eq!(config.concurrency, None);
+    }
+
+    #[test]
+    fn test_remote_cache_enabled_env_setting() {
+        for (value, expected) in [("1", true), ("true", true), ("0", false), ("false", false)] {
+            let mut env: HashMap<OsString, OsString> = HashMap::new();
+            env.insert("turbo_remote_cache_enabled".into(), value.into());
+            let config = EnvVars::new(&env)
+                .unwrap()
+                .get_configuration_options(&ConfigurationOptions::default())
+                .unwrap();
+            assert_eq!(config.enabled, Some(expected), "value {value:?}");
+        }
+    }
+
+    #[test]
+    fn test_remote_cache_enabled_invalid_env_setting() {
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert("turbo_remote_cache_enabled".into(), "banana".into());
+        let err = EnvVars::new(&env)
+            .unwrap()
+            .get_configuration_options(&ConfigurationOptions::default())
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidRemoteCacheEnabled), "{err:?}");
     }
 }
