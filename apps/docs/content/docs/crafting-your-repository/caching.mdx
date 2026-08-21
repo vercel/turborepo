@@ -217,6 +217,8 @@ Inputs are hashed by Turborepo, creating a "fingerprint" for the task run. When 
 
 Under the hood, Turborepo creates two hashes: a global hash and a task hash. If either of the hashes change, the task will miss cache.
 
+If your tasks run on multiple operating systems, architectures, or Node.js versions, visit the [Handling platforms guide](/docs/guides/handling-platforms) to account for those differences in your hashes.
+
 ### Global hash inputs
 
 | Input                                                                                  | Example                                                                                                                                                                                                         |

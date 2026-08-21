@@ -89,7 +89,7 @@ Remote Caching is free and can be used with both [managed providers](https://tur
 
 ### For Local Development
 
-To link your local Turborepo to your Remote Cache, authenticate the Turborepo CLI with your Vercel account:
+To link your local Turborepo to your Remote Cache, authenticate the Turborepo CLI with your Vercel account using [`turbo login`](/docs/reference/login):
 
 ```bash title="Terminal"
 turbo login
@@ -138,7 +138,7 @@ bunx turbo login
   correct privileges.
 </Callout>
 
-Now, link your Turborepo to your Remote Cache:
+Now, link your Turborepo to your Remote Cache with [`turbo link`](/docs/reference/link):
 
 ```bash title="Terminal"
 turbo link
@@ -167,6 +167,8 @@ To verify, delete your local Turborepo cache with:
 </PlatformTabs>
 
 Then, run the same build again. If things are working properly, `turbo` should not execute tasks locally. Instead, it will download the logs and artifacts from your Remote Cache and replay them back to you.
+
+If you want to stop using the Remote Cache, run [`turbo unlink`](/docs/reference/unlink) to disconnect your repository, and [`turbo logout`](/docs/reference/logout) to sign out of your account.
 
 ### Remote Caching on Vercel
 
