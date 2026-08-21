@@ -1,6 +1,13 @@
 import type { Schema } from "@turbo/types";
 
-export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "nub" | "aube";
+export type PackageManager =
+  | "npm"
+  | "yarn"
+  | "pnpm"
+  | "bun"
+  | "nub"
+  | "aube"
+  | "utoo";
 
 export type ExitCode = 0 | 1;
 
