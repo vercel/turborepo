@@ -23,9 +23,10 @@ use crate::{Built, Engine};
 pub enum AffectednessError {
     #[error("engine task refers to unknown package {0}")]
     UnknownTaskPackage(PackageName),
-    #[error("invalid input glob for task {task}: {error}")]
+    #[error("invalid input glob {glob:?} for task {task}: {error}")]
     InvalidGlob {
         task: TaskId<'static>,
+        glob: String,
         error: String,
     },
 }
@@ -95,7 +96,8 @@ pub fn match_tasks_against_changed_files(
             let compiled =
                 compile_globs(inputs).map_err(|error| AffectednessError::InvalidGlob {
                     task: task_id.clone(),
-                    error: error.to_string(),
+                    glob: error.glob,
+                    error: error.error.to_string(),
                 })?;
             compiled_cache.insert(cache_key.clone(), compiled);
         }
