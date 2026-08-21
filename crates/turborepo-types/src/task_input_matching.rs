@@ -43,7 +43,7 @@ pub struct CompiledGlobs {
 #[derive(Debug)]
 pub struct InvalidTaskInputGlob {
     pub glob: String,
-    pub error: wax::BuildError,
+    pub error: Box<wax::BuildError>,
 }
 
 impl std::fmt::Display for InvalidTaskInputGlob {
@@ -54,7 +54,7 @@ impl std::fmt::Display for InvalidTaskInputGlob {
 
 impl std::error::Error for InvalidTaskInputGlob {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
+        Some(self.error.as_ref())
     }
 }
 
@@ -97,7 +97,7 @@ fn compile_patterns(
                 wax::Glob::new(stripped)
                     .map_err(|error| InvalidTaskInputGlob {
                         glob: glob_str.clone(),
-                        error,
+                        error: Box::new(error),
                     })?
                     .into_owned(),
             );
@@ -109,7 +109,7 @@ fn compile_patterns(
                 wax::Glob::new(glob_str)
                     .map_err(|error| InvalidTaskInputGlob {
                         glob: glob_str.clone(),
-                        error,
+                        error: Box::new(error),
                     })?
                     .into_owned(),
             );
