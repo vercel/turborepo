@@ -110,7 +110,7 @@ jobs:
       - parallel:
           - name: Set up Turborepo Remote Cache
             if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            uses: vercel/setup-turborepo-remote-cache-action@49d7b1b46ba4c9251e1977986bfe18336feabc8f # v1.1.0
             with:
               team: ${{ vars.TURBO_TEAM }}
 
@@ -212,7 +212,7 @@ jobs:
           # remotely; Cargo reuses state from the target-cache restore below.
           - name: Set up Turborepo Remote Cache
             if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            uses: vercel/setup-turborepo-remote-cache-action@49d7b1b46ba4c9251e1977986bfe18336feabc8f # v1.1.0
             with:
               team: ${{ vars.TURBO_TEAM }}
 
@@ -320,7 +320,7 @@ jobs:
           # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
           # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
           - name: Set up Turborepo Remote Cache
-            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            uses: vercel/setup-turborepo-remote-cache-action@49d7b1b46ba4c9251e1977986bfe18336feabc8f # v1.1.0
             with:
               team: ${{ vars.TURBO_TEAM }}
 
@@ -372,7 +372,7 @@ jobs:
           # local-only.
           - name: Set up Turborepo Remote Cache
             if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            uses: vercel/setup-turborepo-remote-cache-action@49d7b1b46ba4c9251e1977986bfe18336feabc8f # v1.1.0
             with:
               team: ${{ vars.TURBO_TEAM }}
 
@@ -454,7 +454,7 @@ jobs:
           # local-only.
           - name: Set up Turborepo Remote Cache
             if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            uses: vercel/setup-turborepo-remote-cache-action@49d7b1b46ba4c9251e1977986bfe18336feabc8f # v1.1.0
             with:
               team: ${{ vars.TURBO_TEAM }}
 
