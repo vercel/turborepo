@@ -40,12 +40,30 @@ pub struct CompiledGlobs {
     jit_has_traversal_globs: bool,
 }
 
+#[derive(Debug)]
+pub struct InvalidTaskInputGlob {
+    pub glob: String,
+    pub error: Box<wax::BuildError>,
+}
+
+impl std::fmt::Display for InvalidTaskInputGlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid glob {:?}: {}", self.glob, self.error)
+    }
+}
+
+impl std::error::Error for InvalidTaskInputGlob {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.error.as_ref())
+    }
+}
+
 /// Pre-compiles a task's input globs for efficient matching against many files.
 ///
 /// When `inputs` has no globs and `default` is false (representing either
 /// `inputs: []` or a missing `inputs` key), the compiled result will match
 /// all files — see [`check_compiled_globs`] for details.
-pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, wax::BuildError> {
+pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, InvalidTaskInputGlob> {
     let (inclusions, exclusions, has_traversal_globs) = compile_patterns(&inputs.globs)?;
     let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) =
         compile_patterns(&inputs.jit_globs)?;
@@ -65,7 +83,7 @@ pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, wax::BuildErr
 
 fn compile_patterns(
     globs: &[String],
-) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), wax::BuildError> {
+) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), InvalidTaskInputGlob> {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
     let mut has_traversal_globs = false;
@@ -75,12 +93,26 @@ fn compile_patterns(
             if stripped.starts_with("../") {
                 has_traversal_globs = true;
             }
-            exclusions.push(wax::Glob::new(stripped)?.into_owned());
+            exclusions.push(
+                wax::Glob::new(stripped)
+                    .map_err(|error| InvalidTaskInputGlob {
+                        glob: glob_str.clone(),
+                        error: Box::new(error),
+                    })?
+                    .into_owned(),
+            );
         } else {
             if glob_str.starts_with("../") {
                 has_traversal_globs = true;
             }
-            inclusions.push(wax::Glob::new(glob_str)?.into_owned());
+            inclusions.push(
+                wax::Glob::new(glob_str)
+                    .map_err(|error| InvalidTaskInputGlob {
+                        glob: glob_str.clone(),
+                        error: Box::new(error),
+                    })?
+                    .into_owned(),
+            );
         }
     }
 
@@ -494,7 +526,11 @@ mod tests {
             default: false,
             ..Default::default()
         };
-        assert!(compile_globs(&inputs).is_err());
+        let error = match compile_globs(&inputs) {
+            Ok(_) => panic!("invalid glob compiled successfully"),
+            Err(error) => error,
+        };
+        assert_eq!(error.glob, "[invalid");
     }
 
     #[test]
