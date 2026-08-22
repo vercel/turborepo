@@ -2,6 +2,36 @@
 
 The operator page and its API routes rely on Vercel Deployment Protection for access control. Keep Deployment Protection enabled for every deployed environment that exposes them.
 
+## Slack
+
+Mention the Turborepo factory in a channel where the Slack app is present to
+start a session. Replies and follow-up mentions stay in the Slack thread.
+
+The Slack app requires the `app_mentions:read` and `chat:write` OAuth scopes
+and an `app_mention` bot event subscription. To support direct messages, also
+grant `im:history` and subscribe to `message.im`.
+
+Configure the production project with `SLACK_CONNECT_UID` and
+`SLACK_INSTALLATION_ID` from the factory's Vercel Connect installation. The
+factory resolves its bot token and webhook verifier from Connect at request
+time, so production credentials are not required during builds. Set
+`SLACK_CHANNEL_ID` to the channel used for proactive factory notifications.
+
+Attach the Connect trigger to Eve's Slack route rather than the default
+Connect route:
+
+```bash
+vercel connect detach "$SLACK_CONNECT_UID" --yes
+vercel connect attach "$SLACK_CONNECT_UID" \
+  --triggers \
+  --trigger-path /eve/v1/slack \
+  --yes
+```
+
+After deployment, verify `/eve/v1/health`, then mention the factory with
+`list the examples that need maintenance`. A successful delivery responds
+with a thinking indicator and continues in a thread.
+
 ## Factory image
 
 Every agent in this app runs against the same sandbox base layer, the
