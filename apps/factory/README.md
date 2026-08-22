@@ -2,35 +2,43 @@
 
 The operator page and its API routes rely on Vercel Deployment Protection for access control. Keep Deployment Protection enabled for every deployed environment that exposes them.
 
-## Start work from the operator page
+## Workspaces
 
-The two scheduled operations run a fixed prompt. "Start work" is the ad-hoc
-path: it opens an ordinary durable Eve session from the browser, on the same
-factory image and the same checkout of `main`, and the operator drives it by
-typing. Requests are not scoped to `examples/` and no pull request happens on
-its own — `create_pull_request` runs under the operator's approval, which the
-chat renders as a prompt with the tool's branch and title in it. Answer it and
-the draft pull request is pushed; decline it and nothing is.
+"Start work" creates a durable OpenCode workspace on the factory image. Each
+workspace has one server-side record, Harness session, named Vercel Sandbox,
+transcript, and shareable `/workspaces/<id>` URL. A Workflow runs one turn at a
+time and persists the Harness resume state after each turn, so another browser
+or operator can reopen the URL and continue the same conversation and checkout.
 
-The chat talks to the Eve session routes directly through `useEveAgent`, so
-`agent/channels/eve.ts` has an authenticator for it. Deployment Protection still
-decides who reaches the deployment; the `operatorConsole()` entry only
-establishes that a request came from the console page. It requires the
-`x-operator-action: open-operator-chat` marker the page attaches to every Eve
-request — those routes send no CORS headers, so another site cannot get a custom
-header past a preflight — and rejects anything announcing a cross-site fetch or
-naming an origin other than the host the browser addressed. It reads that host
-from `x-forwarded-host`, because both Vercel and `next start` route these paths
-to the Eve service through a proxy that rewrites the host it dials.
+The workspace page can load the current Git status and a capped diff on demand,
+and exposes a browser terminal, the `sandbox ssh <name>` command, and the
+OpenCode command that resumes the same chat after connecting. Workflow
+observability remains the full execution audit.
+When OpenCode reports a Turborepo pull request URL, the workspace records and
+links it.
 
-The session's principal is a _user_, not the app principal the schedules use,
-which is what keeps the approval gate on and the automated example and
-performance scope gates off.
+Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
+objects. Mutation routes require an exact same-origin request and action header;
+Vercel Deployment Protection remains the outer operator authentication layer.
+The opaque Harness resume state never reaches the browser. Storage requires
+either `BLOB_READ_WRITE_TOKEN`, or both `BLOB_STORE_ID` and
+`VERCEL_OIDC_TOKEN`.
 
-The thread's session cursor and event log live in browser storage, so a reload
-lands back in the same conversation. A turn that is still running when the page
-reloads keeps running: its transcript is in Agent Runs, and "New chat" starts a
-fresh session.
+### Local terminal
+
+Set `FACTORY_URL` to the protected deployment. For automation-protected
+deployments, also set `VERCEL_AUTOMATION_BYPASS_SECRET`.
+Install and authenticate the Vercel `sandbox` CLI before using `factory ssh`.
+
+```sh
+pnpm --filter examples-agent factory list
+pnpm --filter examples-agent factory start "Investigate the affected warning and open a PR"
+pnpm --filter examples-agent factory ssh ws_...
+```
+
+The SSH command prints the in-sandbox OpenCode resume command before connecting.
+The same workspace remains available from the web while the local terminal is
+attached.
 
 ## Factory image
 
@@ -95,10 +103,10 @@ and recent builds, and can start a build for the current `main` head with
 Eve freezes `revalidationKey` at build time, so the template rotates when
 the toolchain fingerprint changes or a newer image is published, and
 boots from the published snapshot when one matches. Each session then
-fast-forwards its checkout to the current `main`. Harness sessions do the
-same through `sandboxConfig` in `agent/lib/harness-agent.ts`, and fall
-back to a shallow clone on a stock runtime when no image matches this
-deployment's toolchain.
+fast-forwards its checkout to the current `main`. New Harness sessions do the
+same through `sandboxConfig` in `agent/lib/harness-agent.ts`, and fall back to a
+shallow clone on a stock runtime when no image matches this deployment's
+toolchain. Resumed workspaces preserve their checkout and uncommitted changes.
 
 A toolchain change provisions the template from scratch during the next
 Vercel build, because Eve prewarms sandbox templates there. Measured
@@ -118,8 +126,9 @@ The workflow clones Turborepo into the selected sandbox and runs the chosen offi
 
 ## Agent Runs
 
-The operator page links to Vercel Agent Runs, the canonical record of scheduled jobs and operator chats. Do not use the local Blob run registry as an audit trail; it exists only to coordinate Harness execution.
-
-Detailed transcripts remain in Agent Runs for Eve and Workflow observability for Harness.
+The operator page links to Vercel Agent Runs, the audit record for Eve schedules.
+Harness maintenance and workspace turns are audited through Workflow
+observability. Workspace Blob records hold the resumable UI transcript and
+control-plane state, not the complete execution audit.
 
 An Eve run's model is recorded when its first model step starts rather than when the session starts. The agent selects its author model dynamically, so `session.started` carries no model id and the ledger fills the field from `step.started` instead.

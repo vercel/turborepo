@@ -9,6 +9,7 @@
   "scripts": {
     "build": "eve build && next build",
     "dev": "next dev",
+    "factory": "node scripts/factory.mjs",
     "start": "next start",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },

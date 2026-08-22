@@ -13,7 +13,7 @@ function operatorConsole(): AuthFn<Request> {
 
 export default eveChannel({
   auth: [
-    // Lets the operator page open an ad-hoc chat session from the browser.
+    // Keeps legacy direct Eve operator-console sessions authenticated.
     operatorConsole(),
     // Open on localhost for `eve dev` and the REPL; ignored in production.
     localDev(),

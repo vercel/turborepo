@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/", label: "Agent Runs" },
+  { href: "/", label: "Workspaces" },
   { href: "/work", label: "Start work" },
   { href: "/factory-image", label: "Factory image" }
 ];
@@ -30,7 +30,11 @@ export function Navigation() {
             <li key={href}>
               <Link
                 className="block rounded-md px-2.5 py-2 text-sm text-muted-foreground no-underline hover:bg-accent hover:text-foreground data-[active=true]:bg-accent data-[active=true]:text-foreground max-[720px]:whitespace-nowrap"
-                data-active={pathname === href || undefined}
+                data-active={
+                  pathname === href ||
+                  (href === "/" && pathname.startsWith("/workspaces/")) ||
+                  undefined
+                }
                 href={href}
               >
                 {label}
