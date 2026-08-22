@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -26,6 +26,7 @@ export function SandboxTerminal({ sandboxName, onExit }: SandboxTerminalProps) {
   const exitedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(true);
+  const onExitEvent = useEffectEvent(onExit);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +104,7 @@ export function SandboxTerminal({ sandboxName, onExit }: SandboxTerminalProps) {
               (message.code !== null ? ` Exit code: ${message.code}.` : "")
           );
           setTimeout(() => {
-            if (!cancelled) onExit();
+            if (!cancelled) onExitEvent();
           }, 600);
           return;
         }
@@ -167,7 +168,7 @@ export function SandboxTerminal({ sandboxName, onExit }: SandboxTerminalProps) {
       socketRef.current = null;
       void cleanupPromise;
     };
-  }, [sandboxName, onExit]);
+  }, [sandboxName]);
 
   if (error) {
     return (
