@@ -86,7 +86,7 @@ pub async fn run(
 
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base, None)?;
+    let run_builder = RunBuilder::new(base, None)?.skip_repo_index_and_scm_state();
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
     // A pure Cargo workspace has no JavaScript package manager to display.
