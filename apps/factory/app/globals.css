@@ -540,6 +540,11 @@ select:focus-visible {
   margin: 16px 0 0 15px;
 }
 
+.sandboxTerminalButton {
+  margin-top: 12px;
+  width: 100%;
+}
+
 .resourceDot {
   color: var(--muted-foreground);
 }
@@ -776,6 +781,69 @@ select:focus-visible {
   .actions > * {
     width: 100%;
   }
+}
+
+.sandboxTerminalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+  color: #ededed;
+}
+
+.sandboxTerminalOverlay-error {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.sandboxTerminalContainer {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+}
+
+.sandboxTerminalContainer .xterm {
+  height: 100%;
+}
+
+.sandboxTerminalContainer .xterm-screen {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.sandboxTerminalNotice {
+  max-width: 480px;
+  padding: 24px;
+  text-align: center;
+  color: var(--foreground);
+  background: var(--secondary);
+  border-radius: var(--radius);
+}
+
+.sandboxTerminalNotice p {
+  margin: 0 0 16px;
+}
+
+.sandboxTerminalClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sandboxTerminalClose:hover {
+  opacity: 0.9;
 }
 
 @media (prefers-reduced-motion: reduce) {

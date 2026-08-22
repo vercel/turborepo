@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   startTransition,
   useEffect,
@@ -16,6 +17,11 @@ import type {
 } from "../agent/lib/run-types";
 import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
+
+const SandboxTerminal = dynamic(
+  () => import("./sandbox-terminal").then((mod) => mod.SandboxTerminal),
+  { ssr: false }
+);
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-eve-agent/observability/agent-runs";
@@ -126,7 +132,13 @@ function RunTicket({ run }: { readonly run: AgentRunRecord }) {
   );
 }
 
-function SandboxCard({ sandbox }: { readonly sandbox: SandboxResource }) {
+function SandboxCard({
+  sandbox,
+  onTerminal
+}: {
+  readonly sandbox: SandboxResource;
+  readonly onTerminal: (name: string) => void;
+}) {
   return (
     <li className="sandboxCard">
       <div>
@@ -154,6 +166,16 @@ function SandboxCard({ sandbox }: { readonly sandbox: SandboxResource }) {
         command={sandboxSshCommand(sandbox.name)}
         label="SSH command for this sandbox"
       />
+      <Button
+        className="sandboxTerminalButton"
+        disabled={sandbox.status !== "running"}
+        onClick={() => onTerminal(sandbox.name)}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        Terminal
+      </Button>
     </li>
   );
 }
@@ -166,6 +188,7 @@ export function RunObservatory({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [trigger, setTrigger] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTerminal, setActiveTerminal] = useState<string | null>(null);
   const refreshController = useRef<AbortController | null>(null);
 
   async function refresh() {
@@ -304,12 +327,22 @@ export function RunObservatory({
       ) : snapshot.sandboxes.length > 0 ? (
         <ul className="sandboxGrid">
           {snapshot.sandboxes.slice(0, 8).map((sandbox) => (
-            <SandboxCard key={sandbox.name} sandbox={sandbox} />
+            <SandboxCard
+              key={sandbox.name}
+              sandbox={sandbox}
+              onTerminal={setActiveTerminal}
+            />
           ))}
         </ul>
       ) : (
         <p className="emptySandboxes">No named sandbox resources are active.</p>
       )}
+      {activeTerminal ? (
+        <SandboxTerminal
+          sandboxName={activeTerminal}
+          onExit={() => setActiveTerminal(null)}
+        />
+      ) : null}
     </section>
   );
 }
