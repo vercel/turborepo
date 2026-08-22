@@ -166,7 +166,7 @@ export function SandboxTerminal({ sandboxName, onExit }: SandboxTerminalProps) {
       terminalRef.current = null;
       fitAddonRef.current = null;
       socketRef.current = null;
-      void cleanupPromise;
+      void cleanupPromise.then((cleanup) => cleanup?.());
     };
   }, [sandboxName]);
 
