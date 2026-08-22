@@ -55,19 +55,20 @@ sandbox stay on one toolchain.
 
 A push to `main` reaches `POST /api/github/push` through a Vercel Connect
 trigger. Connect verifies GitHub's signature, the route verifies Connect's
-Vercel OIDC credential, and then starts the `factory-image` workflow. The
-workflow creates a build sandbox, detaches the provisioning script inside
-it, polls the markers the script writes, snapshots the result, and
-publishes the snapshot id as the current image. No GitHub Actions job is
-involved. When a published image already exists for the same toolchain
-the build boots from it, so a merge build only has to fast-forward the
-checkout, refresh dependencies, and recompile.
+Vercel OIDC credential, and then calls the same application function as the
+operator button and the `rebuild_factory_image` Eve tool. That function creates
+a build sandbox and detaches the provisioning script inside it. Dashboard
+polling and a one-minute Eve schedule reconcile its markers, snapshot the
+result, and publish the snapshot id as the current image. No GitHub Actions job
+or model call is involved. When a published image already exists for the same
+toolchain the build boots from it, so a merge build only has to fast-forward
+the checkout, refresh dependencies, and recompile.
 
 Rapid merges are resolved in the ledger rather than by racing: claiming a
-build cancels every build still in flight, marks it superseded, stops its
-workflow run, and deletes its sandbox. Each step re-reads the ledger
-before doing work and a build that has lost can neither report progress
-nor publish, so only the newest revision on `main` is ever published.
+build cancels every build still in flight, marks it superseded, and deletes its
+sandbox. Each reconciliation re-reads the ledger before doing work and a build
+that has lost can neither report progress nor publish, so only the newest
+revision on `main` is ever published.
 `tests/factory-image-ledger.test.mjs` covers those transitions.
 
 Configure it with:

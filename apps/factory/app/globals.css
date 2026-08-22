@@ -543,6 +543,29 @@ select:focus-visible {
   margin: 16px 0 0 15px;
 }
 
+.sandboxCard-live {
+  grid-column: 1 / -1;
+}
+
+.sandboxCard-live dl {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.buildLog {
+  max-height: 320px;
+  margin: 16px 0 0;
+  padding: 16px;
+  overflow: auto;
+  color: var(--foreground);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 .sandboxTerminalButton {
   margin-top: 12px;
   width: 100%;
@@ -909,6 +932,10 @@ select:focus-visible {
 
   .facts,
   .sandboxGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sandboxCard-live dl {
     grid-template-columns: 1fr;
   }
 

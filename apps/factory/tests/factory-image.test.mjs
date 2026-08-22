@@ -9,6 +9,7 @@ import {
   factoryImageFingerprint,
   factoryImagePhases,
   factoryImageScript,
+  factoryImageStartCommand,
   parseFactoryImageProgress,
   runFactoryImagePhases
 } from "../agent/lib/factory-image.ts";
@@ -176,6 +177,13 @@ test("the detached script records its phase and exit code", () => {
   })) {
     assert.ok(script.includes(`factory_phase ${phase.id}`));
   }
+});
+
+test("starting provisioning reuses a live detached process", () => {
+  const command = factoryImageStartCommand();
+  assert.ok(command.includes("kill -0"));
+  assert.ok(command.includes("already running"));
+  assert.ok(command.includes('printf \'%s\\n\' "$!" > "$pid_file"'));
 });
 
 test("the fingerprint tracks the toolchain, not the commit", () => {

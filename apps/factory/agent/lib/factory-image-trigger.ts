@@ -8,28 +8,39 @@
 
 import { randomUUID } from "node:crypto";
 
-import { getRun, start } from "workflow/api";
-
-import { factoryImageWorkflow } from "../../workflows/factory-image";
 import { factoryImageFingerprint } from "./factory-image";
 import {
+  claimFactoryImageProvisioning,
+  claimFactoryImagePublication,
   claimFactoryImage,
   isFactoryImageRegistryConfigured,
+  publishFactoryImage,
+  readFactoryImageBuild,
+  readFactoryImagePointer,
+  readFactoryImageState,
   recordFactoryImageProgress
 } from "./factory-image-registry";
 import {
   type FactoryImagePointer,
   type FactoryImageTrigger,
-  factoryImageSandboxName
+  factoryImageSandboxName,
+  isFactoryImageBuildActive,
+  isStaleFactoryImageBuild
 } from "./factory-image-types";
-import { deleteFactorySandbox } from "./factory-sandbox";
+import {
+  createFactorySandbox,
+  deleteFactorySandbox,
+  getFactorySandbox,
+  pruneFactorySandboxes,
+  readFactoryProgress,
+  snapshotFactorySandbox,
+  startFactoryProvisioning
+} from "./factory-sandbox";
 
 export interface TriggerFactoryImageInput {
   readonly commit: string;
   readonly ref: string;
   readonly trigger: FactoryImageTrigger;
-  /** Compile `turbo` once inside the image. On by default. */
-  readonly warmBuild?: boolean;
 }
 
 export type TriggerFactoryImageResult =
@@ -39,7 +50,6 @@ export type TriggerFactoryImageResult =
       readonly cancelled: readonly string[];
       readonly commit: string;
       readonly state: "claimed";
-      readonly workflowRunId: string;
     }
   | {
       readonly buildId: string;
@@ -87,23 +97,10 @@ export async function triggerFactoryImageBuild(
     };
   }
 
-  // The ledger already marked these cancelled. Stop their workflow runs
-  // and delete their sandboxes so a superseded build cannot keep burning
-  // sandbox time while the newest revision builds.
+  // The ledger already marked these cancelled. Delete their sandboxes so a
+  // superseded build cannot keep burning sandbox time.
   const cancelled: string[] = [];
   for (const superseded of claim.superseded) {
-    if (superseded.workflowRunId !== undefined) {
-      try {
-        await getRun(superseded.workflowRunId).cancel({
-          cancelReason: `Superseded by ${input.commit.slice(0, 7)}.`
-        });
-      } catch (error) {
-        console.error(
-          `Could not cancel workflow run ${superseded.workflowRunId}.`,
-          error
-        );
-      }
-    }
     try {
       await deleteFactorySandbox(superseded.sandboxName);
     } catch (error) {
@@ -115,42 +112,162 @@ export async function triggerFactoryImageBuild(
     cancelled.push(superseded.id);
   }
 
-  let run;
   try {
-    run = await start(factoryImageWorkflow, [
-      {
-        buildId,
-        commit: input.commit,
-        ref: input.ref,
-        sandboxName: claim.build.sandboxName,
-        warmBuild: input.warmBuild ?? true
-      }
-    ]);
+    await startClaimedFactoryImageBuild(buildId);
   } catch (error) {
-    // Nothing will ever report progress for this build, so retire it
-    // rather than leaving a claim that deduplicates later deliveries.
     await recordFactoryImageProgress(buildId, {
       finishedAt: new Date().toISOString(),
-      message: "The build workflow could not be started.",
+      message: error instanceof Error ? error.message : String(error),
       status: "failed"
     }).catch((failure: unknown) => {
-      console.error("Could not retire the factory image build.", failure);
+      console.error("Could not record the factory image failure.", failure);
     });
+    await deleteFactorySandbox(claim.build.sandboxName).catch(() => {});
     throw error;
-  }
-  // Recorded here as well as inside the workflow's first step so a merge
-  // that lands moments later already has a run id to cancel.
-  try {
-    await recordFactoryImageProgress(buildId, { workflowRunId: run.runId });
-  } catch (error) {
-    console.error("Could not record the factory image workflow run.", error);
   }
 
   return {
     buildId,
     cancelled,
     commit: input.commit,
-    state: "claimed",
-    workflowRunId: run.runId
+    state: "claimed"
   };
+}
+
+async function startClaimedFactoryImageBuild(buildId: string): Promise<void> {
+  const build = await claimFactoryImageProvisioning(buildId);
+  if (build === null) return;
+
+  const pointer = await readFactoryImagePointer();
+  const baseSnapshotId =
+    pointer !== null && pointer.fingerprint === factoryImageFingerprint()
+      ? pointer.snapshotId
+      : undefined;
+  const sandbox =
+    (await getFactorySandbox(build.sandboxName)) ??
+    (await createFactorySandbox({
+      baseSnapshotId,
+      buildId: build.id,
+      commit: build.commit,
+      name: build.sandboxName
+    }));
+
+  const current = await readFactoryImageBuild(build.id);
+  if (current === null || !isFactoryImageBuildActive(current)) {
+    await deleteFactorySandbox(build.sandboxName);
+    return;
+  }
+
+  await startFactoryProvisioning(sandbox, {
+    revision: build.commit,
+    warmBuild: true
+  });
+  await recordFactoryImageProgress(build.id, {
+    message:
+      baseSnapshotId === undefined
+        ? "Building from the base image."
+        : "Building from the previous factory image.",
+    phase: "provisioning"
+  });
+}
+
+export async function reconcileFactoryImageBuilds(): Promise<
+  Readonly<Record<string, string>>
+> {
+  if (!isFactoryImageRegistryConfigured()) return {};
+
+  const logs: Record<string, string> = {};
+  for (const build of (await readFactoryImageState()).builds) {
+    if (!isFactoryImageBuildActive(build)) continue;
+    try {
+      if (
+        build.status === "queued" ||
+        (build.status === "building" &&
+          build.phase === "starting" &&
+          isStaleFactoryImageBuild(build, new Date().toISOString()))
+      ) {
+        await startClaimedFactoryImageBuild(build.id);
+        continue;
+      }
+      if (build.status === "building") {
+        const log = await reconcileBuildingImage(build.id);
+        if (log) logs[build.id] = log;
+      }
+      if (build.status === "publishing") await publishReadyImage(build.id);
+    } catch (error) {
+      console.error(
+        `Could not reconcile factory image build ${build.id}.`,
+        error
+      );
+    }
+  }
+  return logs;
+}
+
+async function reconcileBuildingImage(buildId: string): Promise<string | null> {
+  const build = await readFactoryImageBuild(buildId);
+  if (build === null || build.status !== "building") return null;
+  const sandbox = await getFactorySandbox(build.sandboxName);
+  if (sandbox === null) {
+    if (build.phase === "starting") return null;
+    await recordFactoryImageProgress(build.id, {
+      finishedAt: new Date().toISOString(),
+      message: "The build sandbox disappeared.",
+      status: "failed"
+    });
+    return null;
+  }
+
+  const progress = await readFactoryProgress(sandbox);
+  await recordFactoryImageProgress(build.id, {
+    message:
+      progress.warnings.length === 0
+        ? undefined
+        : `${progress.warnings.length} warning(s).`,
+    phase: progress.phase
+  });
+  if (progress.exitCode === null) return progress.logTail;
+  if (progress.exitCode !== 0) {
+    const message = `Provisioning exited with code ${progress.exitCode} during phase "${progress.phase}".`;
+    await recordFactoryImageProgress(build.id, {
+      finishedAt: new Date().toISOString(),
+      message,
+      status: "failed"
+    });
+    console.error(message, progress.logTail);
+    await deleteFactorySandbox(build.sandboxName);
+    return progress.logTail;
+  }
+  await publishReadyImage(
+    build.id,
+    progress.warnings,
+    progress.manifest ?? undefined
+  );
+  return progress.logTail;
+}
+
+async function publishReadyImage(
+  buildId: string,
+  warnings?: readonly string[],
+  manifest?: Readonly<Record<string, string>>
+): Promise<void> {
+  const build = await claimFactoryImagePublication(buildId);
+  if (build === null) return;
+  const sandbox = await getFactorySandbox(build.sandboxName);
+  if (sandbox === null) {
+    await recordFactoryImageProgress(build.id, {
+      finishedAt: new Date().toISOString(),
+      message: "The build sandbox disappeared before the snapshot.",
+      status: "failed"
+    });
+    return;
+  }
+  const snapshotId = await snapshotFactorySandbox(sandbox);
+  const pointer = await publishFactoryImage(build.id, {
+    snapshotId,
+    tools: manifest,
+    warmBuild: true,
+    warnings
+  });
+  if (pointer !== null) await pruneFactorySandboxes([pointer.sandboxName]);
 }

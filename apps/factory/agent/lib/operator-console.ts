@@ -40,6 +40,23 @@ export const OPERATOR_CHAT_PRINCIPAL = {
   principalType: "user"
 } as const;
 
+export function isOperatorChatPrincipal(
+  auth:
+    | {
+        readonly authenticator: string;
+        readonly principalId: string;
+        readonly principalType: string;
+      }
+    | null
+    | undefined
+): boolean {
+  return (
+    auth?.authenticator === OPERATOR_CHAT_PRINCIPAL.authenticator &&
+    auth.principalId === OPERATOR_CHAT_PRINCIPAL.principalId &&
+    auth.principalType === OPERATOR_CHAT_PRINCIPAL.principalType
+  );
+}
+
 export function isOperatorChatRequest(
   request: OperatorConsoleRequest
 ): boolean {

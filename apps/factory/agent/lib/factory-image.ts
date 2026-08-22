@@ -8,8 +8,8 @@
  * the merge webhook can never drift apart:
  *
  * - `agent/sandbox.ts` runs the phases sequentially in its Eve `bootstrap`.
- * - `workflows/factory-image.ts` writes them into one detached script and
- *   snapshots the sandbox when it finishes.
+ * - `agent/lib/factory-image-trigger.ts` writes them into one detached script
+ *   and snapshots the sandbox when it finishes.
  *
  * Versions are pinned to the values the repository and CI already use
  * (`rust-toolchain.toml`, root `package.json`, `.github/actions/setup-*`);
@@ -544,9 +544,8 @@ export function factoryImagePhases(
 }
 
 /**
- * One-shot script for the merge webhook workflow. It records the current
- * phase and the final exit code under the state directory so the workflow
- * can poll a detached build across step boundaries.
+ * One-shot script for merge-triggered builds. It records the current phase
+ * and final exit code so short reconciliation requests can observe it.
  */
 export function factoryImageScript(
   options: FactoryImageOptions,
@@ -588,14 +587,23 @@ const MANIFEST_MARKER = "--factory-manifest--";
 const LOG_MARKER = "--factory-log--";
 
 /**
- * Detaches the provisioning script so it survives the step that started
- * it. The workflow then polls {@link factoryImageProgressCommand} instead
- * of holding a function invocation open for the whole build.
+ * Detaches the provisioning script so it survives the request that started
+ * it. Repeated starts reuse the live process instead of resetting its markers.
  */
 export function factoryImageStartCommand(): string {
   return `set -euo pipefail
+pid_file=.factory-image-provision.pid
+if [ -f ${FACTORY_IMAGE_SPEC.stateDirectory}/exit ]; then
+  printf 'already finished\\n'
+  exit 0
+fi
+if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+  printf 'already running\\n'
+  exit 0
+fi
 setsid bash -lc 'bash ${FACTORY_IMAGE_SCRIPT_FILE}' \\
   > ${FACTORY_IMAGE_LOG_FILE} 2>&1 < /dev/null &
+printf '%s\\n' "$!" > "$pid_file"
 printf 'started\\n'`;
 }
 

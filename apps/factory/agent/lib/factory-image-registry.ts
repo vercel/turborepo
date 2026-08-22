@@ -9,6 +9,7 @@
 
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 
+import { strongBlobEtag } from "./blob-etag";
 import { factoryImageFingerprint } from "./factory-image";
 import {
   type FactoryImageBuild,
@@ -19,6 +20,8 @@ import {
   type FactoryImagePublishInput,
   type FactoryImageState,
   type FactoryImageView,
+  beginFactoryImageProvisioning,
+  beginFactoryImagePublication,
   claimFactoryImageBuild,
   EMPTY_FACTORY_IMAGE_STATE,
   findFactoryImageBuild,
@@ -107,6 +110,32 @@ export async function recordFactoryImageProgress(
   });
 }
 
+export async function claimFactoryImageProvisioning(
+  buildId: string
+): Promise<FactoryImageBuild | null> {
+  return mutate((state) => {
+    const outcome = beginFactoryImageProvisioning(
+      state,
+      buildId,
+      new Date().toISOString()
+    );
+    return { next: outcome.state, result: outcome.build };
+  });
+}
+
+export async function claimFactoryImagePublication(
+  buildId: string
+): Promise<FactoryImageBuild | null> {
+  return mutate((state) => {
+    const outcome = beginFactoryImagePublication(
+      state,
+      buildId,
+      new Date().toISOString()
+    );
+    return { next: outcome.state, result: outcome.build };
+  });
+}
+
 export async function publishFactoryImage(
   buildId: string,
   input: Omit<FactoryImagePublishInput, "now">
@@ -132,7 +161,10 @@ async function readState(): Promise<{
     return { state: EMPTY_FACTORY_IMAGE_STATE };
   }
   const value: unknown = await new Response(result.stream).json();
-  return { etag: result.blob.etag, state: parseFactoryImageState(value) };
+  return {
+    etag: strongBlobEtag(result.blob.etag),
+    state: parseFactoryImageState(value)
+  };
 }
 
 async function mutate<T>(
