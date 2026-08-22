@@ -26,23 +26,6 @@ export interface AgentRunRecord {
   readonly updatedAt: string;
 }
 
-export interface SandboxResource {
-  readonly createdAt: number;
-  readonly name: string;
-  readonly region?: string;
-  readonly runtime?: string;
-  readonly status: string;
-  readonly updatedAt: number;
-}
-
-export interface ControlPlaneSnapshot {
-  readonly configured: boolean;
-  readonly error?: string;
-  readonly runs: AgentRunRecord[];
-  readonly sandboxError?: boolean;
-  readonly sandboxes: SandboxResource[];
-}
-
 export function isAgentRunRecord(value: unknown): value is AgentRunRecord {
   if (typeof value !== "object" || value === null) return false;
   const run = value as Record<string, unknown>;
