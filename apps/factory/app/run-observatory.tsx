@@ -168,7 +168,7 @@ function SandboxCard({
       />
       <Button
         className="sandboxTerminalButton"
-        disabled={sandbox.status !== "running"}
+        disabled={sandbox.status === "failed"}
         onClick={() => onTerminal(sandbox.name)}
         size="sm"
         type="button"
