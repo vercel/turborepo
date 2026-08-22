@@ -149,20 +149,41 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
 
   return (
     <div
-      className={`status status-${status.state}`}
+      className={`mt-6 flex items-start gap-3 rounded-md bg-muted p-3.5 text-[0.8125rem] ${status.state === "starting" || status.state === "running" ? "text-warning" : status.state === "done" ? "text-success" : "text-destructive"}`}
       role={status.state === "error" ? "alert" : "status"}
       aria-live={status.state === "error" ? "assertive" : "polite"}
     >
-      <span className="statusDot" aria-hidden="true" />
+      <span
+        className="mt-1.5 size-[7px] shrink-0 rounded-full bg-current"
+        aria-hidden="true"
+      />
       <div>
-        <strong>{status.state}</strong>
-        {status.sessionId ? <code>{status.sessionId}</code> : null}
-        {status.harness ? <code>harness {status.harness}</code> : null}
-        {status.sandbox ? <code>sandbox {status.sandbox}</code> : null}
+        <strong className="block font-semibold capitalize">
+          {status.state}
+        </strong>
+        {status.sessionId ? (
+          <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+            {status.sessionId}
+          </code>
+        ) : null}
+        {status.harness ? (
+          <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+            harness {status.harness}
+          </code>
+        ) : null}
+        {status.sandbox ? (
+          <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+            sandbox {status.sandbox}
+          </code>
+        ) : null}
         {status.models ? (
           <>
-            <code>author {status.models.authorModel}</code>
-            <code>reviewer {status.models.reviewerModel}</code>
+            <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+              author {status.models.authorModel}
+            </code>
+            <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+              reviewer {status.models.reviewerModel}
+            </code>
           </>
         ) : null}
       </div>

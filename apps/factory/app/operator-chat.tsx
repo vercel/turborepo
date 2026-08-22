@@ -111,22 +111,39 @@ function toolSummary(part: Extract<EveMessagePart, { type: "dynamic-tool" }>) {
 
 function MessagePart({ part }: { readonly part: EveMessagePart }) {
   if (part.type === "text") {
-    return <p className="chatText">{part.text}</p>;
+    return (
+      <p className="mt-2 wrap-anywhere text-sm whitespace-pre-wrap">
+        {part.text}
+      </p>
+    );
   }
   if (part.type === "reasoning") {
-    return <p className="chatReasoning">{part.text}</p>;
+    return (
+      <p className="mt-2 wrap-anywhere text-[0.8125rem] whitespace-pre-wrap text-muted-foreground">
+        {part.text}
+      </p>
+    );
   }
   if (part.type === "file") {
-    return <p className="chatArtifact">{part.filename ?? part.mediaType}</p>;
+    return (
+      <p className="mt-2 wrap-anywhere text-[0.8125rem] whitespace-pre-wrap text-muted-foreground">
+        {part.filename ?? part.mediaType}
+      </p>
+    );
   }
   if (part.type === "authorization") {
     return (
-      <p className="chatArtifact">
+      <p className="mt-2 wrap-anywhere text-[0.8125rem] whitespace-pre-wrap text-muted-foreground">
         {part.state === "completed"
           ? `${part.displayName} authorization ${part.outcome}.`
           : part.description}
         {part.state === "required" && part.authorization?.url ? (
-          <a href={part.authorization.url} rel="noreferrer" target="_blank">
+          <a
+            className="ml-2 text-foreground"
+            href={part.authorization.url}
+            rel="noreferrer"
+            target="_blank"
+          >
             Sign in <span aria-hidden="true">↗</span>
           </a>
         ) : null}
@@ -135,7 +152,7 @@ function MessagePart({ part }: { readonly part: EveMessagePart }) {
   }
   if (part.type === "dynamic-tool") {
     return (
-      <p className="chatTool">
+      <p className="mt-2 flex items-baseline gap-2 text-xs whitespace-normal text-muted-foreground">
         <code>{part.toolName}</code>
         <span>{toolSummary(part)}</span>
       </p>
@@ -146,9 +163,13 @@ function MessagePart({ part }: { readonly part: EveMessagePart }) {
 
 function ChatMessage({ message }: { readonly message: EveMessage }) {
   return (
-    <li className={`chatMessage chatMessage-${message.role}`}>
+    <li
+      className={`min-w-0 rounded-md border border-border p-4 ${message.role === "user" ? "bg-secondary" : ""}`}
+    >
       <article aria-label={`${message.role} message`}>
-        <header>{message.role === "user" ? "You" : "Factory"}</header>
+        <header className="font-mono text-xs text-muted-foreground">
+          {message.role === "user" ? "You" : "Factory"}
+        </header>
         {message.parts.map((part, index) => (
           <MessagePart key={index} part={part} />
         ))}
@@ -212,17 +233,33 @@ function ChatThread({
   }
 
   return (
-    <div className="chat">
-      <div className="chatToolbar">
-        <div className={`status status-${agent.status}`} role="status">
-          <span className="statusDot" aria-hidden="true" />
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div
+          className={`flex min-w-0 flex-1 basis-60 items-start gap-3 rounded-md bg-muted p-3.5 text-[0.8125rem] ${agent.status === "submitted" || agent.status === "streaming" ? "text-warning" : agent.status === "error" ? "text-destructive" : "text-success"}`}
+          role="status"
+        >
+          <span
+            className="mt-1.5 size-[7px] shrink-0 rounded-full bg-current"
+            aria-hidden="true"
+          />
           <div>
-            <strong>{isBusy ? "working" : agent.status}</strong>
-            {agent.session ? <code>{agent.session.sessionId}</code> : null}
-            {agent.error ? <code>{agent.error.message}</code> : null}
+            <strong className="block font-semibold capitalize">
+              {isBusy ? "working" : agent.status}
+            </strong>
+            {agent.session ? (
+              <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+                {agent.session.sessionId}
+              </code>
+            ) : null}
+            {agent.error ? (
+              <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
+                {agent.error.message}
+              </code>
+            ) : null}
           </div>
         </div>
-        <div className="actions">
+        <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
           {isBusy ? (
             <Button
               onClick={() => dispatch(agent.cancel())}
@@ -242,21 +279,29 @@ function ChatThread({
           >
             New chat
           </Button>
-          <a href={agentRunsUrl} rel="noreferrer" target="_blank">
-            Open Agent Runs <span className="visuallyHidden">in a new tab</span>
+          <a
+            className="inline-flex min-h-10 items-center gap-1.5 px-2 text-sm font-medium text-foreground no-underline hover:underline hover:underline-offset-4"
+            href={agentRunsUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open Agent Runs <span className="sr-only">in a new tab</span>
             <span aria-hidden="true">↗</span>
           </a>
         </div>
       </div>
 
       {messages.length > 0 ? (
-        <ol className="chatTranscript" ref={transcript}>
+        <ol
+          className="mt-6 grid max-h-[60vh] list-none gap-4 overflow-y-auto p-0"
+          ref={transcript}
+        >
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
         </ol>
       ) : (
-        <p className="emptyRunway">
+        <p className="mt-6 grid min-h-[180px] place-items-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           {agent.session
             ? "This session's earlier messages were too large to restore. Keep going, or start a new chat."
             : "Ask for anything in the checkout. The agent opens a pull request only when you approve it."}
@@ -264,16 +309,21 @@ function ChatThread({
       )}
 
       {pending.map(({ request, toolName }) => (
-        <fieldset className="chatRequest" key={request.requestId}>
-          <legend>
+        <fieldset
+          className="mt-6 rounded-md border border-warning p-4"
+          key={request.requestId}
+        >
+          <legend className="px-1.5 text-[0.8125rem] font-semibold">
             {request.kind === "tool-approval"
               ? `Approve ${toolName}`
               : request.kind === "question"
                 ? "Question"
                 : "Session limit"}
           </legend>
-          <p>{request.prompt}</p>
-          <div className="actions">
+          <p className="mb-4 wrap-anywhere text-sm whitespace-pre-wrap">
+            {request.prompt}
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
             {request.options?.map((option) => (
               <Button
                 disabled={isBusy}
@@ -290,9 +340,10 @@ function ChatThread({
             ))}
           </div>
           {request.allowFreeform || request.display === "text" ? (
-            <div className="chatAnswer">
+            <div className="mt-3 flex items-center gap-2">
               <input
                 aria-label="Answer"
+                className="min-h-9 min-w-0 flex-auto rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                 disabled={isBusy}
                 onChange={(event) =>
                   setAnswers((current) => ({
@@ -321,16 +372,17 @@ function ChatThread({
       ))}
 
       <form
-        className="chatComposer"
+        className="mt-6 grid justify-items-end gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           submitDraft();
         }}
       >
-        <label className="visuallyHidden" htmlFor="chat-message">
+        <label className="sr-only" htmlFor="chat-message">
           Message
         </label>
         <textarea
+          className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           disabled={isBusy}
           id="chat-message"
           onChange={(event) => setDraft(event.target.value)}
@@ -374,7 +426,11 @@ export function OperatorChat({ agentRunsUrl }: OperatorChatProps) {
   }
 
   if (thread === null) {
-    return <p className="emptyRunway">Loading the console…</p>;
+    return (
+      <p className="mt-6 grid min-h-[180px] place-items-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        Loading the console…
+      </p>
+    );
   }
 
   return (
