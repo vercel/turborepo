@@ -232,6 +232,20 @@ System environment variables are always overridden by flag values provided direc
         configured.
       </td>
     </tr>
+    <tr id="turbo_remote_cache_enabled">
+      <td>
+        <code>TURBO_REMOTE_CACHE_ENABLED</code>
+      </td>
+      <td>
+        Set to <code>0</code> or <code>false</code> to disable all{" "}
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>{" "}
+        operations, even if the repository has a valid token. Equivalent to{" "}
+        <a href="/docs/reference/configuration#enabled">
+          <code>remoteCache.enabled</code>
+        </a>{" "}
+        in <code>turbo.json</code>.
+      </td>
+    </tr>
     <tr id="turbo_remote_cache_read_only">
       <td>
         <code>TURBO_REMOTE_CACHE_READ_ONLY</code>
