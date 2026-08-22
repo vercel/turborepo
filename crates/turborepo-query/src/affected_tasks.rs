@@ -140,7 +140,7 @@ pub fn calculate_affected_tasks(
     ) {
         Ok(matched) => matched,
         Err(error) => {
-            tracing::error!(?error, "failed to determine affected tasks");
+            tracing::error!("failed to determine affected tasks: {error}");
             return Ok(engine
                 .task_ids()
                 .map(|task_id| AffectedTask {

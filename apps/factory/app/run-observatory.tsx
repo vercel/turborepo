@@ -8,11 +8,13 @@ import {
   useState
 } from "react";
 
+import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
 import type {
   AgentRunRecord,
   ControlPlaneSnapshot,
   SandboxResource
 } from "../agent/lib/run-types";
+import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
 
 const AGENT_RUNS_URL =
@@ -104,6 +106,12 @@ function RunTicket({ run }: { readonly run: AgentRunRecord }) {
           <span aria-hidden="true">→</span>
           <span>{run.sandbox?.status ?? run.status}</span>
         </div>
+        {run.sandbox && run.sandbox.provider !== "eve" ? (
+          <CopyCommand
+            command={sandboxSshCommand(run.sandbox.id)}
+            label="SSH command for this sandbox"
+          />
+        ) : null}
         <a
           className="runDetails"
           href={detailsUrl}
@@ -142,6 +150,10 @@ function SandboxCard({ sandbox }: { readonly sandbox: SandboxResource }) {
           <dd>{sandbox.region ?? "automatic"}</dd>
         </div>
       </dl>
+      <CopyCommand
+        command={sandboxSshCommand(sandbox.name)}
+        label="SSH command for this sandbox"
+      />
     </li>
   );
 }
