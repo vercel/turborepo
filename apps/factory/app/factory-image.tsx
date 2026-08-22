@@ -35,9 +35,15 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value))} UTC`;
 }
 
-function BuildCard({ build }: { readonly build: FactoryImageBuild }) {
+function BuildCard({
+  build,
+  log
+}: {
+  readonly build: FactoryImageBuild;
+  readonly log?: string;
+}) {
   return (
-    <li className="sandboxCard">
+    <li className={`sandboxCard${log ? " sandboxCard-live" : ""}`}>
       <div>
         <span
           className={`runState runState-${BUILD_STATE_CLASS[build.status]}`}
@@ -66,6 +72,11 @@ function BuildCard({ build }: { readonly build: FactoryImageBuild }) {
         </div>
       </dl>
       {build.message ? <p className="description">{build.message}</p> : null}
+      {log ? (
+        <pre className="buildLog" aria-label="Live factory image build log">
+          {log}
+        </pre>
+      ) : null}
     </li>
   );
 }
@@ -233,7 +244,11 @@ export function FactoryImage({
       {view.builds.length > 0 ? (
         <ul className="sandboxGrid">
           {view.builds.map((build) => (
-            <BuildCard build={build} key={build.id} />
+            <BuildCard
+              build={build}
+              key={build.id}
+              log={view.logs?.[build.id]}
+            />
           ))}
         </ul>
       ) : (

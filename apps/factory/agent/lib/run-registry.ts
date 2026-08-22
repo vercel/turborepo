@@ -1,6 +1,7 @@
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { Sandbox } from "@vercel/sandbox";
 
+import { strongBlobEtag } from "./blob-etag";
 import {
   type AgentRunRecord,
   type ControlPlaneSnapshot,
@@ -112,7 +113,7 @@ async function readRunIndex(): Promise<{
   if (!result || result.statusCode !== 200) return { runs: [] };
   const value: unknown = await new Response(result.stream).json();
   return {
-    etag: result.blob.etag,
+    etag: strongBlobEtag(result.blob.etag),
     runs: Array.isArray(value) ? value.filter(isAgentRunRecord) : []
   };
 }

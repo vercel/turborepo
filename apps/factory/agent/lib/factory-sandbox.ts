@@ -2,10 +2,9 @@
  * Vercel Sandbox operations behind a factory image build.
  *
  * The build sandbox is a plain `@vercel/sandbox` VM (not an Eve session):
- * the workflow creates it, detaches the provisioning script, polls the
- * markers it writes, and snapshots the result. Every helper is
- * name-addressed so a workflow step can reattach after a suspension
- * without serializing a live handle.
+ * application code creates it, detaches the provisioning script, polls the
+ * markers it writes, and snapshots the result. Every helper is name-addressed
+ * so later requests can reattach without serializing a live handle.
  */
 
 import { APIError, Sandbox } from "@vercel/sandbox";

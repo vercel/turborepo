@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   activeFactoryImageBuilds,
+  beginFactoryImageProvisioning,
+  beginFactoryImagePublication,
   claimFactoryImageBuild,
   EMPTY_FACTORY_IMAGE_STATE,
   factoryImageSandboxName,
@@ -53,7 +55,7 @@ test("a newer merge cancels every build still in flight", () => {
   const building = updateFactoryImageBuild(
     first.state,
     "build1",
-    { status: "building", workflowRunId: "wrun_1" },
+    { status: "building" },
     "2026-08-19T00:01:00.000Z"
   );
 
@@ -62,10 +64,9 @@ test("a newer merge cancels every build still in flight", () => {
     second.superseded.map((build) => [
       build.id,
       build.status,
-      build.supersededBy,
-      build.workflowRunId
+      build.supersededBy
     ]),
-    [["build1", "cancelled", "build2", "wrun_1"]]
+    [["build1", "cancelled", "build2"]]
   );
   assert.deepEqual(
     activeFactoryImageBuilds(second.state).map((build) => build.id),
@@ -107,6 +108,41 @@ test("redelivered webhooks reuse the live build", () => {
   assert.equal(again.kind, "in-progress");
   assert.equal(again.build.id, "build1");
   assert.equal(activeFactoryImageBuilds(first.state).length, 1);
+});
+
+test("only one reconciler acquires provisioning and publication", () => {
+  const first = claimed(EMPTY_FACTORY_IMAGE_STATE, "a", "build1");
+  const provisioning = beginFactoryImageProvisioning(
+    first.state,
+    "build1",
+    "2026-08-19T00:01:00.000Z"
+  );
+  assert.equal(provisioning.build.status, "building");
+  assert.equal(provisioning.build.phase, "starting");
+  assert.equal(
+    beginFactoryImageProvisioning(
+      provisioning.state,
+      "build1",
+      "2026-08-19T00:02:00.000Z"
+    ).build,
+    null
+  );
+
+  const publication = beginFactoryImagePublication(
+    provisioning.state,
+    "build1",
+    "2026-08-19T00:03:00.000Z"
+  );
+  assert.equal(publication.build.status, "publishing");
+  assert.equal(publication.build.phase, "snapshotting");
+  assert.equal(
+    beginFactoryImagePublication(
+      publication.state,
+      "build1",
+      "2026-08-19T00:04:00.000Z"
+    ).build,
+    null
+  );
 });
 
 test("a build that stopped reporting progress is replaced", () => {

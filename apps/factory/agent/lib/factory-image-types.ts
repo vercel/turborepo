@@ -56,7 +56,6 @@ export interface FactoryImageBuild {
   readonly supersededBy?: string;
   readonly trigger: FactoryImageTrigger;
   readonly updatedAt: string;
-  readonly workflowRunId?: string;
 }
 
 export interface FactoryImagePointer {
@@ -137,8 +136,7 @@ export function findFactoryImageBuild(
  *
  * A rapid series of merges therefore leaves exactly one live build: each
  * claim cancels every build still in flight and records which build
- * replaced it, so the caller can stop those workflow runs and delete
- * their sandboxes.
+ * replaced it, so the caller can delete their sandboxes.
  */
 export function claimFactoryImageBuild(
   state: FactoryImageState,
@@ -202,14 +200,63 @@ export function claimFactoryImageBuild(
 export type FactoryImageBuildChanges = Partial<
   Pick<
     FactoryImageBuild,
-    | "finishedAt"
-    | "message"
-    | "phase"
-    | "snapshotId"
-    | "status"
-    | "workflowRunId"
+    "finishedAt" | "message" | "phase" | "snapshotId" | "status"
   >
 >;
+
+export function beginFactoryImageProvisioning(
+  state: FactoryImageState,
+  buildId: string,
+  now: string
+): {
+  readonly build: FactoryImageBuild | null;
+  readonly state: FactoryImageState;
+} {
+  const build = findFactoryImageBuild(state, buildId);
+  if (
+    build === null ||
+    (build.status !== "queued" &&
+      !(
+        build.status === "building" &&
+        build.phase === "starting" &&
+        isStaleFactoryImageBuild(build, now)
+      ))
+  ) {
+    return { build: null, state };
+  }
+  const next = updateFactoryImageBuild(
+    state,
+    buildId,
+    { phase: "starting", status: "building" },
+    now
+  );
+  return { build: findFactoryImageBuild(next, buildId), state: next };
+}
+
+export function beginFactoryImagePublication(
+  state: FactoryImageState,
+  buildId: string,
+  now: string
+): {
+  readonly build: FactoryImageBuild | null;
+  readonly state: FactoryImageState;
+} {
+  const build = findFactoryImageBuild(state, buildId);
+  if (
+    build === null ||
+    (build.status !== "building" &&
+      !(build.status === "publishing" && isStaleFactoryImageBuild(build, now)))
+  ) {
+    return { build: null, state };
+  }
+  const next = updateFactoryImageBuild(
+    state,
+    buildId,
+    { phase: "snapshotting", status: "publishing" },
+    now
+  );
+  return { build: findFactoryImageBuild(next, buildId), state: next };
+}
 
 /**
  * Applies progress to one build, ignoring updates to builds that already
@@ -345,6 +392,8 @@ export interface FactoryImageView {
   readonly configured: boolean;
   /** Toolchain fingerprint this deployment expects. */
   readonly fingerprint: string;
+  /** Recent output for active builds, keyed by build id. */
+  readonly logs?: Readonly<Record<string, string>>;
   readonly pointer: FactoryImagePointer | null;
 }
 

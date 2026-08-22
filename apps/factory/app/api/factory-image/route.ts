@@ -1,13 +1,23 @@
 import { readFactoryImageView } from "../../../agent/lib/factory-image-registry";
-import { triggerFactoryImageBuild } from "../../../agent/lib/factory-image-trigger";
+import {
+  reconcileFactoryImageBuilds,
+  triggerFactoryImageBuild
+} from "../../../agent/lib/factory-image-trigger";
 import { FACTORY_IMAGE_REBUILD_ACTION } from "../../../agent/lib/factory-image-types";
 import { fetchMainCommit } from "../../../agent/lib/github";
 
 /** Current factory image plus recent builds, for the operator dashboard. */
 export async function GET(): Promise<Response> {
-  return Response.json(await readFactoryImageView(), {
-    headers: { "cache-control": "no-store" }
+  const logs = await reconcileFactoryImageBuilds().catch((error: unknown) => {
+    console.error("Could not reconcile factory image builds.", error);
+    return {};
   });
+  return Response.json(
+    { ...(await readFactoryImageView()), logs },
+    {
+      headers: { "cache-control": "no-store" }
+    }
+  );
 }
 
 /**
