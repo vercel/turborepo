@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import { Navigation } from "./navigation";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -30,7 +31,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <a className="skipLink" href="#main-content">
           Skip to content
         </a>
-        {children}
+        <div className="appShell">
+          <Navigation />
+          {children}
+        </div>
       </body>
     </html>
   );

@@ -137,9 +137,142 @@ code,
   border: 0;
 }
 
-main {
+.appShell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 28px 20px;
+  border-right: 1px solid var(--border);
+}
+
+.brand {
+  color: inherit;
+  text-decoration: none;
+}
+
+.navigationList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navigationLink {
+  display: block;
+  padding: 8px 10px;
+  color: var(--muted-foreground);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.navigationLink:hover,
+.navigationLink[data-active="true"] {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.pageContent {
   width: min(1200px, calc(100% - 48px));
   margin: 0 auto;
+}
+
+.pageTitle {
+  margin: 32px 0 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.auditLogLanding {
+  max-width: 560px;
+  padding: 64px 0;
+}
+
+.auditLogLanding h1 {
+  margin: 0;
+}
+
+.auditLogLanding p {
+  margin: 12px 0 24px;
+  color: var(--muted-foreground);
+}
+
+.auditLogLanding a {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-radius: var(--radius);
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.demoRuns {
+  margin-top: 48px;
+}
+
+.demoRunsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.demoRunsHeader h2 {
+  font-size: 1rem;
+}
+
+.demoRunsHeader span {
+  color: var(--warning);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6875rem;
+}
+
+.demoRuns > p {
+  margin: 4px 0 12px;
+  font-size: 0.8125rem;
+}
+
+.demoRunsViewport {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.demoRuns table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.demoRuns th,
+.demoRuns td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.demoRuns th {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.demoRuns tr:last-child td {
+  border-bottom: 0;
 }
 
 .masthead {
@@ -177,6 +310,7 @@ p {
   text-wrap: pretty;
 }
 
+h1,
 h2 {
   margin: 0;
   font-size: clamp(1.5rem, 3vw, 2rem);
@@ -592,6 +726,33 @@ select:focus-visible {
   grid-row: 1 / 5;
 }
 
+.manualSchedules {
+  padding: 24px 0 64px;
+}
+
+.manualSchedules header > p {
+  margin: 8px 0 24px;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.manualScheduleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.manualScheduleGrid > section {
+  padding: 20px;
+  background: var(--secondary);
+  border-radius: var(--radius);
+}
+
+.manualScheduleGrid .controls {
+  grid-column: auto;
+  margin-top: 16px;
+}
+
 .schedule {
   grid-column: 2;
   align-self: start;
@@ -865,27 +1026,34 @@ select:focus-visible {
 }
 
 @media (max-width: 980px) {
-  .runBoard {
-    grid-template-columns: repeat(3, 300px);
-    width: max-content;
-  }
-
-  .runBoardViewport {
-    padding-bottom: 12px;
-    scroll-snap-type: x proximity;
-  }
-
-  .runColumn {
-    scroll-snap-align: start;
-  }
-
   .sandboxGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
-  main {
+  .appShell {
+    display: block;
+  }
+
+  .sidebar {
+    gap: 20px;
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .navigationList {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .navigationLink {
+    white-space: nowrap;
+  }
+
+  .pageContent {
     width: min(100% - 32px, 1200px);
   }
 
@@ -901,6 +1069,10 @@ select:focus-visible {
   .operation {
     grid-template-columns: 1fr;
     padding: 64px 0;
+  }
+
+  .manualScheduleGrid {
+    grid-template-columns: 1fr;
   }
 
   .operationHeader {

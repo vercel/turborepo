@@ -1,13 +1,7 @@
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
-import { Sandbox } from "@vercel/sandbox";
 
 import { strongBlobEtag } from "./blob-etag";
-import {
-  type AgentRunRecord,
-  type ControlPlaneSnapshot,
-  isAgentRunRecord,
-  type SandboxResource
-} from "./run-types";
+import { type AgentRunRecord, isAgentRunRecord } from "./run-types";
 
 const RUN_INDEX_PATH = "agent-runs/v1/index.json";
 const MAX_RUNS = 100;
@@ -73,35 +67,6 @@ export async function getAgentRun(id: string): Promise<AgentRunRecord | null> {
   return (await readRunIndex()).runs.find((run) => run.id === id) ?? null;
 }
 
-export async function listControlPlaneSnapshot(): Promise<ControlPlaneSnapshot> {
-  const configured = isRunRegistryConfigured();
-  if (!configured) {
-    const inventory = await listSandboxResources();
-    return {
-      configured,
-      runs: [],
-      sandboxError: inventory.error,
-      sandboxes: inventory.resources
-    };
-  }
-  let runError = false;
-  const [runs, inventory] = await Promise.all([
-    listAgentRuns().catch((error: unknown) => {
-      console.error("Could not load the agent run registry.", error);
-      runError = true;
-      return [];
-    }),
-    listSandboxResources()
-  ]);
-  return {
-    configured,
-    error: runError ? "Agent run history is currently unavailable." : undefined,
-    runs,
-    sandboxError: inventory.error,
-    sandboxes: inventory.resources
-  };
-}
-
 async function readRunIndex(): Promise<{
   etag?: string;
   runs: AgentRunRecord[];
@@ -116,12 +81,6 @@ async function readRunIndex(): Promise<{
     etag: strongBlobEtag(result.blob.etag),
     runs: Array.isArray(value) ? value.filter(isAgentRunRecord) : []
   };
-}
-
-async function listAgentRuns(): Promise<AgentRunRecord[]> {
-  return (await readRunIndex()).runs.sort((left, right) =>
-    right.startedAt.localeCompare(left.startedAt)
-  );
 }
 
 async function mutateRuns(
@@ -152,33 +111,4 @@ async function mutateRuns(
   throw new Error(
     "Agent run registry changed too frequently; retry the update."
   );
-}
-
-async function listSandboxResources(): Promise<{
-  error?: boolean;
-  resources: SandboxResource[];
-}> {
-  try {
-    const result = await Sandbox.list({
-      limit: 50,
-      namePrefix: "ai-sdk-harness",
-      sortBy: "name",
-      sortOrder: "asc"
-    });
-    const sandboxes = await result.toArray();
-    return {
-      resources: sandboxes
-        .map((sandbox) => ({
-          createdAt: sandbox.createdAt,
-          name: sandbox.name,
-          region: sandbox.region,
-          runtime: sandbox.runtime,
-          status: sandbox.status,
-          updatedAt: sandbox.updatedAt
-        }))
-        .sort((left, right) => right.updatedAt - left.updatedAt)
-    };
-  } catch {
-    return { error: true, resources: [] };
-  }
 }
