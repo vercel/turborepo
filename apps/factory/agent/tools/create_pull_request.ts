@@ -8,7 +8,11 @@ import {
   readPerformanceState,
   requirePublishablePerformanceChange
 } from "../lib/performance-validation.js";
-import { buildDraftPullRequest } from "../lib/pull-request.js";
+import {
+  buildDraftPullRequest,
+  CONVENTIONAL_TITLE_PATTERN,
+  resolvePullRequestTitle
+} from "../lib/pull-request.js";
 import {
   assertNoReleaseAgeExclusion,
   isReleaseAgeConfigFile
@@ -33,11 +37,13 @@ const inputSchema = z.object({
   title: z
     .string()
     .regex(
-      /^perf: [A-Z].+$/,
-      "Use 'perf: Description' with an uppercase description."
+      CONVENTIONAL_TITLE_PATTERN,
+      "Use 'type: Description' with an uppercase description and no scope."
     )
     .optional()
-    .describe("Required title for an automated performance pull request.")
+    .describe(
+      "Required title for an interactive or automated performance pull request. Automated example maintenance titles itself."
+    )
 });
 
 type RefResponse = { object?: { sha?: string } };
@@ -164,7 +170,7 @@ async function github<T>(input: {
 
 export default defineTool({
   description:
-    "Create a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates.",
+    "Create a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs an agents/* branch and a Conventional Commit title from the caller.",
   inputSchema,
   approval: ({ session }) => {
     return isAppPrincipal(session.auth.current)
@@ -203,10 +209,10 @@ export default defineTool({
       }
       await requirePublishablePerformanceChange(sandbox, ctx.session.id);
     }
-    const changedFiles = await listChangedFiles(
-      sandbox,
-      Boolean(performanceState)
-    );
+    // Automated example maintenance publishes only its selected example. Every
+    // other run — a performance run, or an interactive request from an operator
+    // — publishes whatever it changed in the checkout.
+    const changedFiles = await listChangedFiles(sandbox, selection === null);
     if (changedFiles.length === 0) {
       return { created: false, reason: "No publishable changes." };
     }
@@ -225,14 +231,11 @@ export default defineTool({
     if (!branchName) {
       throw new Error("Interactive pull requests require an agents/* branch.");
     }
-    const changeTitle = performanceState
-      ? input.title
-      : selection
-        ? `chore: Update ${selection.example} example`
-        : "chore: Update Turborepo examples";
-    if (!changeTitle) {
-      throw new Error("Performance pull requests require a perf title.");
-    }
+    const changeTitle = resolvePullRequestTitle({
+      automatedExample: selection?.example,
+      performance: performanceState !== null,
+      requestedTitle: input.title
+    });
 
     const existingPullRequests = await findOpenPullRequests(branchName);
     const existingPullRequest = existingPullRequests[0];
@@ -319,7 +322,7 @@ export default defineTool({
     if (newTreeSha === baseTreeSha) {
       return {
         created: false,
-        reason: "No effective changes under examples/."
+        reason: "No effective changes against main."
       };
     }
 
