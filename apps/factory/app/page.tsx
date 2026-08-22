@@ -2,6 +2,7 @@ import { listExamples } from "../agent/lib/examples";
 import { readFactoryImageView } from "../agent/lib/factory-image-registry";
 import { listControlPlaneSnapshot } from "../agent/lib/run-registry";
 import { FactoryImage } from "./factory-image";
+import { OperatorChat } from "./operator-chat";
 import { RunMaintenance } from "./run-maintenance";
 import { RunObservatory } from "./run-observatory";
 import { RunPerformance } from "./run-performance";
@@ -33,6 +34,43 @@ export default async function OperatorPage() {
       <RunObservatory initialSnapshot={snapshot} />
 
       <FactoryImage initialView={factoryImage} />
+
+      <section className="operation" aria-labelledby="chat-title">
+        <div className="operationHeader">
+          <div>
+            <h2 id="chat-title">Start work</h2>
+          </div>
+          <span className="schedule">ON DEMAND</span>
+        </div>
+
+        <p className="description">
+          Opens an ad-hoc session on the factory image, with the same sandbox
+          checkout of <code>main</code> the scheduled operations use. Ask for
+          anything in the repository; the agent opens a draft pull request only
+          when you ask for one and approve the call.
+        </p>
+
+        <dl className="facts">
+          <div>
+            <dt>Scope</dt>
+            <dd>
+              <code>whole checkout</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Execution</dt>
+            <dd>Chat mode</dd>
+          </div>
+          <div>
+            <dt>Output</dt>
+            <dd>Draft PR on request</dd>
+          </div>
+        </dl>
+
+        <div className="controls">
+          <OperatorChat agentRunsUrl={AGENT_RUNS_URL} />
+        </div>
+      </section>
 
       <section className="operation" aria-labelledby="operation-title">
         <div className="operationHeader">

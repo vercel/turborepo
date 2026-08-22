@@ -336,13 +336,16 @@ h3 {
 .runState-waiting,
 .status-starting,
 .status-running,
+.status-streaming,
+.status-submitted,
 .resourceDot-running,
 .resourceDot-pending {
   color: var(--warning);
 }
 
 .runState-completed,
-.status-done {
+.status-done,
+.status-ready {
   color: var(--success);
 }
 
@@ -653,6 +656,146 @@ select:focus-visible {
   font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
+}
+
+.chatToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chatToolbar .status {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.chatToolbar .actions {
+  flex: none;
+}
+
+.chatTranscript {
+  display: grid;
+  gap: 16px;
+  max-height: 60vh;
+  margin: 24px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.chatMessage {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chatMessage-user {
+  background: var(--secondary);
+}
+
+.chatMessage header {
+  color: var(--muted-foreground);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+}
+
+.chatText,
+.chatReasoning,
+.chatArtifact,
+.chatTool {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.chatReasoning,
+.chatArtifact {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.chatTool {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  white-space: normal;
+}
+
+.chatArtifact a {
+  margin-left: 8px;
+  color: var(--foreground);
+}
+
+.chatRequest {
+  margin: 24px 0 0;
+  padding: 16px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+}
+
+.chatRequest legend {
+  padding: 0 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.chatRequest p {
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.chatAnswer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.chatAnswer input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.chatComposer {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+  margin-top: 24px;
+}
+
+.chatComposer textarea {
+  width: 100%;
+  padding: 12px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+}
+
+.chatAnswer input:focus-visible,
+.chatComposer textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .status {

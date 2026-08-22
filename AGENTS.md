@@ -44,6 +44,8 @@ When making changes to the codebase, check if the following docs need updates:
 - Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
 - Rust CI restores full Cargo target state on Ubuntu, macOS, and Windows from trusted `main` snapshots; only `main` writes. Repository sccache dogfooding is disabled.
 - Linux Rust shards include `terminal-control` black-box TUI integration tests; known regressions remain explicitly ignored.
+- Rust test shards pin Node.js 18.20.2, so any `packageManager` version an integration fixture declares has to run on that Node.
+- Rust integration tests read fixtures from `turborepo-tests/integration/fixtures/`, never from `examples/`. Examples are version-bumped on their own cadence and are not declared inputs of the Rust test task.
 - Example validation remains push-only because it requires Vercel credentials and project state.
 
 ### PR Title Format
