@@ -30,43 +30,92 @@ const DEMO_RUNS = [
 
 export default function OperatorPage() {
   return (
-    <main id="main-content" className="pageContent">
-      <section className="auditLogLanding" aria-labelledby="agent-runs-title">
-        <h1 id="agent-runs-title">Agent Runs</h1>
-        <p>
+    <main
+      id="main-content"
+      className="mx-auto w-[min(1200px,calc(100%_-_48px))] max-[720px]:w-[min(1200px,calc(100%_-_32px))]"
+    >
+      <section
+        className="max-w-[560px] py-16"
+        aria-labelledby="agent-runs-title"
+      >
+        <h1
+          className="text-pretty text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
+          id="agent-runs-title"
+        >
+          Agent Runs
+        </h1>
+        <p className="my-3 mb-6 text-pretty text-muted-foreground">
           View scheduled jobs, operator chats, and their full execution history
           in Vercel Observability.
         </p>
-        <a href={AGENT_RUNS_URL} rel="noreferrer" target="_blank">
-          Open Agent Runs <span className="visuallyHidden">in a new tab</span>
+        <a
+          className="inline-flex min-h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground no-underline"
+          href={AGENT_RUNS_URL}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Open Agent Runs <span className="sr-only">in a new tab</span>
         </a>
-        <div className="demoRuns" aria-labelledby="demo-runs-title">
-          <div className="demoRunsHeader">
-            <h2 id="demo-runs-title">Example Agent Runs</h2>
-            <span>DEMO DATA</span>
+        <div className="mt-12" aria-labelledby="demo-runs-title">
+          <div className="flex items-center justify-between">
+            <h2
+              className="text-pretty text-base font-semibold tracking-[-0.02em]"
+              id="demo-runs-title"
+            >
+              Example Agent Runs
+            </h2>
+            <span className="font-mono text-[0.6875rem] text-warning">
+              DEMO DATA
+            </span>
           </div>
-          <p>Illustrative only. Open Agent Runs for live data.</p>
-          <div className="demoRunsViewport">
-            <table>
+          <p className="mt-1 mb-3 text-[0.8125rem] text-pretty">
+            Illustrative only. Open Agent Runs for live data.
+          </p>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full border-collapse text-[0.8125rem]">
               <thead>
                 <tr>
-                  <th>Created</th>
-                  <th>Trigger</th>
-                  <th>Run</th>
-                  <th>Tokens</th>
-                  <th>Turns</th>
-                  <th>Status</th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Created
+                  </th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Trigger
+                  </th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Run
+                  </th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Tokens
+                  </th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Turns
+                  </th>
+                  <th className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap text-[0.6875rem] font-medium text-muted-foreground uppercase">
+                    Status
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {DEMO_RUNS.map((run) => (
-                  <tr key={run.title}>
-                    <td>{run.created}</td>
-                    <td>{run.trigger}</td>
-                    <td>{run.title}</td>
-                    <td>{run.tokens}</td>
-                    <td>{run.turns}</td>
-                    <td>{run.status}</td>
+                  <tr key={run.title} className="last:[&>td]:border-b-0">
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.created}
+                    </td>
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.trigger}
+                    </td>
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.title}
+                    </td>
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.tokens}
+                    </td>
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.turns}
+                    </td>
+                    <td className="border-b border-border px-3 py-2.5 text-left whitespace-nowrap">
+                      {run.status}
+                    </td>
                   </tr>
                 ))}
               </tbody>

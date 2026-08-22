@@ -43,37 +43,57 @@ function BuildCard({
   readonly log?: string;
 }) {
   return (
-    <li className={`sandboxCard${log ? " sandboxCard-live" : ""}`}>
-      <div>
+    <li
+      className={`min-w-0 border-t border-border pt-4 ${log ? "col-span-full" : ""}`}
+    >
+      <div className="flex items-center gap-2">
         <span
-          className={`runState runState-${BUILD_STATE_CLASS[build.status]}`}
+          className={`flex items-center gap-2 font-mono text-xs capitalize ${BUILD_STATE_CLASS[build.status] === "running" || BUILD_STATE_CLASS[build.status] === "waiting" ? "text-warning" : BUILD_STATE_CLASS[build.status] === "completed" ? "text-success" : "text-destructive"}`}
         >
-          <span className="statusDot" aria-hidden="true" />
+          <span
+            className="size-[7px] shrink-0 rounded-full bg-current"
+            aria-hidden="true"
+          />
           <span>{build.status}</span>
         </span>
-        <strong>{build.commit.slice(0, 7)}</strong>
+        <strong className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-medium">
+          {build.commit.slice(0, 7)}
+        </strong>
       </div>
-      <dl>
+      <dl
+        className={`ml-[15px] mt-4 grid gap-2 ${log ? "grid-cols-3 max-[520px]:grid-cols-1" : ""}`}
+      >
         <div>
-          <dt>Phase</dt>
-          <dd>{build.phase ?? "unknown"}</dd>
+          <dt className="text-xs text-muted-foreground">Phase</dt>
+          <dd className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground">
+            {build.phase ?? "unknown"}
+          </dd>
         </div>
         <div>
-          <dt>Trigger</dt>
-          <dd>{build.trigger}</dd>
+          <dt className="text-xs text-muted-foreground">Trigger</dt>
+          <dd className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground">
+            {build.trigger}
+          </dd>
         </div>
         <div>
-          <dt>Updated</dt>
-          <dd>
+          <dt className="text-xs text-muted-foreground">Updated</dt>
+          <dd className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground">
             <time dateTime={build.updatedAt}>
               {formatTimestamp(build.updatedAt)}
             </time>
           </dd>
         </div>
       </dl>
-      {build.message ? <p className="description">{build.message}</p> : null}
+      {build.message ? (
+        <p className="mt-6 max-w-[68ch] text-muted-foreground">
+          {build.message}
+        </p>
+      ) : null}
       {log ? (
-        <pre className="buildLog" aria-label="Live factory image build log">
+        <pre
+          className="mt-4 max-h-80 overflow-auto rounded-md border border-border bg-secondary p-4 font-mono text-xs leading-[1.6] whitespace-pre-wrap"
+          aria-label="Live factory image build log"
+        >
           {log}
         </pre>
       ) : null}
@@ -161,15 +181,25 @@ export function FactoryImage({
   const stale = pointer !== null && pointer.fingerprint !== view.fingerprint;
 
   return (
-    <section className="operation" aria-labelledby="factory-image-title">
-      <div className="operationHeader">
-        <div>
-          <h2 id="factory-image-title">Factory image</h2>
+    <section
+      className="grid grid-cols-[minmax(220px,4fr)_minmax(0,8fr)] gap-x-16 border-b border-border py-[clamp(64px,10vw,120px)] max-[720px]:block max-[720px]:py-16"
+      aria-labelledby="factory-image-title"
+    >
+      <div className="contents max-[720px]:flex max-[720px]:items-start max-[720px]:justify-between max-[720px]:gap-4 max-[520px]:flex-col-reverse">
+        <div className="col-start-1 row-span-4 max-[720px]:block">
+          <h2
+            className="text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
+            id="factory-image-title"
+          >
+            Factory image
+          </h2>
         </div>
-        <span className="schedule">ON MERGE TO MAIN</span>
+        <span className="col-start-2 self-start justify-self-start font-mono text-xs tracking-[0.02em] text-muted-foreground">
+          ON MERGE TO MAIN
+        </span>
       </div>
 
-      <p className="description">
+      <p className="col-start-2 mt-6 max-w-[68ch] text-muted-foreground max-[720px]:mt-6">
         Every push to <code>main</code> rebuilds the sandbox snapshot each agent
         boots from: a Turborepo checkout at that commit plus the Rust, protoc,
         Cap&apos;n Proto, Zig, and pnpm toolchain, installed dependencies, and a
@@ -178,55 +208,69 @@ export function FactoryImage({
       </p>
 
       {view.configured ? null : (
-        <div className="registryNotice" role="status">
+        <div
+          className="col-start-2 mt-6 border-l-2 border-warning bg-muted px-3.5 py-3 text-sm"
+          role="status"
+        >
           Connect a private Vercel Blob store to enable factory image builds.
         </div>
       )}
       {error ? (
-        <div className="registryNotice registryNotice-error" role="alert">
+        <div
+          className="col-start-2 mt-6 border-l-2 border-destructive bg-muted px-3.5 py-3 text-sm"
+          role="alert"
+        >
           {error}
         </div>
       ) : null}
       {stale ? (
-        <div className="registryNotice" role="status">
+        <div
+          className="col-start-2 mt-6 border-l-2 border-warning bg-muted px-3.5 py-3 text-sm"
+          role="status"
+        >
           The published image was built for an older toolchain. The next merge
           rebuilds it.
         </div>
       ) : null}
 
-      <dl className="facts">
-        <div>
-          <dt>Commit</dt>
-          <dd>
+      <dl className="col-start-2 my-10 grid grid-cols-3 gap-6 max-[520px]:grid-cols-1 max-[520px]:gap-4">
+        <div className="min-w-0 border-t border-border pt-3">
+          <dt className="text-xs text-muted-foreground">Commit</dt>
+          <dd className="mt-1.5 text-sm">
             <code>{pointer ? pointer.commit.slice(0, 7) : "none"}</code>
           </dd>
         </div>
-        <div>
-          <dt>Snapshot</dt>
-          <dd>
+        <div className="min-w-0 border-t border-border pt-3">
+          <dt className="text-xs text-muted-foreground">Snapshot</dt>
+          <dd className="mt-1.5 text-sm">
             <code>{pointer ? pointer.snapshotId : "not published"}</code>
           </dd>
         </div>
-        <div>
-          <dt>Published</dt>
-          <dd>{pointer ? formatTimestamp(pointer.publishedAt) : "never"}</dd>
+        <div className="min-w-0 border-t border-border pt-3">
+          <dt className="text-xs text-muted-foreground">Published</dt>
+          <dd className="mt-1.5 text-sm">
+            {pointer ? formatTimestamp(pointer.publishedAt) : "never"}
+          </dd>
         </div>
-        <div>
-          <dt>Toolchain</dt>
-          <dd>
+        <div className="min-w-0 border-t border-border pt-3">
+          <dt className="text-xs text-muted-foreground">Toolchain</dt>
+          <dd className="mt-1.5 text-sm">
             <code>{view.fingerprint}</code>
           </dd>
         </div>
       </dl>
 
       {pointer?.warnings && pointer.warnings.length > 0 ? (
-        <div className="registryNotice" role="status">
+        <div
+          className="col-start-2 mt-6 border-l-2 border-warning bg-muted px-3.5 py-3 text-sm"
+          role="status"
+        >
           {pointer.warnings.join(" ")}
         </div>
       ) : null}
 
-      <div className="controls">
-        <div className="actions">
+      <div className="col-start-2 border-t border-border pt-8">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             disabled={busy || !view.configured}
             onClick={() => void rebuild()}
@@ -237,12 +281,16 @@ export function FactoryImage({
         </div>
       </div>
 
-      <div className="sandboxInventoryHeader">
-        <h3>Recent builds</h3>
-        <span>{view.builds.length} builds</span>
+      <div className="col-start-2 mt-12 flex items-baseline justify-between">
+        <h3 className="text-pretty text-base font-semibold tracking-[-0.02em]">
+          Recent builds
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {view.builds.length} builds
+        </span>
       </div>
       {view.builds.length > 0 ? (
-        <ul className="sandboxGrid">
+        <ul className="col-start-2 mt-5 grid list-none grid-cols-4 gap-6 p-0 max-[980px]:grid-cols-2 max-[520px]:grid-cols-1">
           {view.builds.map((build) => (
             <BuildCard
               build={build}
@@ -252,7 +300,9 @@ export function FactoryImage({
           ))}
         </ul>
       ) : (
-        <p className="emptySandboxes">No factory image builds are recorded.</p>
+        <p className="col-start-2 mt-4 border-y border-border py-8 text-center text-sm text-muted-foreground">
+          No factory image builds are recorded.
+        </p>
       )}
     </section>
   );

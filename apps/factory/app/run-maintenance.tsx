@@ -123,10 +123,13 @@ export function RunMaintenance({
   }
 
   return (
-    <div className="controls">
-      <label className="examplePicker">
-        <span>Example</span>
+    <div className="mt-4">
+      <label className="mb-5 grid gap-2">
+        <span className="text-[0.8125rem] font-medium text-muted-foreground">
+          Example
+        </span>
         <select
+          className="min-h-10 w-[min(100%,440px)] rounded-md border border-input bg-background px-3 pr-9 text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3"
           disabled={isBusy}
           onChange={(event) => setSelectedExample(event.target.value)}
           value={selectedExample}
@@ -140,9 +143,12 @@ export function RunMaintenance({
         </select>
       </label>
       {harnessEnabled ? (
-        <label className="examplePicker">
-          <span>Harness</span>
+        <label className="mb-5 grid gap-2">
+          <span className="text-[0.8125rem] font-medium text-muted-foreground">
+            Harness
+          </span>
           <select
+            className="min-h-10 w-[min(100%,440px)] rounded-md border border-input bg-background px-3 pr-9 text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3"
             disabled={isBusy}
             onChange={(event) => setHarness(event.target.value as HarnessId)}
             value={harness}
@@ -155,7 +161,7 @@ export function RunMaintenance({
           </select>
         </label>
       ) : null}
-      <div className="actions">
+      <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
         <Button
           disabled={isBusy || !selectedExample}
           onClick={() =>
@@ -179,8 +185,13 @@ export function RunMaintenance({
             ? "Sending Slack test…"
             : "Send Slack test"}
         </Button>
-        <a href={agentRunsUrl} rel="noreferrer" target="_blank">
-          Open Agent Runs <span className="visuallyHidden">in a new tab</span>
+        <a
+          className="inline-flex min-h-10 items-center gap-1.5 px-2 text-sm font-medium text-foreground no-underline hover:underline hover:underline-offset-4"
+          href={agentRunsUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Open Agent Runs <span className="sr-only">in a new tab</span>
           <span aria-hidden="true">↗</span>
         </a>
       </div>
@@ -189,12 +200,15 @@ export function RunMaintenance({
       {slackTest.state !== "idle" ? (
         <div
           aria-live={slackTest.state === "error" ? "assertive" : "polite"}
-          className={`status status-${slackTest.state === "sending" ? "running" : slackTest.state}`}
+          className={`mt-6 flex items-start gap-3 rounded-md bg-muted p-3.5 text-[0.8125rem] ${slackTest.state === "sending" ? "text-warning" : slackTest.state === "done" ? "text-success" : "text-destructive"}`}
           role={slackTest.state === "error" ? "alert" : "status"}
         >
-          <span className="statusDot" aria-hidden="true" />
+          <span
+            className="mt-1.5 size-[7px] shrink-0 rounded-full bg-current"
+            aria-hidden="true"
+          />
           <div>
-            <strong>
+            <strong className="block font-semibold capitalize">
               {slackTest.state === "sending"
                 ? "sending Slack test"
                 : slackTest.state === "done"
@@ -202,7 +216,7 @@ export function RunMaintenance({
                   : "Slack test failed"}
             </strong>
             {slackTest.state === "done" ? (
-              <code>
+              <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
                 channel {slackTest.channel}
                 {slackTest.timestamp
                   ? ` · timestamp ${slackTest.timestamp}`
@@ -210,7 +224,7 @@ export function RunMaintenance({
               </code>
             ) : null}
             {slackTest.state === "error" ? (
-              <code>
+              <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
                 {slackTest.error}
                 {slackTest.channel ? ` · channel ${slackTest.channel}` : ""}
               </code>
