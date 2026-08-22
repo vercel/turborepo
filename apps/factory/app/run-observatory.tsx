@@ -9,7 +9,7 @@ import {
   useState
 } from "react";
 
-import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
+import { isSandboxSSHable, sandboxSshCommand } from "../agent/lib/sandbox-ssh";
 import type {
   AgentRunRecord,
   ControlPlaneSnapshot,
@@ -68,8 +68,16 @@ function duration(run: AgentRunRecord): string {
   return `${Math.round(milliseconds / 60_000)}m`;
 }
 
-function RunTicket({ run }: { readonly run: AgentRunRecord }) {
+function RunTicket({
+  run,
+  onTerminal
+}: {
+  readonly run: AgentRunRecord;
+  readonly onTerminal: (name: string) => void;
+}) {
   const detailsUrl = run.source === "eve" ? AGENT_RUNS_URL : WORKFLOW_RUNS_URL;
+  const sandbox = run.sandbox;
+  const sshable = sandbox ? isSandboxSSHable(sandbox.status) : false;
   return (
     <li className={`runTicket runTicket-${run.status}`}>
       <article aria-label={`${run.title}, ${run.status}`}>
@@ -112,11 +120,28 @@ function RunTicket({ run }: { readonly run: AgentRunRecord }) {
           <span aria-hidden="true">→</span>
           <span>{run.sandbox?.status ?? run.status}</span>
         </div>
-        {run.sandbox && run.sandbox.provider !== "eve" ? (
-          <CopyCommand
-            command={sandboxSshCommand(run.sandbox.id)}
-            label="SSH command for this sandbox"
-          />
+        {sandbox && sandbox.provider !== "eve" ? (
+          <>
+            <CopyCommand
+              command={sandboxSshCommand(sandbox.id)}
+              label="SSH command for this sandbox"
+            />
+            <Button
+              className="sandboxTerminalButton"
+              disabled={!sshable}
+              onClick={() => onTerminal(sandbox.id)}
+              size="sm"
+              title={
+                sshable
+                  ? "Open a terminal session for this sandbox"
+                  : "This sandbox is not currently reachable for a terminal session"
+              }
+              type="button"
+              variant="outline"
+            >
+              Terminal
+            </Button>
+          </>
         ) : null}
         <a
           className="runDetails"
@@ -168,9 +193,14 @@ function SandboxCard({
       />
       <Button
         className="sandboxTerminalButton"
-        disabled={sandbox.status === "failed"}
+        disabled={!isSandboxSSHable(sandbox.status)}
         onClick={() => onTerminal(sandbox.name)}
         size="sm"
+        title={
+          isSandboxSSHable(sandbox.status)
+            ? "Open a terminal session for this sandbox"
+            : "This sandbox is not currently reachable for a terminal session"
+        }
         type="button"
         variant="outline"
       >
@@ -304,7 +334,11 @@ export function RunObservatory({
                 {runs.length > 0 ? (
                   <ol className="runList">
                     {runs.map((run) => (
-                      <RunTicket key={run.id} run={run} />
+                      <RunTicket
+                        key={run.id}
+                        run={run}
+                        onTerminal={setActiveTerminal}
+                      />
                     ))}
                   </ol>
                 ) : (
