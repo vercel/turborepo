@@ -1,5 +1,7 @@
 import { listExamples } from "../agent/lib/examples";
+import { readFactoryImageView } from "../agent/lib/factory-image-registry";
 import { listControlPlaneSnapshot } from "../agent/lib/run-registry";
+import { FactoryImage } from "./factory-image";
 import { RunMaintenance } from "./run-maintenance";
 import { RunObservatory } from "./run-observatory";
 import { RunPerformance } from "./run-performance";
@@ -11,7 +13,10 @@ export const dynamic = "force-dynamic";
 
 export default async function OperatorPage() {
   const examples = listExamples();
-  const snapshot = await listControlPlaneSnapshot();
+  const [snapshot, factoryImage] = await Promise.all([
+    listControlPlaneSnapshot(),
+    readFactoryImageView()
+  ]);
   const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
     <main id="main-content">
@@ -26,6 +31,8 @@ export default async function OperatorPage() {
       <h1 className="visuallyHidden">Turborepo Factory</h1>
 
       <RunObservatory initialSnapshot={snapshot} />
+
+      <FactoryImage initialView={factoryImage} />
 
       <section className="operation" aria-labelledby="operation-title">
         <div className="operationHeader">
