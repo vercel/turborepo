@@ -2,6 +2,36 @@
 
 The operator page and its API routes rely on Vercel Deployment Protection for access control. Keep Deployment Protection enabled for every deployed environment that exposes them.
 
+## Start work from the operator page
+
+The two scheduled operations run a fixed prompt. "Start work" is the ad-hoc
+path: it opens an ordinary durable Eve session from the browser, on the same
+factory image and the same checkout of `main`, and the operator drives it by
+typing. Requests are not scoped to `examples/` and no pull request happens on
+its own — `create_pull_request` runs under the operator's approval, which the
+chat renders as a prompt with the tool's branch and title in it. Answer it and
+the draft pull request is pushed; decline it and nothing is.
+
+The chat talks to the Eve session routes directly through `useEveAgent`, so
+`agent/channels/eve.ts` has an authenticator for it. Deployment Protection still
+decides who reaches the deployment; the `operatorConsole()` entry only
+establishes that a request came from the console page. It requires the
+`x-operator-action: open-operator-chat` marker the page attaches to every Eve
+request — those routes send no CORS headers, so another site cannot get a custom
+header past a preflight — and rejects anything announcing a cross-site fetch or
+naming an origin other than the host the browser addressed. It reads that host
+from `x-forwarded-host`, because both Vercel and `next start` route these paths
+to the Eve service through a proxy that rewrites the host it dials.
+
+The session's principal is a _user_, not the app principal the schedules use,
+which is what keeps the approval gate on and the automated example and
+performance scope gates off.
+
+The thread's session cursor and event log live in browser storage, so a reload
+lands back in the same conversation. A turn that is still running when the page
+reloads keeps running: its transcript is in Agent Runs, and "New chat" starts a
+fresh session.
+
 ## Factory image
 
 Every agent in this app runs against the same sandbox base layer, the
