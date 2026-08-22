@@ -12,10 +12,15 @@ export default function WorkPage() {
   return (
     <main id="main-content" className="pageContent">
       <h1 className="pageTitle">Start work</h1>
-      <section className="manualSchedules" aria-labelledby="manual-schedules-title">
+      <section
+        className="manualSchedules"
+        aria-labelledby="manual-schedules-title"
+      >
         <header>
           <h2 id="manual-schedules-title">Run scheduled jobs</h2>
-          <p>Start either daily job now without waiting for its next cron run.</p>
+          <p>
+            Start either daily job now without waiting for its next cron run.
+          </p>
         </header>
         <div className="manualScheduleGrid">
           <section aria-labelledby="maintenance-title">

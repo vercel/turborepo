@@ -1,10 +1,7 @@
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 
 import { strongBlobEtag } from "./blob-etag";
-import {
-  type AgentRunRecord,
-  isAgentRunRecord
-} from "./run-types";
+import { type AgentRunRecord, isAgentRunRecord } from "./run-types";
 
 const RUN_INDEX_PATH = "agent-runs/v1/index.json";
 const MAX_RUNS = 100;

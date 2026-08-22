@@ -372,75 +372,6 @@ h3 {
   list-style: none;
 }
 
-.auditLogHeader,
-.auditRow {
-  display: grid;
-  grid-template-columns: 130px 90px minmax(180px, 1fr) minmax(120px, 0.7fr) 72px 64px 92px 52px;
-  gap: 12px;
-  align-items: center;
-}
-
-.auditLogHeader {
-  margin-top: 16px;
-  padding: 0 12px 8px;
-  color: var(--muted-foreground);
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-}
-
-.auditLog {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.auditRow {
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.75rem;
-}
-
-.auditRow-failed {
-  border-color: var(--destructive);
-}
-
-.auditIdentity {
-  min-width: 0;
-}
-
-.auditIdentity strong,
-.auditIdentity code {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.auditIdentity strong {
-  font-size: 0.8125rem;
-}
-
-.auditIdentity code,
-.auditRow > time,
-.auditRow > span {
-  color: var(--muted-foreground);
-  font-family: var(--font-geist-mono), monospace;
-}
-
-.auditIdentity code {
-  margin-top: 2px;
-  font-size: 0.6875rem;
-}
-
-.auditRow .runDetails {
-  margin-top: 0;
-  font-size: 0.75rem;
-}
-
 .runBoardViewport {
   contain: layout paint inline-size;
   max-width: 100%;
@@ -1095,16 +1026,6 @@ select:focus-visible {
 }
 
 @media (max-width: 980px) {
-  .auditLogHeader,
-  .auditRow {
-    grid-template-columns: 110px 80px minmax(150px, 1fr) 72px 64px 80px 52px;
-  }
-
-  .auditLogHeader > :nth-child(4),
-  .auditRow > :nth-child(4) {
-    display: none;
-  }
-
   .sandboxGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1139,22 +1060,6 @@ select:focus-visible {
   .runToolbar {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .auditLogHeader,
-  .auditRow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-
-  .auditLogHeader > :nth-child(2),
-  .auditLogHeader > :nth-child(4),
-  .auditLogHeader > :nth-child(5),
-  .auditLogHeader > :nth-child(6),
-  .auditRow > :nth-child(2),
-  .auditRow > :nth-child(4),
-  .auditRow > :nth-child(5),
-  .auditRow > :nth-child(6) {
-    display: none;
   }
 
   .sourceFilters {
