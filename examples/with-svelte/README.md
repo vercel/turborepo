@@ -14,7 +14,7 @@ npx create-turbo@latest -e with-svelte
 To verify that everything works, change into the new project directory:
 
 ```shell
-pnpm install && pnpm exec turbo run build check-types lint
+pnpm install && pnpm exec turbo run build check-types lint test:unit
 ```
 
 ## What's inside?
@@ -55,7 +55,6 @@ The following tasks are provided:
   - depends on `build`
 - `lint`: Running `eslint`.
 - `test:unit`: Running unit and component tests.
-  - depends on `build`
 
 ### Utilities
 
