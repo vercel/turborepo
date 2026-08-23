@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { getVercelOidcToken } from "@vercel/oidc";
 import { APIError, Sandbox } from "@vercel/sandbox";
 
@@ -9,12 +11,12 @@ import {
 } from "./factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
 import {
-  FX_ACP_CANCEL_PATH,
-  FX_ACP_CLIENT_PATH,
-  FX_ACP_CLIENT_SOURCE,
-  FX_ACP_SESSION_PATH,
-  parseFxAcpResult
-} from "./fx-acp";
+  FX_TERMINAL_RUNNER_PATH,
+  FX_TERMINAL_RUNNER_SOURCE,
+  FX_TERMINAL_SESSION_PATH,
+  FX_TERMINAL_TMUX_SESSION,
+  parseFxTerminalResult
+} from "./fx-terminal-runner";
 import { fxEnvironment } from "./fx-environment";
 import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
@@ -38,6 +40,8 @@ export async function getOrCreateFxWorkspaceSandbox(
     const sandbox = await getFxWorkspaceSandbox(name);
     if (!(await hasWorkspaceCheckout(sandbox))) {
       await initializeWorkspaceSandbox(sandbox, false);
+    } else {
+      await ensureWorkspaceTerminalTools(sandbox);
     }
     return sandbox;
   } catch (error) {
@@ -79,6 +83,22 @@ export async function getOrCreateFxWorkspaceSandbox(
 
   await initializeWorkspaceSandbox(sandbox, image !== null);
   return sandbox;
+}
+
+export async function ensureWorkspaceTerminalTools(
+  sandbox: Sandbox
+): Promise<void> {
+  const command = await sandbox.runCommand({
+    args: [
+      "-lc",
+      "command -v tmux >/dev/null || { if command -v apt-get >/dev/null; then sudo -n apt-get update -y && sudo -n apt-get install -y --no-install-recommends tmux; elif command -v dnf >/dev/null; then sudo -n dnf install -y tmux; elif command -v yum >/dev/null; then sudo -n yum install -y tmux; elif command -v apk >/dev/null; then sudo -n apk add --no-cache tmux; else exit 1; fi; }"
+    ],
+    cmd: "bash",
+    timeoutMs: 120_000
+  });
+  if (command.exitCode !== 0) {
+    throw new Error(`Could not install tmux: ${await command.stderr()}`);
+  }
 }
 
 async function hasWorkspaceCheckout(sandbox: Sandbox): Promise<boolean> {
@@ -152,50 +172,56 @@ export async function runFxTurn(
   getOidcToken: () => Promise<string> = getVercelOidcToken,
   onSession?: (sessionId: string) => Promise<void>
 ): Promise<FxTurnResult & { readonly cancelled: boolean }> {
-  await sandbox.writeFiles([
-    {
-      content: Buffer.from(FX_ACP_CLIENT_SOURCE, "utf8"),
-      path: FX_ACP_CLIENT_PATH
-    }
-  ]);
+  const promptPath = `/factory/state/fx-terminal-prompt-${randomUUID()}`;
+  const tokenPath = `/factory/state/fx-terminal-oidc-${randomUUID()}`;
+  const oidcToken = await getOidcToken();
   await sandbox.runCommand({
-    args: ["-f", FX_ACP_SESSION_PATH, FX_ACP_CANCEL_PATH],
+    args: ["-f", FX_TERMINAL_SESSION_PATH],
     cmd: "rm",
     timeoutMs: 10_000
   });
+  await sandbox.writeFiles([
+    {
+      content: Buffer.from(FX_TERMINAL_RUNNER_SOURCE, "utf8"),
+      path: FX_TERMINAL_RUNNER_PATH
+    },
+    { content: Buffer.from(prompt, "utf8"), path: promptPath },
+    { content: Buffer.from(oidcToken, "utf8"), path: tokenPath }
+  ]);
   const command = await sandbox.runCommand({
     args: [
-      FX_ACP_CLIENT_PATH,
+      FX_TERMINAL_RUNNER_PATH,
       FACTORY_IMAGE_SPEC.checkoutPath,
-      prompt,
+      promptPath,
+      tokenPath,
       sessionId ?? "",
-      FX_ACP_SESSION_PATH,
-      FX_ACP_CANCEL_PATH
+      FX_TERMINAL_SESSION_PATH,
+      FX_TERMINAL_TMUX_SESSION
     ],
     cmd: "node",
     detached: true,
-    env: fxEnvironment(await getOidcToken()),
+    env: fxEnvironment(oidcToken),
     timeoutMs: WORKSPACE_TIMEOUT_MS - 60_000
   });
 
   if (!sessionId && onSession) {
-    const createdSessionId = await waitForAcpSession(sandbox);
+    const createdSessionId = await waitForTerminalSession(sandbox);
     await onSession(createdSessionId);
   }
 
   const finished = await command.wait();
-  const parsed = parseFxAcpResult(await finished.stdout());
+  const parsed = parseFxTerminalResult(await finished.stdout());
   if (finished.exitCode !== 0 || parsed === null) {
     const stderr = (await finished.stderr()).slice(0, 2000);
     throw new Error(stderr || "fx did not complete the workspace turn.");
   }
-  return parsed;
+  return { ...parsed, cancelled: false };
 }
 
-async function waitForAcpSession(sandbox: Sandbox): Promise<string> {
+async function waitForTerminalSession(sandbox: Sandbox): Promise<string> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const command = await sandbox.runCommand({
-      args: ["-lc", `cat ${FX_ACP_SESSION_PATH} 2>/dev/null || true`],
+      args: ["-lc", `cat ${FX_TERMINAL_SESSION_PATH} 2>/dev/null || true`],
       cmd: "bash",
       timeoutMs: 10_000
     });
@@ -203,7 +229,7 @@ async function waitForAcpSession(sandbox: Sandbox): Promise<string> {
     if (sessionId) return sessionId;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("fx did not create an ACP session.");
+  throw new Error("fx did not create an interactive session.");
 }
 
 function isMissing(error: unknown): boolean {

@@ -23,7 +23,7 @@ import { createHash } from "node:crypto";
  * version changed (for example after fixing a provisioning script bug
  * that a version comparison cannot detect).
  */
-export const FACTORY_IMAGE_VERSION = "1";
+export const FACTORY_IMAGE_VERSION = "2";
 
 export interface FactoryPerformanceTool {
   /** Executable installed into `CARGO_HOME/bin`. */
@@ -224,13 +224,13 @@ WRAPPER
 
 function systemPackagesPhase(spec: FactoryImageSpec): string {
   return `if have apt-get; then
-  pkg_install build-essential pkg-config lld libssl-dev jq zstd curl git gh \\
+  pkg_install build-essential pkg-config lld libssl-dev jq zstd curl git gh tmux \\
     unzip xz-utils ca-certificates capnproto libcapnp-dev
 elif have dnf || have yum; then
   pkg_install gcc gcc-c++ make pkgconf-pkg-config lld openssl-devel jq \\
-    zstd curl git gh unzip xz tar ca-certificates capnproto capnproto-devel
+    zstd curl git gh tmux unzip xz tar ca-certificates capnproto capnproto-devel
 elif have apk; then
-  pkg_install build-base pkgconf lld openssl-dev jq zstd curl git gh unzip xz \\
+  pkg_install build-base pkgconf lld openssl-dev jq zstd curl git gh tmux unzip xz \\
     tar ca-certificates capnproto capnproto-dev
 else
   factory_log "no supported package manager is available"

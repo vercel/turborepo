@@ -2,11 +2,13 @@ import { getVercelOidcToken } from "@vercel/oidc";
 
 import { FACTORY_IMAGE_SPEC } from "../../../../../agent/lib/factory-image";
 import {
-  cancelFxAcpTurn,
   countFxSessions,
   prepareFxInteractiveLaunch
 } from "../../../../../agent/lib/fx-interactive";
-import { getFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
+import {
+  ensureWorkspaceTerminalTools,
+  getFxWorkspaceSandbox
+} from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
 import { getWorkspace } from "../../../../../agent/lib/workspace-store";
 import {
@@ -44,19 +46,7 @@ export async function POST(
     );
   try {
     const sandbox = await getFxWorkspaceSandbox(workspace.sandbox.name);
-    if (workspace.status === "running") {
-      await cancelFxAcpTurn(sandbox);
-      return Response.json(
-        {
-          code: "chat_handoff",
-          error: "Factory is handing the active chat to this terminal."
-        },
-        {
-          status: 503,
-          headers: { "cache-control": "no-store", "retry-after": "1" }
-        }
-      );
-    }
+    await ensureWorkspaceTerminalTools(sandbox);
     if (!workspace.sessionId) {
       const sessionCount = await countFxSessions(
         sandbox,

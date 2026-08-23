@@ -1,34 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseFxAcpResult } from "../agent/lib/fx-acp.ts";
 import {
-  cancelFxAcpTurn,
   countFxSessions,
   prepareFxInteractiveLaunch
 } from "../agent/lib/fx-interactive.ts";
+import {
+  FX_TERMINAL_RUNNER_SOURCE,
+  parseFxTerminalResult
+} from "../agent/lib/fx-terminal-runner.ts";
 import { workspaceNetworkPolicy } from "../agent/lib/workspace-network-policy.ts";
 
-test("parseFxAcpResult reads the final ACP client result", () => {
+test("parseFxTerminalResult reads the completed interactive turn", () => {
   assert.deepEqual(
-    parseFxAcpResult(
-      `diagnostic\n${JSON.stringify({ cancelled: true, output: "done", sessionId: "session-123" })}\n`
+    parseFxTerminalResult(
+      `diagnostic\n${JSON.stringify({ output: "done", sessionId: "session-123" })}\n`
     ),
-    { cancelled: true, output: "done", sessionId: "session-123" }
+    { output: "done", sessionId: "session-123" }
   );
-  assert.equal(parseFxAcpResult("not json"), null);
-});
-
-test("cancelFxAcpTurn writes the ACP handoff signal", async () => {
-  const writes = [];
-  await cancelFxAcpTurn({
-    async writeFiles(files) {
-      writes.push(...files);
-    }
-  });
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].path, "/factory/state/fx-acp-cancel");
-  assert.equal(writes[0].content.toString("utf8"), "cancel\n");
+  assert.equal(parseFxTerminalResult("not json"), null);
 });
 
 test("countFxSessions returns the current workspace session count", async () => {
@@ -78,7 +68,7 @@ test("countFxSessions treats invalid output as no sessions", async () => {
   );
 });
 
-test("prepareFxInteractiveLaunch resumes the workspace session with OIDC", async () => {
+test("prepareFxInteractiveLaunch attaches or resumes the shared fx terminal", async () => {
   const writes = [];
   const launch = await prepareFxInteractiveLaunch(
     {
@@ -89,20 +79,23 @@ test("prepareFxInteractiveLaunch resumes the workspace session with OIDC", async
     "session-123",
     async () => "oidc-token"
   );
-
-  assert.equal(writes.length, 1);
   assert.equal(writes[0].content.toString("utf8"), "oidc-token");
-  assert.match(writes[0].path, /^\/factory\/state\/interactive-oidc-/);
   assert.equal(launch.command, "bash");
-  assert.equal(launch.args[0], "-lc");
-  assert.doesNotMatch(launch.args[1], /--yolo/);
-  assert.match(
-    launch.args[1],
-    /exec env FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo fx resume --id "\$session_id"/
-  );
-  assert.equal(launch.args[2], "factory-terminal");
+  assert.match(launch.args[1], /tmux has-session/);
+  assert.match(launch.args[1], /tmux attach-session/);
+  assert.match(launch.args[1], /tmux new-session/);
+  assert.match(launch.args[1], /fx --record resume --id/);
   assert.equal(launch.args[3], writes[0].path);
   assert.equal(launch.args[4], "session-123");
+  assert.equal(launch.args[5], "factory-fx");
+});
+
+test("the terminal runner starts fx once and injects the autonomous prompt", () => {
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /new-session/);
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /respawn-pane/);
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /paste-buffer/);
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /fx --record/);
+  assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
 });
 
 test("workspace GitHub credential rules precede the catch-all rule", () => {
