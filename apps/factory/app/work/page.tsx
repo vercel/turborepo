@@ -1,14 +1,13 @@
 import { listExamples } from "../../agent/lib/examples";
-import { OperatorChat } from "../operator-chat";
 import { RunMaintenance } from "../run-maintenance";
 import { RunPerformance } from "../run-performance";
+import { WorkspaceComposer } from "../workspace-composer";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-factory/observability/agent-runs";
 
 export default function WorkPage() {
   const examples = listExamples();
-  const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
     <main
       id="main-content"
@@ -40,11 +39,7 @@ export default function WorkPage() {
             >
               Daily example maintenance
             </h3>
-            <RunMaintenance
-              agentRunsUrl={AGENT_RUNS_URL}
-              examples={examples}
-              harnessEnabled={harnessEnabled}
-            />
+            <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
           </section>
           <section
             className="rounded-md bg-secondary p-5"
@@ -70,7 +65,7 @@ export default function WorkPage() {
               className="text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
               id="chat-title"
             >
-              Chat
+              New workspace
             </h2>
           </div>
           <span className="col-start-2 self-start justify-self-start font-mono text-xs tracking-[0.02em] text-muted-foreground">
@@ -78,29 +73,29 @@ export default function WorkPage() {
           </span>
         </div>
         <p className="col-start-2 mt-6 max-w-[68ch] text-muted-foreground text-pretty max-[720px]:mt-6">
-          Opens an ad-hoc session on the factory image, with the same sandbox
-          checkout of <code>main</code> the scheduled operations use. Ask for
-          anything in the repository; the agent opens a draft pull request only
-          when you ask for one and approve the call.
+          Creates a durable Factory workspace on the factory image, with the
+          same sandbox checkout of <code>main</code> the scheduled operations
+          use. Return later to review the transcript, continue the work, inspect
+          changes, or open its terminal.
         </p>
         <dl className="col-start-2 my-10 grid grid-cols-3 gap-6 max-[520px]:grid-cols-1 max-[520px]:gap-4">
           <div className="min-w-0 border-t border-border pt-3">
             <dt className="text-xs text-muted-foreground">Scope</dt>
             <dd className="mt-1.5 text-sm">
-              <code>whole checkout</code>
+              <code>durable sandbox</code>
             </dd>
           </div>
           <div className="min-w-0 border-t border-border pt-3">
             <dt className="text-xs text-muted-foreground">Execution</dt>
-            <dd className="mt-1.5 text-sm">Chat mode</dd>
+            <dd className="mt-1.5 text-sm">Multi-turn</dd>
           </div>
           <div className="min-w-0 border-t border-border pt-3">
             <dt className="text-xs text-muted-foreground">Output</dt>
-            <dd className="mt-1.5 text-sm">Draft PR on request</dd>
+            <dd className="mt-1.5 text-sm">Transcript and diff</dd>
           </div>
         </dl>
         <div className="col-start-2 border-t border-border pt-8">
-          <OperatorChat agentRunsUrl={AGENT_RUNS_URL} />
+          <WorkspaceComposer />
         </div>
       </section>
     </main>

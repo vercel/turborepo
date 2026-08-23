@@ -9,8 +9,8 @@ import {
 test("produces a sandbox ssh command for a given sandbox name", () => {
   assert.equal(sandboxSshCommand("my-sandbox"), "sandbox ssh my-sandbox");
   assert.equal(
-    sandboxSshCommand("ai-sdk-harness-session-abc123"),
-    "sandbox ssh ai-sdk-harness-session-abc123"
+    sandboxSshCommand("factory-workspace-ws_abc123"),
+    "sandbox ssh factory-workspace-ws_abc123"
   );
 });
 

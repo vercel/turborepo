@@ -108,6 +108,7 @@ test("phases install every tool an agent needs", () => {
       "system-packages",
       "node",
       "pnpm",
+      "fx",
       "rust",
       "protoc",
       "zig",
@@ -123,8 +124,11 @@ test("phases install every tool an agent needs", () => {
   for (const expected of [
     "build-essential",
     "capnproto",
+    "gh",
     "lld",
     `pnpm@${FACTORY_IMAGE_SPEC.pnpmVersion}`,
+    FACTORY_IMAGE_SPEC.fxVersion,
+    FACTORY_IMAGE_SPEC.fxSha256.x86_64,
     FACTORY_IMAGE_SPEC.rustChannel,
     FACTORY_IMAGE_SPEC.protocVersion,
     FACTORY_IMAGE_SPEC.zigVersion,
@@ -245,9 +249,9 @@ test("the sequential runner reports the phase that failed", async () => {
   await runFactoryImagePhases(runner, { revision: COMMIT }, (phase) =>
     seen.push(phase.id)
   );
-  assert.equal(seen.length, 11);
+  assert.equal(seen.length, 12);
   assert.equal(seen[0], "system-packages");
-  assert.equal(runner.commands.length, 11);
+  assert.equal(runner.commands.length, 12);
   assert.ok(runner.commands.every((command) => command.includes("as_root()")));
 
   await assert.rejects(

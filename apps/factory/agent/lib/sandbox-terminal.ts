@@ -11,7 +11,7 @@ export interface SandboxWithInteractive {
   }) => Promise<{ readonly url: string; readonly token: string }>;
 }
 
-const ALLOWED_SANDBOX_NAME_PREFIX = "ai-sdk-harness";
+const ALLOWED_SANDBOX_NAME_PREFIX = "factory-workspace-";
 
 export function isAllowedSandboxName(name: string): boolean {
   return name.startsWith(ALLOWED_SANDBOX_NAME_PREFIX);
@@ -24,9 +24,7 @@ export async function createTerminalSession(
   ) => Promise<SandboxWithInteractive> = defaultGetSandbox
 ): Promise<TerminalSession> {
   if (!isAllowedSandboxName(sandboxName)) {
-    throw new Error(
-      `Sandbox name must start with "${ALLOWED_SANDBOX_NAME_PREFIX}".`
-    );
+    throw new Error("Sandbox name is not managed by Factory.");
   }
 
   const sandbox = await getSandbox(sandboxName);

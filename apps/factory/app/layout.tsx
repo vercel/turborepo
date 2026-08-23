@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   description:
-    "Observe and operate Turborepo agent runs across Eve, Harness, and Vercel Sandbox.",
+    "Observe and operate Turborepo agent runs across Eve, fx, and Vercel Sandbox.",
   title: "Turborepo Agent Control Plane"
 };
 

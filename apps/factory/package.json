@@ -9,15 +9,11 @@
   "scripts": {
     "build": "eve build && next build",
     "dev": "next dev",
+    "factory": "node scripts/factory.mjs",
     "start": "next start",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.71",
-    "@ai-sdk/harness-claude-code": "1.0.71",
-    "@ai-sdk/harness-codex": "1.0.71",
-    "@ai-sdk/harness-opencode": "1.0.71",
-    "@ai-sdk/sandbox-vercel": "1.0.71",
     "@radix-ui/react-slot": "1.2.4",
     "@vercel/blob": "2.7.0",
     "@vercel/connect": "0.4.2",
@@ -25,7 +21,6 @@
     "@vercel/sandbox": "2.5.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "ai": "7.0.65",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "eve": "^0.39.3",
