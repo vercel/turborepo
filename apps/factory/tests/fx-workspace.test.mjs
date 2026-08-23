@@ -141,7 +141,7 @@ test("workspace publication credentials are injected only for the exact route", 
     headers: { authorization: "[redacted]" },
     match: {
       method: ["POST"],
-      path: "/api/workspaces/ws_abc/publish"
+      path: { exact: "/api/workspaces/ws_abc/publish" }
     }
   });
 });

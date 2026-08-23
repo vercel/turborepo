@@ -19,7 +19,9 @@ interface SandboxApiNetworkPolicy {
     readonly headers: Readonly<Record<string, string>>;
     readonly match: {
       readonly method: readonly string[];
-      readonly path: string | { readonly startsWith: string };
+      readonly path:
+        | { readonly exact: string }
+        | { readonly startsWith: string };
     };
   }[];
 }
@@ -53,7 +55,10 @@ export function workspaceNetworkPolicy(
             {
               domain: publishBridge.hostname,
               headers: { authorization: publishBridge.authorization },
-              match: { method: ["POST"], path: publishBridge.path }
+              match: {
+                method: ["POST"],
+                path: { exact: publishBridge.path }
+              }
             }
           ]
         : []),
