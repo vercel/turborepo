@@ -9,7 +9,8 @@ import {
   buildResizeMessage,
   buildStartMessage,
   buildWebSocketUrl,
-  parseServerMessage
+  parseServerMessage,
+  shouldReconnectTerminal
 } from "../lib/sandbox-terminal-protocol";
 
 const RETRY_DELAY_MS = 2_000;
@@ -28,7 +29,6 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
   useEffect(() => {
     let cancelled = false;
     let socket: WebSocket | undefined;
-    let handshakeTimer: number | undefined;
     let retryTimer: number | undefined;
 
     const terminal = new Terminal({
@@ -106,16 +106,20 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       if (cancelled) return;
 
       let receivedOutput = false;
-      socket = new WebSocket(buildWebSocketUrl(session.url, session.token));
-      socket.binaryType = "arraybuffer";
-      socket.addEventListener("open", () => {
-        if (cancelled || !socket) return;
+      let receivedExit = false;
+      const currentSocket = new WebSocket(
+        buildWebSocketUrl(session.url, session.token)
+      );
+      socket = currentSocket;
+      currentSocket.binaryType = "arraybuffer";
+      currentSocket.addEventListener("open", () => {
+        if (cancelled || socket !== currentSocket) return;
         const { cols, rows } = fitAddon.proposeDimensions() ?? {
           cols: 80,
           rows: 24
         };
         terminal.resize(cols, rows);
-        socket.send(
+        currentSocket.send(
           JSON.stringify(
             buildStartMessage(cols, rows, {
               command: session.command,
@@ -124,39 +128,30 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
             })
           )
         );
-        handshakeTimer = window.setTimeout(() => {
-          socket?.close();
-          retry(attempt);
-        }, 10_000);
+        setConnecting(false);
         terminal.focus();
       });
-      socket.addEventListener("message", (event) => {
+      currentSocket.addEventListener("message", (event) => {
         receivedOutput = true;
-        setConnecting(false);
-        if (handshakeTimer !== undefined) {
-          window.clearTimeout(handshakeTimer);
-          handshakeTimer = undefined;
-        }
         const message = parseServerMessage(event.data);
         if (message.kind === "output") terminal.write(message.data);
         if (message.kind === "exit") {
+          receivedExit = true;
           terminal.writeln(
             `\r\nSession closed${message.code === null ? "." : ` with exit code ${message.code}.`}`
           );
         }
       });
-      socket.addEventListener("close", (event) => {
-        if (cancelled) return;
-        if (!receivedOutput && event.code === 1006) {
-          retry(attempt);
-          return;
-        }
-        if (event.code !== 1000)
-          setError(`The terminal connection closed (${event.code}).`);
+      currentSocket.addEventListener("close", (event) => {
+        if (cancelled || socket !== currentSocket) return;
+        socket = undefined;
+        if (!shouldReconnectTerminal(event.code, receivedExit)) return;
+        setStatus("Reconnecting to sandbox…");
+        setConnecting(!receivedOutput);
+        retry(attempt);
       });
-      socket.addEventListener("error", () => {
-        if (!cancelled && receivedOutput)
-          setError("The terminal connection failed.");
+      currentSocket.addEventListener("error", () => {
+        // The close event owns reconnects so an error cannot schedule twice.
       });
     }
 
@@ -190,7 +185,6 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
 
     return () => {
       cancelled = true;
-      if (handshakeTimer !== undefined) window.clearTimeout(handshakeTimer);
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       resizeObserver.disconnect();
       dataDisposable.dispose();

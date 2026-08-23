@@ -66,6 +66,13 @@ export function buildResizeMessage(cols: number, rows: number): ResizeMessage {
   return { type: "resize", cols, rows };
 }
 
+export function shouldReconnectTerminal(
+  closeCode: number,
+  receivedExit: boolean
+): boolean {
+  return !receivedExit && closeCode !== 1000;
+}
+
 export function parseServerMessage(
   data: string | Blob | ArrayBuffer
 ): ServerMessage {

@@ -6,6 +6,7 @@ import {
   buildResizeMessage,
   buildWebSocketUrl,
   parseServerMessage,
+  shouldReconnectTerminal,
   TERM,
   PS1,
   DEFAULT_CWD
@@ -60,6 +61,13 @@ test("buildResizeMessage encodes a resize control frame", () => {
     cols: 120,
     rows: 40
   });
+});
+
+test("shouldReconnectTerminal retries only abnormal closes without an exit", () => {
+  assert.equal(shouldReconnectTerminal(1006, false), true);
+  assert.equal(shouldReconnectTerminal(1011, false), true);
+  assert.equal(shouldReconnectTerminal(1000, false), false);
+  assert.equal(shouldReconnectTerminal(1006, true), false);
 });
 
 test("parseServerMessage parses exit control frames", () => {
