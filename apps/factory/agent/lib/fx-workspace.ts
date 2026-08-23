@@ -34,9 +34,9 @@ export async function getFxWorkspaceSandbox(
   publishBridge?: WorkspacePublishBridge | null
 ): Promise<Sandbox> {
   const sandbox = await Sandbox.get({ name, resume: true });
-  await sandbox.updateNetworkPolicy(
-    workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
-  );
+  await sandbox.update({
+    networkPolicy: workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
+  });
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
@@ -70,7 +70,7 @@ export async function getOrCreateFxWorkspaceSandbox(
       GH_TOKEN: "brokered-by-sandbox"
     },
     name,
-    networkPolicy: workspaceNetworkPolicy(githubToken, publishBridge),
+    networkPolicy: "deny-all" as const,
     resources: { vcpus: WORKSPACE_VCPUS },
     tags: { role: "factory-workspace" },
     timeout: WORKSPACE_TIMEOUT_MS
@@ -90,6 +90,9 @@ export async function getOrCreateFxWorkspaceSandbox(
     return Sandbox.get({ name });
   }
 
+  await sandbox.update({
+    networkPolicy: workspaceNetworkPolicy(githubToken, publishBridge)
+  });
   await initializeWorkspaceSandbox(sandbox, image !== null);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
