@@ -124,12 +124,14 @@ async function initializeWorkspaceSandbox(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await sandbox.writeFiles([
-      {
-        content: Buffer.from(`${message}\n`, "utf8"),
-        path: "/factory/state/error"
-      }
-    ]).catch(() => {});
+    await sandbox
+      .writeFiles([
+        {
+          content: Buffer.from(`${message}\n`, "utf8"),
+          path: "/factory/state/error"
+        }
+      ])
+      .catch(() => {});
     throw error;
   }
 }
