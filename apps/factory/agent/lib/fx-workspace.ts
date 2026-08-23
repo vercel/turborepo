@@ -1,4 +1,4 @@
-import { APIError, type NetworkPolicy, Sandbox } from "@vercel/sandbox";
+import { APIError, Sandbox } from "@vercel/sandbox";
 
 import {
   FACTORY_IMAGE_BASE,
@@ -9,18 +9,27 @@ import {
 import { readFactoryImagePointer } from "./factory-image-registry";
 import { parseFxTurnResult, type FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
+import { workspaceNetworkPolicy } from "./workspace-network-policy";
 
 const WORKSPACE_TIMEOUT_MS = 45 * 60 * 1000;
 const WORKSPACE_VCPUS = 8;
+
+export async function getFxWorkspaceSandbox(name: string): Promise<Sandbox> {
+  const sandbox = await Sandbox.get({ name, resume: true });
+  await sandbox.updateNetworkPolicy(
+    workspaceNetworkPolicy(await getGitHubToken())
+  );
+  return sandbox;
+}
 
 export async function getOrCreateFxWorkspaceSandbox(
   name: string
 ): Promise<Sandbox> {
   try {
-    const sandbox = await Sandbox.get({ name });
-    await sandbox.updateNetworkPolicy(
-      workspaceNetworkPolicy(await getGitHubToken())
-    );
+    const sandbox = await getFxWorkspaceSandbox(name);
+    if (!(await hasWorkspaceCheckout(sandbox))) {
+      await initializeWorkspaceSandbox(sandbox, false);
+    }
     return sandbox;
   } catch (error) {
     if (!isMissing(error)) throw error;
@@ -59,24 +68,48 @@ export async function getOrCreateFxWorkspaceSandbox(
     return Sandbox.get({ name });
   }
 
-  if (image === null) {
-    await runFactoryImagePhases(
-      {
-        async run(command) {
-          const result = await sandbox.runCommand({
-            args: ["-lc", command],
-            cmd: "bash"
-          });
-          return {
-            exitCode: result.exitCode,
-            stderr: await result.stderr(),
-            stdout: await result.stdout()
-          };
-        }
-      },
-      { revision: "main" }
-    );
-  } else {
+  await initializeWorkspaceSandbox(sandbox, image !== null);
+  return sandbox;
+}
+
+async function hasWorkspaceCheckout(sandbox: Sandbox): Promise<boolean> {
+  try {
+    const result = await sandbox.runCommand({
+      args: ["-C", FACTORY_IMAGE_SPEC.checkoutPath, "rev-parse", "HEAD"],
+      cmd: "git",
+      timeoutMs: 30_000
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function initializeWorkspaceSandbox(
+  sandbox: Sandbox,
+  fromSnapshot: boolean
+): Promise<void> {
+  try {
+    if (!fromSnapshot) {
+      await runFactoryImagePhases(
+        {
+          async run(command) {
+            const result = await sandbox.runCommand({
+              args: ["-lc", command],
+              cmd: "bash"
+            });
+            return {
+              exitCode: result.exitCode,
+              stderr: await result.stderr(),
+              stdout: await result.stdout()
+            };
+          }
+        },
+        { revision: "main" }
+      );
+      return;
+    }
+
     const result = await sandbox.runCommand({
       args: [
         "-lc",
@@ -89,35 +122,16 @@ export async function getOrCreateFxWorkspaceSandbox(
         `Could not initialize fx workspace: ${await result.stderr()}`
       );
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await sandbox.writeFiles([
+      {
+        content: Buffer.from(`${message}\n`, "utf8"),
+        path: "/factory/state/error"
+      }
+    ]).catch(() => {});
+    throw error;
   }
-  return sandbox;
-}
-
-function workspaceNetworkPolicy(githubToken: string): NetworkPolicy {
-  return {
-    allow: {
-      "*": [],
-      "api.github.com": [
-        {
-          match: {
-            method: ["GET", "POST", "PATCH"],
-            path: { startsWith: "/repos/vercel/turborepo" }
-          },
-          transform: [{ headers: { authorization: `Bearer ${githubToken}` } }]
-        }
-      ],
-      "github.com": [
-        {
-          match: {
-            method: ["GET", "POST"],
-            path: { startsWith: "/vercel/turborepo.git" }
-          },
-          transform: [{ headers: { authorization: `Bearer ${githubToken}` } }]
-        }
-      ]
-    },
-    subnets: { deny: ["169.254.169.254/32"] }
-  };
 }
 
 export async function runFxTurn(

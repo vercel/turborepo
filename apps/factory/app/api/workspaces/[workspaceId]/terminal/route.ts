@@ -1,5 +1,5 @@
 import { FACTORY_IMAGE_SPEC } from "../../../../../agent/lib/factory-image";
-import { getOrCreateFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
+import { getFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
 import { getWorkspace } from "../../../../../agent/lib/workspace-store";
 import {
@@ -25,7 +25,7 @@ export async function POST(
   if (!workspace)
     return Response.json({ error: "Workspace not found." }, { status: 404 });
   try {
-    const sandbox = await getOrCreateFxWorkspaceSandbox(workspace.sandbox.name);
+    const sandbox = await getFxWorkspaceSandbox(workspace.sandbox.name);
     return Response.json(
       {
         ...(await createTerminalSession(
