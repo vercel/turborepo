@@ -2,12 +2,6 @@
 
 import { useState } from "react";
 
-import {
-  isHarnessId,
-  isSandboxId,
-  type HarnessId,
-  type SandboxId
-} from "../agent/lib/harnesses";
 import type { OperatorRunAction } from "../agent/lib/operator-runs";
 
 type RunState = "starting" | "running" | "done" | "error";
@@ -19,9 +13,7 @@ interface RunModels {
 
 export interface RunStatus {
   readonly cursor?: number;
-  readonly harness?: HarnessId;
   readonly models?: RunModels;
-  readonly sandbox?: SandboxId;
   readonly sessionId?: string;
   readonly state: RunState;
   readonly statusPath?: string;
@@ -51,11 +43,9 @@ function isRunStatus(value: unknown): value is RunStatus {
     (candidate.state === "running" ||
       candidate.state === "done" ||
       candidate.state === "error") &&
-    (candidate.harness === undefined || isHarnessId(candidate.harness)) &&
     (candidate.sessionId === undefined ||
       typeof candidate.sessionId === "string") &&
     (candidate.models === undefined || isRunModels(candidate.models)) &&
-    (candidate.sandbox === undefined || isSandboxId(candidate.sandbox)) &&
     (candidate.statusPath === undefined ||
       typeof candidate.statusPath === "string") &&
     (candidate.cursor === undefined ||
@@ -164,16 +154,6 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
         {status.sessionId ? (
           <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
             {status.sessionId}
-          </code>
-        ) : null}
-        {status.harness ? (
-          <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
-            harness {status.harness}
-          </code>
-        ) : null}
-        {status.sandbox ? (
-          <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
-            sandbox {status.sandbox}
           </code>
         ) : null}
         {status.models ? (

@@ -29,7 +29,7 @@ import { fetchMainCommit } from "./lib/github";
  * to the current `main`.
  */
 
-/** Matches the Harness path, and leaves room for a `cargo build`. */
+/** Matches fx workspaces, and leaves room for a `cargo build`. */
 const SESSION_TIMEOUT_MS = 45 * 60 * 1000;
 /** `.cargo/config.toml` builds with `-Zthreads=8`. */
 const SESSION_VCPUS = 8;

@@ -8,9 +8,8 @@ import {
 } from "../agent/lib/sandbox-terminal.ts";
 
 test("isAllowedSandboxName accepts only Factory-managed names", () => {
-  assert.equal(isAllowedSandboxName("ai-sdk-harness-session-abc"), true);
-  assert.equal(isAllowedSandboxName("ai-sdk-harness"), true);
   assert.equal(isAllowedSandboxName("factory-workspace-ws_abc"), true);
+  assert.equal(isAllowedSandboxName("ai-sdk-harness-session-abc"), false);
   assert.equal(isAllowedSandboxName("other-sandbox"), false);
   assert.equal(isAllowedSandboxName(""), false);
 });
@@ -26,7 +25,7 @@ test("createTerminalSession rejects disallowed sandbox names", async () => {
 
 test("createTerminalSession returns a url and token from openInteractive", async () => {
   const session = await createTerminalSession(
-    "ai-sdk-harness-session-abc",
+    "factory-workspace-ws_abc",
     async () => ({
       openInteractive: async () => ({
         url: "wss://example.com/ws",
@@ -40,7 +39,7 @@ test("createTerminalSession returns a url and token from openInteractive", async
 
 test("createTerminalSession propagates openInteractive errors", async () => {
   await assert.rejects(
-    createTerminalSession("ai-sdk-harness-session-abc", async () => ({
+    createTerminalSession("factory-workspace-ws_abc", async () => ({
       openInteractive: async () => {
         throw new Error("sandbox not found");
       }
@@ -53,7 +52,7 @@ test("handleTerminalRequest returns a session for a valid sandbox", async () => 
   const response = await handleTerminalRequest(
     new Request("http://localhost/api/sandbox/terminal", {
       method: "POST",
-      body: JSON.stringify({ sandboxName: "ai-sdk-harness-session-abc" })
+      body: JSON.stringify({ sandboxName: "factory-workspace-ws_abc" })
     }),
     async () => ({ url: "wss://example.com/ws", token: "tok" })
   );
@@ -91,7 +90,7 @@ test("handleTerminalRequest returns 404 for not_found errors", async () => {
   const response = await handleTerminalRequest(
     new Request("http://localhost/api/sandbox/terminal", {
       method: "POST",
-      body: JSON.stringify({ sandboxName: "ai-sdk-harness-missing" })
+      body: JSON.stringify({ sandboxName: "factory-workspace-missing" })
     }),
     async () => {
       throw new Error("sandbox not_found");
@@ -106,7 +105,7 @@ test("handleTerminalRequest returns 500 for unexpected errors", async () => {
   const response = await handleTerminalRequest(
     new Request("http://localhost/api/sandbox/terminal", {
       method: "POST",
-      body: JSON.stringify({ sandboxName: "ai-sdk-harness-error" })
+      body: JSON.stringify({ sandboxName: "factory-workspace-error" })
     }),
     async () => {
       throw new Error("something went wrong");

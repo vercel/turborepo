@@ -102,10 +102,9 @@ and recent builds, and can start a build for the current `main` head with
 Eve freezes `revalidationKey` at build time, so the template rotates when
 the toolchain fingerprint changes or a newer image is published, and
 boots from the published snapshot when one matches. Each session then
-fast-forwards its checkout to the current `main`. New Harness sessions and fx
-workspaces do the same. Harness falls back to a shallow clone when no matching
-image exists; an fx workspace provisions the shared image phases before its
-first turn. Resumed workspaces preserve their checkout, fx session, and
+fast-forwards its checkout to the current `main`. New fx workspaces do the same,
+and provision the shared image phases before their first turn when no matching
+image exists. Resumed workspaces preserve their checkout, fx session, and
 uncommitted changes.
 
 A toolchain change provisions the template from scratch during the next
@@ -116,19 +115,13 @@ one bad upstream release cannot hold a deployment build open. Only the
 merge webhook asks for the warm `cargo build`, which runs off the
 deployment path inside the build sandbox.
 
-## Harness maintenance
-
-Manual daily-example maintenance runs with `HarnessAgent`. Operators can choose Claude Code, Codex, or OpenCode; each runs in an isolated Vercel Sandbox. Performance runs and scheduled Eve automation are unchanged.
-
 Configure `GITHUB_TOKEN_EXCHANGE_URL`. The exchange endpoint receives Vercel OIDC bearer authentication and must return `{ "token": string, "expires_at": string }` for the requested `vercel/turborepo` write permissions. Vercel OIDC authenticates Vercel Sandbox and AI Gateway. GitHub authorization is injected by the sandbox network policy and is not exposed to agent processes.
-
-The workflow clones Turborepo into the selected sandbox and runs the chosen official Harness SDK adapter there. The adapter and sandbox registries in `agent/lib/harness-agent.ts` are independent, so another provider can be added without changing the workflow or run API.
 
 ## Agent Runs
 
 The operator page links to Vercel Agent Runs, the audit record for Eve schedules.
-Harness maintenance and fx workspace turns are audited through Workflow
-observability. Workspace Blob records hold the resumable UI transcript and
-control-plane state, not the complete execution audit.
+fx workspace turns are audited through Workflow observability. Workspace Blob
+records hold the resumable UI transcript and control-plane state, not the
+complete execution audit.
 
 An Eve run's model is recorded when its first model step starts rather than when the session starts. The agent selects its author model dynamically, so `session.started` carries no model id and the ledger fills the field from `step.started` instead.

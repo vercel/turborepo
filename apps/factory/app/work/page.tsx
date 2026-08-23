@@ -8,7 +8,6 @@ const AGENT_RUNS_URL =
 
 export default function WorkPage() {
   const examples = listExamples();
-  const harnessEnabled = Boolean(process.env.GITHUB_TOKEN_EXCHANGE_URL);
   return (
     <main
       id="main-content"
@@ -40,11 +39,7 @@ export default function WorkPage() {
             >
               Daily example maintenance
             </h3>
-            <RunMaintenance
-              agentRunsUrl={AGENT_RUNS_URL}
-              examples={examples}
-              harnessEnabled={harnessEnabled}
-            />
+            <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
           </section>
           <section
             className="rounded-md bg-secondary p-5"

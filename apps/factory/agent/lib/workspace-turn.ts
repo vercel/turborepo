@@ -8,9 +8,42 @@ import {
   recoverTerminalWorkspaceTurn,
   recordWorkspaceWorkflowRun,
   toWorkspaceView,
+  workspaceSandboxName,
+  type WorkspaceRecord,
   type PublicWorkspaceView
 } from "./workspace";
-import { getWorkspace, mutateWorkspace } from "./workspace-store";
+import {
+  createWorkspace,
+  getWorkspace,
+  mutateWorkspace
+} from "./workspace-store";
+
+export async function createFxWorkspace(input: {
+  readonly prompt?: string;
+  readonly title: string;
+}): Promise<PublicWorkspaceView> {
+  const id = `ws_${randomUUID().replaceAll("-", "")}`;
+  const now = new Date().toISOString();
+  const workspace: WorkspaceRecord = {
+    agent: "fx",
+    createdAt: now,
+    id,
+    messages: [],
+    sandbox: {
+      name: workspaceSandboxName(id),
+      provider: "vercel",
+      status: "pending"
+    },
+    status: "idle",
+    title: input.title,
+    updatedAt: now,
+    version: 1
+  };
+  await createWorkspace(workspace);
+  return input.prompt
+    ? queueWorkspaceTurn(workspace.id, input.prompt)
+    : toWorkspaceView(workspace);
+}
 
 export async function queueWorkspaceTurn(
   workspaceId: string,

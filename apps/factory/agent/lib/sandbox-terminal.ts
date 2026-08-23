@@ -11,12 +11,10 @@ export interface SandboxWithInteractive {
   }) => Promise<{ readonly url: string; readonly token: string }>;
 }
 
-const ALLOWED_SANDBOX_NAME_PREFIXES = ["ai-sdk-harness", "factory-workspace-"];
+const ALLOWED_SANDBOX_NAME_PREFIX = "factory-workspace-";
 
 export function isAllowedSandboxName(name: string): boolean {
-  return ALLOWED_SANDBOX_NAME_PREFIXES.some((prefix) =>
-    name.startsWith(prefix)
-  );
+  return name.startsWith(ALLOWED_SANDBOX_NAME_PREFIX);
 }
 
 export async function createTerminalSession(

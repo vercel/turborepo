@@ -1,11 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { HARNESS_IDS, type HarnessId } from "../agent/lib/harnesses";
 import { MAINTENANCE_RUN_ACTION } from "../agent/lib/operator-runs";
 import { Button } from "../components/ui/button";
-import { RunStatusPanel, runLabel, useOperatorRun } from "./operator-run";
 type SlackTestState =
   | { readonly state: "idle" }
   | { readonly state: "sending" }
@@ -23,7 +22,6 @@ type SlackTestState =
 interface RunMaintenanceProps {
   readonly agentRunsUrl: string;
   readonly examples: string[];
-  readonly harnessEnabled: boolean;
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
@@ -67,18 +65,45 @@ function isSlackTestResult(value: unknown): value is
 
 export function RunMaintenance({
   agentRunsUrl,
-  examples,
-  harnessEnabled
+  examples
 }: RunMaintenanceProps) {
-  const { isBusy, start, status } = useOperatorRun(
-    MAINTENANCE_RUN_ACTION,
-    harnessEnabled ? "/api/harness/runs" : undefined
-  );
-  const [harness, setHarness] = useState<HarnessId>("opencode");
+  const router = useRouter();
+  const [isBusy, setIsBusy] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [slackTest, setSlackTest] = useState<SlackTestState>({ state: "idle" });
   const [selectedExample, setSelectedExample] = useState(() =>
     dailyExample(examples)
   );
+
+  async function startMaintenance() {
+    if (!selectedExample || isBusy) return;
+    setIsBusy(true);
+    setRunError(null);
+    try {
+      const response = await fetch("/api/workspaces/maintenance", {
+        body: JSON.stringify({ example: selectedExample }),
+        headers: {
+          "content-type": "application/json",
+          "x-operator-action": MAINTENANCE_RUN_ACTION
+        },
+        method: "POST"
+      });
+      const workspace = (await response.json().catch(() => ({}))) as {
+        readonly error?: string;
+        readonly id?: string;
+      };
+      if (!response.ok || !workspace.id)
+        throw new Error(workspace.error ?? "Could not start fx maintenance.");
+      router.push(`/workspaces/${encodeURIComponent(workspace.id)}`);
+    } catch (error) {
+      setRunError(
+        error instanceof Error
+          ? error.message
+          : "Could not start fx maintenance."
+      );
+      setIsBusy(false);
+    }
+  }
 
   async function testSlackDelivery() {
     setSlackTest({ state: "sending" });
@@ -142,38 +167,13 @@ export function RunMaintenance({
           ))}
         </select>
       </label>
-      {harnessEnabled ? (
-        <label className="mb-5 grid gap-2">
-          <span className="text-[0.8125rem] font-medium text-muted-foreground">
-            Harness
-          </span>
-          <select
-            className="min-h-10 w-[min(100%,440px)] rounded-md border border-input bg-background px-3 pr-9 text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3"
-            disabled={isBusy}
-            onChange={(event) => setHarness(event.target.value as HarnessId)}
-            value={harness}
-          >
-            {HARNESS_IDS.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
       <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
         <Button
           disabled={isBusy || !selectedExample}
-          onClick={() =>
-            void start({
-              example: selectedExample,
-              harness,
-              sandbox: "vercel"
-            })
-          }
+          onClick={() => void startMaintenance()}
           type="button"
         >
-          {runLabel(status, "Run maintenance now")}
+          {isBusy ? "Starting fx…" : "Run maintenance with fx"}
         </Button>
         <Button
           disabled={slackTest.state === "sending"}
@@ -195,8 +195,11 @@ export function RunMaintenance({
           <span aria-hidden="true">↗</span>
         </a>
       </div>
-
-      <RunStatusPanel status={status} />
+      {runError ? (
+        <p className="mt-4 text-sm text-destructive" role="alert">
+          {runError}
+        </p>
+      ) : null}
       {slackTest.state !== "idle" ? (
         <div
           aria-live={slackTest.state === "error" ? "assertive" : "polite"}

@@ -1,19 +1,13 @@
-import { randomUUID } from "node:crypto";
-
 import {
-  createWorkspace,
   isWorkspaceStoreConfigured,
   listWorkspaces
 } from "../../../agent/lib/workspace-store";
-import { queueWorkspaceTurn } from "../../../agent/lib/workspace-turn";
+import { createFxWorkspace } from "../../../agent/lib/workspace-turn";
 import {
   isWorkspaceMutationRequest,
   parseCreateWorkspaceInput,
   toWorkspaceSummary,
-  toWorkspaceView,
-  WORKSPACE_CREATE_ACTION,
-  workspaceSandboxName,
-  type WorkspaceRecord
+  WORKSPACE_CREATE_ACTION
 } from "../../../agent/lib/workspace";
 
 export async function GET(): Promise<Response> {
@@ -42,27 +36,7 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
 
-  const id = `ws_${randomUUID().replaceAll("-", "")}`;
-  const now = new Date().toISOString();
-  const workspace: WorkspaceRecord = {
-    agent: "fx",
-    createdAt: now,
-    id,
-    messages: [],
-    sandbox: {
-      name: workspaceSandboxName(id),
-      provider: "vercel",
-      status: "pending"
-    },
-    status: "idle",
-    title: input.title,
-    updatedAt: now,
-    version: 1
-  };
-  await createWorkspace(workspace);
-  const view = input.prompt
-    ? await queueWorkspaceTurn(workspace.id, input.prompt)
-    : toWorkspaceView(workspace);
+  const view = await createFxWorkspace(input);
   return Response.json(view, {
     status: input.prompt ? 202 : 201,
     headers: { "cache-control": "no-store" }
