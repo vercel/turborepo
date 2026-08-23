@@ -26,6 +26,7 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
     let terminal: Terminal | undefined;
     let fitAddon: FitAddon | undefined;
     let resizeObserver: ResizeObserver | undefined;
+    let handshakeTimer: number | undefined;
 
     async function connect() {
       const response = await fetch(
@@ -76,10 +77,18 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
         socket.send(
           JSON.stringify(buildStartMessage(cols, rows, { cwd: session.cwd }))
         );
+        handshakeTimer = window.setTimeout(() => {
+          setError("The sandbox shell did not start.");
+          socket?.close();
+        }, 10_000);
         terminal.focus();
       });
       socket.addEventListener("message", (event) => {
         if (!terminal) return;
+        if (handshakeTimer !== undefined) {
+          window.clearTimeout(handshakeTimer);
+          handshakeTimer = undefined;
+        }
         const message = parseServerMessage(event.data);
         if (message.kind === "output") terminal.write(message.data);
         if (message.kind === "exit") {
@@ -87,6 +96,10 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
             `\r\nSession closed${message.code === null ? "." : ` with exit code ${message.code}.`}`
           );
         }
+      });
+      socket.addEventListener("close", (event) => {
+        if (!cancelled && event.code !== 1000)
+          setError(`The terminal connection closed (${event.code}).`);
       });
       socket.addEventListener("error", () => {
         if (!cancelled) setError("The terminal connection failed.");
@@ -124,6 +137,7 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
 
     return () => {
       cancelled = true;
+      if (handshakeTimer !== undefined) window.clearTimeout(handshakeTimer);
       resizeObserver?.disconnect();
       socket?.close();
       terminal?.dispose();
