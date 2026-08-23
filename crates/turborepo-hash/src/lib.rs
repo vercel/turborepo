@@ -4,7 +4,7 @@
 //! deterministic serialization across languages and platforms, then applies
 //! xxHash64 for fast hashing.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod oid_hash;
 mod traits;
@@ -19,7 +19,8 @@ pub use oid_hash::OidHash;
 pub use traits::TurboHash;
 use turborepo_types::{EnvMode, TaskOutputs};
 
-#[allow(dead_code)]
+// Generated Cap'n Proto setters use infallible unwraps.
+#[allow(dead_code, clippy::unwrap_used)]
 mod proto_capnp {
     use turborepo_types::EnvMode;
 
