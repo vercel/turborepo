@@ -698,7 +698,7 @@ impl RepositoryQuery {
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .filter(|ct| {
-                let executes = ct.task.executes();
+                let participates_in_run = ct.task.participates_in_run();
                 let task_ok = tasks.as_ref().is_none_or(|names| {
                     if names.is_empty() {
                         true
@@ -710,7 +710,7 @@ impl RepositoryQuery {
                     }
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                executes && task_ok && package_ok
+                participates_in_run && task_ok && package_ok
             })
             .collect();
 

@@ -12,6 +12,9 @@
     "typecheck": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.ts"]
+    },
+    "aggregate": {
+      "dependsOn": ["build"]
     }
   }
 }

@@ -691,6 +691,39 @@ fn test_affected_tasks_excludes_packages_without_script() {
 }
 
 #[test]
+fn test_affected_tasks_includes_virtual_task_with_affected_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"aggregate\"]) { items { name package { name } script \
+             } } }",
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+
+    assert!(
+        items.iter().any(|item| {
+            item["package"]["name"] == "lib-a"
+                && item["name"] == "aggregate"
+                && item["script"].is_null()
+        }),
+        "virtual aggregate task should be affected when its build dependency is affected: \
+         {items:?}"
+    );
+}
+
+#[test]
 fn test_root_package_json_change_does_not_globally_affect_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_affected_tasks_fixture(tempdir.path());
