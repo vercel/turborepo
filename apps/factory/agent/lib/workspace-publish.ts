@@ -10,6 +10,10 @@ const FX_INSTRUCTIONS_PATH = "/home/vercel/.fx/AGENTS.md";
 const PUBLISH_COMMAND_PATH = "/factory/bin/factory-create-pr";
 const PUBLISH_INSTRUCTIONS = `When the maintainer asks to create or make a pull request, leave repository changes uncommitted and run \`factory-create-pr --branch agents/<topic> --title "type: Description" --body "validation results"\`. Factory creates the verified commit, branch, and draft pull request through Eve's GitHub credentials. Never run git commit, git push, gh auth setup-git, or gh pr create.\n`;
 
+export function workspacePublishPrompt(message: string): string {
+  return `${PUBLISH_INSTRUCTIONS}\nMaintainer request:\n${message}`;
+}
+
 export interface WorkspacePublishBridge {
   readonly authorization: string;
   readonly hostname: string;

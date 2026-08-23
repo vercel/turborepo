@@ -4,7 +4,8 @@ import test from "node:test";
 import {
   isWorkspacePublishRequest,
   parseWorkspacePublishInput,
-  workspacePublishBridge
+  workspacePublishBridge,
+  workspacePublishPrompt
 } from "../agent/lib/workspace-publish.ts";
 
 const workspace = {
@@ -41,6 +42,14 @@ test("validates workspace publication metadata", () => {
     }),
     null
   );
+});
+
+test("tells every workspace turn to publish through Eve", () => {
+  const prompt = workspacePublishPrompt("Open a PR for this fix.");
+  assert.match(prompt, /factory-create-pr/);
+  assert.match(prompt, /Eve's GitHub credentials/);
+  assert.match(prompt, /Never run git commit, git push/);
+  assert.match(prompt, /Maintainer request:\nOpen a PR for this fix\./);
 });
 
 test("requires the private workspace publication capability", () => {
