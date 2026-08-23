@@ -9,7 +9,10 @@ import {
   FX_TERMINAL_RUNNER_SOURCE,
   parseFxTerminalResult
 } from "../agent/lib/fx-terminal-runner.ts";
-import { workspaceNetworkPolicy } from "../agent/lib/workspace-network-policy.ts";
+import {
+  applyWorkspaceNetworkPolicy,
+  workspaceNetworkPolicy
+} from "../agent/lib/workspace-network-policy.ts";
 
 test("parseFxTerminalResult reads the completed interactive turn", () => {
   assert.deepEqual(
@@ -97,6 +100,25 @@ test("the terminal runner starts fx once and injects the autonomous prompt", () 
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /fx --record/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /\/factory\/bin:\$PATH/);
   assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
+});
+
+test("workspace policy updates the current Sandbox session", async () => {
+  const updates = [];
+  const policy = workspaceNetworkPolicy("github-token");
+  await applyWorkspaceNetworkPolicy(
+    {
+      currentSession() {
+        return {
+          async update(input) {
+            updates.push(input);
+          }
+        };
+      }
+    },
+    policy
+  );
+
+  assert.deepEqual(updates, [{ networkPolicy: policy }]);
 });
 
 test("workspace GitHub credential rules precede the catch-all rule", () => {

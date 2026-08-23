@@ -20,7 +20,10 @@ import {
 import { fxEnvironment } from "./fx-environment";
 import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
-import { workspaceNetworkPolicy } from "./workspace-network-policy";
+import {
+  applyWorkspaceNetworkPolicy,
+  workspaceNetworkPolicy
+} from "./workspace-network-policy";
 import {
   installWorkspacePublishCommand,
   type WorkspacePublishBridge
@@ -34,9 +37,10 @@ export async function getFxWorkspaceSandbox(
   publishBridge?: WorkspacePublishBridge | null
 ): Promise<Sandbox> {
   const sandbox = await Sandbox.get({ name, resume: true });
-  await sandbox.update({
-    networkPolicy: workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
-  });
+  await applyWorkspaceNetworkPolicy(
+    sandbox,
+    workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
+  );
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
@@ -90,9 +94,10 @@ export async function getOrCreateFxWorkspaceSandbox(
     return Sandbox.get({ name });
   }
 
-  await sandbox.update({
-    networkPolicy: workspaceNetworkPolicy(githubToken, publishBridge)
-  });
+  await applyWorkspaceNetworkPolicy(
+    sandbox,
+    workspaceNetworkPolicy(githubToken, publishBridge)
+  );
   await initializeWorkspaceSandbox(sandbox, image !== null);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;

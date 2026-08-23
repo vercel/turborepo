@@ -2,6 +2,19 @@ import type { NetworkPolicy } from "@vercel/sandbox";
 
 import type { WorkspacePublishBridge } from "./workspace-publish.js";
 
+interface WorkspaceNetworkPolicySandbox {
+  readonly currentSession: () => {
+    readonly update: (input: { readonly networkPolicy: NetworkPolicy }) => Promise<void>;
+  };
+}
+
+export async function applyWorkspaceNetworkPolicy(
+  sandbox: WorkspaceNetworkPolicySandbox,
+  networkPolicy: NetworkPolicy
+): Promise<void> {
+  await sandbox.currentSession().update({ networkPolicy });
+}
+
 export function workspaceNetworkPolicy(
   githubToken: string,
   publishBridge?: WorkspacePublishBridge | null
