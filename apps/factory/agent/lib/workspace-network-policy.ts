@@ -4,7 +4,9 @@ import type { WorkspacePublishBridge } from "./workspace-publish.js";
 
 interface WorkspaceNetworkPolicySandbox {
   readonly currentSession: () => {
-    readonly update: (input: { readonly networkPolicy: NetworkPolicy }) => Promise<void>;
+    readonly update: (input: {
+      readonly networkPolicy: NetworkPolicy;
+    }) => Promise<void>;
   };
 }
 
