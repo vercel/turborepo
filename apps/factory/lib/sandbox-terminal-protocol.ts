@@ -1,7 +1,7 @@
 export const TERM = "xterm-256color";
 export const PS1 = `▲ \u0001\u001B[2m\u0002$PWD/\u0001\u001B[0m\u0002 `;
-export const DEFAULT_COMMAND = "sh";
-export const DEFAULT_ARGS: readonly string[] = [];
+export const DEFAULT_COMMAND = "bash";
+export const DEFAULT_ARGS: readonly string[] = ["-l"];
 export const DEFAULT_CWD = "/vercel/sandbox";
 
 export interface StartMessage {

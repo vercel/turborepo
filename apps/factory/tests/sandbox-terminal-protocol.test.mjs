@@ -29,8 +29,8 @@ test("buildWebSocketUrl appends the token as a query parameter", () => {
 test("buildStartMessage includes required fields and defaults", () => {
   const message = buildStartMessage(80, 24);
   assert.equal(message.type, "start");
-  assert.equal(message.command, "sh");
-  assert.deepEqual(message.args, []);
+  assert.equal(message.command, "bash");
+  assert.deepEqual(message.args, ["-l"]);
   assert.equal(message.cwd, DEFAULT_CWD);
   assert.equal(message.cols, 80);
   assert.equal(message.rows, 24);
