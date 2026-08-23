@@ -73,7 +73,7 @@ export async function prepareFxInteractiveLaunch(
     command: "bash",
     args: [
       "-lc",
-      'token_path="$1"; session_id="$2"; trap \'rm -f "$token_path"\' EXIT; export VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; exec fx --yolo --resume "$session_id"',
+      'token_path="$1"; session_id="$2"; trap \'rm -f "$token_path"\' EXIT; export VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; exec env FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo fx resume --id "$session_id"',
       "factory-terminal",
       tokenPath,
       sessionId

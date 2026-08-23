@@ -95,7 +95,11 @@ test("prepareFxInteractiveLaunch resumes the workspace session with OIDC", async
   assert.match(writes[0].path, /^\/factory\/state\/interactive-oidc-/);
   assert.equal(launch.command, "bash");
   assert.equal(launch.args[0], "-lc");
-  assert.match(launch.args[1], /exec fx --yolo --resume/);
+  assert.doesNotMatch(launch.args[1], /--yolo/);
+  assert.match(
+    launch.args[1],
+    /exec env FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo fx resume --id "\$session_id"/
+  );
   assert.equal(launch.args[2], "factory-terminal");
   assert.equal(launch.args[3], writes[0].path);
   assert.equal(launch.args[4], "session-123");
