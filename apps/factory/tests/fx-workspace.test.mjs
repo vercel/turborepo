@@ -99,23 +99,19 @@ test("the terminal runner starts fx once and injects the autonomous prompt", () 
   assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
 });
 
-test("workspace GitHub credential rules precede the catch-all rule", () => {
+test("workspace network policy uses the Sandbox API custom wire format", () => {
   const policy = workspaceNetworkPolicy("github-token");
   assert.notEqual(typeof policy, "string");
-  assert.ok(policy.allow && !Array.isArray(policy.allow));
-
-  assert.deepEqual(Object.keys(policy.allow), [
+  assert.deepEqual(policy.allowedDomains, [
     "api.github.com",
     "github.com",
     "*"
   ]);
-  assert.deepEqual(policy.allow["github.com"][0].transform, [
-    {
-      headers: {
-        authorization: `Basic ${Buffer.from("x-access-token:github-token").toString("base64")}`
-      }
-    }
-  ]);
+  assert.deepEqual(policy.deniedCIDRs, ["169.254.169.254/32"]);
+  assert.equal(policy.mode, "custom");
+  assert.deepEqual(policy.injectionRules[1].headers, {
+    authorization: `Basic ${Buffer.from("x-access-token:github-token").toString("base64")}`
+  });
 });
 
 test("workspace publication credentials are injected only for the exact route", () => {
@@ -126,14 +122,13 @@ test("workspace publication credentials are injected only for the exact route", 
     url: "https://factory.example/api/workspaces/ws_abc/publish"
   });
   assert.notEqual(typeof policy, "string");
-  assert.ok(policy.allow && !Array.isArray(policy.allow));
-  assert.deepEqual(policy.allow["factory.example"], [
-    {
-      match: {
-        method: ["POST"],
-        path: "/api/workspaces/ws_abc/publish"
-      },
-      transform: [{ headers: { authorization: "Bearer publish-token" } }]
+  assert.equal(policy.allowedDomains[0], "factory.example");
+  assert.deepEqual(policy.injectionRules[0], {
+    domain: "factory.example",
+    headers: { authorization: "Bearer publish-token" },
+    match: {
+      method: ["POST"],
+      path: "/api/workspaces/ws_abc/publish"
     }
-  ]);
+  });
 });
