@@ -64,7 +64,12 @@ test("countFxSessions treats invalid output as no sessions", async () => {
     await countFxSessions(
       {
         async runCommand() {
-          return { exitCode: 0, async stdout() { return "not json"; } };
+          return {
+            exitCode: 0,
+            async stdout() {
+              return "not json";
+            }
+          };
         }
       },
       "/factory/turborepo"

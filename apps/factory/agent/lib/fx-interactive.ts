@@ -26,7 +26,9 @@ export interface FxInteractiveLaunch {
   readonly args: readonly string[];
 }
 
-export async function cancelFxAcpTurn(sandbox: SandboxFileWriter): Promise<void> {
+export async function cancelFxAcpTurn(
+  sandbox: SandboxFileWriter
+): Promise<void> {
   await sandbox.writeFiles([
     { content: Buffer.from("cancel\n", "utf8"), path: FX_ACP_CANCEL_PATH }
   ]);
