@@ -38,9 +38,17 @@ export async function POST(
     );
   } catch (error) {
     console.error("Could not open workspace terminal.", error);
+    const starting = workspace.status === "running";
     return Response.json(
-      { error: "Could not open the workspace terminal." },
-      { status: 502 }
+      {
+        error: starting
+          ? "The workspace sandbox is still starting."
+          : "Could not open the workspace terminal."
+      },
+      {
+        status: starting ? 503 : 502,
+        headers: starting ? { "retry-after": "2" } : undefined
+      }
     );
   }
 }

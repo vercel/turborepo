@@ -12,6 +12,9 @@ import {
   parseServerMessage
 } from "../lib/sandbox-terminal-protocol";
 
+const RETRY_DELAY_MS = 2_000;
+const MAX_STARTUP_ATTEMPTS = 45;
+
 interface WorkspaceTerminalProps {
   readonly workspaceId: string;
 }
@@ -19,16 +22,52 @@ interface WorkspaceTerminalProps {
 export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     let socket: WebSocket | undefined;
-    let terminal: Terminal | undefined;
-    let fitAddon: FitAddon | undefined;
-    let resizeObserver: ResizeObserver | undefined;
     let handshakeTimer: number | undefined;
+    let retryTimer: number | undefined;
 
-    async function connect() {
+    const terminal = new Terminal({
+      allowProposedApi: false,
+      cursorBlink: true,
+      fontFamily: "var(--font-geist-mono), monospace",
+      fontSize: 14,
+      theme: { background: "#000000", foreground: "#ededed" }
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    if (containerRef.current) {
+      terminal.open(containerRef.current);
+      fitAddon.fit();
+    }
+
+    const retry = (attempt: number) => {
+      if (cancelled || attempt >= MAX_STARTUP_ATTEMPTS) {
+        if (!cancelled) setError("The sandbox terminal did not become ready.");
+        return;
+      }
+      retryTimer = window.setTimeout(() => {
+        void connect(attempt + 1).catch((cause) => {
+          if (!cancelled) {
+            setConnecting(false);
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not start terminal."
+            );
+          }
+        });
+      }, RETRY_DELAY_MS);
+    };
+
+    async function connect(attempt: number) {
+      if (cancelled) return;
+      setConnecting(true);
+      setError(null);
+
       const response = await fetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}/terminal`,
         {
@@ -37,6 +76,10 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
         }
       );
       if (!response.ok) {
+        if (response.status === 503) {
+          retry(attempt);
+          return;
+        }
         const body = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
@@ -51,24 +94,11 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       };
       if (cancelled) return;
 
-      terminal = new Terminal({
-        allowProposedApi: false,
-        cursorBlink: true,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 14,
-        theme: { background: "#000000", foreground: "#ededed" }
-      });
-      fitAddon = new FitAddon();
-      terminal.loadAddon(fitAddon);
-      if (containerRef.current) {
-        terminal.open(containerRef.current);
-        fitAddon.fit();
-      }
-
+      let receivedOutput = false;
       socket = new WebSocket(buildWebSocketUrl(session.url, session.token));
       socket.binaryType = "arraybuffer";
       socket.addEventListener("open", () => {
-        if (cancelled || !terminal || !fitAddon || !socket) return;
+        if (cancelled || !socket) return;
         const { cols, rows } = fitAddon.proposeDimensions() ?? {
           cols: 80,
           rows: 24
@@ -78,13 +108,14 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
           JSON.stringify(buildStartMessage(cols, rows, { cwd: session.cwd }))
         );
         handshakeTimer = window.setTimeout(() => {
-          setError("The sandbox shell did not start.");
           socket?.close();
+          retry(attempt);
         }, 10_000);
         terminal.focus();
       });
       socket.addEventListener("message", (event) => {
-        if (!terminal) return;
+        receivedOutput = true;
+        setConnecting(false);
         if (handshakeTimer !== undefined) {
           window.clearTimeout(handshakeTimer);
           handshakeTimer = undefined;
@@ -98,37 +129,42 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
         }
       });
       socket.addEventListener("close", (event) => {
-        if (!cancelled && event.code !== 1000)
+        if (cancelled) return;
+        if (!receivedOutput && event.code === 1006) {
+          retry(attempt);
+          return;
+        }
+        if (event.code !== 1000)
           setError(`The terminal connection closed (${event.code}).`);
       });
       socket.addEventListener("error", () => {
-        if (!cancelled) setError("The terminal connection failed.");
+        if (!cancelled && receivedOutput)
+          setError("The terminal connection failed.");
       });
-      terminal.onData((data) => {
-        if (socket?.readyState === WebSocket.OPEN)
-          socket.send(new TextEncoder().encode(data));
-      });
-
-      const resize = () => {
-        if (!terminal || !fitAddon) return;
-        fitAddon.fit();
-        const { cols, rows } = fitAddon.proposeDimensions() ?? {
-          cols: 80,
-          rows: 24
-        };
-        terminal.resize(cols, rows);
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify(buildResizeMessage(cols, rows)));
-        }
-      };
-      if (containerRef.current) {
-        resizeObserver = new ResizeObserver(resize);
-        resizeObserver.observe(containerRef.current);
-      }
     }
 
-    void connect().catch((cause) => {
+    const dataDisposable = terminal.onData((data) => {
+      if (socket?.readyState === WebSocket.OPEN)
+        socket.send(new TextEncoder().encode(data));
+    });
+
+    const resize = () => {
+      fitAddon.fit();
+      const { cols, rows } = fitAddon.proposeDimensions() ?? {
+        cols: 80,
+        rows: 24
+      };
+      terminal.resize(cols, rows);
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(buildResizeMessage(cols, rows)));
+      }
+    };
+    const resizeObserver = new ResizeObserver(resize);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+
+    void connect(0).catch((cause) => {
       if (!cancelled) {
+        setConnecting(false);
         setError(
           cause instanceof Error ? cause.message : "Could not start terminal."
         );
@@ -138,9 +174,11 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
     return () => {
       cancelled = true;
       if (handshakeTimer !== undefined) window.clearTimeout(handshakeTimer);
-      resizeObserver?.disconnect();
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      resizeObserver.disconnect();
+      dataDisposable.dispose();
       socket?.close();
-      terminal?.dispose();
+      terminal.dispose();
     };
   }, [workspaceId]);
 
@@ -150,16 +188,26 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       className="fixed inset-0 z-50 bg-black text-[#ededed]"
       id="main-content"
     >
+      <div
+        className="h-full p-2 [&_.xterm]:h-full [&_.xterm-screen]:!h-full [&_.xterm-screen]:!w-full"
+        ref={containerRef}
+      />
+      {connecting && !error ? (
+        <p
+          className="pointer-events-none absolute inset-0 grid place-items-center text-sm"
+          role="status"
+        >
+          Connecting to sandbox…
+        </p>
+      ) : null}
       {error ? (
-        <p className="grid h-full place-items-center p-6 text-sm" role="alert">
+        <p
+          className="absolute inset-0 grid place-items-center bg-black p-6 text-sm"
+          role="alert"
+        >
           {error}
         </p>
-      ) : (
-        <div
-          className="h-full p-2 [&_.xterm]:h-full [&_.xterm-screen]:!h-full [&_.xterm-screen]:!w-full"
-          ref={containerRef}
-        />
-      )}
+      ) : null}
     </main>
   );
 }
