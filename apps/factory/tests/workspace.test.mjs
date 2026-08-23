@@ -23,6 +23,7 @@ function workspace(changes = {}) {
     createdAt: now,
     id: "ws_abc",
     messages: [],
+    publishToken: "private-publish-token",
     sandbox: {
       name: workspaceSandboxName("ws_abc"),
       provider: "vercel",
@@ -53,6 +54,7 @@ test("workspace views whitelist fields and omit opaque state", () => {
   const view = toWorkspaceView({ ...workspace(), unexpected: "private" });
   assert.equal("activeTurnId" in view, false);
   assert.equal("activeDispatchId" in view, false);
+  assert.equal("publishToken" in view, false);
   assert.equal("unexpected" in view, false);
 });
 

@@ -1,4 +1,7 @@
-import { APIError, type NetworkPolicy, Sandbox } from "@vercel/sandbox";
+import { randomUUID } from "node:crypto";
+
+import { getVercelOidcToken } from "@vercel/oidc";
+import { APIError, Sandbox } from "@vercel/sandbox";
 
 import {
   FACTORY_IMAGE_BASE,
@@ -7,20 +10,48 @@ import {
   runFactoryImagePhases
 } from "./factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
-import { parseFxTurnResult, type FxTurnResult } from "./fx-result";
+import {
+  FX_TERMINAL_RUNNER_PATH,
+  FX_TERMINAL_RUNNER_SOURCE,
+  FX_TERMINAL_SESSION_PATH,
+  FX_TERMINAL_TMUX_SESSION,
+  parseFxTerminalResult
+} from "./fx-terminal-runner";
+import { fxEnvironment } from "./fx-environment";
+import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
+import { workspaceNetworkPolicy } from "./workspace-network-policy";
+import {
+  installWorkspacePublishCommand,
+  type WorkspacePublishBridge
+} from "./workspace-publish";
 
 const WORKSPACE_TIMEOUT_MS = 45 * 60 * 1000;
 const WORKSPACE_VCPUS = 8;
 
+export async function getFxWorkspaceSandbox(
+  name: string,
+  publishBridge?: WorkspacePublishBridge | null
+): Promise<Sandbox> {
+  const sandbox = await Sandbox.get({ name, resume: true });
+  await sandbox.updateNetworkPolicy(
+    workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
+  );
+  await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
+  return sandbox;
+}
+
 export async function getOrCreateFxWorkspaceSandbox(
-  name: string
+  name: string,
+  publishBridge?: WorkspacePublishBridge | null
 ): Promise<Sandbox> {
   try {
-    const sandbox = await Sandbox.get({ name });
-    await sandbox.updateNetworkPolicy(
-      workspaceNetworkPolicy(await getGitHubToken())
-    );
+    const sandbox = await getFxWorkspaceSandbox(name, publishBridge);
+    if (!(await hasWorkspaceCheckout(sandbox))) {
+      await initializeWorkspaceSandbox(sandbox, false);
+    } else {
+      await ensureWorkspaceTerminalTools(sandbox);
+    }
     return sandbox;
   } catch (error) {
     if (!isMissing(error)) throw error;
@@ -39,7 +70,7 @@ export async function getOrCreateFxWorkspaceSandbox(
       GH_TOKEN: "brokered-by-sandbox"
     },
     name,
-    networkPolicy: workspaceNetworkPolicy(githubToken),
+    networkPolicy: workspaceNetworkPolicy(githubToken, publishBridge),
     resources: { vcpus: WORKSPACE_VCPUS },
     tags: { role: "factory-workspace" },
     timeout: WORKSPACE_TIMEOUT_MS
@@ -59,24 +90,65 @@ export async function getOrCreateFxWorkspaceSandbox(
     return Sandbox.get({ name });
   }
 
-  if (image === null) {
-    await runFactoryImagePhases(
-      {
-        async run(command) {
-          const result = await sandbox.runCommand({
-            args: ["-lc", command],
-            cmd: "bash"
-          });
-          return {
-            exitCode: result.exitCode,
-            stderr: await result.stderr(),
-            stdout: await result.stdout()
-          };
-        }
-      },
-      { revision: "main" }
-    );
-  } else {
+  await initializeWorkspaceSandbox(sandbox, image !== null);
+  await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
+  return sandbox;
+}
+
+export async function ensureWorkspaceTerminalTools(
+  sandbox: Sandbox
+): Promise<void> {
+  const command = await sandbox.runCommand({
+    args: [
+      "-lc",
+      "command -v tmux >/dev/null || { if command -v apt-get >/dev/null; then sudo -n apt-get update -y && sudo -n apt-get install -y --no-install-recommends tmux; elif command -v dnf >/dev/null; then sudo -n dnf install -y tmux; elif command -v yum >/dev/null; then sudo -n yum install -y tmux; elif command -v apk >/dev/null; then sudo -n apk add --no-cache tmux; else exit 1; fi; }"
+    ],
+    cmd: "bash",
+    timeoutMs: 120_000
+  });
+  if (command.exitCode !== 0) {
+    throw new Error(`Could not install tmux: ${await command.stderr()}`);
+  }
+}
+
+async function hasWorkspaceCheckout(sandbox: Sandbox): Promise<boolean> {
+  try {
+    const result = await sandbox.runCommand({
+      args: ["-C", FACTORY_IMAGE_SPEC.checkoutPath, "rev-parse", "HEAD"],
+      cmd: "git",
+      timeoutMs: 30_000
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function initializeWorkspaceSandbox(
+  sandbox: Sandbox,
+  fromSnapshot: boolean
+): Promise<void> {
+  try {
+    if (!fromSnapshot) {
+      await runFactoryImagePhases(
+        {
+          async run(command) {
+            const result = await sandbox.runCommand({
+              args: ["-lc", command],
+              cmd: "bash"
+            });
+            return {
+              exitCode: result.exitCode,
+              stderr: await result.stderr(),
+              stdout: await result.stdout()
+            };
+          }
+        },
+        { revision: "main" }
+      );
+      return;
+    }
+
     const result = await sandbox.runCommand({
       args: [
         "-lc",
@@ -89,59 +161,85 @@ export async function getOrCreateFxWorkspaceSandbox(
         `Could not initialize fx workspace: ${await result.stderr()}`
       );
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await sandbox
+      .writeFiles([
+        {
+          content: Buffer.from(`${message}\n`, "utf8"),
+          path: "/factory/state/error"
+        }
+      ])
+      .catch(() => {});
+    throw error;
   }
-  return sandbox;
-}
-
-function workspaceNetworkPolicy(githubToken: string): NetworkPolicy {
-  return {
-    allow: {
-      "*": [],
-      "api.github.com": [
-        {
-          match: {
-            method: ["GET", "POST", "PATCH"],
-            path: { startsWith: "/repos/vercel/turborepo" }
-          },
-          transform: [{ headers: { authorization: `Bearer ${githubToken}` } }]
-        }
-      ],
-      "github.com": [
-        {
-          match: {
-            method: ["GET", "POST"],
-            path: { startsWith: "/vercel/turborepo.git" }
-          },
-          transform: [{ headers: { authorization: `Bearer ${githubToken}` } }]
-        }
-      ]
-    },
-    subnets: { deny: ["169.254.169.254/32"] }
-  };
 }
 
 export async function runFxTurn(
   sandbox: Sandbox,
   prompt: string,
-  sessionId?: string
-): Promise<FxTurnResult> {
-  const args = ["ask", "--json", "--yolo"];
-  if (sessionId) args.push("--resume-id", sessionId);
-  args.push("--", prompt);
+  sessionId?: string,
+  getOidcToken: () => Promise<string> = getVercelOidcToken,
+  onSession?: (sessionId: string) => Promise<void>
+): Promise<FxTurnResult & { readonly cancelled: boolean }> {
+  const promptPath = `/factory/state/fx-terminal-prompt-${randomUUID()}`;
+  const tokenPath = `/factory/state/fx-terminal-oidc-${randomUUID()}`;
+  const oidcToken = await getOidcToken();
+  await sandbox.runCommand({
+    args: ["-f", FX_TERMINAL_SESSION_PATH],
+    cmd: "rm",
+    timeoutMs: 10_000
+  });
+  await sandbox.writeFiles([
+    {
+      content: Buffer.from(FX_TERMINAL_RUNNER_SOURCE, "utf8"),
+      path: FX_TERMINAL_RUNNER_PATH
+    },
+    { content: Buffer.from(prompt, "utf8"), path: promptPath },
+    { content: Buffer.from(oidcToken, "utf8"), path: tokenPath }
+  ]);
   const command = await sandbox.runCommand({
-    args,
-    cmd: "fx",
-    cwd: FACTORY_IMAGE_SPEC.checkoutPath,
-    env: { FX_AUTO_UPGRADE: "0", FX_PERMISSION_MODE: "yolo" },
+    args: [
+      FX_TERMINAL_RUNNER_PATH,
+      FACTORY_IMAGE_SPEC.checkoutPath,
+      promptPath,
+      tokenPath,
+      sessionId ?? "",
+      FX_TERMINAL_SESSION_PATH,
+      FX_TERMINAL_TMUX_SESSION
+    ],
+    cmd: "node",
+    detached: true,
+    env: fxEnvironment(oidcToken),
     timeoutMs: WORKSPACE_TIMEOUT_MS - 60_000
   });
-  const stdout = await command.stdout();
-  const parsed = parseFxTurnResult(stdout, command.exitCode);
-  if (parsed === null) {
-    const stderr = (await command.stderr()).slice(0, 2000);
+
+  if (!sessionId && onSession) {
+    const createdSessionId = await waitForTerminalSession(sandbox);
+    await onSession(createdSessionId);
+  }
+
+  const finished = await command.wait();
+  const parsed = parseFxTerminalResult(await finished.stdout());
+  if (finished.exitCode !== 0 || parsed === null) {
+    const stderr = (await finished.stderr()).slice(0, 2000);
     throw new Error(stderr || "fx did not complete the workspace turn.");
   }
-  return parsed;
+  return { ...parsed, cancelled: false };
+}
+
+async function waitForTerminalSession(sandbox: Sandbox): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const command = await sandbox.runCommand({
+      args: ["-lc", `cat ${FX_TERMINAL_SESSION_PATH} 2>/dev/null || true`],
+      cmd: "bash",
+      timeoutMs: 10_000
+    });
+    const sessionId = (await command.stdout()).trim();
+    if (sessionId) return sessionId;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("fx did not create an interactive session.");
 }
 
 function isMissing(error: unknown): boolean {

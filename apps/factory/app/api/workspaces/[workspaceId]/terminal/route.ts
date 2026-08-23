@@ -1,8 +1,20 @@
-import { Sandbox } from "@vercel/sandbox";
+import { getVercelOidcToken } from "@vercel/oidc";
 
-import { getOrCreateFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
+import { FACTORY_IMAGE_SPEC } from "../../../../../agent/lib/factory-image";
+import {
+  countFxSessions,
+  prepareFxInteractiveLaunch
+} from "../../../../../agent/lib/fx-interactive";
+import {
+  ensureWorkspaceTerminalTools,
+  getFxWorkspaceSandbox
+} from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
-import { getWorkspace } from "../../../../../agent/lib/workspace-store";
+import {
+  ensureWorkspacePublishToken,
+  getWorkspace
+} from "../../../../../agent/lib/workspace-store";
+import { workspacePublishBridge } from "../../../../../agent/lib/workspace-publish";
 import {
   isWorkspaceMutationRequest,
   WORKSPACE_TERMINAL_ACTION
@@ -22,19 +34,62 @@ export async function POST(
       { status: 403 }
     );
   const { workspaceId } = await context.params;
-  const workspace = await getWorkspace(workspaceId);
-  if (!workspace)
+  const currentWorkspace = await getWorkspace(workspaceId);
+  if (!currentWorkspace)
     return Response.json({ error: "Workspace not found." }, { status: 404 });
+  const workspace = await ensureWorkspacePublishToken(workspaceId);
+  if (workspace.status === "running" && !workspace.sessionId)
+    return Response.json(
+      {
+        code: "chat_initializing",
+        error: "Factory is creating the first chat for this sandbox."
+      },
+      {
+        status: 503,
+        headers: { "cache-control": "no-store", "retry-after": "2" }
+      }
+    );
   try {
-    const sandbox = await getOrCreateFxWorkspaceSandbox(workspace.sandbox.name);
-    const cwd = await repositoryDirectory(sandbox);
+    const publishBridge = workspace.publishToken
+      ? workspacePublishBridge(workspace.id, workspace.publishToken)
+      : null;
+    const sandbox = await getFxWorkspaceSandbox(
+      workspace.sandbox.name,
+      publishBridge
+    );
+    await ensureWorkspaceTerminalTools(sandbox);
+    if (!workspace.sessionId) {
+      const sessionCount = await countFxSessions(
+        sandbox,
+        FACTORY_IMAGE_SPEC.checkoutPath
+      );
+      return Response.json(
+        sessionCount > 0
+          ? {
+              code: "untracked_chat",
+              error:
+                "This sandbox has an fx chat, but it was started outside Factory and is not linked to this workspace."
+            }
+          : {
+              code: "chat_missing",
+              error: "No fx chat has been created for this sandbox yet."
+            },
+        { status: 409, headers: { "cache-control": "no-store" } }
+      );
+    }
+    const launch = await prepareFxInteractiveLaunch(
+      sandbox,
+      workspace.sessionId,
+      getVercelOidcToken
+    );
     return Response.json(
       {
         ...(await createTerminalSession(
           workspace.sandbox.name,
           async () => sandbox
         )),
-        cwd
+        ...launch,
+        cwd: FACTORY_IMAGE_SPEC.checkoutPath
       },
       { headers: { "cache-control": "no-store" } }
     );
@@ -45,17 +100,4 @@ export async function POST(
       { status: 502 }
     );
   }
-}
-
-async function repositoryDirectory(sandbox: Sandbox): Promise<string> {
-  for (const cwd of ["turborepo", "."]) {
-    const command = await sandbox.runCommand({
-      args: ["rev-parse", "--show-toplevel"],
-      cmd: "git",
-      cwd,
-      timeoutMs: 30_000
-    });
-    if (command.exitCode === 0) return cwd;
-  }
-  throw new Error("Workspace repository is unavailable.");
 }

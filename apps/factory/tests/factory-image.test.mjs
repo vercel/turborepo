@@ -38,6 +38,13 @@ function fakeRunner(failOn) {
   };
 }
 
+test("the image includes tmux for shared interactive fx sessions", () => {
+  const packages = factoryImagePhases({ revision: COMMIT }).find(
+    ({ id }) => id === "system-packages"
+  );
+  assert.ok(packages?.script.includes("tmux"));
+});
+
 test("the image spec pins the versions the repository requires", () => {
   const toolchain = repositoryFile("rust-toolchain.toml");
   assert.match(

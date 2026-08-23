@@ -6,8 +6,8 @@ import {
   type PerformanceModelSelection,
   type PerformanceReviewer,
   selectPerformanceModels
-} from "./performance-models.js";
-import { sessionDate } from "./repo.js";
+} from "./performance-models";
+import { sessionDate } from "./repo";
 
 const checkout = "turborepo";
 const stateDirectory = ".performance-validation";

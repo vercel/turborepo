@@ -5,16 +5,17 @@ interface WorkspaceTurnInput {
   readonly workspaceId: string;
 }
 
-const FIRST_TURN_INSTRUCTIONS = `You are working interactively with a Turborepo maintainer in the vercel/turborepo checkout. Preserve all work in the checkout, make the smallest correct change, verify it using the repository's own commands, and report concrete results. Do not open a pull request unless the maintainer asks. When asked, create an agents/<topic> branch, use a Conventional Commit title with an uppercase description and no scope, push it, and open a draft pull request with validation results in the body.`;
-
 async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
   "use step";
 
   const { getOrCreateFxWorkspaceSandbox, runFxTurn } =
     await import("../agent/lib/fx-workspace");
-  const { getWorkspace, mutateWorkspace } =
+  const { ensureWorkspacePublishToken, getWorkspace, mutateWorkspace } =
     await import("../agent/lib/workspace-store");
-  const workspace = await getWorkspace(input.workspaceId);
+  const currentWorkspace = await getWorkspace(input.workspaceId);
+  const workspace = currentWorkspace
+    ? await ensureWorkspacePublishToken(input.workspaceId)
+    : null;
   if (
     workspace === null ||
     workspace.status !== "running" ||
@@ -53,11 +54,28 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
 
   try {
     if (!message) throw new Error("Workspace turn prompt is missing.");
-    const sandbox = await getOrCreateFxWorkspaceSandbox(workspace.sandbox.name);
-    const prompt = workspace.sessionId
-      ? message
-      : `${FIRST_TURN_INSTRUCTIONS}\n\nMaintainer request:\n${message}`;
-    const result = await runFxTurn(sandbox, prompt, workspace.sessionId);
+    const { workspacePublishBridge } =
+      await import("../agent/lib/workspace-publish");
+    const publishBridge = workspace.publishToken
+      ? workspacePublishBridge(input.workspaceId, workspace.publishToken)
+      : null;
+    const sandbox = await getOrCreateFxWorkspaceSandbox(
+      workspace.sandbox.name,
+      publishBridge
+    );
+    const result = await runFxTurn(
+      sandbox,
+      message,
+      workspace.sessionId,
+      undefined,
+      async (sessionId) => {
+        await mutateWorkspace(input.workspaceId, (current) =>
+          current.activeTurnId === input.turnId
+            ? { ...current, sessionId }
+            : current
+        );
+      }
+    );
     const now = new Date().toISOString();
     await mutateWorkspace(input.workspaceId, (current) => {
       if (current.activeTurnId !== input.turnId) return current;

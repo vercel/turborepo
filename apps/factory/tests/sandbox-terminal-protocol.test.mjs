@@ -6,6 +6,7 @@ import {
   buildResizeMessage,
   buildWebSocketUrl,
   parseServerMessage,
+  shouldReconnectTerminal,
   TERM,
   PS1,
   DEFAULT_CWD
@@ -29,8 +30,8 @@ test("buildWebSocketUrl appends the token as a query parameter", () => {
 test("buildStartMessage includes required fields and defaults", () => {
   const message = buildStartMessage(80, 24);
   assert.equal(message.type, "start");
-  assert.equal(message.command, "sh");
-  assert.deepEqual(message.args, []);
+  assert.equal(message.command, "bash");
+  assert.deepEqual(message.args, ["--noprofile", "--norc", "-i"]);
   assert.equal(message.cwd, DEFAULT_CWD);
   assert.equal(message.cols, 80);
   assert.equal(message.rows, 24);
@@ -60,6 +61,13 @@ test("buildResizeMessage encodes a resize control frame", () => {
     cols: 120,
     rows: 40
   });
+});
+
+test("shouldReconnectTerminal retries only abnormal closes without an exit", () => {
+  assert.equal(shouldReconnectTerminal(1006, false), true);
+  assert.equal(shouldReconnectTerminal(1011, false), true);
+  assert.equal(shouldReconnectTerminal(1000, false), false);
+  assert.equal(shouldReconnectTerminal(1006, true), false);
 });
 
 test("parseServerMessage parses exit control frames", () => {

@@ -9,39 +9,67 @@ import {
   buildResizeMessage,
   buildStartMessage,
   buildWebSocketUrl,
-  parseServerMessage
+  parseServerMessage,
+  shouldReconnectTerminal
 } from "../lib/sandbox-terminal-protocol";
-import { Button } from "../components/ui/button";
+
+const RETRY_DELAY_MS = 2_000;
+const MAX_STARTUP_ATTEMPTS = 45;
 
 interface WorkspaceTerminalProps {
   readonly workspaceId: string;
-  readonly workspaceTitle: string;
-  readonly onExit: () => void;
 }
 
-export function WorkspaceTerminal({
-  workspaceId,
-  workspaceTitle,
-  onExit
-}: WorkspaceTerminalProps) {
+export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const onExitRef = useRef(onExit);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("Connecting to sandbox…");
   const [connecting, setConnecting] = useState(true);
-  onExitRef.current = onExit;
 
   useEffect(() => {
     let cancelled = false;
     let socket: WebSocket | undefined;
-    let terminal: Terminal | undefined;
-    let fitAddon: FitAddon | undefined;
+    let retryTimer: number | undefined;
 
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onExitRef.current();
+    const terminal = new Terminal({
+      allowProposedApi: false,
+      cursorBlink: true,
+      fontFamily: "var(--font-geist-mono), monospace",
+      fontSize: 14,
+      theme: { background: "#000000", foreground: "#ededed" }
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    if (containerRef.current) {
+      terminal.open(containerRef.current);
+      fitAddon.fit();
+    }
+
+    const retry = (attempt: number) => {
+      if (cancelled || attempt >= MAX_STARTUP_ATTEMPTS) {
+        if (!cancelled) setError("The sandbox terminal did not become ready.");
+        return;
+      }
+      retryTimer = window.setTimeout(() => {
+        void connect(attempt + 1).catch((cause) => {
+          if (!cancelled) {
+            setConnecting(false);
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not start terminal."
+            );
+          }
+        });
+      }, RETRY_DELAY_MS);
     };
-    window.addEventListener("keydown", closeOnEscape);
 
-    async function connect() {
+    async function connect(attempt: number) {
+      if (cancelled) return;
+      setConnecting(true);
+      setError(null);
+      if (attempt === 0) setStatus("Connecting to sandbox…");
+
       const response = await fetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}/terminal`,
         {
@@ -51,8 +79,19 @@ export function WorkspaceTerminal({
       );
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as {
+          code?: string;
           error?: string;
         };
+        if (
+          response.status === 503 &&
+          (body.code === "chat_initializing" || body.code === "chat_handoff")
+        ) {
+          setStatus(
+            body.error ?? "Factory is preparing the chat for this terminal."
+          );
+          retry(attempt);
+          return;
+        }
         throw new Error(
           body.error ?? `Could not open terminal (${response.status}).`
         );
@@ -60,144 +99,126 @@ export function WorkspaceTerminal({
       const session = (await response.json()) as {
         readonly url: string;
         readonly token: string;
+        readonly command: string;
+        readonly args: readonly string[];
         readonly cwd: string;
       };
       if (cancelled) return;
 
-      terminal = new Terminal({
-        cursorBlink: true,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 14,
-        theme: { background: "#000000", foreground: "#ededed" }
-      });
-      fitAddon = new FitAddon();
-      terminal.loadAddon(fitAddon);
-      if (containerRef.current) {
-        terminal.open(containerRef.current);
-        fitAddon.fit();
-      }
-
-      socket = new WebSocket(buildWebSocketUrl(session.url, session.token));
-      socket.binaryType = "arraybuffer";
-      socket.addEventListener("open", () => {
-        if (cancelled || !terminal || !fitAddon || !socket) return;
-        setConnecting(false);
+      let receivedOutput = false;
+      let receivedExit = false;
+      const currentSocket = new WebSocket(
+        buildWebSocketUrl(session.url, session.token)
+      );
+      socket = currentSocket;
+      currentSocket.binaryType = "arraybuffer";
+      currentSocket.addEventListener("open", () => {
+        if (cancelled || socket !== currentSocket) return;
         const { cols, rows } = fitAddon.proposeDimensions() ?? {
           cols: 80,
           rows: 24
         };
         terminal.resize(cols, rows);
-        socket.send(
-          JSON.stringify(buildStartMessage(cols, rows, { cwd: session.cwd }))
+        currentSocket.send(
+          JSON.stringify(
+            buildStartMessage(cols, rows, {
+              command: session.command,
+              args: session.args,
+              cwd: session.cwd
+            })
+          )
         );
+        setConnecting(false);
         terminal.focus();
       });
-      socket.addEventListener("message", (event) => {
-        if (!terminal) return;
+      currentSocket.addEventListener("message", (event) => {
+        receivedOutput = true;
         const message = parseServerMessage(event.data);
         if (message.kind === "output") terminal.write(message.data);
         if (message.kind === "exit") {
+          receivedExit = true;
           terminal.writeln(
             `\r\nSession closed${message.code === null ? "." : ` with exit code ${message.code}.`}`
           );
         }
       });
-      socket.addEventListener("close", () => {
-        if (!cancelled) setConnecting(false);
+      currentSocket.addEventListener("close", (event) => {
+        if (cancelled || socket !== currentSocket) return;
+        socket = undefined;
+        if (!shouldReconnectTerminal(event.code, receivedExit)) return;
+        setStatus("Reconnecting to sandbox…");
+        setConnecting(!receivedOutput);
+        retry(attempt);
       });
-      socket.addEventListener("error", () => {
-        if (!cancelled) setError("The terminal connection failed.");
+      currentSocket.addEventListener("error", () => {
+        // The close event owns reconnects so an error cannot schedule twice.
       });
-      terminal.onData((data) => {
-        if (socket?.readyState === WebSocket.OPEN)
-          socket.send(new TextEncoder().encode(data));
-      });
-
-      const resize = () => {
-        if (!terminal || !fitAddon) return;
-        fitAddon.fit();
-        const { cols, rows } = fitAddon.proposeDimensions() ?? {
-          cols: 80,
-          rows: 24
-        };
-        terminal.resize(cols, rows);
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify(buildResizeMessage(cols, rows)));
-        }
-      };
-      window.addEventListener("resize", resize);
-      return () => window.removeEventListener("resize", resize);
     }
 
-    let removeResize: (() => void) | undefined;
-    void connect()
-      .then((cleanup) => {
-        if (cancelled) cleanup?.();
-        else removeResize = cleanup;
-      })
-      .catch((cause) => {
-        if (!cancelled) {
-          setConnecting(false);
-          setError(
-            cause instanceof Error ? cause.message : "Could not start terminal."
-          );
-        }
-      });
+    const dataDisposable = terminal.onData((data) => {
+      if (socket?.readyState === WebSocket.OPEN)
+        socket.send(new TextEncoder().encode(data));
+    });
+
+    const resize = () => {
+      fitAddon.fit();
+      const { cols, rows } = fitAddon.proposeDimensions() ?? {
+        cols: 80,
+        rows: 24
+      };
+      terminal.resize(cols, rows);
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(buildResizeMessage(cols, rows)));
+      }
+    };
+    const resizeObserver = new ResizeObserver(resize);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+
+    void connect(0).catch((cause) => {
+      if (!cancelled) {
+        setConnecting(false);
+        setError(
+          cause instanceof Error ? cause.message : "Could not start terminal."
+        );
+      }
+    });
 
     return () => {
       cancelled = true;
-      removeResize?.();
-      window.removeEventListener("keydown", closeOnEscape);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      resizeObserver.disconnect();
+      dataDisposable.dispose();
       socket?.close();
-      terminal?.dispose();
+      terminal.dispose();
     };
   }, [workspaceId]);
 
   return (
-    <div
-      aria-label={`Terminal for ${workspaceTitle}`}
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex flex-col bg-black text-[#ededed]"
-      role="dialog"
+    <main
+      aria-label="Sandbox terminal"
+      className="fixed inset-0 z-50 bg-black text-[#ededed]"
+      id="main-content"
     >
-      <header className="flex min-h-12 items-center justify-between gap-4 border-b border-white/20 px-4">
-        <span className="truncate font-mono text-xs">{workspaceTitle}</span>
-        <Button
-          className="text-white hover:bg-white/15 hover:text-white"
-          onClick={onExit}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          Close <span className="sr-only">terminal</span>
-        </Button>
-      </header>
-      {connecting ? (
+      <div
+        className="h-full p-2 [&_.xterm]:h-full [&_.xterm-screen]:!h-full [&_.xterm-screen]:!w-full"
+        ref={containerRef}
+      />
+      {connecting && !error ? (
         <p
-          className="pointer-events-none absolute inset-x-0 top-12 bottom-0 grid place-items-center text-sm"
+          className="pointer-events-none absolute inset-0 grid place-items-center text-sm"
           role="status"
         >
-          Opening terminal…
+          {status}
         </p>
       ) : null}
       {error ? (
-        <div
-          className="grid flex-1 place-items-center p-6 text-center"
+        <p
+          className="absolute inset-0 grid place-items-center bg-black p-6 text-sm"
           role="alert"
         >
-          <div>
-            <p>{error}</p>
-            <Button className="mt-4" onClick={onExit} type="button">
-              Return to workspace
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div
-          className="min-h-0 flex-1 p-2 [&_.xterm]:h-full [&_.xterm-screen]:!h-full [&_.xterm-screen]:!w-full"
-          ref={containerRef}
-        />
-      )}
-    </div>
+          {error}
+        </p>
+      ) : null}
+    </main>
   );
 }

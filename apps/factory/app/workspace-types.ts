@@ -44,3 +44,10 @@ export function isWorkspaceRunning(status: string): boolean {
     status
   );
 }
+
+export function workspaceStatusLabel(status: string): string {
+  if (status === "idle") return "Ready";
+  if (isWorkspaceRunning(status)) return "Working";
+  if (status === "error") return "Error";
+  return status;
+}

@@ -16,6 +16,7 @@ export interface WorkspaceRecord {
   readonly activeDispatchId?: string;
   readonly activeTurnId?: string;
   readonly createdAt: string;
+  readonly publishToken?: string;
   readonly error?: string;
   readonly agent: "fx";
   readonly id: string;
@@ -36,7 +37,7 @@ export interface WorkspaceRecord {
 
 export type WorkspaceView = Omit<
   WorkspaceRecord,
-  "activeDispatchId" | "activeTurnId"
+  "activeDispatchId" | "activeTurnId" | "publishToken"
 >;
 
 export interface PublicWorkspaceView extends WorkspaceView {
@@ -254,6 +255,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     optionalString(value.workflowRunId, 256) &&
     optionalString(value.activeDispatchId, 128) &&
     optionalString(value.activeTurnId, 128) &&
+    optionalString(value.publishToken, 128) &&
     optionalString(value.error, 2000) &&
     (value.pullRequest === undefined || isPullRequest(value.pullRequest))
   );

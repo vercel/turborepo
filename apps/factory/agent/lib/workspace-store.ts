@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
 
 import { strongBlobEtag } from "./blob-etag";
@@ -43,6 +45,16 @@ export async function getWorkspace(
   id: string
 ): Promise<WorkspaceRecord | null> {
   return (await readWorkspace(id)).workspace;
+}
+
+export async function ensureWorkspacePublishToken(
+  id: string
+): Promise<WorkspaceRecord> {
+  return mutateWorkspace(id, (workspace) =>
+    workspace.publishToken
+      ? workspace
+      : { ...workspace, publishToken: randomUUID() }
+  );
 }
 
 export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
