@@ -1,5 +1,6 @@
 import { Sandbox } from "@vercel/sandbox";
 
+import { getOrCreateFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
 import { getWorkspace } from "../../../../../agent/lib/workspace-store";
 import {
@@ -25,7 +26,7 @@ export async function POST(
   if (!workspace)
     return Response.json({ error: "Workspace not found." }, { status: 404 });
   try {
-    const sandbox = await Sandbox.get({ name: workspace.sandbox.name });
+    const sandbox = await getOrCreateFxWorkspaceSandbox(workspace.sandbox.name);
     const cwd = await repositoryDirectory(sandbox);
     return Response.json(
       {

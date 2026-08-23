@@ -20,9 +20,9 @@ export interface PublicWorkspace {
   readonly id: string;
   readonly title: string;
   readonly status: string;
-  readonly harness: string;
+  readonly agent: "fx";
   readonly sandbox: WorkspaceSandbox;
-  readonly sessionId: string;
+  readonly sessionId?: string;
   readonly messages: readonly WorkspaceMessage[];
   readonly createdAt: string;
   readonly updatedAt: string;

@@ -40,6 +40,8 @@ export interface FactoryImageSpec {
   readonly cargoHome: string;
   /** Canonical Turborepo checkout inside the image. */
   readonly checkoutPath: string;
+  readonly fxSha256: Readonly<Record<"aarch64" | "x86_64", string>>;
+  readonly fxVersion: string;
   /** Symlinks pointing at {@link checkoutPath} for each consumer's cwd. */
   readonly linkPaths: readonly string[];
   readonly nodeMajor: number;
@@ -61,6 +63,11 @@ export const FACTORY_IMAGE_SPEC: FactoryImageSpec = {
   capnprotoVersion: "1.1.0",
   cargoHome: "/usr/local/cargo",
   checkoutPath: "/factory/turborepo",
+  fxSha256: {
+    aarch64: "8bbcde6a41256c4fac4e0a022291cf02740419e27afabde3b8f45e7a4e393edb",
+    x86_64: "d5639d173267774aa8228a474baf619a7076ac41a91023915007c865143429b1"
+  },
+  fxVersion: "0.0.5",
   linkPaths: ["/workspace/turborepo", "/vercel/sandbox/turborepo"],
   nodeMajor: 24,
   performanceTools: [
@@ -217,13 +224,13 @@ WRAPPER
 
 function systemPackagesPhase(spec: FactoryImageSpec): string {
   return `if have apt-get; then
-  pkg_install build-essential pkg-config lld libssl-dev jq zstd curl git \\
+  pkg_install build-essential pkg-config lld libssl-dev jq zstd curl git gh \\
     unzip xz-utils ca-certificates capnproto libcapnp-dev
 elif have dnf || have yum; then
   pkg_install gcc gcc-c++ make pkgconf-pkg-config lld openssl-devel jq \\
-    zstd curl git unzip xz tar ca-certificates capnproto capnproto-devel
+    zstd curl git gh unzip xz tar ca-certificates capnproto capnproto-devel
 elif have apk; then
-  pkg_install build-base pkgconf lld openssl-dev jq zstd curl git unzip xz \\
+  pkg_install build-base pkgconf lld openssl-dev jq zstd curl git gh unzip xz \\
     tar ca-certificates capnproto capnproto-dev
 else
   factory_log "no supported package manager is available"
@@ -285,6 +292,27 @@ function pnpmPhase(spec: FactoryImageSpec): string {
   as_root npm install --force --global "pnpm@${spec.pnpmVersion}"
 fi
 pnpm --version`;
+}
+
+function fxPhase(spec: FactoryImageSpec): string {
+  return `want=${spec.fxVersion}
+if ! have fx || ! fx --version | grep -q "$want"; then
+  arch="$(factory_arch)"
+  archive="fx-linux-$arch.tar.gz"
+  case "$arch" in
+    x86_64) checksum=${spec.fxSha256.x86_64} ;;
+    aarch64) checksum=${spec.fxSha256.aarch64} ;;
+  esac
+  curl --fail --show-error --silent --location --output "/tmp/$archive" \
+    "https://github.com/vercel-labs/fx/releases/download/v$want/$archive"
+  printf '%s  %s\n' "$checksum" "/tmp/$archive" | sha256sum --check --strict
+  rm -rf /tmp/fx-install
+  mkdir -p /tmp/fx-install
+  tar -xzf "/tmp/$archive" -C /tmp/fx-install fx
+  as_root install -m 0755 /tmp/fx-install/fx /usr/local/bin/fx
+  rm -rf /tmp/fx-install "/tmp/$archive"
+fi
+FX_AUTO_UPGRADE=0 fx --version`;
 }
 
 function rustPhase(spec: FactoryImageSpec): string {
@@ -443,7 +471,7 @@ function verifyPhase(spec: FactoryImageSpec): string {
         `have ${tool.binary} || factory_warn "${tool.binary} is missing"`
     )
     .join("\n");
-  return `for tool in node pnpm cargo rustc protoc capnp zig jq zstd git \\
+  return `for tool in node pnpm cargo rustc protoc capnp zig jq zstd git gh fx \\
   ld.lld; do
   if ! have "$tool"; then
     factory_log "required tool is missing: $tool"
@@ -471,6 +499,7 @@ cat > "$FACTORY_STATE/image.json" <<JSON
 {
   "capnp": "$(capnp --version | tr -d '"' | tail -n1)",
   "commit": "$(git -C "$FACTORY_REPO" rev-parse HEAD)",
+  "fx": "$(FX_AUTO_UPGRADE=0 fx --version)",
   "node": "$(node --version)",
   "pnpm": "$(pnpm --version)",
   "protoc": "$(protoc --version)",
@@ -500,6 +529,7 @@ export function factoryImagePhases(
     },
     { id: "node", script: nodePhase(spec), title: "Install Node.js" },
     { id: "pnpm", script: pnpmPhase(spec), title: "Install pnpm" },
+    { id: "fx", script: fxPhase(spec), title: "Install fx" },
     {
       id: "rust",
       script: rustPhase(spec),

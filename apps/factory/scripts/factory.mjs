@@ -49,9 +49,13 @@ if (command === "list") {
   if (workspace.chatCommand) {
     console.log(`Resume chat after connecting: ${workspace.chatCommand}`);
   }
+  await request(`/api/workspaces/${encodeURIComponent(id)}/access`, {
+    action: "access-workspace-sandbox",
+    method: "POST"
+  });
   const result = spawnSync(
     "sandbox",
-    ["ssh", workspace.sandbox.name],
+    ["ssh", workspace.sandbox.name, "--workdir", "turborepo"],
     { stdio: "inherit" }
   );
   process.exit(result.status ?? 1);

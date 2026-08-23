@@ -61,6 +61,11 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
     readonly truncated: boolean;
   } | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
+  const [audit, setAudit] = useState<{
+    readonly text: string;
+    readonly truncated: boolean;
+  } | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const transcript = useRef<HTMLOListElement>(null);
 
@@ -106,6 +111,30 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
       setError(cause instanceof Error ? cause.message : "Could not load diff.");
     } finally {
       setDiffLoading(false);
+    }
+  }, [workspaceId]);
+
+  const refreshAudit = useCallback(async () => {
+    setAuditLoading(true);
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/audit`,
+        { cache: "no-store" }
+      );
+      if (!response.ok)
+        throw new Error(`Could not load fx audit (${response.status}).`);
+      const result = (await response.json()) as {
+        readonly audit: string;
+        readonly truncated: boolean;
+      };
+      setAudit({ text: result.audit, truncated: result.truncated });
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not load fx audit."
+      );
+    } finally {
+      setAuditLoading(false);
     }
   }, [workspaceId]);
 
@@ -257,8 +286,8 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
 
       <dl className="mt-8 grid grid-cols-3 gap-5 max-[620px]:grid-cols-1">
         <div className="border-t border-border pt-3">
-          <dt className="text-xs text-muted-foreground">Harness</dt>
-          <dd className="mt-1 font-mono text-sm">{workspace.harness}</dd>
+          <dt className="text-xs text-muted-foreground">Agent</dt>
+          <dd className="mt-1 font-mono text-sm">{workspace.agent}</dd>
         </div>
         <div className="border-t border-border pt-3">
           <dt className="text-xs text-muted-foreground">Sandbox</dt>
@@ -269,7 +298,7 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
         <div className="border-t border-border pt-3">
           <dt className="text-xs text-muted-foreground">Session</dt>
           <dd className="mt-1 truncate font-mono text-sm">
-            {workspace.sessionId}
+            {workspace.sessionId ?? "starts with first turn"}
           </dd>
         </div>
       </dl>
@@ -380,6 +409,49 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
 
       <section
         className="mt-12 border-t border-border pt-8"
+        aria-labelledby="audit-title"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold" id="audit-title">
+              fx audit
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Complete saved fx session state and tool history.
+            </p>
+          </div>
+          <Button
+            disabled={auditLoading || !workspace.sessionId}
+            onClick={() => void refreshAudit()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {auditLoading ? "Loading…" : audit ? "Refresh audit" : "Load audit"}
+          </Button>
+        </div>
+        {audit ? (
+          <>
+            <pre className="mt-4 max-h-[50vh] overflow-auto rounded-md bg-secondary p-4 font-mono text-xs whitespace-pre-wrap">
+              {audit.text}
+            </pre>
+            {audit.truncated ? (
+              <p className="mt-2 text-xs text-warning">
+                Audit display capped at 2,000,000 characters.
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">
+            {workspace.sessionId
+              ? "Load the durable fx session audit on demand."
+              : "The audit is available after the first fx turn starts."}
+          </p>
+        )}
+      </section>
+
+      <section
+        className="mt-12 border-t border-border pt-8"
         aria-labelledby="access-title"
       >
         <h2 className="text-lg font-semibold" id="access-title">
@@ -392,7 +464,7 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
         {workspace.chatCommand ? (
           <CopyCommand
             command={workspace.chatCommand}
-            label="Resume this OpenCode chat after connecting"
+            label="Resume this agent chat after connecting"
           />
         ) : null}
         <Button

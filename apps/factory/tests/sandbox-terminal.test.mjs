@@ -7,9 +7,10 @@ import {
   isAllowedSandboxName
 } from "../agent/lib/sandbox-terminal.ts";
 
-test("isAllowedSandboxName accepts only ai-sdk-harness prefixed names", () => {
+test("isAllowedSandboxName accepts only Factory-managed names", () => {
   assert.equal(isAllowedSandboxName("ai-sdk-harness-session-abc"), true);
   assert.equal(isAllowedSandboxName("ai-sdk-harness"), true);
+  assert.equal(isAllowedSandboxName("factory-workspace-ws_abc"), true);
   assert.equal(isAllowedSandboxName("other-sandbox"), false);
   assert.equal(isAllowedSandboxName(""), false);
 });
@@ -19,7 +20,7 @@ test("createTerminalSession rejects disallowed sandbox names", async () => {
     createTerminalSession("untrusted-sandbox", async () => ({
       openInteractive: async () => ({ url: "wss://example.com", token: "tok" })
     })),
-    /Sandbox name must start with "ai-sdk-harness"/
+    /Sandbox name is not managed by Factory/
   );
 });
 

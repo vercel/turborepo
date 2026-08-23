@@ -43,19 +43,17 @@ export async function POST(request: Request): Promise<Response> {
     );
 
   const id = `ws_${randomUUID().replaceAll("-", "")}`;
-  const sessionId = `ses_factory_${randomUUID().replaceAll("-", "")}`;
   const now = new Date().toISOString();
   const workspace: WorkspaceRecord = {
+    agent: "fx",
     createdAt: now,
-    harness: "opencode",
     id,
     messages: [],
     sandbox: {
-      name: workspaceSandboxName(sessionId),
+      name: workspaceSandboxName(id),
       provider: "vercel",
       status: "pending"
     },
-    sessionId,
     status: "idle",
     title: input.title,
     updatedAt: now,

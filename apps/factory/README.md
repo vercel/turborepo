@@ -4,25 +4,25 @@ The operator page and its API routes rely on Vercel Deployment Protection for ac
 
 ## Workspaces
 
-"Start work" creates a durable OpenCode workspace on the factory image. Each
-workspace has one server-side record, Harness session, named Vercel Sandbox,
-transcript, and shareable `/workspaces/<id>` URL. A Workflow runs one turn at a
-time and persists the Harness resume state after each turn, so another browser
-or operator can reopen the URL and continue the same conversation and checkout.
+"Start work" creates a durable Factory workspace driven by
+[`fx`](https://fx.sh/). Each workspace has one server-side record, named Vercel
+Sandbox, fx session, transcript, and shareable `/workspaces/<id>` URL. A
+Workflow advances the same saved fx session one turn at a time, so another
+browser or operator can reopen the URL and continue the same conversation and
+checkout.
 
 The workspace page can load the current Git status and a capped diff on demand,
-and exposes a browser terminal, the `sandbox ssh <name>` command, and the
-OpenCode command that resumes the same chat after connecting. Workflow
-observability remains the full execution audit.
-When OpenCode reports a Turborepo pull request URL, the workspace records and
-links it.
+and exposes a browser terminal, the `sandbox ssh <name>` command, and the exact
+`fx resume --id <session>` command for rejoining the chat after connecting.
+Workflow observability remains the full execution audit. When fx reports a
+Turborepo pull request URL, the workspace records and links it.
 
 Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
 objects. Mutation routes require an exact same-origin request and action header;
 Vercel Deployment Protection remains the outer operator authentication layer.
-The opaque Harness resume state never reaches the browser. Storage requires
-either `BLOB_READ_WRITE_TOKEN`, or both `BLOB_STORE_ID` and
-`VERCEL_OIDC_TOKEN`.
+The fx transcript remains in the sandbox and the app stores only its session ID
+and rendered turns. Storage requires either `BLOB_READ_WRITE_TOKEN`, or both
+`BLOB_STORE_ID` and `VERCEL_OIDC_TOKEN`.
 
 ### Local terminal
 
@@ -36,9 +36,8 @@ pnpm --filter examples-agent factory start "Investigate the affected warning and
 pnpm --filter examples-agent factory ssh ws_...
 ```
 
-The SSH command prints the in-sandbox OpenCode resume command before connecting.
-The same workspace remains available from the web while the local terminal is
-attached.
+The SSH command prints the exact fx resume command before connecting. The same
+workspace remains available from the web while the local terminal is attached.
 
 ## Factory image
 
@@ -48,7 +47,7 @@ factory image: a Turborepo checkout plus everything `cargo build` and
 truth for it — pinned versions, the shell that installs them, and the
 fingerprint that decides when a rebuild is required. It installs the
 system build toolchain (`build-essential`, `pkg-config`, `lld`, OpenSSL
-headers, `jq`, `zstd`), Cap'n Proto, `protoc`, Zig, Node.js, pnpm, the
+headers, `jq`, `zstd`, `gh`), Cap'n Proto, `protoc`, Zig, Node.js, pnpm, fx, the
 `rust-toolchain.toml` nightly with `rustfmt` and `clippy`, the workspace
 `node_modules`, a warm Cargo registry, and the `hyperfine`,
 `cargo-bloat`, and `twiggy` tools the performance skill reaches for. The
@@ -103,10 +102,11 @@ and recent builds, and can start a build for the current `main` head with
 Eve freezes `revalidationKey` at build time, so the template rotates when
 the toolchain fingerprint changes or a newer image is published, and
 boots from the published snapshot when one matches. Each session then
-fast-forwards its checkout to the current `main`. New Harness sessions do the
-same through `sandboxConfig` in `agent/lib/harness-agent.ts`, and fall back to a
-shallow clone on a stock runtime when no image matches this deployment's
-toolchain. Resumed workspaces preserve their checkout and uncommitted changes.
+fast-forwards its checkout to the current `main`. New Harness sessions and fx
+workspaces do the same. Harness falls back to a shallow clone when no matching
+image exists; an fx workspace provisions the shared image phases before its
+first turn. Resumed workspaces preserve their checkout, fx session, and
+uncommitted changes.
 
 A toolchain change provisions the template from scratch during the next
 Vercel build, because Eve prewarms sandbox templates there. Measured
@@ -127,7 +127,7 @@ The workflow clones Turborepo into the selected sandbox and runs the chosen offi
 ## Agent Runs
 
 The operator page links to Vercel Agent Runs, the audit record for Eve schedules.
-Harness maintenance and workspace turns are audited through Workflow
+Harness maintenance and fx workspace turns are audited through Workflow
 observability. Workspace Blob records hold the resumable UI transcript and
 control-plane state, not the complete execution audit.
 

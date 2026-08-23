@@ -108,10 +108,9 @@ async function resolveHarnessImage(): Promise<HarnessSandboxImage | null> {
 export async function createHarnessAgent(
   harnessId: HarnessId,
   sandboxId: SandboxId,
-  sessionId?: string,
-  options?: { readonly instructions?: string; readonly resume?: boolean }
+  sessionId?: string
 ) {
-  if (sessionId && !options?.resume) {
+  if (sessionId) {
     try {
       await (
         await Sandbox.get({ name: `ai-sdk-harness-session-${sessionId}` })
@@ -129,17 +128,13 @@ export async function createHarnessAgent(
   return new HarnessAgent({
     harness: harnesses[harnessId](oidcToken),
     id: `turborepo-maintenance-${harnessId}`,
-    instructions: options?.instructions,
     permissionMode: "allow-all",
     sandbox: sandboxes[sandboxId](githubToken, image),
     sandboxConfig: {
       // Rotate the Harness template whenever the factory image changes.
       bootstrapHash:
         image?.snapshotId ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "local",
-      // A resumed workspace owns its checkout. Resetting it here would discard
-      // every uncommitted change made by earlier turns or an attached operator.
-      onSession:
-        image === null || options?.resume ? undefined : fastForwardCheckout,
+      onSession: image === null ? undefined : fastForwardCheckout,
       // The factory image links its canonical checkout into the sandbox
       // working directory; the clone fallback lands there directly.
       workDir: image === null ? "." : checkoutDirectoryName()

@@ -18,19 +18,17 @@ import {
 const now = "2026-08-22T12:00:00.000Z";
 
 function workspace(changes = {}) {
-  const sessionId = "ses_factory_abc";
   return {
+    agent: "fx",
     createdAt: now,
-    harness: "opencode",
     id: "ws_abc",
     messages: [],
-    resumeState: { secret: "opaque" },
     sandbox: {
-      name: workspaceSandboxName(sessionId),
+      name: workspaceSandboxName("ws_abc"),
       provider: "vercel",
       status: "running"
     },
-    sessionId,
+    sessionId: "1770000000000-1770000000000000000-a1b2c3d4e5f60718",
     status: "idle",
     title: "Fix caching",
     updatedAt: now,
@@ -41,21 +39,18 @@ function workspace(changes = {}) {
 
 test("validates durable workspace records and deterministic sandbox names", () => {
   assert.equal(isWorkspaceRecord(workspace()), true);
+  assert.equal(isWorkspaceRecord(workspace({ sessionId: undefined })), true);
   assert.equal(
     isWorkspaceRecord(
       workspace({ sandbox: { name: "another-sandbox", provider: "vercel" } })
     ),
     false
   );
-  assert.equal(
-    isWorkspaceRecord(workspace({ resumeState: { value: NaN } })),
-    false
-  );
+  assert.equal(isWorkspaceRecord(workspace({ agent: "opencode" })), false);
 });
 
 test("workspace views whitelist fields and omit opaque state", () => {
   const view = toWorkspaceView({ ...workspace(), unexpected: "private" });
-  assert.equal("resumeState" in view, false);
   assert.equal("activeTurnId" in view, false);
   assert.equal("activeDispatchId" in view, false);
   assert.equal("unexpected" in view, false);
@@ -78,20 +73,15 @@ test("workspace summaries omit transcripts and sandbox identifiers", () => {
   ]);
 });
 
-test("workspace views expose the command for resuming the OpenCode chat", () => {
-  const view = toWorkspaceView(
-    workspace({
-      resumeState: {
-        data: { openCodeSessionId: "ses_opencode_abc" },
-        harnessId: "opencode",
-        specificationVersion: "harness-v1",
-        type: "resume-session"
-      }
-    })
-  );
+test("workspace views expose the exact fx resume command", () => {
+  const view = toWorkspaceView(workspace());
   assert.equal(
     view.chatCommand,
-    "/vercel/sandbox/.harness-bootstrap/opencode/node_modules/.bin/opencode --session ses_opencode_abc"
+    "fx resume --id 1770000000000-1770000000000000000-a1b2c3d4e5f60718"
+  );
+  assert.equal(
+    toWorkspaceView(workspace({ sessionId: undefined })).chatCommand,
+    undefined
   );
 });
 
@@ -193,10 +183,15 @@ test("validates create and turn bodies", () => {
   assert.deepEqual(parseCreateWorkspaceInput({ title: "  Work  " }), {
     title: "Work"
   });
-  assert.deepEqual(parseCreateWorkspaceInput({ prompt: "  Fix cache  " }), {
-    prompt: "Fix cache",
-    title: "Fix cache"
-  });
+  assert.deepEqual(
+    parseCreateWorkspaceInput({
+      prompt: "  Fix cache  "
+    }),
+    {
+      prompt: "Fix cache",
+      title: "Fix cache"
+    }
+  );
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
   assert.deepEqual(parseWorkspaceTurnInput({ message: "  Go  " }), {
     message: "Go"
