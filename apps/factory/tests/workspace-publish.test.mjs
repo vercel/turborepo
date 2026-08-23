@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  installWorkspacePublishCommand,
   isWorkspacePublishRequest,
   parseWorkspacePublishInput,
-  workspacePublishBridge,
-  workspacePublishPrompt
+  workspacePublishBridge
 } from "../agent/lib/workspace-publish.ts";
 
 const workspace = {
@@ -44,12 +44,39 @@ test("validates workspace publication metadata", () => {
   );
 });
 
-test("tells every workspace turn to publish through Eve", () => {
-  const prompt = workspacePublishPrompt("Open a PR for this fix.");
-  assert.match(prompt, /factory-create-pr/);
-  assert.match(prompt, /Eve's GitHub credentials/);
-  assert.match(prompt, /Never run git commit, git push/);
-  assert.match(prompt, /Maintainer request:\nOpen a PR for this fix\./);
+test("installs the Factory publishing skill for fx", async () => {
+  const writes = [];
+  const commands = [];
+  const sandbox = {
+    async runCommand(command) {
+      commands.push(command);
+      return { exitCode: 0 };
+    },
+    async writeFiles(files) {
+      writes.push(...files);
+    }
+  };
+
+  await installWorkspacePublishCommand(sandbox, {
+    authorization: "Bearer secret-token",
+    hostname: "factory.example",
+    path: "/api/workspaces/ws_abc/publish",
+    url: "https://factory.example/api/workspaces/ws_abc/publish"
+  });
+
+  const skill = writes.find(({ path }) =>
+    path.endsWith("/skills/factory-publish/SKILL.md")
+  );
+  assert.ok(skill);
+  const contents = skill.content.toString("utf8");
+  assert.match(contents, /name: factory-publish/);
+  assert.match(contents, /create, make, open, or publish a pull request/);
+  assert.match(contents, /factory-create-pr/);
+  assert.match(contents, /Never run `git commit`/);
+  assert.deepEqual(commands.at(-1).args, [
+    "+x",
+    "/factory/bin/factory-create-pr"
+  ]);
 });
 
 test("requires the private workspace publication capability", () => {
