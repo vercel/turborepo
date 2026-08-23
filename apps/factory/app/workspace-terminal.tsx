@@ -36,6 +36,7 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       cursorBlink: true,
       fontFamily: "var(--font-geist-mono), monospace",
       fontSize: 14,
+      lineHeight: 1.2,
       theme: { background: "#000000", foreground: "#ededed" }
     });
     const fitAddon = new FitAddon();
