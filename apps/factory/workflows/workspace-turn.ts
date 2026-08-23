@@ -57,7 +57,19 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
     const prompt = workspace.sessionId
       ? message
       : `${FIRST_TURN_INSTRUCTIONS}\n\nMaintainer request:\n${message}`;
-    const result = await runFxTurn(sandbox, prompt, workspace.sessionId);
+    const result = await runFxTurn(
+      sandbox,
+      prompt,
+      workspace.sessionId,
+      undefined,
+      async (sessionId) => {
+        await mutateWorkspace(input.workspaceId, (current) =>
+          current.activeTurnId === input.turnId
+            ? { ...current, sessionId }
+            : current
+        );
+      }
+    );
     const now = new Date().toISOString();
     await mutateWorkspace(input.workspaceId, (current) => {
       if (current.activeTurnId !== input.turnId) return current;

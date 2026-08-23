@@ -22,6 +22,7 @@ interface WorkspaceTerminalProps {
 export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("Connecting to sandbox…");
   const [connecting, setConnecting] = useState(true);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       if (cancelled) return;
       setConnecting(true);
       setError(null);
+      if (attempt === 0) setStatus("Connecting to sandbox…");
 
       const response = await fetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}/terminal`,
@@ -76,13 +78,20 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
         }
       );
       if (!response.ok) {
-        if (response.status === 503) {
+        const body = (await response.json().catch(() => ({}))) as {
+          code?: string;
+          error?: string;
+        };
+        if (
+          response.status === 503 &&
+          (body.code === "chat_initializing" || body.code === "chat_handoff")
+        ) {
+          setStatus(
+            body.error ?? "Factory is preparing the chat for this terminal."
+          );
           retry(attempt);
           return;
         }
-        const body = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
         throw new Error(
           body.error ?? `Could not open terminal (${response.status}).`
         );
@@ -90,6 +99,8 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
       const session = (await response.json()) as {
         readonly url: string;
         readonly token: string;
+        readonly command: string;
+        readonly args: readonly string[];
         readonly cwd: string;
       };
       if (cancelled) return;
@@ -105,7 +116,13 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
         };
         terminal.resize(cols, rows);
         socket.send(
-          JSON.stringify(buildStartMessage(cols, rows, { cwd: session.cwd }))
+          JSON.stringify(
+            buildStartMessage(cols, rows, {
+              command: session.command,
+              args: session.args,
+              cwd: session.cwd
+            })
+          )
         );
         handshakeTimer = window.setTimeout(() => {
           socket?.close();
@@ -197,7 +214,7 @@ export function WorkspaceTerminal({ workspaceId }: WorkspaceTerminalProps) {
           className="pointer-events-none absolute inset-0 grid place-items-center text-sm"
           role="status"
         >
-          Connecting to sandbox…
+          {status}
         </p>
       ) : null}
       {error ? (

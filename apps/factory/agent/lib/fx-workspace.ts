@@ -8,8 +8,15 @@ import {
   runFactoryImagePhases
 } from "./factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
+import {
+  FX_ACP_CANCEL_PATH,
+  FX_ACP_CLIENT_PATH,
+  FX_ACP_CLIENT_SOURCE,
+  FX_ACP_SESSION_PATH,
+  parseFxAcpResult
+} from "./fx-acp";
 import { fxEnvironment } from "./fx-environment";
-import { parseFxTurnResult, type FxTurnResult } from "./fx-result";
+import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
 import { workspaceNetworkPolicy } from "./workspace-network-policy";
 
@@ -142,25 +149,61 @@ export async function runFxTurn(
   sandbox: Sandbox,
   prompt: string,
   sessionId?: string,
-  getOidcToken: () => Promise<string> = getVercelOidcToken
-): Promise<FxTurnResult> {
-  const args = ["ask", "--json", "--yolo"];
-  if (sessionId) args.push("--resume-id", sessionId);
-  args.push("--", prompt);
+  getOidcToken: () => Promise<string> = getVercelOidcToken,
+  onSession?: (sessionId: string) => Promise<void>
+): Promise<FxTurnResult & { readonly cancelled: boolean }> {
+  await sandbox.writeFiles([
+    {
+      content: Buffer.from(FX_ACP_CLIENT_SOURCE, "utf8"),
+      path: FX_ACP_CLIENT_PATH
+    }
+  ]);
+  await sandbox.runCommand({
+    args: ["-f", FX_ACP_SESSION_PATH, FX_ACP_CANCEL_PATH],
+    cmd: "rm",
+    timeoutMs: 10_000
+  });
   const command = await sandbox.runCommand({
-    args,
-    cmd: "fx",
-    cwd: FACTORY_IMAGE_SPEC.checkoutPath,
+    args: [
+      FX_ACP_CLIENT_PATH,
+      FACTORY_IMAGE_SPEC.checkoutPath,
+      prompt,
+      sessionId ?? "",
+      FX_ACP_SESSION_PATH,
+      FX_ACP_CANCEL_PATH
+    ],
+    cmd: "node",
+    detached: true,
     env: fxEnvironment(await getOidcToken()),
     timeoutMs: WORKSPACE_TIMEOUT_MS - 60_000
   });
-  const stdout = await command.stdout();
-  const parsed = parseFxTurnResult(stdout, command.exitCode);
-  if (parsed === null) {
-    const stderr = (await command.stderr()).slice(0, 2000);
+
+  if (!sessionId && onSession) {
+    const createdSessionId = await waitForAcpSession(sandbox);
+    await onSession(createdSessionId);
+  }
+
+  const finished = await command.wait();
+  const parsed = parseFxAcpResult(await finished.stdout());
+  if (finished.exitCode !== 0 || parsed === null) {
+    const stderr = (await finished.stderr()).slice(0, 2000);
     throw new Error(stderr || "fx did not complete the workspace turn.");
   }
   return parsed;
+}
+
+async function waitForAcpSession(sandbox: Sandbox): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const command = await sandbox.runCommand({
+      args: ["-lc", `cat ${FX_ACP_SESSION_PATH} 2>/dev/null || true`],
+      cmd: "bash",
+      timeoutMs: 10_000
+    });
+    const sessionId = (await command.stdout()).trim();
+    if (sessionId) return sessionId;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("fx did not create an ACP session.");
 }
 
 function isMissing(error: unknown): boolean {
