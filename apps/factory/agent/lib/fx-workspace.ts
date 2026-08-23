@@ -21,23 +21,32 @@ import { fxEnvironment } from "./fx-environment";
 import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
 import { workspaceNetworkPolicy } from "./workspace-network-policy";
+import {
+  installWorkspacePublishCommand,
+  type WorkspacePublishBridge
+} from "./workspace-publish";
 
 const WORKSPACE_TIMEOUT_MS = 45 * 60 * 1000;
 const WORKSPACE_VCPUS = 8;
 
-export async function getFxWorkspaceSandbox(name: string): Promise<Sandbox> {
+export async function getFxWorkspaceSandbox(
+  name: string,
+  publishBridge?: WorkspacePublishBridge | null
+): Promise<Sandbox> {
   const sandbox = await Sandbox.get({ name, resume: true });
   await sandbox.updateNetworkPolicy(
-    workspaceNetworkPolicy(await getGitHubToken())
+    workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
   );
+  await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
 
 export async function getOrCreateFxWorkspaceSandbox(
-  name: string
+  name: string,
+  publishBridge?: WorkspacePublishBridge | null
 ): Promise<Sandbox> {
   try {
-    const sandbox = await getFxWorkspaceSandbox(name);
+    const sandbox = await getFxWorkspaceSandbox(name, publishBridge);
     if (!(await hasWorkspaceCheckout(sandbox))) {
       await initializeWorkspaceSandbox(sandbox, false);
     } else {
@@ -61,7 +70,7 @@ export async function getOrCreateFxWorkspaceSandbox(
       GH_TOKEN: "brokered-by-sandbox"
     },
     name,
-    networkPolicy: workspaceNetworkPolicy(githubToken),
+    networkPolicy: workspaceNetworkPolicy(githubToken, publishBridge),
     resources: { vcpus: WORKSPACE_VCPUS },
     tags: { role: "factory-workspace" },
     timeout: WORKSPACE_TIMEOUT_MS
@@ -82,6 +91,7 @@ export async function getOrCreateFxWorkspaceSandbox(
   }
 
   await initializeWorkspaceSandbox(sandbox, image !== null);
+  await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
 

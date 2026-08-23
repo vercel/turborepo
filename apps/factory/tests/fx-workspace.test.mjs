@@ -95,6 +95,7 @@ test("the terminal runner starts fx once and injects the autonomous prompt", () 
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /respawn-pane/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /paste-buffer/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /fx --record/);
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /\/factory\/bin:\$PATH/);
   assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
 });
 
@@ -113,6 +114,26 @@ test("workspace GitHub credential rules precede the catch-all rule", () => {
       headers: {
         authorization: `Basic ${Buffer.from("x-access-token:github-token").toString("base64")}`
       }
+    }
+  ]);
+});
+
+test("workspace publication credentials are injected only for the exact route", () => {
+  const policy = workspaceNetworkPolicy("github-token", {
+    authorization: "Bearer publish-token",
+    hostname: "factory.example",
+    path: "/api/workspaces/ws_abc/publish",
+    url: "https://factory.example/api/workspaces/ws_abc/publish"
+  });
+  assert.notEqual(typeof policy, "string");
+  assert.ok(policy.allow && !Array.isArray(policy.allow));
+  assert.deepEqual(policy.allow["factory.example"], [
+    {
+      match: {
+        method: ["POST"],
+        path: "/api/workspaces/ws_abc/publish"
+      },
+      transform: [{ headers: { authorization: "Bearer publish-token" } }]
     }
   ]);
 });

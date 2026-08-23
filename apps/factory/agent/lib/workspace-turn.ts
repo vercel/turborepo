@@ -29,6 +29,7 @@ export async function createFxWorkspace(input: {
     createdAt: now,
     id,
     messages: [],
+    publishToken: randomUUID(),
     sandbox: {
       name: workspaceSandboxName(id),
       provider: "vercel",

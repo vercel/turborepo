@@ -65,7 +65,7 @@ export async function prepareFxInteractiveLaunch(
     command: "bash",
     args: [
       "-lc",
-      'token_path="[redacted]"; session_id="$2"; tmux_session="$3"; if tmux has-session -t "$tmux_session" 2>/dev/null; then rm -f "$token_path"; exec tmux attach-session -t "$tmux_session"; fi; launch=\'token_path="$1"; session_id="$2"; trap \'"\'"\'rm -f "$token_path"\'"\'"\' EXIT; export FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; exec fx --record resume --id "$session_id"\'; exec tmux new-session -s "$tmux_session" bash -lc "$launch" factory-terminal "$token_path" "$session_id"',
+      'token_path="[redacted]"; session_id="$2"; tmux_session="$3"; if tmux has-session -t "$tmux_session" 2>/dev/null; then rm -f "$token_path"; exec tmux attach-session -t "$tmux_session"; fi; launch=\'token_path="$1"; session_id="$2"; trap \'"\'"\'rm -f "$token_path"\'"\'"\' EXIT; export FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo PATH="/factory/bin:$PATH" VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; exec fx --record resume --id "$session_id"\'; exec tmux new-session -s "$tmux_session" bash -lc "$launch" factory-terminal "$token_path" "$session_id"',
       "factory-terminal",
       tokenPath,
       sessionId,

@@ -45,7 +45,7 @@ const previousSessionId = requestedSessionId ? undefined : latestSessionId();
 const launch =
   'token_path="$1"; session_id="$2"; ' +
   'trap \'rm -f "$token_path"\' EXIT; ' +
-  'export FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo; ' +
+  'export FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo PATH="/factory/bin:$PATH"; ' +
   'export VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; ' +
   'if [ -n "$session_id" ]; then exec fx --record resume --id "$session_id"; ' +
   'else exec fx --record; fi';

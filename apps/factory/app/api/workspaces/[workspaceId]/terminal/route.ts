@@ -10,7 +10,11 @@ import {
   getFxWorkspaceSandbox
 } from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
-import { getWorkspace } from "../../../../../agent/lib/workspace-store";
+import {
+  ensureWorkspacePublishToken,
+  getWorkspace
+} from "../../../../../agent/lib/workspace-store";
+import { workspacePublishBridge } from "../../../../../agent/lib/workspace-publish";
 import {
   isWorkspaceMutationRequest,
   WORKSPACE_TERMINAL_ACTION
@@ -30,9 +34,10 @@ export async function POST(
       { status: 403 }
     );
   const { workspaceId } = await context.params;
-  const workspace = await getWorkspace(workspaceId);
-  if (!workspace)
+  const currentWorkspace = await getWorkspace(workspaceId);
+  if (!currentWorkspace)
     return Response.json({ error: "Workspace not found." }, { status: 404 });
+  const workspace = await ensureWorkspacePublishToken(workspaceId);
   if (workspace.status === "running" && !workspace.sessionId)
     return Response.json(
       {
@@ -45,7 +50,13 @@ export async function POST(
       }
     );
   try {
-    const sandbox = await getFxWorkspaceSandbox(workspace.sandbox.name);
+    const publishBridge = workspace.publishToken
+      ? workspacePublishBridge(workspace.id, workspace.publishToken)
+      : null;
+    const sandbox = await getFxWorkspaceSandbox(
+      workspace.sandbox.name,
+      publishBridge
+    );
     await ensureWorkspaceTerminalTools(sandbox);
     if (!workspace.sessionId) {
       const sessionCount = await countFxSessions(

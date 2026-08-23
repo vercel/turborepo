@@ -1,9 +1,26 @@
 import type { NetworkPolicy } from "@vercel/sandbox";
 
-export function workspaceNetworkPolicy(githubToken: string): NetworkPolicy {
+import type { WorkspacePublishBridge } from "./workspace-publish.js";
+
+export function workspaceNetworkPolicy(
+  githubToken: string,
+  publishBridge?: WorkspacePublishBridge | null
+): NetworkPolicy {
   const gitAuthorization = `Basic ${Buffer.from(`x-access-token:${githubToken}`).toString("base64")}`;
   return {
     allow: {
+      ...(publishBridge
+        ? {
+            [publishBridge.hostname]: [
+              {
+                match: { method: ["POST"], path: publishBridge.path },
+                transform: [
+                  { headers: { authorization: publishBridge.authorization } }
+                ]
+              }
+            ]
+          }
+        : {}),
       "api.github.com": [
         {
           match: {
