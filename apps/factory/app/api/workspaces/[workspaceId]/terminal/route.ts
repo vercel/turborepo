@@ -1,5 +1,4 @@
-import { Sandbox } from "@vercel/sandbox";
-
+import { FACTORY_IMAGE_SPEC } from "../../../../../agent/lib/factory-image";
 import { getOrCreateFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
 import { getWorkspace } from "../../../../../agent/lib/workspace-store";
@@ -27,14 +26,13 @@ export async function POST(
     return Response.json({ error: "Workspace not found." }, { status: 404 });
   try {
     const sandbox = await getOrCreateFxWorkspaceSandbox(workspace.sandbox.name);
-    const cwd = await repositoryDirectory(sandbox);
     return Response.json(
       {
         ...(await createTerminalSession(
           workspace.sandbox.name,
           async () => sandbox
         )),
-        cwd
+        cwd: FACTORY_IMAGE_SPEC.checkoutPath
       },
       { headers: { "cache-control": "no-store" } }
     );
@@ -45,17 +43,4 @@ export async function POST(
       { status: 502 }
     );
   }
-}
-
-async function repositoryDirectory(sandbox: Sandbox): Promise<string> {
-  for (const cwd of ["turborepo", "."]) {
-    const command = await sandbox.runCommand({
-      args: ["rev-parse", "--show-toplevel"],
-      cmd: "git",
-      cwd,
-      timeoutMs: 30_000
-    });
-    if (command.exitCode === 0) return cwd;
-  }
-  throw new Error("Workspace repository is unavailable.");
 }
