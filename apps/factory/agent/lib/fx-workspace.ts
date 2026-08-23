@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from "@vercel/oidc";
 import { APIError, Sandbox } from "@vercel/sandbox";
 
 import {
@@ -7,6 +8,7 @@ import {
   runFactoryImagePhases
 } from "./factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
+import { fxEnvironment } from "./fx-environment";
 import { parseFxTurnResult, type FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
 import { workspaceNetworkPolicy } from "./workspace-network-policy";
@@ -139,7 +141,8 @@ async function initializeWorkspaceSandbox(
 export async function runFxTurn(
   sandbox: Sandbox,
   prompt: string,
-  sessionId?: string
+  sessionId?: string,
+  getOidcToken: () => Promise<string> = getVercelOidcToken
 ): Promise<FxTurnResult> {
   const args = ["ask", "--json", "--yolo"];
   if (sessionId) args.push("--resume-id", sessionId);
@@ -148,7 +151,7 @@ export async function runFxTurn(
     args,
     cmd: "fx",
     cwd: FACTORY_IMAGE_SPEC.checkoutPath,
-    env: { FX_AUTO_UPGRADE: "0", FX_PERMISSION_MODE: "yolo" },
+    env: fxEnvironment(await getOidcToken()),
     timeoutMs: WORKSPACE_TIMEOUT_MS - 60_000
   });
   const stdout = await command.stdout();
