@@ -9,7 +9,10 @@ import {
   FX_TERMINAL_RUNNER_SOURCE,
   parseFxTerminalResult
 } from "../agent/lib/fx-terminal-runner.ts";
-import { workspaceNetworkPolicy } from "../agent/lib/workspace-network-policy.ts";
+import {
+  applyWorkspaceNetworkPolicy,
+  workspaceNetworkPolicy
+} from "../agent/lib/workspace-network-policy.ts";
 
 test("parseFxTerminalResult reads the completed interactive turn", () => {
   assert.deepEqual(
@@ -99,41 +102,46 @@ test("the terminal runner starts fx once and injects the autonomous prompt", () 
   assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
 });
 
-test("workspace GitHub credential rules precede the catch-all rule", () => {
+test("workspace policy uses the Sandbox API custom schema", async () => {
+  const updates = [];
   const policy = workspaceNetworkPolicy("github-token");
-  assert.notEqual(typeof policy, "string");
-  assert.ok(policy.allow && !Array.isArray(policy.allow));
+  await applyWorkspaceNetworkPolicy(
+    {
+      currentSession() {
+        return {
+          async update(input) {
+            updates.push(input);
+          }
+        };
+      }
+    },
+    policy
+  );
 
-  assert.deepEqual(Object.keys(policy.allow), [
+  assert.equal(policy.mode, "custom");
+  assert.deepEqual(policy.allowedDomains, [
     "api.github.com",
     "github.com",
     "*"
   ]);
-  assert.deepEqual(policy.allow["github.com"][0].transform, [
-    {
-      headers: {
-        authorization: `Basic ${Buffer.from("x-access-token:github-token").toString("base64")}`
-      }
-    }
-  ]);
+  assert.deepEqual(policy.deniedCIDRs, ["169.254.169.254/32"]);
+  assert.deepEqual(updates, [{ networkPolicy: policy }]);
 });
 
 test("workspace publication credentials are injected only for the exact route", () => {
   const policy = workspaceNetworkPolicy("github-token", {
-    authorization: "Bearer publish-token",
+    authorization: "[redacted]",
     hostname: "factory.example",
     path: "/api/workspaces/ws_abc/publish",
     url: "https://factory.example/api/workspaces/ws_abc/publish"
   });
-  assert.notEqual(typeof policy, "string");
-  assert.ok(policy.allow && !Array.isArray(policy.allow));
-  assert.deepEqual(policy.allow["factory.example"], [
-    {
-      match: {
-        method: ["POST"],
-        path: "/api/workspaces/ws_abc/publish"
-      },
-      transform: [{ headers: { authorization: "Bearer publish-token" } }]
+  assert.equal(policy.allowedDomains[0], "factory.example");
+  assert.deepEqual(policy.injectionRules[0], {
+    domain: "factory.example",
+    headers: { authorization: "[redacted]" },
+    match: {
+      method: ["POST"],
+      path: { exact: "/api/workspaces/ws_abc/publish" }
     }
-  ]);
+  });
 });
