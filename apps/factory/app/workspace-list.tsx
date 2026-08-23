@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import type { WorkspaceSummary } from "./workspace-types";
-import { isWorkspaceRunning } from "./workspace-types";
+import { isWorkspaceRunning, workspaceStatusLabel } from "./workspace-types";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -106,13 +106,13 @@ export function WorkspaceList() {
                     {formatTimestamp(workspace.updatedAt)}
                   </time>
                   <span
-                    className={`flex items-center gap-2 capitalize ${isWorkspaceRunning(workspace.status) ? "text-warning" : workspace.status === "error" ? "text-destructive" : "text-success"}`}
+                    className={`flex items-center gap-2 ${isWorkspaceRunning(workspace.status) ? "text-warning" : workspace.status === "error" ? "text-destructive" : "text-success"}`}
                   >
                     <span
                       className="size-1.5 rounded-full bg-current"
                       aria-hidden="true"
                     />
-                    {workspace.status}
+                    {workspaceStatusLabel(workspace.status)}
                   </span>
                 </span>
               </Link>
