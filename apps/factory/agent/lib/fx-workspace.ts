@@ -7,7 +7,7 @@ import {
   runFactoryImagePhases
 } from "./factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
-import { parseFxTurnResult, type FxTurnResult } from "./fx-result.js";
+import { parseFxTurnResult, type FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
 
 const WORKSPACE_TIMEOUT_MS = 45 * 60 * 1000;
