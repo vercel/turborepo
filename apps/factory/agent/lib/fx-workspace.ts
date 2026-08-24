@@ -3,12 +3,8 @@ import { randomUUID } from "node:crypto";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { APIError, Sandbox } from "@vercel/sandbox";
 
-import {
-  FACTORY_IMAGE_BASE,
-  FACTORY_IMAGE_SPEC,
-  factoryImageFingerprint,
-  runFactoryImagePhases
-} from "./factory-image";
+import { FACTORY_IMAGE_SPEC } from "./factory-image";
+import { requireFactoryImage } from "./current-factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
 import {
   FX_TERMINAL_RUNNER_PATH,
@@ -50,13 +46,7 @@ export async function getOrCreateFxWorkspaceSandbox(
   publishBridge?: WorkspacePublishBridge | null
 ): Promise<Sandbox> {
   try {
-    const sandbox = await getFxWorkspaceSandbox(name, publishBridge);
-    if (!(await hasWorkspaceCheckout(sandbox))) {
-      await initializeWorkspaceSandbox(sandbox, false);
-    } else {
-      await ensureWorkspaceTerminalTools(sandbox);
-    }
-    return sandbox;
+    return await getFxWorkspaceSandbox(name, publishBridge);
   } catch (error) {
     if (!isMissing(error)) throw error;
   }
@@ -65,8 +55,7 @@ export async function getOrCreateFxWorkspaceSandbox(
     getGitHubToken(),
     readFactoryImagePointer()
   ]);
-  const image =
-    pointer?.fingerprint === factoryImageFingerprint() ? pointer : null;
+  const image = requireFactoryImage(pointer);
   const shared = {
     env: {
       FX_AUTO_UPGRADE: "0",
@@ -82,13 +71,10 @@ export async function getOrCreateFxWorkspaceSandbox(
 
   let sandbox: Sandbox;
   try {
-    sandbox =
-      image === null
-        ? await Sandbox.create({ ...shared, image: FACTORY_IMAGE_BASE })
-        : await Sandbox.create({
-            ...shared,
-            source: { snapshotId: image.snapshotId, type: "snapshot" }
-          });
+    sandbox = await Sandbox.create({
+      ...shared,
+      source: { snapshotId: image.snapshotId, type: "snapshot" }
+    });
   } catch (error) {
     if (!isConflict(error)) throw error;
     return Sandbox.get({ name });
@@ -98,89 +84,8 @@ export async function getOrCreateFxWorkspaceSandbox(
     sandbox,
     workspaceNetworkPolicy(githubToken, publishBridge)
   );
-  await initializeWorkspaceSandbox(sandbox, image !== null);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
-}
-
-export async function ensureWorkspaceTerminalTools(
-  sandbox: Sandbox
-): Promise<void> {
-  const command = await sandbox.runCommand({
-    args: [
-      "-lc",
-      "command -v tmux >/dev/null || { if command -v apt-get >/dev/null; then sudo -n apt-get update -y && sudo -n apt-get install -y --no-install-recommends tmux; elif command -v dnf >/dev/null; then sudo -n dnf install -y tmux; elif command -v yum >/dev/null; then sudo -n yum install -y tmux; elif command -v apk >/dev/null; then sudo -n apk add --no-cache tmux; else exit 1; fi; }"
-    ],
-    cmd: "bash",
-    timeoutMs: 120_000
-  });
-  if (command.exitCode !== 0) {
-    throw new Error(`Could not install tmux: ${await command.stderr()}`);
-  }
-}
-
-async function hasWorkspaceCheckout(sandbox: Sandbox): Promise<boolean> {
-  try {
-    const result = await sandbox.runCommand({
-      args: ["-C", FACTORY_IMAGE_SPEC.checkoutPath, "rev-parse", "HEAD"],
-      cmd: "git",
-      timeoutMs: 30_000
-    });
-    return result.exitCode === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function initializeWorkspaceSandbox(
-  sandbox: Sandbox,
-  fromSnapshot: boolean
-): Promise<void> {
-  try {
-    if (!fromSnapshot) {
-      await runFactoryImagePhases(
-        {
-          async run(command) {
-            const result = await sandbox.runCommand({
-              args: ["-lc", command],
-              cmd: "bash"
-            });
-            return {
-              exitCode: result.exitCode,
-              stderr: await result.stderr(),
-              stdout: await result.stdout()
-            };
-          }
-        },
-        { revision: "main" }
-      );
-      return;
-    }
-
-    const result = await sandbox.runCommand({
-      args: [
-        "-lc",
-        `git -C ${FACTORY_IMAGE_SPEC.checkoutPath} fetch --depth=1 --force origin main && git -C ${FACTORY_IMAGE_SPEC.checkoutPath} reset --hard FETCH_HEAD && git -C ${FACTORY_IMAGE_SPEC.checkoutPath} clean -ffd && cd ${FACTORY_IMAGE_SPEC.checkoutPath} && pnpm install --frozen-lockfile`
-      ],
-      cmd: "bash"
-    });
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `Could not initialize fx workspace: ${await result.stderr()}`
-      );
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await sandbox
-      .writeFiles([
-        {
-          content: Buffer.from(`${message}\n`, "utf8"),
-          path: "/factory/state/error"
-        }
-      ])
-      .catch(() => {});
-    throw error;
-  }
 }
 
 export async function runFxTurn(
