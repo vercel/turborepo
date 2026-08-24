@@ -6,13 +6,20 @@ import type { SandboxSession } from "eve/sandbox";
 import type { WorkspaceRecord } from "./workspace";
 
 const CHECKOUT_PATH = "/factory/turborepo";
-const FX_INSTRUCTIONS_PATH = "/home/vercel/.fx/AGENTS.md";
+const FX_PUBLISH_SKILL_DIRECTORY = "/home/vercel/.fx/skills/factory-publish";
+const FX_PUBLISH_SKILL_PATH = `${FX_PUBLISH_SKILL_DIRECTORY}/SKILL.md`;
 const PUBLISH_COMMAND_PATH = "/factory/bin/factory-create-pr";
-const PUBLISH_INSTRUCTIONS = `When the maintainer asks to create or make a pull request, leave repository changes uncommitted and run \`factory-create-pr --branch agents/<topic> --title "type: Description" --body "validation results"\`. Factory creates the verified commit, branch, and draft pull request through Eve's GitHub credentials. Never run git commit, git push, gh auth setup-git, or gh pr create.\n`;
+const PUBLISH_SKILL = `---
+name: factory-publish
+description: Use when the maintainer asks to create, make, open, or publish a pull request.
+---
 
-export function workspacePublishPrompt(message: string): string {
-  return `${PUBLISH_INSTRUCTIONS}\nMaintainer request:\n${message}`;
-}
+# Publish a Factory pull request
+
+Leave repository changes uncommitted and run \`factory-create-pr --branch agents/<topic> --title "type: Description" --body "validation results"\`.
+
+Factory creates the verified commit, branch, and draft pull request through Eve's GitHub credentials. Never run \`git commit\`, \`git push\`, \`gh auth setup-git\`, or \`gh pr create\`.
+`;
 
 export interface WorkspacePublishBridge {
   readonly authorization: string;
@@ -79,15 +86,15 @@ try {
 }
 `;
   await sandbox.runCommand({
-    args: ["-p", "/factory/bin", "/home/vercel/.fx"],
+    args: ["-p", "/factory/bin", FX_PUBLISH_SKILL_DIRECTORY],
     cmd: "mkdir",
     timeoutMs: 10_000
   });
   await sandbox.writeFiles([
     { content: Buffer.from(source, "utf8"), path: PUBLISH_COMMAND_PATH },
     {
-      content: Buffer.from(PUBLISH_INSTRUCTIONS, "utf8"),
-      path: FX_INSTRUCTIONS_PATH
+      content: Buffer.from(PUBLISH_SKILL, "utf8"),
+      path: FX_PUBLISH_SKILL_PATH
     }
   ]);
   const command = await sandbox.runCommand({

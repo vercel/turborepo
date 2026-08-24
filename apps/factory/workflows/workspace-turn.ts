@@ -54,7 +54,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
 
   try {
     if (!message) throw new Error("Workspace turn prompt is missing.");
-    const { workspacePublishBridge, workspacePublishPrompt } =
+    const { workspacePublishBridge } =
       await import("../agent/lib/workspace-publish");
     const publishBridge = workspace.publishToken
       ? workspacePublishBridge(input.workspaceId, workspace.publishToken)
@@ -65,7 +65,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
     );
     const result = await runFxTurn(
       sandbox,
-      workspacePublishPrompt(message),
+      message,
       workspace.sessionId,
       undefined,
       async (sessionId) => {
