@@ -98,3 +98,17 @@ test("mutation requests use the browser-facing host behind the Eve proxy", () =>
   assert.equal(isWorkspaceMutationRequest(request, "create-workspace"), true);
   assert.equal(isWorkspaceMutationRequest(request, "another-action"), false);
 });
+
+test("mutation requests reject malformed origins", () => {
+  const request = new Request("http://127.0.0.1:4274/eve/v1/workspaces", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "not a URL",
+      "x-forwarded-host": "factory.example",
+      "x-operator-action": "create-workspace"
+    }
+  });
+
+  assert.equal(isWorkspaceMutationRequest(request, "create-workspace"), false);
+});

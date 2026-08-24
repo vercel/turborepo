@@ -79,7 +79,7 @@ export function isWorkspaceMutationRequest(
   return (
     origin !== null &&
     host !== null &&
-    new URL(origin).host === host &&
+    URL.parse(origin)?.host === host &&
     request.headers.get("sec-fetch-site") !== "cross-site" &&
     request.headers.get("content-type")?.split(";", 1)[0] ===
       "application/json" &&
