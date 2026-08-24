@@ -4,7 +4,8 @@
   "type": "module",
   "imports": {
     "#*": "./agent/*",
-    "#evals/*": "./evals/*"
+    "#evals/*": "./evals/*",
+    "#factory-image": "./agent/lib/factory-image.ts"
   },
   "scripts": {
     "build": "eve build && next build",
@@ -18,17 +19,16 @@
     "@vercel/blob": "2.7.0",
     "@vercel/connect": "0.4.2",
     "@vercel/oidc": "3.8.0",
-    "@vercel/sandbox": "2.5.0",
+    "@vercel/sandbox": "3.1.0-beta.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "eve": "^0.39.3",
+    "eve": "^0.40.0",
     "next": "16.3.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwind-merge": "3.5.0",
-    "workflow": "5.0.0-beta.30",
     "zod": "4.4.3"
   },
   "devDependencies": {

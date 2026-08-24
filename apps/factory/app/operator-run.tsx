@@ -13,6 +13,7 @@ interface RunModels {
 
 export interface RunStatus {
   readonly cursor?: number;
+  readonly error?: string;
   readonly models?: RunModels;
   readonly sessionId?: string;
   readonly state: RunState;
@@ -20,6 +21,7 @@ export interface RunStatus {
 }
 
 const POLL_INTERVAL_MS = 3000;
+const RUN_START_TIMEOUT_MS = 30_000;
 
 function isRunModels(value: unknown): value is RunModels {
   if (typeof value !== "object" || value === null) {
@@ -79,7 +81,8 @@ export function useOperatorRun(
           "content-type": "application/json",
           "x-operator-action": action
         },
-        method: "POST"
+        method: "POST",
+        signal: AbortSignal.timeout(RUN_START_TIMEOUT_MS)
       });
 
       if (!response.ok) {
@@ -91,8 +94,17 @@ export function useOperatorRun(
       }
       setStatus(initialStatus);
       await pollRun(initialStatus.sessionId, initialStatus.statusPath);
-    } catch {
-      setStatus((current) => ({ ...current, state: "error" }));
+    } catch (error) {
+      setStatus((current) => ({
+        ...current,
+        error:
+          error instanceof DOMException && error.name === "TimeoutError"
+            ? "The run is still retrying in Eve. Check Agent Runs before starting another."
+            : error instanceof Error
+              ? error.message
+              : "Could not start the run.",
+        state: "error"
+      }));
     }
   }
 
@@ -151,6 +163,11 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
         <strong className="block font-semibold capitalize">
           {status.state}
         </strong>
+        {status.error ? (
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {status.error}
+          </span>
+        ) : null}
         {status.sessionId ? (
           <code className="mt-1 block wrap-anywhere font-mono text-xs text-muted-foreground">
             {status.sessionId}

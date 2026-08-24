@@ -25,6 +25,7 @@ interface RunMaintenanceProps {
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
+const RUN_START_TIMEOUT_MS = 30_000;
 
 function dailyExample(examples: string[]): string {
   if (examples.length === 0) return "";
@@ -80,26 +81,29 @@ export function RunMaintenance({
     setIsBusy(true);
     setRunError(null);
     try {
-      const response = await fetch("/api/workspaces/maintenance", {
+      const response = await fetch("/eve/v1/operator/runs", {
         body: JSON.stringify({ example: selectedExample }),
         headers: {
           "content-type": "application/json",
           "x-operator-action": MAINTENANCE_RUN_ACTION
         },
-        method: "POST"
+        method: "POST",
+        signal: AbortSignal.timeout(RUN_START_TIMEOUT_MS)
       });
-      const workspace = (await response.json().catch(() => ({}))) as {
+      const run = (await response.json().catch(() => ({}))) as {
         readonly error?: string;
-        readonly id?: string;
+        readonly sessionId?: string;
       };
-      if (!response.ok || !workspace.id)
-        throw new Error(workspace.error ?? "Could not start fx maintenance.");
-      router.push(`/workspaces/${encodeURIComponent(workspace.id)}`);
+      if (!response.ok || !run.sessionId)
+        throw new Error(run.error ?? "Could not start maintenance.");
+      router.refresh();
     } catch (error) {
       setRunError(
-        error instanceof Error
-          ? error.message
-          : "Could not start fx maintenance."
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "The run is still retrying in Eve. Check Agent Runs before starting another."
+          : error instanceof Error
+            ? error.message
+            : "Could not start fx maintenance."
       );
       setIsBusy(false);
     }

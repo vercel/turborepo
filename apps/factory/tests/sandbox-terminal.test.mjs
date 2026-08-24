@@ -3,115 +3,58 @@ import test from "node:test";
 
 import {
   createTerminalSession,
-  handleTerminalRequest,
-  isAllowedSandboxName
+  ensureFxInstalled
 } from "../agent/lib/sandbox-terminal.ts";
 
-test("isAllowedSandboxName accepts only Factory-managed names", () => {
-  assert.equal(isAllowedSandboxName("factory-workspace-ws_abc"), true);
-  assert.equal(isAllowedSandboxName("ai-sdk-harness-session-abc"), false);
-  assert.equal(isAllowedSandboxName("other-sandbox"), false);
-  assert.equal(isAllowedSandboxName(""), false);
-});
-
-test("createTerminalSession rejects disallowed sandbox names", async () => {
-  await assert.rejects(
-    createTerminalSession("untrusted-sandbox", async () => ({
-      openInteractive: async () => ({ url: "wss://example.com", token: "tok" })
-    })),
-    /Sandbox name is not managed by Factory/
-  );
-});
-
-test("createTerminalSession returns a url and token from openInteractive", async () => {
-  const session = await createTerminalSession(
-    "factory-workspace-ws_abc",
-    async () => ({
-      openInteractive: async () => ({
-        url: "wss://example.com/ws",
-        token: "secret-token"
-      })
-    })
-  );
-  assert.equal(session.url, "wss://example.com/ws");
-  assert.equal(session.token, "secret-token");
-});
-
-test("createTerminalSession propagates openInteractive errors", async () => {
-  await assert.rejects(
-    createTerminalSession("factory-workspace-ws_abc", async () => ({
-      openInteractive: async () => {
-        throw new Error("sandbox not found");
-      }
-    })),
-    /sandbox not found/
-  );
-});
-
-test("handleTerminalRequest returns a session for a valid sandbox", async () => {
-  const response = await handleTerminalRequest(
-    new Request("http://localhost/api/sandbox/terminal", {
-      method: "POST",
-      body: JSON.stringify({ sandboxName: "factory-workspace-ws_abc" })
-    }),
-    async () => ({ url: "wss://example.com/ws", token: "tok" })
-  );
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(body.url, "wss://example.com/ws");
-  assert.equal(body.token, "tok");
-});
-
-test("handleTerminalRequest rejects missing sandboxName", async () => {
-  const response = await handleTerminalRequest(
-    new Request("http://localhost/api/sandbox/terminal", {
-      method: "POST",
-      body: JSON.stringify({})
-    })
-  );
-  assert.equal(response.status, 400);
-  const body = await response.json();
-  assert.match(body.error, /A valid sandboxName is required/);
-});
-
-test("handleTerminalRequest rejects disallowed sandbox names", async () => {
-  const response = await handleTerminalRequest(
-    new Request("http://localhost/api/sandbox/terminal", {
-      method: "POST",
-      body: JSON.stringify({ sandboxName: "untrusted-sandbox" })
-    })
-  );
-  assert.equal(response.status, 400);
-  const body = await response.json();
-  assert.match(body.error, /Sandbox name is not allowed/);
-});
-
-test("handleTerminalRequest returns 404 for not_found errors", async () => {
-  const response = await handleTerminalRequest(
-    new Request("http://localhost/api/sandbox/terminal", {
-      method: "POST",
-      body: JSON.stringify({ sandboxName: "factory-workspace-missing" })
-    }),
-    async () => {
-      throw new Error("sandbox not_found");
+function sandbox({ hasFx = true } = {}) {
+  const commands = [];
+  const rootCommands = [];
+  return {
+    commands,
+    rootCommands,
+    asUser(name) {
+      assert.equal(name, "root");
+      return {
+        async runCommand(command, args) {
+          rootCommands.push({ args, command });
+          return { exitCode: 0 };
+        }
+      };
+    },
+    async openInteractive() {
+      return { token: "secret-token", url: "wss://example.com/pty" };
+    },
+    async runCommand(command, args) {
+      commands.push({ args, command });
+      return { exitCode: hasFx ? 0 : 1 };
     }
-  );
-  assert.equal(response.status, 404);
-  const body = await response.json();
-  assert.match(body.error, /not_found/);
+  };
+}
+
+test("terminal sessions open against the server-selected Eve sandbox", async () => {
+  let selected;
+  const target = sandbox();
+  const session = await createTerminalSession("eve-sbx-ses-vercel-abc", async (name) => {
+    selected = name;
+    return target;
+  });
+
+  assert.equal(selected, "eve-sbx-ses-vercel-abc");
+  assert.deepEqual(session, {
+    token: "secret-token",
+    url: "wss://example.com/pty"
+  });
+  assert.equal(target.rootCommands.length, 0);
 });
 
-test("handleTerminalRequest returns 500 for unexpected errors", async () => {
-  const response = await handleTerminalRequest(
-    new Request("http://localhost/api/sandbox/terminal", {
-      method: "POST",
-      body: JSON.stringify({ sandboxName: "factory-workspace-error" })
-    }),
-    async () => {
-      throw new Error("something went wrong");
-    }
-  );
-  assert.equal(response.status, 500);
-  const body = await response.json();
-  assert.match(body.error, /something went wrong/);
+test("older sandboxes install the pinned fx binary on terminal attach", async () => {
+  const target = sandbox({ hasFx: false });
+  await ensureFxInstalled(target);
+
+  assert.equal(target.rootCommands.length, 1);
+  const [{ args, command }] = target.rootCommands;
+  assert.equal(command, "bash");
+  assert.ok(args[1].includes("/usr/local/bin/fx"));
+  assert.ok(args[1].includes("sha256sum --check --strict"));
+  assert.ok(args[1].includes("v0.0.5"));
 });

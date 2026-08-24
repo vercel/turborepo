@@ -5,6 +5,7 @@ import { defineChannel, GET, POST } from "eve/channels";
 import { DAILY_EXAMPLE_MAINTENANCE_PROMPT } from "../lib/daily-example-maintenance.js";
 import { DAILY_PERFORMANCE_IMPROVEMENT_PROMPT } from "../lib/daily-performance-improvement.js";
 import {
+  isOperatorRunRequest,
   MAINTENANCE_RUN_ACTION,
   type OperatorRunAction,
   PERFORMANCE_RUN_ACTION
@@ -21,15 +22,9 @@ const APP_AUTH = {
 } as const;
 
 function operatorAction(request: Request): OperatorRunAction | null {
-  if (
-    request.headers.get("origin") !== new URL(request.url).origin ||
-    request.headers.get("content-type")?.split(";", 1)[0] !== "application/json"
-  ) {
-    return null;
-  }
-
   const action = request.headers.get("x-operator-action");
-  return action === MAINTENANCE_RUN_ACTION || action === PERFORMANCE_RUN_ACTION
+  return (action === MAINTENANCE_RUN_ACTION || action === PERFORMANCE_RUN_ACTION) &&
+    isOperatorRunRequest(request, action)
     ? action
     : null;
 }
@@ -59,15 +54,6 @@ function startedRun(
   return Response.json(
     { cursor: 0, models, sessionId, state: "running" },
     { status: 202, headers: { "cache-control": "no-store" } }
-  );
-}
-
-function isOperatorRequest(request: Request, action: string): boolean {
-  // Vercel Deployment Protection authenticates operators; this validates CSRF intent.
-  return (
-    request.headers.get("origin") === new URL(request.url).origin &&
-    request.headers.get("x-operator-action") === action &&
-    request.headers.get("content-type")?.split(";", 1)[0] === "application/json"
   );
 }
 
@@ -116,7 +102,7 @@ export default defineChannel({
       return startedRun(session.id);
     }),
     POST("/eve/v1/operator/slack/test", async (request) => {
-      if (!isOperatorRequest(request, "test-slack-delivery")) {
+      if (!isOperatorRunRequest(request, "test-slack-delivery")) {
         return Response.json(
           { ok: false, error: "Invalid operator request." },
           {

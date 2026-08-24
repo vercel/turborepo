@@ -19,7 +19,7 @@ export function WorkspaceComposer() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch("/api/workspaces", {
+      const response = await fetch("/eve/v1/workspaces", {
         method: "POST",
         headers: {
           "content-type": "application/json",
