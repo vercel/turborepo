@@ -178,7 +178,7 @@ function WorkspaceChat({
       id="main-content"
     >
       <header className="flex items-start justify-between gap-6">
-        <div>
+        <div className="min-w-0">
           <Link
             className="text-xs text-muted-foreground hover:underline"
             href="/"
