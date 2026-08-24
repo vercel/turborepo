@@ -36,6 +36,7 @@ pub struct DaemonStatus {
     pub sock_file: AbsoluteSystemPathBuf,
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn run_lifecycle_command(
     command: DaemonLifecycleCommand,
     repo_root: &AbsoluteSystemPath,
@@ -140,6 +141,7 @@ pub fn clean_daemon_files(
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn clean_daemon(
     repo_root: &AbsoluteSystemPath,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -163,6 +165,7 @@ pub async fn clean_daemon(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn follow_daemon_logs(
     repo_root: &AbsoluteSystemPath,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -186,6 +189,7 @@ pub async fn follow_daemon_logs(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn serve<W, F, S>(
     repo_root: AbsoluteSystemPathBuf,
     timeout: Duration,
@@ -229,6 +233,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub fn daemon_log_filename(base_filename: &str) -> Result<String, time::Error> {
     let now = OffsetDateTime::now_utc();
     let format = format_description::parse("[year]-[month]-[day]")?;
@@ -236,6 +241,7 @@ pub fn daemon_log_filename(base_filename: &str) -> Result<String, time::Error> {
     Ok(format!("{base_filename}.{date}"))
 }
 
+#[allow(clippy::result_large_err)]
 async fn get_log_file_from_daemon(connector: DaemonConnector) -> Result<PathBuf, DaemonError> {
     let mut client = connector.connect().await?;
     let status = client.status().await?;

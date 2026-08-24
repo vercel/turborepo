@@ -47,6 +47,7 @@ fn run_daemon_command() -> ! {
     std::process::exit(exit_code)
 }
 
+#[allow(clippy::result_large_err)]
 async fn execute_daemon_command(args: DaemonCli) -> Result<(), turborepo_daemon::DaemonError> {
     let verbosity = args.verbosity.unwrap_or(args.v);
     let cwd = AbsoluteSystemPathBuf::cwd()?;

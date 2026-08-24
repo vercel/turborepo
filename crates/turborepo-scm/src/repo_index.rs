@@ -637,15 +637,11 @@ impl RepoGitIndex {
         let prefix_is_empty = prefix_str.is_empty();
 
         // Compute range bounds once for both ls_tree and status lookups
-        let range_start;
-        let range_end;
-        if !prefix_is_empty {
-            range_start = format!("{}/", prefix_str);
-            range_end = format!("{}0", prefix_str);
+        let (range_start, range_end) = if !prefix_is_empty {
+            (format!("{}/", prefix_str), format!("{}0", prefix_str))
         } else {
-            range_start = String::new();
-            range_end = String::new();
-        }
+            (String::new(), String::new())
+        };
 
         let mut hashes = if prefix_is_empty {
             let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
