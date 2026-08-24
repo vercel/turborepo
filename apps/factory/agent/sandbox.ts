@@ -31,30 +31,38 @@ const SESSION_VCPUS = 8;
 export default defineSandbox({
   backend: () => {
     const handoff = readFactoryImageHandoff();
-    if (handoff === null) {
-      throw new Error(
-        "No Factory image has been published. Build the shared image before starting agents."
-      );
-    }
-    return vercel({
-      resources: { vcpus: SESSION_VCPUS },
-      async sessionCreateOptions({ session }) {
-        if (!isWorkspaceDriveEnabled()) return {};
-        const drive = await Drive.getOrCreate({
-          name: workspaceDriveName(session.id)
-        });
-        return {
-          mounts: {
-            [WORKSPACE_DRIVE_MOUNT_PATH]: {
-              drive: drive.name,
-              mode: "read-write"
-            }
+    const sessionCreateOptions = async ({
+      session
+    }: {
+      session: { id: string };
+    }) => {
+      if (!isWorkspaceDriveEnabled()) return {};
+      const drive = await Drive.getOrCreate({
+        name: workspaceDriveName(session.id)
+      });
+      return {
+        mounts: {
+          [WORKSPACE_DRIVE_MOUNT_PATH]: {
+            drive: drive.name,
+            mode: "read-write" as const
           }
-        };
-      },
-      source: { snapshotId: handoff.snapshotId, type: "snapshot" },
-      timeout: SESSION_TIMEOUT_MS
-    });
+        }
+      };
+    };
+    return vercel(
+      handoff === null
+        ? {
+            resources: { vcpus: SESSION_VCPUS },
+            sessionCreateOptions,
+            timeout: SESSION_TIMEOUT_MS
+          }
+        : {
+            resources: { vcpus: SESSION_VCPUS },
+            sessionCreateOptions,
+            source: { snapshotId: handoff.snapshotId, type: "snapshot" },
+            timeout: SESSION_TIMEOUT_MS
+          }
+    );
   },
   async bootstrap() {},
   async onSession({ use }) {
