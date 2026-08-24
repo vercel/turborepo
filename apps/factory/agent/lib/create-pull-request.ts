@@ -12,7 +12,6 @@ import {
   isReleaseAgeConfigFile
 } from "./release-age";
 import { isAppPrincipal, resolveAutomatedSelection } from "./repo";
-import { deliverSlackMessage } from "./slack";
 
 const owner = "vercel";
 const repo = "turborepo";
@@ -395,6 +394,7 @@ export async function createPullRequest(
     newCommitSha
   );
 
+  const { deliverSlackMessage } = await import("./slack");
   const slackNotification = await deliverSlackMessage(
     `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
     {

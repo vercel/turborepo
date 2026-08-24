@@ -81,8 +81,8 @@ export default function WorkPage() {
         <p className="col-start-2 mt-6 max-w-[68ch] text-muted-foreground text-pretty max-[720px]:mt-6">
           Creates a durable Factory workspace on the factory image, with the
           same sandbox checkout of <code>main</code> the scheduled operations
-          use. Return later to review the transcript, continue the work, inspect
-          changes, or open its terminal.
+          use. Return later to review the transcript and continue the work in
+          the same durable Eve session.
         </p>
         <dl className="col-start-2 my-10 grid grid-cols-3 gap-6 max-[520px]:grid-cols-1 max-[520px]:gap-4">
           <div className="min-w-0 border-t border-border pt-3">
@@ -97,7 +97,7 @@ export default function WorkPage() {
           </div>
           <div className="min-w-0 border-t border-border pt-3">
             <dt className="text-xs text-muted-foreground">Output</dt>
-            <dd className="mt-1.5 text-sm">Transcript and diff</dd>
+            <dd className="mt-1.5 text-sm">Durable transcript</dd>
           </div>
         </dl>
         <div className="col-start-2 border-t border-border pt-8">
