@@ -43,7 +43,9 @@ export function parseServerMessage(
         if (typeof code === "number" || code === null)
           return { code: code ?? null, kind: "exit" };
       }
-    } catch {}
+    } catch {
+      // Non-JSON text frames are terminal output.
+    }
     return { data, kind: "output" };
   }
   if (data instanceof Blob) return { kind: "unknown" };

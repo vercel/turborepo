@@ -321,26 +321,35 @@ function ActivityFeed({
 
 function eventSummary(event: MessageStreamEvent): string {
   switch (event.type) {
-    case "message.received":
+    case "message.received": {
       return event.data.message;
-    case "reasoning.completed":
+    }
+    case "reasoning.completed": {
       return event.data.reasoning;
-    case "message.completed":
+    }
+    case "message.completed": {
       return event.data.message ?? event.data.finishReason;
-    case "actions.requested":
+    }
+    case "actions.requested": {
       return `${event.data.actions.length} action${event.data.actions.length === 1 ? "" : "s"} requested`;
-    case "action.result":
+    }
+    case "action.result": {
       return event.data.error?.message ?? event.data.status;
+    }
     case "turn.failed":
-    case "session.failed":
+    case "session.failed": {
       return event.data.message;
+    }
     case "turn.started":
-    case "turn.completed":
+    case "turn.completed": {
       return event.data.turnId;
-    case "session.waiting":
+    }
+    case "session.waiting": {
       return "Waiting for your next message";
-    default:
+    }
+    default: {
       return "";
+    }
   }
 }
 
