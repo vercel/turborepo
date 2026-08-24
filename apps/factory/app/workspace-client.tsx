@@ -6,7 +6,11 @@ import {
   type EveMessageData,
   type MessageStreamEvent
 } from "eve/client";
-import type { EveMessage, EveMessagePart } from "eve/react";
+import type {
+  EveMessage,
+  EveMessageInputRequest,
+  EveMessagePart
+} from "eve/react";
 import { useEveAgent } from "eve/react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -35,6 +39,11 @@ interface WorkspaceClientProps {
 interface LoadedWorkspace {
   readonly events: readonly MessageStreamEvent[];
   readonly workspace: PublicWorkspace;
+}
+
+interface PendingRequest {
+  readonly request: EveMessageInputRequest;
+  readonly toolName: string;
 }
 
 export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
@@ -104,6 +113,7 @@ function WorkspaceChat({
   readonly initialEvents: readonly MessageStreamEvent[];
   readonly workspace: PublicWorkspace;
 }) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [events, setEvents] = useState(initialEvents);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -141,15 +151,25 @@ function WorkspaceChat({
   }, [initialEvents.length, workspace.sessionId]);
 
   const data = reduceEvents(events);
+  const pending = pendingRequests(data.messages);
   const serverBusy = isServerBusy(events);
   const busy =
     serverBusy || agent.status === "submitted" || agent.status === "streaming";
+  const canRespond = pending.length > 0 && agent.status !== "error";
 
   function submit() {
     const message = draft.trim();
     if (!message || busy) return;
     setDraft("");
     agent.send(message).catch(() => undefined);
+  }
+
+  function answer(
+    requestId: string,
+    response: { optionId?: string; text?: string }
+  ) {
+    setAnswers((current) => ({ ...current, [requestId]: "" }));
+    agent.respond([{ requestId, ...response }]).catch(() => undefined);
   }
 
   return (
@@ -195,6 +215,69 @@ function WorkspaceChat({
           ))}
         </ol>
       </section>
+
+      {pending.map(({ request, toolName }) => (
+        <fieldset
+          className="mt-6 rounded-md border border-warning p-4"
+          key={request.requestId}
+        >
+          <legend className="px-1.5 text-[0.8125rem] font-semibold">
+            {request.kind === "tool-approval"
+              ? `Approve ${toolName}`
+              : request.kind === "question"
+                ? "Question"
+                : "Session limit"}
+          </legend>
+          <p className="mb-4 wrap-anywhere text-sm whitespace-pre-wrap">
+            {request.prompt}
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
+            {request.options?.map((option) => (
+              <Button
+                disabled={!canRespond}
+                key={option.id}
+                onClick={() =>
+                  answer(request.requestId, { optionId: option.id })
+                }
+                size="sm"
+                type="button"
+                variant={option.style === "danger" ? "outline" : "default"}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          {request.allowFreeform || request.display === "text" ? (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                aria-label="Answer"
+                className="min-h-9 min-w-0 flex-auto rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                disabled={!canRespond}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    [request.requestId]: event.target.value
+                  }))
+                }
+                value={answers[request.requestId] ?? ""}
+              />
+              <Button
+                disabled={!canRespond || !answers[request.requestId]?.trim()}
+                onClick={() =>
+                  answer(request.requestId, {
+                    text: answers[request.requestId]?.trim()
+                  })
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Answer
+              </Button>
+            </div>
+          ) : null}
+        </fieldset>
+      ))}
 
       <ActivityFeed events={events} />
 
@@ -250,6 +333,20 @@ function WorkspaceChat({
 }
 
 const messageReducer = defaultMessageReducer();
+
+function pendingRequests(
+  messages: readonly EveMessage[]
+): readonly PendingRequest[] {
+  return messages.flatMap((message) =>
+    message.parts.flatMap((part) => {
+      if (part.type !== "dynamic-tool" || part.state !== "approval-requested") {
+        return [];
+      }
+      const request = part.toolMetadata?.eve?.inputRequest;
+      return request ? [{ request, toolName: part.toolName }] : [];
+    })
+  );
+}
 
 function reduceEvents(events: readonly MessageStreamEvent[]): EveMessageData {
   return events.reduce(
