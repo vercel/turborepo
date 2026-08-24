@@ -18,6 +18,7 @@ export interface RunStatus {
   readonly sessionId?: string;
   readonly state: RunState;
   readonly statusPath?: string;
+  readonly workspaceId?: string;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -50,6 +51,8 @@ function isRunStatus(value: unknown): value is RunStatus {
     (candidate.models === undefined || isRunModels(candidate.models)) &&
     (candidate.statusPath === undefined ||
       typeof candidate.statusPath === "string") &&
+    (candidate.workspaceId === undefined ||
+      typeof candidate.workspaceId === "string") &&
     (candidate.cursor === undefined ||
       (typeof candidate.cursor === "number" &&
         Number.isInteger(candidate.cursor) &&
@@ -182,6 +185,14 @@ export function RunStatusPanel({ status }: RunStatusPanelProps) {
               reviewer {status.models.reviewerModel}
             </code>
           </>
+        ) : null}
+        {status.workspaceId ? (
+          <a
+            className="mt-2 block text-xs font-medium text-foreground hover:underline hover:underline-offset-4"
+            href={`/workspaces/${encodeURIComponent(status.workspaceId)}`}
+          >
+            View live conversation →
+          </a>
         ) : null}
       </div>
     </div>

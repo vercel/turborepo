@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { MAINTENANCE_RUN_ACTION } from "../agent/lib/operator-runs";
 import { Button } from "../components/ui/button";
+import { RunStatusPanel, runLabel, useOperatorRun } from "./operator-run";
 type SlackTestState =
   | { readonly state: "idle" }
   | { readonly state: "sending" }
@@ -25,7 +25,6 @@ interface RunMaintenanceProps {
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
-const RUN_START_TIMEOUT_MS = 30_000;
 
 function dailyExample(examples: string[]): string {
   if (examples.length === 0) return "";
@@ -68,46 +67,11 @@ export function RunMaintenance({
   agentRunsUrl,
   examples
 }: RunMaintenanceProps) {
-  const router = useRouter();
-  const [isBusy, setIsBusy] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
+  const { isBusy, start, status } = useOperatorRun(MAINTENANCE_RUN_ACTION);
   const [slackTest, setSlackTest] = useState<SlackTestState>({ state: "idle" });
   const [selectedExample, setSelectedExample] = useState(() =>
     dailyExample(examples)
   );
-
-  async function startMaintenance() {
-    if (!selectedExample || isBusy) return;
-    setIsBusy(true);
-    setRunError(null);
-    try {
-      const response = await fetch("/eve/v1/operator/runs", {
-        body: JSON.stringify({ example: selectedExample }),
-        headers: {
-          "content-type": "application/json",
-          "x-operator-action": MAINTENANCE_RUN_ACTION
-        },
-        method: "POST",
-        signal: AbortSignal.timeout(RUN_START_TIMEOUT_MS)
-      });
-      const run = (await response.json().catch(() => ({}))) as {
-        readonly error?: string;
-        readonly sessionId?: string;
-      };
-      if (!response.ok || !run.sessionId)
-        throw new Error(run.error ?? "Could not start maintenance.");
-      router.refresh();
-    } catch (error) {
-      setRunError(
-        error instanceof DOMException && error.name === "TimeoutError"
-          ? "The run is still retrying in Eve. Check Agent Runs before starting another."
-          : error instanceof Error
-            ? error.message
-            : "Could not start fx maintenance."
-      );
-      setIsBusy(false);
-    }
-  }
 
   async function testSlackDelivery() {
     setSlackTest({ state: "sending" });
@@ -174,10 +138,10 @@ export function RunMaintenance({
       <div className="flex flex-wrap items-center gap-2.5 max-[520px]:[&>*]:w-full">
         <Button
           disabled={isBusy || !selectedExample}
-          onClick={() => void startMaintenance()}
+          onClick={() => void start({ example: selectedExample })}
           type="button"
         >
-          {isBusy ? "Starting fx…" : "Run maintenance with fx"}
+          {runLabel(status, "Run maintenance with fx")}
         </Button>
         <Button
           disabled={slackTest.state === "sending"}
@@ -199,11 +163,7 @@ export function RunMaintenance({
           <span aria-hidden="true">↗</span>
         </a>
       </div>
-      {runError ? (
-        <p className="mt-4 text-sm text-destructive" role="alert">
-          {runError}
-        </p>
-      ) : null}
+      <RunStatusPanel status={status} />
       {slackTest.state !== "idle" ? (
         <div
           aria-live={slackTest.state === "error" ? "assertive" : "polite"}

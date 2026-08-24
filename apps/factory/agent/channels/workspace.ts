@@ -17,13 +17,28 @@ type WorkspaceChannelState = {
   workspaceId: string;
 };
 
+type WorkspaceReceiveTarget = {
+  mode: "conversation" | "task";
+  title: string;
+  workspaceId: string;
+};
+
 export default defineChannel<
   WorkspaceChannelState,
-  { state: WorkspaceChannelState }
+  { state: WorkspaceChannelState },
+  WorkspaceReceiveTarget
 >({
   state: { workspaceId: "" },
   context: (state) => ({ state }),
   metadata: (state) => ({ workspaceId: state.workspaceId }),
+  async receive({ auth, message, target }, { from }) {
+    return from(target.workspaceId).send(message, {
+      auth,
+      mode: target.mode,
+      state: { workspaceId: target.workspaceId },
+      title: target.title
+    });
+  },
   routes: [
     POST("/eve/v1/workspaces", async (request, { from }) => {
       if (!isWorkspaceMutationRequest(request, WORKSPACE_CREATE_ACTION)) {

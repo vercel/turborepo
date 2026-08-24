@@ -5,6 +5,7 @@ import { defineChannel, GET, POST } from "eve/channels";
 import { DAILY_EXAMPLE_MAINTENANCE_PROMPT } from "../lib/daily-example-maintenance.js";
 import { DAILY_PERFORMANCE_IMPROVEMENT_PROMPT } from "../lib/daily-performance-improvement.js";
 import {
+  createOperatorWorkspaceRecord,
   isOperatorRunRequest,
   MAINTENANCE_RUN_ACTION,
   type OperatorRunAction,
@@ -13,6 +14,9 @@ import {
 import { selectPerformanceModels } from "../lib/performance-models.js";
 import { sessionDate } from "../lib/repo.js";
 import { deliverSlackMessage } from "../lib/slack.js";
+import { createWorkspace, mutateWorkspace } from "../lib/workspace-store.js";
+import type { WorkspaceRecord } from "../lib/workspace.js";
+import workspaceChannel from "./workspace.js";
 
 const APP_AUTH = {
   attributes: {},
@@ -50,37 +54,51 @@ function operatorError(error: string, status: number): Response {
 
 function startedRun(
   sessionId: string,
+  workspaceId: string,
   models?: { authorModel: string; reviewerModel: string }
 ): Response {
   return Response.json(
-    { cursor: 0, models, sessionId, state: "running" },
+    { cursor: 0, models, sessionId, state: "running", workspaceId },
     { status: 202, headers: { "cache-control": "no-store" } }
   );
 }
 
 export default defineChannel({
   routes: [
-    POST("/eve/v1/operator/runs", async (request, { from }) => {
+    POST("/eve/v1/operator/runs", async (request, { to }) => {
       const action = operatorAction(request);
       if (!action) {
         return operatorError("Invalid operator request.", 403);
       }
 
       if (action === PERFORMANCE_RUN_ACTION) {
-        // A fresh address is unowned, so `send` always starts a new session.
-        const session = await from(randomUUID()).send(
-          DAILY_PERFORMANCE_IMPROVEMENT_PROMPT,
-          {
-            auth: APP_AUTH,
-            mode: "task",
-            title: "Daily performance improvement"
-          }
+        const title = "Daily performance improvement";
+        const workspace = await createOperatorWorkspace(
+          title,
+          DAILY_PERFORMANCE_IMPROVEMENT_PROMPT
         );
+        const session = await to(workspaceChannel, {
+          mode: "task",
+          title,
+          workspaceId: workspace.id
+        })
+          .send(DAILY_PERFORMANCE_IMPROVEMENT_PROMPT, { auth: APP_AUTH })
+          .catch(async (error: unknown) => {
+            await failOperatorWorkspace(
+              workspace.id,
+              "Could not start the scheduled performance session."
+            );
+            throw error;
+          });
+        await attachWorkspaceSession(workspace.id, session.id);
         const { authorModel, reviewerModel } = selectPerformanceModels(
           sessionDate(session.id)
         );
 
-        return startedRun(session.id, { authorModel, reviewerModel });
+        return startedRun(session.id, workspace.id, {
+          authorModel,
+          reviewerModel
+        });
       }
 
       const example = await requestedExample(request);
@@ -88,19 +106,32 @@ export default defineChannel({
         return operatorError("A valid example is required.", 400);
       }
 
-      const session = await from(randomUUID()).send(
-        DAILY_EXAMPLE_MAINTENANCE_PROMPT,
-        {
+      const title = `Daily example maintenance · ${example}`;
+      const workspace = await createOperatorWorkspace(
+        title,
+        DAILY_EXAMPLE_MAINTENANCE_PROMPT
+      );
+      const session = await to(workspaceChannel, {
+        mode: "task",
+        title,
+        workspaceId: workspace.id
+      })
+        .send(DAILY_EXAMPLE_MAINTENANCE_PROMPT, {
           auth: {
             ...APP_AUTH,
             attributes: { maintenanceExample: example }
-          },
-          mode: "task",
-          title: "Daily example maintenance"
-        }
-      );
+          }
+        })
+        .catch(async (error: unknown) => {
+          await failOperatorWorkspace(
+            workspace.id,
+            "Could not start the scheduled maintenance session."
+          );
+          throw error;
+        });
+      await attachWorkspaceSession(workspace.id, session.id);
 
-      return startedRun(session.id);
+      return startedRun(session.id, workspace.id);
     }),
     POST("/eve/v1/operator/slack/test", async (request) => {
       if (!isOperatorRunRequest(request, "test-slack-delivery")) {
@@ -170,3 +201,50 @@ export default defineChannel({
     )
   ]
 });
+
+async function createOperatorWorkspace(
+  title: string,
+  prompt: string
+): Promise<WorkspaceRecord> {
+  return createWorkspace(
+    createOperatorWorkspaceRecord({
+      id: `ws_${randomUUID().replaceAll("-", "")}`,
+      now: new Date().toISOString(),
+      prompt,
+      title,
+      turnId: `turn_${randomUUID().replaceAll("-", "")}`
+    })
+  );
+}
+
+async function attachWorkspaceSession(
+  workspaceId: string,
+  sessionId: string
+): Promise<void> {
+  await mutateOperatorWorkspace(workspaceId, (workspace) => ({
+    ...workspace,
+    sessionId
+  }));
+}
+
+async function failOperatorWorkspace(
+  workspaceId: string,
+  message: string
+): Promise<void> {
+  if (!workspaceId) return;
+  await mutateOperatorWorkspace(workspaceId, (workspace) => ({
+    ...workspace,
+    activeTurnId: undefined,
+    error: message.slice(0, 2000),
+    sandbox: { ...workspace.sandbox, status: "error" },
+    status: "error",
+    updatedAt: new Date().toISOString()
+  }));
+}
+
+async function mutateOperatorWorkspace(
+  workspaceId: string,
+  mutation: (workspace: WorkspaceRecord) => WorkspaceRecord
+): Promise<void> {
+  await mutateWorkspace(workspaceId, mutation).catch(() => undefined);
+}

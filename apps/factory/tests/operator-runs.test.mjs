@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createOperatorWorkspaceRecord,
   isOperatorRunRequest,
   MAINTENANCE_RUN_ACTION
 } from "../agent/lib/operator-runs.ts";
@@ -9,6 +10,21 @@ import {
 function request(headers) {
   return { headers: new Headers(headers) };
 }
+
+test("operator runs create workspace records for the home page", () => {
+  const workspace = createOperatorWorkspaceRecord({
+    id: "ws_operator",
+    now: "2026-08-24T20:00:00.000Z",
+    prompt: "Improve the selected example.",
+    title: "Daily example maintenance · with-vue-nuxt",
+    turnId: "turn_operator"
+  });
+
+  assert.equal(workspace.id, "ws_operator");
+  assert.equal(workspace.status, "running");
+  assert.equal(workspace.messages[0]?.text, "Improve the selected example.");
+  assert.equal(workspace.title, "Daily example maintenance · with-vue-nuxt");
+});
 
 test("operator runs match the browser-facing host behind the Eve proxy", () => {
   assert.equal(

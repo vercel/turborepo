@@ -1,3 +1,5 @@
+import type { WorkspaceRecord } from "./workspace";
+
 export const MAINTENANCE_RUN_ACTION = "run-daily-maintenance";
 export const PERFORMANCE_RUN_ACTION = "run-daily-performance";
 
@@ -24,6 +26,34 @@ export function isOperatorRunRequest(
   } catch {
     return false;
   }
+}
+
+export function createOperatorWorkspaceRecord(input: {
+  readonly id: string;
+  readonly now: string;
+  readonly prompt: string;
+  readonly title: string;
+  readonly turnId: string;
+}): WorkspaceRecord {
+  return {
+    agent: "eve",
+    activeTurnId: input.turnId,
+    createdAt: input.now,
+    id: input.id,
+    messages: [
+      {
+        createdAt: input.now,
+        id: input.turnId,
+        role: "user",
+        text: input.prompt
+      }
+    ],
+    sandbox: { provider: "vercel", status: "running" },
+    status: "running",
+    title: input.title,
+    updatedAt: input.now,
+    version: 2
+  };
 }
 
 // Sent as `x-operator-action` by the dashboard and required by the operator
