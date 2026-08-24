@@ -48,7 +48,7 @@ Without global `turbo`, use your package manager:
 ```sh
 cd my-turborepo
 npx turbo build
-yarn dlx turbo build
+yarn exec turbo build
 pnpm exec turbo build
 ```
 
