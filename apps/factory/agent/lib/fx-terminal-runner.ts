@@ -6,7 +6,7 @@ export const FX_TERMINAL_RUNNER_SOURCE = String.raw`
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const [cwd, promptPath, tokenPath, requestedSessionId, sessionPath, tmuxSession] =
+const [cwd, promptPath, tokenPath, requestedSessionId, model, sessionPath, tmuxSession] =
   process.argv.slice(2);
 
 function run(command, args, options = {}) {
@@ -46,12 +46,13 @@ const launch =
   'token_path="$1"; session_id="$2"; ' +
   'trap \'rm -f "$token_path"\' EXIT; ' +
   'export FX_AUTO_UPGRADE=0 FX_PERMISSION_MODE=yolo PATH="/factory/bin:$PATH"; ' +
+  'if [ -n "$3" ]; then export FX_MODEL="$3"; fi; ' +
   'export VERCEL_OIDC_TOKEN="$(cat "$token_path")"; rm -f "$token_path"; ' +
   'if [ -n "$session_id" ]; then exec fx --record resume --id "$session_id"; ' +
   'else exec fx --record; fi';
 const paneArgs = [
   "-c", cwd,
-  "bash", "-lc", launch, "factory-terminal", tokenPath, requestedSessionId
+  "bash", "-lc", launch, "factory-terminal", tokenPath, requestedSessionId, model
 ];
 
 const exists = run("tmux", ["has-session", "-t", tmuxSession], {

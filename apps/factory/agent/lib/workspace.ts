@@ -5,6 +5,14 @@ export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 
 export type WorkspaceStatus = "idle" | "running" | "error";
 
+export const DEFAULT_WORKSPACE_MODEL = "zai/glm-5.2";
+export type WorkspaceModel = string;
+
+export interface WorkspaceModelOption {
+  readonly id: WorkspaceModel;
+  readonly name: string;
+}
+
 export interface WorkspaceMessage {
   readonly createdAt: string;
   readonly id: string;
@@ -21,6 +29,7 @@ export interface WorkspaceRecord {
   readonly agent: "fx";
   readonly id: string;
   readonly messages: readonly WorkspaceMessage[];
+  readonly model?: WorkspaceModel;
   readonly pullRequest?: { readonly number: number; readonly url: string };
   readonly sandbox: {
     readonly name: string;
@@ -62,6 +71,7 @@ export function isWorkspaceId(value: unknown): value is string {
 }
 
 export function parseCreateWorkspaceInput(value: unknown): {
+  readonly model: WorkspaceModel;
   readonly prompt?: string;
   readonly title: string;
 } | null {
@@ -69,6 +79,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   if (value.title !== undefined && typeof value.title !== "string") return null;
   if (value.prompt !== undefined && typeof value.prompt !== "string")
     return null;
+  if (value.model !== undefined && !isWorkspaceModel(value.model)) return null;
   const prompt = value.prompt?.trim();
   const title = value.title?.trim() || prompt?.split("\n", 1)[0]?.slice(0, 120);
   if (
@@ -78,6 +89,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   )
     return null;
   return {
+    model: value.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(prompt === undefined ? {} : { prompt }),
     title
   };
@@ -183,6 +195,7 @@ export function toWorkspaceView(
     agent: workspace.agent,
     id: workspace.id,
     messages: workspace.messages,
+    model: workspace.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(workspace.pullRequest === undefined
       ? {}
       : { pullRequest: workspace.pullRequest }),
@@ -239,6 +252,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
       value.status === "running" ||
       value.status === "error") &&
     value.agent === "fx" &&
+    (value.model === undefined || isWorkspaceModel(value.model)) &&
     (value.sessionId === undefined ||
       (typeof value.sessionId === "string" &&
         ID_PATTERN.test(value.sessionId))) &&
@@ -258,6 +272,14 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     optionalString(value.publishToken, 128) &&
     optionalString(value.error, 2000) &&
     (value.pullRequest === undefined || isPullRequest(value.pullRequest))
+  );
+}
+
+export function isWorkspaceModel(value: unknown): value is WorkspaceModel {
+  return (
+    typeof value === "string" &&
+    value.length <= 200 &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)
   );
 }
 

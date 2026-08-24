@@ -5,10 +5,12 @@ import { getRun, start } from "workflow/api";
 import { workspaceTurnWorkflow } from "../../workflows/workspace-turn";
 import {
   beginWorkspaceTurn,
+  DEFAULT_WORKSPACE_MODEL,
   recoverTerminalWorkspaceTurn,
   recordWorkspaceWorkflowRun,
   toWorkspaceView,
   workspaceSandboxName,
+  type WorkspaceModel,
   type WorkspaceRecord,
   type PublicWorkspaceView
 } from "./workspace";
@@ -19,6 +21,7 @@ import {
 } from "./workspace-store";
 
 export async function createFxWorkspace(input: {
+  readonly model?: WorkspaceModel;
   readonly prompt?: string;
   readonly title: string;
 }): Promise<PublicWorkspaceView> {
@@ -29,6 +32,7 @@ export async function createFxWorkspace(input: {
     createdAt: now,
     id,
     messages: [],
+    model: input.model ?? DEFAULT_WORKSPACE_MODEL,
     publishToken: randomUUID(),
     sandbox: {
       name: workspaceSandboxName(id),

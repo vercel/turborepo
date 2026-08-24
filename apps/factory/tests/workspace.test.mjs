@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   beginWorkspaceTurn,
+  DEFAULT_WORKSPACE_MODEL,
   isSafeWorkspaceDiffPath,
   isWorkspaceMutationRequest,
   isWorkspaceRecord,
@@ -23,6 +24,7 @@ function workspace(changes = {}) {
     createdAt: now,
     id: "ws_abc",
     messages: [],
+    model: DEFAULT_WORKSPACE_MODEL,
     publishToken: "private-publish-token",
     sandbox: {
       name: workspaceSandboxName("ws_abc"),
@@ -48,6 +50,7 @@ test("validates durable workspace records and deterministic sandbox names", () =
     false
   );
   assert.equal(isWorkspaceRecord(workspace({ agent: "opencode" })), false);
+  assert.equal(isWorkspaceRecord(workspace({ model: "invalid model" })), false);
 });
 
 test("workspace views whitelist fields and omit opaque state", () => {
@@ -183,6 +186,7 @@ test("terminal workflows return a stranded workspace to the operator", () => {
 
 test("validates create and turn bodies", () => {
   assert.deepEqual(parseCreateWorkspaceInput({ title: "  Work  " }), {
+    model: DEFAULT_WORKSPACE_MODEL,
     title: "Work"
   });
   assert.deepEqual(
@@ -190,9 +194,21 @@ test("validates create and turn bodies", () => {
       prompt: "  Fix cache  "
     }),
     {
+      model: DEFAULT_WORKSPACE_MODEL,
       prompt: "Fix cache",
       title: "Fix cache"
     }
+  );
+  assert.deepEqual(
+    parseCreateWorkspaceInput({
+      model: "anthropic/claude-fable-5",
+      title: "Use Claude"
+    }),
+    { model: "anthropic/claude-fable-5", title: "Use Claude" }
+  );
+  assert.equal(
+    parseCreateWorkspaceInput({ model: "invalid model", title: "Nope" }),
+    null
   );
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
   assert.deepEqual(parseWorkspaceTurnInput({ message: "  Go  " }), {

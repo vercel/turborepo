@@ -2,6 +2,7 @@ import {
   isWorkspaceStoreConfigured,
   listWorkspaces
 } from "../../../agent/lib/workspace-store";
+import { listFxModels } from "../../../agent/lib/fx-environment";
 import { createFxWorkspace } from "../../../agent/lib/workspace-turn";
 import {
   isWorkspaceMutationRequest,
@@ -32,7 +33,21 @@ export async function POST(request: Request): Promise<Response> {
   );
   if (!input)
     return Response.json(
-      { error: "A title or prompt is required." },
+      { error: "A title, prompt, and valid model are required." },
+      { status: 400 }
+    );
+  let models;
+  try {
+    models = await listFxModels();
+  } catch {
+    return Response.json(
+      { error: "Could not load the available AI Gateway models." },
+      { status: 503 }
+    );
+  }
+  if (!models.some((model) => model.id === input.model))
+    return Response.json(
+      { error: "The selected AI Gateway model is not available." },
       { status: 400 }
     );
 

@@ -67,6 +67,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
       sandbox,
       message,
       workspace.sessionId,
+      workspace.model,
       undefined,
       async (sessionId) => {
         await mutateWorkspace(input.workspaceId, (current) =>

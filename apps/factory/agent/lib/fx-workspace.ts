@@ -92,6 +92,7 @@ export async function runFxTurn(
   sandbox: Sandbox,
   prompt: string,
   sessionId?: string,
+  model?: string,
   getOidcToken: () => Promise<string> = getVercelOidcToken,
   onSession?: (sessionId: string) => Promise<void>
 ): Promise<FxTurnResult & { readonly cancelled: boolean }> {
@@ -118,12 +119,13 @@ export async function runFxTurn(
       promptPath,
       tokenPath,
       sessionId ?? "",
+      model ?? "",
       FX_TERMINAL_SESSION_PATH,
       FX_TERMINAL_TMUX_SESSION
     ],
     cmd: "node",
     detached: true,
-    env: fxEnvironment(oidcToken),
+    env: fxEnvironment(oidcToken, model),
     timeoutMs: WORKSPACE_TIMEOUT_MS - 60_000
   });
 

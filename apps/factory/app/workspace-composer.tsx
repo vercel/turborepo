@@ -4,12 +4,25 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "../components/ui/button";
+import type {
+  WorkspaceModel,
+  WorkspaceModelOption
+} from "../agent/lib/workspace";
 import type { PublicWorkspace } from "./workspace-types";
 
-export function WorkspaceComposer() {
+interface WorkspaceComposerProps {
+  readonly defaultModel: WorkspaceModel;
+  readonly models: readonly WorkspaceModelOption[];
+}
+
+export function WorkspaceComposer({
+  defaultModel,
+  models
+}: WorkspaceComposerProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState<WorkspaceModel>(defaultModel);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +40,7 @@ export function WorkspaceComposer() {
         },
         body: JSON.stringify({
           ...(title.trim() ? { title: title.trim() } : {}),
+          model,
           prompt: message
         })
       });
@@ -69,6 +83,24 @@ export function WorkspaceComposer() {
           placeholder="Fix affected package detection"
           value={title}
         />
+      </div>
+      <div className="grid gap-2">
+        <label className="text-sm font-medium" htmlFor="workspace-model">
+          Model
+        </label>
+        <select
+          className="min-h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+          disabled={submitting}
+          id="workspace-model"
+          onChange={(event) => setModel(event.target.value as WorkspaceModel)}
+          value={model}
+        >
+          {models.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name} — {option.id}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="workspace-prompt">
