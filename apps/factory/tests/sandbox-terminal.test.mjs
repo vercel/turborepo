@@ -34,10 +34,13 @@ function sandbox({ hasFx = true } = {}) {
 test("terminal sessions open against the server-selected Eve sandbox", async () => {
   let selected;
   const target = sandbox();
-  const session = await createTerminalSession("eve-sbx-ses-vercel-abc", async (name) => {
-    selected = name;
-    return target;
-  });
+  const session = await createTerminalSession(
+    "eve-sbx-ses-vercel-abc",
+    async (name) => {
+      selected = name;
+      return target;
+    }
+  );
 
   assert.equal(selected, "eve-sbx-ses-vercel-abc");
   assert.deepEqual(session, {

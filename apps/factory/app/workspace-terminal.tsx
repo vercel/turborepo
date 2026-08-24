@@ -12,7 +12,11 @@ import {
   parseServerMessage
 } from "../lib/sandbox-terminal-protocol";
 
-export function WorkspaceTerminal({ workspaceId }: { readonly workspaceId: string }) {
+export function WorkspaceTerminal({
+  workspaceId
+}: {
+  readonly workspaceId: string;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,12 +50,17 @@ export function WorkspaceTerminal({ workspaceId }: { readonly workspaceId: strin
           readonly url?: string;
         };
         if (!response.ok || !body.url || !body.token)
-          throw new Error(body.error ?? `Could not open terminal (${response.status}).`);
+          throw new Error(
+            body.error ?? `Could not open terminal (${response.status}).`
+          );
         if (cancelled) return;
         socket = new WebSocket(buildWebSocketUrl(body.url, body.token));
         socket.binaryType = "arraybuffer";
         socket.addEventListener("open", () => {
-          const { cols, rows } = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
+          const { cols, rows } = fitAddon.proposeDimensions() ?? {
+            cols: 80,
+            rows: 24
+          };
           socket?.send(JSON.stringify(buildStartMessage(cols, rows)));
           terminal.focus();
         });
@@ -59,12 +68,16 @@ export function WorkspaceTerminal({ workspaceId }: { readonly workspaceId: strin
           const message = parseServerMessage(event.data);
           if (message.kind === "output") terminal.write(message.data);
           if (message.kind === "exit")
-            terminal.writeln(`\r\nSession closed${message.code === null ? "." : ` with exit code ${message.code}.`}`);
+            terminal.writeln(
+              `\r\nSession closed${message.code === null ? "." : ` with exit code ${message.code}.`}`
+            );
         });
       })
       .catch((cause) => {
         if (!cancelled)
-          setError(cause instanceof Error ? cause.message : "Could not open terminal.");
+          setError(
+            cause instanceof Error ? cause.message : "Could not open terminal."
+          );
       });
 
     const input = terminal.onData((data) => {
@@ -73,7 +86,10 @@ export function WorkspaceTerminal({ workspaceId }: { readonly workspaceId: strin
     });
     const resize = () => {
       fitAddon.fit();
-      const { cols, rows } = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
+      const { cols, rows } = fitAddon.proposeDimensions() ?? {
+        cols: 80,
+        rows: 24
+      };
       if (socket?.readyState === WebSocket.OPEN)
         socket.send(JSON.stringify(buildResizeMessage(cols, rows)));
     };
@@ -93,7 +109,10 @@ export function WorkspaceTerminal({ workspaceId }: { readonly workspaceId: strin
     <div className="relative h-[28rem] overflow-hidden rounded-md bg-black p-2">
       <div className="h-full [&_.xterm]:h-full" ref={containerRef} />
       {error ? (
-        <p className="absolute inset-0 grid place-items-center bg-black p-6 text-sm text-destructive" role="alert">
+        <p
+          className="absolute inset-0 grid place-items-center bg-black p-6 text-sm text-destructive"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}

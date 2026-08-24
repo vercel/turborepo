@@ -25,7 +25,9 @@ export function buildResizeMessage(cols: number, rows: number) {
   return { cols, rows, type: "resize" as const };
 }
 
-export function parseServerMessage(data: string | Blob | ArrayBuffer):
+export function parseServerMessage(
+  data: string | Blob | ArrayBuffer
+):
   | { readonly kind: "output"; readonly data: string }
   | { readonly kind: "exit"; readonly code: number | null }
   | { readonly kind: "unknown" } {

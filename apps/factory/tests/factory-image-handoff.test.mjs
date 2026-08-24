@@ -11,7 +11,9 @@ const handoffPath = path.join(
 
 async function freshModule() {
   process.env.FACTORY_IMAGE_HANDOFF_PATH = handoffPath;
-  return import(`../agent/lib/factory-image-handoff.ts?test=${crypto.randomUUID()}`);
+  return import(
+    `../agent/lib/factory-image-handoff.ts?test=${crypto.randomUUID()}`
+  );
 }
 
 test.after(() => {

@@ -37,7 +37,10 @@ export async function createTerminalSession(
 export async function ensureFxInstalled(
   sandbox: InteractiveSandbox
 ): Promise<void> {
-  const probe = await sandbox.runCommand("sh", ["-c", "command -v fx >/dev/null"]);
+  const probe = await sandbox.runCommand("sh", [
+    "-c",
+    "command -v fx >/dev/null"
+  ]);
   if (probe.exitCode === 0) return;
 
   const version = FACTORY_IMAGE_SPEC.fxVersion;

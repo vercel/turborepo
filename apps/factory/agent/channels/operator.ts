@@ -23,7 +23,8 @@ const APP_AUTH = {
 
 function operatorAction(request: Request): OperatorRunAction | null {
   const action = request.headers.get("x-operator-action");
-  return (action === MAINTENANCE_RUN_ACTION || action === PERFORMANCE_RUN_ACTION) &&
+  return (action === MAINTENANCE_RUN_ACTION ||
+    action === PERFORMANCE_RUN_ACTION) &&
     isOperatorRunRequest(request, action)
     ? action
     : null;

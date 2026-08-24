@@ -38,7 +38,13 @@ test("Eve session drives keep the checkout and agent state together", () => {
   assert.equal(WORKSPACE_DRIVE_FX_PATH, "/factory/persist/fx");
 
   const script = workspaceDriveInitializationScript();
-  assert.match(script, /cp -a \/factory\/turborepo\/\. \/factory\/persist\/workspace\//);
-  assert.match(script, /ln -s \/factory\/persist\/workspace \/factory\/turborepo/);
+  assert.match(
+    script,
+    /cp -a \/factory\/turborepo\/\. \/factory\/persist\/workspace\//
+  );
+  assert.match(
+    script,
+    /ln -s \/factory\/persist\/workspace \/factory\/turborepo/
+  );
   assert.match(script, /\.factory-initialized/);
 });

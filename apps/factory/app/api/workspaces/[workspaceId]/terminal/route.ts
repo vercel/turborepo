@@ -10,7 +10,10 @@ export async function POST(
   context: { params: Promise<{ workspaceId: string }> }
 ): Promise<Response> {
   if (!isWorkspaceMutationRequest(request, WORKSPACE_TERMINAL_ACTION))
-    return Response.json({ error: "Invalid operator request." }, { status: 403 });
+    return Response.json(
+      { error: "Invalid operator request." },
+      { status: 403 }
+    );
 
   const { workspaceId } = await context.params;
   const workspace = await getWorkspace(workspaceId);

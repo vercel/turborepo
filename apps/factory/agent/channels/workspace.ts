@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { defineChannel, POST } from "eve/channels";
 
-import {
-  createWorkspace,
-  mutateWorkspace
-} from "../lib/workspace-store.js";
+import { createWorkspace, mutateWorkspace } from "../lib/workspace-store.js";
 import {
   isWorkspaceMutationRequest,
   parseCreateWorkspaceInput,

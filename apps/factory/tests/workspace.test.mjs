@@ -76,10 +76,10 @@ test("validates create bodies", () => {
   assert.deepEqual(parseCreateWorkspaceInput({ title: "  Work  " }), {
     title: "Work"
   });
-  assert.deepEqual(
-    parseCreateWorkspaceInput({ prompt: "  Fix cache  " }),
-    { prompt: "Fix cache", title: "Fix cache" }
-  );
+  assert.deepEqual(parseCreateWorkspaceInput({ prompt: "  Fix cache  " }), {
+    prompt: "Fix cache",
+    title: "Fix cache"
+  });
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
 });
 

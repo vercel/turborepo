@@ -47,7 +47,8 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
       cache: "no-store"
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error(`Could not load workspace (${response.status}).`);
+        if (!response.ok)
+          throw new Error(`Could not load workspace (${response.status}).`);
         return (await response.json()) as PublicWorkspace;
       })
       .then(async (workspace) => {
@@ -63,7 +64,9 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
       })
       .catch((cause) => {
         if (!cancelled)
-          setError(cause instanceof Error ? cause.message : "Could not load workspace.");
+          setError(
+            cause instanceof Error ? cause.message : "Could not load workspace."
+          );
       });
     return () => {
       cancelled = true;
@@ -72,21 +75,25 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
 
   if (error)
     return (
-      <main className="mx-auto w-[min(900px,calc(100%_-_48px))] py-12" id="main-content">
-        <p className="text-sm text-destructive" role="alert">{error}</p>
+      <main
+        className="mx-auto w-[min(900px,calc(100%_-_48px))] py-12"
+        id="main-content"
+      >
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
       </main>
     );
   if (!loaded?.workspace.sessionId)
     return (
       <main className="grid min-h-[60vh] place-items-center" id="main-content">
-        <p className="text-sm text-muted-foreground" role="status">Loading durable Eve session…</p>
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading durable Eve session…
+        </p>
       </main>
     );
   return (
-    <WorkspaceChat
-      initialEvents={loaded.events}
-      workspace={loaded.workspace}
-    />
+    <WorkspaceChat initialEvents={loaded.events} workspace={loaded.workspace} />
   );
 }
 
@@ -117,7 +124,9 @@ function WorkspaceChat({
     });
     void (async () => {
       try {
-        for await (const event of session.stream({ signal: controller.signal })) {
+        for await (const event of session.stream({
+          signal: controller.signal
+        })) {
           setEvents((current) =>
             current.some((candidate) => candidate.meta.id === event.meta.id)
               ? current
@@ -144,12 +153,24 @@ function WorkspaceChat({
   }
 
   return (
-    <main className="mx-auto w-[min(900px,calc(100%_-_48px))] py-10" id="main-content">
+    <main
+      className="mx-auto w-[min(900px,calc(100%_-_48px))] py-10"
+      id="main-content"
+    >
       <header className="flex items-start justify-between gap-6">
         <div>
-          <Link className="text-xs text-muted-foreground hover:underline" href="/">← Workspaces</Link>
-          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{workspace.title}</h1>
-          <code className="mt-2 block text-xs text-muted-foreground">{workspace.sessionId}</code>
+          <Link
+            className="text-xs text-muted-foreground hover:underline"
+            href="/"
+          >
+            ← Workspaces
+          </Link>
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">
+            {workspace.title}
+          </h1>
+          <code className="mt-2 block text-xs text-muted-foreground">
+            {workspace.sessionId}
+          </code>
           {workspace.sandbox.id ? (
             <CopyCommand
               command={sandboxSshCommand(workspace.sandbox.id)}
@@ -157,13 +178,17 @@ function WorkspaceChat({
             />
           ) : null}
         </div>
-        <span className={`mt-6 text-xs ${agent.status === "error" ? "text-destructive" : busy ? "text-warning" : "text-success"}`}>
+        <span
+          className={`mt-6 text-xs ${agent.status === "error" ? "text-destructive" : busy ? "text-warning" : "text-success"}`}
+        >
           {busy ? "Streaming" : agent.status === "error" ? "Error" : "Ready"}
         </span>
       </header>
 
       <section className="mt-8" aria-labelledby="conversation-title">
-        <h2 className="text-sm font-semibold" id="conversation-title">Conversation</h2>
+        <h2 className="text-sm font-semibold" id="conversation-title">
+          Conversation
+        </h2>
         <ol className="mt-3 grid max-h-[52vh] list-none gap-4 overflow-y-auto p-0">
           {data.messages.map((message) => (
             <WorkspaceMessage key={message.id} message={message} />
@@ -189,7 +214,11 @@ function WorkspaceChat({
         </details>
       ) : null}
 
-      {agent.error ? <p className="mt-4 text-sm text-destructive" role="alert">{agent.error.message}</p> : null}
+      {agent.error ? (
+        <p className="mt-4 text-sm text-destructive" role="alert">
+          {agent.error.message}
+        </p>
+      ) : null}
       <form
         className="mt-6 grid gap-3 border-t border-border pt-6"
         onSubmit={(event) => {
@@ -197,7 +226,9 @@ function WorkspaceChat({
           submit();
         }}
       >
-        <label className="text-sm font-medium" htmlFor="workspace-message">Continue the work</label>
+        <label className="text-sm font-medium" htmlFor="workspace-message">
+          Continue the work
+        </label>
         <textarea
           className="min-h-28 resize-y rounded-md border border-input bg-background p-3 text-sm"
           disabled={busy}
@@ -206,7 +237,11 @@ function WorkspaceChat({
           placeholder="Ask Factory to inspect, change, or verify something in this workspace."
           value={draft}
         />
-        <Button className="justify-self-start" disabled={busy || !draft.trim()} type="submit">
+        <Button
+          className="justify-self-start"
+          disabled={busy || !draft.trim()}
+          type="submit"
+        >
           {busy ? "Working…" : "Send"}
         </Button>
       </form>
@@ -264,7 +299,10 @@ function ActivityFeed({
       </summary>
       <ol className="mt-3 grid max-h-72 list-none gap-2 overflow-y-auto p-0 font-mono text-xs">
         {visible.map((event, index) => (
-          <li className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 border-t border-border pt-2" key={event.meta.id ?? index}>
+          <li
+            className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 border-t border-border pt-2"
+            key={event.meta.id ?? index}
+          >
             <time className="text-muted-foreground" dateTime={event.meta.at}>
               {new Date(event.meta.at).toLocaleTimeString()}
             </time>
@@ -308,12 +346,16 @@ function eventSummary(event: MessageStreamEvent): string {
 
 function WorkspaceMessage({ message }: { readonly message: EveMessage }) {
   return (
-    <li className={`rounded-md border border-border p-4 ${message.role === "user" ? "bg-secondary" : ""}`}>
+    <li
+      className={`rounded-md border border-border p-4 ${message.role === "user" ? "bg-secondary" : ""}`}
+    >
       <article>
         <header className="font-mono text-xs text-muted-foreground">
           {message.role === "user" ? "You" : "Factory"}
         </header>
-        {message.parts.map((part, index) => <WorkspacePart key={index} part={part} />)}
+        {message.parts.map((part, index) => (
+          <WorkspacePart key={index} part={part} />
+        ))}
       </article>
     </li>
   );
@@ -323,6 +365,10 @@ function WorkspacePart({ part }: { readonly part: EveMessagePart }) {
   if (part.type === "text" || part.type === "reasoning")
     return <p className="mt-2 whitespace-pre-wrap text-sm">{part.text}</p>;
   if (part.type === "dynamic-tool")
-    return <p className="mt-2 font-mono text-xs text-muted-foreground">{part.toolName}: {part.state}</p>;
+    return (
+      <p className="mt-2 font-mono text-xs text-muted-foreground">
+        {part.toolName}: {part.state}
+      </p>
+    );
   return null;
 }
