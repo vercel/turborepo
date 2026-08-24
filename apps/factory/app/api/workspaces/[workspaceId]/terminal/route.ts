@@ -5,10 +5,7 @@ import {
   countFxSessions,
   prepareFxInteractiveLaunch
 } from "../../../../../agent/lib/fx-interactive";
-import {
-  ensureWorkspaceTerminalTools,
-  getFxWorkspaceSandbox
-} from "../../../../../agent/lib/fx-workspace";
+import { getFxWorkspaceSandbox } from "../../../../../agent/lib/fx-workspace";
 import { createTerminalSession } from "../../../../../agent/lib/sandbox-terminal";
 import {
   ensureWorkspacePublishToken,
@@ -57,7 +54,6 @@ export async function POST(
       workspace.sandbox.name,
       publishBridge
     );
-    await ensureWorkspaceTerminalTools(sandbox);
     if (!workspace.sessionId) {
       const sessionCount = await countFxSessions(
         sandbox,

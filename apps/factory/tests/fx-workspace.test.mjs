@@ -9,10 +9,25 @@ import {
   FX_TERMINAL_RUNNER_SOURCE,
   parseFxTerminalResult
 } from "../agent/lib/fx-terminal-runner.ts";
+import { requireFactoryImage } from "../agent/lib/current-factory-image.ts";
 import {
   applyWorkspaceNetworkPolicy,
   workspaceNetworkPolicy
 } from "../agent/lib/workspace-network-policy.ts";
+
+test("workspace creation uses any published factory image", () => {
+  const pointer = {
+    buildId: "build-123",
+    commit: "0123456789abcdef0123456789abcdef01234567",
+    fingerprint: "older-image",
+    publishedAt: "2026-08-24T00:00:00.000Z",
+    sandboxName: "factory-image-test",
+    snapshotId: "snap_123",
+    warmBuild: true
+  };
+  assert.equal(requireFactoryImage(pointer), pointer);
+  assert.throws(() => requireFactoryImage(null), /has been published/);
+});
 
 test("parseFxTerminalResult reads the completed interactive turn", () => {
   assert.deepEqual(
