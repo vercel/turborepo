@@ -11,7 +11,6 @@ const PREFIX = "factory-workspaces/v1/";
 const MAX_WRITE_ATTEMPTS = 5;
 
 export class WorkspaceConflictError extends Error {}
-export class WorkspaceNotFoundError extends Error {}
 
 export function isWorkspaceStoreConfigured(): boolean {
   return Boolean(
@@ -70,7 +69,7 @@ export async function mutateWorkspace(
   for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
     const current = await readWorkspace(id);
     if (!current.workspace || !current.etag)
-      throw new WorkspaceNotFoundError("Workspace not found.");
+      throw new Error("Workspace not found.");
     const workspace = mutation(current.workspace);
     if (workspace === null)
       throw new WorkspaceConflictError("Workspace is already running a turn.");

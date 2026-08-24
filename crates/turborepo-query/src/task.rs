@@ -46,6 +46,23 @@ impl RepositoryTask {
         }
     }
 
+    pub fn participates_in_run(&self) -> bool {
+        if self.executes() {
+            return true;
+        }
+
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.package
+            .run()
+            .engine()
+            .dependencies(&task_id)
+            .is_some_and(|dependencies| {
+                dependencies
+                    .into_iter()
+                    .any(|node| matches!(node, TaskNode::Task(_)))
+            })
+    }
+
     fn collect_and_sort<'a>(
         &self,
         task_id: &TaskId<'a>,
