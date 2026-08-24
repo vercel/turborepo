@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
+
 import { listExamples } from "../../agent/lib/examples";
 import { RunMaintenance } from "../run-maintenance";
 import { RunPerformance } from "../run-performance";
 import { WorkspaceComposer } from "../workspace-composer";
+
+export const metadata: Metadata = {
+  title: "Start work"
+};
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-factory/observability/agent-runs";

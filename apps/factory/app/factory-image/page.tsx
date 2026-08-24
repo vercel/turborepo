@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
+
 import { readFactoryImageView } from "../../agent/lib/factory-image-registry";
 import { FactoryImage } from "../factory-image";
+
+export const metadata: Metadata = {
+  title: "Factory image"
+};
 
 export default async function FactoryImagePage() {
   return (
