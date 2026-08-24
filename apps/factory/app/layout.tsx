@@ -17,7 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   description:
     "Observe and operate Turborepo agent runs across Eve, fx, and Vercel Sandbox.",
-  title: "Turborepo Agent Control Plane"
+  title: {
+    default: "Factory - Turborepo",
+    template: "%s - Turborepo"
+  }
 };
 
 interface RootLayoutProps {
