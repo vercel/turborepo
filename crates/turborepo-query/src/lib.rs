@@ -10,6 +10,7 @@ mod server;
 mod task;
 
 use std::{
+    collections::{HashMap, HashSet},
     io,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -683,35 +684,80 @@ impl RepositoryQuery {
         tasks: Option<Vec<String>>,
         filter: Option<PackagePredicate>,
     ) -> Result<Array<ChangedTask>, Error> {
-        let results = affected_tasks::calculate_affected_tasks(&self.run, base, head)?;
-
-        let mut changed_tasks: Array<ChangedTask> = results
+        let task_level_results =
+            affected_tasks::calculate_affected_tasks(&self.run, base.clone(), head.clone())?;
+        let mut reasons: HashMap<_, _> = task_level_results
             .into_iter()
-            .map(|at| {
-                let task = task::RepositoryTask::new(&at.task_id, &self.run).map_err(|error| {
-                    tracing::error!(?error, task = %at.task_id, "failed to represent affected task");
+            .map(|affected| (affected.task_id, affected.reason))
+            .collect();
+        let task_level_affected = self
+            .run
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+            || self.run.root_turbo_json().future_flags.filter_using_tasks;
+        if !task_level_affected {
+            let affected_packages: HashSet<_> = self
+                .run
+                .calculate_affected_packages(base, head)?
+                .into_keys()
+                .collect();
+            for task_id in
+                self.run.engine().task_ids().filter(|task_id| {
+                    affected_packages.contains(&PackageName::from(task_id.package()))
+                })
+            {
+                reasons.entry(task_id.clone()).or_insert_with(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "package is affected".to_string(),
+                    }
+                });
+            }
+        }
+
+        let selected: HashSet<_> = reasons
+            .keys()
+            .filter(|task_id| {
+                tasks.as_ref().is_none_or(|names| {
+                    names.is_empty()
+                        || names
+                            .iter()
+                            .any(|name| name == task_id.task() || name == &task_id.to_string())
+                })
+            })
+            .filter_map(|task_id| {
+                let task = task::RepositoryTask::new(task_id, &self.run).ok()?;
+                filter
+                    .as_ref()
+                    .is_none_or(|predicate| predicate.check(&task.package))
+                    .then(|| task_id.clone())
+            })
+            .collect();
+
+        let engine = self.run.engine();
+        let mut scheduled = selected.clone();
+        scheduled.extend(engine.collect_task_dependencies(&selected));
+
+        let mut changed_tasks: Array<ChangedTask> = scheduled
+            .into_iter()
+            .map(|task_id| {
+                let task = task::RepositoryTask::new(&task_id, &self.run).map_err(|error| {
+                    tracing::error!(?error, task = %task_id, "failed to represent affected task");
                     Error::AffectedTasks
-                })?;
-                let reason = convert_task_change_reason(at.reason);
-                Ok(ChangedTask { reason, task })
+                });
+                let reason = reasons.remove(&task_id).unwrap_or_else(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "required by an affected task".to_string(),
+                    }
+                });
+                task.map(|task| ChangedTask {
+                    reason: convert_task_change_reason(reason),
+                    task,
+                })
             })
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
-            .filter(|ct| {
-                let participates_in_run = ct.task.participates_in_run();
-                let task_ok = tasks.as_ref().is_none_or(|names| {
-                    if names.is_empty() {
-                        true
-                    } else {
-                        let full_name = format!("{}#{}", ct.task.package.get_name(), ct.task.name);
-                        names
-                            .iter()
-                            .any(|n| n.as_str() == ct.task.name || n == &full_name)
-                    }
-                });
-                let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                participates_in_run && task_ok && package_ok
-            })
+            .filter(|changed| changed.task.participates_in_run())
             .collect();
 
         changed_tasks.sort_by(|a, b| {

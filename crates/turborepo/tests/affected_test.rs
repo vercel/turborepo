@@ -580,9 +580,26 @@ fn test_affected_tasks_global_dep_change() {
     }
 }
 
-fn setup_affected_tasks_fixture(dir: &std::path::Path) {
+fn setup_affected_tasks_fixture_with_flags(dir: &std::path::Path, future_flags: serde_json::Value) {
     setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
+    if future_flags != serde_json::json!({}) {
+        let turbo_json_path = dir.join("turbo.json");
+        let mut turbo_json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&turbo_json_path).unwrap()).unwrap();
+        turbo_json["futureFlags"] = future_flags;
+        fs::write(
+            turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).unwrap(),
+        )
+        .unwrap();
+        git(dir, &["add", "turbo.json"]);
+        git(dir, &["commit", "-m", "configure future flags", "--quiet"]);
+    }
     git(dir, &["checkout", "-b", "my-branch"]);
+}
+
+fn setup_affected_tasks_fixture(dir: &std::path::Path) {
+    setup_affected_tasks_fixture_with_flags(dir, serde_json::json!({}));
 }
 
 #[test]
@@ -622,12 +639,21 @@ fn test_affected_tasks_filter_by_task_name() {
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    for item in items {
-        assert_eq!(
-            item["name"], "test",
-            "filter should only return test tasks: {item:?}"
-        );
-    }
+    let task_ids: std::collections::HashSet<_> = items
+        .iter()
+        .map(|item| {
+            format!(
+                "{}#{}",
+                item["package"]["name"].as_str().unwrap(),
+                item["name"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert!(task_ids.contains("lib-a#test"));
+    assert!(
+        task_ids.contains("lib-a#build"),
+        "task filter should retain execution dependencies: {items:?}"
+    );
 }
 
 #[test]
@@ -690,37 +716,175 @@ fn test_affected_tasks_excludes_packages_without_script() {
     assert!(has_typecheck, "lib-no-test#typecheck should be affected");
 }
 
-#[test]
-fn test_affected_tasks_includes_virtual_task_with_affected_dependency() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected_tasks_fixture(tempdir.path());
-
-    fs::write(
-        tempdir.path().join("packages/lib-a/index.ts"),
-        "export const changed = true;",
-    )
-    .unwrap();
-
-    let output = run_turbo(
-        tempdir.path(),
-        &[
-            "query",
-            "query { affectedTasks(tasks: [\"aggregate\"]) { items { name package { name } script \
-             } } }",
-        ],
+fn affected_query_task_ids(dir: &Path, tasks: &[&str]) -> std::collections::HashSet<String> {
+    let task_names = tasks
+        .iter()
+        .map(|task| format!("\"{task}\""))
+        .collect::<Vec<_>>()
+        .join(",");
+    let query =
+        format!("query {{ affectedTasks(tasks: [{task_names}]) {{ items {{ fullName }} }} }}");
+    let output = run_turbo(dir, &["query", &query]);
+    assert!(
+        output.status.success(),
+        "affected query failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    json["data"]["affectedTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["fullName"].as_str().unwrap().to_string())
+        .collect()
+}
 
+fn affected_run_task_ids(dir: &Path, tasks: &[&str]) -> std::collections::HashSet<String> {
+    let mut args = vec!["run"];
+    args.extend_from_slice(tasks);
+    args.extend_from_slice(&["--affected", "--dry=json"]);
+    let output = run_turbo(dir, &args);
     assert!(
-        items.iter().any(|item| {
-            item["package"]["name"] == "lib-a"
-                && item["name"] == "aggregate"
-                && item["script"].is_null()
-        }),
-        "virtual aggregate task should be affected when its build dependency is affected: \
-         {items:?}"
+        output.status.success(),
+        "affected run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn test_affected_tasks_matches_run_for_virtual_task() {
+    for future_flags in [
+        serde_json::json!({}),
+        serde_json::json!({ "affectedUsingTaskInputs": false }),
+        serde_json::json!({ "affectedUsingTaskInputs": true }),
+        serde_json::json!({ "filterUsingTasks": true }),
+        serde_json::json!({ "strictTaskEntrypointSelection": true }),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_affected_tasks_fixture_with_flags(tempdir.path(), future_flags.clone());
+
+        fs::write(
+            tempdir.path().join("packages/lib-a/index.ts"),
+            "export const changed = true;",
+        )
+        .unwrap();
+
+        let query_tasks = affected_query_task_ids(tempdir.path(), &["aggregate"]);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &["aggregate"]);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with {future_flags}"
+        );
+        assert!(query_tasks.contains("lib-a#aggregate"));
+        assert!(query_tasks.contains("lib-a#build"));
+    }
+}
+
+#[test]
+fn test_affected_tasks_matches_run_with_command_overrides() {
+    for command in [
+        serde_json::json!(null),
+        serde_json::json!(["echo", "aggregate"]),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup::setup_integration_test(tempdir.path(), "affected_tasks_inputs", "npm@10.5.0", false)
+            .unwrap();
+
+        let turbo_json_path = tempdir.path().join("turbo.json");
+        let mut turbo_json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&turbo_json_path).unwrap()).unwrap();
+        turbo_json["futureFlags"] = serde_json::json!({
+            "affectedUsingTaskInputs": true,
+            "experimentalTaskCommand": true
+        });
+        turbo_json["tasks"]["lib-a#aggregate"] = serde_json::json!({
+            "dependsOn": ["build"],
+            "command": command
+        });
+        fs::write(
+            &turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).unwrap(),
+        )
+        .unwrap();
+        git(tempdir.path(), &["add", "turbo.json"]);
+        git(
+            tempdir.path(),
+            &["commit", "-m", "configure command override", "--quiet"],
+        );
+        git(tempdir.path(), &["checkout", "-b", "my-branch"]);
+
+        fs::write(
+            tempdir.path().join("packages/lib-a/index.ts"),
+            "export const changed = true;",
+        )
+        .unwrap();
+
+        let query_tasks = affected_query_task_ids(tempdir.path(), &["aggregate"]);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &["aggregate"]);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with command override {command}"
+        );
+    }
+}
+
+#[test]
+fn test_affected_tasks_matches_run_task_input_flag_behavior() {
+    for (future_flags, expected_lib_tasks) in [
+        (
+            serde_json::json!({}),
+            [
+                "lib-a#aggregate",
+                "lib-a#build",
+                "lib-a#test",
+                "lib-a#typecheck",
+            ]
+            .as_slice(),
+        ),
+        (
+            serde_json::json!({ "affectedUsingTaskInputs": false }),
+            [
+                "lib-a#aggregate",
+                "lib-a#build",
+                "lib-a#test",
+                "lib-a#typecheck",
+            ]
+            .as_slice(),
+        ),
+        (
+            serde_json::json!({ "affectedUsingTaskInputs": true }),
+            ["lib-a#aggregate", "lib-a#build"].as_slice(),
+        ),
+        (
+            serde_json::json!({ "filterUsingTasks": true }),
+            ["lib-a#aggregate", "lib-a#build"].as_slice(),
+        ),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_affected_tasks_fixture_with_flags(tempdir.path(), future_flags.clone());
+        fs::write(tempdir.path().join("packages/lib-a/README.md"), "changed").unwrap();
+
+        let tasks = ["aggregate", "build", "test", "typecheck"];
+        let query_tasks = affected_query_task_ids(tempdir.path(), &tasks);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &tasks);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with {future_flags}"
+        );
+        for task in expected_lib_tasks {
+            assert!(
+                query_tasks.contains(*task),
+                "missing {task} with {future_flags}"
+            );
+        }
+    }
 }
 
 #[test]
