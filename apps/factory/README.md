@@ -17,6 +17,13 @@ and exposes a browser terminal, the `sandbox ssh <name>` command, and the exact
 Workflow observability remains the full execution audit. When fx reports a
 Turborepo pull request URL, the workspace records and links it.
 
+The Eve GitHub channel also follows Factory-created pull requests whose head is
+an `agents/*` branch. Timeline and inline review comments from collaborators
+with write access start a turn without requiring an `@mention`. The turn checks
+out the current PR head, replies in the same GitHub thread, and can publish
+validated feedback changes back to that exact branch. Bot, external-user,
+non-PR, and non-Factory-branch comments fail closed and are ignored.
+
 Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
 objects. Mutation routes require an exact same-origin request and action header;
 Vercel Deployment Protection remains the outer operator authentication layer.
@@ -82,7 +89,12 @@ Configure it with:
 
 - A private Vercel Blob store (the ledger lives beside the run
   registry).
-- A GitHub Vercel Connect connector subscribed to `push`.
+- A GitHub Vercel Connect connector subscribed to `push`, `issue_comment`, and
+  `pull_request_review_comment`, with pull-request read/write, issue read/write,
+  contents write, and repository collaborator metadata read permissions. Route
+  `push` to `/api/github/push`, and route both comment events to
+  `/eve/v1/github` (including the Deployment Protection bypass query parameter
+  on both destinations).
 - `FACTORY_IMAGE_CONNECTOR_ID` set to that connector's stable `scl_...` ID.
 - A Production trigger destination for the `turborepo-factory` project at
   `/api/github/push`. Because Deployment Protection covers that path, append
