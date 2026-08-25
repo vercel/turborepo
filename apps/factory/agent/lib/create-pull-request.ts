@@ -1,6 +1,10 @@
 import type { SandboxSession } from "eve/sandbox";
 
 import { requireSuccessfulValidation } from "./example-validation";
+import {
+  FACTORY_PULL_REQUEST_FEEDBACK_ATTRIBUTE,
+  isAuthorizedFactoryPullRequestUpdate
+} from "./github-feedback";
 import { getGitHubToken } from "./github";
 import {
   readPerformanceState,
@@ -11,6 +15,7 @@ import {
   resolvePullRequestTitle,
   updateBranchRefWithLease
 } from "./pull-request";
+import { resolveExistingPullRequestUpdate } from "./pull-request-update";
 import {
   assertNoReleaseAgeExclusion,
   isReleaseAgeConfigFile
@@ -40,7 +45,8 @@ type CompareResponse = { merge_base_commit?: { sha?: string } };
 type ShaResponse = { sha?: string };
 type RepositoryResponse = { node_id?: string };
 type PullRequestResponse = {
-  head?: { sha?: string };
+  base?: { ref?: string };
+  head?: { ref?: string; sha?: string };
   html_url?: string;
   number?: number;
 };
@@ -230,6 +236,14 @@ export async function createPullRequest(
   if (!branchName) {
     throw new Error("Interactive pull requests require an agents/* branch.");
   }
+  if (
+    auth?.attributes?.[FACTORY_PULL_REQUEST_FEEDBACK_ATTRIBUTE] === "true" &&
+    !isAuthorizedFactoryPullRequestUpdate(auth, branchName)
+  ) {
+    throw new Error(
+      "Factory pull request feedback can update only its authenticated branch."
+    );
+  }
   const changeTitle = resolvePullRequestTitle({
     automatedExample: selection?.example,
     performance: performanceState !== null,
@@ -240,16 +254,31 @@ export async function createPullRequest(
   const existingPullRequest = existingPullRequests[0];
 
   const checkoutSha = (await runGit(sandbox, "git rev-parse HEAD")).trim();
-  const comparison = await github<CompareResponse>({
-    method: "GET",
-    owner,
-    repo,
-    path: `/compare/${checkoutSha}...${baseBranch}`
-  });
-  if (comparison.merge_base_commit?.sha !== checkoutSha) {
-    throw new Error(
-      "The sandbox checkout is not based on vercel/turborepo main."
-    );
+  const existingPullRequestHead = existingPullRequest?.head?.sha;
+  const updatingCheckedOutPullRequest =
+    existingPullRequest !== undefined &&
+    existingPullRequestHead === checkoutSha;
+  if (updatingCheckedOutPullRequest) {
+    if (
+      existingPullRequest.base?.ref !== baseBranch ||
+      existingPullRequest.head?.ref !== branchName
+    ) {
+      throw new Error(
+        `Pull request ${requirePullRequest(existingPullRequest).url} does not match ${branchName} -> ${baseBranch}.`
+      );
+    }
+  } else {
+    const comparison = await github<CompareResponse>({
+      method: "GET",
+      owner,
+      repo,
+      path: `/compare/${checkoutSha}...${baseBranch}`
+    });
+    if (comparison.merge_base_commit?.sha !== checkoutSha) {
+      throw new Error(
+        "The sandbox checkout is not based on vercel/turborepo main or the current pull request head."
+      );
+    }
   }
 
   const branchCommit = await github<CommitResponse>({
@@ -321,7 +350,7 @@ export async function createPullRequest(
   if (newTreeSha === baseTreeSha) {
     return {
       created: false,
-      reason: "No effective changes against main."
+      reason: "No effective changes against the checkout."
     };
   }
 
@@ -337,10 +366,18 @@ export async function createPullRequest(
       repo,
       path: `/git/commits/${headSha}`
     });
-    if (existingCommit.tree?.sha === newTreeSha) {
+    const update = resolveExistingPullRequestUpdate({
+      checkoutSha,
+      currentTreeSha: existingCommit.tree?.sha,
+      headSha,
+      newTreeSha,
+      pullRequestUrl: validatedPullRequest.url
+    });
+    if (update === "unchanged") {
       return {
         created: false,
         existing: true,
+        updated: false,
         number: validatedPullRequest.number,
         url: validatedPullRequest.url,
         branch: branchName,

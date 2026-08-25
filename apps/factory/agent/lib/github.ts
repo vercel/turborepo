@@ -73,6 +73,7 @@ export async function getGitHubToken(): Promise<string> {
       repo: "turborepo",
       permissions: {
         contents: "write",
+        issues: "write",
         pull_requests: "write"
       }
     })
