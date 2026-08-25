@@ -36,7 +36,10 @@ export function isAutomaticIssueSession(auth: Auth): boolean {
 export function validateIssueAssessment(
   assessment: IssueAssessment
 ): IssueAssessment {
-  if (!Number.isSafeInteger(assessment.issueNumber) || assessment.issueNumber <= 0) {
+  if (
+    !Number.isSafeInteger(assessment.issueNumber) ||
+    assessment.issueNumber <= 0
+  ) {
     throw new Error("Issue number must be a positive integer.");
   }
   const expectedUrl = `https://github.com/vercel/turborepo/issues/${assessment.issueNumber}`;
@@ -47,8 +50,13 @@ export function validateIssueAssessment(
     throw new Error("Issue title and security reason are required.");
   }
   if (assessment.safe) {
-    if (assessment.confidence === null || !assessment.confidenceReason?.trim()) {
-      throw new Error("Safe issues require a confidence assessment and reason.");
+    if (
+      assessment.confidence === null ||
+      !assessment.confidenceReason?.trim()
+    ) {
+      throw new Error(
+        "Safe issues require a confidence assessment and reason."
+      );
     }
   } else if (
     assessment.confidence !== null ||
@@ -65,7 +73,9 @@ export async function recordIssueAssessment(
   assessment: IssueAssessment
 ): Promise<IssueAssessment> {
   const validated = validateIssueAssessment(assessment);
-  const directory = await sandbox.run({ command: `mkdir -p ${stateDirectory}` });
+  const directory = await sandbox.run({
+    command: `mkdir -p ${stateDirectory}`
+  });
   if (directory.exitCode !== 0) throw new Error(directory.stderr);
   await sandbox.writeTextFile({
     path: statePath(sessionId),
@@ -92,7 +102,9 @@ export async function requireActionableIssueAssessment(
     throw new Error("Automatic issue handling has not passed security triage.");
   }
   if (assessment.confidence === "low") {
-    throw new Error("Low-confidence issues must produce a report, not a pull request.");
+    throw new Error(
+      "Low-confidence issues must produce a report, not a pull request."
+    );
   }
   return assessment;
 }

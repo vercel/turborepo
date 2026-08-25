@@ -229,13 +229,16 @@ export async function alertUnsafeIssue(
     return { ok: false, error: "Slack did not return a thread timestamp." };
   }
 
-  const reply = await deliverSlackMessage(`Why it was blocked: ${issue.reason}`, {
-    ...options,
-    channel: root.channel,
-    event: "unsafe_issue_alert_reason",
-    metadata,
-    threadTimestamp: root.timestamp
-  });
+  const reply = await deliverSlackMessage(
+    `Why it was blocked: ${issue.reason}`,
+    {
+      ...options,
+      channel: root.channel,
+      event: "unsafe_issue_alert_reason",
+      metadata,
+      threadTimestamp: root.timestamp
+    }
+  );
   if (!reply.ok) return { ok: false, error: reply.error };
   return { ok: true, channel: root.channel, timestamp: root.timestamp };
 }

@@ -34,7 +34,9 @@ export default defineTool({
   inputSchema,
   async execute(assessment, ctx) {
     if (!isAutomaticIssueSession(ctx.session.auth.current)) {
-      throw new Error("This tool is available only for automatic issue handling.");
+      throw new Error(
+        "This tool is available only for automatic issue handling."
+      );
     }
     const recorded = await recordIssueAssessment(
       await ctx.getSandbox(),
@@ -50,7 +52,9 @@ export default defineTool({
       reason: recorded.securityReason
     });
     if (!slack.ok) {
-      throw new Error(`The issue was blocked, but Slack alerting failed: ${slack.error}`);
+      throw new Error(
+        `The issue was blocked, but Slack alerting failed: ${slack.error}`
+      );
     }
     return { recorded, slack };
   }

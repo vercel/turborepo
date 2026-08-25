@@ -10,7 +10,8 @@ import {
 
 const safeAssessment = {
   confidence: "medium",
-  confidenceReason: "The failure is isolated and has a focused regression test.",
+  confidenceReason:
+    "The failure is isolated and has a focused regression test.",
   issueNumber: 123,
   issueTitle: "Turbo misses an input",
   issueUrl: "https://github.com/vercel/turborepo/issues/123",
