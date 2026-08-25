@@ -11,7 +11,7 @@ import {
   WORKSPACE_RUN_MODE,
   type WorkspaceRecord
 } from "../lib/workspace.js";
-import { OPERATOR_CHAT_PRINCIPAL } from "../lib/operator-console.js";
+import { operatorSessionPrincipal } from "../lib/operator-console.js";
 
 type WorkspaceChannelState = {
   workspaceId: string;
@@ -69,6 +69,7 @@ export default defineChannel<
         messages: [
           { createdAt: now, id: turnId, role: "user", text: input.prompt }
         ],
+        model: input.model,
         sandbox: { provider: "vercel", status: "running" },
         status: "running",
         title: input.title,
@@ -79,7 +80,7 @@ export default defineChannel<
 
       try {
         const session = await from(id).send(input.prompt, {
-          auth: OPERATOR_CHAT_PRINCIPAL,
+          auth: operatorSessionPrincipal(input.model),
           mode: WORKSPACE_RUN_MODE,
           state: { workspaceId: id },
           title: input.title

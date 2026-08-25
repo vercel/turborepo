@@ -23,6 +23,7 @@ export interface PublicWorkspace {
   readonly sandbox: WorkspaceSandbox;
   readonly sessionId?: string;
   readonly messages: readonly WorkspaceMessage[];
+  readonly model?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly error?: string;

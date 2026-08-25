@@ -3,6 +3,8 @@ export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 
 export type WorkspaceStatus = "idle" | "running" | "error";
 
+export const DEFAULT_WORKSPACE_MODEL = "openai/gpt-5.6-sol";
+
 export interface WorkspaceMessage {
   readonly createdAt: string;
   readonly id: string;
@@ -17,6 +19,7 @@ export interface WorkspaceRecord {
   readonly agent: "eve";
   readonly id: string;
   readonly messages: readonly WorkspaceMessage[];
+  readonly model?: string;
   readonly pullRequest?: { readonly number: number; readonly url: string };
   readonly sandbox: {
     readonly id?: string;
@@ -48,6 +51,7 @@ export function isWorkspaceId(value: unknown): value is string {
 }
 
 export function parseCreateWorkspaceInput(value: unknown): {
+  readonly model: string;
   readonly prompt?: string;
   readonly title: string;
 } | null {
@@ -55,6 +59,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   if (value.title !== undefined && typeof value.title !== "string") return null;
   if (value.prompt !== undefined && typeof value.prompt !== "string")
     return null;
+  if (value.model !== undefined && !isWorkspaceModel(value.model)) return null;
   const prompt = value.prompt?.trim();
   const title = value.title?.trim() || prompt?.split("\n", 1)[0]?.slice(0, 120);
   if (
@@ -64,6 +69,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   )
     return null;
   return {
+    model: value.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(prompt === undefined ? {} : { prompt }),
     title
   };
@@ -96,6 +102,7 @@ export function toWorkspaceView(
     agent: workspace.agent,
     id: workspace.id,
     messages: workspace.messages,
+    model: workspace.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(workspace.pullRequest === undefined
       ? {}
       : { pullRequest: workspace.pullRequest }),
@@ -133,6 +140,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
       value.status === "running" ||
       value.status === "error") &&
     value.agent === "eve" &&
+    (value.model === undefined || isWorkspaceModel(value.model)) &&
     optionalString(value.sessionId, 256) &&
     isObject(sandbox) &&
     sandbox.provider === "vercel" &&
@@ -147,6 +155,14 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     optionalString(value.activeTurnId, 128) &&
     optionalString(value.error, 2000) &&
     (value.pullRequest === undefined || isPullRequest(value.pullRequest))
+  );
+}
+
+export function isWorkspaceModel(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 200 &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)
   );
 }
 
