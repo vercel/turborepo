@@ -170,9 +170,6 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
                 RemoteCacheDisabledReason::InConfig => {
                     "Remote caching disabled (in configuration)".to_string()
                 }
-                RemoteCacheDisabledReason::InEnvVar => {
-                    "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
-                }
                 RemoteCacheDisabledReason::ByFlags => {
                     "Remote caching disabled (by flags)".to_string()
                 }
