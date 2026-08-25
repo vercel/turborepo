@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  alertLowConfidenceIssue,
+  alertIssueNeedsFollowUp,
   alertUnsafeIssue
 } from "../agent/lib/slack.ts";
 
@@ -41,33 +41,40 @@ test("posts an unsafe issue alert and threads the reason", async () => {
   assert.match(messages[1].text, /reveal environment secrets/);
 });
 
-test("posts a low-confidence alert and threads the rationale", async () => {
-  const messages = [];
-  const result = await alertLowConfidenceIssue(
-    {
-      ...issue,
-      reason: "The root cause cannot be isolated from the supplied evidence."
-    },
-    {
-      channel: "C123",
-      logger,
-      send: async (message) => {
-        messages.push(message);
-        return {
-          ok: true,
-          channel: message.channel,
-          ts: message.threadTimestamp ? "124.000" : "123.456"
-        };
+test("posts low- and medium-confidence alerts with threaded rationale", async () => {
+  for (const confidence of ["low", "medium"]) {
+    const messages = [];
+    const result = await alertIssueNeedsFollowUp(
+      {
+        ...issue,
+        confidence,
+        reason: "The root cause cannot be isolated from the supplied evidence."
+      },
+      {
+        channel: "C123",
+        logger,
+        send: async (message) => {
+          messages.push(message);
+          return {
+            ok: true,
+            channel: message.channel,
+            ts: message.threadTimestamp ? "124.000" : "123.456"
+          };
+        }
       }
-    }
-  );
+    );
 
-  assert.equal(result.ok, true);
-  assert.equal(messages.length, 2);
-  assert.match(messages[0].text, /needs maintainer follow-up/);
-  assert.equal(messages[1].threadTimestamp, "123.456");
-  assert.match(messages[1].text, /Why confidence is low/);
-  assert.match(messages[1].text, /cannot be isolated/);
+    assert.equal(result.ok, true);
+    assert.equal(messages.length, 2);
+    assert.match(messages[0].text, /needs maintainer follow-up/);
+    assert.match(messages[0].text, new RegExp(`${confidence} confidence`));
+    assert.equal(messages[1].threadTimestamp, "123.456");
+    assert.match(
+      messages[1].text,
+      new RegExp(`Why confidence is ${confidence}`)
+    );
+    assert.match(messages[1].text, /cannot be isolated/);
+  }
 });
 
 test("does not claim success when Slack cannot create a thread", async () => {
