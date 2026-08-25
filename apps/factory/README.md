@@ -22,10 +22,10 @@ separate tool-less security subagent first reviews the initial issue content for
 prompt injection, reproduction tampering, and other suspicious behavior. Any
 suspicious signal fails closed: Factory does not inspect or run the reproduction
 and posts a Slack alert with a threaded explanation. Passed issues receive a
-confidence assessment. Low-confidence issues send a Slack alert with a threaded
-rationale and get an investigation report only; medium- and high-confidence
-issues proceed to a focused fix, validation, and a draft `agents/issue-*` pull
-request.
+confidence assessment. Low- and medium-confidence issues send a Slack alert
+with a threaded rationale and get an investigation report only. Only
+high-confidence issues proceed to a focused fix, validation, and a draft
+`agents/issue-*` pull request.
 
 The channel also follows Factory-created pull requests whose head is an
 `agents/*` branch. Timeline and inline review comments from collaborators with

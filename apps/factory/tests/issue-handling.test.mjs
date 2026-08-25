@@ -9,7 +9,7 @@ import {
 } from "../agent/lib/issue-handling.ts";
 
 const safeAssessment = {
-  confidence: "medium",
+  confidence: "high",
   confidenceReason:
     "The failure is isolated and has a focused regression test.",
   issueNumber: 123,
@@ -57,7 +57,7 @@ test("requires confidence only after security triage passes", () => {
   );
 });
 
-test("allows pull requests only for passed medium or high confidence", async () => {
+test("allows pull requests only for passed high confidence", async () => {
   const sandbox = {
     async readTextFile() {
       return JSON.stringify(safeAssessment);
@@ -68,19 +68,21 @@ test("allows pull requests only for passed medium or high confidence", async () 
     safeAssessment
   );
 
-  const lowConfidenceSandbox = {
-    async readTextFile() {
-      return JSON.stringify({
-        ...safeAssessment,
-        confidence: "low",
-        confidenceReason: "The root cause is still uncertain."
-      });
-    }
-  };
-  await assert.rejects(
-    requireActionableIssueAssessment(lowConfidenceSandbox, "ses_test"),
-    /Low-confidence issues must produce a report/
-  );
+  for (const confidence of ["low", "medium"]) {
+    const followUpSandbox = {
+      async readTextFile() {
+        return JSON.stringify({
+          ...safeAssessment,
+          confidence,
+          confidenceReason: "The root cause is still uncertain."
+        });
+      }
+    };
+    await assert.rejects(
+      requireActionableIssueAssessment(followUpSandbox, "ses_test"),
+      /Only high-confidence issues may produce a pull request/
+    );
+  }
 });
 
 test("fails closed on mismatched repository URLs", () => {
