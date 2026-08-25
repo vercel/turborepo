@@ -4,6 +4,15 @@ import { createSignedOgUrl } from "@/lib/og/sign";
 
 const BASE_URL = "https://turborepo.dev";
 
+/**
+ * Escapes `&` so URLs render as valid XML attribute values.
+ * The `feed` library escapes `&` in text nodes but not in the
+ * `enclosure` URL attribute, and `xml-js` leaves attribute values raw,
+ * so signed OG image URLs with query params break feed.xml.
+ */
+const escapeXmlAmpersand = (url: string): string =>
+  url.replace(/&/g, "&amp;");
+
 export const revalidate = false;
 
 export const GET = async () => {
@@ -35,7 +44,7 @@ export const GET = async () => {
       link: `${BASE_URL}/blog/${slug}`,
       date: new Date(post.data.date),
       description: post.data.description,
-      enclosure: { url: imageUrl, length: 0, type: "image/png" }
+      enclosure: { url: escapeXmlAmpersand(imageUrl), length: 0, type: "image/png" }
     });
   }
 
