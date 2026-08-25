@@ -24,6 +24,7 @@ export default function WorkspacesPage() {
           <Link
             className="text-sm font-medium hover:underline hover:underline-offset-4"
             href="/work"
+            prefetch={false}
           >
             Start work
           </Link>

@@ -16,6 +16,7 @@ export function Navigation() {
       <Link
         className="flex items-center gap-2.5 font-semibold tracking-tight"
         href="/"
+        prefetch={false}
         aria-label="Turborepo Factory home"
       >
         <span
@@ -36,6 +37,7 @@ export function Navigation() {
                   undefined
                 }
                 href={href}
+                prefetch={false}
               >
                 {label}
               </Link>
