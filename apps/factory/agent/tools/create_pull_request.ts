@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createPullRequest } from "../lib/create-pull-request.js";
 import { isAuthorizedFactoryPullRequestUpdate } from "../lib/github-feedback.js";
+import { isAutomaticIssueSession } from "../lib/issue-handling.js";
 import { isOperatorSessionPrincipal } from "../lib/operator-console.js";
 import { isAppPrincipal } from "../lib/repo.js";
 import { CONVENTIONAL_TITLE_PATTERN } from "../lib/pull-request.js";
@@ -34,6 +35,7 @@ export default defineTool({
   inputSchema,
   approval: ({ session, toolInput }) =>
     isAppPrincipal(session.auth.current) ||
+    isAutomaticIssueSession(session.auth.current) ||
     isOperatorSessionPrincipal(session.auth.current) ||
     isAuthorizedFactoryPullRequestUpdate(
       session.auth.current,
