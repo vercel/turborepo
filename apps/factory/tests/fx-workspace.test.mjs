@@ -12,6 +12,7 @@ import {
 import { requireFactoryImage } from "../agent/lib/current-factory-image.ts";
 import {
   applyWorkspaceNetworkPolicy,
+  configureWorkspaceGitAuthentication,
   workspaceNetworkPolicy
 } from "../agent/lib/workspace-network-policy.ts";
 
@@ -159,4 +160,30 @@ test("workspace publication credentials are injected only for the exact route", 
       path: { exact: "/api/workspaces/ws_abc/publish" }
     }
   });
+});
+
+test("workspace Git sends a placeholder credential for policy replacement", async () => {
+  const commands = [];
+  await configureWorkspaceGitAuthentication({
+    async runCommand(command) {
+      commands.push(command);
+      return {
+        exitCode: 0,
+        async stderr() {
+          return "";
+        }
+      };
+    }
+  });
+
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].cmd, "git");
+  assert.equal(commands[0].cwd, "/factory/turborepo");
+  assert.deepEqual(commands[0].args.slice(0, 3), [
+    "config",
+    "--local",
+    "http.https://github.com/.extraheader"
+  ]);
+  assert.match(commands[0].args[3], /^Authorization: Basic /);
+  assert.doesNotMatch(commands[0].args[3], /github-token/);
 });

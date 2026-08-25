@@ -18,6 +18,7 @@ import type { FxTurnResult } from "./fx-result";
 import { getGitHubToken } from "./github";
 import {
   applyWorkspaceNetworkPolicy,
+  configureWorkspaceGitAuthentication,
   workspaceNetworkPolicy
 } from "./workspace-network-policy";
 import {
@@ -37,6 +38,7 @@ export async function getFxWorkspaceSandbox(
     sandbox,
     workspaceNetworkPolicy(await getGitHubToken(), publishBridge)
   );
+  await configureWorkspaceGitAuthentication(sandbox);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
@@ -84,6 +86,7 @@ export async function getOrCreateFxWorkspaceSandbox(
     sandbox,
     workspaceNetworkPolicy(githubToken, publishBridge)
   );
+  await configureWorkspaceGitAuthentication(sandbox);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
