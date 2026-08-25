@@ -204,37 +204,75 @@ export async function deliverSlackMessage(
   }
 }
 
-interface UnsafeIssueAlert {
+interface IssueAlert {
   readonly issueNumber: number;
   readonly issueTitle: string;
   readonly issueUrl: string;
   readonly reason: string;
 }
 
-export type UnsafeIssueAlertResult =
+export type IssueAlertResult =
   | { readonly ok: true; readonly channel: string; readonly timestamp: string }
   | { readonly ok: false; readonly error: string };
 
-export async function alertUnsafeIssue(
-  issue: UnsafeIssueAlert,
-  options: Omit<SlackDeliveryOptions, "event" | "metadata"> = {}
-): Promise<UnsafeIssueAlertResult> {
-  const metadata = { issueNumber: issue.issueNumber, issueUrl: issue.issueUrl };
-  const root = await deliverSlackMessage(
-    `:warning: Factory blocked <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> during security triage.`,
-    { ...options, event: "unsafe_issue_alert", metadata }
+type IssueAlertOptions = Omit<SlackDeliveryOptions, "event" | "metadata">;
+
+export function alertUnsafeIssue(
+  issue: IssueAlert,
+  options: IssueAlertOptions = {}
+): Promise<IssueAlertResult> {
+  return alertIssueOutcome(
+    issue,
+    {
+      event: "unsafe_issue_alert",
+      headline: `:warning: Factory blocked <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> during security triage.`,
+      reasonLabel: "Why it was blocked"
+    },
+    options
   );
+}
+
+export function alertLowConfidenceIssue(
+  issue: IssueAlert,
+  options: IssueAlertOptions = {}
+): Promise<IssueAlertResult> {
+  return alertIssueOutcome(
+    issue,
+    {
+      event: "low_confidence_issue_alert",
+      headline: `:mag: Factory needs maintainer follow-up on <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}>.`,
+      reasonLabel: "Why confidence is low"
+    },
+    options
+  );
+}
+
+async function alertIssueOutcome(
+  issue: IssueAlert,
+  alert: {
+    readonly event: string;
+    readonly headline: string;
+    readonly reasonLabel: string;
+  },
+  options: IssueAlertOptions
+): Promise<IssueAlertResult> {
+  const metadata = { issueNumber: issue.issueNumber, issueUrl: issue.issueUrl };
+  const root = await deliverSlackMessage(alert.headline, {
+    ...options,
+    event: alert.event,
+    metadata
+  });
   if (!root.ok) return { ok: false, error: root.error };
   if (root.timestamp === null) {
     return { ok: false, error: "Slack did not return a thread timestamp." };
   }
 
   const reply = await deliverSlackMessage(
-    `Why it was blocked: ${issue.reason}`,
+    `${alert.reasonLabel}: ${issue.reason}`,
     {
       ...options,
       channel: root.channel,
-      event: "unsafe_issue_alert_reason",
+      event: `${alert.event}_reason`,
       metadata,
       threadTimestamp: root.timestamp
     }
