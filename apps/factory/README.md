@@ -27,9 +27,14 @@ non-PR, and non-Factory-branch comments fail closed and are ignored.
 Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
 objects. Mutation routes require an exact same-origin request and action header;
 Vercel Deployment Protection remains the outer operator authentication layer.
-The fx transcript remains in the sandbox and the app stores only its session ID
-and rendered turns. Storage requires either `BLOB_READ_WRITE_TOKEN`, or both
-`BLOB_STORE_ID` and `VERCEL_OIDC_TOKEN`.
+The durable Eve event stream is the transcript and execution activity source.
+Storage requires either `BLOB_READ_WRITE_TOKEN`, or both `BLOB_STORE_ID` and
+`VERCEL_OIDC_TOKEN`.
+
+Sandbox Drives are currently private beta. Factory defaults to Eve's regular
+session sandbox storage so workspace creation still works without beta access.
+After the Vercel team is enrolled, set `FACTORY_WORKSPACE_DRIVES=1` to mount a
+per-session Drive and persist the checkout across replacement sandbox compute.
 
 ### Local terminal
 

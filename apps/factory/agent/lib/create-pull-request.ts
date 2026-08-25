@@ -10,14 +10,17 @@ import {
   readPerformanceState,
   requirePublishablePerformanceChange
 } from "./performance-validation";
-import { buildDraftPullRequest, resolvePullRequestTitle } from "./pull-request";
+import {
+  buildDraftPullRequest,
+  resolvePullRequestTitle,
+  updateBranchRefWithLease
+} from "./pull-request";
 import { resolveExistingPullRequestUpdate } from "./pull-request-update";
 import {
   assertNoReleaseAgeExclusion,
   isReleaseAgeConfigFile
 } from "./release-age";
 import { isAppPrincipal, resolveAutomatedSelection } from "./repo";
-import { deliverSlackMessage } from "./slack";
 
 const owner = "vercel";
 const repo = "turborepo";
@@ -40,6 +43,7 @@ type RefResponse = { object?: { sha?: string } };
 type CommitResponse = { tree?: { sha?: string } };
 type CompareResponse = { merge_base_commit?: { sha?: string } };
 type ShaResponse = { sha?: string };
+type RepositoryResponse = { node_id?: string };
 type PullRequestResponse = {
   base?: { ref?: string };
   head?: { ref?: string; sha?: string };
@@ -130,7 +134,7 @@ async function reconcileCreatedPullRequest(
 
 async function github<T>(input: {
   body?: unknown;
-  method: "GET" | "PATCH" | "POST";
+  method: "GET" | "POST";
   owner: string;
   path: string;
   repo: string;
@@ -157,6 +161,27 @@ async function github<T>(input: {
   }
 
   return (await response.json()) as T;
+}
+
+async function publishBranchUpdateWithLease(input: {
+  branchName: string;
+  expectedSha: string;
+  newSha: string;
+}) {
+  const repository = await github<RepositoryResponse>({
+    method: "GET",
+    owner,
+    repo,
+    path: ""
+  });
+  if (typeof repository.node_id !== "string" || repository.node_id === "") {
+    throw new Error("GitHub response did not include repository node ID.");
+  }
+  await updateBranchRefWithLease({
+    ...input,
+    repositoryId: repository.node_id,
+    token: await getGitHubToken()
+  });
 }
 
 export async function createPullRequest(
@@ -360,7 +385,7 @@ export async function createPullRequest(
       };
     }
 
-    const updatedCommit = await github<ShaResponse>({
+    const commit = await github<ShaResponse>({
       method: "POST",
       owner,
       repo,
@@ -368,17 +393,19 @@ export async function createPullRequest(
       body: {
         message: changeTitle,
         tree: newTreeSha,
-        parents: [headSha]
+        parents: [checkoutSha]
       }
     });
-    const updatedCommitSha = requireSha(updatedCommit.sha, "commit SHA");
-    await github({
-      method: "PATCH",
-      owner,
-      repo,
-      path: `/git/refs/heads/${branchName}`,
-      body: { force: false, sha: updatedCommitSha }
+    const updatedCommitSha = requireSha(commit.sha, "commit SHA");
+    // updateRefs applies beforeOid atomically, matching the safety of
+    // `git push --force-with-lease` without exposing the installation token
+    // inside the sandbox.
+    await publishBranchUpdateWithLease({
+      branchName,
+      expectedSha: headSha,
+      newSha: updatedCommitSha
     });
+
     return {
       created: false,
       existing: true,
@@ -458,6 +485,7 @@ export async function createPullRequest(
     newCommitSha
   );
 
+  const { deliverSlackMessage } = await import("./slack");
   const slackNotification = await deliverSlackMessage(
     `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
     {

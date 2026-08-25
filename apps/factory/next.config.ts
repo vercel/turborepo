@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 import { withEve } from "eve/next";
-import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -14,4 +13,4 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default withWorkflow(withEve(nextConfig));
+export default withEve(nextConfig);

@@ -1,3 +1,4 @@
+import { Drive } from "@vercel/sandbox";
 import { defineSandbox } from "eve/sandbox";
 import { vercel } from "eve/sandbox/vercel";
 
@@ -6,6 +7,12 @@ import {
   writeFactoryImageHandoff
 } from "./lib/factory-image-handoff";
 import { readFactoryImagePointer } from "./lib/factory-image-registry";
+import {
+  isWorkspaceDriveEnabled,
+  WORKSPACE_DRIVE_MOUNT_PATH,
+  workspaceDriveInitializationScript,
+  workspaceDriveName
+} from "./lib/workspace-drive";
 
 /**
  * Sandbox for every Eve run in this app.
@@ -24,22 +31,55 @@ const SESSION_VCPUS = 8;
 export default defineSandbox({
   backend: () => {
     const handoff = readFactoryImageHandoff();
-    if (handoff === null) {
-      throw new Error(
-        "No Factory image has been published. Build the shared image before starting agents."
-      );
-    }
-    return vercel({
-      resources: { vcpus: SESSION_VCPUS },
-      source: { snapshotId: handoff.snapshotId, type: "snapshot" },
-      timeout: SESSION_TIMEOUT_MS
-    });
+    const sessionCreateOptions = async ({
+      session
+    }: {
+      session: { id: string };
+    }) => {
+      if (!isWorkspaceDriveEnabled()) return {};
+      const drive = await Drive.getOrCreate({
+        name: workspaceDriveName(session.id)
+      });
+      return {
+        mounts: {
+          [WORKSPACE_DRIVE_MOUNT_PATH]: {
+            drive: drive.name,
+            mode: "read-write" as const
+          }
+        }
+      };
+    };
+    return vercel(
+      handoff === null
+        ? {
+            resources: { vcpus: SESSION_VCPUS },
+            sessionCreateOptions,
+            timeout: SESSION_TIMEOUT_MS
+          }
+        : {
+            resources: { vcpus: SESSION_VCPUS },
+            sessionCreateOptions,
+            source: { snapshotId: handoff.snapshotId, type: "snapshot" },
+            timeout: SESSION_TIMEOUT_MS
+          }
+    );
   },
   async bootstrap() {},
+  async onSession({ use }) {
+    if (!isWorkspaceDriveEnabled()) return;
+    const sandbox = await use();
+    const result = await sandbox.run({
+      command: `bash -lc ${JSON.stringify(workspaceDriveInitializationScript())}`
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || "Could not initialize workspace Drive.");
+    }
+  },
   revalidationKey: async () => {
     const pointer = await readFactoryImagePointer();
     writeFactoryImageHandoff({
       commit: pointer?.commit,
+      fingerprint: pointer?.fingerprint,
       snapshotId: pointer?.snapshotId
     });
     return `factory-image:${pointer?.snapshotId ?? "none"}`;
