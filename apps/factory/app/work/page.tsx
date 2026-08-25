@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { listExamples } from "../../agent/lib/examples";
+import { fetchGatewayModels } from "../../agent/lib/gateway-models";
+import { DEFAULT_WORKSPACE_MODEL } from "../../agent/lib/workspace";
 import { RunMaintenance } from "../run-maintenance";
 import { RunPerformance } from "../run-performance";
 import { WorkspaceComposer } from "../workspace-composer";
@@ -12,8 +14,24 @@ export const metadata: Metadata = {
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-factory/observability/agent-runs";
 
-export default function WorkPage() {
+export default async function WorkPage() {
   const examples = listExamples();
+  const fetchedModels = await fetchGatewayModels().catch(() => []);
+  const models =
+    fetchedModels.length > 0
+      ? fetchedModels
+      : [
+          {
+            id: DEFAULT_WORKSPACE_MODEL,
+            name: "GPT-5.6 Sol",
+            ownedBy: "openai"
+          }
+        ];
+  const defaultModel = models.some(
+    (model) => model.id === DEFAULT_WORKSPACE_MODEL
+  )
+    ? DEFAULT_WORKSPACE_MODEL
+    : models[0].id;
   return (
     <main
       id="main-content"
@@ -101,7 +119,7 @@ export default function WorkPage() {
           </div>
         </dl>
         <div className="col-start-2 border-t border-border pt-8">
-          <WorkspaceComposer />
+          <WorkspaceComposer defaultModel={defaultModel} models={models} />
         </div>
       </section>
     </main>

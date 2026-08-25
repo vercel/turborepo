@@ -2,19 +2,19 @@ import { type AuthFn, localDev, vercelOidc } from "eve/channels/auth";
 import { eveChannel } from "eve/channels/eve";
 
 import {
-  isOperatorChatRequest,
-  operatorChatPrincipal
+  isOperatorSessionRequest,
+  OPERATOR_SESSION_PRINCIPAL
 } from "../lib/operator-console.js";
 
-function operatorConsole(): AuthFn<Request> {
+function operatorSession(): AuthFn<Request> {
   return (request) =>
-    isOperatorChatRequest(request) ? operatorChatPrincipal(request) : null;
+    isOperatorSessionRequest(request) ? OPERATOR_SESSION_PRINCIPAL : null;
 }
 
 export default eveChannel({
   auth: [
-    // Keeps legacy direct Eve operator-console sessions authenticated.
-    operatorConsole(),
+    // Authenticates browser access to durable workspace sessions.
+    operatorSession(),
     // Open on localhost for `eve dev` and the REPL; ignored in production.
     localDev(),
     // Lets the eve TUI and Vercel deployments reach the deployed agent.

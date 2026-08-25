@@ -18,14 +18,14 @@ import { useEffect, useState } from "react";
 
 import {
   OPERATOR_ACTION_HEADER,
-  OPERATOR_CHAT_ACTION
+  OPERATOR_SESSION_ACTION
 } from "../agent/lib/operator-console";
 import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
 import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
 import type { PublicWorkspace } from "./workspace-types";
 
-const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_CHAT_ACTION };
+const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_SESSION_ACTION };
 const WorkspaceTerminal = dynamic(
   () =>
     import("./workspace-terminal").then((module) => module.WorkspaceTerminal),

@@ -1,21 +1,16 @@
 /**
- * Browser access to the eve session routes for the operator console's chat.
+ * Browser access to the Eve session routes used by durable workspaces.
  *
- * Vercel Deployment Protection decides who reaches this app at all, exactly as
- * it does for the operator run routes. What it cannot tell the agent is whether
- * a request came from the console page or from another site riding the
- * operator's protection cookie, so the console marks every eve request with
- * `x-operator-action` and this check refuses anything that arrives without the
- * marker, declares a different origin, or announces a cross-site fetch. The eve
- * session routes answer with no CORS headers, so a cross-origin caller cannot
- * get the marker past a preflight either.
+ * Vercel Deployment Protection decides who reaches this app at all. The
+ * browser additionally marks every Eve request with `x-operator-action`, and
+ * this check refuses anything that arrives without the marker, declares a
+ * different origin, or announces a cross-site fetch. The Eve session routes
+ * answer with no CORS headers, so a cross-origin caller cannot get the marker
+ * past a preflight either.
  */
 
-// Sent as `x-operator-action` by the console's chat and required by the eve
-// channel, so both sides of the contract stay in sync.
 export const OPERATOR_ACTION_HEADER = "x-operator-action";
-export const OPERATOR_MODEL_HEADER = "x-operator-model";
-export const OPERATOR_CHAT_ACTION = "open-operator-chat";
+export const OPERATOR_SESSION_ACTION = "access-workspace-session";
 
 interface OperatorConsoleRequest {
   readonly headers: { get: (name: string) => string | null };
@@ -30,27 +25,26 @@ function originHost(origin: string): string | null {
 }
 
 /**
- * Principal for a console chat turn. It is deliberately *not* the app
- * principal the schedules and run routes use, so `create_pull_request` keeps
- * asking the operator for approval and the automated scope gates stay off.
+ * Principal for an operator-controlled workspace. It is deliberately *not*
+ * the app principal used by schedules, so `create_pull_request` keeps asking
+ * the operator for approval and the automated scope gates stay off.
  */
-export const OPERATOR_CHAT_PRINCIPAL = {
+export const OPERATOR_SESSION_PRINCIPAL = {
   attributes: {},
   authenticator: "operator-console",
   principalId: "turborepo-factory-operator",
   principalType: "user"
 } as const;
 
-export function operatorChatPrincipal(request: OperatorConsoleRequest) {
-  const model = request.headers.get(OPERATOR_MODEL_HEADER);
+export function operatorSessionPrincipal(model?: string) {
   if (
-    model === null ||
-    !/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(model)
+    model === undefined ||
+    !/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(model)
   ) {
-    return OPERATOR_CHAT_PRINCIPAL;
+    return OPERATOR_SESSION_PRINCIPAL;
   }
   return {
-    ...OPERATOR_CHAT_PRINCIPAL,
+    ...OPERATOR_SESSION_PRINCIPAL,
     attributes: { selectedModel: model }
   };
 }
@@ -69,7 +63,7 @@ export function selectedOperatorModel(
   return typeof model === "string" ? model : undefined;
 }
 
-export function isOperatorChatPrincipal(
+export function isOperatorSessionPrincipal(
   auth:
     | {
         readonly authenticator: string;
@@ -80,16 +74,16 @@ export function isOperatorChatPrincipal(
     | undefined
 ): boolean {
   return (
-    auth?.authenticator === OPERATOR_CHAT_PRINCIPAL.authenticator &&
-    auth.principalId === OPERATOR_CHAT_PRINCIPAL.principalId &&
-    auth.principalType === OPERATOR_CHAT_PRINCIPAL.principalType
+    auth?.authenticator === OPERATOR_SESSION_PRINCIPAL.authenticator &&
+    auth.principalId === OPERATOR_SESSION_PRINCIPAL.principalId &&
+    auth.principalType === OPERATOR_SESSION_PRINCIPAL.principalType
   );
 }
 
-export function isOperatorChatRequest(
+export function isOperatorSessionRequest(
   request: OperatorConsoleRequest
 ): boolean {
-  if (request.headers.get(OPERATOR_ACTION_HEADER) !== OPERATOR_CHAT_ACTION) {
+  if (request.headers.get(OPERATOR_ACTION_HEADER) !== OPERATOR_SESSION_ACTION) {
     return false;
   }
 
@@ -102,8 +96,8 @@ export function isOperatorChatRequest(
 
   // Browsers omit `origin` on a same-origin stream GET. When it is there it has
   // to name the host the browser addressed, which is the forwarded host rather
-  // than `request.url`: both Vercel and `next start` route these paths to the
-  // eve service through a proxy that rewrites the host it dials.
+  // than `request.url`: Vercel routes these paths through a proxy that rewrites
+  // the host it dials.
   const origin = request.headers.get("origin");
   if (origin === null) return true;
   const host =
