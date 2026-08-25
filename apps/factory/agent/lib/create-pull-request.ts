@@ -7,6 +7,10 @@ import {
 } from "./github-feedback";
 import { getGitHubToken } from "./github";
 import {
+  isAutomaticIssueSession,
+  requireActionableIssueAssessment
+} from "./issue-handling";
+import {
   readPerformanceState,
   requirePublishablePerformanceChange
 } from "./performance-validation";
@@ -189,6 +193,10 @@ export async function createPullRequest(
   context: CreatePullRequestContext
 ) {
   const { auth, sandbox, sessionId } = context;
+  const automaticIssue = isAutomaticIssueSession(auth);
+  if (automaticIssue) {
+    await requireActionableIssueAssessment(sandbox, sessionId);
+  }
   const automated = isAppPrincipal(auth);
   const performanceState = automated
     ? await readPerformanceState(sandbox, sessionId)

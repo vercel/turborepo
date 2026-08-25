@@ -8,6 +8,7 @@ import {
   isTrustedFactoryPullRequestFeedback
 } from "../lib/github-feedback.js";
 import { githubCredentials } from "../lib/github.js";
+import { FACTORY_ISSUE_ATTRIBUTE } from "../lib/issue-handling.js";
 
 type PullRequestResponse = { head?: { ref?: string } };
 type PermissionResponse = { permission?: string };
@@ -18,6 +19,29 @@ export default githubChannel({
   botName,
   credentials: { ...githubCredentials, webhookVerifier: vercelOidc() },
   turnPolicy: "queue",
+  onIssue(ctx, issue) {
+    if (
+      issue.action !== "opened" ||
+      ctx.repository.fullName !== "vercel/turborepo" ||
+      ctx.sender.type === "Bot"
+    ) {
+      return null;
+    }
+    const auth = defaultGitHubAuth(ctx);
+    return {
+      auth: {
+        ...auth,
+        attributes: {
+          ...auth.attributes,
+          [FACTORY_ISSUE_ATTRIBUTE]: "true"
+        }
+      },
+      context: [
+        "This session was automatically opened for a new public issue. Follow the Automatic Issue Handling policy exactly."
+      ],
+      title: "Handle newly opened Turborepo issue"
+    };
+  },
   async onComment(ctx, comment) {
     const defaultMentionDispatch = () =>
       hasGitHubInvocation(comment.body, botName)

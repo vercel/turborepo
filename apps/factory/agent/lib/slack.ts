@@ -18,9 +18,10 @@ interface SlackApiResponse {
 interface SlackMessageInput {
   readonly channel: string;
   readonly text: string;
+  readonly threadTimestamp?: string;
 }
 
-interface SlackDeliveryOptions {
+export interface SlackDeliveryOptions {
   readonly channel?: string;
   readonly event: string;
   readonly logger?: Pick<Console, "error" | "info">;
@@ -91,11 +92,19 @@ export const slackCredentials: SlackChannelCredentials = {
   webhookVerifier: verifySlackWebhook
 };
 
-async function sendSlackMessage({ channel, text }: SlackMessageInput) {
+async function sendSlackMessage({
+  channel,
+  text,
+  threadTimestamp
+}: SlackMessageInput) {
   return callSlackApi({
     botToken: slackCredentials.botToken,
     operation: "chat.postMessage",
-    body: { channel, text }
+    body: {
+      channel,
+      text,
+      ...(threadTimestamp ? { thread_ts: threadTimestamp } : {})
+    }
   });
 }
 
@@ -129,7 +138,7 @@ function logDelivery(
 
 export async function deliverSlackMessage(
   text: string,
-  options: SlackDeliveryOptions
+  options: SlackDeliveryOptions & { readonly threadTimestamp?: string }
 ): Promise<SlackDeliveryResult> {
   const logger = options.logger ?? console;
   let channel: string | null = null;
@@ -138,7 +147,11 @@ export async function deliverSlackMessage(
   try {
     channel = options.channel ?? slackDestinationChannel();
     const response = await Promise.race([
-      (options.send ?? sendSlackMessage)({ channel, text }),
+      (options.send ?? sendSlackMessage)({
+        channel,
+        text,
+        threadTimestamp: options.threadTimestamp
+      }),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(
           () =>
@@ -189,4 +202,40 @@ export async function deliverSlackMessage(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+interface UnsafeIssueAlert {
+  readonly issueNumber: number;
+  readonly issueTitle: string;
+  readonly issueUrl: string;
+  readonly reason: string;
+}
+
+export type UnsafeIssueAlertResult =
+  | { readonly ok: true; readonly channel: string; readonly timestamp: string }
+  | { readonly ok: false; readonly error: string };
+
+export async function alertUnsafeIssue(
+  issue: UnsafeIssueAlert,
+  options: Omit<SlackDeliveryOptions, "event" | "metadata"> = {}
+): Promise<UnsafeIssueAlertResult> {
+  const metadata = { issueNumber: issue.issueNumber, issueUrl: issue.issueUrl };
+  const root = await deliverSlackMessage(
+    `:warning: Factory blocked <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> during security triage.`,
+    { ...options, event: "unsafe_issue_alert", metadata }
+  );
+  if (!root.ok) return { ok: false, error: root.error };
+  if (root.timestamp === null) {
+    return { ok: false, error: "Slack did not return a thread timestamp." };
+  }
+
+  const reply = await deliverSlackMessage(`Why it was blocked: ${issue.reason}`, {
+    ...options,
+    channel: root.channel,
+    event: "unsafe_issue_alert_reason",
+    metadata,
+    threadTimestamp: root.timestamp
+  });
+  if (!reply.ok) return { ok: false, error: reply.error };
+  return { ok: true, channel: root.channel, timestamp: root.timestamp };
 }
