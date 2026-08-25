@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { createPullRequest } from "../lib/create-pull-request.js";
+import { isOperatorSessionPrincipal } from "../lib/operator-console.js";
 import { isAppPrincipal } from "../lib/repo.js";
 import { CONVENTIONAL_TITLE_PATTERN } from "../lib/pull-request.js";
 
@@ -31,7 +32,10 @@ export default defineTool({
     "Create or update a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs an agents/* branch and a Conventional Commit title from the caller.",
   inputSchema,
   approval: ({ session }) =>
-    isAppPrincipal(session.auth.current) ? "not-applicable" : "user-approval",
+    isAppPrincipal(session.auth.current) ||
+    isOperatorSessionPrincipal(session.auth.current)
+      ? "not-applicable"
+      : "user-approval",
   async execute(input, ctx) {
     return createPullRequest(input, {
       auth: ctx.session.auth.current,
