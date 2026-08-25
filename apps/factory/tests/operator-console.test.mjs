@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   isOperatorChatRequest,
-  OPERATOR_CHAT_PRINCIPAL
+  operatorChatPrincipal,
+  OPERATOR_CHAT_PRINCIPAL,
+  selectedOperatorModel
 } from "../agent/lib/operator-console.ts";
 import { isAppPrincipal } from "../agent/lib/repo.ts";
 
@@ -107,4 +109,20 @@ test("rejects unmarked and cross-site requests", () => {
 test("chats as a user, never as the app principal", () => {
   assert.equal(isAppPrincipal(OPERATOR_CHAT_PRINCIPAL), false);
   assert.equal(OPERATOR_CHAT_PRINCIPAL.principalType, "user");
+});
+
+test("carries a selected gateway model on the operator principal", () => {
+  const principal = operatorChatPrincipal(
+    request({ "x-operator-model": "anthropic/claude-sonnet-5" })
+  );
+  assert.equal(selectedOperatorModel(principal), "anthropic/claude-sonnet-5");
+  assert.equal(isAppPrincipal(principal), false);
+});
+
+test("ignores malformed model headers", () => {
+  const principal = operatorChatPrincipal(
+    request({ "x-operator-model": "not a model" })
+  );
+  assert.equal(principal, OPERATOR_CHAT_PRINCIPAL);
+  assert.equal(selectedOperatorModel(principal), undefined);
 });

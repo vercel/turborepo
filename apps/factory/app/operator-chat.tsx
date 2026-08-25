@@ -15,8 +15,10 @@ import {
 } from "../agent/lib/operator-chat-session";
 import {
   OPERATOR_ACTION_HEADER,
-  OPERATOR_CHAT_ACTION
+  OPERATOR_CHAT_ACTION,
+  OPERATOR_MODEL_HEADER
 } from "../agent/lib/operator-console";
+import { GPT_SOL_MODEL } from "../agent/lib/performance-models";
 import { Button } from "../components/ui/button";
 
 /**
@@ -29,9 +31,21 @@ import { Button } from "../components/ui/button";
  */
 
 const STORAGE_KEY = "turborepo-factory-operator-chat";
+const MODEL_STORAGE_KEY = "turborepo-factory-operator-model";
 // Marks every eve request as coming from this page; the eve channel's
 // operator-console auth entry requires it. See `agent/lib/operator-console.ts`.
-const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_CHAT_ACTION };
+interface AvailableModel {
+  readonly id: string;
+  readonly name: string;
+  readonly ownedBy: string;
+}
+
+function consoleHeaders(model: string) {
+  return {
+    [OPERATOR_ACTION_HEADER]: OPERATOR_CHAT_ACTION,
+    [OPERATOR_MODEL_HEADER]: model
+  };
+}
 
 interface PendingRequest {
   readonly request: EveMessageInputRequest;
@@ -180,10 +194,18 @@ function ChatMessage({ message }: { readonly message: EveMessage }) {
 
 function ChatThread({
   agentRunsUrl,
+  availableModels,
+  model,
+  modelsError,
+  onModelChange,
   onNewChat,
   saved
 }: {
   readonly agentRunsUrl: string;
+  readonly availableModels: readonly AvailableModel[];
+  readonly model: string;
+  readonly modelsError: string | null;
+  readonly onModelChange: (model: string) => void;
   readonly onNewChat: () => void;
   readonly saved: SavedChat | null;
 }) {
@@ -192,7 +214,7 @@ function ChatThread({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const transcript = useRef<HTMLOListElement | null>(null);
   const agent = useEveAgent({
-    headers: CONSOLE_HEADERS,
+    headers: consoleHeaders(model),
     initialEvents: saved?.events,
     initialSession: saved?.session,
     onFinish: (snapshot) => writeSavedChat(snapshot),
@@ -270,6 +292,34 @@ function ChatThread({
               Stop
             </Button>
           ) : null}
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            Model
+            <select
+              aria-label="Model"
+              className="min-h-9 max-w-64 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              disabled={
+                isBusy ||
+                agent.session !== undefined ||
+                availableModels.length === 0
+              }
+              onChange={(event) => onModelChange(event.target.value)}
+              value={model}
+            >
+              {availableModels.some(
+                (candidate) => candidate.id === model
+              ) ? null : (
+                <option value={model}>{model}</option>
+              )}
+              {availableModels.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name} ({candidate.ownedBy})
+                </option>
+              ))}
+            </select>
+            {modelsError ? (
+              <span className="text-destructive">{modelsError}</span>
+            ) : null}
+          </label>
           <Button
             disabled={isBusy}
             onClick={onNewChat}
@@ -411,10 +461,56 @@ export function OperatorChat({ agentRunsUrl }: OperatorChatProps) {
     readonly key: number;
     readonly saved: SavedChat | null;
   } | null>(null);
+  const [model, setModel] = useState(GPT_SOL_MODEL);
+  const [availableModels, setAvailableModels] = useState<
+    readonly AvailableModel[]
+  >([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
 
   useEffect(() => {
+    let savedModel = GPT_SOL_MODEL;
+    try {
+      savedModel = window.localStorage.getItem(MODEL_STORAGE_KEY) ?? savedModel;
+    } catch {
+      // Use the default model when browser storage is unavailable.
+    }
+    setModel(savedModel);
     setThread({ key: 0, saved: readSavedChat() });
+
+    const controller = new AbortController();
+    fetch("/api/models", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load models.");
+        const payload = (await response.json()) as { models?: unknown };
+        if (!Array.isArray(payload.models))
+          throw new Error("Could not load models.");
+        const models = payload.models.filter(
+          (candidate): candidate is AvailableModel =>
+            typeof candidate === "object" &&
+            candidate !== null &&
+            typeof (candidate as AvailableModel).id === "string" &&
+            typeof (candidate as AvailableModel).name === "string" &&
+            typeof (candidate as AvailableModel).ownedBy === "string"
+        );
+        setAvailableModels(models);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError")
+          return;
+        setModelsError("Model list unavailable");
+      });
+    return () => controller.abort();
   }, []);
+
+  function changeModel(nextModel: string) {
+    setModel(nextModel);
+    try {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, nextModel);
+    } catch {
+      // The choice still applies to this page load.
+    }
+    setThread((current) => ({ key: (current?.key ?? 0) + 1, saved: null }));
+  }
 
   function startNewChat() {
     try {
@@ -436,7 +532,11 @@ export function OperatorChat({ agentRunsUrl }: OperatorChatProps) {
   return (
     <ChatThread
       agentRunsUrl={agentRunsUrl}
+      availableModels={availableModels}
       key={thread.key}
+      model={model}
+      modelsError={modelsError}
+      onModelChange={changeModel}
       onNewChat={startNewChat}
       saved={thread.saved}
     />

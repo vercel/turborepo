@@ -14,6 +14,7 @@
 // Sent as `x-operator-action` by the console's chat and required by the eve
 // channel, so both sides of the contract stay in sync.
 export const OPERATOR_ACTION_HEADER = "x-operator-action";
+export const OPERATOR_MODEL_HEADER = "x-operator-model";
 export const OPERATOR_CHAT_ACTION = "open-operator-chat";
 
 interface OperatorConsoleRequest {
@@ -39,6 +40,34 @@ export const OPERATOR_CHAT_PRINCIPAL = {
   principalId: "turborepo-factory-operator",
   principalType: "user"
 } as const;
+
+export function operatorChatPrincipal(request: OperatorConsoleRequest) {
+  const model = request.headers.get(OPERATOR_MODEL_HEADER);
+  if (
+    model === null ||
+    !/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(model)
+  ) {
+    return OPERATOR_CHAT_PRINCIPAL;
+  }
+  return {
+    ...OPERATOR_CHAT_PRINCIPAL,
+    attributes: { selectedModel: model }
+  };
+}
+
+export function selectedOperatorModel(
+  auth:
+    | {
+        readonly attributes: Readonly<
+          Record<string, string | readonly string[]>
+        >;
+      }
+    | null
+    | undefined
+): string | undefined {
+  const model = auth?.attributes.selectedModel;
+  return typeof model === "string" ? model : undefined;
+}
 
 export function isOperatorChatPrincipal(
   auth:
