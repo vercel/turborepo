@@ -3,12 +3,12 @@ import { eveChannel } from "eve/channels/eve";
 
 import {
   isOperatorChatRequest,
-  OPERATOR_CHAT_PRINCIPAL
+  operatorChatPrincipal
 } from "../lib/operator-console.js";
 
 function operatorConsole(): AuthFn<Request> {
   return (request) =>
-    isOperatorChatRequest(request) ? OPERATOR_CHAT_PRINCIPAL : null;
+    isOperatorChatRequest(request) ? operatorChatPrincipal(request) : null;
 }
 
 export default eveChannel({
