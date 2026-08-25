@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { alertUnsafeIssue } from "../lib/slack.js";
+import { alertLowConfidenceIssue, alertUnsafeIssue } from "../lib/slack.js";
 import {
   isAutomaticIssueSession,
   recordIssueAssessment
@@ -30,7 +30,7 @@ const inputSchema = z.discriminatedUnion("safe", [
 
 export default defineTool({
   description:
-    "Record the mandatory security-triage and confidence result for an automatically opened GitHub issue. Unsafe results also alert Slack and thread the reason.",
+    "Record the mandatory security-triage and confidence result for an automatically opened GitHub issue. Unsafe and low-confidence results also alert Slack and thread the reason.",
   inputSchema,
   async execute(assessment, ctx) {
     if (!isAutomaticIssueSession(ctx.session.auth.current)) {
@@ -43,17 +43,27 @@ export default defineTool({
       ctx.session.id,
       assessment
     );
-    if (recorded.safe) return { recorded, slack: null };
+    if (recorded.safe && recorded.confidence !== "low") {
+      return { recorded, slack: null };
+    }
 
-    const slack = await alertUnsafeIssue({
-      issueNumber: recorded.issueNumber,
-      issueTitle: recorded.issueTitle,
-      issueUrl: recorded.issueUrl,
-      reason: recorded.securityReason
-    });
+    const slack = recorded.safe
+      ? await alertLowConfidenceIssue({
+          issueNumber: recorded.issueNumber,
+          issueTitle: recorded.issueTitle,
+          issueUrl: recorded.issueUrl,
+          reason: recorded.confidenceReason as string
+        })
+      : await alertUnsafeIssue({
+          issueNumber: recorded.issueNumber,
+          issueTitle: recorded.issueTitle,
+          issueUrl: recorded.issueUrl,
+          reason: recorded.securityReason
+        });
     if (!slack.ok) {
+      const outcome = recorded.safe ? "low confidence" : "blocked";
       throw new Error(
-        `The issue was blocked, but Slack alerting failed: ${slack.error}`
+        `The issue was ${outcome}, but Slack alerting failed: ${slack.error}`
       );
     }
     return { recorded, slack };
