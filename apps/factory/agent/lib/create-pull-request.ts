@@ -6,7 +6,11 @@ import {
   readPerformanceState,
   requirePublishablePerformanceChange
 } from "./performance-validation";
-import { buildDraftPullRequest, resolvePullRequestTitle } from "./pull-request";
+import {
+  buildDraftPullRequest,
+  resolvePullRequestTitle,
+  updateBranchRefWithLease
+} from "./pull-request";
 import {
   assertNoReleaseAgeExclusion,
   isReleaseAgeConfigFile
@@ -34,6 +38,7 @@ type RefResponse = { object?: { sha?: string } };
 type CommitResponse = { tree?: { sha?: string } };
 type CompareResponse = { merge_base_commit?: { sha?: string } };
 type ShaResponse = { sha?: string };
+type RepositoryResponse = { node_id?: string };
 type PullRequestResponse = {
   head?: { sha?: string };
   html_url?: string;
@@ -123,7 +128,7 @@ async function reconcileCreatedPullRequest(
 
 async function github<T>(input: {
   body?: unknown;
-  method: "GET" | "PATCH" | "POST";
+  method: "GET" | "POST";
   owner: string;
   path: string;
   repo: string;
@@ -150,6 +155,27 @@ async function github<T>(input: {
   }
 
   return (await response.json()) as T;
+}
+
+async function publishBranchUpdateWithLease(input: {
+  branchName: string;
+  expectedSha: string;
+  newSha: string;
+}) {
+  const repository = await github<RepositoryResponse>({
+    method: "GET",
+    owner,
+    repo,
+    path: ""
+  });
+  if (typeof repository.node_id !== "string" || repository.node_id === "") {
+    throw new Error("GitHub response did not include repository node ID.");
+  }
+  await updateBranchRefWithLease({
+    ...input,
+    repositoryId: repository.node_id,
+    token: await getGitHubToken()
+  });
 }
 
 export async function createPullRequest(
@@ -311,18 +337,46 @@ export async function createPullRequest(
       repo,
       path: `/git/commits/${headSha}`
     });
-    if (existingCommit.tree?.sha !== newTreeSha) {
-      throw new Error(
-        `Pull request ${validatedPullRequest.url} already uses ${branchName} with different changes.`
-      );
+    if (existingCommit.tree?.sha === newTreeSha) {
+      return {
+        created: false,
+        existing: true,
+        number: validatedPullRequest.number,
+        url: validatedPullRequest.url,
+        branch: branchName,
+        commit: headSha
+      };
     }
+
+    const commit = await github<ShaResponse>({
+      method: "POST",
+      owner,
+      repo,
+      path: "/git/commits",
+      body: {
+        message: changeTitle,
+        tree: newTreeSha,
+        parents: [checkoutSha]
+      }
+    });
+    const updatedCommitSha = requireSha(commit.sha, "commit SHA");
+    // updateRefs applies beforeOid atomically, matching the safety of
+    // `git push --force-with-lease` without exposing the installation token
+    // inside the sandbox.
+    await publishBranchUpdateWithLease({
+      branchName,
+      expectedSha: headSha,
+      newSha: updatedCommitSha
+    });
+
     return {
       created: false,
       existing: true,
+      updated: true,
       number: validatedPullRequest.number,
       url: validatedPullRequest.url,
       branch: branchName,
-      commit: headSha
+      commit: updatedCommitSha
     };
   }
 

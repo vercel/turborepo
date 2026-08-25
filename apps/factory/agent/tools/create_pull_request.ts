@@ -28,7 +28,7 @@ const inputSchema = z.object({
 
 export default defineTool({
   description:
-    "Create a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs an agents/* branch and a Conventional Commit title from the caller.",
+    "Create or update a draft vercel/turborepo pull request from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs an agents/* branch and a Conventional Commit title from the caller.",
   inputSchema,
   approval: ({ session }) =>
     isAppPrincipal(session.auth.current) ? "not-applicable" : "user-approval",
