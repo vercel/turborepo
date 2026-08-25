@@ -101,9 +101,9 @@ export async function requireActionableIssueAssessment(
   if (!assessment?.safe) {
     throw new Error("Automatic issue handling has not passed security triage.");
   }
-  if (assessment.confidence === "low") {
+  if (assessment.confidence !== "high") {
     throw new Error(
-      "Low-confidence issues must produce a report, not a pull request."
+      "Only high-confidence issues may produce a pull request; low- and medium-confidence issues must produce a report."
     );
   }
   return assessment;

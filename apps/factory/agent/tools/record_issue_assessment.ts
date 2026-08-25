@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { alertLowConfidenceIssue, alertUnsafeIssue } from "../lib/slack.js";
+import { alertIssueNeedsFollowUp, alertUnsafeIssue } from "../lib/slack.js";
 import {
   isAutomaticIssueSession,
   recordIssueAssessment
@@ -30,7 +30,7 @@ const inputSchema = z.discriminatedUnion("safe", [
 
 export default defineTool({
   description:
-    "Record the mandatory security-triage and confidence result for an automatically opened GitHub issue. Unsafe and low-confidence results also alert Slack and thread the reason.",
+    "Record the mandatory security-triage and confidence result for an automatically opened GitHub issue. Unsafe, low-confidence, and medium-confidence results also alert Slack and thread the reason.",
   inputSchema,
   async execute(assessment, ctx) {
     if (!isAutomaticIssueSession(ctx.session.auth.current)) {
@@ -43,12 +43,13 @@ export default defineTool({
       ctx.session.id,
       assessment
     );
-    if (recorded.safe && recorded.confidence !== "low") {
+    if (recorded.safe && recorded.confidence === "high") {
       return { recorded, slack: null };
     }
 
     const slack = recorded.safe
-      ? await alertLowConfidenceIssue({
+      ? await alertIssueNeedsFollowUp({
+          confidence: recorded.confidence as "low" | "medium",
           issueNumber: recorded.issueNumber,
           issueTitle: recorded.issueTitle,
           issueUrl: recorded.issueUrl,
@@ -61,7 +62,9 @@ export default defineTool({
           reason: recorded.securityReason
         });
     if (!slack.ok) {
-      const outcome = recorded.safe ? "low confidence" : "blocked";
+      const outcome = recorded.safe
+        ? `${recorded.confidence} confidence`
+        : "blocked";
       throw new Error(
         `The issue was ${outcome}, but Slack alerting failed: ${slack.error}`
       );

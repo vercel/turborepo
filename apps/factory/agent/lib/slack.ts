@@ -232,16 +232,16 @@ export function alertUnsafeIssue(
   );
 }
 
-export function alertLowConfidenceIssue(
-  issue: IssueAlert,
+export function alertIssueNeedsFollowUp(
+  issue: IssueAlert & { readonly confidence: "low" | "medium" },
   options: IssueAlertOptions = {}
 ): Promise<IssueAlertResult> {
   return alertIssueOutcome(
     issue,
     {
-      event: "low_confidence_issue_alert",
-      headline: `:mag: Factory needs maintainer follow-up on <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}>.`,
-      reasonLabel: "Why confidence is low"
+      event: "issue_follow_up_alert",
+      headline: `:mag: Factory needs maintainer follow-up on <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> (${issue.confidence} confidence).`,
+      reasonLabel: `Why confidence is ${issue.confidence}`
     },
     options
   );
