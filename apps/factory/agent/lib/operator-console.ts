@@ -26,8 +26,8 @@ function originHost(origin: string): string | null {
 
 /**
  * Principal for an operator-controlled workspace. It is deliberately *not*
- * the app principal used by schedules, so `create_pull_request` keeps asking
- * the operator for approval and the automated scope gates stay off.
+ * the app principal used by schedules, so automated scope gates stay off while
+ * trusted operator actions can bypass redundant human approval.
  */
 export const OPERATOR_SESSION_PRINCIPAL = {
   attributes: {},
