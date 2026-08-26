@@ -183,6 +183,42 @@ fn setup_cargo_pure_workspace(dir: &Path) {
     );
 }
 
+fn setup_cargo_root_package(dir: &Path) {
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("Cargo.toml"),
+        r#"[package]
+name = "root-app"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+resolver = "2"
+
+[workspace.metadata]
+name = "rust-workspace"
+"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": {} }
+}"#,
+    )
+    .unwrap();
+    let output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_command_success(&output, "generate root package lockfile");
+    setup::setup_git(dir).unwrap();
+}
+
 fn cargo_binary(dir: &Path, segments: &[&str]) -> std::path::PathBuf {
     let mut path = dir.to_path_buf();
     path.extend(segments);
@@ -379,6 +415,51 @@ fn test_cargo_packages_in_task_graph() {
     let expected_output = format!("../../target/debug/{output_name}");
     assert_eq!(cargo_outputs, [expected_output.as_str()]);
     assert!(cargo_outputs.iter().all(|output| !output.contains('*')));
+}
+
+#[test]
+fn test_cargo_root_package_can_be_filtered_and_built() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_root_package(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=root-app", "--dry-run=json"],
+    );
+    assert_command_success(&output, "root package dry run");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["packages"], serde_json::json!(["root-app"]));
+    let task = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "root-app#build"))
+        .expect("root-app#build in graph");
+    assert_eq!(task["command"], "cargo build --package=root-app --locked");
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=root-app"]);
+    assert_command_success(&output, "root package build");
+    let binary = tempdir
+        .path()
+        .join("target")
+        .join("debug")
+        .join(if cfg!(windows) {
+            "root-app.exe"
+        } else {
+            "root-app"
+        });
+    assert!(
+        binary.exists(),
+        "root package binary must exist at {binary:?}"
+    );
+
+    let output = run_turbo(tempdir.path(), &["prune", "root-app"]);
+    assert!(
+        !output.status.success(),
+        "root package prune must fail closed"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("has no directory of its own"),
+        "root package prune must explain the limitation: {output:?}"
+    );
 }
 
 #[test]
