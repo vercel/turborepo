@@ -2138,10 +2138,8 @@ fn metadata_closure(
         if is_local && node.kind == "package" && !member_ids.contains(id) {
             return Err(Error::UnsupportedLocalMetadataNode(id.to_string()));
         }
-        if !is_local {
-            if let Some(package) = metadata_package_identity(node) {
-                packages.insert(package);
-            }
+        if !is_local && let Some(package) = metadata_package_identity(node) {
+            packages.insert(package);
         }
         pending.extend(
             node.dependencies
@@ -2170,7 +2168,7 @@ fn external_closures(
             let id = member_ids
                 .get(member)
                 .ok_or_else(|| Error::UnknownMetadataNode(member.clone()))?;
-            Ok((member.clone(), metadata_closure(&metadata, id)?))
+            Ok((member.clone(), metadata_closure(metadata, id)?))
         })
         .collect()
 }
