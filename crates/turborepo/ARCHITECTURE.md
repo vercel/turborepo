@@ -518,9 +518,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
   through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
-  repository `build.target` stays conservatively unavailable. Failure to
-  resolve the compiler identity is
-  a hard error. Every non-empty Cargo workspace must have a current
+  repository `build.target` stays conservatively unavailable. If the compiler
+  identity cannot be resolved, Cargo tasks remain runnable but implicit caching
+  is disabled with a warning, matching the uv toolchain's identity fallback.
+  Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
