@@ -697,7 +697,7 @@ the shared repository graph.
   unfiltered run, while a package filter can select only a directly declaring
   member. Member pytest tasks have no shared serial group and can run in
   parallel.
-- **Command shapes** are `uv build --package=<name>`, or `uv run --frozen`
+- **Command shapes** are `uv build --package=<name>`, or `uv run --active --frozen`
   followed by owner selection (`--package <name>` for a member,
   `--all-packages` for homogeneous member ownership, and no owner flag for a
   root declaration), non-default group activation (`--no-default-groups
@@ -716,8 +716,8 @@ the shared repository graph.
   Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
   inserted before path targets. Active aggregates reject them and name the
   package-qualified child tasks that can receive them.
-  Pytest commands are `uv run --frozen pytest` for the workspace or `uv run
-  --frozen --package <name> pytest <member-dir>` for members, with non-default
+  Pytest commands are `uv run --active --frozen pytest` for the workspace or `uv run
+  --active --frozen --package <name> pytest <member-dir>` for members, with non-default
   group activation inserted before pytest and pass-through arguments inserted
   before the member target.
 - **Hashing and affectedness** include member sources, relevant workspace
@@ -726,7 +726,11 @@ the shared repository graph.
   Quality workspace tasks include every member's sources; a bare workspace
   pytest task hashes the full repository because pytest controls collection.
   Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
-  Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
+  `VIRTUAL_ENV` is hashed and native `uv run` tasks opt into it with `--active`;
+  otherwise `UV_PROJECT_ENVIRONMENT` or the root `.venv` determines the effective
+  environment directory. An in-repository environment is excluded from task inputs,
+  and output globs that would archive it are rejected because virtual environments
+  are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
   configuration, and any pass-through arguments make automatic inputs
   untracked. Turborepo invokes `uv workspace metadata --frozen --offline` and
   hashes each scope's external dependency closure from uv's JSON resolution
@@ -740,7 +744,8 @@ the shared repository graph.
   all uv packages. Build output inference covers the bare command's matching
   `dist/` artifacts and becomes unavailable when arguments are present.
 - **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
-  `.python-version`, and `uv.toml`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
+  `.python-version`, and `uv.toml`. In-repository `VIRTUAL_ENV` and
+  `UV_PROJECT_ENVIRONMENT` directories, root `.venv/` and `dist/`, plus known quality-tool and Python cache
   directories at the root and member scopes, are ignored as task byproducts.
 - **Prune** uses the same uv metadata graph for reachability, including
   dependency groups and optional extras. It mechanically filters matching
