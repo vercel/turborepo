@@ -78,63 +78,6 @@ fn find_task<'a>(json: &'a serde_json::Value, task_id: &str) -> &'a serde_json::
         .unwrap_or_else(|| panic!("{task_id} in task graph"))
 }
 
-fn uv_toolchain_diagnostics(dir: &Path) -> String {
-    let uv = which::which("uv").map_or_else(
-        |error| format!("uv path error: {error}"),
-        |path| format!("uv path: {}", path.display()),
-    );
-    let command = |program: &str, args: &[&str]| {
-        std::process::Command::new(program)
-            .args(args)
-            .current_dir(dir)
-            .output()
-            .map_or_else(
-                |error| format!("spawn error: {error}"),
-                |output| {
-                    format!(
-                        "status: {}\nstdout: {}\nstderr: {}",
-                        output.status,
-                        String::from_utf8_lossy(&output.stdout),
-                        String::from_utf8_lossy(&output.stderr)
-                    )
-                },
-            )
-    };
-    let python_find = std::process::Command::new("uv")
-        .args(["python", "find", "--resolve-links", "--no-python-downloads"])
-        .current_dir(dir)
-        .output();
-    let python_diagnostics = python_find.as_ref().map_or_else(
-        |error| format!("spawn error: {error}"),
-        |output| {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            format!(
-                "status: {}\nstdout: {path}\nstderr: {}\npython metadata: {:?}\npython \
-                 --version:\n{}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr),
-                fs::metadata(&path),
-                command(&path, &["--version"])
-            )
-        },
-    );
-    let uv_metadata = which::which("uv").map(|path| fs::metadata(path));
-    let windows_host = std::env::var_os("SystemRoot").map_or_else(
-        || "SystemRoot is missing".to_string(),
-        |root| {
-            command(
-                &Path::new(&root).join("System32/cmd.exe").to_string_lossy(),
-                &["/C", "ver"],
-            )
-        },
-    );
-    format!(
-        "{uv}\nuv metadata: {uv_metadata:?}\nuv --version:\n{}\nuv python \
-         find:\n{python_diagnostics}\nWindows host:\n{windows_host}",
-        command("uv", &["--version"])
-    )
-}
-
 fn append_manifest(dir: &Path, relative: &str, contents: &str) {
     use std::io::Write;
 
@@ -676,9 +619,7 @@ fn test_uv_build_caches_bundled_backend() {
     let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(
         find_task(&dry_run, "py-app#build")["resolvedTaskDefinition"]["cache"],
-        true,
-        "{}",
-        uv_toolchain_diagnostics(tempdir.path())
+        true
     );
 
     let output = run(&["build", "--filter=py-app", "--log-order", "grouped"]);
@@ -736,9 +677,7 @@ fn test_uv_quality_tasks_cache_with_toolchain_identity() {
     let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(
         find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
-        true,
-        "{}",
-        uv_toolchain_diagnostics(tempdir.path())
+        true
     );
 
     let run = || {

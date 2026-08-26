@@ -1878,10 +1878,11 @@ fn host_compatibility_identity() -> Option<String> {
 
 #[cfg(windows)]
 fn host_compatibility_identity() -> Option<String> {
-    let cmd = std::path::PathBuf::from(std::env::var_os("SystemRoot")?).join("System32/cmd.exe");
-    let mut command = Command::new(cmd);
-    command.args(["/C", "ver"]);
-    successful_stdout(command)
+    Some(format!(
+        "{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ))
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
