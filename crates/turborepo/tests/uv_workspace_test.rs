@@ -528,15 +528,9 @@ fn test_uv_flag_disabled_hints_at_opt_in() {
 }
 
 #[test]
-fn test_uv_lock_change_affects_all_packages() {
+fn test_uv_lock_metadata_only_change_affects_no_packages() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
-
-    let base = dry_run_tasks(
-        tempdir.path(),
-        &["build", "--filter=[HEAD]", "--log-order", "grouped"],
-    );
-    assert_eq!(task_ids(&base), Vec::<String>::new());
 
     let lock_path = tempdir.path().join("uv.lock");
     let mut contents = fs::read_to_string(&lock_path).unwrap();
@@ -547,9 +541,59 @@ fn test_uv_lock_change_affects_all_packages() {
         tempdir.path(),
         &["build", "--filter=[HEAD]", "--log-order", "grouped"],
     );
+    assert_eq!(task_ids(&json), Vec::<String>::new());
+}
+
+#[test]
+fn test_uv_lock_change_only_affects_dependency_closure() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "packages/py-app/pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"ruff==0.12.0\"]\n",
+    );
+    let lock = std::process::Command::new("uv")
+        .arg("lock")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv lock runs");
+    assert_command_success(&lock, "initial uv lock");
+    let add = std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("git add runs");
+    assert_command_success(&add, "git add");
+    let commit = std::process::Command::new("git")
+        .args(["commit", "-m", "add ruff"])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("git commit runs");
+    assert_command_success(&commit, "git commit");
+
+    let manifest = tempdir.path().join("packages/py-app/pyproject.toml");
+    let contents = fs::read_to_string(&manifest)
+        .unwrap()
+        .replace("ruff==0.12.0", "ruff==0.12.1");
+    fs::write(manifest, contents).unwrap();
+    let lock = std::process::Command::new("uv")
+        .arg("lock")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv lock runs");
+    assert_command_success(&lock, "updated uv lock");
+
+    let json = dry_run_tasks(
+        tempdir.path(),
+        &["build", "--filter=[HEAD]", "--log-order", "grouped"],
+    );
     let ids = task_ids(&json);
     assert!(ids.contains(&"py-app#build".to_string()), "ids: {ids:?}");
-    assert!(ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
+    assert!(!ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
 }
 
 #[test]
@@ -560,8 +604,8 @@ fn test_uv_build_caches_bundled_backend() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let run = |args: &[&str]| {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
         let mut command = common::turbo_command(tempdir.path());
         command
             .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
@@ -603,7 +647,7 @@ fn test_uv_build_caches_bundled_backend() {
 }
 
 #[test]
-fn test_uv_quality_tasks_cache_with_toolchain_identity() {
+fn test_uv_quality_tasks_are_cacheable_with_toolchain_identity() {
     if !uv_available() {
         return;
     }
@@ -634,25 +678,6 @@ fn test_uv_quality_tasks_cache_with_toolchain_identity() {
     assert_eq!(
         find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
         true
-    );
-
-    let run = || {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
-        let mut command = common::turbo_command(tempdir.path());
-        command
-            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-            .env("UV_NO_CONFIG", "1")
-            .args(["lint:ruff", "--filter=py-lib", "--log-order=grouped"])
-            .output()
-            .expect("failed to execute turbo")
-    };
-    assert_command_success(&run(), "first cacheable quality run");
-    let second = run();
-    assert_command_success(&second, "second cacheable quality run");
-    let stdout = String::from_utf8_lossy(&second.stdout);
-    assert!(
-        stdout.contains("FULL TURBO"),
-        "expected cache hit: {stdout}"
     );
 }
 

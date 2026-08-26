@@ -659,7 +659,10 @@ the shared repository graph.
 - **Discovery** invokes `uv workspace metadata --frozen --offline` once and uses
   its member list and resolution graph as authoritative. Turborepo parses each
   returned `pyproject.toml` only for task/tool declarations and dependency-kind
-  labels. Discovery also probes uv and the Python interpreter selected by
+  labels. For git-range affectedness, `uv.lock` package tables are diffed
+  mechanically and changed package names are intersected with these
+  metadata-derived closures; unrelated workspace packages remain unaffected.
+  Discovery also probes uv and the Python interpreter selected by
   `uv python find` for cache identity. Missing identities and repository-local
   uv executables fail closed to uncached tasks. Names are PEP 503-normalized.
   Dependencies become internal graph edges only when

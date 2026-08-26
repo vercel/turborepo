@@ -44,7 +44,7 @@ use std::{
     sync::Arc,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -1788,23 +1788,6 @@ impl UvTaskContract {
 // External dependency hashing
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, Serialize)]
-struct UvPythonIdentity {
-    key: String,
-    version: String,
-    #[serde(skip_serializing)]
-    path: String,
-    os: String,
-    variant: String,
-    implementation: String,
-    arch: String,
-    libc: String,
-    #[serde(default)]
-    binary_sha256: String,
-    #[serde(default)]
-    host: String,
-}
-
 struct UvToolchainIdentity {
     packages: [turborepo_lockfiles::Package; 2],
     uv_version: node_semver::Version,
@@ -1855,33 +1838,6 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-fn paths_equal(left: &std::path::Path, right: &std::path::Path) -> bool {
-    if cfg!(windows) {
-        left.as_os_str()
-            .to_string_lossy()
-            .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
-    } else {
-        left == right
-    }
-}
-
-fn parse_python_identity(
-    stdout: &str,
-    python_path: &std::path::Path,
-    binary_sha256: String,
-    host: String,
-) -> Option<String> {
-    let mut identity = serde_json::from_str::<Vec<UvPythonIdentity>>(stdout)
-        .ok()?
-        .into_iter()
-        .find(|identity| {
-            dunce::canonicalize(&identity.path).is_ok_and(|path| paths_equal(&path, python_path))
-        })?;
-    identity.binary_sha256 = binary_sha256;
-    identity.host = host;
-    serde_json::to_string(&identity).ok()
-}
-
 fn file_sha256(path: &std::path::Path) -> Option<String> {
     let mut file = std::fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
@@ -1922,10 +1878,11 @@ fn host_compatibility_identity() -> Option<String> {
 
 #[cfg(windows)]
 fn host_compatibility_identity() -> Option<String> {
-    let cmd = std::path::PathBuf::from(std::env::var_os("SystemRoot")?).join("System32/cmd.exe");
-    let mut command = Command::new(cmd);
-    command.args(["/C", "ver"]);
-    successful_stdout(command)
+    Some(format!(
+        "{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ))
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
@@ -1946,9 +1903,7 @@ fn successful_stdout(mut command: Command) -> Option<String> {
 /// workspace. Discovery remains available without either binary, but native
 /// command tasks stay uncached until both identities can be proven.
 fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIdentity> {
-    // Avoid Windows verbatim (`\\?\`) paths: uv does not match them against
-    // the ordinary paths returned by `uv python list`.
-    let uv = dunce::canonicalize(which::which("uv").ok()?).ok()?;
+    let uv = which::which("uv").ok()?;
     if uv.starts_with(repo_root.as_std_path()) {
         return None;
     }
@@ -1972,24 +1927,16 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
     python
         .args(["python", "find", "--resolve-links", "--no-python-downloads"])
         .current_dir(repo_root.as_std_path());
-    let python = successful_stdout(python)?;
-    let python_path = dunce::canonicalize(&python).ok()?;
+    let python_path = std::path::PathBuf::from(successful_stdout(python)?);
     let python_sha256 = file_sha256(&python_path)?;
     let host = host_compatibility_identity()?;
 
-    let mut python_identity = Command::new(&uv);
-    python_identity
-        .args([
-            "python",
-            "list",
-            "--only-installed",
-            "--output-format",
-            "json",
-        ])
+    let mut python_version = Command::new(&python_path);
+    python_version
+        .args(["--version"])
         .current_dir(repo_root.as_std_path());
-    let python_identity = successful_stdout(python_identity)?;
-    let python_identity =
-        parse_python_identity(&python_identity, &python_path, python_sha256, host)?;
+    let python_version = successful_stdout(python_version)?;
+    let python_identity = format!("{python_version}\nsha256:{python_sha256}\nhost:{host}");
 
     Some(UvToolchainIdentity {
         packages: [
@@ -3413,34 +3360,6 @@ version = "0.1.0"
             "true".to_string(),
         )]));
         assert!(has_untracked_uv_configuration(&no_sync));
-    }
-
-    #[test]
-    fn test_python_paths_follow_platform_case_sensitivity() {
-        let left = std::path::Path::new("C:/Users/RunnerAdmin/Python/python.exe");
-        let right = std::path::Path::new("c:/users/runneradmin/python/python.exe");
-        assert_eq!(paths_equal(left, right), cfg!(windows));
-    }
-
-    #[test]
-    fn test_python_identity_omits_installation_paths() {
-        let python_path = dunce::canonicalize(std::env::current_exe().unwrap()).unwrap();
-        let identity = parse_python_identity(
-            &format!(
-                r#"[{{"key":"cpython-3.13.10-linux-x86_64-gnu","version":"3.13.10","path":"/other/python","os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}},{{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":{},"os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}}]"#,
-                serde_json::to_string(&python_path).unwrap()
-            ),
-            &python_path,
-            "binary-hash".to_string(),
-            "host-identity".to_string(),
-        )
-        .unwrap();
-
-        assert!(identity.contains("cpython-3.13.11-linux-x86_64-gnu"));
-        assert!(identity.contains("\"libc\":\"gnu\""));
-        assert!(identity.contains("\"binary_sha256\":\"binary-hash\""));
-        assert!(identity.contains("\"host\":\"host-identity\""));
-        assert!(!identity.contains("/home/user"));
     }
 
     #[test]
