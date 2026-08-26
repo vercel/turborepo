@@ -1093,6 +1093,7 @@ pub fn native_tasks_for_package(
     package: &str,
     package_directory: &str,
     workspace_directories: &[String],
+    toolchain_identified: bool,
     build_cacheable: bool,
 ) -> Vec<crate::native_tasks::NativeTask> {
     let mut tasks = Vec::with_capacity(3);
@@ -1151,7 +1152,7 @@ pub fn native_tasks_for_package(
         check_arguments,
         Vec::new(),
         Some("uv".to_string()),
-        false,
+        toolchain_identified,
     ));
 
     if kind != UvPackageKind::Package {
@@ -1296,6 +1297,7 @@ fn python_tasks_for_package(
         package,
         package_directory,
         workspace_directories,
+        toolchain_identified,
         build_cacheable,
     );
 
@@ -1841,18 +1843,18 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-fn file_sha256(path: &std::path::Path) -> Option<String> {
-    let mut file = std::fs::File::open(path).ok()?;
+fn file_sha256(path: &std::path::Path) -> Result<String, std::io::Error> {
+    let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = [0; 64 * 1024];
     loop {
-        let read = file.read(&mut buffer).ok()?;
+        let read = file.read(&mut buffer)?;
         if read == 0 {
             break;
         }
         hasher.update(&buffer[..read]);
     }
-    Some(format!("{:x}", hasher.finalize()))
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 #[cfg(target_os = "linux")]
@@ -1893,6 +1895,7 @@ fn host_compatibility_identity() -> Option<String> {
     None
 }
 
+#[cfg(target_os = "macos")]
 fn successful_stdout(mut command: Command) -> Option<String> {
     let output = command.output().ok()?;
     if !output.status.success() {
@@ -1902,46 +1905,73 @@ fn successful_stdout(mut command: Command) -> Option<String> {
     (!stdout.is_empty()).then(|| stdout.to_string())
 }
 
+fn identity_stdout(mut command: Command, probe: &str) -> Result<String, String> {
+    let output = command
+        .output()
+        .map_err(|error| format!("unable to run {probe}: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = if stderr.trim().is_empty() {
+            String::new()
+        } else {
+            format!(": {}", stderr.trim())
+        };
+        return Err(format!("{probe} exited with {}{detail}", output.status));
+    }
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|_| format!("{probe} returned non-UTF-8 output"))?
+        .trim();
+    (!stdout.is_empty())
+        .then(|| stdout.to_string())
+        .ok_or_else(|| format!("{probe} returned no output"))
+}
+
 /// Resolve the exact uv frontend and Python interpreter selected for this
 /// workspace. Discovery remains available without either binary, but native
 /// command tasks stay uncached until both identities can be proven.
-fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIdentity> {
-    let uv = which::which("uv").ok()?;
+fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIdentity, String> {
+    let uv = which::which("uv").map_err(|error| format!("unable to find uv: {error}"))?;
     if uv.starts_with(repo_root.as_std_path()) {
-        return None;
+        return Err("the uv executable is inside the repository".to_string());
     }
-    let uv_sha256 = file_sha256(&uv)?;
+    let uv_sha256 = file_sha256(&uv)
+        .map_err(|error| format!("unable to hash uv at {}: {error}", uv.display()))?;
 
     let mut uv_version = Command::new(&uv);
     uv_version
         .arg("--version")
         .current_dir(repo_root.as_std_path());
-    let uv_version_output = successful_stdout(uv_version)?;
-    let uv_version = node_semver::Version::parse(
-        uv_version_output
-            .strip_prefix("uv ")?
-            .split_whitespace()
-            .next()?,
-    )
-    .ok()?;
+    let uv_version_output = identity_stdout(uv_version, "uv --version")?;
+    let version = uv_version_output
+        .strip_prefix("uv ")
+        .and_then(|version| version.split_whitespace().next())
+        .ok_or_else(|| format!("unexpected uv version output: {uv_version_output}"))?;
+    let uv_version = node_semver::Version::parse(version)
+        .map_err(|error| format!("unable to parse uv version {version:?}: {error}"))?;
     let uv_identity = format!("{uv_version_output}\nsha256:{uv_sha256}");
 
     let mut python = Command::new(&uv);
     python
         .args(["python", "find", "--resolve-links", "--no-python-downloads"])
         .current_dir(repo_root.as_std_path());
-    let python_path = std::path::PathBuf::from(successful_stdout(python)?);
-    let python_sha256 = file_sha256(&python_path)?;
-    let host = host_compatibility_identity()?;
+    let python_path = std::path::PathBuf::from(identity_stdout(python, "uv python find")?);
+    let python_sha256 = file_sha256(&python_path).map_err(|error| {
+        format!(
+            "unable to hash Python interpreter at {}: {error}",
+            python_path.display()
+        )
+    })?;
+    let host = host_compatibility_identity()
+        .ok_or_else(|| "unable to identify host compatibility".to_string())?;
 
     let mut python_version = Command::new(&python_path);
     python_version
         .args(["--version"])
         .current_dir(repo_root.as_std_path());
-    let python_version = successful_stdout(python_version)?;
+    let python_version = identity_stdout(python_version, "Python --version")?;
     let python_identity = format!("{python_version}\nsha256:{python_sha256}\nhost:{host}");
 
-    Some(UvToolchainIdentity {
+    Ok(UvToolchainIdentity {
         packages: [
             turborepo_lockfiles::Package {
                 key: "uv".to_string(),
@@ -2538,6 +2568,13 @@ impl RepositoryContributor for UvContributor {
                 .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let toolchain_identity =
                 turborepo_rayon_compat::block_in_place(|| toolchain_identities(&self.repo_root));
+            if let Err(reason) = &toolchain_identity {
+                tracing::warn!(
+                    "uv task caching is disabled because Turborepo could not identify uv and its \
+                     Python interpreter: {reason}"
+                );
+            }
+            let toolchain_identity = toolchain_identity.ok();
             let toolchain_identified = toolchain_identity.is_some();
             let toolchain_packages = toolchain_identity
                 .as_ref()
@@ -3451,7 +3488,7 @@ version = "0.1.0"
         let format = tasks.iter().find(|task| task.name() == "format").unwrap();
         assert_eq!(format.contract().defaults().cache, Some(false));
         let check = tasks.iter().find(|task| task.name() == "check").unwrap();
-        assert_eq!(check.contract().defaults().cache, Some(false));
+        assert_eq!(check.contract().defaults().cache, Some(true));
         assert_eq!(
             build.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Candidate)
@@ -3748,6 +3785,7 @@ version = "0.1.0"
             "packages/py-app",
             &[],
             false,
+            false,
         );
 
         for task in tasks.iter().filter(|task| task.command().is_some()) {
@@ -3758,6 +3796,20 @@ version = "0.1.0"
                 task.name()
             );
         }
+    }
+
+    #[test]
+    fn test_uv_check_is_cacheable_with_toolchain_identity() {
+        let tasks = native_tasks_for_package(
+            UvPackageKind::Package,
+            "py-app",
+            "packages/py-app",
+            &[],
+            true,
+            false,
+        );
+        let check = tasks.iter().find(|task| task.name() == "check").unwrap();
+        assert_eq!(check.contract().defaults().cache, Some(true));
     }
 
     #[test]

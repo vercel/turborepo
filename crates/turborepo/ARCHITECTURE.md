@@ -745,7 +745,9 @@ the shared repository graph.
   reachability and only parses TOML to filter selected package tables. Every scope also
   includes path-independent uv and Python identities
   containing executable content hashes, Python implementation and version,
-  operating system, architecture, libc, variant, and host compatibility. A `uv.lock` change across git refs conservatively affects
+  operating system, architecture, libc, variant, and host compatibility. If either
+  identity probe fails, native uv command tasks fail closed to uncached and emit one
+  warning for the workspace with the concrete probe failure. A `uv.lock` change across git refs conservatively affects
   all uv packages. Build output inference covers the bare command's matching
   `dist/` artifacts and becomes unavailable when arguments are present.
 - **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
