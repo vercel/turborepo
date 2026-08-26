@@ -1537,24 +1537,21 @@ fn environment_flag(environment: &toolchain::TaskIOEnvironment, name: &str) -> b
     })
 }
 
-fn has_untracked_uv_path_env(environment: &toolchain::TaskIOEnvironment) -> bool {
-    UV_PATH_ENV_VARS
+fn untracked_uv_configuration_reason(environment: &toolchain::TaskIOEnvironment) -> Option<String> {
+    if let Some(name) = UV_PATH_ENV_VARS
         .iter()
-        .any(|name| environment.get(name).is_some())
-}
-
-fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) -> bool {
-    if has_untracked_uv_path_env(environment) {
-        return true;
+        .find(|name| environment.get(name).is_some())
+    {
+        return Some(format!("{name} points to inputs Turborepo cannot hash"));
     }
     if environment_flag(environment, "UV_NO_SYNC") {
-        return true;
+        return Some("UV_NO_SYNC can use an environment Turborepo cannot hash".to_string());
     }
     if environment_flag(environment, "UV_NO_PROJECT") {
-        return true;
+        return Some("UV_NO_PROJECT can select inputs Turborepo cannot hash".to_string());
     }
     if environment_flag(environment, "UV_NO_CONFIG") {
-        return false;
+        return None;
     }
     let mut paths = Vec::new();
     if let Some(config_home) = environment.get("XDG_CONFIG_HOME") {
@@ -1571,7 +1568,10 @@ fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) ->
     #[cfg(unix)]
     paths.push(std::path::PathBuf::from("/etc/uv/uv.toml"));
 
-    paths.into_iter().any(|path| path.is_file())
+    paths
+        .into_iter()
+        .any(|path| path.is_file())
+        .then(|| "user or system uv configuration is outside the task hash".to_string())
 }
 
 /// Input globs whose changes should invalidate a Python task's cache: the
@@ -1697,13 +1697,16 @@ impl UvTaskContract {
         // These variables point at files whose contents affect uv. Until the
         // paths can be resolved against the repository safely, fail closed
         // instead of restoring an artifact hashed only by the path string.
-        if has_untracked_uv_configuration(context.environment) {
+        if let Some(reason) = untracked_uv_configuration_reason(context.environment) {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            io.cache_reason = Some(reason);
         }
         if context.task_args.is_some_and(|args| !args.is_empty()) {
             // Native tools accept path-valued and mutating options that cannot
             // be inferred uniformly. Explicit cache configuration can opt in.
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            io.cache_reason =
+                Some("pass-through arguments can select inputs Turborepo cannot hash".to_string());
         }
         match self.kind {
             UvPackageKind::Package | UvPackageKind::VirtualPackage => {
@@ -3350,16 +3353,23 @@ version = "0.1.0"
             "UV_CONFIG_FILE".to_string(),
             "/outside/uv.toml".to_string(),
         )]));
-        assert!(has_untracked_uv_configuration(&environment));
-        assert!(!has_untracked_uv_configuration(
-            &toolchain::TaskIOEnvironment::default()
-        ));
+        assert_eq!(
+            untracked_uv_configuration_reason(&environment).as_deref(),
+            Some("UV_CONFIG_FILE points to inputs Turborepo cannot hash")
+        );
+        assert_eq!(
+            untracked_uv_configuration_reason(&toolchain::TaskIOEnvironment::default()),
+            None
+        );
 
         let no_sync = toolchain::TaskIOEnvironment::new(HashMap::from([(
             "UV_NO_SYNC".to_string(),
             "true".to_string(),
         )]));
-        assert!(has_untracked_uv_configuration(&no_sync));
+        assert_eq!(
+            untracked_uv_configuration_reason(&no_sync).as_deref(),
+            Some("UV_NO_SYNC can use an environment Turborepo cannot hash")
+        );
     }
 
     #[test]
@@ -3371,7 +3381,7 @@ version = "0.1.0"
                 "/outside/constraints.txt".to_string(),
             ),
         ]));
-        assert!(has_untracked_uv_configuration(&environment));
+        assert!(untracked_uv_configuration_reason(&environment).is_some());
     }
 
     #[test]
@@ -3384,7 +3394,10 @@ version = "0.1.0"
             "XDG_CONFIG_HOME".to_string(),
             tempdir.path().to_string_lossy().to_string(),
         )]));
-        assert!(has_untracked_uv_configuration(&environment));
+        assert_eq!(
+            untracked_uv_configuration_reason(&environment).as_deref(),
+            Some("user or system uv configuration is outside the task hash")
+        );
     }
 
     #[test]

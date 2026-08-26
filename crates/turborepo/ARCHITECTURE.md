@@ -735,7 +735,9 @@ the shared repository graph.
   and output globs that would archive it are rejected because virtual environments
   are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
   configuration, and any pass-through arguments make automatic inputs
-  untracked. Turborepo invokes `uv workspace metadata --frozen --offline` and
+  untracked. Unless `cache` is explicitly configured, Turborepo disables caching
+  and emits the reason as a warning. Turborepo invokes
+  `uv workspace metadata --frozen --offline` and
   hashes each scope's external dependency closure from uv's JSON resolution
   graph; root-owned tools conservatively add the workspace closure. Package
   identities include version, source, and artifact hashes. Turborepo therefore
