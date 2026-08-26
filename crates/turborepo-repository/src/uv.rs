@@ -1792,8 +1792,8 @@ impl UvTaskContract {
 struct UvPythonIdentity {
     key: String,
     version: String,
-    #[serde(skip_serializing)]
-    path: String,
+    #[serde(rename = "path", skip_serializing)]
+    _path: String,
     os: String,
     variant: String,
     implementation: String,
@@ -1855,28 +1855,11 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-fn paths_equal(left: &std::path::Path, right: &std::path::Path) -> bool {
-    if cfg!(windows) {
-        left.as_os_str()
-            .to_string_lossy()
-            .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
-    } else {
-        left == right
-    }
-}
-
-fn parse_python_identity(
-    stdout: &str,
-    python_path: &std::path::Path,
-    binary_sha256: String,
-    host: String,
-) -> Option<String> {
-    let mut identity = serde_json::from_str::<Vec<UvPythonIdentity>>(stdout)
+fn parse_python_identity(stdout: &str, binary_sha256: String, host: String) -> Option<String> {
+    let [mut identity]: [UvPythonIdentity; 1] = serde_json::from_str::<Vec<_>>(stdout)
         .ok()?
-        .into_iter()
-        .find(|identity| {
-            dunce::canonicalize(&identity.path).is_ok_and(|path| paths_equal(&path, python_path))
-        })?;
+        .try_into()
+        .ok()?;
     identity.binary_sha256 = binary_sha256;
     identity.host = host;
     serde_json::to_string(&identity).ok()
@@ -1986,10 +1969,10 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
             "--output-format",
             "json",
         ])
+        .arg(&python_path)
         .current_dir(repo_root.as_std_path());
     let python_identity = successful_stdout(python_identity)?;
-    let python_identity =
-        parse_python_identity(&python_identity, &python_path, python_sha256, host)?;
+    let python_identity = parse_python_identity(&python_identity, python_sha256, host)?;
 
     Some(UvToolchainIdentity {
         packages: [
@@ -3416,21 +3399,9 @@ version = "0.1.0"
     }
 
     #[test]
-    fn test_python_paths_follow_platform_case_sensitivity() {
-        let left = std::path::Path::new("C:/Users/RunnerAdmin/Python/python.exe");
-        let right = std::path::Path::new("c:/users/runneradmin/python/python.exe");
-        assert_eq!(paths_equal(left, right), cfg!(windows));
-    }
-
-    #[test]
     fn test_python_identity_omits_installation_paths() {
-        let python_path = dunce::canonicalize(std::env::current_exe().unwrap()).unwrap();
         let identity = parse_python_identity(
-            &format!(
-                r#"[{{"key":"cpython-3.13.10-linux-x86_64-gnu","version":"3.13.10","path":"/other/python","os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}},{{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":{},"os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}}]"#,
-                serde_json::to_string(&python_path).unwrap()
-            ),
-            &python_path,
+            r#"[{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":"/home/user/.local/python","os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}]"#,
             "binary-hash".to_string(),
             "host-identity".to_string(),
         )
