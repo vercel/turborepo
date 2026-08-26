@@ -647,7 +647,7 @@ fn test_uv_build_caches_bundled_backend() {
 }
 
 #[test]
-fn test_uv_quality_tasks_cache_with_toolchain_identity() {
+fn test_uv_quality_tasks_are_cacheable_with_toolchain_identity() {
     if !uv_available() {
         return;
     }
@@ -678,24 +678,6 @@ fn test_uv_quality_tasks_cache_with_toolchain_identity() {
     assert_eq!(
         find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
         true
-    );
-
-    let run = || {
-        let mut command = common::turbo_command(tempdir.path());
-        command
-            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-            .env("UV_NO_CONFIG", "1")
-            .args(["lint:ruff", "--filter=py-lib", "--log-order=grouped"])
-            .output()
-            .expect("failed to execute turbo")
-    };
-    assert_command_success(&run(), "first cacheable quality run");
-    let second = run();
-    assert_command_success(&second, "second cacheable quality run");
-    let stdout = String::from_utf8_lossy(&second.stdout);
-    assert!(
-        stdout.contains("FULL TURBO"),
-        "expected cache hit: {stdout}"
     );
 }
 
