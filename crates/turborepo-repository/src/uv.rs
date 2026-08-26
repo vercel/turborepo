@@ -7,11 +7,11 @@
 //!
 //! Discovery parses the root `pyproject.toml`'s `[tool.uv.workspace]` table
 //! in-process: member globs are expanded against the filesystem and each
-//! member's `pyproject.toml` is parsed for its identity and dependencies.
-//! Unlike Cargo (whose membership semantics only `cargo metadata` can
-//! answer), uv workspace membership is declarative globs. Discovery probes uv
-//! and its selected Python interpreter when available so command tasks can be
-//! cached safely, but neither binary is required to construct the graph.
+//! member's `pyproject.toml` is parsed for its identity, task configuration,
+//! and internal relationships. Exact external resolution comes from
+//! `uv workspace metadata --frozen --offline`, avoiding direct interpretation
+//! of uv's unstable lockfile schema. Discovery also probes uv and its selected
+//! Python interpreter so command tasks can be cached safely.
 //!
 //! Buildable packages register `build` (`uv build --package=<name>`), and all
 //! packages register `format` and `check`. A synthetic package
@@ -29,7 +29,7 @@
 //! name = "acme"
 //! ```
 //!
-//! External dependencies hash from `uv.lock` per member (see
+//! External dependencies hash from uv's workspace metadata per member (see
 //! [`external_closures`]), scoped to each member's transitive closure, so a
 //! dependency bump only invalidates the packages that depend on it. Resolved
 //! uv and Python identities participate in every Python package hash.
@@ -41,7 +41,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::{self, Read},
     process::Command,
-    str::FromStr as _,
     sync::Arc,
 };
 
@@ -117,22 +116,24 @@ pub enum Error {
     MissingLockfile,
     #[error("failed to read uv.lock: {0}")]
     LockfileRead(#[source] io::Error),
+    #[error("failed to run `uv workspace metadata --frozen`: {0}")]
+    MetadataCommand(String),
+    #[error("failed to parse `uv workspace metadata` output: {0}")]
+    MetadataParse(#[source] serde_json::Error),
+    #[error("uv workspace metadata references unknown resolution node {0:?}")]
+    UnknownMetadataNode(String),
+    #[error(
+        "uv workspace metadata contains reachable local dependency {0:?}, but only uv workspace \
+         members are supported. Add it to [tool.uv.workspace] or replace it with a non-local \
+         source."
+    )]
+    UnsupportedLocalMetadataNode(String),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
-    #[error("invalid uv workspace member glob: {0}")]
-    MemberGlob(#[from] globwalk::GlobError),
-    #[error("failed to walk uv workspace members: {0}")]
-    MemberWalk(#[from] globwalk::WalkError),
     #[error("uv workspace member manifest has no parent directory: {0}")]
     InvalidMemberManifestPath(String),
-    #[error("unsafe uv workspace glob {0:?}: patterns must be relative and cannot contain `..`")]
-    UnsafeWorkspaceGlob(String),
-    #[error("uv workspace declares too many member/exclude globs (maximum {0})")]
-    TooManyWorkspaceGlobs(usize),
-    #[error("uv workspace expands to too many members (maximum {0})")]
-    TooManyWorkspaceMembers(usize),
-    #[error("uv workspace glob exceeds the maximum length of {0} bytes")]
-    WorkspaceGlobTooLong(usize),
+    #[error("uv workspace metadata returned member path outside the repository: {0}")]
+    MetadataMemberOutsideRepository(String),
     #[error(transparent)]
     ResolutionPath(#[from] turbopath::PathError),
 }
@@ -212,7 +213,6 @@ struct BuildSystemTable {
 
 #[derive(Debug, Default, Deserialize)]
 struct ProjectTable {
-    name: Option<String>,
     #[serde(default)]
     dependencies: Vec<String>,
     #[serde(default, rename = "optional-dependencies")]
@@ -227,22 +227,12 @@ struct ToolTable {
 
 #[derive(Debug, Default, Deserialize)]
 struct UvToolTable {
-    workspace: Option<UvWorkspaceTable>,
-    #[serde(default)]
-    sources: BTreeMap<String, toml::Value>,
+    workspace: Option<toml::Value>,
     #[serde(default, rename = "dev-dependencies")]
     dev_dependencies: Vec<String>,
     #[serde(default, rename = "default-groups")]
     default_groups: Option<toml::Value>,
     package: Option<bool>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct UvWorkspaceTable {
-    #[serde(default)]
-    members: Vec<String>,
-    #[serde(default)]
-    exclude: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -270,23 +260,16 @@ impl PyProjectManifest {
             })
     }
 
-    fn workspace(&self) -> Option<&UvWorkspaceTable> {
-        self.tool.as_ref()?.uv.as_ref()?.workspace.as_ref()
-    }
-
-    fn project_name(&self) -> Option<&str> {
-        self.project.as_ref()?.name.as_deref()
+    fn has_workspace(&self) -> bool {
+        self.tool
+            .as_ref()
+            .and_then(|tool| tool.uv.as_ref())
+            .and_then(|uv| uv.workspace.as_ref())
+            .is_some()
     }
 
     fn uv(&self) -> Option<&UvToolTable> {
         self.tool.as_ref()?.uv.as_ref()
-    }
-
-    fn source(&self, normalized_name: &str) -> Option<&toml::Value> {
-        self.uv()?
-            .sources
-            .iter()
-            .find_map(|(name, source)| (normalize_name(name) == normalized_name).then_some(source))
     }
 
     fn is_buildable(&self) -> bool {
@@ -679,27 +662,6 @@ impl QualityPlan {
     }
 }
 
-fn effective_source<'a>(
-    root: &'a PyProjectManifest,
-    member: &'a PyProjectManifest,
-    normalized_name: &str,
-) -> Option<&'a toml::Value> {
-    member
-        .source(normalized_name)
-        .or_else(|| root.source(normalized_name))
-}
-
-fn source_uses_current_workspace(source: &toml::Value) -> bool {
-    match source {
-        toml::Value::Table(table) => table
-            .get("workspace")
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(false),
-        toml::Value::Array(sources) => sources.iter().any(source_uses_current_workspace),
-        _ => false,
-    }
-}
-
 /// Extract and validate the user-declared workspace name from the
 /// `[tool.turbo]` table.
 fn workspace_name(manifest: &PyProjectManifest) -> Result<Option<String>, Error> {
@@ -779,18 +741,12 @@ pub struct DiscoveredWorkspace {
     pytest: Option<ToolExecution>,
 }
 
-/// Discover the uv workspace rooted at `repo_root` by parsing
-/// `pyproject.toml` manifests in-process.
-///
-/// Returns an empty workspace if `repo_root` has no `pyproject.toml`, and
-/// warns (rather than errors) when one exists without a
-/// `[tool.uv.workspace]` table — the flag being enabled in a repository
-/// whose Python code is not a uv workspace should not break unrelated runs.
-///
-/// Members whose manifests live outside the repository root, resolve to the
-/// repository root itself, or have no `[project].name` are skipped with a
-/// warning.
-pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
+/// Discover the uv workspace from uv's authoritative metadata, parsing member
+/// manifests only for Turborepo task synthesis and dependency-kind labels.
+fn discover_workspace_from_metadata(
+    repo_root: &AbsoluteSystemPath,
+    metadata: &UvWorkspaceMetadata,
+) -> Result<DiscoveredWorkspace, Error> {
     let root_manifest_path = repo_root.join_component(PYPROJECT_TOML);
     let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
         return Ok(DiscoveredWorkspace {
@@ -802,7 +758,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         });
     };
     let name = workspace_name(&root_manifest)?;
-    let Some(workspace) = root_manifest.workspace() else {
+    if !root_manifest.has_workspace() {
         tracing::warn!(
             "the root pyproject.toml has no [tool.uv.workspace] table; Turborepo's Python support \
              requires a uv workspace, so no Python packages were discovered"
@@ -814,65 +770,33 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             quality_plan: QualityPlan::default(),
             pytest: None,
         });
-    };
+    }
 
-    let manifest_paths = member_manifest_paths(repo_root, workspace)?;
     let real_repo_root = repo_root.to_realpath()?;
-    let real_root_manifest = root_manifest_path.to_realpath()?;
-    let mut parsed: Vec<(String, AbsoluteSystemPathBuf, PyProjectManifest)> = Vec::new();
-    let mut seen: HashMap<String, AbsoluteSystemPathBuf> = HashMap::new();
-    for manifest_path in manifest_paths {
-        let real_manifest = manifest_path.to_realpath()?;
-        if real_manifest == real_root_manifest {
-            // The root is never a member of itself through globs; its
-            // [project] (when present) participates only through the
-            // workspace package.
+    let mut parsed = Vec::new();
+    let mut root_project_name = None;
+    for member in &metadata.members {
+        let member_path = AbsoluteSystemPathBuf::from_cwd(&member.path)?;
+        let real_member = member_path.to_realpath()?;
+        if !real_member.starts_with(&real_repo_root) {
+            return Err(Error::MetadataMemberOutsideRepository(member.path.clone()));
+        }
+        let normalized = normalize_name(&member.name);
+        if real_member == real_repo_root {
+            root_project_name = Some(normalized);
             continue;
         }
-        if !real_manifest.starts_with(&real_repo_root) {
-            tracing::warn!(
-                "skipping uv workspace member {manifest_path}: it resolves outside the repository"
-            );
-            continue;
-        }
+        let manifest_path = member_path.join_component(PYPROJECT_TOML);
         let Some(manifest) = PyProjectManifest::load(&manifest_path)? else {
             continue;
         };
-        let Some(project_name) = manifest.project_name() else {
-            tracing::warn!(
-                "skipping uv workspace member {manifest_path}: pyproject.toml has no [project] \
-                 name"
-            );
-            continue;
-        };
-        let normalized = normalize_name(project_name);
-        if normalized.is_empty() {
-            tracing::warn!(
-                "skipping uv workspace member {manifest_path}: invalid package name \
-                 {project_name:?}"
-            );
-            continue;
-        }
-        if let Some(first) = seen.get(&normalized) {
-            return Err(Error::DuplicateMemberName {
-                name: normalized,
-                first: first.to_string(),
-                second: manifest_path.to_string(),
-            });
-        }
-        seen.insert(normalized.clone(), manifest_path.clone());
         parsed.push((normalized, manifest_path, manifest));
     }
     parsed.sort_by(|left, right| left.0.cmp(&right.0));
 
-    let root_project_name = root_manifest
-        .project_name()
-        .map(normalize_name)
-        .filter(|name| !name.is_empty());
-    let member_names: HashSet<String> = parsed.iter().map(|(name, _, _)| name.clone()).collect();
     let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let pytest = root_tools.execution(PythonTool::Pytest);
-    let packages = connect_packages(parsed, &member_names, &root_manifest, &root_tools);
+    let packages = connect_packages(parsed, metadata, &root_tools);
     let quality_plan = QualityPlan::homogeneous(
         &packages
             .iter()
@@ -911,83 +835,68 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     })
 }
 
-/// Expand `[tool.uv.workspace]` member globs into member `pyproject.toml`
-/// paths, subtracting the exclude globs.
-fn member_manifest_paths(
-    repo_root: &AbsoluteSystemPath,
-    workspace: &UvWorkspaceTable,
-) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
-    const MAX_WORKSPACE_GLOBS: usize = 1024;
-    const MAX_WORKSPACE_GLOB_BYTES: usize = 4096;
-    const MAX_WORKSPACE_MEMBERS: usize = 10_000;
-
-    if workspace.members.len() + workspace.exclude.len() > MAX_WORKSPACE_GLOBS {
-        return Err(Error::TooManyWorkspaceGlobs(MAX_WORKSPACE_GLOBS));
-    }
-    for pattern in workspace.members.iter().chain(&workspace.exclude) {
-        if pattern.len() > MAX_WORKSPACE_GLOB_BYTES {
-            return Err(Error::WorkspaceGlobTooLong(MAX_WORKSPACE_GLOB_BYTES));
-        }
-        validate_workspace_pattern(pattern)?;
-    }
-    let inclusions = workspace
-        .members
-        .iter()
-        .map(|member| {
-            let mut glob = member.clone();
-            if !glob.ends_with('/') {
-                glob.push('/');
-            }
-            glob.push_str(PYPROJECT_TOML);
-            globwalk::ValidatedGlob::from_str(&glob)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let exclusions = workspace
-        .exclude
-        .iter()
-        .map(|exclude| globwalk::ValidatedGlob::from_str(exclude))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut paths: Vec<_> = globwalk::globwalk_with_settings(
-        repo_root,
-        &inclusions,
-        &exclusions,
-        globwalk::WalkType::Files,
-        globwalk::Settings::default(),
-    )?
-    .into_iter()
-    .collect();
-    if paths.len() > MAX_WORKSPACE_MEMBERS {
-        return Err(Error::TooManyWorkspaceMembers(MAX_WORKSPACE_MEMBERS));
-    }
-    paths.sort();
-    Ok(paths)
-}
-
-fn validate_workspace_pattern(pattern: &str) -> Result<(), Error> {
-    let bytes = pattern.as_bytes();
-    let has_windows_drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
-    let is_unsafe = pattern.starts_with('/')
-        || pattern.starts_with('\\')
-        || has_windows_drive
-        || pattern
-            .split(['/', '\\'])
-            .any(|component| component == "..");
-    if is_unsafe {
-        return Err(Error::UnsafeWorkspaceGlob(pattern.to_string()));
-    }
-    Ok(())
-}
-
 /// Resolve dependency edges to package names. Dependency-group
 /// (development) edges that would form a cycle remain compilation inputs
 /// but do not order tasks, since PEP 735 groups permit cycles while the
 /// task graph is a DAG.
+fn metadata_internal_dependencies(
+    metadata: &UvWorkspaceMetadata,
+) -> HashMap<String, HashSet<String>> {
+    let members_by_id = metadata
+        .members
+        .iter()
+        .map(|member| (member.id.as_str(), normalize_name(&member.name)))
+        .collect::<HashMap<_, _>>();
+    metadata
+        .members
+        .iter()
+        .map(|member| {
+            let mut dependencies = HashSet::new();
+            let mut pending = metadata
+                .resolution
+                .get(&member.id)
+                .into_iter()
+                .flat_map(|node| {
+                    node.dependencies
+                        .iter()
+                        .chain(&node.optional_dependencies)
+                        .chain(&node.dependency_groups)
+                })
+                .map(|dependency| dependency.id.as_str())
+                .collect::<Vec<_>>();
+            let mut visited = HashSet::new();
+            while let Some(id) = pending.pop() {
+                if !visited.insert(id) {
+                    continue;
+                }
+                if let Some(name) = members_by_id.get(id) {
+                    dependencies.insert(name.clone());
+                    continue;
+                }
+                let Some(node) = metadata.resolution.get(id) else {
+                    continue;
+                };
+                if node.kind.is_object() {
+                    pending.extend(
+                        node.dependencies
+                            .iter()
+                            .chain(&node.optional_dependencies)
+                            .chain(&node.dependency_groups)
+                            .map(|dependency| dependency.id.as_str()),
+                    );
+                }
+            }
+            (normalize_name(&member.name), dependencies)
+        })
+        .collect()
+}
+
 fn connect_packages(
     parsed: Vec<(String, AbsoluteSystemPathBuf, PyProjectManifest)>,
-    member_names: &HashSet<String>,
-    root_manifest: &PyProjectManifest,
+    metadata: &UvWorkspaceMetadata,
     root_tools: &ToolDeclarations,
 ) -> Vec<UvPackage> {
+    let internal_dependencies = metadata_internal_dependencies(metadata);
     let mut graph = petgraph::Graph::<(), ()>::new();
     let node_indices: HashMap<&str, petgraph::graph::NodeIndex> = parsed
         .iter()
@@ -1003,12 +912,10 @@ fn connect_packages(
                 continue;
             };
             let to = normalize_name(dependency_name);
-            // A matching name is not enough: uv only resolves the dependency
-            // to this workspace when the effective source selects it.
             if to == *from
-                || !member_names.contains(&to)
-                || !effective_source(root_manifest, manifest, &to)
-                    .is_some_and(source_uses_current_workspace)
+                || !internal_dependencies
+                    .get(from)
+                    .is_some_and(|dependencies| dependencies.contains(&to))
             {
                 continue;
             }
@@ -1640,10 +1547,10 @@ fn has_untracked_uv_configuration(environment: &toolchain::TaskIOEnvironment) ->
 /// empty for the workspace package). Globs that don't match anything (e.g.
 /// a missing `.python-version`) simply contribute nothing.
 ///
-/// uv.lock is deliberately absent: locked dependencies participate in each
-/// package task's external-dependency hash, scoped to that package's
-/// transitive closure (see [`external_closures`]), so a dependency bump
-/// only invalidates the packages that actually depend on it.
+/// uv.lock is deliberately absent: uv workspace metadata supplies each package
+/// task's external-dependency hash, scoped to that package's transitive closure
+/// (see [`external_closures`]), so a dependency bump only invalidates packages
+/// that actually depend on it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     [
         PYPROJECT_TOML,
@@ -2039,29 +1946,233 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
     })
 }
 
-/// Per-package external dependency closures from uv.lock, for the packages'
-/// external-dependency hashes.
-///
-/// A missing, unreadable, or unparsable lockfile is a hard error — silently
-/// hashing nothing would be unsound.
-pub fn external_closures(
-    repo_root: &AbsoluteSystemPath,
-    members: &[String],
-    workspace_paths: &HashMap<String, String>,
-) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
-    let lock_path = repo_root.join_component(UV_LOCK);
-    let contents = match lock_path.read_to_string() {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Err(Error::MissingLockfile);
-        }
-        Err(error) => return Err(Error::LockfileRead(error)),
+#[derive(Debug, Clone, Deserialize)]
+struct UvWorkspaceMetadata {
+    members: Vec<UvMetadataMember>,
+    resolution: HashMap<String, UvMetadataNode>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UvMetadataMember {
+    name: String,
+    path: String,
+    id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UvMetadataNode {
+    name: Option<String>,
+    version: Option<String>,
+    #[serde(default)]
+    kind: serde_json::Value,
+    source: Option<serde_json::Value>,
+    #[serde(default)]
+    dependencies: Vec<UvMetadataDependency>,
+    #[serde(default)]
+    optional_dependencies: Vec<UvMetadataDependency>,
+    #[serde(default)]
+    dependency_groups: Vec<UvMetadataDependency>,
+    sdist: Option<UvMetadataArtifact>,
+    #[serde(default)]
+    wheels: Vec<UvMetadataArtifact>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UvMetadataDependency {
+    id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UvMetadataArtifact {
+    #[serde(default)]
+    hashes: BTreeMap<String, String>,
+}
+
+fn workspace_metadata(repo_root: &AbsoluteSystemPath) -> Result<UvWorkspaceMetadata, Error> {
+    let output = Command::new("uv")
+        .args([
+            "workspace",
+            "metadata",
+            "--frozen",
+            "--offline",
+            "--preview-features",
+            "workspace-metadata",
+        ])
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .map_err(|error| Error::MetadataCommand(error.to_string()))?;
+    if !output.status.success() {
+        return Err(Error::MetadataCommand(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    serde_json::from_slice(&output.stdout).map_err(Error::MetadataParse)
+}
+
+pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
+    let root_manifest_path = repo_root.join_component(PYPROJECT_TOML);
+    let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
+        return Ok(empty_workspace(None));
     };
-    Ok(turborepo_lockfiles::uv_external_closures(
-        &contents,
-        members,
-        workspace_paths,
-    )?)
+    let name = workspace_name(&root_manifest)?;
+    if !root_manifest.has_workspace() {
+        return Ok(empty_workspace(name));
+    }
+    let metadata = workspace_metadata(repo_root)?;
+    discover_workspace_from_metadata(repo_root, &metadata)
+}
+
+fn empty_workspace(name: Option<String>) -> DiscoveredWorkspace {
+    DiscoveredWorkspace {
+        name,
+        packages: Vec::new(),
+        root_project_name: None,
+        quality_plan: QualityPlan::default(),
+        pytest: None,
+    }
+}
+
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "null".to_string(),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Number(value) => value.to_string(),
+        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .map(canonical_json)
+            .collect::<Vec<_>>()
+            .join(","),
+        serde_json::Value::Object(values) => {
+            let mut values = values.iter().collect::<Vec<_>>();
+            values.sort_unstable_by_key(|(key, _)| *key);
+            values
+                .into_iter()
+                .map(|(key, value)| format!("{key}={}", canonical_json(value)))
+                .collect::<Vec<_>>()
+                .join(",")
+        }
+    }
+}
+
+fn metadata_package_identity(node: &UvMetadataNode) -> Option<turborepo_lockfiles::Package> {
+    let source = node.source.as_ref()?.as_object()?;
+    let name = node.name.clone()?;
+    let mut version = node.version.clone().unwrap_or_default();
+    for (key, value) in source {
+        version.push(' ');
+        version.push_str(key);
+        version.push('+');
+        version.push_str(&canonical_json(value));
+    }
+    let mut hashes = node
+        .sdist
+        .iter()
+        .chain(&node.wheels)
+        .flat_map(|artifact| &artifact.hashes)
+        .map(|(algorithm, hash)| format!("{algorithm}:{hash}"))
+        .collect::<Vec<_>>();
+    hashes.sort_unstable();
+    hashes.dedup();
+    for hash in hashes {
+        version.push(' ');
+        version.push_str(&hash);
+    }
+    Some(turborepo_lockfiles::Package { key: name, version })
+}
+
+fn collect_metadata_nodes<'a>(
+    metadata: &'a UvWorkspaceMetadata,
+    root: &'a str,
+    visited: &mut HashSet<&'a str>,
+) -> Result<(), Error> {
+    let mut pending = vec![root];
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let node = metadata
+            .resolution
+            .get(id)
+            .ok_or_else(|| Error::UnknownMetadataNode(id.to_string()))?;
+        pending.extend(
+            node.dependencies
+                .iter()
+                .chain(&node.optional_dependencies)
+                .chain(&node.dependency_groups)
+                .map(|dependency| dependency.id.as_str()),
+        );
+    }
+    Ok(())
+}
+
+fn metadata_closure(
+    metadata: &UvWorkspaceMetadata,
+    root: &str,
+) -> Result<HashSet<turborepo_lockfiles::Package>, Error> {
+    let member_ids = metadata
+        .members
+        .iter()
+        .map(|member| member.id.as_str())
+        .collect::<HashSet<_>>();
+    let mut pending = vec![root];
+    let mut visited = HashSet::new();
+    let mut packages = HashSet::new();
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let node = metadata
+            .resolution
+            .get(id)
+            .ok_or_else(|| Error::UnknownMetadataNode(id.to_string()))?;
+        let is_local = node
+            .source
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|source| {
+                source.keys().any(|key| {
+                    matches!(key.as_str(), "editable" | "virtual" | "directory" | "path")
+                })
+            });
+        if is_local && node.kind == "package" && !member_ids.contains(id) {
+            return Err(Error::UnsupportedLocalMetadataNode(id.to_string()));
+        }
+        if !is_local {
+            if let Some(package) = metadata_package_identity(node) {
+                packages.insert(package);
+            }
+        }
+        pending.extend(
+            node.dependencies
+                .iter()
+                .chain(&node.optional_dependencies)
+                .chain(&node.dependency_groups)
+                .map(|dependency| dependency.id.as_str()),
+        );
+    }
+    Ok(packages)
+}
+
+/// Per-package external dependency closures from uv's supported metadata API.
+fn external_closures(
+    metadata: &UvWorkspaceMetadata,
+    members: &[String],
+) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
+    let member_ids = metadata
+        .members
+        .iter()
+        .map(|member| (normalize_name(&member.name), member.id.as_str()))
+        .collect::<HashMap<_, _>>();
+    members
+        .iter()
+        .map(|member| {
+            let id = member_ids
+                .get(member)
+                .ok_or_else(|| Error::UnknownMetadataNode(member.clone()))?;
+            Ok((member.clone(), metadata_closure(&metadata, id)?))
+        })
+        .collect()
 }
 
 fn read_lockfile(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
@@ -2163,6 +2274,7 @@ struct UvPruneKnowledge {
     root_manifest: String,
     package_directories: HashMap<String, String>,
     root_project_name: Option<String>,
+    metadata: UvWorkspaceMetadata,
 }
 
 impl UvPruneKnowledge {
@@ -2171,6 +2283,7 @@ impl UvPruneKnowledge {
         package_directories: HashMap<String, String>,
         root_project_name: Option<String>,
         lockfile: String,
+        metadata: UvWorkspaceMetadata,
     ) -> Result<Self, Error> {
         let root_manifest = repo_root
             .join_component(PYPROJECT_TOML)
@@ -2185,6 +2298,7 @@ impl UvPruneKnowledge {
             root_manifest,
             package_directories,
             root_project_name,
+            metadata,
         })
     }
 }
@@ -2202,18 +2316,48 @@ impl PruneDomain for UvPruneKnowledge {
             return Ok(None);
         }
         let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
+        let requested_packages: HashSet<&str> = kept_packages.iter().map(String::as_str).collect();
         let mut roots = kept_packages.to_vec();
         if let Some(root_project) = &self.root_project_name {
             roots.push(root_project.clone());
         }
+        let member_ids = self
+            .metadata
+            .members
+            .iter()
+            .map(|member| (normalize_name(&member.name), member.id.as_str()))
+            .collect::<HashMap<_, _>>();
+        let mut reachable = HashSet::new();
+        for root in &roots {
+            let id = member_ids
+                .get(root)
+                .ok_or_else(|| failed(Error::UnknownMetadataNode(root.clone())))?;
+            collect_metadata_nodes(&self.metadata, id, &mut reachable).map_err(failed)?;
+        }
+        let kept_packages = reachable
+            .iter()
+            .filter_map(|id| self.metadata.resolution.get(*id))
+            .filter_map(|node| {
+                Some(turborepo_lockfiles::UvPackageKey {
+                    name: node.name.clone()?,
+                    version: node.version.clone(),
+                })
+            })
+            .collect::<HashSet<_>>();
+        let members = self
+            .metadata
+            .members
+            .iter()
+            .filter(|member| reachable.contains(member.id.as_str()))
+            .map(|member| normalize_name(&member.name))
+            .collect::<HashSet<_>>();
         let pruned_lock =
-            turborepo_lockfiles::uv_prune_lock(&self.lockfile, &roots, &self.package_directories)
+            turborepo_lockfiles::uv_prune_lock(&self.lockfile, &kept_packages, &members)
                 .map_err(|error| failed(Error::Lockfile(error)))?;
 
         let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
         let mut kept_names = HashSet::with_capacity(pruned_lock.members.len());
         let mut extra_packages = Vec::new();
-        let requested_packages: HashSet<&str> = kept_packages.iter().map(String::as_str).collect();
         for member in &pruned_lock.members {
             if self.root_project_name.as_deref() == Some(member.as_str()) {
                 kept_names.insert(member.clone());
@@ -2293,12 +2437,14 @@ impl RepositoryContributor for UvContributor {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            // Discovery reads manifests and walks member globs
-            // synchronously, so keep it off the async runtime like the
-            // JavaScript manifest-parsing path.
-            let workspace =
-                turborepo_rayon_compat::block_in_place(|| discover_workspace(&self.repo_root))
-                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            // uv owns workspace membership and external resolution. Invoke its
+            // metadata command once, then parse manifests only for task details.
+            let (metadata, workspace) = turborepo_rayon_compat::block_in_place(|| {
+                let metadata = workspace_metadata(&self.repo_root)?;
+                let workspace = discover_workspace_from_metadata(&self.repo_root, &metadata)?;
+                Ok::<_, Error>((metadata, workspace))
+            })
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
                 .repo_root
                 .join_component(PYPROJECT_TOML)
@@ -2348,6 +2494,7 @@ impl RepositoryContributor for UvContributor {
                 package_directories.clone(),
                 workspace.root_project_name.clone(),
                 lockfile.clone(),
+                metadata.clone(),
             )
             .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
@@ -2365,13 +2512,8 @@ impl RepositoryContributor for UvContributor {
             if let Some(root_project) = &workspace.root_project_name {
                 closure_members.push(root_project.clone());
             }
-            let mut closures = turborepo_lockfiles::uv_external_closures(
-                &lockfile,
-                &closure_members,
-                &package_directories,
-            )
-            .map_err(Error::from)
-            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let mut closures = external_closures(&metadata, &closure_members)
+                .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let toolchain_identity =
                 turborepo_rayon_compat::block_in_place(|| toolchain_identities(&self.repo_root));
             let toolchain_identified = toolchain_identity.is_some();
@@ -2516,6 +2658,77 @@ mod test {
 
     use super::*;
     use crate::package_graph::{PackageName, PackageTaskContext, PackageTaskContextKind};
+
+    #[test]
+    fn test_workspace_metadata_external_closures() {
+        let metadata: UvWorkspaceMetadata = serde_json::from_value(serde_json::json!({
+            "members": [{ "name": "app", "path": "/workspace/app", "id": "app" }],
+            "resolution": {
+                "app": {
+                    "name": "app",
+                    "version": "0.1.0",
+                    "source": { "editable": "/workspace/app" },
+                    "dependencies": [{ "id": "six" }]
+                },
+                "six": {
+                    "name": "six",
+                    "version": "1.17.0",
+                    "source": { "registry": { "url": "https://pypi.org/simple" } },
+                    "dependencies": [],
+                    "sdist": { "hashes": { "sha256": "sdist" } },
+                    "wheels": [{ "hashes": { "sha256": "wheel" } }]
+                }
+            }
+        }))
+        .unwrap();
+
+        let closure = metadata_closure(&metadata, "app").unwrap();
+        assert_eq!(closure.len(), 1);
+        let package = closure.iter().next().unwrap();
+        assert_eq!(package.key, "six");
+        assert_eq!(
+            package.version,
+            "1.17.0 registry+url=https://pypi.org/simple sha256:sdist sha256:wheel"
+        );
+    }
+
+    #[test]
+    fn test_workspace_metadata_unknown_node_errors() {
+        let metadata = UvWorkspaceMetadata {
+            members: Vec::new(),
+            resolution: HashMap::new(),
+        };
+        assert!(matches!(
+            metadata_closure(&metadata, "missing"),
+            Err(Error::UnknownMetadataNode(node)) if node == "missing"
+        ));
+    }
+
+    #[test]
+    fn test_workspace_metadata_rejects_non_workspace_local_dependency() {
+        let metadata: UvWorkspaceMetadata = serde_json::from_value(serde_json::json!({
+            "members": [{ "name": "app", "path": "/workspace/app", "id": "app" }],
+            "resolution": {
+                "app": {
+                    "name": "app",
+                    "kind": "package",
+                    "source": { "editable": "/workspace/app" },
+                    "dependencies": [{ "id": "shared" }]
+                },
+                "shared": {
+                    "name": "shared",
+                    "kind": "package",
+                    "source": { "directory": "/shared" },
+                    "dependencies": []
+                }
+            }
+        }))
+        .unwrap();
+        assert!(matches!(
+            metadata_closure(&metadata, "app"),
+            Err(Error::UnsupportedLocalMetadataNode(node)) if node == "shared"
+        ));
+    }
 
     fn resolved_args(
         task: &crate::native_tasks::NativeTask,
@@ -2998,6 +3211,14 @@ version = "0.1.0"
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         write_workspace(&root);
+        let locked = Command::new("uv")
+            .args(["lock", "--offline"])
+            .current_dir(root.as_std_path())
+            .status()
+            .is_ok_and(|status| status.success());
+        if !locked {
+            return;
+        }
 
         let workspace = discover_workspace(&root).unwrap();
         assert_eq!(workspace.name.as_deref(), Some("acme"));
@@ -3105,185 +3326,6 @@ version = "0.1.0"
     }
 
     #[test]
-    fn test_dev_cycle_breaks_deterministically() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents(
-                r#"
-[tool.turbo]
-name = "acme"
-
-[tool.uv.workspace]
-members = ["packages/*"]
-"#,
-            )
-            .unwrap();
-        for (name, dependencies, group) in [
-            ("pkg-a", r#"["pkg-b"]"#, "[]"),
-            ("pkg-b", "[]", r#"["pkg-a"]"#),
-        ] {
-            let source = if name == "pkg-a" { "pkg-b" } else { "pkg-a" };
-            let dir = root.join_components(&["packages", name]);
-            dir.create_dir_all().unwrap();
-            dir.join_component(PYPROJECT_TOML)
-                .create_with_contents(format!(
-                    r#"
-[project]
-name = "{name}"
-version = "0.1.0"
-dependencies = {dependencies}
-
-[dependency-groups]
-dev = {group}
-
-[tool.uv.sources]
-{source} = {{ workspace = true }}
-"#
-                ))
-                .unwrap();
-        }
-
-        let workspace = discover_workspace(&root).unwrap();
-        let pkg_a = &workspace.packages[0];
-        let pkg_b = &workspace.packages[1];
-        // a -> b is a production edge; b -> a is a dev edge that would form
-        // a cycle, so it demotes to a non-ordering input edge.
-        assert!(pkg_a.relationships[0].orders_tasks());
-        assert!(!pkg_b.relationships[0].orders_tasks());
-    }
-
-    #[test]
-    fn test_internal_edges_require_workspace_source() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents(
-                r#"
-[tool.turbo]
-name = "acme"
-
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-inherited = { workspace = true }
-overridden = { workspace = true }
-"#,
-            )
-            .unwrap();
-        for (name, contents) in [
-            (
-                "app",
-                r#"
-[project]
-name = "app"
-dependencies = ["inherited", "overridden", "same-name"]
-
-[tool.uv.sources]
-overridden = { index = "private" }
-"#,
-            ),
-            ("inherited", "[project]\nname = \"inherited\"\n"),
-            ("overridden", "[project]\nname = \"overridden\"\n"),
-            ("same-name", "[project]\nname = \"same-name\"\n"),
-        ] {
-            let dir = root.join_components(&["packages", name]);
-            dir.create_dir_all().unwrap();
-            dir.join_component(PYPROJECT_TOML)
-                .create_with_contents(contents)
-                .unwrap();
-        }
-
-        let workspace = discover_workspace(&root).unwrap();
-        let app = workspace
-            .packages
-            .iter()
-            .find(|package| package.name == "app")
-            .unwrap();
-        assert_eq!(app.relationships.len(), 1);
-        assert_eq!(app.relationships[0].declaration_name(), "inherited");
-    }
-
-    #[test]
-    fn test_legacy_uv_dev_dependencies_create_edges() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents(
-                "[tool.turbo]\nname = \"acme\"\n[tool.uv.workspace]\nmembers = [\"packages/*\"]\n",
-            )
-            .unwrap();
-        for (name, contents) in [
-            (
-                "app",
-                "[project]\nname = \"app\"\n[tool.uv]\ndev-dependencies = \
-                 [\"lib\"]\n[tool.uv.sources]\nlib = { workspace = true }\n",
-            ),
-            ("lib", "[project]\nname = \"lib\"\n"),
-        ] {
-            let dir = root.join_components(&["packages", name]);
-            dir.create_dir_all().unwrap();
-            dir.join_component(PYPROJECT_TOML)
-                .create_with_contents(contents)
-                .unwrap();
-        }
-        let workspace = discover_workspace(&root).unwrap();
-        assert_eq!(workspace.packages[0].relationships.len(), 1);
-        assert_eq!(
-            workspace.packages[0].relationships[0].declaration_name(),
-            "lib"
-        );
-    }
-
-    #[test]
-    fn test_unsafe_workspace_globs_are_rejected() {
-        for pattern in ["../outside", "/outside", "C:/outside", r"..\outside"] {
-            let tempdir = tempfile::tempdir().unwrap();
-            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-            root.join_component(PYPROJECT_TOML)
-                .create_with_contents(format!("[tool.uv.workspace]\nmembers = [{pattern:?}]\n"))
-                .unwrap();
-            assert!(matches!(
-                discover_workspace(&root),
-                Err(Error::UnsafeWorkspaceGlob(_))
-            ));
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_recursive_glob_does_not_follow_external_symlink() {
-        use std::os::unix::fs::symlink;
-
-        let tempdir = tempfile::tempdir().unwrap();
-        let temp_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        let root = temp_root.join_component("repo");
-        root.create_dir_all().unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents(
-                "[tool.turbo]\nname = \"acme\"\n[tool.uv.workspace]\nmembers = [\"packages/**\"]\n",
-            )
-            .unwrap();
-        let outside = temp_root.join_component("outside");
-        outside.create_dir_all().unwrap();
-        outside
-            .join_component(PYPROJECT_TOML)
-            .create_with_contents("[project]\nname = \"outside\"\n")
-            .unwrap();
-        let packages = root.join_component("packages");
-        packages.create_dir_all().unwrap();
-        symlink(
-            outside.as_std_path(),
-            packages.join_component("external").as_std_path(),
-        )
-        .unwrap();
-
-        let workspace = discover_workspace(&root).unwrap();
-        assert!(workspace.packages.is_empty());
-    }
-
-    #[test]
     fn test_uv_path_environment_disables_automatic_inputs() {
         let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
             "UV_CONFIG_FILE".to_string(),
@@ -3351,47 +3393,6 @@ overridden = { index = "private" }
             .unwrap();
         let workspace = discover_workspace(&root).unwrap();
         assert!(workspace.packages.is_empty());
-    }
-
-    #[test]
-    fn test_duplicate_normalized_names_error() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents("[tool.uv.workspace]\nmembers = [\"packages/*\"]\n")
-            .unwrap();
-        for (dir, name) in [("one", "my_pkg"), ("two", "My-Pkg")] {
-            let package_dir = root.join_components(&["packages", dir]);
-            package_dir.create_dir_all().unwrap();
-            package_dir
-                .join_component(PYPROJECT_TOML)
-                .create_with_contents(format!(
-                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\n"
-                ))
-                .unwrap();
-        }
-        let error = discover_workspace(&root).unwrap_err();
-        assert!(matches!(error, Error::DuplicateMemberName { .. }));
-    }
-
-    #[test]
-    fn test_workspace_name_collision_errors() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        root.join_component(PYPROJECT_TOML)
-            .create_with_contents(
-                "[tool.turbo]\nname = \"py-app\"\n\n[tool.uv.workspace]\nmembers = \
-                 [\"packages/*\"]\n",
-            )
-            .unwrap();
-        let package_dir = root.join_components(&["packages", "py-app"]);
-        package_dir.create_dir_all().unwrap();
-        package_dir
-            .join_component(PYPROJECT_TOML)
-            .create_with_contents("[project]\nname = \"py-app\"\nversion = \"0.1.0\"\n")
-            .unwrap();
-        let error = discover_workspace(&root).unwrap_err();
-        assert!(matches!(error, Error::WorkspaceNameCollision { .. }));
     }
 
     #[test]

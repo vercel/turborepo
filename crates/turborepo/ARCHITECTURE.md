@@ -656,10 +656,11 @@ involved. `UvContributor` contributes pre-classified relationships, native
 tasks, external resolution, change observations, and a prune domain through
 the shared repository graph.
 
-- **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
-  in-process, so graph construction does not require the `uv` binary. When uv
-  is available, discovery probes its version and the Python interpreter selected
-  by `uv python find` for cache identity. Missing identities and repository-local
+- **Discovery** invokes `uv workspace metadata --frozen --offline` once and uses
+  its member list and resolution graph as authoritative. Turborepo parses each
+  returned `pyproject.toml` only for task/tool declarations and dependency-kind
+  labels. Discovery also probes uv and the Python interpreter selected by
+  `uv python find` for cache identity. Missing identities and repository-local
   uv executables fail closed to uncached tasks. Names are PEP 503-normalized.
   Dependencies become internal graph edges only when
   their effective `[tool.uv.sources]` entry selects `workspace = true`.
@@ -727,10 +728,13 @@ the shared repository graph.
   Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
   Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
   configuration, and any pass-through arguments make automatic inputs
-  untracked. Each scope also hashes its external
-  dependency closure from `uv.lock`; root-owned tools conservatively add the
-  workspace closure. Package identities include version, source, and artifact
-  hashes. Every scope also includes path-independent uv and Python identities
+  untracked. Turborepo invokes `uv workspace metadata --frozen --offline` and
+  hashes each scope's external dependency closure from uv's JSON resolution
+  graph; root-owned tools conservatively add the workspace closure. Package
+  identities include version, source, and artifact hashes. Turborepo therefore
+  does not interpret `uv.lock` for task hashing; pruning also uses metadata for
+  reachability and only parses TOML to filter selected package tables. Every scope also
+  includes path-independent uv and Python identities
   containing executable content hashes, Python implementation and version,
   operating system, architecture, libc, variant, and host compatibility. A `uv.lock` change across git refs conservatively affects
   all uv packages. Build output inference covers the bare command's matching
@@ -738,11 +742,13 @@ the shared repository graph.
 - **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
   `.python-version`, and `uv.toml`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
   directories at the root and member scopes, are ignored as task byproducts.
-- **Prune** walks `uv.lock` reachability, including dependency groups and
-  optional extras, and preserves retained package metadata through
-  `toml_edit`. It rewrites root workspace members, removes dangling uv source
-  entries, and copies `.python-version` and `uv.toml` when present. Reachable
-  local dependencies that are not workspace members fail closed.
+- **Prune** uses the same uv metadata graph for reachability, including
+  dependency groups and optional extras. It mechanically filters matching
+  `uv.lock` package tables with `toml_edit`, preserving retained metadata and
+  conservatively keeping all same-name/version forks. It rewrites root workspace
+  members, removes dangling uv source entries, and copies `.python-version` and
+  `uv.toml` when present. Reachable local dependencies that are not workspace
+  members fail closed.
 
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
