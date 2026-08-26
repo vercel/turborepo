@@ -1753,6 +1753,8 @@ impl UvTaskContract {
 struct UvPythonIdentity {
     key: String,
     version: String,
+    #[serde(skip_serializing)]
+    path: String,
     os: String,
     variant: String,
     implementation: String,
@@ -1814,11 +1816,18 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-fn parse_python_identity(stdout: &str, binary_sha256: String, host: String) -> Option<String> {
-    let [mut identity]: [UvPythonIdentity; 1] = serde_json::from_str::<Vec<_>>(stdout)
+fn parse_python_identity(
+    stdout: &str,
+    python_path: &std::path::Path,
+    binary_sha256: String,
+    host: String,
+) -> Option<String> {
+    let mut identity = serde_json::from_str::<Vec<UvPythonIdentity>>(stdout)
         .ok()?
-        .try_into()
-        .ok()?;
+        .into_iter()
+        .find(|identity| {
+            dunce::canonicalize(&identity.path).is_ok_and(|path| path == python_path)
+        })?;
     identity.binary_sha256 = binary_sha256;
     identity.host = host;
     serde_json::to_string(&identity).ok()
@@ -1927,11 +1936,11 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
             "--only-installed",
             "--output-format",
             "json",
-            python_path.to_str()?,
         ])
         .current_dir(repo_root.as_std_path());
     let python_identity = successful_stdout(python_identity)?;
-    let python_identity = parse_python_identity(&python_identity, python_sha256, host)?;
+    let python_identity =
+        parse_python_identity(&python_identity, &python_path, python_sha256, host)?;
 
     Some(UvToolchainIdentity {
         packages: [
@@ -3345,8 +3354,13 @@ version = "0.1.0"
 
     #[test]
     fn test_python_identity_omits_installation_paths() {
+        let python_path = dunce::canonicalize(std::env::current_exe().unwrap()).unwrap();
         let identity = parse_python_identity(
-            r#"[{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":"/home/user/.local/python","symlink":null,"url":null,"os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}]"#,
+            &format!(
+                r#"[{{"key":"cpython-3.13.10-linux-x86_64-gnu","version":"3.13.10","path":"/other/python","os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}},{{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":{},"os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}}]"#,
+                serde_json::to_string(&python_path).unwrap()
+            ),
+            &python_path,
             "binary-hash".to_string(),
             "host-identity".to_string(),
         )
