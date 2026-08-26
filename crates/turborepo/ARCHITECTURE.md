@@ -551,7 +551,8 @@ whether anything changed; Cargo decides how and in what order to build.**
   toggling it invalidates caches. Entrypoint `run`/`dev` tasks and library
   `build` tasks default to `cache: false`: a cache hit must not suppress a
   requested process, and library artifacts have no stable final path to restore.
-  An explicit turbo.json `cache` setting overrides the toolchain default.
+  Turborepo warns when unavailable library outputs disable implicit caching. An
+  explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
   consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery

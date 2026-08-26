@@ -501,8 +501,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     derived.outputs = turborepo_repository::toolchain::DerivedOutputs::Unavailable;
                 }
                 let cache_reason = (!had_explicit_cache
-                    && derived.input_safety
-                        == turborepo_repository::toolchain::DerivedInputSafety::Untracked)
+                    && (derived.input_safety
+                        == turborepo_repository::toolchain::DerivedInputSafety::Untracked
+                        || (!had_explicit_outputs
+                            && derived.outputs
+                                == turborepo_repository::toolchain::DerivedOutputs::Unavailable)))
                     .then(|| derived.cache_reason.clone())
                     .flatten();
                 apply_derived_task_io(

@@ -385,12 +385,18 @@ fn test_cargo_packages_in_task_graph() {
 fn test_cargo_library_build_can_be_filtered() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
+    configure_build_without_outputs(tempdir.path());
 
     let output = run_turbo(
         tempdir.path(),
         &["run", "build", "--filter=lib-a", "--dry-run=json"],
     );
     assert!(output.status.success(), "dry run failed: {output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("Cargo library artifacts have no stable outputs for Turborepo to restore"),
+        "library build must explain why caching is disabled: {output:?}"
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let task = json["tasks"]
         .as_array()
