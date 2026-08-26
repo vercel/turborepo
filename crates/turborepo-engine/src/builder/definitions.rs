@@ -500,6 +500,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 ) {
                     derived.outputs = turborepo_repository::toolchain::DerivedOutputs::Unavailable;
                 }
+                let cache_reason = (!had_explicit_cache
+                    && derived.input_safety
+                        == turborepo_repository::toolchain::DerivedInputSafety::Untracked)
+                    .then(|| derived.cache_reason.clone())
+                    .flatten();
                 apply_derived_task_io(
                     &mut task_def,
                     derived,
@@ -507,6 +512,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     had_explicit_outputs,
                     had_explicit_cache,
                 );
+                if let Some(reason) = cache_reason {
+                    tracing::warn!(
+                        "caching disabled for task {}: {reason}; set `cache` explicitly to \
+                         override",
+                        task_id.as_inner()
+                    );
+                }
             }
         }
 
@@ -1123,6 +1135,7 @@ mod derived_io_tests {
     fn untracked_inputs_require_explicit_cache_authority() {
         let untracked = || DerivedTaskIO {
             input_safety: DerivedInputSafety::Untracked,
+            cache_reason: Some("automatic inputs are incomplete".to_string()),
             outputs: DerivedOutputs::Resolved(vec!["automatic/**".to_string()]),
             ..Default::default()
         };

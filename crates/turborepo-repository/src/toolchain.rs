@@ -543,6 +543,8 @@ pub struct DerivedTaskIO {
     /// Directory prefixes that must not be cached as task outputs.
     pub forbidden_output_prefixes: Vec<String>,
     pub input_safety: DerivedInputSafety,
+    /// User-facing explanation when untracked inputs disable implicit caching.
+    pub cache_reason: Option<String>,
     pub outputs: DerivedOutputs,
 }
 
