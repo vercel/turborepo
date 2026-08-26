@@ -44,7 +44,7 @@ use std::{
     sync::Arc,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -1788,23 +1788,6 @@ impl UvTaskContract {
 // External dependency hashing
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, Serialize)]
-struct UvPythonIdentity {
-    key: String,
-    version: String,
-    #[serde(rename = "path", skip_serializing)]
-    _path: String,
-    os: String,
-    variant: String,
-    implementation: String,
-    arch: String,
-    libc: String,
-    #[serde(default)]
-    binary_sha256: String,
-    #[serde(default)]
-    host: String,
-}
-
 struct UvToolchainIdentity {
     packages: [turborepo_lockfiles::Package; 2],
     uv_version: node_semver::Version,
@@ -1853,16 +1836,6 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
         ));
     }
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
-}
-
-fn parse_python_identity(stdout: &str, binary_sha256: String, host: String) -> Option<String> {
-    let [mut identity]: [UvPythonIdentity; 1] = serde_json::from_str::<Vec<_>>(stdout)
-        .ok()?
-        .try_into()
-        .ok()?;
-    identity.binary_sha256 = binary_sha256;
-    identity.host = host;
-    serde_json::to_string(&identity).ok()
 }
 
 fn file_sha256(path: &std::path::Path) -> Option<String> {
@@ -1960,19 +1933,12 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
     let python_sha256 = file_sha256(&python_path)?;
     let host = host_compatibility_identity()?;
 
-    let mut python_identity = Command::new(&uv);
-    python_identity
-        .args([
-            "python",
-            "list",
-            "--only-installed",
-            "--output-format",
-            "json",
-        ])
-        .arg(&python_path)
+    let mut python_version = Command::new(&python_path);
+    python_version
+        .args(["--version"])
         .current_dir(repo_root.as_std_path());
-    let python_identity = successful_stdout(python_identity)?;
-    let python_identity = parse_python_identity(&python_identity, python_sha256, host)?;
+    let python_version = successful_stdout(python_version)?;
+    let python_identity = format!("{python_version}\nsha256:{python_sha256}\nhost:{host}");
 
     Some(UvToolchainIdentity {
         packages: [
@@ -3396,22 +3362,6 @@ version = "0.1.0"
             "true".to_string(),
         )]));
         assert!(has_untracked_uv_configuration(&no_sync));
-    }
-
-    #[test]
-    fn test_python_identity_omits_installation_paths() {
-        let identity = parse_python_identity(
-            r#"[{"key":"cpython-3.13.11-linux-x86_64-gnu","version":"3.13.11","path":"/home/user/.local/python","os":"linux","variant":"default","implementation":"cpython","arch":"x86_64","libc":"gnu"}]"#,
-            "binary-hash".to_string(),
-            "host-identity".to_string(),
-        )
-        .unwrap();
-
-        assert!(identity.contains("cpython-3.13.11-linux-x86_64-gnu"));
-        assert!(identity.contains("\"libc\":\"gnu\""));
-        assert!(identity.contains("\"binary_sha256\":\"binary-hash\""));
-        assert!(identity.contains("\"host\":\"host-identity\""));
-        assert!(!identity.contains("/home/user"));
     }
 
     #[test]
