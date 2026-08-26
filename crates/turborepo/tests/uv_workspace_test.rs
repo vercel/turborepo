@@ -807,7 +807,11 @@ fn test_uv_prune() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "py-app"]);
+    let output = common::run_turbo_with_env(
+        tempdir.path(),
+        &["prune", "py-app"],
+        &[("UV_NO_CONFIG", "1")],
+    );
     assert_command_success(&output, "turbo prune");
     let out = tempdir.path().join("out");
 
@@ -828,6 +832,7 @@ fn test_uv_prune() {
     if uv_available() {
         let check = std::process::Command::new("uv")
             .args(["lock", "--check"])
+            .env("UV_NO_CONFIG", "1")
             .current_dir(&out)
             .output()
             .expect("uv runs");
@@ -845,7 +850,11 @@ fn test_uv_prune_mixed_repo() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_monorepo(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "py-lib"]);
+    let output = common::run_turbo_with_env(
+        tempdir.path(),
+        &["prune", "py-lib"],
+        &[("UV_NO_CONFIG", "1")],
+    );
     assert_command_success(&output, "turbo prune");
     let out = tempdir.path().join("out");
 
