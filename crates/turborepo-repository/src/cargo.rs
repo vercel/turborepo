@@ -899,6 +899,11 @@ impl CargoTaskContract {
                 if subcommand == "build" {
                     if self.package.kind == CargoPackageKind::Library {
                         io.outputs = toolchain::DerivedOutputs::Unavailable;
+                        io.cache_reason = Some(
+                            "Cargo library artifacts have no stable outputs for Turborepo to \
+                             restore"
+                                .to_string(),
+                        );
                     } else {
                         io.outputs = self
                             .workspace

@@ -188,7 +188,7 @@ Project-specific hashing inputs must be accounted for manually. This includes:
 
 ### Output caching
 
-Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
+Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs, and Turborepo emits a warning explaining this default. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
 
 Turborepo resolves exact outputs for these layouts:
 
