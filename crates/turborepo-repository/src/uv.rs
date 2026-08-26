@@ -1855,6 +1855,16 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
+fn paths_equal(left: &std::path::Path, right: &std::path::Path) -> bool {
+    if cfg!(windows) {
+        left.as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
+    } else {
+        left == right
+    }
+}
+
 fn parse_python_identity(
     stdout: &str,
     python_path: &std::path::Path,
@@ -1865,7 +1875,7 @@ fn parse_python_identity(
         .ok()?
         .into_iter()
         .find(|identity| {
-            dunce::canonicalize(&identity.path).is_ok_and(|path| path == python_path)
+            dunce::canonicalize(&identity.path).is_ok_and(|path| paths_equal(&path, python_path))
         })?;
     identity.binary_sha256 = binary_sha256;
     identity.host = host;
@@ -3403,6 +3413,13 @@ version = "0.1.0"
             "true".to_string(),
         )]));
         assert!(has_untracked_uv_configuration(&no_sync));
+    }
+
+    #[test]
+    fn test_python_paths_follow_platform_case_sensitivity() {
+        let left = std::path::Path::new("C:/Users/RunnerAdmin/Python/python.exe");
+        let right = std::path::Path::new("c:/users/runneradmin/python/python.exe");
+        assert_eq!(paths_equal(left, right), cfg!(windows));
     }
 
     #[test]
