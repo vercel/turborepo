@@ -1902,9 +1902,7 @@ fn successful_stdout(mut command: Command) -> Option<String> {
 /// workspace. Discovery remains available without either binary, but native
 /// command tasks stay uncached until both identities can be proven.
 fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIdentity> {
-    // Avoid Windows verbatim (`\\?\`) paths: uv does not match them against
-    // the ordinary paths returned by `uv python list`.
-    let uv = dunce::canonicalize(which::which("uv").ok()?).ok()?;
+    let uv = which::which("uv").ok()?;
     if uv.starts_with(repo_root.as_std_path()) {
         return None;
     }
@@ -1928,8 +1926,7 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Option<UvToolchainIde
     python
         .args(["python", "find", "--resolve-links", "--no-python-downloads"])
         .current_dir(repo_root.as_std_path());
-    let python = successful_stdout(python)?;
-    let python_path = dunce::canonicalize(&python).ok()?;
+    let python_path = std::path::PathBuf::from(successful_stdout(python)?);
     let python_sha256 = file_sha256(&python_path)?;
     let host = host_compatibility_identity()?;
 
