@@ -1895,6 +1895,7 @@ fn host_compatibility_identity() -> Option<String> {
     None
 }
 
+#[cfg(target_os = "macos")]
 fn successful_stdout(mut command: Command) -> Option<String> {
     let output = command.output().ok()?;
     if !output.status.success() {
