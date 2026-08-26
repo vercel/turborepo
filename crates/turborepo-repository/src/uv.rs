@@ -3488,7 +3488,7 @@ version = "0.1.0"
         let format = tasks.iter().find(|task| task.name() == "format").unwrap();
         assert_eq!(format.contract().defaults().cache, Some(false));
         let check = tasks.iter().find(|task| task.name() == "check").unwrap();
-        assert_eq!(check.contract().defaults().cache, Some(false));
+        assert_eq!(check.contract().defaults().cache, Some(true));
         assert_eq!(
             build.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Candidate)
