@@ -604,8 +604,8 @@ fn test_uv_build_caches_bundled_backend() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let run = |args: &[&str]| {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
         let mut command = common::turbo_command(tempdir.path());
         command
             .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
@@ -681,7 +681,6 @@ fn test_uv_quality_tasks_cache_with_toolchain_identity() {
     );
 
     let run = || {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
         let mut command = common::turbo_command(tempdir.path());
         command
             .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
