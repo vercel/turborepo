@@ -122,12 +122,13 @@ impl<'a> ScopeChangeDetector<'a> {
             return LockfileContents::UnknownChange;
         };
 
+        let Ok(path) = self.turbo_root.anchor(&lockfile_path) else {
+            debug!("lockfile changed but was outside the repository");
+            return LockfileContents::UnknownChange;
+        };
         debug!("lockfile changed, have the previous content");
         LockfileContents::Changed {
-            path: self
-                .turbo_root
-                .anchor(&lockfile_path)
-                .expect("lockfile should be in repo"),
+            path,
             previous_contents: content,
         }
     }
