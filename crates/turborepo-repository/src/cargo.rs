@@ -2680,26 +2680,28 @@ dependencies = ["lib-a"]
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_cargo_toolchain_rejects_root_package() {
+    async fn test_cargo_toolchain_accepts_root_package() {
         let (_tmp, root) = tempdir_root();
         write(
             &root,
             &["Cargo.toml"],
             "[package]\nname = \"root-package\"\nversion = \"0.1.0\"\nedition = \
-             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \"2\"\n",
+             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"root-workspace\"\n",
         );
         write(&root, &["src", "lib.rs"], "");
         generate_lockfile(&root);
 
-        let error = CargoContributor::new(root)
+        let discovered = CargoContributor::new(root)
             .discover_packages()
             .await
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("root-package")
-                && error.to_string().contains("root Cargo.toml"),
-            "unexpected validation result: {error}"
-        );
+            .unwrap();
+        let names: Vec<_> = discovered
+            .packages()
+            .iter()
+            .filter_map(|package| package.clone().into_parts().name)
+            .collect();
+        assert_eq!(names, ["root-package", "root-workspace"]);
     }
 
     fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
