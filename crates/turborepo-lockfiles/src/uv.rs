@@ -4,7 +4,7 @@
 //! `uv workspace metadata`. This module does not resolve uv dependencies; it
 //! only removes `[[package]]` tables that metadata determined are unreachable.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -34,6 +34,44 @@ pub struct PrunedUvLock {
     pub members: Vec<String>,
     /// The filtered lockfile, preserving retained package metadata verbatim.
     pub lockfile: String,
+}
+
+/// Return package names whose complete lockfile tables changed.
+///
+/// Dependency ownership remains metadata-derived; this only identifies which
+/// pinned package records changed between two lockfiles.
+pub fn changed_package_names(previous: &str, current: &str) -> Result<HashSet<String>, Error> {
+    fn packages(contents: &str) -> Result<BTreeMap<String, Vec<String>>, Error> {
+        let document: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+        let packages = document
+            .get("package")
+            .and_then(|item| item.as_array_of_tables())
+            .ok_or(Error::MalformedPackageArray)?;
+        let mut by_name = BTreeMap::<String, Vec<String>>::new();
+        for package in packages {
+            let name = package
+                .get("name")
+                .and_then(|item| item.as_str())
+                .ok_or(Error::MissingPackageName)?;
+            by_name
+                .entry(name.to_string())
+                .or_default()
+                .push(package.to_string());
+        }
+        for entries in by_name.values_mut() {
+            entries.sort();
+        }
+        Ok(by_name)
+    }
+
+    let previous = packages(previous)?;
+    let current = packages(current)?;
+    Ok(previous
+        .keys()
+        .chain(current.keys())
+        .filter(|name| previous.get(*name) != current.get(*name))
+        .cloned()
+        .collect())
 }
 
 /// Filter a uv.lock to package identities and workspace members selected by
@@ -120,6 +158,21 @@ name = "unused"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 "#;
+
+    #[test]
+    fn detects_changed_package_tables_by_name() {
+        let current = LOCK.replace("sha256:abc", "sha256:def");
+        assert_eq!(
+            changed_package_names(LOCK, &current).unwrap(),
+            HashSet::from(["dep".to_string()])
+        );
+    }
+
+    #[test]
+    fn ignores_non_package_lockfile_changes() {
+        let current = LOCK.replace("revision = 3", "revision = 4");
+        assert!(changed_package_names(LOCK, &current).unwrap().is_empty());
+    }
 
     #[test]
     fn filters_packages_and_manifest_members() {

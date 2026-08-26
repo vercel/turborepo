@@ -222,7 +222,10 @@ impl Workspace {
         let git = SCM::new(workspace_root);
         let anchored_path = workspace_root.resolve(lockfile_path);
         match git.previous_content(Some(from_commit), &anchored_path) {
-            Ok(contents) => LockfileContents::Changed(contents),
+            Ok(previous_contents) => LockfileContents::Changed {
+                path: lockfile_path.to_owned(),
+                previous_contents,
+            },
             Err(e) => {
                 debug!("{e}");
                 LockfileContents::UnknownChange

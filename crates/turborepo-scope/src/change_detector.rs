@@ -123,7 +123,13 @@ impl<'a> ScopeChangeDetector<'a> {
         };
 
         debug!("lockfile changed, have the previous content");
-        LockfileContents::Changed(content)
+        LockfileContents::Changed {
+            path: self
+                .turbo_root
+                .anchor(&lockfile_path)
+                .expect("lockfile should be in repo"),
+            previous_contents: content,
+        }
     }
 }
 

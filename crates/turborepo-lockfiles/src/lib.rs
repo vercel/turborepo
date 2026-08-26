@@ -42,7 +42,10 @@ use rayon::prelude::*;
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
-pub use uv::{Error as UvLockError, PrunedUvLock, UvPackageKey, uv_prune_lock};
+pub use uv::{
+    Error as UvLockError, PrunedUvLock, UvPackageKey, changed_package_names as uv_changed_packages,
+    uv_prune_lock,
+};
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 // The closure walk visits every edge of every workspace's dependency closure,

@@ -261,7 +261,7 @@ fn resolution_data(
 }
 
 impl PackageGraph {
-    pub fn changed_packages_from_lockfile_contents(
+    pub(super) fn changed_javascript_packages_from_lockfile_contents(
         &self,
         previous_lockfile_contents: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
@@ -379,4 +379,8 @@ pub enum ChangedPackagesError {
     PackageManager(#[from] crate::package_manager::Error),
     #[error("Yarn config error: {0}")]
     Yarnrc(#[from] crate::package_manager::yarnrc::Error),
+    #[error("uv lockfile error: {0}")]
+    Uv(#[from] turborepo_lockfiles::UvLockError),
+    #[error("Lockfile content is not UTF-8")]
+    NonUtf8Lockfile,
 }
