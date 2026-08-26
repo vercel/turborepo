@@ -1184,7 +1184,11 @@ fn declared_tool_task(
     serial_group: Option<String>,
     toolchain_identified: bool,
 ) -> crate::native_tasks::NativeTask {
-    let mut prefix = vec!["run".to_string(), "--frozen".to_string()];
+    let mut prefix = vec![
+        "run".to_string(),
+        "--active".to_string(),
+        "--frozen".to_string(),
+    ];
     match execution.owner {
         ExecutionOwner::Root => {}
         ExecutionOwner::Member => {
@@ -1477,6 +1481,7 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "PIP_EXTRA_INDEX_URL",
     "PYTHONHOME",
     "PYTHONPATH",
+    "VIRTUAL_ENV",
 ];
 
 const UV_PATH_ENV_VARS: &[&str] = &[
@@ -1487,11 +1492,41 @@ const UV_PATH_ENV_VARS: &[&str] = &[
     "UV_EXCLUDE",
     "UV_OVERRIDE",
     "UV_PROJECT",
-    "UV_PROJECT_ENVIRONMENT",
     "UV_WORKING_DIR",
     "PYTHONHOME",
     "PYTHONPATH",
 ];
+
+fn effective_virtual_environment(environment: &toolchain::TaskIOEnvironment) -> &str {
+    environment
+        .get("VIRTUAL_ENV")
+        .filter(|path| !path.is_empty())
+        .or_else(|| {
+            environment
+                .get("UV_PROJECT_ENVIRONMENT")
+                .filter(|path| !path.is_empty())
+        })
+        .unwrap_or(".venv")
+}
+
+fn virtual_environment_path(
+    package: &crate::package_graph::PackageTaskContext<'_>,
+    environment: &toolchain::TaskIOEnvironment,
+) -> Option<String> {
+    let configured = effective_virtual_environment(environment);
+    let absolute = AbsoluteSystemPathBuf::from_unknown(package.repository_root(), configured);
+    let repo_root = package.repository_root().to_realpath().ok()?;
+    let absolute = absolute.to_realpath().unwrap_or(absolute);
+    let repo_relative = repo_root.anchor(&absolute).ok()?;
+    Some(
+        turbopath::AnchoredSystemPathBuf::relative_path_between(
+            &repo_root.resolve(package.directory()),
+            &repo_root.resolve(&repo_relative),
+        )
+        .to_unix()
+        .to_string(),
+    )
+}
 
 fn environment_flag(environment: &toolchain::TaskIOEnvironment, name: &str) -> bool {
     environment.get(name).is_some_and(|value| {
@@ -1640,7 +1675,7 @@ impl UvTaskContract {
 
     pub(crate) fn derived_task_io(
         &self,
-        _package: &crate::package_graph::PackageTaskContext<'_>,
+        package: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
         path_to_root: &str,
         dependencies: &[crate::package_graph::PackageTaskContext<'_>],
@@ -1655,6 +1690,10 @@ impl UvTaskContract {
         };
         io.input_globs
             .extend(PYTHON_CACHE_GLOBS.map(|cache| format!("!{cache}")));
+        if let Some(venv) = virtual_environment_path(package, context.environment) {
+            io.input_globs.push(format!("!{venv}/**"));
+            io.forbidden_output_prefixes.push(venv);
+        }
         // These variables point at files whose contents affect uv. Until the
         // paths can be resolved against the repository safely, fail closed
         // instead of restoring an artifact hashed only by the path string.
@@ -1816,6 +1855,16 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
+fn paths_equal(left: &std::path::Path, right: &std::path::Path) -> bool {
+    if cfg!(windows) {
+        left.as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
+    } else {
+        left == right
+    }
+}
+
 fn parse_python_identity(
     stdout: &str,
     python_path: &std::path::Path,
@@ -1826,7 +1875,7 @@ fn parse_python_identity(
         .ok()?
         .into_iter()
         .find(|identity| {
-            dunce::canonicalize(&identity.path).is_ok_and(|path| path == python_path)
+            dunce::canonicalize(&identity.path).is_ok_and(|path| paths_equal(&path, python_path))
         })?;
     identity.binary_sha256 = binary_sha256;
     identity.host = host;
@@ -2400,7 +2449,10 @@ impl PruneDomain for UvPruneKnowledge {
     }
 }
 
-fn uv_change_observation(package_directories: &[String]) -> ChangeObservation {
+fn uv_change_observation(
+    repo_root: &AbsoluteSystemPath,
+    package_directories: &[String],
+) -> ChangeObservation {
     let mut observation = ChangeObservation::new()
         .with_rediscovery_file_name(PYPROJECT_TOML)
         .with_resolution_path(UV_LOCK)
@@ -2408,6 +2460,17 @@ fn uv_change_observation(package_directories: &[String]) -> ChangeObservation {
         .with_resolution_path("uv.toml")
         .with_ignore_prefix(".venv")
         .with_ignore_prefix("dist");
+    for name in ["VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT"] {
+        if let Some(path) = std::env::var_os(name)
+            .map(|path| {
+                AbsoluteSystemPathBuf::from_unknown(repo_root, path.to_string_lossy().as_ref())
+            })
+            .and_then(|path| repo_root.anchor(&path).ok())
+            .filter(|path| path.components().next().is_some())
+        {
+            observation = observation.with_ignore_prefix(path.to_unix().to_string());
+        }
+    }
     for directory in std::iter::once("").chain(package_directories.iter().map(String::as_str)) {
         for cache in [
             ".ruff_cache",
@@ -2497,7 +2560,7 @@ impl RepositoryContributor for UvContributor {
                 .collect();
             workspace_directories.sort();
             workspace_directories.dedup();
-            let change_observation = uv_change_observation(&workspace_directories);
+            let change_observation = uv_change_observation(&self.repo_root, &workspace_directories);
             let prune_domain = UvPruneKnowledge::discover(
                 &self.repo_root,
                 package_directories.clone(),
@@ -3353,6 +3416,13 @@ version = "0.1.0"
     }
 
     #[test]
+    fn test_python_paths_follow_platform_case_sensitivity() {
+        let left = std::path::Path::new("C:/Users/RunnerAdmin/Python/python.exe");
+        let right = std::path::Path::new("c:/users/runneradmin/python/python.exe");
+        assert_eq!(paths_equal(left, right), cfg!(windows));
+    }
+
+    #[test]
     fn test_python_identity_omits_installation_paths() {
         let python_path = dunce::canonicalize(std::env::current_exe().unwrap()).unwrap();
         let identity = parse_python_identity(
@@ -3488,7 +3558,7 @@ version = "0.1.0"
             .iter()
             .find(|task| task.name() == "test")
             .unwrap();
-        assert_eq!(root_test.display(), Some("uv run --frozen pytest"));
+        assert_eq!(root_test.display(), Some("uv run --active --frozen pytest"));
         assert_eq!(
             root_test.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::PreferredOnly)
@@ -3519,7 +3589,7 @@ version = "0.1.0"
         assert_eq!(
             member_test.display(),
             Some(
-                "uv run --frozen --package app --no-default-groups --group tests pytest \
+                "uv run --active --frozen --package app --no-default-groups --group tests pytest \
                  packages/app"
             )
         );
@@ -3532,6 +3602,7 @@ version = "0.1.0"
             resolved_args(member_test, &["-k", "smoke"]),
             [
                 "run",
+                "--active",
                 "--frozen",
                 "--package",
                 "app",
@@ -3573,12 +3644,12 @@ version = "0.1.0"
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
             task("lint:ruff").display(),
-            Some("uv run --frozen ruff check packages/app")
+            Some("uv run --active --frozen ruff check packages/app")
         );
         assert_eq!(
             task("check:pyright").display(),
             Some(
-                "uv run --frozen --package app --no-default-groups --group types pyright \
+                "uv run --active --frozen --package app --no-default-groups --group types pyright \
                  packages/app"
             )
         );
@@ -3590,12 +3661,22 @@ version = "0.1.0"
         assert_eq!(arguments.suffix, ["packages/app"]);
         assert_eq!(
             resolved_args(task("lint:ruff"), &["--fix"]),
-            ["run", "--frozen", "ruff", "check", "--fix", "packages/app",].map(OsString::from)
+            [
+                "run",
+                "--active",
+                "--frozen",
+                "ruff",
+                "check",
+                "--fix",
+                "packages/app",
+            ]
+            .map(OsString::from)
         );
         assert_eq!(
             resolved_args(task("check:pyright"), &["--warnings"]),
             [
                 "run",
+                "--active",
                 "--frozen",
                 "--package",
                 "app",
@@ -3634,12 +3715,13 @@ version = "0.1.0"
             .unwrap();
         assert_eq!(
             lint.display(),
-            Some("uv run --frozen --all-packages ruff check packages/one packages/two")
+            Some("uv run --active --frozen --all-packages ruff check packages/one packages/two")
         );
         assert_eq!(
             resolved_args(lint, &["--fix", "--unsafe-fixes"]),
             [
                 "run",
+                "--active",
                 "--frozen",
                 "--all-packages",
                 "ruff",
@@ -3674,11 +3756,11 @@ version = "0.1.0"
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
             task("format:ruff").display(),
-            Some("uv run --frozen --package app ruff format app")
+            Some("uv run --active --frozen --package app ruff format app")
         );
         assert_eq!(
             task("format:black").display(),
-            Some("uv run --frozen --package app black app")
+            Some("uv run --active --frozen --package app black app")
         );
         assert_eq!(
             task("format").display(),
@@ -3687,15 +3769,15 @@ version = "0.1.0"
         );
         assert_eq!(
             task("check:mypy").display(),
-            Some("uv run --frozen --package app mypy app")
+            Some("uv run --active --frozen --package app mypy app")
         );
         assert_eq!(
             task("check:ty").display(),
-            Some("uv run --frozen --package app ty check app")
+            Some("uv run --active --frozen --package app ty check app")
         );
         assert_eq!(
             task("check:pyright").display(),
-            Some("uv run --frozen --package app pyright app")
+            Some("uv run --active --frozen --package app pyright app")
         );
         assert!(matches!(
             task("lint").execution(),
@@ -3890,7 +3972,8 @@ version = "0.1.0"
 
     #[test]
     fn test_python_watch_ignores_root_and_member_caches() {
-        let observation = uv_change_observation(&["packages/app".to_string()]);
+        let root = AbsoluteSystemPathBuf::cwd().unwrap();
+        let observation = uv_change_observation(&root, &["packages/app".to_string()]);
         let expected = ChangeObservation::new()
             .with_rediscovery_file_name(PYPROJECT_TOML)
             .with_resolution_path(UV_LOCK)
