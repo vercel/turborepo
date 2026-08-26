@@ -177,7 +177,7 @@ With zero configuration, Turborepo creates task hashes using:
 - Root Cargo files
 - Relevant Cargo and compiler environment
 - The resolved external dependency closure from `Cargo.lock`
-- The complete `rustc -vV` identity.
+- The complete `rustc -vV` identity. If Turborepo cannot resolve it, Cargo tasks remain runnable but implicit caching is disabled with a warning.
 
 The built-in `format` task also includes `rustfmt.toml`, `.rustfmt.toml`, and `RUSTFMT` in its derived inputs. Because formatting mutates source files, it defaults to uncached.
 

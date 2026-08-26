@@ -785,8 +785,9 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CargoWorkspaceDetails {
     target_directory: AbsoluteSystemPathBuf,
-    host_target: String,
+    host_target: Option<String>,
     supported_targets: HashSet<String>,
+    compiler_identified: bool,
     repository_config_alters_output_layout: bool,
     repository_config_untracked: bool,
     external_config_present: bool,
@@ -853,6 +854,11 @@ impl CargoTaskContract {
             io.env.push("RUSTFMT".to_string());
         }
         if let Some(workspace) = &self.workspace
+            && !workspace.compiler_identified
+        {
+            io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            io.cache_reason = Some("Turborepo could not identify the Rust compiler".to_string());
+        } else if let Some(workspace) = &self.workspace
             && (workspace.repository_config_untracked || workspace.external_config_present)
         {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
@@ -922,8 +928,10 @@ impl CargoTaskContract {
                                     &self.package,
                                     context,
                                 )?;
-                                let effective_target =
-                                    layout.target.as_deref().unwrap_or(&workspace.host_target);
+                                let effective_target = layout
+                                    .target
+                                    .as_deref()
+                                    .or(workspace.host_target.as_deref())?;
                                 let platform = target_platform(effective_target)?;
                                 let package_directory = self.repo_root.resolve(package.directory());
                                 let target_directory =
@@ -1589,20 +1597,33 @@ impl RepositoryContributor for CargoContributor {
             // invalidates crates that actually depend on it, and a toolchain
             // change invalidates everything.
             let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let (rustc, host_target, supported_targets, mut closures) =
-                turborepo_rayon_compat::block_in_place(|| {
-                    validate_contributor_metadata(&self.repo_root, metadata)?;
-                    let (rustc, host_target) = rustc_info(&self.repo_root)?;
-                    let mut supported_targets = rustc_supported_targets(&self.repo_root);
-                    supported_targets.insert(host_target.clone());
-                    Ok::<_, Error>((
-                        rustc,
-                        host_target,
-                        supported_targets,
-                        external_closures_from_lockfile(&lockfile, &all_names)?,
-                    ))
-                })
-                .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let mut closures = turborepo_rayon_compat::block_in_place(|| {
+                validate_contributor_metadata(&self.repo_root, metadata)?;
+                external_closures_from_lockfile(&lockfile, &all_names)
+            })
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let compiler_identity =
+                turborepo_rayon_compat::block_in_place(|| rustc_info(&self.repo_root));
+            if let Err(reason) = &compiler_identity {
+                tracing::warn!(
+                    "Cargo task caching is disabled because Turborepo could not identify the Rust \
+                     compiler: {reason}"
+                );
+            }
+            let compiler_identity = compiler_identity.ok();
+            let compiler_identified = compiler_identity.is_some();
+            let rustc = compiler_identity.as_ref().map(|(identity, _)| identity);
+            let host_target = compiler_identity
+                .as_ref()
+                .map(|(_, host_target)| host_target.clone());
+            let mut supported_targets = if compiler_identified {
+                rustc_supported_targets(&self.repo_root)
+            } else {
+                HashSet::new()
+            };
+            if let Some(host_target) = &host_target {
+                supported_targets.insert(host_target.clone());
+            }
             let workspace_contract_details = target_directory.map(|target_directory| {
                 let startup_environment = CargoHomeEnvironment::current();
                 let config = cargo_config_influence(&self.repo_root, &startup_environment);
@@ -1610,6 +1631,7 @@ impl RepositoryContributor for CargoContributor {
                     target_directory,
                     host_target,
                     supported_targets,
+                    compiler_identified,
                     repository_config_alters_output_layout: config.repository_alters_output_layout,
                     repository_config_untracked: config.repository_config_untracked,
                     external_config_present: config.external_present,
@@ -1620,7 +1642,7 @@ impl RepositoryContributor for CargoContributor {
                 .values()
                 .flatten()
                 .cloned()
-                .chain(std::iter::once(rustc.clone()))
+                .chain(rustc.cloned())
                 .collect();
 
             let mut packages = Vec::with_capacity(crates.len() + 1);
@@ -1648,7 +1670,7 @@ impl RepositoryContributor for CargoContributor {
                     .remove(&cargo_crate.name)
                     .unwrap_or_default()
                     .into_iter()
-                    .chain(std::iter::once(rustc.clone()))
+                    .chain(rustc.cloned())
                     .collect();
                 resolutions.push(package_resolution(
                     cargo_crate.name.clone(),
@@ -2738,12 +2760,13 @@ dependencies = ["lib-a"]
     fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
         CargoWorkspaceDetails {
             target_directory: root.join_component(TARGET_DIR),
-            host_target: "x86_64-unknown-linux-gnu".to_string(),
+            host_target: Some("x86_64-unknown-linux-gnu".to_string()),
             supported_targets: HashSet::from([
                 "x86_64-unknown-linux-gnu".to_string(),
                 "aarch64-apple-darwin".to_string(),
                 "x86_64-pc-windows-msvc".to_string(),
             ]),
+            compiler_identified: true,
             repository_config_alters_output_layout: false,
             repository_config_untracked: false,
             external_config_present: false,
@@ -4147,6 +4170,30 @@ release: 1.96.0-nightly\n",
         let io = app_contract
             .derived_task_io(&app_ctx, "build", "../..", &deps, true, &context)
             .expect("entrypoint build derives IO");
+        let mut unidentified_workspace = output_test_workspace(&root);
+        unidentified_workspace.compiler_identified = false;
+        unidentified_workspace.host_target = None;
+        unidentified_workspace.supported_targets.clear();
+        let unidentified_contract = CargoTaskContract::new(
+            root.clone(),
+            output_test_package(),
+            Some(unidentified_workspace),
+        );
+        let unidentified_io = unidentified_contract
+            .derived_task_io(&app_ctx, "build", "../..", &deps, true, &context)
+            .expect("entrypoint build remains runnable without compiler identity");
+        assert_eq!(
+            unidentified_io.input_safety,
+            toolchain::DerivedInputSafety::Untracked
+        );
+        assert_eq!(
+            unidentified_io.cache_reason.as_deref(),
+            Some("Turborepo could not identify the Rust compiler")
+        );
+        assert_eq!(
+            unidentified_io.outputs,
+            toolchain::DerivedOutputs::Unavailable
+        );
         assert!(
             !io.input_globs
                 .iter()
