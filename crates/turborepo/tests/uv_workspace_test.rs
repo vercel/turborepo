@@ -100,12 +100,37 @@ fn uv_toolchain_diagnostics(dir: &Path) -> String {
                 },
             )
     };
-    let python_find = command(
-        "uv",
-        &["python", "find", "--resolve-links", "--no-python-downloads"],
+    let python_find = std::process::Command::new("uv")
+        .args(["python", "find", "--resolve-links", "--no-python-downloads"])
+        .current_dir(dir)
+        .output();
+    let python_diagnostics = python_find.as_ref().map_or_else(
+        |error| format!("spawn error: {error}"),
+        |output| {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            format!(
+                "status: {}\nstdout: {path}\nstderr: {}\npython metadata: {:?}\npython \
+                 --version:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr),
+                fs::metadata(&path),
+                command(&path, &["--version"])
+            )
+        },
+    );
+    let uv_metadata = which::which("uv").map(|path| fs::metadata(path));
+    let windows_host = std::env::var_os("SystemRoot").map_or_else(
+        || "SystemRoot is missing".to_string(),
+        |root| {
+            command(
+                &Path::new(&root).join("System32/cmd.exe").to_string_lossy(),
+                &["/C", "ver"],
+            )
+        },
     );
     format!(
-        "{uv}\nuv --version:\n{}\nuv python find:\n{python_find}",
+        "{uv}\nuv metadata: {uv_metadata:?}\nuv --version:\n{}\nuv python \
+         find:\n{python_diagnostics}\nWindows host:\n{windows_host}",
         command("uv", &["--version"])
     )
 }
