@@ -857,9 +857,16 @@ impl CargoTaskContract {
         {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
             if workspace.repository_config_untracked {
+                io.cache_reason =
+                    Some("repository Cargo configuration cannot be hashed safely".to_string());
                 io.input_globs.retain(|glob| {
                     !glob.ends_with(".cargo/config.toml") && !glob.ends_with(".cargo/config")
                 });
+            } else {
+                io.cache_reason = Some(
+                    "Cargo configuration outside the repository is not included in the task hash"
+                        .to_string(),
+                );
             }
         }
 

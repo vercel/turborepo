@@ -500,7 +500,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
-  `include_str!` from outside any crate directory) are additive.
+  `include_str!` from outside any crate directory) are additive. Unsafe
+  repository Cargo configuration and configuration inherited from outside the
+  repository disable implicit caching and emit the reason as a warning.
 - **External dependencies** (`turborepo-lockfiles/src/cargo.rs`): locked
   registry/git packages and the compiler itself flow through the same
   `ExternalResolutionGeneration` and resolution fingerprint used by JavaScript
