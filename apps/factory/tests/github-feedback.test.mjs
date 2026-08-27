@@ -11,21 +11,17 @@ import {
 
 const trusted = {
   branch: "agents/examples-basic-2026-08-25",
-  conversationKind: "pull_request",
+  conversationKind: "review_thread",
   permission: "write",
   pullRequestNumber: 123,
   repository: "vercel/turborepo",
   senderType: "User"
 };
 
-test("accepts trusted feedback on Factory pull requests", () => {
+test("accepts trusted feedback on Factory pull request review threads", () => {
   assert.equal(isTrustedFactoryPullRequestFeedback(trusted), true);
   assert.equal(
-    isTrustedFactoryPullRequestFeedback({
-      ...trusted,
-      conversationKind: "review_thread",
-      permission: "admin"
-    }),
+    isTrustedFactoryPullRequestFeedback({ ...trusted, permission: "admin" }),
     true
   );
 });
@@ -34,6 +30,7 @@ test("rejects comments that cannot safely drive Factory changes", () => {
   for (const candidate of [
     { ...trusted, branch: "feature/not-factory" },
     { ...trusted, conversationKind: "issue" },
+    { ...trusted, conversationKind: "pull_request" },
     { ...trusted, permission: "read" },
     { ...trusted, pullRequestNumber: null },
     { ...trusted, repository: "someone/fork" },
