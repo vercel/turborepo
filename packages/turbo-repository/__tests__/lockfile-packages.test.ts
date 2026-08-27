@@ -1,10 +1,21 @@
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
+import * as os from "node:os";
+import * as fs from "node:fs";
 import { Workspace } from "../js/dist/index.js";
 
 const PNPM_MONOREPO_PATH = path.resolve(__dirname, "./fixtures/monorepo");
 const NPM_MONOREPO_PATH = path.resolve(__dirname, "./fixtures/npm-monorepo");
+
+// The set of typed error categories `lockfilePackages` may report. Keep in
+// sync with the `LockfileErrorKind` enum in the native module.
+const LOCKFILE_ERROR_KINDS = [
+  "NoLockfile",
+  "LockfileUnreadable",
+  "ResolutionFailed",
+  "UnparseableEntry",
+];
 
 describe("packagesFromLockfile", () => {
   it("returns external packages from a pnpm lockfile", async () => {
@@ -100,6 +111,35 @@ describe("lockfilePackages", () => {
 
     assert.deepEqual(packages, [], "Expected no packages");
     assert.deepEqual(errors, [], "Expected no parse errors");
+  });
+
+  it("reports a typed error instead of throwing when there is no lockfile", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "no-lockfile-"));
+    fs.writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: "solo",
+        version: "1.0.0",
+        packageManager: "pnpm@9.15.9",
+      })
+    );
+
+    const workspace = await Workspace.find(dir);
+    const { packages, errors } = await workspace.lockfilePackages();
+
+    assert.deepEqual(packages, [], "Expected no packages");
+    assert.equal(errors.length, 1, "Expected exactly one error");
+    assert.equal(errors[0].kind, "NoLockfile");
+    assert.ok(errors[0].message.length > 0, "Expected an error message");
+
+    // Every reported error carries a known, typed category so callers can
+    // group failures in metrics.
+    for (const error of errors) {
+      assert.ok(
+        LOCKFILE_ERROR_KINDS.includes(error.kind),
+        `Unexpected error kind: ${error.kind}`
+      );
+    }
   });
 });
 

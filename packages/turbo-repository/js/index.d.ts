@@ -14,7 +14,42 @@ export interface LockfilePackage {
   version: string;
 }
 /**
- * The external packages referenced by a workspace's lockfile, plus any
+ * A typed classifier for why lockfile package extraction was incomplete.
+ * Stable across releases so consumers can group failures in metrics without
+ * parsing human-readable messages.
+ */
+export const enum LockfileErrorKind {
+  /**
+   * No JavaScript lockfile resolution is available for this workspace (for
+   * example a single-package workspace, or one with no lockfile at all).
+   */
+  NoLockfile = "NoLockfile",
+  /** A lockfile is present but could not be read or parsed. */
+  LockfileUnreadable = "LockfileUnreadable",
+  /**
+   * The lockfile was read, but its dependency graph could not be resolved
+   * (for example a transitive closure or declaration could not be
+   * computed).
+   */
+  ResolutionFailed = "ResolutionFailed",
+  /**
+   * A specific lockfile entry could not be split into a `name` and
+   * `version` (for example an unrecognized key format).
+   */
+  UnparseableEntry = "UnparseableEntry",
+}
+/** A single, typed reason lockfile package extraction was incomplete. */
+export interface LockfileError {
+  /** The typed failure category, for grouping in metrics. */
+  kind: LockfileErrorKind;
+  /**
+   * A human-readable explanation, including the underlying resolver reason
+   * code where one applies.
+   */
+  message: string;
+}
+/**
+ * The external packages referenced by a workspace's lockfile, plus any typed
  * reasons the lockfile could not be fully parsed. Intended to be consumed for
  * metrics: a non-empty `errors` list (or an empty `packages` list alongside
  * one) signals that extraction was incomplete.
@@ -26,10 +61,10 @@ export interface LockfilePackages {
    */
   packages: Array<LockfilePackage>;
   /**
-   * Human-readable reasons the lockfile could not be read or fully parsed.
-   * Empty when extraction succeeded.
+   * Typed reasons the lockfile could not be read or fully parsed. Empty
+   * when extraction succeeded.
    */
-  errors: Array<string>;
+  errors: Array<LockfileError>;
 }
 export class Package {
   name: string;

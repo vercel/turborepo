@@ -66,7 +66,36 @@ pub struct LockfilePackage {
     pub version: String,
 }
 
-/// The external packages referenced by a workspace's lockfile, plus any
+/// A typed classifier for why lockfile package extraction was incomplete.
+/// Stable across releases so consumers can group failures in metrics without
+/// parsing human-readable messages.
+#[napi(string_enum)]
+pub enum LockfileErrorKind {
+    /// No JavaScript lockfile resolution is available for this workspace (for
+    /// example a single-package workspace, or one with no lockfile at all).
+    NoLockfile,
+    /// A lockfile is present but could not be read or parsed.
+    LockfileUnreadable,
+    /// The lockfile was read, but its dependency graph could not be resolved
+    /// (for example a transitive closure or declaration could not be
+    /// computed).
+    ResolutionFailed,
+    /// A specific lockfile entry could not be split into a `name` and
+    /// `version` (for example an unrecognized key format).
+    UnparseableEntry,
+}
+
+/// A single, typed reason lockfile package extraction was incomplete.
+#[napi(object)]
+pub struct LockfileError {
+    /// The typed failure category, for grouping in metrics.
+    pub kind: LockfileErrorKind,
+    /// A human-readable explanation, including the underlying resolver reason
+    /// code where one applies.
+    pub message: String,
+}
+
+/// The external packages referenced by a workspace's lockfile, plus any typed
 /// reasons the lockfile could not be fully parsed. Intended to be consumed for
 /// metrics: a non-empty `errors` list (or an empty `packages` list alongside
 /// one) signals that extraction was incomplete.
@@ -75,9 +104,9 @@ pub struct LockfilePackages {
     /// Fully qualified external packages found in the lockfile, sorted and
     /// deduplicated.
     pub packages: Vec<LockfilePackage>,
-    /// Human-readable reasons the lockfile could not be read or fully parsed.
-    /// Empty when extraction succeeded.
-    pub errors: Vec<String>,
+    /// Typed reasons the lockfile could not be read or fully parsed. Empty
+    /// when extraction succeeded.
+    pub errors: Vec<LockfileError>,
 }
 
 #[napi]
@@ -248,10 +277,13 @@ impl Workspace {
                 for identity in identities {
                     match split_identity(identity.display_name()) {
                         Some((name, version)) => packages.push(LockfilePackage { name, version }),
-                        None => errors.push(format!(
-                            "could not parse name and version from lockfile entry '{}'",
-                            identity.display_name()
-                        )),
+                        None => errors.push(LockfileError {
+                            kind: LockfileErrorKind::UnparseableEntry,
+                            message: format!(
+                                "could not parse name and version from lockfile entry '{}'",
+                                identity.display_name()
+                            ),
+                        }),
                     }
                 }
                 packages.sort_by(|left, right| {
@@ -261,13 +293,18 @@ impl Workspace {
             }
             JavascriptExternalResolution::Unavailable { code, message } => LockfilePackages {
                 packages: Vec::new(),
-                errors: vec![format!("{code}: {message}")],
+                errors: vec![LockfileError {
+                    kind: classify_resolution_code(&code),
+                    message: format!("{code}: {message}"),
+                }],
             },
             JavascriptExternalResolution::NotAvailable => LockfilePackages {
                 packages: Vec::new(),
-                errors: vec![
-                    "no JavaScript lockfile resolution is available for this workspace".to_string(),
-                ],
+                errors: vec![LockfileError {
+                    kind: LockfileErrorKind::NoLockfile,
+                    message: "no JavaScript lockfile resolution is available for this workspace"
+                        .to_string(),
+                }],
             },
         }
     }
@@ -428,6 +465,18 @@ impl Workspace {
             .map_err(|error| Error::from_reason(error.to_string()))?;
         packages.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
         Ok(packages)
+    }
+}
+
+/// Maps an underlying JavaScript external-resolution reason code to a typed
+/// [`LockfileErrorKind`]. Unrecognized codes fall back to
+/// [`LockfileErrorKind::ResolutionFailed`], since an `Unavailable` domain
+/// always means resolution did not complete; the raw code is preserved in the
+/// error message for debugging.
+fn classify_resolution_code(code: &str) -> LockfileErrorKind {
+    match code {
+        "lockfile-unavailable" => LockfileErrorKind::LockfileUnreadable,
+        _ => LockfileErrorKind::ResolutionFailed,
     }
 }
 
