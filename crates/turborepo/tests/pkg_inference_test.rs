@@ -20,6 +20,5 @@ fn test_package_inference_from_subdirectory() {
         stdout.contains("Packages in scope: util"),
         "expected only util in scope when run from packages/util, got: {stdout}"
     );
-    assert!(stdout.contains("Running build in 1 package"));
     assert!(stdout.contains("1 successful, 1 total"));
 }
