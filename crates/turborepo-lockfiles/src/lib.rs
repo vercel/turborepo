@@ -93,6 +93,42 @@ pub struct Package {
     pub version: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageSource {
+    Registry,
+    Git,
+    File,
+    Link,
+    Workspace,
+    Patch,
+}
+
+pub fn package_source_from_identifier(identifier: &str) -> PackageSource {
+    if identifier.starts_with("patch:") || identifier.contains("patch_hash=") {
+        PackageSource::Patch
+    } else if identifier.contains("@workspace:") || identifier.starts_with("workspace:") {
+        PackageSource::Workspace
+    } else if identifier.contains("@link:") || identifier.starts_with("link:") {
+        PackageSource::Link
+    } else if identifier.contains("@file:")
+        || identifier.starts_with("file:")
+        || identifier.starts_with("./")
+        || identifier.starts_with("../")
+    {
+        PackageSource::File
+    } else if identifier.contains("@git:")
+        || identifier.contains("@git+")
+        || identifier.contains("@github:")
+        || identifier.starts_with("git:")
+        || identifier.starts_with("git+")
+        || identifier.starts_with("github:")
+    {
+        PackageSource::Git
+    } else {
+        PackageSource::Registry
+    }
+}
+
 /// A trait for exposing common operations for lockfile parsing, analysis, and
 /// encoding.
 ///
@@ -179,6 +215,17 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     /// the lockfile e.g. differing peer dependencies.
     #[allow(unused)]
     fn human_name(&self, package: &Package) -> Option<String> {
+        None
+    }
+
+    /// The source used to resolve a package.
+    fn package_source(&self, package: &Package) -> PackageSource {
+        package_source_from_identifier(&package.key)
+    }
+
+    /// The package-manager-specific lockfile format version, when exposed by
+    /// this lockfile implementation.
+    fn format_version(&self) -> Option<String> {
         None
     }
 
@@ -446,5 +493,26 @@ impl Package {
         let key = key.into();
         let version = version.into();
         Self { key, version }
+    }
+}
+
+#[cfg(test)]
+mod package_source_tests {
+    use super::{PackageSource, package_source_from_identifier};
+
+    #[test]
+    fn classifies_supported_package_sources() {
+        for (identifier, expected) in [
+            ("lodash@4.17.21", PackageSource::Registry),
+            ("pkg@git+https://example.com/repo.git", PackageSource::Git),
+            ("pkg@github:owner/repo", PackageSource::Git),
+            ("pkg@file:../pkg", PackageSource::File),
+            ("pkg@link:../pkg", PackageSource::Link),
+            ("pkg@workspace:packages/pkg", PackageSource::Workspace),
+            ("pkg@1.0.0(patch_hash=abc)", PackageSource::Patch),
+            ("patch:pkg@npm:1.0.0#./pkg.patch", PackageSource::Patch),
+        ] {
+            assert_eq!(package_source_from_identifier(identifier), expected);
+        }
     }
 }

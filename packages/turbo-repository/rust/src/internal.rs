@@ -1,17 +1,187 @@
+use std::collections::{BTreeMap, HashMap};
+
 use napi::Status;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
+use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     inference::{self, RepoMode as WorkspaceType, RepoState as WorkspaceState},
     package_graph::{PackageGraph, PackageGraphBuilder},
-    package_json::PackageJson,
+    package_json::{DependencyKind, PackageJson},
     package_manager,
 };
 use turborepo_turbo_json::{
     RawTurboJson, TurboJson, TurboJsonPath, TurboJsonReader, load_from_path,
 };
 
-use crate::{Package, PackageManager, Workspace};
+use crate::{
+    LockfileError, LockfileErrorKind, LockfilePackage, LockfilePackages, LockfilePackagesMetadata,
+    Package, PackageManager, Workspace, package_source_name, split_identity,
+};
+
+enum SinglePackageLockfileRead {
+    Loaded(Box<dyn Lockfile>),
+    Missing(String),
+    Unreadable {
+        kind: LockfileErrorKind,
+        message: String,
+    },
+}
+
+pub(crate) struct SinglePackageLockfile {
+    lockfile: SinglePackageLockfileRead,
+    dependencies: BTreeMap<String, String>,
+}
+
+impl SinglePackageLockfile {
+    fn new(
+        workspace_root: &turbopath::AbsoluteSystemPath,
+        package_manager: &package_manager::PackageManager,
+        package_json: &PackageJson,
+    ) -> Self {
+        let mut dependencies = BTreeMap::new();
+        for (name, specifier, kind) in package_json.dependencies_with_kind() {
+            if !matches!(kind, DependencyKind::Peer { .. }) {
+                dependencies
+                    .entry(name.clone())
+                    .or_insert_with(|| specifier.clone());
+            }
+        }
+        let lockfile = match package_manager.read_lockfile(workspace_root, package_json) {
+            Ok(lockfile) => SinglePackageLockfileRead::Loaded(lockfile),
+            Err(package_manager::Error::LockfileMissing(_))
+                if matches!(
+                    package_manager.lockfile_manager(),
+                    package_manager::PackageManager::Bun
+                ) && workspace_root.join_component("bun.lockb").exists() =>
+            {
+                SinglePackageLockfileRead::Unreadable {
+                    kind: LockfileErrorKind::UnsupportedBunLockfile,
+                    message: "Only found bun.lockb, please run `bun install --save-text-lockfile`"
+                        .to_string(),
+                }
+            }
+            Err(package_manager::Error::LockfileMissing(path)) => {
+                SinglePackageLockfileRead::Missing(format!("Lockfile not found at {path}"))
+            }
+            Err(error) => SinglePackageLockfileRead::Unreadable {
+                kind: classify_package_manager_error(&error),
+                message: error.to_string(),
+            },
+        };
+        Self {
+            lockfile,
+            dependencies,
+        }
+    }
+
+    pub(crate) fn error_kind(&self) -> Option<LockfileErrorKind> {
+        match &self.lockfile {
+            SinglePackageLockfileRead::Loaded(_) => None,
+            SinglePackageLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
+            SinglePackageLockfileRead::Unreadable { kind, .. } => Some(*kind),
+        }
+    }
+
+    pub(crate) fn error_message(&self) -> Option<String> {
+        match &self.lockfile {
+            SinglePackageLockfileRead::Loaded(_) => None,
+            SinglePackageLockfileRead::Missing(message)
+            | SinglePackageLockfileRead::Unreadable { message, .. } => Some(message.clone()),
+        }
+    }
+
+    pub(crate) fn packages(
+        &self,
+        lockfile_path: &str,
+        lockfile_format: &str,
+        package_manager: &PackageManager,
+    ) -> LockfilePackages {
+        let metadata = |lockfile_version| LockfilePackagesMetadata {
+            lockfile_path: lockfile_path.to_string(),
+            lockfile_format: lockfile_format.to_string(),
+            lockfile_version,
+            package_manager: package_manager.name.clone(),
+            package_manager_version: package_manager.version.clone(),
+        };
+        let lockfile = match &self.lockfile {
+            SinglePackageLockfileRead::Loaded(lockfile) => lockfile,
+            SinglePackageLockfileRead::Missing(message) => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::NoLockfile,
+                        message: message.clone(),
+                    }],
+                    metadata(None),
+                );
+            }
+            SinglePackageLockfileRead::Unreadable { kind, message } => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: *kind,
+                        message: message.clone(),
+                    }],
+                    metadata(None),
+                );
+            }
+        };
+
+        let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
+            lockfile.as_ref(),
+            HashMap::from([(String::new(), self.dependencies.clone())]),
+            false,
+        ) {
+            Ok(closures) => closures,
+            Err(error) => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::ResolutionFailed,
+                        message: error.to_string(),
+                    }],
+                    metadata(lockfile.format_version()),
+                );
+            }
+        };
+
+        let mut packages = Vec::new();
+        let mut errors = Vec::new();
+        for package in closures.get("").into_iter().flatten() {
+            let display_name = lockfile
+                .human_name(package)
+                .unwrap_or_else(|| package.key.clone());
+            match split_identity(&display_name) {
+                Some((name, version)) => packages.push(LockfilePackage {
+                    name,
+                    version,
+                    source: package_source_name(lockfile.package_source(package)),
+                }),
+                None => errors.push(LockfileError {
+                    kind: LockfileErrorKind::UnparseableEntry,
+                    message: format!(
+                        "could not parse name and version from lockfile entry '{display_name}'"
+                    ),
+                }),
+            }
+        }
+        packages
+            .sort_by(|left, right| (&left.name, &left.version).cmp(&(&right.name, &right.version)));
+        packages.dedup_by(|left, right| left.name == right.name && left.version == right.version);
+        LockfilePackages::new(packages, errors, metadata(lockfile.format_version()))
+    }
+}
+
+fn classify_package_manager_error(error: &package_manager::Error) -> LockfileErrorKind {
+    match error {
+        package_manager::Error::Lockfile(turborepo_lockfiles::Error::UnsupportedNpmVersion) => {
+            LockfileErrorKind::UnsupportedNpmLockfileVersion
+        }
+        package_manager::Error::BunBinaryLockfile => LockfileErrorKind::UnsupportedBunLockfile,
+        _ => LockfileErrorKind::LockfileUnreadable,
+    }
+}
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -95,6 +265,30 @@ impl Workspace {
         let package_manager_name = package_manager.name();
 
         let workspace_root = &workspace_state.root;
+        let lockfile_manager = package_manager.lockfile_manager();
+        let lockfile_path = if matches!(lockfile_manager, package_manager::PackageManager::Bun)
+            && !workspace_root.join_component("bun.lock").exists()
+            && workspace_root.join_component("bun.lockb").exists()
+        {
+            workspace_root.join_component("bun.lockb")
+        } else {
+            package_manager.lockfile_path(workspace_root)
+        }
+        .to_string();
+        let lockfile_format = match lockfile_manager {
+            package_manager::PackageManager::Npm => "npm",
+            package_manager::PackageManager::Pnpm
+            | package_manager::PackageManager::Pnpm6
+            | package_manager::PackageManager::Pnpm9 => "pnpm",
+            package_manager::PackageManager::Yarn => "yarn",
+            package_manager::PackageManager::Berry => "yarn",
+            package_manager::PackageManager::Bun => "bun",
+            package_manager::PackageManager::Nub { .. }
+            | package_manager::PackageManager::Aube { .. } => {
+                unreachable!("lockfile_manager returns a concrete package manager")
+            }
+        }
+        .to_string();
         let initial_turbo_json = match load_from_path(
             &TurboJsonReader::new(workspace_root.clone()),
             TurboJsonPath::Dir(workspace_root),
@@ -123,6 +317,8 @@ impl Workspace {
         };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
+        let lockfile =
+            SinglePackageLockfile::new(workspace_root, package_manager, &root_package_json);
         let mut package_graph_builder = PackageGraphBuilder::new(workspace_root, root_package_json)
             .with_single_package_mode(!is_multi_package)
             .with_package_manager(package_manager.clone());
@@ -142,6 +338,9 @@ impl Workspace {
                 version: package_manager_version,
             },
             graph: package_graph,
+            lockfile,
+            lockfile_path,
+            lockfile_format,
         })
     }
 
