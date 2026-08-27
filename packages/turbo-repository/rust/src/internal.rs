@@ -122,6 +122,7 @@ impl Workspace {
             initial_turbo_json
         };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
+        let package_manager_version = detect_package_manager_version(&root_package_json);
         let mut package_graph_builder = PackageGraphBuilder::new(workspace_root, root_package_json)
             .with_single_package_mode(!is_multi_package)
             .with_package_manager(package_manager.clone());
@@ -138,6 +139,7 @@ impl Workspace {
             is_multi_package,
             package_manager: PackageManager {
                 name: package_manager_name.to_string(),
+                version: package_manager_version,
             },
             graph: package_graph,
         })
@@ -146,6 +148,31 @@ impl Workspace {
     pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
         packages_from_graph(&self.graph)
     }
+}
+
+/// Best-effort extraction of the declared package manager version from the
+/// root `package.json`. Prefers the `packageManager` field (e.g.
+/// `pnpm@9.12.3`), falling back to `devEngines.packageManager.version`. Returns
+/// `None` when neither is present or when the version points at a URL rather
+/// than a concrete version. This is metadata only, so any failure to parse is
+/// swallowed rather than surfaced as an error.
+fn detect_package_manager_version(package_json: &PackageJson) -> Option<String> {
+    if let Some(field) = &package_json.package_manager
+        && let Ok((_, version)) =
+            package_manager::PackageManager::parse_package_manager_string(field)
+        && !version.starts_with("http")
+    {
+        return Some(version.to_string());
+    }
+
+    let dev_engines = package_json.dev_engines.as_ref()?;
+    let version = dev_engines
+        .as_object()?
+        .get("packageManager")?
+        .as_object()?
+        .get("version")?
+        .as_str()?;
+    Some(version.to_string())
 }
 
 fn packages_from_graph(graph: &PackageGraph) -> Result<Vec<Package>, Error> {

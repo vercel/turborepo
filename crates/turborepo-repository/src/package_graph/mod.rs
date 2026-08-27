@@ -45,6 +45,26 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+/// Outcome of reading the JavaScript external resolution (lockfile) domain.
+///
+/// Distinguishes a resolved listing (which may legitimately be empty when a
+/// workspace has no external dependencies) from an unavailable one that
+/// carries a machine-readable reason, so consumers such as build tooling can
+/// emit metrics describing why a lockfile could not be parsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JavascriptExternalResolution {
+    /// The lockfile was read and resolved; `identities` is the deduplicated,
+    /// sorted set of external packages it references (possibly empty).
+    Resolved(Vec<ExternalPackageIdentity>),
+    /// The lockfile could not be read or parsed. `code` is a stable
+    /// classifier (e.g. `lockfile-unavailable`, `closure-unavailable`) and
+    /// `message` is a human-readable explanation.
+    Unavailable { code: String, message: String },
+    /// No JavaScript resolution data exists for this workspace (for example a
+    /// single-package workspace, or one with no lockfile at all).
+    NotAvailable,
+}
+
 #[derive(Debug)]
 struct ExternalResolutionKnowledge {
     status: ExternalResolutionStatus,
@@ -1529,6 +1549,42 @@ impl PackageGraph {
             .identities
             .iter()
             .find(|identity| *identity == &needle)
+    }
+
+    /// JavaScript-domain external resolution outcome, preserving the reason a
+    /// lockfile could not be read or parsed. Unlike
+    /// [`Self::javascript_external_package_identities`], which collapses every
+    /// non-resolved state to an empty list, this distinguishes a resolved
+    /// (possibly empty) listing from an unavailable one so callers can emit
+    /// metrics on parse failures.
+    pub fn javascript_external_resolution(&self) -> JavascriptExternalResolution {
+        let Some(generation) = self.resolution_generation() else {
+            return JavascriptExternalResolution::NotAvailable;
+        };
+        let Some(domain) = generation.domain(&JAVASCRIPT_RESOLUTION_DOMAIN) else {
+            return JavascriptExternalResolution::NotAvailable;
+        };
+        match domain.data() {
+            ExternalResolutionData::Resolved { packages, .. } => {
+                let mut seen = HashSet::new();
+                let mut identities = Vec::new();
+                for package in packages {
+                    for identity in package.identities() {
+                        if seen.insert(identity.clone()) {
+                            identities.push(identity.clone());
+                        }
+                    }
+                }
+                identities.sort();
+                JavascriptExternalResolution::Resolved(identities)
+            }
+            ExternalResolutionData::Unavailable(reason) => {
+                JavascriptExternalResolution::Unavailable {
+                    code: reason.code().to_string(),
+                    message: reason.message().to_string(),
+                }
+            }
+        }
     }
 
     /// JavaScript-domain external identities only. Used by N-API lockfile
