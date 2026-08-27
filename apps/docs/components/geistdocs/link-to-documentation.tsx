@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { DynamicLink } from "fumadocs-core/dynamic-link";
 
 type LinkToDocumentationProps = {
   href: string;
@@ -11,11 +11,21 @@ export const LinkToDocumentation = ({
   text
 }: LinkToDocumentationProps) => (
   <small className="not-prose underline">
-    <Link
-      href={href}
-      className="inline-flex flex-row gap-2 space-y-0 decoration-foreground decoration-1"
-    >
-      → {text}
-    </Link>
+    {href.startsWith("/") ? (
+      <DynamicLink
+        className="inline-flex flex-row gap-2 space-y-0 decoration-foreground decoration-1"
+        href={`/[lang]${href}`}
+        prefetch
+      >
+        → {text}
+      </DynamicLink>
+    ) : (
+      <a
+        className="inline-flex flex-row gap-2 space-y-0 decoration-foreground decoration-1"
+        href={href}
+      >
+        → {text}
+      </a>
+    )}
   </small>
 );
