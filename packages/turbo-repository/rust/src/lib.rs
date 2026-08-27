@@ -289,6 +289,13 @@ impl Workspace {
                 packages.sort_by(|left, right| {
                     (&left.name, &left.version).cmp(&(&right.name, &right.version))
                 });
+                // Distinct lockfile identities can collapse to the same
+                // `(name, version)` after `split_identity` strips pnpm peer
+                // closures (e.g. `react-dom@18.2.0(react@18.2.0)` vs
+                // `react-dom@18.2.0(react@17.0.0)`). The upstream dedup keys on
+                // the full identity, so those variants both survive; dedup here
+                // to honor the documented "deduplicated" contract.
+                packages.dedup_by(|a, b| a.name == b.name && a.version == b.version);
                 LockfilePackages { packages, errors }
             }
             JavascriptExternalResolution::Unavailable { code, message } => LockfilePackages {
