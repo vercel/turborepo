@@ -86,7 +86,16 @@ pub async fn run(
 
     let color_config = base.color_config;
 
+    // Git-aware filters use lockfile changes while resolving package scope.
+    // Plain listings and package details only query workspace relationships.
+    let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
+        || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder = RunBuilder::new(base, None)?.skip_repo_index_and_scm_state();
+    let run_builder = if needs_external_dependencies {
+        run_builder
+    } else {
+        run_builder.skip_external_dependencies()
+    };
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
     // A pure Cargo workspace has no JavaScript package manager to display.
