@@ -1031,9 +1031,7 @@ impl PackageManager {
         })
     }
 
-    pub(crate) fn parse_package_manager_string(
-        manager: &Spanned<String>,
-    ) -> Result<(&str, &str), Error> {
+    pub fn parse_package_manager_string(manager: &Spanned<String>) -> Result<(&str, &str), Error> {
         let package_manager_pattern = regex!(
             r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
         );

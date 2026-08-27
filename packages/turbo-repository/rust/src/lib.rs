@@ -12,7 +12,9 @@ use turborepo_repository::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
         LockfileContents, PackageChangeMapper, PackageChanges,
     },
-    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage},
+    package_graph::{
+        JavascriptExternalResolution, PackageGraph, PackageName, PackageNode, WorkspacePackage,
+    },
 };
 use turborepo_scm::SCM;
 mod internal;
@@ -48,6 +50,63 @@ pub struct PackageManager {
     /// The package manager name in lower case.
     #[napi(readonly)]
     pub name: String,
+    /// The declared package manager version (from the root `package.json`
+    /// `packageManager` or `devEngines.packageManager` field), if available.
+    #[napi(readonly)]
+    pub version: Option<String>,
+}
+
+/// A single external package resolved from the workspace lockfile, as a fully
+/// qualified `name` and `version` (e.g. `{ name: "lodash", version: "4.17.21"
+/// }`). Peer-dependency closures are stripped so `${name}@${version}` is
+/// always a plain `pkg@1.2.3` identifier.
+#[napi(object)]
+pub struct LockfilePackage {
+    pub name: String,
+    pub version: String,
+}
+
+/// A typed classifier for why lockfile package extraction was incomplete.
+/// Stable across releases so consumers can group failures in metrics without
+/// parsing human-readable messages.
+#[napi(string_enum)]
+pub enum LockfileErrorKind {
+    /// No JavaScript lockfile resolution is available for this workspace (for
+    /// example a single-package workspace, or one with no lockfile at all).
+    NoLockfile,
+    /// A lockfile is present but could not be read or parsed.
+    LockfileUnreadable,
+    /// The lockfile was read, but its dependency graph could not be resolved
+    /// (for example a transitive closure or declaration could not be
+    /// computed).
+    ResolutionFailed,
+    /// A specific lockfile entry could not be split into a `name` and
+    /// `version` (for example an unrecognized key format).
+    UnparseableEntry,
+}
+
+/// A single, typed reason lockfile package extraction was incomplete.
+#[napi(object)]
+pub struct LockfileError {
+    /// The typed failure category, for grouping in metrics.
+    pub kind: LockfileErrorKind,
+    /// A human-readable explanation, including the underlying resolver reason
+    /// code where one applies.
+    pub message: String,
+}
+
+/// The external packages referenced by a workspace's lockfile, plus any typed
+/// reasons the lockfile could not be fully parsed. Intended to be consumed for
+/// metrics: a non-empty `errors` list (or an empty `packages` list alongside
+/// one) signals that extraction was incomplete.
+#[napi(object)]
+pub struct LockfilePackages {
+    /// Fully qualified external packages found in the lockfile, sorted and
+    /// deduplicated.
+    pub packages: Vec<LockfilePackage>,
+    /// Typed reasons the lockfile could not be read or fully parsed. Empty
+    /// when extraction succeeded.
+    pub errors: Vec<LockfileError>,
 }
 
 #[napi]
@@ -198,6 +257,63 @@ impl Workspace {
 
         result.sort();
         Ok(result)
+    }
+
+    /// Returns the external packages referenced by the workspace lockfile as a
+    /// flat, sorted, deduplicated list of `{ name, version }` structs, together
+    /// with any reasons the lockfile could not be fully parsed.
+    ///
+    /// Unlike [`Self::packages_from_lockfile`], this never rejects: a missing
+    /// or unparseable lockfile yields an empty `packages` list and a populated
+    /// `errors` list rather than an exception, so callers can emit metrics on
+    /// both success and failure. Package manager identity is exposed separately
+    /// on [`Workspace::package_manager`].
+    #[napi]
+    pub async fn lockfile_packages(&self) -> LockfilePackages {
+        match self.graph.javascript_external_resolution() {
+            JavascriptExternalResolution::Resolved(identities) => {
+                let mut packages = Vec::with_capacity(identities.len());
+                let mut errors = Vec::new();
+                for identity in identities {
+                    match split_identity(identity.display_name()) {
+                        Some((name, version)) => packages.push(LockfilePackage { name, version }),
+                        None => errors.push(LockfileError {
+                            kind: LockfileErrorKind::UnparseableEntry,
+                            message: format!(
+                                "could not parse name and version from lockfile entry '{}'",
+                                identity.display_name()
+                            ),
+                        }),
+                    }
+                }
+                packages.sort_by(|left, right| {
+                    (&left.name, &left.version).cmp(&(&right.name, &right.version))
+                });
+                // Distinct lockfile identities can collapse to the same
+                // `(name, version)` after `split_identity` strips pnpm peer
+                // closures (e.g. `react-dom@18.2.0(react@18.2.0)` vs
+                // `react-dom@18.2.0(react@17.0.0)`). The upstream dedup keys on
+                // the full identity, so those variants both survive; dedup here
+                // to honor the documented "deduplicated" contract.
+                packages.dedup_by(|a, b| a.name == b.name && a.version == b.version);
+                LockfilePackages { packages, errors }
+            }
+            JavascriptExternalResolution::Unavailable { code, message } => LockfilePackages {
+                packages: Vec::new(),
+                errors: vec![LockfileError {
+                    kind: classify_resolution_code(&code),
+                    message: format!("{code}: {message}"),
+                }],
+            },
+            JavascriptExternalResolution::NotAvailable => LockfilePackages {
+                packages: Vec::new(),
+                errors: vec![LockfileError {
+                    kind: LockfileErrorKind::NoLockfile,
+                    message: "no JavaScript lockfile resolution is available for this workspace"
+                        .to_string(),
+                }],
+            },
+        }
     }
 
     pub fn get_lockfile_contents(
@@ -356,5 +472,109 @@ impl Workspace {
             .map_err(|error| Error::from_reason(error.to_string()))?;
         packages.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
         Ok(packages)
+    }
+}
+
+/// Maps an underlying JavaScript external-resolution reason code to a typed
+/// [`LockfileErrorKind`]. Unrecognized codes fall back to
+/// [`LockfileErrorKind::ResolutionFailed`], since an `Unavailable` domain
+/// always means resolution did not complete; the raw code is preserved in the
+/// error message for debugging.
+fn classify_resolution_code(code: &str) -> LockfileErrorKind {
+    match code {
+        "lockfile-unavailable" => LockfileErrorKind::LockfileUnreadable,
+        _ => LockfileErrorKind::ResolutionFailed,
+    }
+}
+
+/// Splits a fully qualified lockfile identity display name into a clean
+/// `(name, version)` pair.
+///
+/// Display names are `name@version` across every supported JavaScript package
+/// manager, but pnpm keys additionally carry a peer-dependency closure — e.g.
+/// `pkg@1.2.3(other@4.5.6)(another@7.8.9)` — and pnpm v5/v6 keys are prefixed
+/// with `/`. Both are stripped so the result is always a plain `pkg@1.2.3`
+/// style identity. Scoped names (`@scope/pkg@1.2.3`) are handled by locating
+/// the version delimiter after the leading scope `@`.
+///
+/// Returns `None` when no `name@version` delimiter can be found (for example a
+/// pnpm v5 `name/version` key), letting the caller record the entry as a
+/// parse failure instead of emitting a malformed package.
+fn split_identity(display_name: &str) -> Option<(String, String)> {
+    // pnpm v5/v6 dependency-path keys are prefixed with a leading slash.
+    let trimmed = display_name.strip_prefix('/').unwrap_or(display_name);
+    // Drop any peer-dependency closure: `pkg@1.2.3(react@18.0.0)` -> `pkg@1.2.3`.
+    let base = trimmed.split('(').next().unwrap_or(trimmed);
+    // Scoped names start with '@', so search for the version delimiter after
+    // the leading scope '@'. The version is the final `@`-delimited segment
+    // (the closure that could reintroduce an '@' has already been removed).
+    let search_start = usize::from(base.starts_with('@'));
+    let at = base[search_start..].rfind('@').map(|i| i + search_start)?;
+    let name = &base[..at];
+    let version = &base[at + 1..];
+    if name.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some((name.to_string(), version.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_identity;
+
+    #[test]
+    fn splits_plain_identity() {
+        assert_eq!(
+            split_identity("lodash@4.17.21"),
+            Some(("lodash".to_string(), "4.17.21".to_string()))
+        );
+    }
+
+    #[test]
+    fn splits_scoped_identity() {
+        assert_eq!(
+            split_identity("@scope/pkg@1.2.3"),
+            Some(("@scope/pkg".to_string(), "1.2.3".to_string()))
+        );
+    }
+
+    #[test]
+    fn strips_pnpm_peer_closure() {
+        assert_eq!(
+            split_identity("pkg@1.2.3(other@4.5.6)(another@7.8.9)"),
+            Some(("pkg".to_string(), "1.2.3".to_string()))
+        );
+    }
+
+    #[test]
+    fn strips_scoped_pnpm_peer_closure() {
+        assert_eq!(
+            split_identity("@scope/pkg@1.2.3(react@18.0.0)"),
+            Some(("@scope/pkg".to_string(), "1.2.3".to_string()))
+        );
+    }
+
+    #[test]
+    fn strips_leading_slash_from_pnpm_key() {
+        assert_eq!(
+            split_identity("/react-dom@18.2.0(react@18.2.0)"),
+            Some(("react-dom".to_string(), "18.2.0".to_string()))
+        );
+    }
+
+    #[test]
+    fn preserves_underscores_in_package_name() {
+        assert_eq!(
+            split_identity("some_package@1.0.0"),
+            Some(("some_package".to_string(), "1.0.0".to_string()))
+        );
+    }
+
+    #[test]
+    fn returns_none_without_version_delimiter() {
+        // e.g. a pnpm v5 `name/version` key that uses `/` as its delimiter.
+        assert_eq!(split_identity("react-dom/18.2.0"), None);
+        assert_eq!(split_identity("no-version"), None);
+        assert_eq!(split_identity("@scope/only"), None);
     }
 }
