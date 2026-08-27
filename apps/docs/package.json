@@ -3,6 +3,9 @@
   "description": "Turborepo documentation site, built on @vercel/geistdocs.",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "build": "next build",
     "check-links": "cd content && node --experimental-strip-types ../../../docs/link-checker/src/validate-docs-links.ts",
