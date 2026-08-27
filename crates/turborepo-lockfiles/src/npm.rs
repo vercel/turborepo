@@ -15,6 +15,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
+    #[serde(default)]
     packages: HashMap<String, NpmPackage>,
     // We parse this so it doesn't end up in 'other' and we don't need to worry
     // about accidentally serializing it.
@@ -245,6 +246,25 @@ impl Lockfile for NpmLockfile {
         let version = npm_package.version.as_deref()?;
         let name = package.key.split("node_modules/").last()?;
         Some(format!("{name}@{version}"))
+    }
+
+    fn package_source(&self, package: &Package) -> crate::PackageSource {
+        let Some(entry) = self.packages.get(&package.key) else {
+            return crate::PackageSource::Registry;
+        };
+        if entry.link {
+            crate::PackageSource::Link
+        } else {
+            entry
+                .resolved
+                .as_deref()
+                .map(crate::package_source_from_identifier)
+                .unwrap_or(crate::PackageSource::Registry)
+        }
+    }
+
+    fn format_version(&self) -> String {
+        self.lockfile_version.to_string()
     }
 }
 

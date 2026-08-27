@@ -7,6 +7,7 @@ use napi::Error;
 use napi_derive::napi;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_lockfiles::{Package as ResolvedPackage, PackageSource as CorePackageSource};
 use turborepo_repository::{
     change_mapper::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
@@ -60,10 +61,24 @@ pub struct PackageManager {
 /// qualified `name` and `version` (e.g. `{ name: "lodash", version: "4.17.21"
 /// }`). Peer-dependency closures are stripped so `${name}@${version}` is
 /// always a plain `pkg@1.2.3` identifier.
+fn package_source_name(source: CorePackageSource) -> String {
+    match source {
+        CorePackageSource::Registry => "registry",
+        CorePackageSource::Git => "git",
+        CorePackageSource::File => "file",
+        CorePackageSource::Link => "link",
+        CorePackageSource::Workspace => "workspace",
+        CorePackageSource::Patch => "patch",
+    }
+    .to_string()
+}
+
 #[napi(object)]
 pub struct LockfilePackage {
     pub name: String,
     pub version: String,
+    #[napi(ts_type = "'registry' | 'git' | 'file' | 'link' | 'workspace' | 'patch'")]
+    pub source: String,
 }
 
 /// A typed classifier for why lockfile package extraction was incomplete.
@@ -83,6 +98,12 @@ pub enum LockfileErrorKind {
     /// A specific lockfile entry could not be split into a `name` and
     /// `version` (for example an unrecognized key format).
     UnparseableEntry,
+    /// npm lockfile v1 lacks the `packages` data required for dependency
+    /// resolution.
+    UnsupportedNpmLockfileVersion,
+    /// Bun's binary `bun.lockb` format cannot be read; a text `bun.lock` is
+    /// required.
+    UnsupportedBunLockfile,
 }
 
 /// A single, typed reason lockfile package extraction was incomplete.
@@ -107,6 +128,43 @@ pub struct LockfilePackages {
     /// Typed reasons the lockfile could not be read or fully parsed. Empty
     /// when extraction succeeded.
     pub errors: Vec<LockfileError>,
+    /// Absolute path to the lockfile used for resolution.
+    pub lockfile_path: String,
+    /// Lockfile family, such as `npm`, `pnpm`, `yarn`, or `bun`.
+    pub lockfile_format: String,
+    /// Package-manager-specific lockfile format version, when parsing
+    /// succeeded.
+    pub lockfile_version: Option<String>,
+    /// Declared package-manager name.
+    pub package_manager: String,
+    /// Declared package-manager version, when available.
+    pub package_manager_version: Option<String>,
+}
+
+pub(crate) struct LockfilePackagesMetadata {
+    pub lockfile_path: String,
+    pub lockfile_format: String,
+    pub lockfile_version: Option<String>,
+    pub package_manager: String,
+    pub package_manager_version: Option<String>,
+}
+
+impl LockfilePackages {
+    pub(crate) fn new(
+        packages: Vec<LockfilePackage>,
+        errors: Vec<LockfileError>,
+        metadata: LockfilePackagesMetadata,
+    ) -> Self {
+        Self {
+            packages,
+            errors,
+            lockfile_path: metadata.lockfile_path,
+            lockfile_format: metadata.lockfile_format,
+            lockfile_version: metadata.lockfile_version,
+            package_manager: metadata.package_manager,
+            package_manager_version: metadata.package_manager_version,
+        }
+    }
 }
 
 #[napi]
@@ -122,6 +180,12 @@ pub struct Workspace {
     pub package_manager: PackageManager,
     /// The package graph for the workspace.
     graph: PackageGraph,
+    /// Inputs for resolving a single-package repository's root lockfile on
+    /// demand. Core single-package graphs intentionally skip lockfile
+    /// resolution, so the JS API retains this repository-local fallback.
+    lockfile: internal::SinglePackageLockfile,
+    lockfile_path: String,
+    lockfile_format: String,
 }
 
 #[napi]
@@ -270,13 +334,50 @@ impl Workspace {
     /// on [`Workspace::package_manager`].
     #[napi]
     pub async fn lockfile_packages(&self) -> LockfilePackages {
+        if !self.is_multi_package {
+            return self.lockfile.packages(
+                &self.lockfile_path,
+                &self.lockfile_format,
+                &self.package_manager,
+            );
+        }
+
+        let lockfile_version = self
+            .graph
+            .lockfile()
+            .map(|lockfile| lockfile.format_version());
+        let metadata = || LockfilePackagesMetadata {
+            lockfile_path: self.lockfile_path.clone(),
+            lockfile_format: self.lockfile_format.clone(),
+            lockfile_version: lockfile_version.clone(),
+            package_manager: self.package_manager.name.clone(),
+            package_manager_version: self.package_manager.version.clone(),
+        };
+
         match self.graph.javascript_external_resolution() {
             JavascriptExternalResolution::Resolved(identities) => {
                 let mut packages = Vec::with_capacity(identities.len());
                 let mut errors = Vec::new();
                 for identity in identities {
                     match split_identity(identity.display_name()) {
-                        Some((name, version)) => packages.push(LockfilePackage { name, version }),
+                        Some((name, version)) => {
+                            let source = self
+                                .graph
+                                .lockfile()
+                                .map(|lockfile| {
+                                    lockfile.package_source(&ResolvedPackage {
+                                        key: identity.key().to_string(),
+                                        version: identity.version().to_string(),
+                                    })
+                                })
+                                .unwrap_or(CorePackageSource::Registry);
+                            let source = package_source_name(source);
+                            packages.push(LockfilePackage {
+                                name,
+                                version,
+                                source,
+                            });
+                        }
                         None => errors.push(LockfileError {
                             kind: LockfileErrorKind::UnparseableEntry,
                             message: format!(
@@ -296,23 +397,31 @@ impl Workspace {
                 // the full identity, so those variants both survive; dedup here
                 // to honor the documented "deduplicated" contract.
                 packages.dedup_by(|a, b| a.name == b.name && a.version == b.version);
-                LockfilePackages { packages, errors }
+                LockfilePackages::new(packages, errors, metadata())
             }
-            JavascriptExternalResolution::Unavailable { code, message } => LockfilePackages {
-                packages: Vec::new(),
-                errors: vec![LockfileError {
-                    kind: classify_resolution_code(&code),
-                    message: format!("{code}: {message}"),
+            JavascriptExternalResolution::Unavailable { code, message } => LockfilePackages::new(
+                Vec::new(),
+                vec![LockfileError {
+                    kind: self
+                        .lockfile
+                        .error_kind()
+                        .unwrap_or_else(|| classify_resolution_code(&code)),
+                    message: self
+                        .lockfile
+                        .error_message()
+                        .unwrap_or_else(|| format!("{code}: {message}")),
                 }],
-            },
-            JavascriptExternalResolution::NotAvailable => LockfilePackages {
-                packages: Vec::new(),
-                errors: vec![LockfileError {
+                metadata(),
+            ),
+            JavascriptExternalResolution::NotAvailable => LockfilePackages::new(
+                Vec::new(),
+                vec![LockfileError {
                     kind: LockfileErrorKind::NoLockfile,
                     message: "no JavaScript lockfile resolution is available for this workspace"
                         .to_string(),
                 }],
-            },
+                metadata(),
+            ),
         }
     }
 

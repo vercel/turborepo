@@ -295,4 +295,16 @@ impl Lockfile for BunLockfile {
         let entry = self.data.packages.get(&package.key)?;
         Some(entry.ident.clone())
     }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        self.data
+            .packages
+            .get(&package.key)
+            .map(|entry| crate::package_source_from_identifier(&entry.ident))
+            .unwrap_or(crate::PackageSource::Registry)
+    }
+
+    fn format_version(&self) -> String {
+        self.data.lockfile_version.to_string()
+    }
 }

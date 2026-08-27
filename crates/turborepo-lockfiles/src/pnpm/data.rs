@@ -1012,6 +1012,10 @@ impl crate::Lockfile for PnpmLockfile {
         Some(turbo_version.to_owned())
     }
 
+    fn format_version(&self) -> String {
+        self.lockfile_version.version.clone()
+    }
+
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
             // For v7/v9 the key is already the human-readable identity, so a
