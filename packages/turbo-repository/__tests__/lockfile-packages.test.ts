@@ -14,7 +14,7 @@ const LOCKFILE_ERROR_KINDS = [
   "NoLockfile",
   "LockfileUnreadable",
   "ResolutionFailed",
-  "UnparseableEntry",
+  "UnparseableEntry"
 ];
 
 describe("packagesFromLockfile", () => {
@@ -74,7 +74,10 @@ describe("lockfilePackages", () => {
     assert.deepEqual(errors, [], "Expected no parse errors");
 
     const microdiff = packages.find((pkg) => pkg.name === "microdiff");
-    assert.ok(microdiff, `Expected microdiff, got: ${JSON.stringify(packages)}`);
+    assert.ok(
+      microdiff,
+      `Expected microdiff, got: ${JSON.stringify(packages)}`
+    );
     assert.equal(microdiff.version, "1.4.0");
   });
 
@@ -83,7 +86,10 @@ describe("lockfilePackages", () => {
     const { packages } = await workspace.lockfilePackages();
 
     for (const pkg of packages) {
-      assert.ok(pkg.name.length > 0, `Expected a name, got: ${JSON.stringify(pkg)}`);
+      assert.ok(
+        pkg.name.length > 0,
+        `Expected a name, got: ${JSON.stringify(pkg)}`
+      );
       assert.ok(
         pkg.version.length > 0,
         `Expected a version, got: ${JSON.stringify(pkg)}`
@@ -120,7 +126,7 @@ describe("lockfilePackages", () => {
       JSON.stringify({
         name: "solo",
         version: "1.0.0",
-        packageManager: "pnpm@9.15.9",
+        packageManager: "pnpm@9.15.9"
       })
     );
 

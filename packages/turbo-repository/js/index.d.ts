@@ -36,7 +36,7 @@ export const enum LockfileErrorKind {
    * A specific lockfile entry could not be split into a `name` and
    * `version` (for example an unrecognized key format).
    */
-  UnparseableEntry = "UnparseableEntry",
+  UnparseableEntry = "UnparseableEntry"
 }
 /** A single, typed reason lockfile package extraction was incomplete. */
 export interface LockfileError {
