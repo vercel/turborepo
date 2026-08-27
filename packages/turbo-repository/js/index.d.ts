@@ -41,7 +41,7 @@ export const enum LockfileErrorKind {
    * Bun's binary `bun.lockb` format cannot be read; a text `bun.lock` is
    * required.
    */
-  UnsupportedBunLockfile = "UnsupportedBunLockfile",
+  UnsupportedBunLockfile = "UnsupportedBunLockfile"
 }
 /** A single, typed reason lockfile package extraction was incomplete. */
 export interface LockfileError {
@@ -162,7 +162,7 @@ export class Workspace {
   affectedPackages(
     files: Array<string>,
     base?: string | undefined | null,
-    optimizeGlobalInvalidations?: boolean | undefined | null,
+    optimizeGlobalInvalidations?: boolean | undefined | null
   ): Promise<Array<Package>>;
   /**
    * Given a path (relative to the workspace root), returns the
