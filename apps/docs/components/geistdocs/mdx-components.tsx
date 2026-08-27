@@ -1,6 +1,10 @@
 import { createMdxComponents } from "@vercel/geistdocs/mdx";
 import { DynamicLink } from "fumadocs-core/dynamic-link";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import {
+  Card as FumadocsCard,
+  type CardProps
+} from "fumadocs-ui/components/card";
 import { Heading } from "fumadocs-ui/components/heading";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import type { MDXComponents } from "mdx/types";
@@ -19,7 +23,7 @@ const BADGE_COMPONENTS: Record<
   string,
   React.ComponentType<{ children?: string }>
 > = {
-  ExperimentalBadge,
+  ExperimentalBadge
 };
 
 function HeadingWithBadges({
@@ -58,6 +62,10 @@ interface GetMDXComponentsOptions {
   isBlog?: boolean;
 }
 
+const PrefetchedCard = (props: CardProps) => (
+  <FumadocsCard {...props} {...{ prefetch: true }} />
+);
+
 export const getMDXComponents = (
   options: GetMDXComponentsOptions = {}
 ): MDXComponents => {
@@ -93,22 +101,26 @@ export const getMDXComponents = (
             {...rest}
           />
         );
-      },
+      }
     }),
-    a: ({ href, ...props }: React.ComponentProps<"a">) =>
-      href?.startsWith("/") ? (
-        <DynamicLink
-          className="font-normal text-primary no-underline"
-          href={`/[lang]${href}`}
-          {...props}
-        />
-      ) : (
-        <a
-          href={href}
-          {...props}
-          className="font-normal text-primary no-underline"
-        />
-      ),
+    a:
+      components?.a ??
+      (({ href, ...props }: React.ComponentProps<"a">) =>
+        href?.startsWith("/") ? (
+          <DynamicLink
+            className="font-normal text-primary no-underline"
+            href={`/[lang]${href}`}
+            prefetch
+            {...props}
+          />
+        ) : (
+          <a
+            href={href}
+            {...props}
+            className="font-normal text-primary no-underline"
+          />
+        )),
+    Card: PrefetchedCard,
     Tabs,
     Tab,
     PackageManagerTabs,
@@ -125,6 +137,6 @@ export const getMDXComponents = (
     Accordions,
     ThemeAwareImage,
     InVersion,
-    ExperimentalBadge,
+    ExperimentalBadge
   });
 };

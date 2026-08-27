@@ -1,12 +1,14 @@
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
-import { createMDX } from "fumadocs-mdx/next";
+import { createGeistdocs } from "@vercel/geistdocs/next";
 import type { NextConfig } from "next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 
-const withMDX = createMDX();
+const withGeistdocs = createGeistdocs();
 const vercelToolbar = withVercelToolbar();
 
 const config: NextConfig = {
+  cacheComponents: true,
+  partialPrefetching: true,
   experimental: {
     turbopackFileSystemCacheForDev: true
   },
@@ -562,4 +564,4 @@ const config: NextConfig = {
   }
 };
 
-export default withMDX(vercelToolbar(config));
+export default withGeistdocs(vercelToolbar(config));
