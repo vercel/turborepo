@@ -223,8 +223,11 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
         package_source_from_identifier(&package.key)
     }
 
-    /// The package-manager-specific lockfile format version.
-    fn format_version(&self) -> String;
+    /// The package-manager-specific lockfile format version, when exposed by
+    /// this lockfile implementation.
+    fn format_version(&self) -> Option<String> {
+        None
+    }
 
     /// A resolver for transitive dependency edges whose resolution can be
     /// proven identical across workspaces, enabling the shared closure DP
@@ -485,6 +488,14 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
     }
 }
 
+impl Package {
+    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+        let key = key.into();
+        let version = version.into();
+        Self { key, version }
+    }
+}
+
 #[cfg(test)]
 mod package_source_tests {
     use super::{PackageSource, package_source_from_identifier};
@@ -503,13 +514,5 @@ mod package_source_tests {
         ] {
             assert_eq!(package_source_from_identifier(identifier), expected);
         }
-    }
-}
-
-impl Package {
-    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
-        let key = key.into();
-        let version = version.into();
-        Self { key, version }
     }
 }

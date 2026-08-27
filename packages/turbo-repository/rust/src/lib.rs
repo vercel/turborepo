@@ -345,7 +345,7 @@ impl Workspace {
         let lockfile_version = self
             .graph
             .lockfile()
-            .map(|lockfile| lockfile.format_version());
+            .and_then(|lockfile| lockfile.format_version());
         let metadata = || LockfilePackagesMetadata {
             lockfile_path: self.lockfile_path.clone(),
             lockfile_format: self.lockfile_format.clone(),

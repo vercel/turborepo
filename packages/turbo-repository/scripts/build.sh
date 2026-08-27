@@ -25,7 +25,6 @@ for flag in $user_provided_flags; do
 done
 
 node_modules/.bin/napi build $script_provided_flags $user_provided_flags
-cp native/index.d.ts js/index.d.ts
 
 # Unfortunately, when napi generates a .d.ts file, it doesn't match our formatting rules (it doesn't have semicolons).
 # Since there's no way to configure this from napi itself, we need to run prettier on it after generating it.

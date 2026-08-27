@@ -304,7 +304,7 @@ impl Lockfile for BunLockfile {
             .unwrap_or(crate::PackageSource::Registry)
     }
 
-    fn format_version(&self) -> String {
-        self.data.lockfile_version.to_string()
+    fn format_version(&self) -> Option<String> {
+        Some(self.data.lockfile_version.to_string())
     }
 }

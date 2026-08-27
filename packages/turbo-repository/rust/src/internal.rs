@@ -79,7 +79,7 @@ impl SinglePackageLockfile {
         match &self.lockfile {
             SinglePackageLockfileRead::Loaded(_) => None,
             SinglePackageLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
-            SinglePackageLockfileRead::Unreadable { kind, .. } => Some(kind.clone()),
+            SinglePackageLockfileRead::Unreadable { kind, .. } => Some(*kind),
         }
     }
 
@@ -120,7 +120,7 @@ impl SinglePackageLockfile {
                 return LockfilePackages::new(
                     Vec::new(),
                     vec![LockfileError {
-                        kind: kind.clone(),
+                        kind: *kind,
                         message: message.clone(),
                     }],
                     metadata(None),
@@ -141,7 +141,7 @@ impl SinglePackageLockfile {
                         kind: LockfileErrorKind::ResolutionFailed,
                         message: error.to_string(),
                     }],
-                    metadata(Some(lockfile.format_version())),
+                    metadata(lockfile.format_version()),
                 );
             }
         };
@@ -169,7 +169,7 @@ impl SinglePackageLockfile {
         packages
             .sort_by(|left, right| (&left.name, &left.version).cmp(&(&right.name, &right.version)));
         packages.dedup_by(|left, right| left.name == right.name && left.version == right.version);
-        LockfilePackages::new(packages, errors, metadata(Some(lockfile.format_version())))
+        LockfilePackages::new(packages, errors, metadata(lockfile.format_version()))
     }
 }
 

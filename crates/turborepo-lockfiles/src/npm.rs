@@ -263,8 +263,8 @@ impl Lockfile for NpmLockfile {
         }
     }
 
-    fn format_version(&self) -> String {
-        self.lockfile_version.to_string()
+    fn format_version(&self) -> Option<String> {
+        Some(self.lockfile_version.to_string())
     }
 }
 

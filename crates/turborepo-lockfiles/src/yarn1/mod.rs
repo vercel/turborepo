@@ -184,8 +184,8 @@ impl Lockfile for Yarn1Lockfile {
             .unwrap_or_else(|| crate::package_source_from_identifier(&package.key))
     }
 
-    fn format_version(&self) -> String {
-        "1".to_string()
+    fn format_version(&self) -> Option<String> {
+        Some("1".to_string())
     }
 }
 

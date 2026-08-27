@@ -776,8 +776,8 @@ impl Lockfile for BerryLockfile {
         crate::package_source_from_identifier(&package.key)
     }
 
-    fn format_version(&self) -> String {
-        self.data.metadata.version.clone()
+    fn format_version(&self) -> Option<String> {
+        Some(self.data.metadata.version.clone())
     }
 }
 
