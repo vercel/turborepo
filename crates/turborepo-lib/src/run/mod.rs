@@ -430,8 +430,13 @@ impl Run {
             turborepo_log::info(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!(
-                    "{pad}• Running {targets_list} in {} packages",
-                    self.filtered_pkgs.len()
+                    "{pad}• Running {targets_list} in {package_count} {package_label}",
+                    package_count = self.filtered_pkgs.len(),
+                    package_label = if self.filtered_pkgs.len() == 1 {
+                        "package"
+                    } else {
+                        "packages"
+                    }
                 ),
             )
             .emit();
