@@ -31,8 +31,7 @@ export function isTrustedFactoryPullRequestFeedback(
 } {
   return (
     candidate.repository === "vercel/turborepo" &&
-    (candidate.conversationKind === "pull_request" ||
-      candidate.conversationKind === "review_thread") &&
+    candidate.conversationKind === "review_thread" &&
     candidate.pullRequestNumber !== null &&
     candidate.senderType !== "Bot" &&
     typeof candidate.branch === "string" &&
