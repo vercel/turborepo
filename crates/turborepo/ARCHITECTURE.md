@@ -428,10 +428,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   or package-manager policy. The same snapshot validates resolution and every
   resolved local package. `--no-deps` is used only to preserve error precedence
   and classify memberless workspaces when locked metadata cannot be obtained.
-  Automatic in-repository workspace members are supported, while
-  excluded/non-member, outside-repository, and root-manifest local packages
-  hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo contributor reports the current workspace root.
+  Automatic in-repository workspace members and a package defined by the root
+  manifest are supported, while excluded/non-member and outside-repository local
+  packages hard-error because Turborepo cannot hash, watch, or prune their
+  sources safely. A root package can execute but cannot be a prune target because
+  its package directory is the entire repository. The Cargo contributor reports
+  the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose

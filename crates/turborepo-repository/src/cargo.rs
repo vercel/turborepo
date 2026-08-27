@@ -118,11 +118,6 @@ pub enum Error {
          `[workspace].exclude`."
     )]
     NonMemberLocalPackage { name: String, manifest_path: String },
-    #[error(
-        "Cargo package {name:?} is defined in the root Cargo.toml, which Turborepo cannot model \
-         as a package safely. Move it into a subdirectory and add it to `[workspace].members`."
-    )]
-    UnsupportedRootPackage { name: String },
     #[error("failed to resolve Cargo local package path {path}: {source}")]
     LocalPackagePath {
         path: String,
@@ -307,7 +302,6 @@ fn validate_resolved_local_packages(
             path: repo_root.to_string(),
             source,
         })?;
-    let root_manifest_path = real_repo_root.join_component(CARGO_TOML);
     for package in &metadata.packages {
         if package.source.is_some() {
             continue;
@@ -329,11 +323,6 @@ fn validate_resolved_local_packages(
             return Err(Error::OutsideRepositoryLocalPackage {
                 name: package.name.clone(),
                 manifest_path: package.manifest_path.clone(),
-            });
-        }
-        if real_manifest_path == root_manifest_path {
-            return Err(Error::UnsupportedRootPackage {
-                name: package.name.clone(),
             });
         }
         if !metadata.workspace_members.contains(&package.id) {
@@ -1499,7 +1488,7 @@ fn discover_contributor_workspace(
 
     match locked_metadata(repo_root) {
         Ok(metadata) => {
-            let workspace = workspace_from_metadata(repo_root, &root_manifest_path, &metadata)?;
+            let workspace = workspace_from_metadata(repo_root, &metadata)?;
             Ok((
                 workspace,
                 ContributorMetadata::Resolved { metadata, lockfile },
@@ -2022,8 +2011,8 @@ fn cargo_config_influence(
 /// is required.
 ///
 /// Crates whose manifests live outside the repository root, or whose names
-/// are invalid, are skipped with a warning. A `[package]` in the root
-/// manifest is skipped too: its directory would be the entire repository.
+/// are invalid, are skipped with a warning. A `[package]` in the root manifest
+/// is modeled as a normal Cargo package anchored at the repository root.
 pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
     let root_manifest_path = repo_root.join_component(CARGO_TOML);
     if !root_manifest_path.exists() {
@@ -2054,12 +2043,11 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
     }
     let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
-    workspace_from_metadata(repo_root, &root_manifest_path, &metadata)
+    workspace_from_metadata(repo_root, &metadata)
 }
 
 fn workspace_from_metadata(
     repo_root: &AbsoluteSystemPath,
-    root_manifest_path: &AbsoluteSystemPath,
     metadata: &Metadata,
 ) -> Result<DiscoveredWorkspace, Error> {
     let has_packages = !metadata.workspace_members.is_empty();
@@ -2071,7 +2059,7 @@ fn workspace_from_metadata(
         .filter(|package| metadata.workspace_members.contains(&package.id))
         .cloned()
         .collect();
-    let crates = connect_crates(parse_members(repo_root, root_manifest_path, packages));
+    let crates = connect_crates(parse_members(repo_root, packages));
 
     if let Some(name) = &name
         && let Some(collision) = crates.iter().find(|c| &c.name == name)
@@ -2183,7 +2171,6 @@ fn manifest_alters_output_layout(manifest_path: &AbsoluteSystemPath) -> bool {
 
 fn parse_members(
     repo_root: &AbsoluteSystemPath,
-    root_manifest_path: &AbsoluteSystemPath,
     packages: Vec<MetadataPackage>,
 ) -> Vec<ParsedCrate> {
     let mut parsed = Vec::new();
@@ -2196,13 +2183,6 @@ fn parse_members(
             );
             continue;
         };
-        if &*manifest_path == root_manifest_path {
-            tracing::warn!(
-                "ignoring [package] in the root Cargo.toml: a crate at the repository root is not \
-                 supported as a Turborepo package"
-            );
-            continue;
-        }
         if !repo_root.contains(&manifest_path) {
             tracing::warn!(
                 "skipping Cargo crate {}: manifest {manifest_path} is outside the repository",
@@ -2425,7 +2405,6 @@ mod test {
     #[test]
     fn full_metadata_discovers_only_workspace_members() {
         let (_temp, root) = tempdir_root();
-        let root_manifest = root.join_component(CARGO_TOML);
         let member_manifest = root.join_components(&["crates", "member", CARGO_TOML]);
         let metadata = Metadata {
             packages: vec![
@@ -2453,7 +2432,7 @@ mod test {
             metadata: serde_json::json!({ "name": "workspace" }),
         };
 
-        let workspace = workspace_from_metadata(&root, &root_manifest, &metadata).unwrap();
+        let workspace = workspace_from_metadata(&root, &metadata).unwrap();
         assert!(workspace.has_packages);
         assert_eq!(workspace.crates.len(), 1);
         assert_eq!(workspace.crates[0].name, "member");
@@ -2735,26 +2714,28 @@ dependencies = ["lib-a"]
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_cargo_toolchain_rejects_root_package() {
+    async fn test_cargo_toolchain_accepts_root_package() {
         let (_tmp, root) = tempdir_root();
         write(
             &root,
             &["Cargo.toml"],
             "[package]\nname = \"root-package\"\nversion = \"0.1.0\"\nedition = \
-             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \"2\"\n",
+             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"root-workspace\"\n",
         );
         write(&root, &["src", "lib.rs"], "");
         generate_lockfile(&root);
 
-        let error = CargoContributor::new(root)
+        let discovered = CargoContributor::new(root)
             .discover_packages()
             .await
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("root-package")
-                && error.to_string().contains("root Cargo.toml"),
-            "unexpected validation result: {error}"
-        );
+            .unwrap();
+        let names: Vec<_> = discovered
+            .packages()
+            .iter()
+            .filter_map(|package| package.clone().into_parts().name)
+            .collect();
+        assert_eq!(names, ["root-package", "root-workspace"]);
     }
 
     fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
@@ -3537,7 +3518,7 @@ release: 1.96.0-nightly\n",
     }
 
     #[test]
-    fn test_discover_crates_skips_root_crate() {
+    fn test_discover_crates_includes_root_crate() {
         let (_tmp, root) = tempdir_root();
         write(
             &root,
@@ -3556,8 +3537,7 @@ release: 1.96.0-nightly\n",
         let crates = discover_crates(&root).unwrap().crates;
         assert_eq!(
             crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
-            vec!["member"],
-            "the root crate's directory is the whole repository, so it is not a package"
+            vec!["member", "root-crate"]
         );
     }
 
