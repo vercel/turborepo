@@ -7,7 +7,6 @@ import {
   WORKSPACE_DRIVE_FX_PATH,
   WORKSPACE_DRIVE_MOUNT_PATH,
   isWorkspaceDriveEnabled,
-  workspaceCheckoutRefreshScript,
   workspaceDriveInitializationScript,
   workspaceDriveName
 } from "../agent/lib/workspace-drive.ts";
@@ -32,14 +31,6 @@ test("workspace Drives are opt-in until the Vercel team has beta access", () => 
   assert.equal(isWorkspaceDriveEnabled("1"), true);
 });
 
-test("new Eve sessions update their checkout to main", () => {
-  assert.equal(
-    workspaceCheckoutRefreshScript(),
-    `git -C /factory/turborepo fetch --depth=1 --force origin main
-git -C /factory/turborepo reset --hard FETCH_HEAD`
-  );
-});
-
 test("Eve session drives keep the checkout and agent state together", () => {
   assert.equal(workspaceDriveName("wrun_abc"), "factory-eve-wrun_abc-drive");
   assert.equal(WORKSPACE_DRIVE_MOUNT_PATH, "/factory/persist");
@@ -55,12 +46,5 @@ test("Eve session drives keep the checkout and agent state together", () => {
     script,
     /ln -s \/factory\/persist\/workspace \/factory\/turborepo/
   );
-  assert.match(
-    script,
-    /git -C \/factory\/persist\/workspace fetch --depth=1 --force origin main/
-  );
-  assert.ok(
-    script.indexOf("fetch --depth=1") <
-      script.indexOf("touch /factory/persist/.factory-initialized")
-  );
+  assert.match(script, /\.factory-initialized/);
 });
