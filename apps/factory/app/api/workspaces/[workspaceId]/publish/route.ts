@@ -41,7 +41,31 @@ export async function POST(
       const now = new Date().toISOString();
       await mutateWorkspace(workspaceId, (current) => ({
         ...current,
-        pullRequest: { number: result.number, url: result.url },
+        activity: current.status === "running" ? current.activity : undefined,
+        completeAfterTurn:
+          current.pullRequest?.number === result.number &&
+          current.pullRequest.state === "merged"
+            ? current.completeAfterTurn
+            : undefined,
+        pullRequest:
+          current.pullRequest?.number === result.number &&
+          current.pullRequest.state === "merged"
+            ? current.pullRequest
+            : {
+                checkedAt: now,
+                number: result.number,
+                state: "open",
+                url: result.url
+              },
+        status:
+          current.pullRequest?.number === result.number &&
+          current.pullRequest.state === "merged"
+            ? current.status === "running"
+              ? "running"
+              : "done"
+            : current.status === "done"
+              ? "idle"
+              : current.status,
         updatedAt: now
       }));
     }

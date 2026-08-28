@@ -112,7 +112,7 @@ export function WorkspaceList() {
                       className="size-1.5 rounded-full bg-current"
                       aria-hidden="true"
                     />
-                    {workspaceStatusLabel(workspace.status)}
+                    {workspaceStatusLabel(workspace)}
                   </span>
                 </span>
               </Link>

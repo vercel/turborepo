@@ -3,7 +3,7 @@ export const WORKSPACE_ACCESS_ACTION = "access-workspace-sandbox";
 export const WORKSPACE_TURN_ACTION = "send-workspace-message";
 export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 
-export type WorkspaceStatus = "idle" | "running" | "error";
+export type WorkspaceStatus = "idle" | "running" | "done" | "error";
 
 export interface WorkspaceMessage {
   readonly createdAt: string;
@@ -13,15 +13,22 @@ export interface WorkspaceMessage {
 }
 
 export interface WorkspaceRecord {
+  readonly activity?: string;
   readonly activeDispatchId?: string;
   readonly activeTurnId?: string;
+  readonly completeAfterTurn?: boolean;
   readonly createdAt: string;
   readonly publishToken?: string;
   readonly error?: string;
   readonly agent: "fx";
   readonly id: string;
   readonly messages: readonly WorkspaceMessage[];
-  readonly pullRequest?: { readonly number: number; readonly url: string };
+  readonly pullRequest?: {
+    readonly checkedAt?: string;
+    readonly number: number;
+    readonly state?: "open" | "closed" | "merged";
+    readonly url: string;
+  };
   readonly sandbox: {
     readonly name: string;
     readonly provider: "vercel";
@@ -46,7 +53,7 @@ export interface PublicWorkspaceView extends WorkspaceView {
 
 export type WorkspaceSummary = Pick<
   WorkspaceRecord,
-  "createdAt" | "id" | "status" | "title" | "updatedAt"
+  "activity" | "createdAt" | "id" | "pullRequest" | "status" | "title" | "updatedAt"
 >;
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -121,8 +128,10 @@ export function beginWorkspaceTurn(
   if (workspace.status === "running" && !stale) return null;
   return {
     ...workspace,
+    activity: "Starting",
     activeDispatchId: undefined,
     activeTurnId: input.id,
+    completeAfterTurn: undefined,
     error: undefined,
     messages: [
       ...workspace.messages,
@@ -178,6 +187,7 @@ export function toWorkspaceView(
   const chatCommand = workspaceChatCommand(workspace);
   return {
     ...(chatCommand === undefined ? {} : { chatCommand }),
+    ...(workspace.activity === undefined ? {} : { activity: workspace.activity }),
     createdAt: workspace.createdAt,
     ...(workspace.error === undefined ? {} : { error: workspace.error }),
     agent: workspace.agent,
@@ -202,12 +212,107 @@ export function toWorkspaceSummary(
   workspace: WorkspaceRecord
 ): WorkspaceSummary {
   return {
+    ...(workspace.activity === undefined ? {} : { activity: workspace.activity }),
     createdAt: workspace.createdAt,
     id: workspace.id,
+    ...(workspace.pullRequest === undefined
+      ? {}
+      : { pullRequest: workspace.pullRequest }),
     status: workspace.status,
     title: workspace.title,
     updatedAt: workspace.updatedAt
   };
+}
+
+const PULL_REQUEST_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+
+export type WorkspacePullRequestState = "open" | "closed" | "merged";
+
+export function githubPullRequestState(
+  value: unknown
+): WorkspacePullRequestState | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return null;
+  const pullRequest = value as Record<string, unknown>;
+  if (typeof pullRequest.merged_at === "string") return "merged";
+  if (pullRequest.state === "open" || pullRequest.state === "closed")
+    return pullRequest.state;
+  return null;
+}
+
+export function shouldRefreshWorkspacePullRequest(
+  workspace: WorkspaceRecord,
+  now: Date
+): boolean {
+  const pullRequest = workspace.pullRequest;
+  if (!pullRequest || pullRequest.state === "merged") return false;
+  if (!pullRequest.checkedAt) return true;
+  return (
+    now.getTime() - Date.parse(pullRequest.checkedAt) >=
+    PULL_REQUEST_REFRESH_INTERVAL_MS
+  );
+}
+
+export function workspaceStatusAfterTurn(
+  workspace: Pick<WorkspaceRecord, "completeAfterTurn">
+): WorkspaceStatus {
+  return workspace.completeAfterTurn ? "done" : "idle";
+}
+
+export function reconcileWorkspacePullRequest(
+  workspace: WorkspaceRecord,
+  pullRequestNumber: number,
+  state: "open" | "closed" | "merged",
+  checkedAt: string
+): WorkspaceRecord {
+  if (workspace.pullRequest?.number !== pullRequestNumber) return workspace;
+  if (workspace.pullRequest.state === "merged" && state !== "merged")
+    return workspace;
+  if (
+    workspace.pullRequest.checkedAt &&
+    workspace.pullRequest.checkedAt > checkedAt
+  )
+    return workspace;
+  return {
+    ...workspace,
+    activity: workspace.status === "running" ? workspace.activity : undefined,
+    completeAfterTurn:
+      workspace.status === "running" &&
+      state === "merged" &&
+      workspace.pullRequest.state !== "merged"
+        ? true
+        : workspace.completeAfterTurn,
+    pullRequest: { ...workspace.pullRequest, checkedAt, state },
+    status:
+      workspace.status === "running"
+        ? "running"
+        : state === "merged"
+          ? "done"
+          : workspace.status === "done"
+            ? "idle"
+            : workspace.status,
+    updatedAt: checkedAt
+  };
+}
+
+export function workspaceActionActivity(
+  actions: readonly (
+    | { readonly kind: "tool-call"; readonly toolName: string }
+    | { readonly kind: "subagent-call"; readonly name: string }
+    | { readonly kind: "remote-agent-call"; readonly name: string }
+    | { readonly kind: "load-skill" }
+  )[]
+): string {
+  if (actions.length !== 1) return `Running ${actions.length} actions`;
+  const action = actions[0];
+  if (action.kind === "load-skill") return "Loading a skill";
+  if (action.kind === "subagent-call" || action.kind === "remote-agent-call")
+    return `Delegating to ${humanizeActivityName(action.name)}`;
+  return `Running ${humanizeActivityName(action.toolName)}`;
+}
+
+function humanizeActivityName(value: string): string {
+  return value.replaceAll("_", " ").replaceAll("-", " ");
 }
 
 export function isSafeWorkspaceDiffPath(path: string): boolean {
@@ -237,6 +342,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     value.title.length <= 120 &&
     (value.status === "idle" ||
       value.status === "running" ||
+      value.status === "done" ||
       value.status === "error") &&
     value.agent === "fx" &&
     (value.sessionId === undefined ||
@@ -252,6 +358,9 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     value.messages.every(isWorkspaceMessage) &&
     isIsoDate(value.createdAt) &&
     isIsoDate(value.updatedAt) &&
+    optionalString(value.activity, 120) &&
+    (value.completeAfterTurn === undefined ||
+      typeof value.completeAfterTurn === "boolean") &&
     optionalString(value.workflowRunId, 256) &&
     optionalString(value.activeDispatchId, 128) &&
     optionalString(value.activeTurnId, 128) &&
@@ -278,6 +387,11 @@ function isPullRequest(value: unknown): boolean {
     isObject(value) &&
     Number.isSafeInteger(value.number) &&
     (value.number as number) > 0 &&
+    (value.checkedAt === undefined || isIsoDate(value.checkedAt)) &&
+    (value.state === undefined ||
+      value.state === "open" ||
+      value.state === "closed" ||
+      value.state === "merged") &&
     typeof value.url === "string" &&
     value.url.startsWith("https://github.com/vercel/turborepo/pull/")
   );

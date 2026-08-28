@@ -6,6 +6,7 @@ import { strongBlobEtag } from "./blob-etag";
 import {
   isWorkspaceId,
   isWorkspaceRecord,
+  reconcileWorkspacePullRequest,
   type WorkspaceRecord
 } from "./workspace";
 
@@ -72,6 +73,49 @@ export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   } while (cursor);
   return workspaces.sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt)
+  );
+}
+
+export async function updateWorkspaceActivityForSession(
+  sessionId: string,
+  activity: string
+): Promise<void> {
+  const workspace = (await listWorkspaces()).find(
+    (candidate) => candidate.sessionId === sessionId
+  );
+  if (
+    !workspace ||
+    workspace.status !== "running" ||
+    workspace.activity === activity
+  )
+    return;
+  const updatedAt = new Date().toISOString();
+  await mutateWorkspace(workspace.id, (current) =>
+    current.sessionId === sessionId && current.status === "running"
+      ? { ...current, activity, updatedAt }
+      : current
+  );
+}
+
+export async function recordWorkspacePullRequestState(
+  pullRequestNumber: number,
+  state: "open" | "closed" | "merged",
+  checkedAt: string
+): Promise<void> {
+  const matches = (await listWorkspaces()).filter(
+    (workspace) => workspace.pullRequest?.number === pullRequestNumber
+  );
+  await Promise.all(
+    matches.map((workspace) =>
+      mutateWorkspace(workspace.id, (current) =>
+        reconcileWorkspacePullRequest(
+          current,
+          pullRequestNumber,
+          state,
+          checkedAt
+        )
+      )
+    )
   );
 }
 

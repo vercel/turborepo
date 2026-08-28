@@ -9,10 +9,13 @@ import {
   parseCreateWorkspaceInput,
   parseWorkspaceTurnInput,
   recoverTerminalWorkspaceTurn,
+  reconcileWorkspacePullRequest,
   recordWorkspaceWorkflowRun,
   toWorkspaceSummary,
   toWorkspaceView,
-  workspaceSandboxName
+  workspaceActionActivity,
+  workspaceSandboxName,
+  workspaceStatusAfterTurn
 } from "../agent/lib/workspace.ts";
 
 const now = "2026-08-22T12:00:00.000Z";
@@ -178,6 +181,97 @@ test("terminal workflows return a stranded workspace to the operator", () => {
   assert.equal(
     recoverTerminalWorkspaceTurn(running, "wrun_new", "failed", now),
     running
+  );
+});
+
+
+test("workspace pull request state drives completion", () => {
+  const withPullRequest = workspace({
+    pullRequest: {
+      number: 123,
+      url: "https://github.com/vercel/turborepo/pull/123"
+    }
+  });
+  const merged = reconcileWorkspacePullRequest(
+    withPullRequest,
+    123,
+    "merged",
+    now
+  );
+  assert.equal(merged.status, "done");
+  assert.equal(merged.pullRequest.state, "merged");
+  assert.equal(workspaceStatusAfterTurn(merged), "idle");
+  assert.equal(
+    reconcileWorkspacePullRequest(merged, 123, "open", now),
+    merged
+  );
+  assert.equal(
+    reconcileWorkspacePullRequest(
+      {
+        ...withPullRequest,
+        pullRequest: {
+          ...withPullRequest.pullRequest,
+          checkedAt: "2026-08-22T12:01:00.000Z",
+          state: "open"
+        }
+      },
+      123,
+      "closed",
+      now
+    ).pullRequest.state,
+    "open"
+  );
+  assert.equal(
+    reconcileWorkspacePullRequest(withPullRequest, 456, "merged", now),
+    withPullRequest
+  );
+
+  const running = reconcileWorkspacePullRequest(
+    { ...withPullRequest, activity: "Waiting for input", status: "running" },
+    123,
+    "merged",
+    now
+  );
+  assert.equal(running.status, "running");
+  assert.equal(running.activity, "Waiting for input");
+  assert.equal(running.completeAfterTurn, true);
+  assert.equal(workspaceStatusAfterTurn(running), "done");
+  assert.equal(
+    reconcileWorkspacePullRequest(
+      { ...merged, status: "running" },
+      123,
+      "merged",
+      "2026-08-22T12:02:00.000Z"
+    ).completeAfterTurn,
+    undefined
+  );
+
+  const continued = beginWorkspaceTurn(merged, {
+    createdAt: "2026-08-22T12:01:00.000Z",
+    id: "turn_after_merge",
+    text: "Make one more change"
+  });
+  assert.equal(continued.completeAfterTurn, undefined);
+  assert.equal(workspaceStatusAfterTurn(continued), "idle");
+});
+
+test("Eve action names become useful workspace activity", () => {
+  assert.equal(
+    workspaceActionActivity([
+      { kind: "tool-call", toolName: "run_example_turbo_tasks" }
+    ]),
+    "Running run example turbo tasks"
+  );
+  assert.equal(
+    workspaceActionActivity([{ kind: "subagent-call", name: "reviewer" }]),
+    "Delegating to reviewer"
+  );
+  assert.equal(
+    workspaceActionActivity([
+      { kind: "tool-call", toolName: "read_file" },
+      { kind: "tool-call", toolName: "bash" }
+    ]),
+    "Running 2 actions"
   );
 });
 

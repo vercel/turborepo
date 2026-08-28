@@ -81,6 +81,7 @@ export async function queueWorkspaceTurn(
       current.activeTurnId === turnId
         ? {
             ...current,
+            activity: undefined,
             activeTurnId: undefined,
             error: "Could not start workspace turn.",
             sandbox: { ...current.sandbox, status: "error" },

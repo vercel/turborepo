@@ -2,6 +2,7 @@ import {
   isWorkspaceStoreConfigured,
   listWorkspaces
 } from "../../../agent/lib/workspace-store";
+import { reconcileWorkspacePullRequests } from "../../../agent/lib/workspace-pull-request";
 import { createFxWorkspace } from "../../../agent/lib/workspace-turn";
 import {
   isWorkspaceMutationRequest,
@@ -12,7 +13,9 @@ import {
 
 export async function GET(): Promise<Response> {
   if (!isWorkspaceStoreConfigured()) return unconfigured();
-  const workspaces = await listWorkspaces();
+  const workspaces = await reconcileWorkspacePullRequests(
+    await listWorkspaces()
+  );
   return Response.json(
     { workspaces: workspaces.map(toWorkspaceSummary) },
     { headers: { "cache-control": "no-store" } }

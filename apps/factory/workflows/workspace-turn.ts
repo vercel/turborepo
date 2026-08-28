@@ -12,6 +12,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
     await import("../agent/lib/fx-workspace");
   const { ensureWorkspacePublishToken, getWorkspace, mutateWorkspace } =
     await import("../agent/lib/workspace-store");
+  const { workspaceStatusAfterTurn } = await import("../agent/lib/workspace");
   const currentWorkspace = await getWorkspace(input.workspaceId);
   const workspace = currentWorkspace
     ? await ensureWorkspacePublishToken(input.workspaceId)
@@ -30,7 +31,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
   const claimed = await mutateWorkspace(input.workspaceId, (current) =>
     current.activeTurnId === input.turnId &&
     current.activeDispatchId === undefined
-      ? { ...current, activeDispatchId: dispatchId }
+      ? { ...current, activity: "Preparing sandbox", activeDispatchId: dispatchId }
       : current
   );
   if (claimed.activeDispatchId !== dispatchId) {
@@ -39,6 +40,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
       current.activeTurnId === input.turnId
         ? {
             ...current,
+            activity: undefined,
             activeDispatchId: undefined,
             activeTurnId: undefined,
             error:
@@ -79,11 +81,24 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
     const now = new Date().toISOString();
     await mutateWorkspace(input.workspaceId, (current) => {
       if (current.activeTurnId !== input.turnId) return current;
-      const pullRequest = findPullRequest(result.output) ?? current.pullRequest;
+      const foundPullRequest = findPullRequest(result.output);
+      const samePullRequest =
+        foundPullRequest?.number === current.pullRequest?.number;
+      const pullRequest = foundPullRequest
+        ? samePullRequest
+          ? current.pullRequest
+          : { ...foundPullRequest, checkedAt: now, state: "open" as const }
+        : current.pullRequest;
+      const completeAfterTurn =
+        !foundPullRequest || samePullRequest
+          ? current.completeAfterTurn
+          : undefined;
       return {
         ...current,
+        activity: undefined,
         activeDispatchId: undefined,
         activeTurnId: undefined,
+        completeAfterTurn: undefined,
         error: undefined,
         messages: [
           ...current.messages,
@@ -97,7 +112,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
         ...(pullRequest === undefined ? {} : { pullRequest }),
         sandbox: { ...current.sandbox, status: "running" },
         sessionId: result.sessionId,
-        status: "idle",
+        status: workspaceStatusAfterTurn({ completeAfterTurn }),
         updatedAt: now
       };
     });
@@ -108,6 +123,7 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
       current.activeTurnId === input.turnId
         ? {
             ...current,
+            activity: undefined,
             activeDispatchId: undefined,
             activeTurnId: undefined,
             error:
