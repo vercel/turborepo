@@ -19,36 +19,14 @@ import {
  *
  * Every agent starts directly from the latest published Factory image. Image
  * provisioning and verification happen only in the dedicated image-build
- * sandbox. New sessions update the checkout to current main, but do not
- * re-check tools or install dependencies before giving control to the agent.
+ * sandbox; sessions do not re-check tools, update the checkout, or install
+ * dependencies before giving control to the agent.
  */
 
 /** Matches fx workspaces, and leaves room for a `cargo build`. */
 const SESSION_TIMEOUT_MS = 45 * 60 * 1000;
 /** `.cargo/config.toml` builds with `-Zthreads=8`. */
 const SESSION_VCPUS = 8;
-const WORKSPACE_CHECKOUT_PATH = "/factory/turborepo";
-const WORKSPACE_DRIVE_INITIALIZED_PATH = `${WORKSPACE_DRIVE_MOUNT_PATH}/.factory-initialized`;
-
-function workspaceCheckoutRefreshScript(): string {
-  return `git -C ${WORKSPACE_CHECKOUT_PATH} fetch --depth=1 --force origin main
-git -C ${WORKSPACE_CHECKOUT_PATH} reset --hard FETCH_HEAD`;
-}
-
-function workspaceInitializationScript(drivesEnabled: boolean): string {
-  const refresh = workspaceCheckoutRefreshScript();
-  if (!drivesEnabled) return `set -eu
-${refresh}`;
-  return `set -eu
-refresh_checkout=0
-if [ ! -f ${WORKSPACE_DRIVE_INITIALIZED_PATH} ]; then
-  refresh_checkout=1
-fi
-${workspaceDriveInitializationScript()}
-if [ "$refresh_checkout" -eq 1 ]; then
-  ${refresh}
-fi`;
-}
 
 export default defineSandbox({
   backend: () => {
@@ -88,14 +66,13 @@ export default defineSandbox({
   },
   async bootstrap() {},
   async onSession({ use }) {
+    if (!isWorkspaceDriveEnabled()) return;
     const sandbox = await use();
     const result = await sandbox.run({
-      command: `bash -lc ${JSON.stringify(
-        workspaceInitializationScript(isWorkspaceDriveEnabled())
-      )}`
+      command: `bash -lc ${JSON.stringify(workspaceDriveInitializationScript())}`
     });
     if (result.exitCode !== 0) {
-      throw new Error(result.stderr || "Could not initialize workspace.");
+      throw new Error(result.stderr || "Could not initialize workspace Drive.");
     }
   },
   revalidationKey: async () => {

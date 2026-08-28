@@ -39,9 +39,11 @@ function fakeRunner(failOn) {
 }
 
 test("new workspaces update their checkout to main", () => {
-  const sandbox = repositoryFile("apps/factory/agent/sandbox.ts");
-  assert.match(sandbox, /git -C \${WORKSPACE_CHECKOUT_PATH} fetch --depth=1/);
-  assert.match(sandbox, /git -C \${WORKSPACE_CHECKOUT_PATH} reset --hard FETCH_HEAD/);
+  const hook = repositoryFile(
+    "apps/factory/agent/hooks/refresh-workspace.ts"
+  );
+  assert.match(hook, /fetch --depth=1 --force origin main/);
+  assert.match(hook, /reset --hard FETCH_HEAD/);
 });
 
 test("the image includes tmux for shared interactive fx sessions", () => {
