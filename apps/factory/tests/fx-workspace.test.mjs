@@ -9,7 +9,10 @@ import {
   FX_TERMINAL_RUNNER_SOURCE,
   parseFxTerminalResult
 } from "../agent/lib/fx-terminal-runner.ts";
-import { requireFactoryImage } from "../agent/lib/current-factory-image.ts";
+import {
+  refreshFactoryCheckout,
+  requireFactoryImage
+} from "../agent/lib/current-factory-image.ts";
 import {
   applyWorkspaceNetworkPolicy,
   workspaceNetworkPolicy
@@ -27,6 +30,55 @@ test("workspace creation uses any published factory image", () => {
   };
   assert.equal(requireFactoryImage(pointer), pointer);
   assert.throws(() => requireFactoryImage(null), /has been published/);
+});
+
+test("new workspaces update their checkout to main", async () => {
+  const calls = [];
+  await refreshFactoryCheckout(
+    {
+      async runCommand(options) {
+        calls.push(options);
+        return {
+          exitCode: 0,
+          async stderr() {
+            return "";
+          }
+        };
+      }
+    },
+    "/factory/turborepo"
+  );
+
+  assert.deepEqual(calls, [
+    {
+      args: [
+        "-lc",
+        "git fetch --depth=1 --force origin main && git reset --hard FETCH_HEAD"
+      ],
+      cmd: "bash",
+      cwd: "/factory/turborepo",
+      timeoutMs: 120_000
+    }
+  ]);
+});
+
+test("workspace creation reports checkout update failures", async () => {
+  await assert.rejects(
+    refreshFactoryCheckout(
+      {
+        async runCommand() {
+          return {
+            exitCode: 1,
+            async stderr() {
+              return "network unavailable\n";
+            }
+          };
+        }
+      },
+      "/factory/turborepo"
+    ),
+    /Could not update the workspace checkout to main: network unavailable/
+  );
 });
 
 test("parseFxTerminalResult reads the completed interactive turn", () => {

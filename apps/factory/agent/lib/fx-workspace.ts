@@ -4,7 +4,10 @@ import { getVercelOidcToken } from "@vercel/oidc";
 import { APIError, Sandbox } from "@vercel/sandbox";
 
 import { FACTORY_IMAGE_SPEC } from "./factory-image";
-import { requireFactoryImage } from "./current-factory-image";
+import {
+  refreshFactoryCheckout,
+  requireFactoryImage
+} from "./current-factory-image";
 import { readFactoryImagePointer } from "./factory-image-registry";
 import {
   FX_TERMINAL_RUNNER_PATH,
@@ -84,6 +87,7 @@ export async function getOrCreateFxWorkspaceSandbox(
     sandbox,
     workspaceNetworkPolicy(githubToken, publishBridge)
   );
+  await refreshFactoryCheckout(sandbox, FACTORY_IMAGE_SPEC.checkoutPath);
   await installWorkspacePublishCommand(sandbox, publishBridge ?? null);
   return sandbox;
 }
