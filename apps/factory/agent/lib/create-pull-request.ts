@@ -16,6 +16,7 @@ import {
 } from "./performance-validation";
 import {
   buildDraftPullRequest,
+  formatPullRequestSlackNotification,
   resolvePullRequestTitle,
   updateBranchRefWithLease
 } from "./pull-request";
@@ -495,7 +496,7 @@ export async function createPullRequest(
 
   const { deliverSlackMessage } = await import("./slack");
   const slackNotification = await deliverSlackMessage(
-    `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
+    formatPullRequestSlackNotification(changeTitle, validatedPullRequest.url),
     {
       event: "pull_request_notification",
       metadata: { pullRequestNumber: validatedPullRequest.number }

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildBranchRefUpdate,
   buildDraftPullRequest,
+  formatPullRequestSlackNotification,
   resolvePullRequestTitle,
   updateBranchRefWithLease
 } from "../agent/lib/pull-request.ts";
@@ -23,6 +24,16 @@ test("builds draft pull requests", () => {
       base: "main",
       draft: true
     }
+  );
+});
+
+test("formats pull request Slack notifications with a bold linked title", () => {
+  assert.equal(
+    formatPullRequestSlackNotification(
+      "fix: Format Slack pull request notifications",
+      "https://github.com/vercel/turborepo/pull/123"
+    ),
+    ":pr: *<https://github.com/vercel/turborepo/pull/123|fix: Format Slack pull request notifications>*"
   );
 });
 
