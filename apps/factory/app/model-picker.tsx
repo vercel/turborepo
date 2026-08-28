@@ -1,20 +1,77 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-import type { GatewayModel } from "../agent/lib/gateway-models";
+interface ModelOption {
+  readonly id: string;
+  readonly label: string;
+}
 
 interface ModelPickerProps {
-  readonly disabled?: boolean;
-  readonly labelId: string;
-  readonly models: readonly GatewayModel[];
+  readonly disabled: boolean;
+  readonly models: readonly ModelOption[];
   readonly onValueChange: (value: string) => void;
   readonly value: string;
 }
 
-export function ModelPicker({
-  disabled = false,
-  labelId,
+export function ModelPickerEnhancer() {
+  const [select, setSelect] = useState<HTMLSelectElement | null>(null);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    const element = document.querySelector<HTMLSelectElement>(
+      "select#workspace-model"
+    );
+    if (!element) return;
+
+    const label = document.querySelector<HTMLLabelElement>(
+      'label[for="workspace-model"]'
+    );
+    element.hidden = true;
+    label?.setAttribute("for", "workspace-model-picker");
+    setSelect(element);
+
+    const observer = new MutationObserver(() =>
+      setRevision((current) => current + 1)
+    );
+    observer.observe(element, {
+      attributes: true,
+      childList: true,
+      subtree: true
+    });
+
+    return () => {
+      observer.disconnect();
+      element.hidden = false;
+      label?.setAttribute("for", "workspace-model");
+    };
+  }, []);
+
+  if (!select?.parentElement) return null;
+
+  const models = Array.from(select.options, (option) => ({
+    id: option.value,
+    label: option.text
+  }));
+
+  return createPortal(
+    <ModelPicker
+      disabled={select.disabled}
+      key={revision}
+      models={models}
+      onValueChange={(value) => {
+        select.value = value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }}
+      value={select.value}
+    />,
+    select.parentElement
+  );
+}
+
+function ModelPicker({
+  disabled,
   models,
   onValueChange,
   value
@@ -22,20 +79,19 @@ export function ModelPicker({
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const selected = models.find((model) => model.id === value) ?? models[0];
-  const [query, setQuery] = useState<string>(selected?.name ?? "");
+  const [query, setQuery] = useState<string>(selected?.label ?? "");
   const [open, setOpen] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredModels = models.filter(
     (model) =>
       normalizedQuery.length === 0 ||
-      model.name.toLowerCase().includes(normalizedQuery) ||
-      model.id.toLowerCase().includes(normalizedQuery) ||
-      model.ownedBy.toLowerCase().includes(normalizedQuery)
+      model.label.toLowerCase().includes(normalizedQuery) ||
+      model.id.toLowerCase().includes(normalizedQuery)
   );
 
-  function selectModel(model: GatewayModel) {
+  function selectModel(model: ModelOption) {
     onValueChange(model.id);
-    setQuery(model.name);
+    setQuery(model.label);
     setOpen(false);
     inputRef.current?.focus();
   }
@@ -46,14 +102,14 @@ export function ModelPicker({
         aria-autocomplete="list"
         aria-controls={listId}
         aria-expanded={open}
-        aria-labelledby={labelId}
         className="min-h-10 w-full rounded-md border border-input bg-background px-3 pr-9 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
         disabled={disabled}
+        id="workspace-model-picker"
         onBlur={(event) => {
           const list = document.getElementById(listId);
           if (event.relatedTarget && list?.contains(event.relatedTarget))
             return;
-          setQuery(selected?.name ?? "");
+          setQuery(selected?.label ?? "");
           setOpen(false);
         }}
         onChange={(event) => {
@@ -66,7 +122,7 @@ export function ModelPicker({
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
-            setQuery(selected?.name ?? "");
+            setQuery(selected?.label ?? "");
             setOpen(false);
           } else if (event.key === "Enter" && open && filteredModels[0]) {
             event.preventDefault();
@@ -111,7 +167,7 @@ export function ModelPicker({
                 onClick={() => selectModel(model)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
-                    setQuery(selected?.name ?? "");
+                    setQuery(selected?.label ?? "");
                     setOpen(false);
                     inputRef.current?.focus();
                   } else if (event.key === "ArrowDown") {
@@ -136,10 +192,10 @@ export function ModelPicker({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">
-                    {model.name}
+                    {model.label}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {model.id} · {model.ownedBy}
+                    {model.id}
                   </span>
                 </span>
                 {model.id === value ? (

@@ -3,24 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import type { GatewayModel } from "../agent/lib/gateway-models";
 import { Button } from "../components/ui/button";
-import { ModelPicker } from "./model-picker";
 import type { PublicWorkspace } from "./workspace-types";
 
-interface WorkspaceComposerProps {
-  readonly defaultModel: string;
-  readonly models: readonly GatewayModel[];
-}
-
-export function WorkspaceComposer({
-  defaultModel,
-  models
-}: WorkspaceComposerProps) {
+export function WorkspaceComposer() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState(defaultModel);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +19,7 @@ export function WorkspaceComposer({
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch("/eve/v1/workspaces", {
+      const response = await fetch("/api/workspaces", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -38,7 +27,6 @@ export function WorkspaceComposer({
         },
         body: JSON.stringify({
           ...(title.trim() ? { title: title.trim() } : {}),
-          model,
           prompt: message
         })
       });
@@ -80,18 +68,6 @@ export function WorkspaceComposer({
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Fix affected package detection"
           value={title}
-        />
-      </div>
-      <div className="grid gap-2">
-        <span className="text-sm font-medium" id="workspace-model-label">
-          Model
-        </span>
-        <ModelPicker
-          disabled={submitting}
-          labelId="workspace-model-label"
-          models={models}
-          onValueChange={setModel}
-          value={model}
         />
       </div>
       <div className="grid gap-2">
