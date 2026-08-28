@@ -106,7 +106,7 @@ function ModelPicker({
         disabled={disabled}
         id="workspace-model-picker"
         onBlur={(event) => {
-          const list = document.getElementById(listId);
+          const list = document.querySelector(`#${CSS.escape(listId)}`);
           if (event.relatedTarget && list?.contains(event.relatedTarget))
             return;
           setQuery(selected?.label ?? "");
@@ -129,7 +129,9 @@ function ModelPicker({
             selectModel(filteredModels[0]);
           } else if (event.key === "ArrowDown" && open && filteredModels[0]) {
             event.preventDefault();
-            document.getElementById(`${listId}-0`)?.focus();
+            document
+              .querySelector<HTMLElement>(`#${CSS.escape(`${listId}-0`)}`)
+              ?.focus();
           }
         }}
         ref={inputRef}
@@ -173,8 +175,8 @@ function ModelPicker({
                   } else if (event.key === "ArrowDown") {
                     event.preventDefault();
                     document
-                      .getElementById(
-                        `${listId}-${Math.min(index + 1, filteredModels.length - 1)}`
+                      .querySelector<HTMLElement>(
+                        `#${CSS.escape(`${listId}-${Math.min(index + 1, filteredModels.length - 1)}`)}`
                       )
                       ?.focus();
                   } else if (event.key === "ArrowUp") {
@@ -182,7 +184,9 @@ function ModelPicker({
                     if (index === 0) inputRef.current?.focus();
                     else
                       document
-                        .getElementById(`${listId}-${index - 1}`)
+                        .querySelector<HTMLElement>(
+                          `#${CSS.escape(`${listId}-${index - 1}`)}`
+                        )
                         ?.focus();
                   }
                 }}

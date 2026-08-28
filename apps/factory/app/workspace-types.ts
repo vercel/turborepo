@@ -1,12 +1,12 @@
 export interface WorkspaceMessage {
   readonly id: string;
-  readonly role: "user" | "assistant";
+  readonly role: "user" | "assistant" | "system";
   readonly text: string;
   readonly createdAt: string;
 }
 
 export interface WorkspaceSandbox {
-  readonly id?: string;
+  readonly name: string;
   readonly status: string;
 }
 
@@ -16,17 +16,18 @@ export interface WorkspacePullRequest {
 }
 
 export interface PublicWorkspace {
+  readonly chatCommand?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
-  readonly agent: "eve";
+  readonly agent: "fx";
   readonly sandbox: WorkspaceSandbox;
   readonly sessionId?: string;
   readonly messages: readonly WorkspaceMessage[];
-  readonly model?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly error?: string;
+  readonly workflowRunId?: string;
   readonly pullRequest?: string | WorkspacePullRequest;
 }
 
