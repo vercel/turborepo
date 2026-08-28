@@ -3,15 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import type { GatewayModel } from "../agent/lib/gateway-models";
 import { Button } from "../components/ui/button";
 import { ModelPicker } from "./model-picker";
 import type { PublicWorkspace } from "./workspace-types";
 
-export function WorkspaceComposer() {
+interface WorkspaceComposerProps {
+  readonly defaultModel: string;
+  readonly models: readonly GatewayModel[];
+}
+
+export function WorkspaceComposer({
+  defaultModel,
+  models
+}: WorkspaceComposerProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState(defaultModel);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,15 +30,15 @@ export function WorkspaceComposer() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch("/api/workspaces", {
+      const response = await fetch("/eve/v1/workspaces", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-operator-action": "create-workspace"
         },
         body: JSON.stringify({
-          ...(model ? { model } : {}),
           ...(title.trim() ? { title: title.trim() } : {}),
+          model,
           prompt: message
         })
       });
@@ -80,6 +89,7 @@ export function WorkspaceComposer() {
         <ModelPicker
           disabled={submitting}
           labelId="workspace-model-label"
+          models={models}
           onValueChange={setModel}
           value={model}
         />
