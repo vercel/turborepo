@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "../components/ui/button";
+import { ModelPicker } from "./model-picker";
 import type { PublicWorkspace } from "./workspace-types";
 
 export function WorkspaceComposer() {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export function WorkspaceComposer() {
           "x-operator-action": "create-workspace"
         },
         body: JSON.stringify({
+          ...(model ? { model } : {}),
           ...(title.trim() ? { title: title.trim() } : {}),
           prompt: message
         })
@@ -68,6 +71,17 @@ export function WorkspaceComposer() {
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Fix affected package detection"
           value={title}
+        />
+      </div>
+      <div className="grid gap-2">
+        <span className="text-sm font-medium" id="workspace-model-label">
+          Model
+        </span>
+        <ModelPicker
+          disabled={submitting}
+          labelId="workspace-model-label"
+          onValueChange={setModel}
+          value={model}
         />
       </div>
       <div className="grid gap-2">

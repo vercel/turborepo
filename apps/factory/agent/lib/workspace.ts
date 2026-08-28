@@ -5,6 +5,12 @@ export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 
 export type WorkspaceStatus = "idle" | "running" | "error";
 
+export const WORKSPACE_MODEL_IDS = [
+  "openai/gpt-5.6-sol",
+  "anthropic/claude-fable-5"
+] as const;
+export type WorkspaceModel = (typeof WORKSPACE_MODEL_IDS)[number];
+
 export interface WorkspaceMessage {
   readonly createdAt: string;
   readonly id: string;
@@ -21,6 +27,7 @@ export interface WorkspaceRecord {
   readonly agent: "fx";
   readonly id: string;
   readonly messages: readonly WorkspaceMessage[];
+  readonly model?: WorkspaceModel;
   readonly pullRequest?: { readonly number: number; readonly url: string };
   readonly sandbox: {
     readonly name: string;
@@ -62,11 +69,13 @@ export function isWorkspaceId(value: unknown): value is string {
 }
 
 export function parseCreateWorkspaceInput(value: unknown): {
+  readonly model?: WorkspaceModel;
   readonly prompt?: string;
   readonly title: string;
 } | null {
   if (!isObject(value)) return null;
   if (value.title !== undefined && typeof value.title !== "string") return null;
+  if (value.model !== undefined && !isWorkspaceModel(value.model)) return null;
   if (value.prompt !== undefined && typeof value.prompt !== "string")
     return null;
   const prompt = value.prompt?.trim();
@@ -78,6 +87,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   )
     return null;
   return {
+    ...(value.model === undefined ? {} : { model: value.model }),
     ...(prompt === undefined ? {} : { prompt }),
     title
   };
@@ -248,6 +258,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     (sandbox.status === "pending" ||
       sandbox.status === "running" ||
       sandbox.status === "error") &&
+    (value.model === undefined || isWorkspaceModel(value.model)) &&
     value.messages.length <= MAX_MESSAGES &&
     value.messages.every(isWorkspaceMessage) &&
     isIsoDate(value.createdAt) &&
@@ -259,6 +270,10 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     optionalString(value.error, 2000) &&
     (value.pullRequest === undefined || isPullRequest(value.pullRequest))
   );
+}
+
+function isWorkspaceModel(value: unknown): value is WorkspaceModel {
+  return WORKSPACE_MODEL_IDS.some((model) => model === value);
 }
 
 function isWorkspaceMessage(value: unknown): value is WorkspaceMessage {

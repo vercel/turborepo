@@ -42,6 +42,11 @@ test("validates durable workspace records and deterministic sandbox names", () =
   assert.equal(isWorkspaceRecord(workspace()), true);
   assert.equal(isWorkspaceRecord(workspace({ sessionId: undefined })), true);
   assert.equal(
+    isWorkspaceRecord(workspace({ model: "openai/gpt-5.6-sol" })),
+    true
+  );
+  assert.equal(isWorkspaceRecord(workspace({ model: "unknown/model" })), false);
+  assert.equal(
     isWorkspaceRecord(
       workspace({ sandbox: { name: "another-sandbox", provider: "vercel" } })
     ),
@@ -193,6 +198,21 @@ test("validates create and turn bodies", () => {
       prompt: "Fix cache",
       title: "Fix cache"
     }
+  );
+  assert.deepEqual(
+    parseCreateWorkspaceInput({
+      model: "anthropic/claude-fable-5",
+      prompt: "Fix cache"
+    }),
+    {
+      model: "anthropic/claude-fable-5",
+      prompt: "Fix cache",
+      title: "Fix cache"
+    }
+  );
+  assert.equal(
+    parseCreateWorkspaceInput({ model: "unknown/model", prompt: "Fix cache" }),
+    null
   );
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
   assert.deepEqual(parseWorkspaceTurnInput({ message: "  Go  " }), {

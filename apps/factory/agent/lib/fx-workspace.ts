@@ -93,7 +93,8 @@ export async function runFxTurn(
   prompt: string,
   sessionId?: string,
   getOidcToken: () => Promise<string> = getVercelOidcToken,
-  onSession?: (sessionId: string) => Promise<void>
+  onSession?: (sessionId: string) => Promise<void>,
+  model?: string
 ): Promise<FxTurnResult & { readonly cancelled: boolean }> {
   const promptPath = `/factory/state/fx-terminal-prompt-${randomUUID()}`;
   const tokenPath = `/factory/state/fx-terminal-oidc-${randomUUID()}`;
@@ -119,7 +120,8 @@ export async function runFxTurn(
       tokenPath,
       sessionId ?? "",
       FX_TERMINAL_SESSION_PATH,
-      FX_TERMINAL_TMUX_SESSION
+      FX_TERMINAL_TMUX_SESSION,
+      model ?? ""
     ],
     cmd: "node",
     detached: true,

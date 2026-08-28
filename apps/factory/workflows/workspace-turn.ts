@@ -74,7 +74,8 @@ async function runWorkspaceTurn(input: WorkspaceTurnInput): Promise<void> {
             ? { ...current, sessionId }
             : current
         );
-      }
+      },
+      workspace.model
     );
     const now = new Date().toISOString();
     await mutateWorkspace(input.workspaceId, (current) => {

@@ -10,7 +10,8 @@ import {
   toWorkspaceView,
   workspaceSandboxName,
   type WorkspaceRecord,
-  type PublicWorkspaceView
+  type PublicWorkspaceView,
+  type WorkspaceModel
 } from "./workspace";
 import {
   createWorkspace,
@@ -19,6 +20,7 @@ import {
 } from "./workspace-store";
 
 export async function createFxWorkspace(input: {
+  readonly model?: WorkspaceModel;
   readonly prompt?: string;
   readonly title: string;
 }): Promise<PublicWorkspaceView> {
@@ -29,6 +31,7 @@ export async function createFxWorkspace(input: {
     createdAt: now,
     id,
     messages: [],
+    ...(input.model === undefined ? {} : { model: input.model }),
     publishToken: randomUUID(),
     sandbox: {
       name: workspaceSandboxName(id),

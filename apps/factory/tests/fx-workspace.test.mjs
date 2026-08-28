@@ -113,6 +113,7 @@ test("the terminal runner starts fx once and injects the autonomous prompt", () 
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /respawn-pane/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /paste-buffer/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /fx --record/);
+  assert.match(FX_TERMINAL_RUNNER_SOURCE, /export FX_MODEL/);
   assert.match(FX_TERMINAL_RUNNER_SOURCE, /\/factory\/bin:\$PATH/);
   assert.doesNotMatch(FX_TERMINAL_RUNNER_SOURCE, /session\/cancel/);
 });
