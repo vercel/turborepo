@@ -187,8 +187,6 @@ pub enum Error {
     Encoding(String),
     #[error("TURBO_SIGNATURE should be either 1 or 0.")]
     InvalidSignature,
-    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
-    InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]

@@ -12,6 +12,13 @@ export interface PullRequestInput {
 export const CONVENTIONAL_TITLE_PATTERN = /^[a-z]+: [A-Z].+$/;
 const PERFORMANCE_TITLE_PATTERN = /^perf: [A-Z].+$/;
 
+export interface BranchRefUpdate {
+  readonly afterOid: string;
+  readonly beforeOid: string;
+  readonly force: true;
+  readonly name: string;
+}
+
 export interface PullRequestNaming {
   /** Set for an automated example-maintenance run, which titles itself. */
   readonly automatedExample?: string;
@@ -23,6 +30,77 @@ export interface PullRequestNaming {
 
 export function buildDraftPullRequest(input: PullRequestInput) {
   return { ...input, draft: true as const };
+}
+
+export function buildBranchRefUpdate(
+  branchName: string,
+  beforeOid: string,
+  afterOid: string
+): BranchRefUpdate {
+  return {
+    afterOid,
+    beforeOid,
+    force: true,
+    name: `refs/heads/${branchName}`
+  };
+}
+
+export async function updateBranchRefWithLease(
+  input: {
+    branchName: string;
+    expectedSha: string;
+    newSha: string;
+    repositoryId: string;
+    token: string;
+  },
+  fetchImplementation: typeof fetch = fetch
+): Promise<void> {
+  const response = await fetchImplementation("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${input.token}`,
+      "content-type": "application/json",
+      "x-github-api-version": "2022-11-28"
+    },
+    body: JSON.stringify({
+      query: `mutation UpdateBranchWithLease($input: UpdateRefsInput!) {
+        updateRefs(input: $input) { clientMutationId }
+      }`,
+      variables: {
+        input: {
+          repositoryId: input.repositoryId,
+          refUpdates: [
+            buildBranchRefUpdate(
+              input.branchName,
+              input.expectedSha,
+              input.newSha
+            )
+          ]
+        }
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `GitHub GraphQL request failed with ${response.status}: ${await response.text()}`
+    );
+  }
+
+  const body = (await response.json()) as {
+    data?: { updateRefs?: unknown };
+    errors?: Array<{ message?: unknown }>;
+  };
+  if (body.errors?.length) {
+    const detail = body.errors
+      .map((error) => String(error.message ?? "Unknown GraphQL error"))
+      .join("; ");
+    throw new Error(`GitHub GraphQL request failed: ${detail}`);
+  }
+  if (body.data?.updateRefs === undefined || body.data.updateRefs === null) {
+    throw new Error("GitHub GraphQL response did not confirm the ref update.");
+  }
 }
 
 /**

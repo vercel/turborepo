@@ -2,17 +2,21 @@ import type { JSX, ReactNode } from "react";
 import Link from "next/link";
 import { TurborepoLogo } from "@/components/logos";
 import { github, footerLinks } from "@/geistdocs";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
+import { getRootLang } from "@/lib/geistdocs/root-params";
 
 const gitHubRepoUrl = `https://github.com/${github.owner}/${github.repo}`;
 const communityUrl =
   footerLinks.community.find((l) => l.label === "Community")?.href ??
   "https://community.vercel.com/tag/turborepo";
 
-export function NotFoundTemplate({
+export async function NotFoundTemplate({
   content
 }: {
   content?: ReactNode;
-}): JSX.Element {
+}): Promise<JSX.Element> {
+  const lang = await getRootLang();
+
   return (
     <main className="relative flex h-full w-full flex-col overflow-hidden pt-36 pb-20">
       <div className="flex justify-center pb-24">
@@ -28,10 +32,14 @@ export function NotFoundTemplate({
           </p>
           <ul className="mt-8 flex flex-col gap-y-3 text-sm">
             <li className="transition duration-100 text-muted-foreground hover:text-foreground">
-              <Link href="/">Home</Link>
+              <Link href={getLocalizedPath(lang, "/")} prefetch>
+                Home
+              </Link>
             </li>
             <li className="transition duration-100 text-muted-foreground hover:text-foreground">
-              <Link href="/docs">Documentation</Link>
+              <Link href={getLocalizedPath(lang, "/docs")} prefetch>
+                Documentation
+              </Link>
             </li>
             <li className="transition duration-100 text-muted-foreground hover:text-foreground">
               <a href={gitHubRepoUrl} rel="noopener" target="_blank">
@@ -44,7 +52,9 @@ export function NotFoundTemplate({
               </a>
             </li>
             <li className="transition duration-100 text-muted-foreground hover:text-foreground">
-              <Link href="/sitemap.md">Sitemap for agents</Link>
+              <Link href={getLocalizedPath(lang, "/sitemap.md")} prefetch>
+                Sitemap for agents
+              </Link>
             </li>
           </ul>
         </div>

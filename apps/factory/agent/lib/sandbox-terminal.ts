@@ -1,92 +1,66 @@
 import { Sandbox } from "@vercel/sandbox";
 
+import { FACTORY_IMAGE_SPEC } from "#factory-image";
+
 export interface TerminalSession {
-  readonly url: string;
   readonly token: string;
+  readonly url: string;
 }
 
-export interface SandboxWithInteractive {
-  readonly openInteractive: (opts?: {
-    readonly signal?: AbortSignal;
-  }) => Promise<{ readonly url: string; readonly token: string }>;
+interface CommandResult {
+  readonly exitCode: number;
 }
 
-const ALLOWED_SANDBOX_NAME_PREFIX = "factory-workspace-";
+interface CommandRunner {
+  runCommand(
+    command: string,
+    args?: string[],
+    options?: { readonly timeoutMs?: number }
+  ): Promise<CommandResult>;
+}
 
-export function isAllowedSandboxName(name: string): boolean {
-  return name.startsWith(ALLOWED_SANDBOX_NAME_PREFIX);
+interface InteractiveSandbox extends CommandRunner {
+  asUser(name: "root"): CommandRunner;
+  openInteractive(): Promise<TerminalSession>;
 }
 
 export async function createTerminalSession(
   sandboxName: string,
-  getSandbox: (
-    name: string
-  ) => Promise<SandboxWithInteractive> = defaultGetSandbox
+  getSandbox: (name: string) => Promise<InteractiveSandbox> = async (name) =>
+    Sandbox.get({ name, resume: true })
 ): Promise<TerminalSession> {
-  if (!isAllowedSandboxName(sandboxName)) {
-    throw new Error("Sandbox name is not managed by Factory.");
-  }
-
   const sandbox = await getSandbox(sandboxName);
-  const session = await sandbox.openInteractive();
-  return { url: session.url, token: session.token };
+  await ensureFxInstalled(sandbox);
+  return sandbox.openInteractive();
 }
 
-async function defaultGetSandbox(
-  name: string
-): Promise<SandboxWithInteractive> {
-  const sandbox = await Sandbox.get({ name, resume: true });
-  return sandbox as SandboxWithInteractive;
-}
+export async function ensureFxInstalled(
+  sandbox: InteractiveSandbox
+): Promise<void> {
+  const probe = await sandbox.runCommand("sh", [
+    "-c",
+    "command -v fx >/dev/null"
+  ]);
+  if (probe.exitCode === 0) return;
 
-export async function handleTerminalRequest(
-  request: Request,
-  createSession: (
-    name: string
-  ) => Promise<TerminalSession> = createTerminalSession
-): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  if (!isValidRequest(body)) {
-    return Response.json(
-      { error: "A valid sandboxName is required." },
-      { status: 400 }
-    );
-  }
-
-  const { sandboxName } = body;
-
-  if (!isAllowedSandboxName(sandboxName)) {
-    return Response.json(
-      { error: "Sandbox name is not allowed." },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const session = await createSession(sandboxName);
-    return Response.json(session);
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Could not open an interactive session for the sandbox.";
-    const status = message.includes("not_found") ? 404 : 500;
-    return Response.json({ error: message }, { status });
-  }
-}
-
-function isValidRequest(
-  value: unknown
-): value is { readonly sandboxName: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).sandboxName === "string"
-  );
+  const version = FACTORY_IMAGE_SPEC.fxVersion;
+  const script = String.raw`set -euo pipefail
+case "$(uname -m)" in
+  x86_64) arch=x86_64; checksum=${FACTORY_IMAGE_SPEC.fxSha256.x86_64} ;;
+  aarch64|arm64) arch=aarch64; checksum=${FACTORY_IMAGE_SPEC.fxSha256.aarch64} ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+archive="/tmp/fx-linux-$arch.tar.gz"
+curl --fail --show-error --silent --location --output "$archive" \
+  "https://github.com/vercel-labs/fx/releases/download/v${version}/fx-linux-$arch.tar.gz"
+printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --strict
+tar -xzf "$archive" -C /tmp fx
+install -m 0755 /tmp/fx /usr/local/bin/fx
+rm -f /tmp/fx "$archive"
+FX_AUTO_UPGRADE=0 fx --version`;
+  const installed = await sandbox
+    .asUser("root")
+    .runCommand("bash", ["-lc", script], { timeoutMs: 60_000 });
+  if (installed.exitCode !== 0)
+    throw new Error("Could not install fx in this older sandbox.");
 }

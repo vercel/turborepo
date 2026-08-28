@@ -103,3 +103,40 @@ fn test_filtered_ls_still_reads_lockfile() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("attempting to parse"));
 }
+
+#[test]
+fn test_ls_multiple_package_details_json_preserves_order_and_duplicates() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["ls", "util", "my-app", "util", "--output", "json"],
+    );
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let names = json["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|package| package["name"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["util", "my-app", "util"]);
+    assert_eq!(
+        json["packages"][1]["dependencies"],
+        serde_json::json!(["util"])
+    );
+}
+
+#[test]
+fn test_ls_multiple_package_details_json_reports_first_missing_package() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["ls", "util", "missing", "also-missing", "--output", "json"],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Package `missing` not found"));
+}

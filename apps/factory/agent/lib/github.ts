@@ -44,6 +44,11 @@ export async function fetchMainCommit(): Promise<string> {
   return body.sha;
 }
 
+export async function getOptionalGitHubToken(): Promise<string | null> {
+  if (!process.env.GITHUB_TOKEN_EXCHANGE_URL) return null;
+  return getGitHubToken();
+}
+
 export async function getGitHubToken(): Promise<string> {
   if (
     cachedToken !== null &&

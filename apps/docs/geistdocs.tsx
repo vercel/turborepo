@@ -92,6 +92,15 @@ export const agent = {
       "Prune monorepos for lightweight deploys"
     ]
   },
+  api: {
+    openApiUrl: "/api/remote-cache-spec"
+  },
+  instructions: [
+    "Use /sitemap.md to identify the most relevant documentation pages before answering broad questions.",
+    "Use /llms.txt to find individual documentation pages and /llms-full.txt when you need the complete documentation corpus as Markdown context.",
+    "Fetch individual documentation pages with a .md or .mdx extension for focused page-level context.",
+    "Only use product capabilities and integration surfaces that are explicitly listed in this file."
+  ],
   links: [
     {
       label: "Turborepo source",
