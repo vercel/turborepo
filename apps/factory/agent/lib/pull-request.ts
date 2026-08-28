@@ -32,6 +32,13 @@ export function buildDraftPullRequest(input: PullRequestInput) {
   return { ...input, draft: true as const };
 }
 
+export function formatPullRequestSlackNotification(
+  title: string,
+  url: string
+): string {
+  return `:pr: *<${url}|${title}>*`;
+}
+
 export function buildBranchRefUpdate(
   branchName: string,
   beforeOid: string,
