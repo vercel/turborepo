@@ -96,4 +96,4 @@ Use this workflow for any request to inspect, update, modernize, validate, or re
 - Do not ask the user to choose safe vs full updates. The default is full latest exact pins across all examples.
 - Do not report “latest-compatible” fallbacks as completion. Completion requires exact latest direct pins or a true external availability blocker.
 - Report only after the completion contract is satisfied. Avoid interim status updates unless a tool or channel requires visible progress.
-- For automated runs, let `create_pull_request` choose the example-specific branch and title, and include validation results in the body.
+- For automated runs, let `create_pull_request` choose the example-specific branch and title. Keep the body focused on the changes; omit routine CI-covered validation, and mention validation only when the update required non-routine manual testing beyond running the test suite.

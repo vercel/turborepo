@@ -16,7 +16,9 @@ description: Use when the maintainer asks to create, make, open, or publish a pu
 
 # Publish a Factory pull request
 
-Leave repository changes uncommitted and run \`factory-create-pr --branch agents/<topic> --title "type: Description" --body "validation results"\`.
+Leave repository changes uncommitted and run \`factory-create-pr --branch agents/<topic> --title "type: Description" --body "summary of changes"\`.
+
+Keep the pull request description focused on the change. Do not list routine tests, builds, lint, or type checks that CI will run. Mention validation only when the change required non-routine manual testing beyond running the test suite, and describe that manual verification.
 
 Factory creates the verified commit, branch, and draft pull request through Eve's GitHub credentials. Never run \`git commit\`, \`git push\`, \`gh auth setup-git\`, or \`gh pr create\`.
 `;
@@ -63,7 +65,7 @@ for (let index = 0; index < values.length; index += 2) {
   const key = values[index];
   const value = values[index + 1];
   if (!key?.startsWith("--") || value === undefined) {
-    console.error("Usage: factory-create-pr --branch agents/<topic> --title 'type: Description' --body 'Validation results'");
+    console.error("Usage: factory-create-pr --branch agents/<topic> --title 'type: Description' --body 'Summary of changes'");
     process.exit(2);
   }
   input[key.slice(2)] = value;

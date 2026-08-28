@@ -72,6 +72,11 @@ test("installs the Factory publishing skill for fx", async () => {
   assert.match(contents, /name: factory-publish/);
   assert.match(contents, /create, make, open, or publish a pull request/);
   assert.match(contents, /factory-create-pr/);
+  assert.match(
+    contents,
+    /Do not list routine tests, builds, lint, or type checks/
+  );
+  assert.match(contents, /non-routine manual testing/);
   assert.match(contents, /Never run `git commit`/);
   assert.deepEqual(commands.at(-1).args, [
     "+x",
