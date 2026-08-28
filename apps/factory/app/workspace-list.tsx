@@ -103,34 +103,47 @@ export function WorkspaceList() {
       ) : (
         <ol className="grid list-none gap-3 p-0">
           {workspaces.map((workspace) => (
-            <li key={workspace.id}>
+            <li
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 rounded-md border border-border p-4 hover:bg-accent max-[520px]:grid-cols-1"
+              key={workspace.id}
+            >
               <Link
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 rounded-md border border-border p-4 text-foreground no-underline hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 max-[520px]:grid-cols-1"
+                className="min-w-0 text-foreground no-underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                 href={`/workspaces/${encodeURIComponent(workspace.id)}`}
               >
-                <span className="min-w-0">
-                  <strong className="block truncate text-sm font-semibold">
-                    {workspace.title || "Untitled workspace"}
-                  </strong>
-                  <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
-                    {workspace.id}
-                  </span>
-                </span>
-                <span className="flex items-center gap-5 text-xs text-muted-foreground max-[520px]:justify-between">
-                  <time dateTime={workspace.updatedAt}>
-                    {formatTimestamp(workspace.updatedAt)}
-                  </time>
-                  <span
-                    className={`flex items-center gap-2 ${isWorkspaceRunning(workspace.status) ? "text-warning" : workspace.status === "error" ? "text-destructive" : "text-success"}`}
-                  >
-                    <span
-                      className="size-1.5 rounded-full bg-current"
-                      aria-hidden="true"
-                    />
-                    {workspaceStatusLabel(workspace)}
-                  </span>
+                <strong className="block truncate text-sm font-semibold">
+                  {workspace.title || "Untitled workspace"}
+                </strong>
+                <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
+                  {workspace.id}
                 </span>
               </Link>
+              <span className="flex items-center gap-5 text-xs text-muted-foreground max-[520px]:justify-between">
+                {workspace.pullRequest ? (
+                  <a
+                    className="font-medium text-foreground hover:underline hover:underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                    href={workspace.pullRequest.url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    PR #{workspace.pullRequest.number}{" "}
+                    <span className="sr-only">in a new tab</span>
+                    <span aria-hidden="true">↗</span>
+                  </a>
+                ) : null}
+                <time dateTime={workspace.updatedAt}>
+                  {formatTimestamp(workspace.updatedAt)}
+                </time>
+                <span
+                  className={`flex items-center gap-2 ${isWorkspaceRunning(workspace.status) ? "text-warning" : workspace.status === "error" ? "text-destructive" : "text-success"}`}
+                >
+                  <span
+                    className="size-1.5 rounded-full bg-current"
+                    aria-hidden="true"
+                  />
+                  {workspaceStatusLabel(workspace)}
+                </span>
+              </span>
             </li>
           ))}
         </ol>
