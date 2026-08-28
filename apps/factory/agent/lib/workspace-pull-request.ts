@@ -1,8 +1,8 @@
 import { get, put } from "@vercel/blob";
 
-import { getGitHubToken } from "./github.js";
-import { listWorkspaces } from "./workspace-store.js";
-import type { WorkspaceRecord } from "./workspace.js";
+import { getGitHubToken } from "./github";
+import { listWorkspaces } from "./workspace-store";
+import type { WorkspaceRecord } from "./workspace";
 
 const PREFIX = "factory-workspace-status/v1/";
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -159,8 +159,12 @@ async function readStatus(workspaceId: string): Promise<DisplayStatus> {
     useCache: false
   });
   if (!result || result.statusCode !== 200) return {};
-  const value: unknown = await new Response(result.stream).json().catch(() => null);
-  return typeof value === "object" && value !== null ? (value as DisplayStatus) : {};
+  const value: unknown = await new Response(result.stream)
+    .json()
+    .catch(() => null);
+  return typeof value === "object" && value !== null
+    ? (value as DisplayStatus)
+    : {};
 }
 
 async function writeStatus(

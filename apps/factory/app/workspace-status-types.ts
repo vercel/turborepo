@@ -21,7 +21,9 @@ export function isWorkspaceRunning(status: string): boolean {
   );
 }
 
-export function workspaceStatusLabel(workspace: WorkspaceDisplayStatus): string {
+export function workspaceStatusLabel(
+  workspace: WorkspaceDisplayStatus
+): string {
   if (isWorkspaceRunning(workspace.status))
     return workspace.activity ?? "Working";
   if (workspace.status === "done") return "Done";
