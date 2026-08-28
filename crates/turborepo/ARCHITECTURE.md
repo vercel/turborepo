@@ -428,10 +428,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   or package-manager policy. The same snapshot validates resolution and every
   resolved local package. `--no-deps` is used only to preserve error precedence
   and classify memberless workspaces when locked metadata cannot be obtained.
-  Automatic in-repository workspace members are supported, while
-  excluded/non-member, outside-repository, and root-manifest local packages
-  hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo contributor reports the current workspace root.
+  Automatic in-repository workspace members and a package defined by the root
+  manifest are supported, while excluded/non-member and outside-repository local
+  packages hard-error because Turborepo cannot hash, watch, or prune their
+  sources safely. A root package can execute but cannot be a prune target because
+  its package directory is the entire repository. The Cargo contributor reports
+  the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
@@ -500,7 +502,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
-  `include_str!` from outside any crate directory) are additive.
+  `include_str!` from outside any crate directory) are additive. Unsafe
+  repository Cargo configuration and configuration inherited from outside the
+  repository disable implicit caching and emit the reason as a warning.
 - **External dependencies** (`turborepo-lockfiles/src/cargo.rs`): locked
   registry/git packages and the compiler itself flow through the same
   `ExternalResolutionGeneration` and resolution fingerprint used by JavaScript
@@ -516,9 +520,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
   through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
-  repository `build.target` stays conservatively unavailable. Failure to
-  resolve the compiler identity is
-  a hard error. Every non-empty Cargo workspace must have a current
+  repository `build.target` stays conservatively unavailable. If the compiler
+  identity cannot be resolved, Cargo tasks remain runnable but implicit caching
+  is disabled with a warning, matching the uv toolchain's identity fallback.
+  Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
@@ -551,7 +556,8 @@ whether anything changed; Cargo decides how and in what order to build.**
   toggling it invalidates caches. Entrypoint `run`/`dev` tasks and library
   `build` tasks default to `cache: false`: a cache hit must not suppress a
   requested process, and library artifacts have no stable final path to restore.
-  An explicit turbo.json `cache` setting overrides the toolchain default.
+  Turborepo warns when unavailable library outputs disable implicit caching. An
+  explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
   consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery
@@ -656,10 +662,14 @@ involved. `UvContributor` contributes pre-classified relationships, native
 tasks, external resolution, change observations, and a prune domain through
 the shared repository graph.
 
-- **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
-  in-process, so graph construction does not require the `uv` binary. When uv
-  is available, discovery probes its version and the Python interpreter selected
-  by `uv python find` for cache identity. Missing identities and repository-local
+- **Discovery** invokes `uv workspace metadata --frozen --offline` once and uses
+  its member list and resolution graph as authoritative. Turborepo parses each
+  returned `pyproject.toml` only for task/tool declarations and dependency-kind
+  labels. For git-range affectedness, `uv.lock` package tables are diffed
+  mechanically and changed package names are intersected with these
+  metadata-derived closures; unrelated workspace packages remain unaffected.
+  Discovery also probes uv and the Python interpreter selected by
+  `uv python find` for cache identity. Missing identities and repository-local
   uv executables fail closed to uncached tasks. Names are PEP 503-normalized.
   Dependencies become internal graph edges only when
   their effective `[tool.uv.sources]` entry selects `workspace = true`.
@@ -696,7 +706,7 @@ the shared repository graph.
   unfiltered run, while a package filter can select only a directly declaring
   member. Member pytest tasks have no shared serial group and can run in
   parallel.
-- **Command shapes** are `uv build --package=<name>`, or `uv run --frozen`
+- **Command shapes** are `uv build --package=<name>`, or `uv run --active --frozen`
   followed by owner selection (`--package <name>` for a member,
   `--all-packages` for homogeneous member ownership, and no owner flag for a
   root declaration), non-default group activation (`--no-default-groups
@@ -715,8 +725,8 @@ the shared repository graph.
   Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
   inserted before path targets. Active aggregates reject them and name the
   package-qualified child tasks that can receive them.
-  Pytest commands are `uv run --frozen pytest` for the workspace or `uv run
-  --frozen --package <name> pytest <member-dir>` for members, with non-default
+  Pytest commands are `uv run --active --frozen pytest` for the workspace or `uv run
+  --active --frozen --package <name> pytest <member-dir>` for members, with non-default
   group activation inserted before pytest and pass-through arguments inserted
   before the member target.
 - **Hashing and affectedness** include member sources, relevant workspace
@@ -725,24 +735,38 @@ the shared repository graph.
   Quality workspace tasks include every member's sources; a bare workspace
   pytest task hashes the full repository because pytest controls collection.
   Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
-  Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
+  `VIRTUAL_ENV` is hashed and native `uv run` tasks opt into it with `--active`;
+  otherwise `UV_PROJECT_ENVIRONMENT` or the root `.venv` determines the effective
+  environment directory. An in-repository environment is excluded from task inputs,
+  and output globs that would archive it are rejected because virtual environments
+  are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
   configuration, and any pass-through arguments make automatic inputs
-  untracked. Each scope also hashes its external
-  dependency closure from `uv.lock`; root-owned tools conservatively add the
-  workspace closure. Package identities include version, source, and artifact
-  hashes. Every scope also includes path-independent uv and Python identities
+  untracked. Unless `cache` is explicitly configured, Turborepo disables caching
+  and emits the reason as a warning. Turborepo invokes
+  `uv workspace metadata --frozen --offline` and
+  hashes each scope's external dependency closure from uv's JSON resolution
+  graph; root-owned tools conservatively add the workspace closure. Package
+  identities include version, source, and artifact hashes. Turborepo therefore
+  does not interpret `uv.lock` for task hashing; pruning also uses metadata for
+  reachability and only parses TOML to filter selected package tables. Every scope also
+  includes path-independent uv and Python identities
   containing executable content hashes, Python implementation and version,
-  operating system, architecture, libc, variant, and host compatibility. A `uv.lock` change across git refs conservatively affects
+  operating system, architecture, libc, variant, and host compatibility. If either
+  identity probe fails, native uv command tasks fail closed to uncached and emit one
+  warning for the workspace with the concrete probe failure. A `uv.lock` change across git refs conservatively affects
   all uv packages. Build output inference covers the bare command's matching
   `dist/` artifacts and becomes unavailable when arguments are present.
 - **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
-  `.python-version`, and `uv.toml`. Root `.venv/` and `dist/`, plus known quality-tool and Python cache
+  `.python-version`, and `uv.toml`. In-repository `VIRTUAL_ENV` and
+  `UV_PROJECT_ENVIRONMENT` directories, root `.venv/` and `dist/`, plus known quality-tool and Python cache
   directories at the root and member scopes, are ignored as task byproducts.
-- **Prune** walks `uv.lock` reachability, including dependency groups and
-  optional extras, and preserves retained package metadata through
-  `toml_edit`. It rewrites root workspace members, removes dangling uv source
-  entries, and copies `.python-version` and `uv.toml` when present. Reachable
-  local dependencies that are not workspace members fail closed.
+- **Prune** uses the same uv metadata graph for reachability, including
+  dependency groups and optional extras. It mechanically filters matching
+  `uv.lock` package tables with `toml_edit`, preserving retained metadata and
+  conservatively keeping all same-name/version forks. It rewrites root workspace
+  members, removes dangling uv source entries, and copies `.python-version` and
+  `uv.toml` when present. Reachable local dependencies that are not workspace
+  members fail closed.
 
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,

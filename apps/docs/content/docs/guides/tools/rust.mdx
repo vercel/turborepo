@@ -177,7 +177,7 @@ With zero configuration, Turborepo creates task hashes using:
 - Root Cargo files
 - Relevant Cargo and compiler environment
 - The resolved external dependency closure from `Cargo.lock`
-- The complete `rustc -vV` identity.
+- The complete `rustc -vV` identity. If Turborepo cannot resolve it, Cargo tasks remain runnable but implicit caching is disabled with a warning.
 
 The built-in `format` task also includes `rustfmt.toml`, `.rustfmt.toml`, and `RUSTFMT` in its derived inputs. Because formatting mutates source files, it defaults to uncached.
 
@@ -188,7 +188,7 @@ Project-specific hashing inputs must be accounted for manually. This includes:
 
 ### Output caching
 
-Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
+Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs, and Turborepo emits a warning explaining this default. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
 
 Turborepo resolves exact outputs for these layouts:
 
@@ -204,7 +204,7 @@ Untracked inputs are more strict. External, included, or symlinked Cargo configu
 
 ## Limitations
 
-- Only the root virtual Cargo workspace is discovered. Root crates are rejected, nested workspaces are not independently discovered, and resolved external or non-member local path dependencies fail closed.
+- Only the root Cargo workspace is discovered. A package defined in the root `Cargo.toml` participates in task execution, but cannot be a `turbo prune` target because its package directory is the entire repository. Nested workspaces are not independently discovered, and resolved external or non-member local path dependencies fail closed.
 - `cdylib`/`staticlib`-only entrypoints are build-only. Multi-bin crates require both `package.default-run` and an authored task definition for native `run` and `dev`; pass-through arguments cannot supply Cargo's `--bin` option.
 - Automatic artifact caching is deliberately disabled for unresolved output layouts and untracked inputs. Explicit outputs can authorize an unresolved output layout, but untracked inputs require an explicit `cache` setting. Cargo's full `target/` directory is never a task output.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune an entrypoint crate instead.

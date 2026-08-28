@@ -1,6 +1,5 @@
+import { cacheLife } from "next/cache";
 import { REMOTE_CACHE_COUNTER_START_HOURS } from "@/components/remote-cache-counter/constants";
-
-export const revalidate = 5;
 
 export const pathKey = `https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=${process.env.TINYBIRD_TIME_SAVED_TOKEN}`;
 
@@ -27,13 +26,16 @@ export interface TurborepoMinutesSaved {
 
 export const getRemoteCacheSavedMinutes =
   async (): Promise<TurborepoMinutesSaved> => {
+    "use cache";
+    cacheLife({ stale: 5, revalidate: 5, expire: 60 });
+
     if (!process.env.VERCEL && !process.env.TINYBIRD_TIME_SAVED_TOKEN) {
       const fallbackMinutes = REMOTE_CACHE_COUNTER_START_HOURS * 60;
 
       return {
         total: fallbackMinutes,
         remoteCacheMinutesSaved: fallbackMinutes / 2,
-        localCacheMinutesSaved: fallbackMinutes / 2,
+        localCacheMinutesSaved: fallbackMinutes / 2
       };
     }
 
@@ -46,7 +48,7 @@ export const getRemoteCacheSavedMinutes =
     return {
       total: data.remote_cache_minutes_saved + data.local_cache_minutes_saved,
       remoteCacheMinutesSaved: data.remote_cache_minutes_saved,
-      localCacheMinutesSaved: data.local_cache_minutes_saved,
+      localCacheMinutesSaved: data.local_cache_minutes_saved
     };
   };
 

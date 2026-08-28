@@ -11,6 +11,7 @@ use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
 };
 use turborepo_types::{TaskArgs, TaskCommandOverride, TaskDefinition};
+use wax::Program;
 
 use super::EngineBuilder;
 use crate::{
@@ -491,6 +492,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 wants_automatic_inputs,
                 &context,
             ) {
+                validate_forbidden_outputs(task_id.as_inner(), &task_def, &derived)?;
                 if task_io_env_exclusion_conflict(
                     &task_def.env,
                     &self.global_env,
@@ -498,6 +500,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 ) {
                     derived.outputs = turborepo_repository::toolchain::DerivedOutputs::Unavailable;
                 }
+                let cache_reason = (!had_explicit_cache
+                    && (derived.input_safety
+                        == turborepo_repository::toolchain::DerivedInputSafety::Untracked
+                        || (!had_explicit_outputs
+                            && derived.outputs
+                                == turborepo_repository::toolchain::DerivedOutputs::Unavailable)))
+                    .then(|| derived.cache_reason.clone())
+                    .flatten();
                 apply_derived_task_io(
                     &mut task_def,
                     derived,
@@ -505,6 +515,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     had_explicit_outputs,
                     had_explicit_cache,
                 );
+                if let Some(reason) = cache_reason {
+                    tracing::warn!(
+                        "caching disabled for task {}: {reason}; set `cache` explicitly to \
+                         override",
+                        task_id.as_inner()
+                    );
+                }
             }
         }
 
@@ -837,6 +854,34 @@ fn task_io_env_exclusion_conflict(
         .map_or(true, |matches| !matches.exclusions.is_empty())
 }
 
+fn validate_forbidden_outputs(
+    task_id: &TaskId,
+    task_def: &TaskDefinition,
+    derived: &turborepo_repository::toolchain::DerivedTaskIO,
+) -> Result<(), BuilderError> {
+    for output in &task_def.outputs.inclusions {
+        let normalized = output.trim_start_matches("./");
+        let Some(environment) = derived
+            .forbidden_output_prefixes
+            .iter()
+            .find(|environment| {
+                wax::Glob::new(normalized).is_ok_and(|glob| {
+                    let probe = format!("{environment}/__turbo_venv_probe__");
+                    glob.is_match(environment.as_str()) || glob.is_match(probe.as_str())
+                })
+            })
+        else {
+            continue;
+        };
+        return Err(BuilderError::PythonVirtualEnvironmentOutput {
+            task_id: task_id.to_string(),
+            environment: environment.clone(),
+            output: output.clone(),
+        });
+    }
+    Ok(())
+}
+
 fn apply_derived_task_io(
     task_def: &mut TaskDefinition,
     derived: turborepo_repository::toolchain::DerivedTaskIO,
@@ -1054,9 +1099,10 @@ mod command_override_tests {
 #[cfg(test)]
 mod derived_io_tests {
     use turborepo_repository::toolchain::{DerivedInputSafety, DerivedOutputs, DerivedTaskIO};
+    use turborepo_task_id::TaskId;
     use turborepo_types::TaskDefinition;
 
-    use super::apply_derived_task_io;
+    use super::{apply_derived_task_io, validate_forbidden_outputs};
 
     #[test]
     fn unavailable_outputs_disable_only_implicit_caching() {
@@ -1092,6 +1138,7 @@ mod derived_io_tests {
     fn untracked_inputs_require_explicit_cache_authority() {
         let untracked = || DerivedTaskIO {
             input_safety: DerivedInputSafety::Untracked,
+            cache_reason: Some("automatic inputs are incomplete".to_string()),
             outputs: DerivedOutputs::Resolved(vec!["automatic/**".to_string()]),
             ..Default::default()
         };
@@ -1116,6 +1163,24 @@ mod derived_io_tests {
             apply_derived_task_io(&mut explicit_cache, untracked(), &[], true, true);
             assert_eq!(explicit_cache.cache, cache);
         }
+    }
+
+    #[test]
+    fn virtual_environment_outputs_are_rejected() {
+        let task_id = TaskId::new("py-app", "build");
+        let derived = DerivedTaskIO {
+            forbidden_output_prefixes: vec!["../../.venv".to_string()],
+            ..Default::default()
+        };
+        for output in ["../../.venv/**", "../../**"] {
+            let mut task = TaskDefinition::default();
+            task.outputs.inclusions.push(output.to_string());
+            assert!(validate_forbidden_outputs(&task_id, &task, &derived).is_err());
+        }
+
+        let mut task = TaskDefinition::default();
+        task.outputs.inclusions.push("dist/**".to_string());
+        assert!(validate_forbidden_outputs(&task_id, &task, &derived).is_ok());
     }
 
     #[test]

@@ -41,6 +41,25 @@ test("reports successful Slack delivery details", async () => {
   ]);
 });
 
+test("passes a thread timestamp to Slack replies", async () => {
+  const result = await deliverSlackMessage("reason", {
+    channel: "C123",
+    event: "test",
+    logger,
+    threadTimestamp: "123.456",
+    send: async (input) => {
+      assert.deepEqual(input, {
+        channel: "C123",
+        text: "reason",
+        threadTimestamp: "123.456"
+      });
+      return { ok: true, channel: "C123", ts: "124.000" };
+    }
+  });
+
+  assert.equal(result.ok, true);
+});
+
 test("uses configured fallback values for incomplete success responses", async () => {
   const result = await deliverSlackMessage("test", {
     channel: "C123",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import {
   CommandPromptContent,
@@ -9,11 +10,13 @@ import {
   CommandPromptSurface,
   CommandPromptTrigger,
   CommandPromptTriggerDivider,
-  CommandPromptViewport,
+  CommandPromptViewport
 } from "@vercel/geistdocs/components/command-prompt";
 import { Button } from "@vercel/geistdocs/components/button";
 import { Testimonials } from "@/components/testimonials";
 import { createMetadata } from "@/lib/create-metadata";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
+import { getRootLang } from "@/lib/geistdocs/root-params";
 import { HighlightedCode } from "./highlighted-code";
 import { OpenSourceMetrics } from "./open-source-metrics";
 import { ProviderBadges } from "./graphics/provider-badges";
@@ -23,7 +26,7 @@ import { MonorepoVisual } from "./graphics/monorepo-visual";
 import {
   AgentSkillsVisual,
   TurboDocsVisual,
-  ValidationLoopsVisual,
+  ValidationLoopsVisual
 } from "./graphics/agent-workflow-visuals";
 
 type HomepageFeature = {
@@ -37,20 +40,20 @@ const FEATURES: HomepageFeature[] = [
     title: "Works with any provider",
     description:
       "Integrate with any CI provider to keep workflows fast as your team and codebase grow.",
-    illustration: <ProviderBadges />,
+    illustration: <ProviderBadges />
   },
   {
     title: "Remote Caching",
     description:
       "Share task outputs across machines and CI so your team never repeats the same work.",
-    illustration: <RemoteCacheVisual />,
+    illustration: <RemoteCacheVisual />
   },
   {
     title: "Effortless monorepos",
     description:
       "Define dependable workflows once, then run them consistently across local development and CI.",
-    illustration: <MonorepoVisual />,
-  },
+    illustration: <MonorepoVisual />
+  }
 ];
 
 const AGENT_FEATURES: HomepageFeature[] = [
@@ -58,13 +61,13 @@ const AGENT_FEATURES: HomepageFeature[] = [
     title: "Faster validation loops",
     description:
       "Run only the checks affected by each change, so agents can verify their work and iterate without waiting on the entire repository.",
-    illustration: <ValidationLoopsVisual />,
+    illustration: <ValidationLoopsVisual />
   },
   {
     title: "Monorepo expertise, on demand",
     description:
       "Agent Skills give your coding agent Turborepo best practices and the context it needs to make the right changes across your monorepo.",
-    illustration: <AgentSkillsVisual />,
+    illustration: <AgentSkillsVisual />
   },
   {
     title: "Docs, right when they’re needed",
@@ -78,8 +81,8 @@ const AGENT_FEATURES: HomepageFeature[] = [
         terminal, without interrupting their work.
       </>
     ),
-    illustration: <TurboDocsVisual />,
-  },
+    illustration: <TurboDocsVisual />
+  }
 ];
 
 const simpleTurboJson = `{
@@ -106,28 +109,36 @@ turbo ls
 # Get deep repository context
 turbo query --schema`;
 
-const baseMetadata = createMetadata({
-  description: "Turborepo is the build system for coding agents.",
-  canonicalPath: "/",
-});
+export const generateMetadata = async ({
+  params
+}: PageProps<"/[lang]">): Promise<Metadata> => {
+  const { lang } = await params;
+  const canonicalPath = getLocalizedPath(lang, "/");
+  const metadata = createMetadata({
+    description: "Turborepo is the build system for coding agents.",
+    canonicalPath
+  });
 
-export const metadata = {
-  ...baseMetadata,
-  openGraph: {
-    ...baseMetadata.openGraph,
-    images: [
-      "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/og-homepage.png",
-    ],
-  },
+  return {
+    ...metadata,
+    alternates: {
+      ...metadata.alternates,
+      types: {
+        "text/markdown": getLocalizedPath(lang, "/agents.md")
+      }
+    },
+    openGraph: {
+      ...metadata.openGraph,
+      images: [
+        "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/og-homepage.png"
+      ]
+    }
+  };
 };
 
-export const revalidate = 3600;
+export default async function HomePage() {
+  const lang = await getRootLang();
 
-export function generateStaticParams(): Array<{ lang: string }> {
-  return [{ lang: "en" }, { lang: "cn" }];
-}
-
-export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1448px] px-4 sm:px-6">
       <section className="relative grid grid-cols-1 items-center gap-12 py-0 lg:py-40 lg:grid-cols-12 lg:gap-0">
@@ -191,7 +202,9 @@ export default function HomePage() {
             </p>
           </div>
           <Button asChild className="rounded-full" size="lg" variant="outline">
-            <Link href="/repo/docs">Read the docs</Link>
+            <Link href={getLocalizedPath(lang, "/repo/docs")} prefetch>
+              Read the docs
+            </Link>
           </Button>
         </div>
         <div className="mt-6 grid w-full auto-rows-fr grid-cols-1 items-stretch gap-x-6 gap-y-6 md:grid-cols-3 md:gap-y-10 lg:gap-y-12">
@@ -225,7 +238,9 @@ export default function HomePage() {
           </h2>
           <div className="flex flex-col w-full items-start gap-3 sm:flex-row sm:items-center md:justify-end">
             <Button asChild className="w-full sm:w-fit rounded-full" size="lg">
-              <Link href="/docs">Get started</Link>
+              <Link href={getLocalizedPath(lang, "/docs")} prefetch>
+                Get started
+              </Link>
             </Button>
             <CommandPromptRoot
               className="w-full sm:w-auto items-start"
@@ -251,7 +266,7 @@ export default function HomePage() {
 function FeatureSection({
   description,
   features,
-  title,
+  title
 }: {
   description: string;
   features: HomepageFeature[];

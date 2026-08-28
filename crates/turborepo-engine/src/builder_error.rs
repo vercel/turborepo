@@ -69,6 +69,16 @@ pub enum Error {
         task_id: String,
         alternatives: String,
     },
+    #[error(
+        "Task `{task_id}` cannot cache Python virtual environment `{environment}` as output \
+         `{output}`. Virtual environments are machine-specific; remove this output and cache \
+         portable artifacts such as `dist/**` instead."
+    )]
+    PythonVirtualEnvironmentOutput {
+        task_id: String,
+        environment: String,
+        output: String,
+    },
 }
 
 impl From<ValidateError> for Error {

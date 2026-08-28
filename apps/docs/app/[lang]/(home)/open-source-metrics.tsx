@@ -1,9 +1,10 @@
+import { cacheLife } from "next/cache";
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 
 const FALLBACK = {
   downloads: "17.5M",
   openIssues: 0,
-  stars: "30.5K",
+  stars: "30.5K"
 };
 
 const formatNumber = (value: number): string => {
@@ -26,7 +27,7 @@ const getOpenIssuesLabel = (count: number): string => {
 
 const fetchDownloads = async (): Promise<string> => {
   const response = await fetch(
-    "https://api.npmjs.org/downloads/range/last-month/turbo",
+    "https://api.npmjs.org/downloads/range/last-month/turbo"
   );
 
   if (!response.ok) {
@@ -45,7 +46,7 @@ const fetchDownloads = async (): Promise<string> => {
   const weeklyTotals = [0, 7, 14].map((start) =>
     recentDownloads
       .slice(start, start + 7)
-      .reduce((total, day) => total + day.downloads, 0),
+      .reduce((total, day) => total + day.downloads, 0)
   );
 
   return formatNumber(Math.max(...weeklyTotals));
@@ -65,13 +66,13 @@ const fetchRepositoryMetrics = async (): Promise<{
   };
 
   return {
-    stars: formatNumber(data.stargazers_count),
+    stars: formatNumber(data.stargazers_count)
   };
 };
 
 const fetchOpenIssues = async (): Promise<number> => {
   const response = await fetch(
-    "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen",
+    "https://api.github.com/search/issues?q=repo%3Avercel%2Fturborepo+type%3Aissue+state%3Aopen"
   );
 
   if (!response.ok) {
@@ -83,10 +84,13 @@ const fetchOpenIssues = async (): Promise<number> => {
 };
 
 export async function OpenSourceMetrics() {
+  "use cache";
+  cacheLife("hours");
+
   const [downloads, repository, openIssues] = await Promise.all([
     fetchDownloads().catch(() => FALLBACK.downloads),
     fetchRepositoryMetrics().catch(() => ({ stars: FALLBACK.stars })),
-    fetchOpenIssues().catch(() => FALLBACK.openIssues),
+    fetchOpenIssues().catch(() => FALLBACK.openIssues)
   ]);
 
   const metrics = [
@@ -100,15 +104,15 @@ export async function OpenSourceMetrics() {
       ),
       value: (
         <RemoteCacheCounterClient className="min-w-0 text-[inherit] leading-[inherit] font-[inherit] tracking-[inherit]" />
-      ),
+      )
     },
     { id: "downloads", label: "Weekly downloads", value: downloads },
     { id: "stars", label: "GitHub stars", value: repository.stars },
     {
       id: "issues",
       label: getOpenIssuesLabel(openIssues),
-      value: formatNumber(openIssues),
-    },
+      value: formatNumber(openIssues)
+    }
   ];
 
   return (
@@ -118,9 +122,7 @@ export async function OpenSourceMetrics() {
 
         return (
           <div
-            className={
-              isFeatured ? "min-w-0" : "min-w-0 lg:justify-self-end"
-            }
+            className={isFeatured ? "min-w-0" : "min-w-0 lg:justify-self-end"}
             key={metric.id}
           >
             <dt

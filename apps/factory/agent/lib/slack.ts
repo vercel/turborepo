@@ -18,9 +18,10 @@ interface SlackApiResponse {
 interface SlackMessageInput {
   readonly channel: string;
   readonly text: string;
+  readonly threadTimestamp?: string;
 }
 
-interface SlackDeliveryOptions {
+export interface SlackDeliveryOptions {
   readonly channel?: string;
   readonly event: string;
   readonly logger?: Pick<Console, "error" | "info">;
@@ -91,11 +92,19 @@ export const slackCredentials: SlackChannelCredentials = {
   webhookVerifier: verifySlackWebhook
 };
 
-async function sendSlackMessage({ channel, text }: SlackMessageInput) {
+async function sendSlackMessage({
+  channel,
+  text,
+  threadTimestamp
+}: SlackMessageInput) {
   return callSlackApi({
     botToken: slackCredentials.botToken,
     operation: "chat.postMessage",
-    body: { channel, text }
+    body: {
+      channel,
+      text,
+      ...(threadTimestamp ? { thread_ts: threadTimestamp } : {})
+    }
   });
 }
 
@@ -129,7 +138,7 @@ function logDelivery(
 
 export async function deliverSlackMessage(
   text: string,
-  options: SlackDeliveryOptions
+  options: SlackDeliveryOptions & { readonly threadTimestamp?: string }
 ): Promise<SlackDeliveryResult> {
   const logger = options.logger ?? console;
   let channel: string | null = null;
@@ -138,7 +147,11 @@ export async function deliverSlackMessage(
   try {
     channel = options.channel ?? slackDestinationChannel();
     const response = await Promise.race([
-      (options.send ?? sendSlackMessage)({ channel, text }),
+      (options.send ?? sendSlackMessage)({
+        channel,
+        text,
+        threadTimestamp: options.threadTimestamp
+      }),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(
           () =>
@@ -189,4 +202,81 @@ export async function deliverSlackMessage(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+interface IssueAlert {
+  readonly issueNumber: number;
+  readonly issueTitle: string;
+  readonly issueUrl: string;
+  readonly reason: string;
+}
+
+export type IssueAlertResult =
+  | { readonly ok: true; readonly channel: string; readonly timestamp: string }
+  | { readonly ok: false; readonly error: string };
+
+type IssueAlertOptions = Omit<SlackDeliveryOptions, "event" | "metadata">;
+
+export function alertUnsafeIssue(
+  issue: IssueAlert,
+  options: IssueAlertOptions = {}
+): Promise<IssueAlertResult> {
+  return alertIssueOutcome(
+    issue,
+    {
+      event: "unsafe_issue_alert",
+      headline: `:warning: Factory blocked <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> during security triage.`,
+      reasonLabel: "Why it was blocked"
+    },
+    options
+  );
+}
+
+export function alertIssueNeedsFollowUp(
+  issue: IssueAlert & { readonly confidence: "low" | "medium" },
+  options: IssueAlertOptions = {}
+): Promise<IssueAlertResult> {
+  return alertIssueOutcome(
+    issue,
+    {
+      event: "issue_follow_up_alert",
+      headline: `:mag: Factory needs maintainer follow-up on <${issue.issueUrl}|#${issue.issueNumber}: ${issue.issueTitle}> (${issue.confidence} confidence).`,
+      reasonLabel: `Why confidence is ${issue.confidence}`
+    },
+    options
+  );
+}
+
+async function alertIssueOutcome(
+  issue: IssueAlert,
+  alert: {
+    readonly event: string;
+    readonly headline: string;
+    readonly reasonLabel: string;
+  },
+  options: IssueAlertOptions
+): Promise<IssueAlertResult> {
+  const metadata = { issueNumber: issue.issueNumber, issueUrl: issue.issueUrl };
+  const root = await deliverSlackMessage(alert.headline, {
+    ...options,
+    event: alert.event,
+    metadata
+  });
+  if (!root.ok) return { ok: false, error: root.error };
+  if (root.timestamp === null) {
+    return { ok: false, error: "Slack did not return a thread timestamp." };
+  }
+
+  const reply = await deliverSlackMessage(
+    `${alert.reasonLabel}: ${issue.reason}`,
+    {
+      ...options,
+      channel: root.channel,
+      event: `${alert.event}_reason`,
+      metadata,
+      threadTimestamp: root.timestamp
+    }
+  );
+  if (!reply.ok) return { ok: false, error: reply.error };
+  return { ok: true, channel: root.channel, timestamp: root.timestamp };
 }

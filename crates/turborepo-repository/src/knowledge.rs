@@ -302,7 +302,8 @@ impl RepositoryKnowledge {
         let mut scopes = Vec::with_capacity(observations.len());
         let mut scope_lookup = HashMap::with_capacity(observations.len());
         let mut definitions = HashMap::<String, AnchoredSystemPathBuf>::new();
-        let mut definition_owners = HashMap::<std::path::PathBuf, String>::new();
+        let mut definition_owners =
+            HashMap::<std::path::PathBuf, (String, ToolchainId, ScopeKind)>::new();
         let workspace_roots =
             validate_workspace_roots(repository_root, workspace_root_observations)?;
 
@@ -357,8 +358,17 @@ impl RepositoryKnowledge {
                     existing_identity: "//".to_string(),
                 });
             }
-            if let Some(existing_identity) =
-                definition_owners.insert(physical_definition_path, identity.clone())
+            if let Some((existing_identity, existing_toolchain, existing_kind)) = definition_owners
+                .insert(
+                    physical_definition_path,
+                    (
+                        identity.clone(),
+                        observation.toolchain.clone(),
+                        observation.scope_kind,
+                    ),
+                )
+                && (existing_toolchain != observation.toolchain
+                    || existing_kind == observation.scope_kind)
             {
                 return Err(Error::DuplicateDefinitionPath {
                     path: definition_path,

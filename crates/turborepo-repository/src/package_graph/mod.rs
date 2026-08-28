@@ -20,7 +20,8 @@ use crate::{
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
         ExternalResolutionDomainId, ExternalResolutionGeneration, ExternalResolutionStatus,
-        JAVASCRIPT_RESOLUTION_DOMAIN, PackageExternalDeclarations, PackageResolutionState,
+        JAVASCRIPT_RESOLUTION_DOMAIN, PYTHON_RESOLUTION_DOMAIN, PackageExternalDeclarations,
+        PackageResolutionState,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -43,6 +44,26 @@ pub use projections::{
 pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
+
+/// Outcome of reading the JavaScript external resolution (lockfile) domain.
+///
+/// Distinguishes a resolved listing (which may legitimately be empty when a
+/// workspace has no external dependencies) from an unavailable one that
+/// carries a machine-readable reason, so consumers such as build tooling can
+/// emit metrics describing why a lockfile could not be parsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JavascriptExternalResolution {
+    /// The lockfile was read and resolved; `identities` is the deduplicated,
+    /// sorted set of external packages it references (possibly empty).
+    Resolved(Vec<ExternalPackageIdentity>),
+    /// The lockfile could not be read or parsed. `code` is a stable
+    /// classifier (e.g. `lockfile-unavailable`, `closure-unavailable`) and
+    /// `message` is a human-readable explanation.
+    Unavailable { code: String, message: String },
+    /// No JavaScript resolution data exists for this workspace (for example a
+    /// single-package workspace, or one with no lockfile at all).
+    NotAvailable,
+}
 
 #[derive(Debug)]
 struct ExternalResolutionKnowledge {
@@ -1029,6 +1050,73 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
+    pub fn changed_packages_from_lockfile_contents(
+        &self,
+        path: &AnchoredSystemPath,
+        previous_contents: &[u8],
+    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
+        if path.as_str() != "uv.lock" {
+            return self.changed_javascript_packages_from_lockfile_contents(previous_contents);
+        }
+
+        let previous = std::str::from_utf8(previous_contents)
+            .map_err(|_| ChangedPackagesError::NonUtf8Lockfile)?;
+        let current = self
+            .repo_root()
+            .join_component("uv.lock")
+            .read_to_string()
+            .map_err(crate::package_manager::Error::Io)?;
+        let changed_names = turborepo_lockfiles::uv_changed_packages(previous, &current)?;
+        if changed_names.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let resolution = self
+            .external_resolution
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let domain = resolution
+            .generation
+            .as_deref()
+            .and_then(|generation| generation.domain(&PYTHON_RESOLUTION_DOMAIN))
+            .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+        let ExternalResolutionData::Resolved { packages, .. } = domain.data() else {
+            return Err(ChangedPackagesError::ResolutionUnavailable);
+        };
+
+        let mut changes = Vec::new();
+        for resolution in packages {
+            let added = resolution
+                .identities()
+                .iter()
+                .filter(|identity| {
+                    changed_names.contains(identity.display_name())
+                        || changed_names.contains(identity.key())
+                })
+                .map(|identity| turborepo_lockfiles::Package {
+                    key: identity.key().to_string(),
+                    version: identity.version().to_string(),
+                })
+                .collect::<Vec<_>>();
+            if added.is_empty() {
+                continue;
+            }
+            let name = PackageName::from(resolution.package());
+            let context = self
+                .package_task_context(&name)
+                .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+            changes.push(ExternalDependencyChange {
+                package: WorkspacePackage {
+                    name,
+                    path: context.directory().to_owned(),
+                },
+                added,
+                removed: Vec::new(),
+            });
+        }
+        Ok(changes)
+    }
+
     pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
         self.external_resolution
             .lock()
@@ -1463,6 +1551,42 @@ impl PackageGraph {
             .find(|identity| *identity == &needle)
     }
 
+    /// JavaScript-domain external resolution outcome, preserving the reason a
+    /// lockfile could not be read or parsed. Unlike
+    /// [`Self::javascript_external_package_identities`], which collapses every
+    /// non-resolved state to an empty list, this distinguishes a resolved
+    /// (possibly empty) listing from an unavailable one so callers can emit
+    /// metrics on parse failures.
+    pub fn javascript_external_resolution(&self) -> JavascriptExternalResolution {
+        let Some(generation) = self.resolution_generation() else {
+            return JavascriptExternalResolution::NotAvailable;
+        };
+        let Some(domain) = generation.domain(&JAVASCRIPT_RESOLUTION_DOMAIN) else {
+            return JavascriptExternalResolution::NotAvailable;
+        };
+        match domain.data() {
+            ExternalResolutionData::Resolved { packages, .. } => {
+                let mut seen = HashSet::new();
+                let mut identities = Vec::new();
+                for package in packages {
+                    for identity in package.identities() {
+                        if seen.insert(identity.clone()) {
+                            identities.push(identity.clone());
+                        }
+                    }
+                }
+                identities.sort();
+                JavascriptExternalResolution::Resolved(identities)
+            }
+            ExternalResolutionData::Unavailable(reason) => {
+                JavascriptExternalResolution::Unavailable {
+                    code: reason.code().to_string(),
+                    message: reason.message().to_string(),
+                }
+            }
+        }
+    }
+
     /// JavaScript-domain external identities only. Used by N-API lockfile
     /// listing which historically filtered through the JS lockfile human-name
     /// path and therefore excluded Cargo identities.
@@ -1850,7 +1974,10 @@ mod test {
                     mapper
                         .changed_packages(
                             HashSet::new(),
-                            LockfileContents::Changed(b"invalid lockfile".to_vec()),
+                            LockfileContents::Changed {
+                                path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
+                                previous_contents: b"invalid lockfile".to_vec(),
+                            },
                         )
                         .unwrap(),
                     PackageChanges::All(AllPackageChangeReason::LockfileChangeDetectionFailed)
@@ -1874,7 +2001,13 @@ mod test {
             let mapper = ChangeMapper::new(&dep_graph, Vec::new(), detector);
             assert_eq!(
                 mapper
-                    .changed_packages(HashSet::new(), LockfileContents::Changed(previous_contents),)
+                    .changed_packages(
+                        HashSet::new(),
+                        LockfileContents::Changed {
+                            path: AnchoredSystemPathBuf::from_raw(lockfile).unwrap(),
+                            previous_contents,
+                        },
+                    )
                     .unwrap(),
                 PackageChanges::All(AllPackageChangeReason::LockfileChangeDetectionFailed)
             );
