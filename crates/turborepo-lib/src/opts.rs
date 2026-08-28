@@ -29,8 +29,6 @@ pub enum RemoteCacheDisabledReason {
     TokenWithoutTeam,
     /// `remoteCache.enabled: false` in turbo.json.
     InConfig,
-    /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
-    InEnvVar,
     /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
     /// disabled both remote read and write.
     ByFlags,
@@ -246,15 +244,7 @@ impl Opts {
                     Some(RemoteCacheDisabledReason::NotLinked)
                 }
             } else if config.enabled == Some(false) {
-                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
-                    .ok()
-                    .filter(|v| v == "0")
-                    .is_some();
-                if disabled_by_env {
-                    Some(RemoteCacheDisabledReason::InEnvVar)
-                } else {
-                    Some(RemoteCacheDisabledReason::InConfig)
-                }
+                Some(RemoteCacheDisabledReason::InConfig)
             } else {
                 // Linked and enabled in config, but remote cache is still disabled.
                 // This means CLI flags (--no-cache + --force, or --cache=local:rw)
@@ -1066,7 +1056,6 @@ mod test {
             "TURBO_FORCE",
             "TURBO_LOGIN",
             "TURBO_PREFLIGHT",
-            "TURBO_REMOTE_CACHE_ENABLED",
             "TURBO_REMOTE_CACHE_READ_ONLY",
             "TURBO_REMOTE_ONLY",
             "TURBO_TEAM",

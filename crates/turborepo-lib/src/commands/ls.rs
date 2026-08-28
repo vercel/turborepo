@@ -4,7 +4,7 @@
 //! retrieval is done through the query server (GraphQL execution), keeping
 //! the ls command in sync with `turbo query` semantics.
 
-use std::sync::Arc;
+use std::{fmt::Write, sync::Arc};
 
 use miette::Diagnostic;
 use serde::Serialize;
@@ -28,11 +28,26 @@ pub enum Error {
 // GraphQL query: list all packages with name and path
 const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
 
+const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name script } length } \
+                                     allDependencies { items { name } length } allDependents { \
+                                     items { name } length }";
+
 fn package_detail_query(name: &str) -> String {
     let escaped = super::query::escape_graphql_string(name);
-    format!(
-        r#"{{ package(name: "{escaped}") {{ name path tasks {{ items {{ name script }} length }} allDependencies {{ items {{ name }} length }} allDependents {{ items {{ name }} length }} }} }}"#
-    )
+    format!(r#"{{ package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }} }}"#)
+}
+
+fn package_details_query(packages: &[String]) -> String {
+    let mut query = String::from("{");
+    for (index, package) in packages.iter().enumerate() {
+        let escaped = super::query::escape_graphql_string(package);
+        let _ = write!(
+            query,
+            r#" package{index}: package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }}"#
+        );
+    }
+    query.push_str(" }");
+    query
 }
 
 #[derive(Serialize)]
@@ -104,11 +119,8 @@ pub async fn run(
     } else {
         match output {
             Some(OutputFormat::Json) => {
-                let mut details_list = Vec::new();
-                for package in &packages {
-                    let detail = query_package_detail(run.clone(), query_server, package).await?;
-                    details_list.push(detail);
-                }
+                let details_list =
+                    query_package_details(run.clone(), query_server, &packages).await?;
                 let list = PackageDetailsList {
                     packages: details_list,
                 };
@@ -173,6 +185,46 @@ async fn query_packages(
     })
 }
 
+async fn query_package_details(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    packages: &[String],
+) -> Result<Vec<PackageDetailsDisplay>, cli::Error> {
+    for package in packages {
+        if run
+            .pkg_dep_graph()
+            .package_view(&PackageName::from(package.as_str()))
+            .is_none()
+        {
+            return Err(Error::PackageNotFound {
+                package: package.clone(),
+            }
+            .into());
+        }
+    }
+
+    let query = package_details_query(packages);
+    let result = query_server.execute_query(run, &query, None).await?;
+    if !result.errors.is_empty() {
+        return Err(Error::QueryError.into());
+    }
+
+    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
+    packages
+        .iter()
+        .enumerate()
+        .map(|(index, package)| {
+            let pointer = format!("/data/package{index}");
+            let pkg = value
+                .pointer(&pointer)
+                .ok_or_else(|| Error::PackageNotFound {
+                    package: package.clone(),
+                })?;
+            parse_package_detail(pkg, package)
+        })
+        .collect()
+}
+
 async fn query_package_detail(
     run: Arc<dyn QueryRun>,
     query_server: &dyn QueryServer,
@@ -195,6 +247,13 @@ async fn query_package_detail(
             package: package.to_string(),
         })?;
 
+    parse_package_detail(pkg, package)
+}
+
+fn parse_package_detail(
+    pkg: &serde_json::Value,
+    package: &str,
+) -> Result<PackageDetailsDisplay, cli::Error> {
     let name = pkg
         .get("name")
         .and_then(|v| v.as_str())

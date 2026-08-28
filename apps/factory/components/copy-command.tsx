@@ -23,9 +23,9 @@ export function CopyCommand({ command, label }: CopyCommandProps) {
   }, [command]);
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2">
+    <div className="mt-3 flex min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2">
       <code
-        className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground"
+        className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground"
         aria-label={label ?? "Terminal command"}
       >
         {command}

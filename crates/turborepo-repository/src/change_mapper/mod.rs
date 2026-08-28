@@ -11,7 +11,7 @@ pub use package::{
     GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
 };
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
 use crate::package_graph::{
@@ -38,9 +38,12 @@ pub enum LockfileContents {
     /// previous lockfile (i.e. `git status`, or perhaps a lockfile that was
     /// deleted or otherwise inaccessible with the information we have)
     UnknownChange,
-    /// We know the lockfile changed and have the contents of the previous
-    /// lockfile
-    Changed(Vec<u8>),
+    /// We know the lockfile changed and have its repository-relative path and
+    /// the contents of the previous lockfile.
+    Changed {
+        path: AnchoredSystemPathBuf,
+        previous_contents: Vec<u8>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -160,10 +163,13 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
             PackageChanges::Some(mut changed_pkgs) => {
                 match lockfile_contents {
-                    LockfileContents::Changed(previous_lockfile_contents) => {
+                    LockfileContents::Changed {
+                        path,
+                        previous_contents,
+                    } => {
                         // if we run into issues, don't error, just assume all packages have changed
                         let Ok(lockfile_changes) =
-                            self.get_changed_packages_from_lockfile(&previous_lockfile_contents)
+                            self.get_changed_packages_from_lockfile(&path, &previous_contents)
                         else {
                             debug!(
                                 "unable to determine lockfile changes, assuming all packages \
@@ -318,10 +324,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
     fn get_changed_packages_from_lockfile(
         &self,
+        path: &AnchoredSystemPath,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
         self.pkg_graph
-            .changed_packages_from_lockfile_contents(lockfile_content)
+            .changed_packages_from_lockfile_contents(path, lockfile_content)
             .map_err(Into::into)
     }
 

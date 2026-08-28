@@ -208,14 +208,14 @@ dev = ["Ruff", "black", "mypy", "ty", "pyright"]
     );
     assert_eq!(
         find_task(&check, "acme#check:mypy")["command"],
-        "uv run --frozen mypy packages/py-app packages/py-lib"
+        "uv run --active --frozen mypy packages/py-app packages/py-lib"
     );
 
     let format = dry_run_tasks(tempdir.path(), &["format"]);
     assert_eq!(task_ids(&format), vec!["acme#format".to_string()]);
     assert_eq!(
         find_task(&format, "acme#format")["command"],
-        "uv run --frozen ruff format packages/py-app packages/py-lib"
+        "uv run --active --frozen ruff format packages/py-app packages/py-lib"
     );
 
     let output = run_turbo(
@@ -233,7 +233,7 @@ dev = ["Ruff", "black", "mypy", "ty", "pyright"]
     assert_eq!(task_ids(&qualified), vec!["py-app#format:ruff".to_string()]);
     assert_eq!(
         find_task(&qualified, "py-app#format:ruff")["command"],
-        "uv run --frozen ruff format packages/py-app"
+        "uv run --active --frozen ruff format packages/py-app"
     );
 
     let warning_output = run_turbo(tempdir.path(), &["format", "--dry-run=json"]);
@@ -268,11 +268,11 @@ fn test_uv_heterogeneous_tools_use_member_entrypoints() {
     );
     assert_eq!(
         find_task(&format, "py-app#format")["command"],
-        "uv run --frozen --package py-app black packages/py-app"
+        "uv run --active --frozen --package py-app black packages/py-app"
     );
     assert_eq!(
         find_task(&format, "py-lib#format")["command"],
-        "uv run --frozen ruff format packages/py-lib"
+        "uv run --active --frozen ruff format packages/py-lib"
     );
 
     let check = dry_run_tasks(tempdir.path(), &["check"]);
@@ -304,7 +304,7 @@ fn test_uv_heterogeneous_tools_use_member_entrypoints() {
     assert!(task_ids(&lint).contains(&"acme#lint".to_string()));
     assert_eq!(
         find_task(&lint, "acme#lint:ruff")["command"],
-        "uv run --frozen ruff check packages/py-app packages/py-lib"
+        "uv run --active --frozen ruff check packages/py-app packages/py-lib"
     );
 }
 
@@ -324,14 +324,14 @@ fn test_uv_compatible_member_tools_use_all_packages_entrypoint() {
     assert!(task_ids(&lint).contains(&"acme#lint".to_string()));
     assert_eq!(
         find_task(&lint, "acme#lint:ruff")["command"],
-        "uv run --frozen --all-packages ruff check packages/py-app packages/py-lib"
+        "uv run --active --frozen --all-packages ruff check packages/py-app packages/py-lib"
     );
 
     let filtered = dry_run_tasks(tempdir.path(), &["lint:ruff", "--filter=py-app"]);
     assert_eq!(task_ids(&filtered), ["py-app#lint:ruff"]);
     assert_eq!(
         find_task(&filtered, "py-app#lint:ruff")["command"],
-        "uv run --frozen --package py-app ruff check packages/py-app"
+        "uv run --active --frozen --package py-app ruff check packages/py-app"
     );
 }
 
@@ -354,14 +354,14 @@ fn test_uv_root_pytest_is_workspace_only_and_member_filter_uses_direct_declarati
     assert_eq!(task_ids(&workspace), ["acme#test"]);
     assert_eq!(
         find_task(&workspace, "acme#test")["command"],
-        "uv run --frozen pytest"
+        "uv run --active --frozen pytest"
     );
 
     let app = dry_run_tasks(tempdir.path(), &["test", "--filter=py-app"]);
     assert_eq!(task_ids(&app), ["py-app#test"]);
     assert_eq!(
         find_task(&app, "py-app#test")["command"],
-        "uv run --frozen --package py-app pytest packages/py-app"
+        "uv run --active --frozen --package py-app pytest packages/py-app"
     );
 
     let lib = dry_run_tasks(tempdir.path(), &["test", "--filter=py-lib"]);
@@ -387,11 +387,12 @@ fn test_uv_member_pytest_tasks_run_per_declaring_package() {
     assert_eq!(task_ids(&test), ["py-app#test", "py-lib#test"]);
     assert_eq!(
         find_task(&test, "py-app#test")["command"],
-        "uv run --frozen --package py-app pytest packages/py-app"
+        "uv run --active --frozen --package py-app pytest packages/py-app"
     );
     assert_eq!(
         find_task(&test, "py-lib#test")["command"],
-        "uv run --frozen --package py-lib --no-default-groups --group tests pytest packages/py-lib"
+        "uv run --active --frozen --package py-lib --no-default-groups --group tests pytest \
+         packages/py-lib"
     );
 
     let output = run_turbo(
@@ -409,7 +410,7 @@ fn test_uv_member_pytest_tasks_run_per_declaring_package() {
     let filtered: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(
         find_task(&filtered, "py-app#test")["command"],
-        "uv run --frozen --package py-app pytest packages/py-app"
+        "uv run --active --frozen --package py-app pytest packages/py-app"
     );
 }
 
@@ -527,15 +528,9 @@ fn test_uv_flag_disabled_hints_at_opt_in() {
 }
 
 #[test]
-fn test_uv_lock_change_affects_all_packages() {
+fn test_uv_lock_metadata_only_change_affects_no_packages() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
-
-    let base = dry_run_tasks(
-        tempdir.path(),
-        &["build", "--filter=[HEAD]", "--log-order", "grouped"],
-    );
-    assert_eq!(task_ids(&base), Vec::<String>::new());
 
     let lock_path = tempdir.path().join("uv.lock");
     let mut contents = fs::read_to_string(&lock_path).unwrap();
@@ -546,9 +541,59 @@ fn test_uv_lock_change_affects_all_packages() {
         tempdir.path(),
         &["build", "--filter=[HEAD]", "--log-order", "grouped"],
     );
+    assert_eq!(task_ids(&json), Vec::<String>::new());
+}
+
+#[test]
+fn test_uv_lock_change_only_affects_dependency_closure() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    append_manifest(
+        tempdir.path(),
+        "packages/py-app/pyproject.toml",
+        "\n[dependency-groups]\ndev = [\"ruff==0.12.0\"]\n",
+    );
+    let lock = std::process::Command::new("uv")
+        .arg("lock")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv lock runs");
+    assert_command_success(&lock, "initial uv lock");
+    let add = std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("git add runs");
+    assert_command_success(&add, "git add");
+    let commit = std::process::Command::new("git")
+        .args(["commit", "-m", "add ruff"])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("git commit runs");
+    assert_command_success(&commit, "git commit");
+
+    let manifest = tempdir.path().join("packages/py-app/pyproject.toml");
+    let contents = fs::read_to_string(&manifest)
+        .unwrap()
+        .replace("ruff==0.12.0", "ruff==0.12.1");
+    fs::write(manifest, contents).unwrap();
+    let lock = std::process::Command::new("uv")
+        .arg("lock")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv lock runs");
+    assert_command_success(&lock, "updated uv lock");
+
+    let json = dry_run_tasks(
+        tempdir.path(),
+        &["build", "--filter=[HEAD]", "--log-order", "grouped"],
+    );
     let ids = task_ids(&json);
     assert!(ids.contains(&"py-app#build".to_string()), "ids: {ids:?}");
-    assert!(ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
+    assert!(!ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
 }
 
 #[test]
@@ -559,8 +604,8 @@ fn test_uv_build_caches_bundled_backend() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let run = |args: &[&str]| {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
         let mut command = common::turbo_command(tempdir.path());
         command
             .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
@@ -602,7 +647,7 @@ fn test_uv_build_caches_bundled_backend() {
 }
 
 #[test]
-fn test_uv_quality_tasks_cache_with_toolchain_identity() {
+fn test_uv_quality_tasks_are_cacheable_with_toolchain_identity() {
     if !uv_available() {
         return;
     }
@@ -634,24 +679,126 @@ fn test_uv_quality_tasks_cache_with_toolchain_identity() {
         find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
         true
     );
+}
 
-    let run = || {
+#[test]
+fn test_uv_virtual_environment_is_hashed_and_excluded_from_inputs() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+
+    let dry_run = |virtual_env: &Path| {
         let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
         let mut command = common::turbo_command(tempdir.path());
-        command
+        let output = command
             .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
             .env("UV_NO_CONFIG", "1")
-            .args(["lint:ruff", "--filter=py-lib", "--log-order=grouped"])
+            .env("VIRTUAL_ENV", virtual_env)
+            .args(["build", "--filter=py-app", "--dry-run=json"])
             .output()
-            .expect("failed to execute turbo")
+            .expect("failed to execute turbo");
+        assert_command_success(&output, "virtual environment dry-run");
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
     };
-    assert_command_success(&run(), "first cacheable quality run");
-    let second = run();
-    assert_command_success(&second, "second cacheable quality run");
-    let stdout = String::from_utf8_lossy(&second.stdout);
+
+    let first_env = tempdir.path().join("envs/first");
+    fs::create_dir_all(&first_env).unwrap();
+    let first = dry_run(&first_env);
+    let first_task = find_task(&first, "py-app#build");
     assert!(
-        stdout.contains("FULL TURBO"),
-        "expected cache hit: {stdout}"
+        first_task["environmentVariables"]["specified"]["env"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "VIRTUAL_ENV")
+    );
+    assert!(
+        first_task["resolvedTaskDefinition"]["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|input| input.as_str().is_some_and(|input| {
+                input.starts_with('!') && input.ends_with("envs/first/**")
+            })),
+        "inputs: {}",
+        first_task["resolvedTaskDefinition"]["inputs"]
+    );
+
+    let second_env = tempdir.path().join("envs/second");
+    fs::create_dir_all(&second_env).unwrap();
+    let second = dry_run(&second_env);
+    assert_ne!(
+        first_task["hash"],
+        find_task(&second, "py-app#build")["hash"],
+        "changing VIRTUAL_ENV must invalidate the task hash"
+    );
+}
+
+#[test]
+fn test_uv_project_environment_is_excluded_from_inputs() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let project_env = tempdir.path().join("envs/project");
+    fs::create_dir_all(&project_env).unwrap();
+
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let mut command = common::turbo_command(tempdir.path());
+    let output = command
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+        .env("UV_NO_CONFIG", "1")
+        .env_remove("VIRTUAL_ENV")
+        .env("UV_PROJECT_ENVIRONMENT", &project_env)
+        .args(["build", "--filter=py-app", "--dry-run=json"])
+        .output()
+        .expect("failed to execute turbo");
+    assert_command_success(&output, "project environment dry-run");
+    let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task = find_task(&dry_run, "py-app#build");
+    assert!(
+        task["resolvedTaskDefinition"]["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|input| input.as_str().is_some_and(|input| {
+                input.starts_with('!') && input.ends_with("envs/project/**")
+            })),
+        "inputs: {}",
+        task["resolvedTaskDefinition"]["inputs"]
+    );
+}
+
+#[test]
+fn test_uv_virtual_environment_cannot_be_cached_as_output() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "futureFlags": { "experimentalPythonWorkspaces": true },
+  "tasks": { "build": { "outputs": ["$TURBO_ROOT$/.venv/**"] } }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot cache Python virtual environment")
+            && stderr.contains(".venv")
+            && stderr.contains("dist/**"),
+        "expected actionable virtual environment output error: {stderr}"
     );
 }
 
@@ -660,7 +807,11 @@ fn test_uv_prune() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "py-app"]);
+    let output = common::run_turbo_with_env(
+        tempdir.path(),
+        &["prune", "py-app"],
+        &[("UV_NO_CONFIG", "1")],
+    );
     assert_command_success(&output, "turbo prune");
     let out = tempdir.path().join("out");
 
@@ -681,6 +832,7 @@ fn test_uv_prune() {
     if uv_available() {
         let check = std::process::Command::new("uv")
             .args(["lock", "--check"])
+            .env("UV_NO_CONFIG", "1")
             .current_dir(&out)
             .output()
             .expect("uv runs");
@@ -698,7 +850,11 @@ fn test_uv_prune_mixed_repo() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_monorepo(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "py-lib"]);
+    let output = common::run_turbo_with_env(
+        tempdir.path(),
+        &["prune", "py-lib"],
+        &[("UV_NO_CONFIG", "1")],
+    );
     assert_command_success(&output, "turbo prune");
     let out = tempdir.path().join("out");
 

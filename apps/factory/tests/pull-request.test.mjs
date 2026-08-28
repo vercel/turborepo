@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildBranchRefUpdate,
   buildDraftPullRequest,
-  resolvePullRequestTitle
+  resolvePullRequestTitle,
+  updateBranchRefWithLease
 } from "../agent/lib/pull-request.ts";
 
 test("builds draft pull requests", () => {
@@ -21,6 +23,78 @@ test("builds draft pull requests", () => {
       base: "main",
       draft: true
     }
+  );
+});
+
+test("builds force-with-lease branch updates", () => {
+  assert.deepEqual(
+    buildBranchRefUpdate("agents/update", "expected-head", "new-head"),
+    {
+      afterOid: "new-head",
+      beforeOid: "expected-head",
+      force: true,
+      name: "refs/heads/agents/update"
+    }
+  );
+});
+
+test("updates a branch with an atomic expected-head lease", async () => {
+  let request;
+  await updateBranchRefWithLease(
+    {
+      branchName: "agents/update",
+      expectedSha: "expected-head",
+      newSha: "new-head",
+      repositoryId: "repository-id",
+      token: "installation-token"
+    },
+    async (url, init) => {
+      request = { url, init };
+      return Response.json({
+        data: { updateRefs: { clientMutationId: null } }
+      });
+    }
+  );
+
+  assert.equal(request.url, "https://api.github.com/graphql");
+  assert.equal(request.init.method, "POST");
+  assert.equal(request.init.headers.authorization, "Bearer installation-token");
+  const body = JSON.parse(request.init.body);
+  assert.match(body.query, /updateRefs/);
+  assert.deepEqual(body.variables, {
+    input: {
+      repositoryId: "repository-id",
+      refUpdates: [
+        {
+          afterOid: "new-head",
+          beforeOid: "expected-head",
+          force: true,
+          name: "refs/heads/agents/update"
+        }
+      ]
+    }
+  });
+});
+
+test("rejects concurrent branch updates and malformed GraphQL success", async () => {
+  const input = {
+    branchName: "agents/update",
+    expectedSha: "expected-head",
+    newSha: "new-head",
+    repositoryId: "repository-id",
+    token: "installation-token"
+  };
+  await assert.rejects(
+    updateBranchRefWithLease(input, async () =>
+      Response.json({
+        errors: [{ message: "Expected ref to point to expected-head" }]
+      })
+    ),
+    /Expected ref to point to expected-head/
+  );
+  await assert.rejects(
+    updateBranchRefWithLease(input, async () => Response.json({ data: {} })),
+    /did not confirm the ref update/
   );
 });
 

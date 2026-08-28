@@ -14,22 +14,33 @@ import path from "node:path";
 
 export interface FactoryImageHandoff {
   readonly commit: string;
+  readonly fingerprint: string;
   readonly snapshotId: string;
 }
 
 interface HandoffFile {
   readonly commit?: string;
+  readonly fingerprint?: string;
   readonly snapshotId?: string;
 }
 
-const HANDOFF_PATH = path.join(tmpdir(), "turborepo-factory-image-base.json");
+const HANDOFF_PATH =
+  process.env.FACTORY_IMAGE_HANDOFF_PATH ??
+  path.join(tmpdir(), "turborepo-factory-image-base.json");
 
 let cached: HandoffFile | null | undefined;
 
 export function writeFactoryImageHandoff(handoff: {
   readonly commit?: string;
+  readonly fingerprint?: string;
   readonly snapshotId?: string;
 }): void {
+  if (
+    handoff.commit === undefined ||
+    handoff.fingerprint === undefined ||
+    handoff.snapshotId === undefined
+  )
+    return;
   cached = handoff;
   try {
     writeFileSync(HANDOFF_PATH, JSON.stringify(handoff), "utf8");
@@ -44,11 +55,16 @@ export function readFactoryImageHandoff(): FactoryImageHandoff | null {
   if (
     file === null ||
     file.snapshotId === undefined ||
-    file.commit === undefined
+    file.commit === undefined ||
+    file.fingerprint === undefined
   ) {
     return null;
   }
-  return { commit: file.commit, snapshotId: file.snapshotId };
+  return {
+    commit: file.commit,
+    fingerprint: file.fingerprint,
+    snapshotId: file.snapshotId
+  };
 }
 
 function load(): HandoffFile | null {

@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../components/ui/button";
-import type { WorkspaceSummary } from "./workspace-types";
-import { isWorkspaceRunning, workspaceStatusLabel } from "./workspace-types";
+import {
+  isWorkspaceRunning,
+  workspaceStatusLabel,
+  type WorkspaceDisplayStatus,
+  type WorkspaceSummary
+} from "./workspace-status-types";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -23,13 +27,24 @@ export function WorkspaceList() {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch("/api/workspaces", { cache: "no-store" });
-      if (!response.ok)
-        throw new Error(`Could not load workspaces (${response.status}).`);
+      const [response, statusResponse] = await Promise.all([
+        fetch("/api/workspaces", { cache: "no-store" }),
+        fetch("/api/workspace-statuses", { cache: "no-store" })
+      ]);
+      if (!response.ok || !statusResponse.ok)
+        throw new Error("Could not load workspace statuses.");
       const result = (await response.json()) as {
         readonly workspaces: readonly WorkspaceSummary[];
       };
-      setWorkspaces(result.workspaces);
+      const statusResult = (await statusResponse.json()) as {
+        readonly statuses: Readonly<Record<string, WorkspaceDisplayStatus>>;
+      };
+      setWorkspaces(
+        result.workspaces.map((workspace) => ({
+          ...workspace,
+          ...statusResult.statuses[workspace.id]
+        }))
+      );
       setError(null);
     } catch (cause) {
       setError(
@@ -112,7 +127,7 @@ export function WorkspaceList() {
                       className="size-1.5 rounded-full bg-current"
                       aria-hidden="true"
                     />
-                    {workspaceStatusLabel(workspace.status)}
+                    {workspaceStatusLabel(workspace)}
                   </span>
                 </span>
               </Link>

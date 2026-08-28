@@ -540,7 +540,12 @@ pub struct DerivedTaskIO {
     pub package_default_inputs: Option<bool>,
     /// Env vars that participate in the task hash.
     pub env: Vec<String>,
+    /// Directory prefixes that must not be cached as task outputs.
+    pub forbidden_output_prefixes: Vec<String>,
     pub input_safety: DerivedInputSafety,
+    /// User-facing explanation when derived inputs or outputs disable implicit
+    /// caching.
+    pub cache_reason: Option<String>,
     pub outputs: DerivedOutputs,
 }
 
@@ -637,6 +642,30 @@ fn npm_direct_command(
 }
 
 #[cfg(windows)]
+fn pnpm_direct_command(
+    package_manager_binary: &std::path::Path,
+) -> Option<(std::path::PathBuf, OsString)> {
+    if !package_manager_binary
+        .file_name()?
+        .to_str()?
+        .eq_ignore_ascii_case("pnpm.cmd")
+    {
+        return None;
+    }
+
+    let bin_dir = package_manager_binary.parent()?;
+    let node = bin_dir.join("node.exe");
+    let pnpm_cli = bin_dir
+        .parent()?
+        .join("node_modules")
+        .join("pnpm")
+        .join("bin")
+        .join("pnpm.mjs");
+
+    (node.is_file() && pnpm_cli.is_file()).then(|| (node, pnpm_cli.into_os_string()))
+}
+
+#[cfg(windows)]
 pub(crate) fn package_manager_command(
     package_manager: &PackageManager,
     package_manager_binary: &std::path::Path,
@@ -645,6 +674,14 @@ pub(crate) fn package_manager_command(
         && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
     {
         return (node.into_os_string(), vec![npm_cli]);
+    }
+
+    if matches!(
+        package_manager,
+        PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+    ) && let Some((node, pnpm_cli)) = pnpm_direct_command(package_manager_binary)
+    {
+        return (node.into_os_string(), vec![pnpm_cli]);
     }
 
     (package_manager_binary.as_os_str().to_owned(), Vec::new())
@@ -1006,6 +1043,49 @@ mod tests {
         let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
 
         assert_eq!(program, npm_cmd.into_os_string());
+        assert!(args.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_unwraps_global_virtual_store_shim() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let slot = tempdir
+            .path()
+            .join("First Last")
+            .join("store")
+            .join("links");
+        let bin_dir = slot.join("bin");
+        let pnpm_cmd = bin_dir.join("pnpm.CMD");
+        let node = bin_dir.join("node.exe");
+        let pnpm_cli = slot
+            .join("node_modules")
+            .join("pnpm")
+            .join("bin")
+            .join("pnpm.mjs");
+
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(&pnpm_cmd, "").unwrap();
+        std::fs::write(&node, "").unwrap();
+        std::fs::create_dir_all(pnpm_cli.parent().unwrap()).unwrap();
+        std::fs::write(&pnpm_cli, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![pnpm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_falls_back_for_other_installation_layouts() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let pnpm_cmd = tempdir.path().join("pnpm.cmd");
+        std::fs::write(&pnpm_cmd, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+
+        assert_eq!(program, pnpm_cmd.into_os_string());
         assert!(args.is_empty());
     }
 }
