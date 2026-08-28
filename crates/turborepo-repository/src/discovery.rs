@@ -185,20 +185,27 @@ impl PackageDiscovery for LocalPackageDiscovery {
         }
 
         // `buffered` keeps discovery order deterministic while letting the
-        // per-workspace turbo.json stats run concurrently — sequentially
-        // these 1-per-workspace syscalls cost ~20ms on large monorepos.
+        // per-workspace turbo.json/turbo.jsonc stats run concurrently — sequentially
+        // these per-workspace syscalls cost ~20ms on large monorepos.
         futures::stream::iter(package_paths.into_iter().map(|path| async move {
-            let potential_turbo = path
-                .parent()
-                .expect("non-root")
-                .join_component("turbo.json");
-            let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
+            let package_dir = path.parent().expect("non-root");
+            let potential_turbo = package_dir.join_component("turbo.json");
+            let potential_turbo_jsonc = package_dir.join_component("turbo.jsonc");
+            let (potential_turbo_exists, potential_turbo_jsonc_exists) = tokio::join!(
+                tokio::fs::try_exists(potential_turbo.as_path()),
+                tokio::fs::try_exists(potential_turbo_jsonc.as_path())
+            );
 
             Ok(WorkspaceData {
                 package_json: path,
                 turbo_json: potential_turbo_exists
                     .unwrap_or_default()
-                    .then_some(potential_turbo),
+                    .then_some(potential_turbo)
+                    .or_else(|| {
+                        potential_turbo_jsonc_exists
+                            .unwrap_or_default()
+                            .then_some(potential_turbo_jsonc)
+                    }),
             })
         }))
         .buffered(64)
@@ -379,6 +386,31 @@ mod local_tests {
         let without_turbo_json = builder.build().unwrap().discover_packages().await.unwrap();
         assert_eq!(without_turbo_json.workspaces.len(), 1);
         assert!(without_turbo_json.workspaces[0].turbo_json.is_none());
+    }
+
+    #[tokio::test]
+    async fn discovers_turbo_jsonc_and_prefers_turbo_json() {
+        let (_dir, repo_root) = npm_workspace();
+        let workspace_dir = repo_root.join_components(&["apps", "web"]);
+        let turbo_json = workspace_dir.join_component("turbo.json");
+        let turbo_jsonc = workspace_dir.join_component("turbo.jsonc");
+
+        turbo_json.remove_file().unwrap();
+        turbo_jsonc.create_with_contents("{}").unwrap();
+
+        let discovery = LocalPackageDiscovery::new(repo_root.clone(), PackageManager::Npm)
+            .discover_packages()
+            .await
+            .unwrap();
+        assert_eq!(discovery.workspaces[0].turbo_json, Some(turbo_jsonc));
+
+        turbo_json.create_with_contents("{}").unwrap();
+
+        let discovery = LocalPackageDiscovery::new(repo_root, PackageManager::Npm)
+            .discover_packages()
+            .await
+            .unwrap();
+        assert_eq!(discovery.workspaces[0].turbo_json, Some(turbo_json));
     }
 }
 
