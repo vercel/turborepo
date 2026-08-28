@@ -879,7 +879,7 @@ mod test {
     use turborepo_types::{OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs};
     use turborepo_ui::ColorConfig;
 
-    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
+    use super::{ConfigCache, OutputWatcher, OutputWatcherError, RunCache, TaskCache};
 
     fn local_cache_opts(repo_root: &AbsoluteSystemPathBuf) -> CacheOpts {
         CacheOpts {
@@ -975,6 +975,32 @@ mod test {
             ColorConfig::new(false),
             false,
         ))
+    }
+
+    #[tokio::test]
+    async fn config_cache_skips_missing_config_file() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let run_cache = run_cache(&repo_root);
+        let config_cache = ConfigCache::new(
+            "config-hash".to_string(),
+            repo_root.clone(),
+            &[".turbo", "task-access-trace.json"],
+            run_cache.cache.clone(),
+        );
+
+        config_cache.save().await.unwrap();
+        run_cache.cache.wait().await.unwrap();
+
+        assert!(
+            run_cache
+                .cache
+                .fetch(&repo_root, config_cache.hash())
+                .await
+                .unwrap()
+                .is_none(),
+            "a missing config file must not create a cache artifact"
+        );
     }
 
     #[tokio::test]
