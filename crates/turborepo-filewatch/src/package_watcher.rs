@@ -25,7 +25,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     discovery::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
-        WorkspaceData,
+        WorkspaceData, discover_turbo_config_path,
     },
     package_manager::{self, PackageManager},
     workspaces::WorkspaceGlobs,
@@ -477,6 +477,7 @@ impl Subscriber {
 
         // here, we can only update if we have a valid package state
         let mut changed = false;
+        let mut rediscover = false;
         // if a path is not a valid utf8 string, it is not a valid path, so ignore
         for path in file_event
             .paths
@@ -515,32 +516,28 @@ impl Subscriber {
 
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
-            let turbo_json = path_workspace.join_component("turbo.json");
-            let turbo_jsonc = path_workspace.join_component("turbo.jsonc");
-
-            let (package_exists, turbo_json_exists, turbo_jsonc_exists) = join!(
+            let (package_exists, turbo_json) = join!(
                 // It's possible that an IO error could occur other than the file not existing, but
                 // we will treat it like the file doesn't exist. It's possible we'll need to
                 // revisit this, depending on what kind of errors occur.
                 tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
-                tokio::fs::try_exists(&turbo_json),
-                tokio::fs::try_exists(&turbo_jsonc)
+                discover_turbo_config_path(path_workspace)
             );
 
             changed |= if package_exists {
+                let turbo_json = match turbo_json {
+                    Ok(path) => path,
+                    Err(_) => {
+                        rediscover = true;
+                        break;
+                    }
+                };
                 workspaces
                     .insert(
                         path_workspace.to_owned(),
                         WorkspaceData {
                             package_json,
-                            turbo_json: turbo_json_exists
-                                .unwrap_or_default()
-                                .then_some(turbo_json)
-                                .or_else(|| {
-                                    turbo_jsonc_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_jsonc)
-                                }),
+                            turbo_json,
                         },
                     )
                     .is_none()
@@ -549,7 +546,9 @@ impl Subscriber {
             }
         }
 
-        if changed {
+        if rediscover {
+            self.bump_or_queue_rediscovery(state, package_state_tx);
+        } else if changed {
             self.write_state(package_state);
         }
     }

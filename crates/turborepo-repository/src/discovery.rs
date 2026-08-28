@@ -41,6 +41,49 @@ pub enum Error {
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error(
+    "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
+     turbo.json or turbo.jsonc so there is only one."
+)]
+pub struct MultipleTurboConfigsError {
+    pub directory: String,
+}
+
+pub fn select_turbo_config_path(
+    directory: &turbopath::AbsoluteSystemPath,
+    turbo_json_exists: bool,
+    turbo_jsonc_exists: bool,
+) -> Result<Option<AbsoluteSystemPathBuf>, MultipleTurboConfigsError> {
+    match (turbo_json_exists, turbo_jsonc_exists) {
+        (true, true) => Err(MultipleTurboConfigsError {
+            directory: directory.to_string(),
+        }),
+        (true, false) => Ok(Some(directory.join_component("turbo.json"))),
+        (false, true) => Ok(Some(directory.join_component("turbo.jsonc"))),
+        (false, false) => Ok(None),
+    }
+}
+
+pub async fn discover_turbo_config_path(
+    directory: &turbopath::AbsoluteSystemPath,
+) -> Result<Option<AbsoluteSystemPathBuf>, Error> {
+    let turbo_json = directory.join_component("turbo.json");
+    let turbo_jsonc = directory.join_component("turbo.jsonc");
+    let (turbo_json_exists, turbo_jsonc_exists) = tokio::join!(
+        tokio::fs::try_exists(turbo_json.as_path()),
+        tokio::fs::try_exists(turbo_jsonc.as_path())
+    );
+
+    // Discovery has historically treated stat errors as a missing optional config.
+    select_turbo_config_path(
+        directory,
+        turbo_json_exists.unwrap_or_default(),
+        turbo_jsonc_exists.unwrap_or_default(),
+    )
+    .map_err(|error| Error::Failed(Box::new(error)))
+}
+
 /// Defines a strategy for discovering packages on the filesystem.
 pub trait PackageDiscovery {
     // desugar to assert that the future is Send
@@ -185,27 +228,15 @@ impl PackageDiscovery for LocalPackageDiscovery {
         }
 
         // `buffered` keeps discovery order deterministic while letting the
-        // per-workspace turbo.json/turbo.jsonc stats run concurrently — sequentially
-        // these per-workspace syscalls cost ~20ms on large monorepos.
+        // per-workspace config discovery run concurrently — sequentially these
+        // per-workspace syscalls cost ~20ms on large monorepos.
         futures::stream::iter(package_paths.into_iter().map(|path| async move {
             let package_dir = path.parent().expect("non-root");
-            let potential_turbo = package_dir.join_component("turbo.json");
-            let potential_turbo_jsonc = package_dir.join_component("turbo.jsonc");
-            let (potential_turbo_exists, potential_turbo_jsonc_exists) = tokio::join!(
-                tokio::fs::try_exists(potential_turbo.as_path()),
-                tokio::fs::try_exists(potential_turbo_jsonc.as_path())
-            );
+            let turbo_json = discover_turbo_config_path(package_dir).await?;
 
             Ok(WorkspaceData {
                 package_json: path,
-                turbo_json: potential_turbo_exists
-                    .unwrap_or_default()
-                    .then_some(potential_turbo)
-                    .or_else(|| {
-                        potential_turbo_jsonc_exists
-                            .unwrap_or_default()
-                            .then_some(potential_turbo_jsonc)
-                    }),
+                turbo_json,
             })
         }))
         .buffered(64)
@@ -389,7 +420,7 @@ mod local_tests {
     }
 
     #[tokio::test]
-    async fn discovers_turbo_jsonc_and_prefers_turbo_json() {
+    async fn discovers_turbo_jsonc_and_rejects_duplicate_configs() {
         let (_dir, repo_root) = npm_workspace();
         let workspace_dir = repo_root.join_components(&["apps", "web"]);
         let turbo_json = workspace_dir.join_component("turbo.json");
@@ -406,11 +437,15 @@ mod local_tests {
 
         turbo_json.create_with_contents("{}").unwrap();
 
-        let discovery = LocalPackageDiscovery::new(repo_root, PackageManager::Npm)
+        let error = LocalPackageDiscovery::new(repo_root, PackageManager::Npm)
             .discover_packages()
             .await
-            .unwrap();
-        assert_eq!(discovery.workspaces[0].turbo_json, Some(turbo_json));
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Found both turbo.json and turbo.jsonc")
+        );
     }
 }
 
