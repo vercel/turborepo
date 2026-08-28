@@ -1,45 +1,39 @@
 export interface WorkspaceMessage {
   readonly id: string;
-  readonly role: "user" | "assistant" | "system";
+  readonly role: "user" | "assistant";
   readonly text: string;
   readonly createdAt: string;
 }
 
 export interface WorkspaceSandbox {
-  readonly name: string;
+  readonly id?: string;
   readonly status: string;
 }
 
 export interface WorkspacePullRequest {
-  readonly checkedAt?: string;
   readonly url?: string;
   readonly number?: number;
-  readonly state?: "open" | "closed" | "merged";
 }
 
 export interface PublicWorkspace {
-  readonly activity?: string;
-  readonly chatCommand?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
-  readonly agent: "fx";
+  readonly agent: "eve";
   readonly sandbox: WorkspaceSandbox;
   readonly sessionId?: string;
   readonly messages: readonly WorkspaceMessage[];
+  readonly model?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly error?: string;
-  readonly workflowRunId?: string;
   readonly pullRequest?: string | WorkspacePullRequest;
 }
 
 export interface WorkspaceSummary {
-  readonly activity?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
-  readonly pullRequest?: WorkspacePullRequest;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -50,15 +44,9 @@ export function isWorkspaceRunning(status: string): boolean {
   );
 }
 
-export function workspaceStatusLabel(
-  workspace: Pick<WorkspaceSummary, "activity" | "pullRequest" | "status">
-): string {
-  if (isWorkspaceRunning(workspace.status))
-    return workspace.activity ?? "Working";
-  if (workspace.status === "done") return "Done";
-  if (workspace.status === "error") return "Error";
-  if (workspace.pullRequest?.state === "closed") return "PR closed";
-  if (workspace.pullRequest) return "PR open";
-  if (workspace.status === "idle") return "Ready";
-  return workspace.status;
+export function workspaceStatusLabel(status: string): string {
+  if (status === "idle") return "Ready";
+  if (isWorkspaceRunning(status)) return "Working";
+  if (status === "error") return "Error";
+  return status;
 }

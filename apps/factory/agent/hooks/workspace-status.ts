@@ -1,40 +1,73 @@
 import { defineHook } from "eve/hooks";
+import { toolResultFrom } from "eve/tools";
 
-import { updateWorkspaceActivityForSession } from "../lib/workspace-store.js";
-import { workspaceActionActivity } from "../lib/workspace.js";
+import {
+  recordWorkspacePullRequestForSession,
+  updateWorkspaceActivityForSession
+} from "../lib/workspace-pull-request.js";
+import createPullRequestTool from "../tools/create_pull_request.js";
 
-async function updateActivity(sessionId: string, activity: string): Promise<void> {
+async function update(
+  sessionId: string,
+  activity: string | undefined,
+  startsTurn = false
+): Promise<void> {
   try {
-    await updateWorkspaceActivityForSession(sessionId, activity);
+    await updateWorkspaceActivityForSession(sessionId, activity, startsTurn);
   } catch (error) {
-    // Dashboard updates must never fail the agent turn they are observing.
-    console.error("Could not update Factory workspace activity.", error);
+    console.error("Could not update Factory workspace status.", error);
   }
 }
 
 export default defineHook({
   events: {
-    "action.result"(_event, ctx) {
-      return updateActivity(ctx.session.id, "Thinking");
+    "turn.started"(_event, ctx) {
+      return update(ctx.session.id, "Thinking", true);
     },
     "actions.requested"(event, ctx) {
-      return updateActivity(
-        ctx.session.id,
-        workspaceActionActivity(event.data.actions)
-      );
+      const actions = event.data.actions;
+      const activity =
+        actions.length === 1 && actions[0]?.kind === "tool-call"
+          ? `Running ${actions[0].toolName.replaceAll("_", " ")}`
+          : `Running ${actions.length} actions`;
+      return update(ctx.session.id, activity);
+    },
+    async "action.result"(event, ctx) {
+      const result = toolResultFrom(event.data.result, createPullRequestTool);
+      const output = result?.output;
+      if (
+        typeof output === "object" &&
+        output !== null &&
+        "number" in output &&
+        typeof output.number === "number" &&
+        "url" in output &&
+        typeof output.url === "string"
+      ) {
+        await recordWorkspacePullRequestForSession(ctx.session.id, {
+          number: output.number,
+          url: output.url
+        });
+      }
+      await update(ctx.session.id, "Thinking");
     },
     "approval.candidate"(event, ctx) {
-      if (event.data.outcome !== "pending") return;
-      return updateActivity(ctx.session.id, "Waiting for approval");
+      if (event.data.outcome === "pending")
+        return update(ctx.session.id, "Waiting for approval");
+    },
+    "approval.settled"(_event, ctx) {
+      return update(ctx.session.id, "Working");
     },
     "input.requested"(_event, ctx) {
-      return updateActivity(ctx.session.id, "Waiting for input");
-    },
-    "step.started"(_event, ctx) {
-      return updateActivity(ctx.session.id, "Thinking");
+      return update(ctx.session.id, "Waiting for input");
     },
     "turn.completed"(_event, ctx) {
-      return updateActivity(ctx.session.id, "Finishing");
+      return update(ctx.session.id, undefined);
+    },
+    "turn.cancelled"(_event, ctx) {
+      return update(ctx.session.id, undefined);
+    },
+    "turn.failed"(_event, ctx) {
+      return update(ctx.session.id, undefined);
     }
   }
 });

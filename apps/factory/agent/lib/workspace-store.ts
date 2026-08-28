@@ -1,12 +1,9 @@
-import { randomUUID } from "node:crypto";
-
 import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
 
 import { strongBlobEtag } from "./blob-etag";
 import {
   isWorkspaceId,
   isWorkspaceRecord,
-  reconcileWorkspacePullRequest,
   type WorkspaceRecord
 } from "./workspace";
 
@@ -14,7 +11,6 @@ const PREFIX = "factory-workspaces/v1/";
 const MAX_WRITE_ATTEMPTS = 5;
 
 export class WorkspaceConflictError extends Error {}
-export class WorkspaceNotFoundError extends Error {}
 
 export function isWorkspaceStoreConfigured(): boolean {
   return Boolean(
@@ -48,16 +44,6 @@ export async function getWorkspace(
   return (await readWorkspace(id)).workspace;
 }
 
-export async function ensureWorkspacePublishToken(
-  id: string
-): Promise<WorkspaceRecord> {
-  return mutateWorkspace(id, (workspace) =>
-    workspace.publishToken
-      ? workspace
-      : { ...workspace, publishToken: randomUUID() }
-  );
-}
-
 export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   const workspaces: WorkspaceRecord[] = [];
   let cursor: string | undefined;
@@ -76,49 +62,6 @@ export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   );
 }
 
-export async function updateWorkspaceActivityForSession(
-  sessionId: string,
-  activity: string
-): Promise<void> {
-  const workspace = (await listWorkspaces()).find(
-    (candidate) => candidate.sessionId === sessionId
-  );
-  if (
-    !workspace ||
-    workspace.status !== "running" ||
-    workspace.activity === activity
-  )
-    return;
-  const updatedAt = new Date().toISOString();
-  await mutateWorkspace(workspace.id, (current) =>
-    current.sessionId === sessionId && current.status === "running"
-      ? { ...current, activity, updatedAt }
-      : current
-  );
-}
-
-export async function recordWorkspacePullRequestState(
-  pullRequestNumber: number,
-  state: "open" | "closed" | "merged",
-  checkedAt: string
-): Promise<void> {
-  const matches = (await listWorkspaces()).filter(
-    (workspace) => workspace.pullRequest?.number === pullRequestNumber
-  );
-  await Promise.all(
-    matches.map((workspace) =>
-      mutateWorkspace(workspace.id, (current) =>
-        reconcileWorkspacePullRequest(
-          current,
-          pullRequestNumber,
-          state,
-          checkedAt
-        )
-      )
-    )
-  );
-}
-
 export async function mutateWorkspace(
   id: string,
   mutation: (workspace: WorkspaceRecord) => WorkspaceRecord | null
@@ -126,7 +69,7 @@ export async function mutateWorkspace(
   for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
     const current = await readWorkspace(id);
     if (!current.workspace || !current.etag)
-      throw new WorkspaceNotFoundError("Workspace not found.");
+      throw new Error("Workspace not found.");
     const workspace = mutation(current.workspace);
     if (workspace === null)
       throw new WorkspaceConflictError("Workspace is already running a turn.");
