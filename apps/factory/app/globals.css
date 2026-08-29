@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../node_modules/streamdown/dist/*.js";
 
 :root {
   color-scheme: light dark;
@@ -44,6 +45,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
@@ -73,5 +76,35 @@
     --ring: #ededed;
     --success: #46a758;
     --warning: #f5a623;
+  }
+}
+
+.shimmer-text {
+  animation: shimmer-text 1.8s linear infinite;
+  background: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--foreground) 45%,
+    var(--muted-foreground) 90%
+  );
+  background-clip: text;
+  background-size: 220% 100%;
+  color: transparent;
+  will-change: background-position;
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text {
+    animation: none;
   }
 }
