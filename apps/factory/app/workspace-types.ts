@@ -16,6 +16,7 @@ export interface WorkspacePullRequest {
 }
 
 export interface PublicWorkspace {
+  readonly harness?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
@@ -31,6 +32,7 @@ export interface PublicWorkspace {
 }
 
 export interface WorkspaceSummary {
+  readonly harness?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;

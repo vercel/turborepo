@@ -65,6 +65,7 @@ export default defineChannel<
         agent: "eve",
         activeTurnId: turnId,
         createdAt: now,
+        harness: input.harness,
         id,
         messages: [
           { createdAt: now, id: turnId, role: "user", text: input.prompt }
@@ -80,7 +81,7 @@ export default defineChannel<
 
       try {
         const session = await from(id).send(input.prompt, {
-          auth: operatorSessionPrincipal(input.model),
+          auth: operatorSessionPrincipal(input.model, input.harness),
           mode: WORKSPACE_RUN_MODE,
           state: { workspaceId: id },
           title: input.title

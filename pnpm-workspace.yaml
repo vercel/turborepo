@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - eve
 
 allowBuilds:
+  "@google/genai": true
   "@swc/core": true
   "@vercel/speed-insights": true
   "@vscode/vsce-sign": false
@@ -23,6 +24,7 @@ allowBuilds:
   esbuild: true
   keytar: false
   phase: false
+  protobufjs: true
   sharp: true
   unrs-resolver: false
 

@@ -295,6 +295,7 @@ function WorkspaceChat({
               {workspace.title}
             </h1>
             <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+              {workspace.harness ? `${workspace.harness} · ` : ""}
               {workspace.sessionId}
             </p>
           </div>
