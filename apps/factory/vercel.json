@@ -1,4 +1,4 @@
 {
   "installCommand": "export PNPM_HOME=$PWD/.pnpm SHELL=/bin/bash && npx --yes get-pnpm 12.0.0 && $PNPM_HOME/bin/pnpm install --filter=examples-agent... --frozen-lockfile",
-  "buildCommand": "cd ../.. && PATH=$PWD/apps/factory/.pnpm/bin:$PATH npx --yes turbo@$(head -n 1 version.txt) run build --filter={apps/factory}..."
+  "buildCommand": "$PWD/.pnpm/bin/pnpm build"
 }
