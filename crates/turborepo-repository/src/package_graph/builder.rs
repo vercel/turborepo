@@ -1955,7 +1955,7 @@ mod test {
         );
         assert_eq!(retained_generation.packages().count(), 0);
         assert_eq!(
-            graph.external_resolution_global_file_fallback(),
+            graph.external_resolution_fallback_inputs(),
             Some(vec![root.join_component("package.json")]),
             "single-package mode must preserve package.json as a global hash input"
         );

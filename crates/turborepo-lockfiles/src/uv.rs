@@ -74,6 +74,32 @@ pub fn changed_package_names(previous: &str, current: &str) -> Result<HashSet<St
         .collect())
 }
 
+/// Return every package identity present in a syntactically valid uv.lock.
+/// Used by conservative prune fallback when uv metadata is unavailable.
+pub fn uv_package_keys(contents: &str) -> Result<HashSet<UvPackageKey>, Error> {
+    let document: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+    let packages = document
+        .get("package")
+        .and_then(|item| item.as_array_of_tables())
+        .ok_or(Error::MalformedPackageArray)?;
+    packages
+        .iter()
+        .map(|package| {
+            let name = package
+                .get("name")
+                .and_then(|item| item.as_str())
+                .ok_or(Error::MissingPackageName)?;
+            Ok(UvPackageKey {
+                name: name.to_string(),
+                version: package
+                    .get("version")
+                    .and_then(|item| item.as_str())
+                    .map(str::to_string),
+            })
+        })
+        .collect()
+}
+
 /// Filter a uv.lock to package identities and workspace members selected by
 /// `uv workspace metadata`.
 pub fn uv_prune_lock(
