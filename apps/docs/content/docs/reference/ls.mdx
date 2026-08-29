@@ -43,11 +43,34 @@ turbo ls --affected --filter=web
 
 By default the changes considered are those between `main` and `HEAD`.
 
-- You can override `main` as the default base by setting `TURBO_SCM_BASE`.
-- You can override `HEAD` as the default head by setting `TURBO_SCM_HEAD`.
+- You can override the base with `--base` or `TURBO_SCM_BASE`.
+- You can override the head with `--head` or `TURBO_SCM_HEAD`.
+
+When both a CLI flag and its environment variable are provided, the CLI flag takes precedence.
 
 ```bash title="Terminal"
+turbo ls --affected --base=development --head=HEAD
 TURBO_SCM_BASE=development turbo ls --affected
+```
+
+#### `--base`
+
+Base git ref for `--affected` comparison. Defaults to the auto-detected base (e.g. `GITHUB_BASE_REF` on GitHub Actions, or the merge-base with `main`).
+
+Can also be set with the `TURBO_SCM_BASE` environment variable. When both are provided, `--base` takes precedence.
+
+```bash title="Terminal"
+turbo ls --affected --base main
+```
+
+#### `--head`
+
+Head git ref for `--affected` comparison. Defaults to `HEAD`.
+
+Can also be set with the `TURBO_SCM_HEAD` environment variable. When both are provided, `--head` takes precedence.
+
+```bash title="Terminal"
+turbo ls --affected --head my-branch
 ```
 
 ### `--output <format>` <ExperimentalBadge />

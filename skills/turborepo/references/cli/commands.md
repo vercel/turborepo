@@ -38,8 +38,9 @@ turbo test --affected --filter=./apps/*  # combine with filter
 
 - Default: compares `main...HEAD`
 - In GitHub Actions: auto-detects `GITHUB_BASE_REF`
-- Override base: `TURBO_SCM_BASE=development turbo build --affected`
-- Override head: `TURBO_SCM_HEAD=your-branch turbo build --affected`
+- Override base: `turbo build --affected --base=development` (or `TURBO_SCM_BASE`)
+- Override head: `turbo build --affected --head=your-branch` (or `TURBO_SCM_HEAD`)
+- CLI `--base` / `--head` take precedence over the environment variables
 
 **Requires git history** - shallow clones may fall back to running all tasks.
 

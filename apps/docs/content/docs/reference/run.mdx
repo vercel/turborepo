@@ -73,14 +73,37 @@ For example, setting up Git to check out with `--filter=blob:none --depth=0` wil
 
 </Callout>
 
-You can override the default base and head with their respective [System Environment Variables](/docs/reference/system-environment-variables).
+You can override the default base and head with `--base` / `--head`, or with their respective [System Environment Variables](/docs/reference/system-environment-variables). CLI flags take precedence over the environment variables.
 
 ```bash title="Terminal"
-# Override Git comparison base
+# Override Git comparison base via flags
+turbo run build --affected --base=development --head=HEAD
+
+# Override Git comparison base via environment variables
 TURBO_SCM_BASE=development turbo run build --affected
 
-# Override Git comparison head
+# Override Git comparison head via environment variables
 TURBO_SCM_HEAD=your-branch turbo run build --affected
+```
+
+#### `--base`
+
+Base git ref for `--affected` comparison. Defaults to the auto-detected base (e.g. `GITHUB_BASE_REF` on GitHub Actions, or the merge-base with `main`).
+
+Can also be set with the `TURBO_SCM_BASE` environment variable. When both are provided, `--base` takes precedence.
+
+```bash title="Terminal"
+turbo run build --affected --base main
+```
+
+#### `--head`
+
+Head git ref for `--affected` comparison. Defaults to `HEAD`.
+
+Can also be set with the `TURBO_SCM_HEAD` environment variable. When both are provided, `--head` takes precedence.
+
+```bash title="Terminal"
+turbo run build --affected --head my-branch
 ```
 
 By default, `--affected` operates at the package level: if any file in a package changed, all of its tasks are selected. Enable [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) to filter at the task level using each task's [`inputs`](/docs/reference/configuration#inputs) globs instead.

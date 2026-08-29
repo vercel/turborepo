@@ -640,10 +640,18 @@ pub enum Command {
     Config,
     /// List packages in your monorepo.
     Ls {
-        /// Show only packages that are affected by changes between
-        /// the current branch and `main`
+        /// Show only packages that are affected by changes between two git
+        /// refs. Defaults can be set with `TURBO_SCM_BASE` / `TURBO_SCM_HEAD`.
         #[clap(long)]
         affected: bool,
+        /// Base git ref for `--affected` comparison. Overrides
+        /// `TURBO_SCM_BASE`.
+        #[clap(long, requires = "affected")]
+        base: Option<String>,
+        /// Head git ref for `--affected` comparison. Overrides
+        /// `TURBO_SCM_HEAD`.
+        #[clap(long, requires = "affected")]
+        head: Option<String>,
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
@@ -839,10 +847,16 @@ pub enum QuerySubcommand {
 
 #[derive(clap::Args, Clone, Debug, PartialEq)]
 pub struct LsArgs {
-    /// Show only packages that are affected by changes between
-    /// the current branch and `main`
+    /// Show only packages that are affected by changes between two git refs.
+    /// Defaults can be set with `TURBO_SCM_BASE` / `TURBO_SCM_HEAD`.
     #[clap(long)]
     pub affected: bool,
+    /// Base git ref for `--affected` comparison. Overrides `TURBO_SCM_BASE`.
+    #[clap(long, requires = "affected")]
+    pub base: Option<String>,
+    /// Head git ref for `--affected` comparison. Overrides `TURBO_SCM_HEAD`.
+    #[clap(long, requires = "affected")]
+    pub head: Option<String>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
@@ -949,10 +963,16 @@ pub struct ExecutionArgs {
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
-    /// Filter to only packages that are affected by changes between
-    /// the current branch and `main`
+    /// Filter to only packages that are affected by changes between two git
+    /// refs. Defaults can be set with `TURBO_SCM_BASE` / `TURBO_SCM_HEAD`.
     #[clap(long, group = "scope-filter-group")]
     pub affected: bool,
+    /// Base git ref for `--affected` comparison. Overrides `TURBO_SCM_BASE`.
+    #[clap(long, requires = "affected")]
+    pub base: Option<String>,
+    /// Head git ref for `--affected` comparison. Overrides `TURBO_SCM_HEAD`.
+    #[clap(long, requires = "affected")]
+    pub head: Option<String>,
 
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed

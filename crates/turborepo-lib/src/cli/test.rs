@@ -1728,6 +1728,62 @@ fn test_affected_and_filter_can_be_combined() {
     assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_ok(),);
 }
 
+#[test]
+fn test_run_affected_with_base_head() {
+    let args = Args::try_parse_from([
+        "turbo",
+        "run",
+        "build",
+        "--affected",
+        "--base",
+        "main",
+        "--head",
+        "HEAD",
+    ])
+    .unwrap();
+    let Some(Command::Run { execution_args, .. }) = args.command else {
+        panic!("expected run command");
+    };
+    assert!(execution_args.affected);
+    assert_eq!(execution_args.base.as_deref(), Some("main"));
+    assert_eq!(execution_args.head.as_deref(), Some("HEAD"));
+}
+
+#[test]
+fn test_run_base_requires_affected() {
+    assert!(Args::try_parse_from(["turbo", "run", "build", "--base", "main"]).is_err());
+    assert!(Args::try_parse_from(["turbo", "run", "build", "--head", "HEAD"]).is_err());
+}
+
+#[test]
+fn test_ls_affected_with_base_head() {
+    let args = Args::try_parse_from([
+        "turbo",
+        "ls",
+        "--affected",
+        "--base",
+        "main",
+        "--head",
+        "HEAD",
+    ])
+    .unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Ls {
+            affected: true,
+            base: Some(ref base),
+            head: Some(ref head),
+            ..
+        }) if base == "main" && head == "HEAD"
+    );
+}
+
+#[test]
+fn test_ls_base_requires_affected() {
+    assert!(Args::try_parse_from(["turbo", "ls", "--base", "main"]).is_err());
+    assert!(Args::try_parse_from(["turbo", "ls", "--head", "HEAD"]).is_err());
+}
+
 struct SinglePackageTestCase {
     args: &'static [&'static str],
     expected_is_single: bool,

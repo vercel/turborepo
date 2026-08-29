@@ -166,11 +166,17 @@ impl Opts {
             }) => (execution_args, run_args),
             Some(Command::Watch { execution_args, .. }) => (execution_args, &Box::default()),
             Some(Command::Ls {
-                affected, filter, ..
+                affected,
+                filter,
+                base,
+                head,
+                ..
             }) => {
                 let execution_args = ExecutionArgs {
                     filter: filter.clone(),
                     affected: *affected,
+                    base: base.clone(),
+                    head: head.clone(),
                     ..Default::default()
                 };
 
@@ -191,6 +197,8 @@ impl Opts {
                 let execution_args = ExecutionArgs {
                     filter: ls_args.filter.clone(),
                     affected: ls_args.affected,
+                    base: ls_args.base.clone(),
+                    head: ls_args.head.clone(),
                     ..Default::default()
                 };
 
@@ -547,12 +555,21 @@ fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
         .transpose()?;
 
     let affected_range = inputs.execution_args.affected.then(|| {
-        let scm_base = inputs.config.scm_base();
-        let scm_head = inputs.config.scm_head();
-        (
-            scm_base.map(|b| b.to_owned()),
-            scm_head.map(|h| h.to_string()),
-        )
+        let scm_base = inputs
+            .execution_args
+            .base
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .or_else(|| inputs.config.scm_base())
+            .map(|b| b.to_owned());
+        let scm_head = inputs
+            .execution_args
+            .head
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .or_else(|| inputs.config.scm_head())
+            .map(|h| h.to_string());
+        (scm_base, scm_head)
     });
 
     Ok(ScopeOpts {

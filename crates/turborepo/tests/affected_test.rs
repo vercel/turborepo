@@ -435,6 +435,65 @@ fn test_affected_scm_base_override() {
 }
 
 #[test]
+fn test_affected_cli_base_override() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add foo", "--quiet"]);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--base",
+            "HEAD",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 successful, 0 total"),
+        "--base=HEAD should show no changes: {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_cli_base_overrides_env() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add foo", "--quiet"]);
+
+    // Env alone would select HEAD (no changes). CLI --base should win and
+    // compare against the branch point so the new commit is detected.
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--base",
+            "main",
+            "--log-order",
+            "grouped",
+        ],
+        &[("TURBO_SCM_BASE", "HEAD")],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("my-app:build"),
+        "CLI --base should override TURBO_SCM_BASE: {stdout}"
+    );
+}
+
+#[test]
 fn test_affected_scm_head_override() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_affected(tempdir.path());
@@ -452,6 +511,64 @@ fn test_affected_scm_head_override() {
     assert!(
         stdout.contains("0 successful, 0 total"),
         "SCM_HEAD=main should show no changes: {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_cli_head_override() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add foo", "--quiet"]);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--head",
+            "main",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 successful, 0 total"),
+        "--head=main should show no changes: {stdout}"
+    );
+}
+
+#[test]
+fn test_ls_affected_cli_base_head() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add foo", "--quiet"]);
+
+    let empty = run_turbo(
+        tempdir.path(),
+        &["ls", "--affected", "--base", "HEAD", "--head", "HEAD"],
+    );
+    let empty_stdout = String::from_utf8_lossy(&empty.stdout);
+    assert!(
+        !empty_stdout.contains("my-app"),
+        "identical refs should affect nothing: {empty_stdout}"
+    );
+
+    let changed = run_turbo(
+        tempdir.path(),
+        &["ls", "--affected", "--base", "main", "--head", "HEAD"],
+    );
+    let changed_stdout = String::from_utf8_lossy(&changed.stdout);
+    assert!(
+        changed_stdout.contains("my-app"),
+        "--base/--head should detect the change: {changed_stdout}"
     );
 }
 

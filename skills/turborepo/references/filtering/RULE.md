@@ -21,14 +21,20 @@ If you change `@repo/ui`, packages that import `@repo/ui` (like `apps/web`) need
 ### Customizing --affected
 
 ```bash
-# Use a different base branch
+# Use a different base branch (CLI flag preferred)
+turbo run build --affected --base=origin/develop
+
+# Or via environment variable
 TURBO_SCM_BASE=origin/develop turbo run build --affected
 
 # Use a different head (current state)
+turbo run build --affected --head=HEAD~5
 TURBO_SCM_HEAD=HEAD~5 turbo run build --affected
 ```
 
-Base resolution order: `TURBO_SCM_BASE`, then the CI base ref on GitHub Actions (`GITHUB_BASE_REF` for PRs, the push event's previous SHA otherwise — errors if unresolvable rather than falling through), then the literal refs `main`, `master`. Turborepo does NOT read the repo's configured default branch — if the default branch is anything else (e.g. `develop`), set `TURBO_SCM_BASE`.
+CLI `--base` / `--head` take precedence over `TURBO_SCM_*` when both are set.
+
+Base resolution order: `--base` / `TURBO_SCM_BASE`, then the CI base ref on GitHub Actions (`GITHUB_BASE_REF` for PRs, the push event's previous SHA otherwise — errors if unresolvable rather than falling through), then the literal refs `main`, `master`. Turborepo does NOT read the repo's configured default branch — if the default branch is anything else (e.g. `develop`), set `--base` or `TURBO_SCM_BASE`.
 
 ### Common CI Pattern
 
@@ -144,7 +150,7 @@ turbo run build --filter=web --filter=api   # runs in both
 | Goal                               | Command                                                    |
 | ---------------------------------- | ---------------------------------------------------------- |
 | Changed + dependents (recommended) | `turbo run build --affected`                               |
-| Custom base branch                 | `TURBO_SCM_BASE=origin/develop turbo run build --affected` |
+| Custom base branch                 | `turbo run build --affected --base=origin/develop`         |
 | Only changed (no dependents)       | `turbo run build --filter=[origin/main]`                   |
 | Changed + dependencies             | `turbo run build --filter=[origin/main]...`                |
 | Since last commit                  | `turbo run build --filter=...[HEAD^1]`                     |
