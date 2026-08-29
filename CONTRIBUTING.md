@@ -26,8 +26,8 @@ Thank you for your interest in contributing to Turborepo!
 You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [Node.js](https://nodejs.org/en) v22
-- [pnpm](https://pnpm.io/) v10
+- [Node.js](https://nodejs.org/en) v24
+- [pnpm](https://pnpm.io/) v12
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 - [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
