@@ -528,6 +528,56 @@ fn test_uv_flag_disabled_hints_at_opt_in() {
 }
 
 #[test]
+fn test_uv_workspace_falls_back_without_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let lockfile = tempdir.path().join("uv.lock");
+    fs::remove_file(&lockfile).unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(output.status.success());
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined.contains("using conservative Python task hashing"));
+    assert!(combined.contains("py-app#build"));
+    assert!(!lockfile.exists());
+}
+
+#[test]
+fn test_uv_workspace_falls_back_with_unparsable_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let lockfile = tempdir.path().join("uv.lock");
+    fs::write(&lockfile, "not valid lockfile TOML").unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(output.status.success());
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined.contains("using conservative Python task hashing"));
+    let first: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let first_hash = first["tasks"][0]["hash"].as_str().unwrap().to_string();
+    fs::write(&lockfile, "still invalid, but different").unwrap();
+    let second = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(second.status.success());
+    let second: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    assert_ne!(first_hash, second["tasks"][0]["hash"].as_str().unwrap());
+}
+
+#[test]
 fn test_uv_lock_metadata_only_change_affects_no_packages() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());

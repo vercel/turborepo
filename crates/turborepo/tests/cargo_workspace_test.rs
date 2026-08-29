@@ -630,56 +630,75 @@ fn test_rustup_selection_reaches_strict_and_loose_execution() {
 }
 
 #[test]
-fn test_cargo_workspace_requires_lockfile() {
+fn test_cargo_workspace_falls_back_without_lockfile() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let lockfile = tempdir.path().join("Cargo.lock");
     fs::remove_file(&lockfile).unwrap();
-
     let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
-    assert!(!output.status.success(), "missing lockfile must fail");
+    assert!(
+        output.status.success(),
+        "missing lockfile should use fallback: {output:?}"
+    );
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(
-        combined.contains("Cargo.lock is required for Cargo workspace caching"),
-        "expected actionable lockfile error: {combined}"
+        combined.contains("using conservative Cargo task hashing"),
+        "expected fallback warning: {combined}"
     );
-    assert!(!lockfile.exists(), "turbo must not generate Cargo.lock");
+    assert!(combined.contains("app#build"));
+    assert!(!lockfile.exists());
 }
 
 #[test]
-fn test_cargo_workspace_rejects_stale_lockfile() {
+fn test_cargo_workspace_falls_back_with_stale_lockfile() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let lockfile = tempdir.path().join("Cargo.lock");
-    let original_lockfile = fs::read_to_string(&lockfile).unwrap();
+    let original = fs::read_to_string(&lockfile).unwrap();
     let manifest = tempdir.path().join("crates/app/Cargo.toml");
-    let contents = fs::read_to_string(&manifest).unwrap();
     fs::write(
         &manifest,
-        contents.replace("version = \"0.1.0\"", "version = \"0.2.0\""),
+        fs::read_to_string(&manifest)
+            .unwrap()
+            .replace("version = \"0.1.0\"", "version = \"0.2.0\""),
     )
     .unwrap();
-
     let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
-    assert!(!output.status.success(), "stale lockfile must fail");
+    assert!(output.status.success());
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        combined.contains("Cargo.lock is out of date or could not be validated"),
-        "expected actionable stale lockfile error: {combined}"
+    assert!(combined.contains("using conservative Cargo task hashing"));
+    assert_eq!(fs::read_to_string(lockfile).unwrap(), original);
+}
+
+#[test]
+fn test_cargo_workspace_falls_back_with_unparsable_lockfile() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let lockfile = tempdir.path().join("Cargo.lock");
+    fs::write(&lockfile, "not valid lockfile TOML").unwrap();
+    let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+    assert!(output.status.success());
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        fs::read_to_string(lockfile).unwrap(),
-        original_lockfile,
-        "turbo must not update Cargo.lock"
-    );
+    assert!(combined.contains("using conservative Cargo task hashing"));
+    let first: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let first_hash = first["tasks"][0]["hash"].as_str().unwrap().to_string();
+    fs::write(&lockfile, "still invalid, but different").unwrap();
+    let second = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+    assert!(second.status.success());
+    let second: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    assert_ne!(first_hash, second["tasks"][0]["hash"].as_str().unwrap());
 }
 
 #[test]

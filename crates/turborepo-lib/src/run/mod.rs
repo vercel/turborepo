@@ -1198,7 +1198,7 @@ impl Run {
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
                     let resolution_file_fallback = self
                         .pkg_dep_graph
-                        .external_resolution_global_file_fallback()
+                        .external_resolution_fallback_inputs()
                         .unwrap_or_default();
                     let root_engines = self.pkg_dep_graph.root_engines();
                     let root_engines = (!root_engines.is_empty()).then_some(root_engines);

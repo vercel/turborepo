@@ -126,6 +126,8 @@ pub enum Error {
     },
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
+    #[error("Cargo dependency resolution is unavailable: {0}")]
+    ResolutionUnavailable(String),
     #[error("failed to run `rustc -vV`: {0}")]
     RustcSpawn(#[source] io::Error),
     #[error("`rustc -vV` failed: {stderr}")]
@@ -1278,7 +1280,7 @@ fn cargo_change_observation(
 #[derive(Debug)]
 struct CargoPruneKnowledge {
     domain: crate::prune_knowledge::PruneDomainId,
-    lockfile: String,
+    lockfile: Result<String, String>,
     root_manifest: String,
     package_directories: HashMap<String, String>,
 }
@@ -1287,7 +1289,7 @@ impl CargoPruneKnowledge {
     fn discover(
         repo_root: &AbsoluteSystemPath,
         crates: &[CargoCrate],
-        lockfile: String,
+        lockfile: Result<String, String>,
     ) -> Result<Self, Error> {
         let root_manifest = repo_root
             .join_component(CARGO_TOML)
@@ -1323,7 +1325,11 @@ impl PruneDomain for CargoPruneKnowledge {
             return Ok(None);
         }
         let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
-        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&self.lockfile, kept_packages)
+        let lockfile = self
+            .lockfile
+            .as_ref()
+            .map_err(|reason| failed(Error::ResolutionUnavailable(reason.clone())))?;
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(lockfile, kept_packages)
             .map_err(|error| failed(Error::Lockfile(error)))?;
 
         let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
@@ -1459,6 +1465,19 @@ enum ContributorMetadata {
     Unresolved(Error),
 }
 
+impl Error {
+    fn supports_lockfile_fallback(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingLockfile
+                | Self::LockfileRead(_)
+                | Self::Lockfile(_)
+                | Self::InvalidLockfile { .. }
+                | Self::LockfileValidationSpawn(_)
+        )
+    }
+}
+
 impl ContributorMetadata {
     fn lockfile(&self) -> Option<&str> {
         match self {
@@ -1566,31 +1585,46 @@ impl RepositoryContributor for CargoContributor {
 
             let change_observation =
                 cargo_change_observation(&self.repo_root, target_directory.as_deref());
-            let lockfile = if let Some(lockfile) = metadata.lockfile() {
-                lockfile.to_string()
-            } else {
-                read_lockfile(&self.repo_root)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?
+            // Exact lockfile resolution is optional for graph construction.
+            // When it fails, retain Cargo's lockfile-independent `--no-deps`
+            // package graph and let the generic resolution-domain fallback
+            // hash manifests plus raw Cargo.lock bytes conservatively.
+            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
+            let resolution_result = turborepo_rayon_compat::block_in_place(|| {
+                let lockfile = metadata
+                    .lockfile()
+                    .map(str::to_string)
+                    .or_else(|| read_lockfile(&self.repo_root).ok());
+                validate_contributor_metadata(&self.repo_root, metadata)?;
+                let lockfile = lockfile.ok_or(Error::MissingLockfile)?;
+                let closures = external_closures_from_lockfile(&lockfile, &all_names)?;
+                Ok::<_, Error>((lockfile, closures))
+            });
+            let (lockfile, mut closures, resolution_incomplete) = match resolution_result {
+                Ok((lockfile, closures)) => (Ok(lockfile), closures, None),
+                Err(error) => {
+                    if !error.supports_lockfile_fallback() {
+                        return Err(toolchain::Error::Failed(Box::new(error)));
+                    }
+                    let message = error.to_string();
+                    tracing::warn!(
+                        "Unable to resolve Cargo.lock; using conservative Cargo task hashing. Run                          `cargo generate-lockfile` or `cargo update` and commit Cargo.lock to restore                          dependency-aware caching: {}",
+                        message
+                    );
+                    (
+                        Err(message.clone()),
+                        HashMap::new(),
+                        Some(crate::external_resolution::ResolutionIncompleteReason::new(
+                            "cargo-lockfile-unavailable",
+                            message,
+                        )),
+                    )
+                }
             };
             let prune_domain =
                 CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile.clone())
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            // Each crate contributes its already-classified native internal
-            // relationships directly. No JavaScript dependency descriptor or
-            // package-manager policy participates in Cargo graph assembly.
-            // External dependencies (locked crates.io/git packages plus the
-            // compiler itself) participate in each crate task's hash through
-            // the same external-dependency mechanism JS packages use, scoped
-            // to the crate's transitive closure — a dependency bump only
-            // invalidates crates that actually depend on it, and a toolchain
-            // change invalidates everything.
-            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let mut closures = turborepo_rayon_compat::block_in_place(|| {
-                validate_contributor_metadata(&self.repo_root, metadata)?;
-                external_closures_from_lockfile(&lockfile, &all_names)
-            })
-            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let compiler_identity =
                 turborepo_rayon_compat::block_in_place(|| rustc_info(&self.repo_root));
             if let Err(reason) = &compiler_identity {
@@ -1634,6 +1668,13 @@ impl RepositoryContributor for CargoContributor {
                 .chain(rustc.cloned())
                 .collect();
 
+            let fallback_inputs = std::iter::once(
+                AnchoredSystemPathBuf::from_raw(CARGO_TOML).expect("static path is valid"),
+            )
+            .chain(crates.iter().filter_map(|cargo_crate| {
+                AnchoredSystemPathBuf::new(&self.repo_root, &cargo_crate.manifest_path).ok()
+            }))
+            .collect::<Vec<_>>();
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut resolutions = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
@@ -1733,10 +1774,14 @@ impl RepositoryContributor for CargoContributor {
                     .map_err(Error::from)
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
                 ExternalResolutionData::Resolved {
-                    completeness: ResolutionCompleteness::Complete,
+                    completeness: resolution_incomplete.map_or(
+                        ResolutionCompleteness::Complete,
+                        ResolutionCompleteness::Partial,
+                    ),
                     packages: resolutions,
                 },
-            );
+            )
+            .with_fallback_inputs(fallback_inputs);
             Ok(DiscoveredPackages::new(packages, workspace_roots)
                 .with_external_resolution(resolution)
                 .with_change_observation(change_observation)
@@ -3669,6 +3714,35 @@ release: 1.96.0-nightly\n",
         let env =
             std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "1".to_string())]);
         assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_falls_back_without_lockfile() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        std::fs::remove_file(root.join_component(CARGO_LOCK).as_std_path()).unwrap();
+        let (packages, _, resolutions, _, prune_domains) = CargoContributor::new(root)
+            .discover_packages()
+            .await
+            .unwrap()
+            .into_parts();
+        assert_eq!(packages.len(), 4);
+        let ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Partial(reason),
+            packages: resolved,
+        } = resolutions[0].data()
+        else {
+            panic!("missing Cargo.lock should produce partial resolution")
+        };
+        assert_eq!(reason.code(), "cargo-lockfile-unavailable");
+        assert_eq!(resolved.len(), 4);
+        assert!(
+            resolutions[0]
+                .fallback_inputs()
+                .iter()
+                .any(|path| path.as_str().ends_with(CARGO_TOML))
+        );
+        assert!(prune_domains[0].plan(&["app".to_string()]).is_err());
     }
 
     #[tokio::test(flavor = "multi_thread")]

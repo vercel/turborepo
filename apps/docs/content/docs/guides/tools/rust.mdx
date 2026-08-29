@@ -45,6 +45,8 @@ To work with Rust, the repository root must contain:
 - A valid, unique `[workspace.metadata] name`, used for a synthetic Turborepo package that represents the Cargo workspace
 - A root `Cargo.lock`
 
+If `Cargo.lock` is missing, stale, unreadable, or unparsable, Turborepo still discovers the Cargo workspace and constructs its internal Package Graph. It falls back from package-specific external dependency hashes to conservatively hashing the workspace Cargo manifests and the raw lockfile when present. This may invalidate more Cargo tasks than necessary. Run `cargo generate-lockfile` or `cargo update` and commit `Cargo.lock` to restore dependency-aware caching. Built-in Cargo commands continue to use `--locked`, so commands that need dependency resolution can still fail until the lockfile is repaired.
+
 ```toml title="./Cargo.toml"
 [workspace]
 members = ["crates/*"]

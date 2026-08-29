@@ -44,7 +44,7 @@ use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use uv::{
     Error as UvLockError, PrunedUvLock, UvPackageKey, changed_package_names as uv_changed_packages,
-    uv_prune_lock,
+    uv_package_keys, uv_prune_lock,
 };
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 

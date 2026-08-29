@@ -45,6 +45,8 @@ To work with Python, the repository root must contain:
 - A valid, unique `[tool.turbo] name`, used for a synthetic Turborepo package that represents the uv workspace
 - A root `uv.lock`
 
+If `uv.lock` is missing, stale, unreadable, or unparsable, Turborepo discovers workspace members and internal relationships directly from the workspace manifests. It falls back from package-specific external dependency hashes to conservatively hashing the workspace `pyproject.toml` files and the raw lockfile when present. This may invalidate more Python tasks than necessary. Run `uv lock` and commit `uv.lock` to restore dependency-aware caching. Commands emitted with `--frozen` can still fail until the lockfile is repaired.
+
 ```toml title="./pyproject.toml"
 [tool.turbo]
 name = "acme-python"
@@ -235,7 +237,7 @@ Changes to any `pyproject.toml`, the root `uv.lock`, `.python-version`, or `uv.t
 ## Limitations
 
 - Only the root uv workspace is discovered. A standalone `pyproject.toml` without `[tool.uv.workspace]` is not modeled, and nested workspaces are not independently discovered.
-- Turborepo never creates or refreshes `uv.lock`; run `uv lock` to refresh and commit it. Use `uv lock --check` to validate it in CI. Turborepo rejects a missing lockfile and structural inconsistencies it can detect, but does not perform uv's complete manifest freshness validation during graph construction.
+- Turborepo never creates or refreshes `uv.lock`; run `uv lock` to refresh and commit it. Use `uv lock --check` to validate it in CI. When exact resolution is unavailable, package discovery continues with conservative global hashing, but frozen uv commands and `turbo prune` still require a valid lockfile.
 - Reachable local path, directory, editable, or virtual dependencies must be discovered workspace members at the same path recorded in `uv.lock`. Other local sources prevent graph construction because Turborepo cannot yet content-hash or prune them safely.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune a member instead.
 - Automatic tool discovery is limited to Ruff, Black, mypy, ty, Pyright, and pytest. Unsupported tools require normal task configuration; they are not inferred from Python metadata.
