@@ -1,4 +1,4 @@
 {
-  "installCommand": "export PNPM_HOME=$PWD/.pnpm SHELL=/bin/bash && npx --yes get-pnpm 12.0.0 && $PNPM_HOME/bin/pnpm install --filter=examples-agent... --frozen-lockfile && $PNPM_HOME/bin/pnpm --workspace-root add --save-dev turbo@$(head -n 1 ../../version.txt) --config.minimum-release-age=0",
-  "buildCommand": "cd ../.. && apps/factory/.pnpm/bin/pnpm --workspace-root exec turbo run build --filter={apps/factory}..."
+  "installCommand": "export PNPM_HOME=$PWD/.pnpm SHELL=/bin/bash PATH=$PWD/.pnpm/bin:$PATH && npx -y get-pnpm 12.0.0 && pnpm i --filter=examples-agent... --frozen-lockfile && pnpm -w add -D turbo@$(head -1 ../../version.txt) --config.minimum-release-age=0",
+  "buildCommand": "cd ../.. && apps/factory/.pnpm/bin/pnpm -w exec turbo run build --filter={apps/factory}..."
 }
