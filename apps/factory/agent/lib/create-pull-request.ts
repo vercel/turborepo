@@ -494,7 +494,8 @@ export async function createPullRequest(
     newCommitSha
   );
 
-  const { deliverSlackMessage } = await import("./slack");
+  const { deliverSlackMessage, recordPullRequestSlackNotification } =
+    await import("./slack");
   const slackNotification = await deliverSlackMessage(
     formatPullRequestSlackNotification(changeTitle, validatedPullRequest.url),
     {
@@ -502,6 +503,17 @@ export async function createPullRequest(
       metadata: { pullRequestNumber: validatedPullRequest.number }
     }
   );
+  try {
+    await recordPullRequestSlackNotification(
+      validatedPullRequest.number,
+      slackNotification
+    );
+  } catch (error) {
+    console.warn("Could not record the Factory pull request Slack message.", {
+      error,
+      pullRequestNumber: validatedPullRequest.number
+    });
+  }
 
   return {
     created: true,

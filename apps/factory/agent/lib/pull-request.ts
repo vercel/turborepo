@@ -39,6 +39,39 @@ export function formatPullRequestSlackNotification(
   return `:pr: *<${url}|${title}>*`;
 }
 
+export function formatMergedPullRequestSlackNotification(
+  title: string,
+  url: string
+): string {
+  return `:pr-merged: *<${url}|${title}>*`;
+}
+
+export function mergedFactoryPullRequest(
+  action: string,
+  raw: Readonly<Record<string, unknown>>
+): { readonly title: string; readonly url: string } | null {
+  const pullRequest = raw.pull_request;
+  if (
+    action !== "closed" ||
+    typeof pullRequest !== "object" ||
+    pullRequest === null
+  ) {
+    return null;
+  }
+
+  const value = pullRequest as Readonly<Record<string, unknown>>;
+  const head = value.head;
+  if (typeof head !== "object" || head === null) return null;
+  const branch = (head as Readonly<Record<string, unknown>>).ref;
+  return value.merged === true &&
+    typeof branch === "string" &&
+    branch.startsWith("agents/") &&
+    typeof value.title === "string" &&
+    typeof value.html_url === "string"
+    ? { title: value.title, url: value.html_url }
+    : null;
+}
+
 export function buildBranchRefUpdate(
   branchName: string,
   beforeOid: string,

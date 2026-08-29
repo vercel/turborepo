@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildBranchRefUpdate,
   buildDraftPullRequest,
+  formatMergedPullRequestSlackNotification,
   formatPullRequestSlackNotification,
+  mergedFactoryPullRequest,
   resolvePullRequestTitle,
   updateBranchRefWithLease
 } from "../agent/lib/pull-request.ts";
@@ -34,6 +36,44 @@ test("formats pull request Slack notifications with a bold linked title", () => 
       "https://github.com/vercel/turborepo/pull/123"
     ),
     ":pr: *<https://github.com/vercel/turborepo/pull/123|fix: Format Slack pull request notifications>*"
+  );
+});
+
+test("recognizes merged Factory pull requests", () => {
+  const raw = {
+    pull_request: {
+      merged: true,
+      head: { ref: "agents/slack-pr-status" },
+      title: "fix: Update merged PR notifications",
+      html_url: "https://github.com/vercel/turborepo/pull/123"
+    }
+  };
+  assert.deepEqual(mergedFactoryPullRequest("closed", raw), {
+    title: "fix: Update merged PR notifications",
+    url: "https://github.com/vercel/turborepo/pull/123"
+  });
+  assert.equal(mergedFactoryPullRequest("opened", raw), null);
+  assert.equal(
+    mergedFactoryPullRequest("closed", {
+      pull_request: {
+        ...raw.pull_request,
+        head: { ref: "user/not-factory" }
+      }
+    }),
+    null
+  );
+  assert.equal(
+    mergedFactoryPullRequest("closed", {
+      pull_request: { ...raw.pull_request, merged: false }
+    }),
+    null
+  );
+  assert.equal(
+    formatMergedPullRequestSlackNotification(
+      raw.pull_request.title,
+      raw.pull_request.html_url
+    ),
+    ":pr-merged: *<https://github.com/vercel/turborepo/pull/123|fix: Update merged PR notifications>*"
   );
 });
 
