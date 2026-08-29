@@ -178,6 +178,23 @@ test("requires a perf title for an automated performance run", () => {
   assert.throws(() => resolvePullRequestTitle({ performance: true }), /perf/);
 });
 
+test("uses a chore prefix for Factory changes", () => {
+  assert.equal(
+    resolvePullRequestTitle({
+      factory: true,
+      requestedTitle: "fix: Update merged PR notifications"
+    }),
+    "chore: Update merged PR notifications"
+  );
+  assert.equal(
+    resolvePullRequestTitle({
+      factory: true,
+      requestedTitle: "chore: Update Factory instructions"
+    }),
+    "chore: Update Factory instructions"
+  );
+});
+
 test("requires a conventional title for an ad-hoc run", () => {
   assert.equal(
     resolvePullRequestTitle({ requestedTitle: "fix: Show invalid task globs" }),

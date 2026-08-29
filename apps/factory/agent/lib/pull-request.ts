@@ -22,6 +22,8 @@ export interface BranchRefUpdate {
 export interface PullRequestNaming {
   /** Set for an automated example-maintenance run, which titles itself. */
   readonly automatedExample?: string;
+  /** Set when the pull request changes the Factory, which always uses `chore:`. */
+  readonly factory?: boolean;
   /** Set for an automated performance run, which must publish a `perf:` title. */
   readonly performance?: boolean;
   /** Title supplied by the caller of an interactive run. */
@@ -173,5 +175,7 @@ export function resolvePullRequestTitle(naming: PullRequestNaming): string {
       "Interactive pull requests require a Conventional Commit title such as 'fix: Correct the task hash'."
     );
   }
-  return naming.requestedTitle;
+  return naming.factory
+    ? naming.requestedTitle.replace(/^[a-z]+:/, "chore:")
+    : naming.requestedTitle;
 }
