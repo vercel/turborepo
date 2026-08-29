@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { deliverSlackMessage } from "../agent/lib/slack.ts";
+import {
+  deliverSlackMessage,
+  markPullRequestSlackNotificationMerged
+} from "../agent/lib/slack.ts";
 
 const logger = { error() {}, info() {} };
 
@@ -175,4 +178,44 @@ test("ignores diagnostic logger failures", async () => {
     channel: "C123",
     timestamp: null
   });
+});
+
+test("updates the recorded pull request notification after merge", async () => {
+  const requests = [];
+  const updated = await markPullRequestSlackNotificationMerged(
+    123,
+    ":pr-merged: merged",
+    {
+      notification: { channel: "C123", timestamp: "123.456" },
+      request: async (operation, body) => {
+        requests.push({ operation, body });
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(updated, true);
+  assert.deepEqual(requests, [
+    {
+      operation: "chat.update",
+      body: {
+        channel: "C123",
+        ts: "123.456",
+        text: ":pr-merged: merged"
+      }
+    }
+  ]);
+});
+
+test("does not post a new message when no pull request notification was recorded", async () => {
+  const operations = [];
+  const updated = await markPullRequestSlackNotificationMerged(123, "merged", {
+    notification: null,
+    request: async (operation) => {
+      operations.push(operation);
+      return { ok: true };
+    }
+  });
+  assert.equal(updated, false);
+  assert.deepEqual(operations, []);
 });

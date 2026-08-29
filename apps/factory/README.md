@@ -104,10 +104,11 @@ Configure it with:
 
 - A private Vercel Blob store (the ledger lives beside the run
   registry).
-- A GitHub Vercel Connect connector subscribed to `push` and
+- A GitHub Vercel Connect connector subscribed to `push`, `pull_request`, and
   `pull_request_review_comment`, with pull-request read/write, contents write,
   and repository collaborator metadata read permissions. Route `push` to
-  `/api/github/push`, and route `pull_request_review_comment` to `/eve/v1/github`
+  `/api/github/push`, and route `pull_request` and
+  `pull_request_review_comment` to `/eve/v1/github`
   (including the Deployment Protection bypass query parameter on both
   destinations).
 - `FACTORY_IMAGE_CONNECTOR_ID` set to that connector's stable `scl_...` ID.

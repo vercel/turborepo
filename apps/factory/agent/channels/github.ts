@@ -8,6 +8,11 @@ import {
   isTrustedFactoryPullRequestFeedback
 } from "../lib/github-feedback.js";
 import { githubCredentials } from "../lib/github.js";
+import {
+  formatMergedPullRequestSlackNotification,
+  mergedFactoryPullRequest
+} from "../lib/pull-request.js";
+import { markPullRequestSlackNotificationMerged } from "../lib/slack.js";
 
 type PullRequestResponse = { head?: { ref?: string } };
 type PermissionResponse = { permission?: string };
@@ -18,6 +23,32 @@ export default githubChannel({
   botName,
   credentials: { ...githubCredentials, webhookVerifier: vercelOidc() },
   turnPolicy: "queue",
+  async onPullRequest(ctx, pullRequest) {
+    if (ctx.repository.fullName !== "vercel/turborepo") return null;
+    const merged = mergedFactoryPullRequest(
+      pullRequest.action,
+      pullRequest.raw
+    );
+    if (merged === null) return null;
+
+    try {
+      const updated = await markPullRequestSlackNotificationMerged(
+        pullRequest.pullRequestNumber,
+        formatMergedPullRequestSlackNotification(merged.title, merged.url)
+      );
+      if (!updated) {
+        console.warn("Could not find the Factory pull request Slack message.", {
+          pullRequestNumber: pullRequest.pullRequestNumber
+        });
+      }
+    } catch (error) {
+      console.warn("Could not update the Factory pull request Slack message.", {
+        error,
+        pullRequestNumber: pullRequest.pullRequestNumber
+      });
+    }
+    return null;
+  },
   async onComment(ctx, comment) {
     if (ctx.conversation.kind !== "review_thread") return null;
 
