@@ -7,6 +7,7 @@ import {
   writeFactoryImageHandoff
 } from "./lib/factory-image-handoff";
 import { readFactoryImagePointer } from "./lib/factory-image-registry";
+import { FACTORY_HARNESS_PORT } from "./lib/harness-agent-config";
 import {
   isWorkspaceDriveEnabled,
   WORKSPACE_DRIVE_MOUNT_PATH,
@@ -23,7 +24,7 @@ import {
  * dependencies before giving control to the agent.
  */
 
-/** Matches fx workspaces, and leaves room for a `cargo build`. */
+/** Matches coding-agent workspaces, and leaves room for a `cargo build`. */
 const SESSION_TIMEOUT_MS = 45 * 60 * 1000;
 /** `.cargo/config.toml` builds with `-Zthreads=8`. */
 const SESSION_VCPUS = 8;
@@ -52,11 +53,13 @@ export default defineSandbox({
     return vercel(
       handoff === null
         ? {
+            ports: [FACTORY_HARNESS_PORT],
             resources: { vcpus: SESSION_VCPUS },
             sessionCreateOptions,
             timeout: SESSION_TIMEOUT_MS
           }
         : {
+            ports: [FACTORY_HARNESS_PORT],
             resources: { vcpus: SESSION_VCPUS },
             sessionCreateOptions,
             source: { snapshotId: handoff.snapshotId, type: "snapshot" },

@@ -6,6 +6,7 @@ import {
   operatorSessionPrincipal,
   OPERATOR_SESSION_ACTION,
   OPERATOR_SESSION_PRINCIPAL,
+  selectedOperatorHarness,
   selectedOperatorModel
 } from "../agent/lib/operator-console.ts";
 import { isAppPrincipal } from "../agent/lib/repo.ts";
@@ -103,8 +104,9 @@ test("workspace sessions run as a user, never as the app principal", () => {
 });
 
 test("workspace principals carry their selected model", () => {
-  const principal = operatorSessionPrincipal("openai/gpt-5.6-sol");
+  const principal = operatorSessionPrincipal("openai/gpt-5.6-sol", "codex");
   assert.equal(selectedOperatorModel(principal), "openai/gpt-5.6-sol");
+  assert.equal(selectedOperatorHarness(principal), "codex");
   assert.equal(isAppPrincipal(principal), false);
 });
 
@@ -112,4 +114,5 @@ test("workspace principals ignore malformed model identifiers", () => {
   const principal = operatorSessionPrincipal("not a model");
   assert.equal(principal, OPERATOR_SESSION_PRINCIPAL);
   assert.equal(selectedOperatorModel(principal), undefined);
+  assert.equal(selectedOperatorHarness(principal), undefined);
 });
