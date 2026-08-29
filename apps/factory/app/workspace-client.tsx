@@ -38,7 +38,7 @@ import {
   type FormEvent,
   type KeyboardEvent
 } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, type PluginConfig } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 import {
@@ -51,7 +51,12 @@ import { Button } from "../components/ui/button";
 import type { PublicWorkspace } from "./workspace-types";
 
 const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_SESSION_ACTION };
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins: PluginConfig = {
+  cjk,
+  code: code as unknown as NonNullable<PluginConfig["code"]>,
+  math,
+  mermaid
+};
 const messageReducer = defaultMessageReducer();
 const WorkspaceTerminal = dynamic(
   () =>
