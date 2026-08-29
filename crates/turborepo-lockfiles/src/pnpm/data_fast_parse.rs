@@ -1795,8 +1795,13 @@ snapshots:
             .join("../..")
             .join("pnpm-lock.yaml");
         let bytes = std::fs::read(&lockfile_path).expect("repo lockfile readable");
-        let text = std::str::from_utf8(&bytes).expect("utf8");
-        assert_scanner_matches_serde(text);
+        assert!(
+            parse(&bytes).is_none(),
+            "pnpm 12 multi-document lockfiles must use the serde path"
+        );
+        let parsed = PnpmLockfile::from_bytes(&bytes).expect("repo lockfile parses");
+        let serde = PnpmLockfile::from_bytes_via_serde(&bytes).expect("serde path parses");
+        assert_eq!(parsed, serde);
     }
 
     /// A lockfile large enough to cross the production size gates, so
