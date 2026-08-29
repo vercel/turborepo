@@ -94,7 +94,11 @@ export default defineChannel<
           headers: { "cache-control": "no-store" }
         });
       } catch (error) {
-        await failWorkspace(id, "Could not start the Eve workspace session.");
+        const reason =
+          error instanceof Error && error.message.trim()
+            ? `Could not start the workspace session: ${error.message.trim()}`
+            : "Could not start the workspace session.";
+        await failWorkspace(id, reason);
         throw error;
       }
     })

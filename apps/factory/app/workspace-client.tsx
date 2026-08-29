@@ -48,7 +48,11 @@ import {
 import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
 import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
-import type { PublicWorkspace } from "./workspace-types";
+import {
+  latestWorkspaceFailure,
+  type PublicWorkspace,
+  type WorkspaceFailure
+} from "./workspace-types";
 
 const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_SESSION_ACTION };
 const streamdownPlugins: PluginConfig = {
@@ -123,12 +127,32 @@ export function WorkspaceClient({ workspaceId }: WorkspaceClientProps) {
         </p>
       </main>
     );
-  if (!loaded?.workspace.sessionId)
+  if (!loaded)
     return (
       <main className="grid min-h-[60vh] place-items-center" id="main-content">
         <p className="shimmer-text text-sm" role="status">
           Loading durable Eve session…
         </p>
+      </main>
+    );
+  if (!loaded.workspace.sessionId)
+    return (
+      <main className="grid min-h-[60vh] place-items-center" id="main-content">
+        {loaded.workspace.error ? (
+          <div
+            className="mx-4 max-w-2xl rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+          >
+            <p className="font-medium">Workspace failed to start</p>
+            <p className="mt-1 whitespace-pre-wrap text-foreground">
+              {loaded.workspace.error}
+            </p>
+          </div>
+        ) : (
+          <p className="shimmer-text text-sm" role="status">
+            Starting workspace session…
+          </p>
+        )}
       </main>
     );
   return (
@@ -202,6 +226,12 @@ function WorkspaceChat({
   const busy =
     serverBusy || agent.status === "submitted" || agent.status === "streaming";
   const hasAssistantProgress = hasRenderableAssistantProgress(messages.at(-1));
+  const streamedFailure = useMemo(
+    () => latestWorkspaceFailure(events),
+    [events]
+  );
+  const failure =
+    streamedFailure ?? fallbackWorkspaceFailure(agent.error?.message);
 
   useEffect(() => {
     if (
@@ -270,11 +300,11 @@ function WorkspaceChat({
           </div>
           <div className="flex shrink-0 items-center gap-3 pt-1">
             <span
-              className={`flex items-center gap-1.5 text-xs ${agent.status === "error" ? "text-destructive" : busy ? "text-muted-foreground" : "text-success"}`}
+              className={`flex items-center gap-1.5 text-xs ${failure ? "text-destructive" : busy ? "text-muted-foreground" : "text-success"}`}
               role="status"
             >
               {busy ? <Loader2Icon className="size-3 animate-spin" /> : null}
-              {busy ? "Working" : agent.status === "error" ? "Error" : "Ready"}
+              {busy ? "Working" : failure ? "Error" : "Ready"}
             </span>
             <details className="relative">
               <summary className="cursor-pointer list-none rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
@@ -328,15 +358,7 @@ function WorkspaceChat({
       </ChatConversation>
 
       <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
-        {agent.error ? (
-          <div
-            className="mx-auto mb-2 flex max-w-3xl items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
-            role="alert"
-          >
-            <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-            {agent.error.message}
-          </div>
-        ) : null}
+        {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
         <ChatComposer
           busy={busy}
           disabled={busy}
@@ -348,6 +370,32 @@ function WorkspaceChat({
         />
       </div>
     </main>
+  );
+}
+
+function WorkspaceFailureAlert({
+  failure
+}: {
+  readonly failure: WorkspaceFailure;
+}) {
+  return (
+    <div
+      className="mx-auto mb-2 flex max-w-3xl items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2.5 text-xs text-destructive"
+      role="alert"
+    >
+      <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+      <div className="min-w-0 space-y-1.5">
+        <p className="font-medium">{failureHeadline(failure)}</p>
+        {failure.hint ? (
+          <p className="whitespace-pre-wrap text-foreground">{failure.hint}</p>
+        ) : null}
+        {failure.detail ? (
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-2 font-mono text-[11px] leading-5 text-foreground">
+            {failure.detail}
+          </pre>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -746,7 +794,9 @@ function ActivityFeed({
             >
               {new Date(event.meta.at).toLocaleTimeString()}
             </time>
-            <span className="min-w-0 truncate">{event.type}</span>
+            <span className="min-w-0 truncate">
+              {describeActivityEvent(event)}
+            </span>
           </li>
         ))}
       </ol>
@@ -803,15 +853,18 @@ function appendOptimisticMessage(
 }
 
 function hasLatestUserMessage(messages: readonly EveMessage[], text: string) {
-  return (
-    [...messages]
-      .reverse()
-      .find((message) => message.role === "user")
-      ?.parts.filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("\n")
-      .trim() === text.trim()
-  );
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "user") continue;
+    return (
+      message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+        .trim() === text.trim()
+    );
+  }
+  return false;
 }
 
 function hasRenderableAssistantProgress(message: EveMessage | undefined) {
@@ -855,4 +908,23 @@ function partKey(part: EveMessagePart, index: number) {
   return part.type === "dynamic-tool"
     ? part.toolCallId
     : `${part.type}:${index}`;
+}
+
+function fallbackWorkspaceFailure(
+  message: string | undefined
+): WorkspaceFailure | undefined {
+  const normalized = message?.trim();
+  return normalized ? { message: normalized } : undefined;
+}
+
+function failureHeadline(failure: WorkspaceFailure): string {
+  const { code, message } = failure;
+  return !code || message === code || message.startsWith(`${code}:`)
+    ? message
+    : `${code}: ${message}`;
+}
+
+function describeActivityEvent(event: MessageStreamEvent): string {
+  const failure = latestWorkspaceFailure([event]);
+  return failure ? `${event.type} — ${failureHeadline(failure)}` : event.type;
 }
