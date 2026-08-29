@@ -170,8 +170,6 @@ jobs:
       - parallel:
           - name: Setup Node
             uses: ./.github/actions/setup-node
-            with:
-              enable-corepack: false
 
           - name: Get base SHA
             id: base-sha
@@ -553,7 +551,6 @@ jobs:
           - name: Setup Node
             uses: ./.github/actions/setup-node
             with:
-              enable-corepack: false
               extra-flags: "--no-frozen-lockfile"
 
           - name: Download Rust artifacts
@@ -624,7 +621,6 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
 
       - name: Build release tool
@@ -811,7 +807,6 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
 
       - name: Build release tool
