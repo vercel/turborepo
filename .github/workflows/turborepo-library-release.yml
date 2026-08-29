@@ -142,8 +142,6 @@ jobs:
 
           - name: Setup Node
             uses: ./.github/actions/setup-node
-            with:
-              enable-corepack: false
             if: ${{ !matrix.settings.install }}
 
           - name: Setup capnproto
@@ -192,7 +190,6 @@ jobs:
           - name: Setup Node
             uses: ./.github/actions/setup-node
             with:
-              enable-corepack: false
               package-install: false
 
           - name: Download Artifacts
