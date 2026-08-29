@@ -1789,7 +1789,7 @@ snapshots:
     }
 
     #[test]
-    fn test_repo_own_lockfile_differential() {
+    fn test_repo_own_multi_document_lockfile_uses_serde() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let lockfile_path = std::path::Path::new(manifest_dir)
             .join("../..")
