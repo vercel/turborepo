@@ -334,7 +334,7 @@ function WorkspaceChat({
         ) : null}
         <ChatComposer
           busy={busy}
-          disabled={agent.status === "error"}
+          disabled={busy}
           onChange={setDraft}
           onStop={stop}
           onSubmit={submit}
