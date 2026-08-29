@@ -1,3 +1,4 @@
 {
-  "installCommand": "npm exec --yes --package=pnpm@12.0.0 -- pnpm install --filter=examples-agent... --frozen-lockfile && npm exec --yes --package=pnpm@12.0.0 -- pnpm --workspace-root add --save-dev turbo@$(head -n 1 ../../version.txt) --config.minimum-release-age=0"
+  "installCommand": "export PNPM_HOME=$PWD/.pnpm && npx --yes get-pnpm 12.0.0 && $PNPM_HOME/bin/pnpm install --filter=examples-agent... --frozen-lockfile",
+  "buildCommand": "cd ../.. && PATH=$PWD/apps/factory/.pnpm/bin:$PATH npm exec --yes --package=turbo@$(head -n 1 version.txt) -- turbo run build --filter={apps/factory}..."
 }
