@@ -2647,10 +2647,10 @@ impl RepositoryContributor for UvContributor {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
-                discover_workspace_from_manifests(&self.repo_root)
-            })
-            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            // Try uv's authoritative view first. Manifest discovery is a
+            // fallback, not a prerequisite: differences between uv's workspace
+            // semantics and our conservative parser must not reject a workspace
+            // whose metadata resolved successfully.
             let exact = turborepo_rayon_compat::block_in_place(|| {
                 let metadata = workspace_metadata(&self.repo_root)?;
                 let workspace = discover_workspace_from_metadata(&self.repo_root, &metadata)?;
@@ -2662,6 +2662,10 @@ impl RepositoryContributor for UvContributor {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
                 Err(error) => {
+                    let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
+                        discover_workspace_from_manifests(&self.repo_root)
+                    })
+                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
                     let message = error.to_string();
                     tracing::warn!(
