@@ -573,9 +573,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   graph through the same construction path as a run, so watch sees the same
   package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
-  all-packages fallback. Known gap: the hash watcher's content-hash dedup
-  is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
-  fast cache hit rather than being suppressed.
+  all-packages fallback. The repository graph registers every execution
+  scope with the hash watcher, so content-hash deduplication applies equally
+  to JavaScript, Cargo, and Python packages.
 
 - **Prune** (`PruneKnowledge` and `PruneDomain::{plan, finalize}`, consumed by
   `turborepo-lib/src/commands/prune.rs`): each generation-owned domain reports
