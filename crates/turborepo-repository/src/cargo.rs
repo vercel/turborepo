@@ -1158,25 +1158,31 @@ fn contains_glob_syntax(value: &str) -> bool {
         .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']' | b'{' | b'}'))
 }
 
+fn normalize_target_directory(
+    repo_root: &AbsoluteSystemPath,
+    target_directory: &AbsoluteSystemPath,
+) -> Option<AbsoluteSystemPathBuf> {
+    let real_repo_root = dunce::canonicalize(repo_root.as_std_path()).ok()?;
+    let mut existing_ancestor = target_directory.as_std_path();
+    let mut missing_components = Vec::new();
+    while !existing_ancestor.exists() {
+        missing_components.push(existing_ancestor.file_name()?.to_os_string());
+        existing_ancestor = existing_ancestor.parent()?;
+    }
+    let mut normalized = dunce::canonicalize(existing_ancestor).ok()?;
+    if !normalized.starts_with(real_repo_root) {
+        return None;
+    }
+    normalized.extend(missing_components.into_iter().rev());
+    AbsoluteSystemPathBuf::new(normalized.to_str()?.to_string()).ok()
+}
+
+#[cfg(test)]
 fn target_directory_within_repo(
     repo_root: &AbsoluteSystemPath,
     target_directory: &AbsoluteSystemPath,
 ) -> bool {
-    if !repo_root.contains(target_directory) {
-        return false;
-    }
-    let Ok(real_repo_root) = dunce::canonicalize(repo_root.as_std_path()) else {
-        return false;
-    };
-    let mut existing_ancestor = target_directory.as_std_path();
-    while !existing_ancestor.exists() {
-        let Some(parent) = existing_ancestor.parent() else {
-            return false;
-        };
-        existing_ancestor = parent;
-    }
-    dunce::canonicalize(existing_ancestor)
-        .is_ok_and(|ancestor| ancestor.starts_with(real_repo_root))
+    normalize_target_directory(repo_root, target_directory).is_some()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1248,11 +1254,10 @@ fn cargo_output_layout(
     } else {
         workspace.target_directory.clone()
     };
-    if contains_glob_syntax(target_directory.as_str())
-        || !target_directory_within_repo(repo_root, &target_directory)
-    {
+    if contains_glob_syntax(target_directory.as_str()) {
         return None;
     }
+    let target_directory = normalize_target_directory(repo_root, &target_directory)?;
 
     Some(CargoOutputLayout {
         profile: arguments.profile,
@@ -3153,6 +3158,17 @@ dependencies = ["lib-a"]
         )
         .unwrap();
         assert!(!target_directory_within_repo(&root, &outside_path));
+
+        #[cfg(unix)]
+        {
+            let alias = root.join_component("root-alias");
+            std::os::unix::fs::symlink(&root, &alias).unwrap();
+            let aliased_target = alias.join_components(&["new", "target"]);
+            assert_eq!(
+                normalize_target_directory(&root, &aliased_target),
+                Some(root.join_components(&["new", "target"]))
+            );
+        }
 
         #[cfg(windows)]
         {
