@@ -169,6 +169,7 @@ function WorkspaceChat({
 }) {
   const [draft, setDraft] = useState("");
   const [externalEvents, setExternalEvents] = useState(initialEvents);
+  const streamIndex = useRef(initialEvents.length);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(
     null
   );
@@ -184,26 +185,59 @@ function WorkspaceChat({
   });
 
   useEffect(() => {
-    const controller = new AbortController();
-    const session = new Client({
-      headers: CONSOLE_HEADERS,
-      host: ""
-    }).sessions.attach(workspace.sessionId!, {
-      streamIndex: initialEvents.length
-    });
-    void (async () => {
-      try {
-        for await (const event of session.stream({
-          signal: controller.signal
-        })) {
-          setExternalEvents((current) => appendUniqueEvent(current, event));
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) console.error(cause);
+    let controller: AbortController | undefined;
+    let disposed = false;
+    let reconnectRequested = false;
+    let restarting = false;
+    let streamTask: Promise<void> = Promise.resolve();
+
+    const reconnect = async () => {
+      reconnectRequested = true;
+      controller?.abort();
+      if (restarting) return;
+
+      restarting = true;
+      while (reconnectRequested && !disposed) {
+        await streamTask;
+        if (disposed) break;
+
+        reconnectRequested = false;
+        controller = new AbortController();
+        const session = new Client({
+          headers: CONSOLE_HEADERS,
+          host: ""
+        }).sessions.attach(workspace.sessionId!, {
+          streamIndex: streamIndex.current
+        });
+        streamTask = (async () => {
+          try {
+            for await (const event of session.stream({
+              signal: controller?.signal
+            })) {
+              streamIndex.current = session.state.streamIndex;
+              setExternalEvents((current) => appendUniqueEvent(current, event));
+            }
+          } catch (cause) {
+            if (!controller?.signal.aborted) console.error(cause);
+          }
+        })();
       }
-    })();
-    return () => controller.abort();
-  }, [initialEvents.length, workspace.sessionId]);
+      restarting = false;
+    };
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === "visible") void reconnect();
+    };
+
+    void reconnect();
+    document.addEventListener("visibilitychange", reconnectWhenVisible);
+    window.addEventListener("focus", reconnectWhenVisible);
+    return () => {
+      disposed = true;
+      controller?.abort();
+      document.removeEventListener("visibilitychange", reconnectWhenVisible);
+      window.removeEventListener("focus", reconnectWhenVisible);
+    };
+  }, [workspace.sessionId]);
 
   const events = useMemo(
     () => mergeEvents(externalEvents, agent.events),
