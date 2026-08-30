@@ -549,6 +549,31 @@ pub enum TelemetryCommand {
     Status,
 }
 
+pub(super) fn unwrap_flag_help(help: &str) -> String {
+    let mut output = String::with_capacity(help.len());
+    let mut joining_flag = false;
+
+    for line in help.lines() {
+        let trimmed = line.trim_start();
+        let is_flag = trimmed.starts_with('-');
+        let is_continuation =
+            joining_flag && line.starts_with("                                  ");
+
+        if is_continuation {
+            output.push(' ');
+            output.push_str(trimmed);
+        } else {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(line);
+        }
+        joining_flag = is_flag || is_continuation;
+    }
+    output.push('\n');
+    output
+}
+
 impl Args {
     #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
@@ -559,7 +584,7 @@ impl Args {
         if help_requested {
             let help_args: Vec<_> = os_args.into_iter().skip(1).collect();
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
-                print!("{}", exit.text);
+                print!("{}", unwrap_flag_help(&exit.text));
                 exit_with_heap_profile(exit.code);
             }
             unreachable!("a help flag must produce an exit outcome");

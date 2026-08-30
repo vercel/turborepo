@@ -76,6 +76,19 @@ fn turbo_long_help() {
 }
 
 #[test]
+fn flag_help_is_greppable_on_one_line() {
+    let run = get_subcommand("run");
+    let help = super::args::unwrap_flag_help(&Args::render_help(run, false).unwrap());
+    let remote_only = help
+        .lines()
+        .find(|line| line.contains("--remote-only"))
+        .expect("remote-only help line");
+
+    assert!(remote_only.contains("Ignore the local filesystem cache for all tasks."));
+    assert!(remote_only.contains("Equivalent to `--cache=remote:rw`"));
+}
+
+#[test]
 fn link_short_help() {
     let cmd = get_subcommand("link");
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
