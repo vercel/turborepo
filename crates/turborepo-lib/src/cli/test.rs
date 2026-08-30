@@ -1,18 +1,30 @@
 use std::{assert_matches, ffi::OsString};
 
 use camino::Utf8PathBuf;
-use clap::{CommandFactory, Parser};
 use insta::assert_snapshot;
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
+use turborepo_types::LogOrder;
 
-use crate::cli::{ExecutionArgs, RunArgs};
+use crate::cli::{
+    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GraphOutput, LogOrderArg,
+    LogPrefixArg, NonEmptyPath, OutputLogsModeArg, RunArgs,
+};
 
-fn get_subcommand(name: &str) -> clap::Command {
+fn parse_args<I, S>(args: I) -> Result<Args, String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+{
+    Args::parse_args(args.into_iter().map(Into::into).collect())
+}
+
+fn get_subcommand(name: &str) -> &'static usage::Command<'static> {
     Args::command()
-        .find_subcommand(name)
+        .subcommands
+        .iter()
+        .find(|command| command.name == name)
         .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
-        .clone()
 }
 
 #[test_case::test_case("", None ; "root")]
@@ -45,7 +57,7 @@ fn inferred_package_root_returns_repo_relative_invocation_path(
 #[test_case::test_case(vec!["turbo", "run", "build", "--summarize=true"], Some(true) ; "enabled")]
 #[test_case::test_case(vec!["turbo", "run", "build", "--summarize=false"], Some(false) ; "disabled")]
 fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<bool>) {
-    let args = Args::try_parse_from(args).unwrap();
+    let args = parse_args(args).unwrap();
     let Command::Run { run_args, .. } = args.command.unwrap() else {
         panic!("expected run command");
     };
@@ -55,50 +67,36 @@ fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<
 
 #[test]
 fn turbo_short_help() {
-    let mut cmd = Args::command();
-    let mut buf = Vec::new();
-    cmd.write_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    assert_snapshot!(Args::render_help(Args::command(), false).unwrap());
 }
 
 #[test]
 fn turbo_long_help() {
-    let mut cmd = Args::command();
-    let mut buf = Vec::new();
-    cmd.write_long_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    assert_snapshot!(Args::render_help(Args::command(), true).unwrap());
 }
 
 #[test]
 fn link_short_help() {
-    let mut cmd = get_subcommand("link");
-    let mut buf = Vec::new();
-    cmd.write_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    let cmd = get_subcommand("link");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
 #[test]
 fn unlink_short_help() {
-    let mut cmd = get_subcommand("unlink");
-    let mut buf = Vec::new();
-    cmd.write_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    let cmd = get_subcommand("unlink");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
 #[test]
 fn login_short_help() {
-    let mut cmd = get_subcommand("login");
-    let mut buf = Vec::new();
-    cmd.write_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    let cmd = get_subcommand("login");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
 #[test]
 fn logout_short_help() {
-    let mut cmd = get_subcommand("logout");
-    let mut buf = Vec::new();
-    cmd.write_help(&mut buf).unwrap();
-    assert_snapshot!(String::from_utf8(buf).unwrap());
+    let cmd = get_subcommand("logout");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
 struct CommandTestCase {
@@ -118,7 +116,7 @@ fn get_default_run_args() -> RunArgs {
 fn get_default_execution_args() -> ExecutionArgs {
     ExecutionArgs {
         output_logs: None,
-        framework_inference: true,
+        framework_inference: Some(true),
         ..ExecutionArgs::default()
     }
 }
@@ -127,7 +125,7 @@ impl CommandTestCase {
     fn test(&self) {
         let permutations = self.create_all_arg_permutations();
         for command in permutations {
-            assert_eq!(Args::try_parse_from(command).unwrap(), self.expected_output)
+            assert_eq!(parse_args(command).unwrap(), self.expected_output)
         }
     }
 
@@ -154,19 +152,17 @@ impl CommandTestCase {
     }
 }
 
-use turborepo_types::{ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode};
-
 use crate::cli::{Args, Command};
 
 #[test_case::test_case(
     &["turbo", "run", "build"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -176,12 +172,12 @@ use crate::cli::{Args, Command};
     &["turbo", "run", "build"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                framework_inference: true,
+                framework_inference: Some(true),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -191,12 +187,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--framework-inference"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                  tasks: vec!["build".to_string()],
-                 framework_inference: true,
+                 framework_inference: Some(true),
                  ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -206,12 +202,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--framework-inference", "true"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                framework_inference: true,
+                framework_inference: Some(true),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
 		} ;
@@ -222,12 +218,12 @@ use crate::cli::{Args, Command};
 "false"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                framework_inference: false,
+                framework_inference: Some(false),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
 		} ;
@@ -237,12 +233,12 @@ use crate::cli::{Args, Command};
     &["turbo", "run", "build", "--env-mode"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                env_mode: Some(EnvMode::Strict),
+                env_mode: Some(EnvModeArg::Strict),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -252,12 +248,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--env-mode", "loose"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                env_mode: Some(EnvMode::Loose),
+                env_mode: Some(EnvModeArg::Loose),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
 		} ;
@@ -267,12 +263,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--env-mode", "strict"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                env_mode: Some(EnvMode::Strict),
+                env_mode: Some(EnvModeArg::Strict),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
 		} ;
@@ -282,11 +278,11 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "lint", "test"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -296,12 +292,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--cache-dir", "foobar"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                cache_dir: Some(Utf8PathBuf::from("foobar")),
+                cache_dir: Some(NonEmptyPath(Utf8PathBuf::from("foobar"))),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -311,14 +307,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--cache-workers", "100"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec ! ["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 cache_workers: 100,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -328,12 +324,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--concurrency", "20"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 concurrency: Some("20".to_string()),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -343,12 +339,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--continue"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                continue_execution: ContinueMode::Always,
+                continue_execution: ContinueModeArg::Always,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -358,12 +354,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "--continue", "build"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                continue_execution: ContinueMode::Always,
+                continue_execution: ContinueModeArg::Always,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -373,12 +369,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--continue=dependencies-successful"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                continue_execution: ContinueMode::DependenciesSuccessful,
+                continue_execution: ContinueModeArg::DependenciesSuccessful,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -388,14 +384,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--dry-run"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
-                dry_run: Some(DryRunMode::Text),
+            },
+            run_args: RunArgs {
+                dry_run: Some(DryRunModeArg::Text),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -405,14 +401,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--dry-run", "json"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
-                dry_run: Some(DryRunMode::Json),
+            },
+            run_args: RunArgs {
+                dry_run: Some(DryRunModeArg::Json),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -422,7 +418,7 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--filter", "water", "--filter", "earth", "--filter", "fire", "--filter", "air"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 filter: vec![
                     "water".to_string(),
@@ -431,8 +427,8 @@ use crate::cli::{Args, Command};
                     "air".to_string()
                 ],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -442,7 +438,7 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "-F", "water", "-F", "earth", "-F", "fire", "-F", "air"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 filter: vec![
                     "water".to_string(),
@@ -451,8 +447,8 @@ use crate::cli::{Args, Command};
                     "air".to_string()
                 ],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -462,7 +458,7 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--filter", "water", "-F", "earth", "--filter", "fire", "-F", "air"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 filter: vec![
                     "water".to_string(),
@@ -471,8 +467,8 @@ use crate::cli::{Args, Command};
                     "air".to_string()
                 ],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -482,14 +478,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--force"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 force: Some(Some(true)),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -499,12 +495,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--global-deps", ".env"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 global_deps: vec![".env".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -514,12 +510,12 @@ use crate::cli::{Args, Command};
 		&[ "turbo", "run", "build", "--global-deps", ".env", "--global-deps", ".env.development"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 global_deps: vec![".env".to_string(), ".env.development".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -529,14 +525,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--graph"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
-                graph: Some("".to_string()),
+            },
+            run_args: RunArgs {
+                graph: Some(GraphOutput("".to_string())),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -546,14 +542,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--graph", "out.html"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
-                graph: Some("out.html".to_string()),
+            },
+            run_args: RunArgs {
+                graph: Some(GraphOutput("out.html".to_string())),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -563,14 +559,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--no-cache"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 no_cache: true,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -580,12 +576,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--only"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 only: true,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -595,14 +591,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--no-daemon"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 no_daemon: true,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -612,14 +608,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--daemon"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 daemon: true,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -629,12 +625,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--output-logs", "full"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                output_logs: Some(OutputLogsMode::Full),
+                output_logs: Some(OutputLogsModeArg::Full),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -644,12 +640,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--output-logs", "none"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                output_logs: Some(OutputLogsMode::None),
+                output_logs: Some(OutputLogsModeArg::None),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -659,12 +655,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--output-logs", "hash-only"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                output_logs: Some(OutputLogsMode::HashOnly),
+                output_logs: Some(OutputLogsModeArg::HashOnly),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -674,12 +670,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--log-order", "stream"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                log_order: Some(LogOrder::Stream),
+                log_order: Some(LogOrderArg::Stream),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -689,12 +685,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--log-order", "grouped"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                log_order: Some(LogOrder::Grouped),
+                log_order: Some(LogOrderArg::Grouped),
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     };
@@ -704,12 +700,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--log-prefix", "auto"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                log_prefix: LogPrefix::Auto,
+                log_prefix: LogPrefixArg::Auto,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -719,12 +715,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--log-prefix", "none"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                log_prefix: LogPrefix::None,
+                log_prefix: LogPrefixArg::None,
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -734,12 +730,12 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--log-prefix", "task"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                  tasks: vec!["build".to_string()],
-                 log_prefix: LogPrefix::Task,
+                 log_prefix: LogPrefixArg::Task,
                  ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -749,11 +745,11 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(get_default_run_args())
+            },
+            run_args: get_default_run_args()
         }),
         ..Args::default()
     } ;
@@ -763,14 +759,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--parallel"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 parallel: true,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -780,14 +776,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--profile", "profile_out"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
               profile: Some("profile_out".to_string()),
               ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -797,14 +793,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--profile"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
               profile: Some(String::new()),
               ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
     } ;
@@ -815,14 +811,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 remote_only: None,
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
 		} ;
@@ -832,14 +828,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--remote-only"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 remote_only: Some(Some(true)),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
 		} ;
@@ -849,14 +845,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--remote-only", "true"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 remote_only: Some(Some(true)),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
 		} ;
@@ -866,14 +862,14 @@ use crate::cli::{Args, Command};
 		&["turbo", "run", "build", "--remote-only", "false"],
     Args {
         command: Some(Command::Run {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
-            run_args: Box::new(RunArgs {
+            },
+            run_args: RunArgs {
                 remote_only: Some(Some(false)),
                 ..get_default_run_args()
-            })
+            }
         }),
         ..Args::default()
 		} ;
@@ -882,10 +878,7 @@ use crate::cli::{Args, Command};
 #[test_case::test_case(
 		&["turbo", "build"],
     Args {
-        execution_args: Some(ExecutionArgs {
-            tasks: vec!["build".to_string()],
-            ..get_default_execution_args()
-        }),
+        command: Some(Command::Run { execution_args: ExecutionArgs { tasks: vec!["build".to_string()], ..get_default_execution_args() }, run_args: get_default_run_args() }),
         ..Args::default()
     } ;
     "build no run prefix"
@@ -893,26 +886,23 @@ use crate::cli::{Args, Command};
 #[test_case::test_case(
 	&["turbo", "build", "lint", "test"],
     Args {
-        execution_args: Some(ExecutionArgs {
-            tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
-            ..get_default_execution_args()
-        }),
+        command: Some(Command::Run { execution_args: ExecutionArgs { tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()], ..get_default_execution_args() }, run_args: get_default_run_args() }),
         ..Args::default()
     } ;
     "multiple tasks no run prefix"
 )]
 fn test_parse_run(args: &[&str], expected: Args) {
-    assert_eq!(Args::try_parse_from(args).unwrap(), expected);
+    assert_eq!(parse_args(args).unwrap(), expected);
 }
 
 #[test_case::test_case(
     &["turbo", "watch", "build"],
     Args {
         command: Some(Command::Watch {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
                 ..get_default_execution_args()
-            }),
+            },
             experimental_write_cache: false
         }),
         ..Args::default()
@@ -923,11 +913,11 @@ fn test_parse_run(args: &[&str], expected: Args) {
     &["turbo", "watch", "build", "--cache-dir", "foobar"],
     Args {
         command: Some(Command::Watch {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
                 tasks: vec!["build".to_string()],
-                cache_dir: Some(Utf8PathBuf::from("foobar")),
+                cache_dir: Some(NonEmptyPath(Utf8PathBuf::from("foobar"))),
                 ..get_default_execution_args()
-            }),
+            },
             experimental_write_cache: false
         }),
         ..Args::default()
@@ -938,10 +928,10 @@ fn test_parse_run(args: &[&str], expected: Args) {
     &["turbo", "watch", "build", "lint", "check"],
     Args {
         command: Some(Command::Watch {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
               tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
               ..get_default_execution_args()
-            }),
+            },
             experimental_write_cache: false
         }),
         ..Args::default()
@@ -952,10 +942,10 @@ fn test_parse_run(args: &[&str], expected: Args) {
     &["turbo", "watch", "build", "--experimental-write-cache"],
     Args {
         command: Some(Command::Watch {
-            execution_args: Box::new(ExecutionArgs {
+            execution_args: ExecutionArgs {
               tasks: vec!["build".to_string()],
               ..get_default_execution_args()
-            }),
+            },
             experimental_write_cache: true
         }),
         ..Args::default()
@@ -963,12 +953,12 @@ fn test_parse_run(args: &[&str], expected: Args) {
     "with experimental-write-cache"
 )]
 fn test_parse_watch(args: &[&str], expected: Args) {
-    assert_eq!(Args::try_parse_from(args).unwrap(), expected);
+    assert_eq!(parse_args(args).unwrap(), expected);
 }
 
 #[test_case::test_case(
     &["turbo", "run", "build", "--daemon", "--no-daemon"],
-    "cannot be used with '--no-daemon'" ;
+    "cannot be used with" ;
     "daemon and no-daemon at the same time"
 )]
 #[test_case::test_case(
@@ -1003,8 +993,8 @@ fn test_parse_watch(args: &[&str], expected: Args) {
 )]
 fn test_parse_run_failures(args: &[&str], expected: &str) {
     assert_matches!(
-        Args::try_parse_from(args),
-        Err(err) if err.to_string().contains(expected)
+        parse_args(args),
+        Err(err) if err.contains(expected)
     );
 }
 
@@ -1013,7 +1003,7 @@ fn test_parse_run_failures(args: &[&str], expected: &str) {
 #[test_case::test_case(&["turbo", "run", "build", "--verbosity=1"], 1 ; "long one")]
 #[test_case::test_case(&["turbo", "run", "build", "--verbosity=2"], 2 ; "long two")]
 fn test_parse_verbosity(args: &[&str], expected: u8) {
-    let args = Args::try_parse_from(args).unwrap();
+    let args = parse_args(args).unwrap();
 
     assert_eq!(u8::from(args.verbosity), expected);
 }
@@ -1021,7 +1011,7 @@ fn test_parse_verbosity(args: &[&str], expected: u8) {
 #[test]
 fn test_parse_bin() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "bin"]).unwrap(),
+        parse_args(["turbo", "bin"]).unwrap(),
         Args {
             command: Some(Command::Bin {}),
             ..Args::default()
@@ -1044,7 +1034,7 @@ fn test_parse_bin() {
 #[test]
 fn test_parse_link() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "link"]).unwrap(),
+        parse_args(["turbo", "link"]).unwrap(),
         Args {
             command: Some(Command::Link {
                 no_gitignore: false,
@@ -1123,7 +1113,7 @@ fn test_parse_link() {
 #[test]
 fn test_parse_login() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "login"]).unwrap(),
+        parse_args(["turbo", "login"]).unwrap(),
         Args {
             command: Some(Command::Login {
                 sso_team: None,
@@ -1170,9 +1160,11 @@ fn test_parse_login() {
 #[test]
 fn test_parse_logout() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "logout"]).unwrap(),
+        parse_args(["turbo", "logout"]).unwrap(),
         Args {
-            command: Some(Command::Logout { invalidate: true }),
+            command: Some(Command::Logout {
+                invalidate: Some(true)
+            }),
             ..Args::default()
         }
     );
@@ -1182,7 +1174,9 @@ fn test_parse_logout() {
         command_args: vec![],
         global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
         expected_output: Args {
-            command: Some(Command::Logout { invalidate: true }),
+            command: Some(Command::Logout {
+                invalidate: Some(true),
+            }),
             cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
             ..Args::default()
         },
@@ -1190,9 +1184,11 @@ fn test_parse_logout() {
     .test();
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "logout", "--invalidate=false"]).unwrap(),
+        parse_args(["turbo", "logout", "--invalidate=false"]).unwrap(),
         Args {
-            command: Some(Command::Logout { invalidate: false }),
+            command: Some(Command::Logout {
+                invalidate: Some(false)
+            }),
             ..Args::default()
         }
     );
@@ -1201,7 +1197,7 @@ fn test_parse_logout() {
 #[test]
 fn test_parse_unlink() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "unlink"]).unwrap(),
+        parse_args(["turbo", "unlink"]).unwrap(),
         Args {
             command: Some(Command::Unlink),
             ..Args::default()
@@ -1233,7 +1229,7 @@ fn test_parse_prune() {
     };
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "foo"]).unwrap(),
+        parse_args(["turbo", "prune", "foo"]).unwrap(),
         Args {
             command: Some(default_prune.clone()),
             ..Args::default()
@@ -1253,7 +1249,7 @@ fn test_parse_prune() {
     .test();
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
+        parse_args(["turbo", "prune", "--scope", "bar"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: Some(vec!["bar".to_string()]),
@@ -1268,7 +1264,7 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "foo", "bar"]).unwrap(),
+        parse_args(["turbo", "prune", "foo", "bar"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: None,
@@ -1283,7 +1279,7 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "--docker", "foo"]).unwrap(),
+        parse_args(["turbo", "prune", "--docker", "foo"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: None,
@@ -1298,7 +1294,7 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "--out-dir", "dist", "foo"]).unwrap(),
+        parse_args(["turbo", "prune", "--out-dir", "dist", "foo"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: None,
@@ -1426,7 +1422,7 @@ fn test_parse_prune() {
     .test();
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "--production", "foo"]).unwrap(),
+        parse_args(["turbo", "prune", "--production", "foo"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: None,
@@ -1441,7 +1437,7 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "prune", "--docker", "--production", "foo"]).unwrap(),
+        parse_args(["turbo", "prune", "--docker", "--production", "foo"]).unwrap(),
         Args {
             command: Some(Command::Prune {
                 scope: None,
@@ -1459,24 +1455,24 @@ fn test_parse_prune() {
 #[test]
 fn test_pass_through_args() {
     assert_eq!(
-        Args::try_parse_from(["turbo", "run", "build", "--", "--script-arg=42"]).unwrap(),
+        parse_args(["turbo", "run", "build", "--", "--script-arg=42"]).unwrap(),
         Args {
             command: Some(Command::Run {
-                run_args: Box::new(RunArgs {
+                run_args: RunArgs {
                     ..get_default_run_args()
-                }),
-                execution_args: Box::new(ExecutionArgs {
+                },
+                execution_args: ExecutionArgs {
                     tasks: vec!["build".to_string()],
                     pass_through_args: vec!["--script-arg=42".to_string()],
                     ..get_default_execution_args()
-                }),
+                },
             }),
             ..Args::default()
         }
     );
 
     assert_eq!(
-        Args::try_parse_from([
+        parse_args([
             "turbo",
             "run",
             "build",
@@ -1489,10 +1485,10 @@ fn test_pass_through_args() {
         .unwrap(),
         Args {
             command: Some(Command::Run {
-                run_args: Box::new(RunArgs {
+                run_args: RunArgs {
                     ..get_default_run_args()
-                }),
-                execution_args: Box::new(ExecutionArgs {
+                },
+                execution_args: ExecutionArgs {
                     tasks: vec!["build".to_string()],
                     pass_through_args: vec![
                         "--script-arg=42".to_string(),
@@ -1501,7 +1497,7 @@ fn test_pass_through_args() {
                         "bat".to_string()
                     ],
                     ..get_default_execution_args()
-                }),
+                },
             }),
             ..Args::default()
         }
@@ -1510,7 +1506,7 @@ fn test_pass_through_args() {
 
 #[test]
 fn test_parse_prune_no_mixed_arg_and_flag() {
-    assert!(Args::try_parse_from(["turbo", "prune", "foo", "--scope", "bar"]).is_err(),);
+    assert!(parse_args(["turbo", "prune", "foo", "--scope", "bar"]).is_err(),);
 }
 
 #[test]
@@ -1525,7 +1521,7 @@ fn test_parse_gen() {
     };
 
     assert_eq!(
-        Args::try_parse_from(["turbo", "gen"]).unwrap(),
+        parse_args(["turbo", "gen"]).unwrap(),
         Args {
             command: Some(default_gen.clone()),
             ..Args::default()
@@ -1533,7 +1529,7 @@ fn test_parse_gen() {
     );
 
     assert_eq!(
-        Args::try_parse_from([
+        parse_args([
             "turbo",
             "gen",
             "--args",
@@ -1558,7 +1554,7 @@ fn test_parse_gen() {
     );
 
     assert_eq!(
-        Args::try_parse_from([
+        parse_args([
             "turbo",
             "gen",
             "--tag",
@@ -1584,7 +1580,7 @@ fn test_parse_gen() {
 
 #[test]
 fn test_gen_default_tag_is_not_latest() {
-    let args = Args::try_parse_from(["turbo", "gen"]).unwrap();
+    let args = parse_args(["turbo", "gen"]).unwrap();
     let tag = match args.command {
         Some(Command::Generate { tag, .. }) => tag,
         _ => panic!("expected Generate command"),
@@ -1594,7 +1590,7 @@ fn test_gen_default_tag_is_not_latest() {
 
 #[test]
 fn test_gen_default_tag_resolves_to_current_version() {
-    let args = Args::try_parse_from(["turbo", "gen"]).unwrap();
+    let args = parse_args(["turbo", "gen"]).unwrap();
     let tag = match args.command {
         Some(Command::Generate { tag, .. }) => tag,
         _ => panic!("expected Generate command"),
@@ -1609,7 +1605,7 @@ fn test_gen_default_tag_resolves_to_current_version() {
 
 #[test]
 fn test_gen_explicit_tag_is_preserved() {
-    let args = Args::try_parse_from(["turbo", "gen", "--tag", "1.2.3"]).unwrap();
+    let args = parse_args(["turbo", "gen", "--tag", "1.2.3"]).unwrap();
     let tag = match args.command {
         Some(Command::Generate { tag, .. }) => tag,
         _ => panic!("expected Generate command"),
@@ -1625,13 +1621,13 @@ fn test_gen_explicit_tag_is_preserved() {
 #[test]
 fn test_profile_usage() {
     // Without a filename, profile should still be accepted
-    assert!(Args::try_parse_from(["turbo", "build", "--profile"]).is_ok());
-    assert!(Args::try_parse_from(["turbo", "build", "--anon-profile"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--profile"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--anon-profile"]).is_ok());
     // With a filename, profile should be accepted
-    assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
-    assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--profile", "foo.json"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
     // Both flags simultaneously should be rejected
-    assert!(Args::try_parse_from([
+    assert!(parse_args([
         "turbo",
         "build",
         "--profile",
@@ -1677,20 +1673,20 @@ fn test_profile_default_filename() {
 
 #[test]
 fn test_empty_cache_dir() {
-    assert!(Args::try_parse_from(["turbo", "build", "--cache-dir"]).is_err());
-    assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
-    assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
+    assert!(parse_args(["turbo", "build", "--cache-dir"]).is_err());
+    assert!(parse_args(["turbo", "build", "--cache-dir="]).is_err());
+    assert!(parse_args(["turbo", "build", "--cache-dir", ""]).is_err());
 }
 
 #[test]
 fn test_preflight() {
-    assert!(!Args::try_parse_from(["turbo", "build",]).unwrap().preflight);
+    assert!(!parse_args(["turbo", "build",]).unwrap().preflight);
     assert!(
-        Args::try_parse_from(["turbo", "build", "--preflight"])
+        parse_args(["turbo", "build", "--preflight"])
             .unwrap()
             .preflight
     );
-    assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
+    assert!(parse_args(["turbo", "build", "--preflight=true"]).is_err());
 }
 
 #[test]
@@ -1703,12 +1699,12 @@ fn test_log_stream_tui_compatibility() {
 #[test]
 fn test_dangerously_allow_no_package_manager() {
     assert!(
-        !Args::try_parse_from(["turbo", "build",])
+        !parse_args(["turbo", "build",])
             .unwrap()
             .dangerously_disable_package_manager_check
     );
     assert!(
-        Args::try_parse_from([
+        parse_args([
             "turbo",
             "build",
             "--dangerously-disable-package-manager-check"
@@ -1720,12 +1716,10 @@ fn test_dangerously_allow_no_package_manager() {
 
 #[test]
 fn test_affected_and_filter_can_be_combined() {
-    assert!(
-        Args::try_parse_from(["turbo", "run", "build", "--affected", "--filter", "foo"]).is_ok(),
-    );
-    assert!(Args::try_parse_from(["turbo", "build", "--affected", "--filter", "foo"]).is_ok(),);
-    assert!(Args::try_parse_from(["turbo", "build", "--filter", "foo", "--affected"]).is_ok(),);
-    assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_ok(),);
+    assert!(parse_args(["turbo", "run", "build", "--affected", "--filter", "foo"]).is_ok(),);
+    assert!(parse_args(["turbo", "build", "--affected", "--filter", "foo"]).is_ok(),);
+    assert!(parse_args(["turbo", "build", "--filter", "foo", "--affected"]).is_ok(),);
+    assert!(parse_args(["turbo", "ls", "--filter", "foo", "--affected"]).is_ok(),);
 }
 
 struct SinglePackageTestCase {
@@ -1794,14 +1788,14 @@ fn test_single_package_removal(test: SinglePackageTestCase) {
 
 #[test]
 fn test_set_single_package() {
-    let inferred_run = Args::parse(
+    let inferred_run = Args::parse_args(
         ["turbo", "--single-package", "build"]
             .iter()
             .map(|s| OsString::from(*s))
             .collect(),
     )
     .unwrap();
-    let explicit_run = Args::parse(
+    let explicit_run = Args::parse_args(
         ["turbo", "run", "--single-package", "build"]
             .iter()
             .map(|s| OsString::from(*s))
@@ -1809,8 +1803,7 @@ fn test_set_single_package() {
     )
     .unwrap();
     assert!(inferred_run
-        .execution_args
-        .as_ref()
+        .execution_args()
         .is_some_and(|e| e.single_package));
     assert!(explicit_run
         .command
@@ -1821,9 +1814,9 @@ fn test_set_single_package() {
             None
         })
         .unwrap_or(false));
-    assert!(explicit_run.execution_args.is_none());
+    assert!(explicit_run.execution_args().is_some());
 
-    let watch = Args::parse(
+    let watch = Args::parse_args(
         ["turbo", "watch", "--single-package", "build"]
             .iter()
             .map(|s| OsString::from(*s))
@@ -1839,14 +1832,14 @@ fn test_set_single_package() {
             None
         })
         .unwrap_or(false));
-    assert!(watch.execution_args.is_none());
+    assert!(watch.execution_args().is_some());
 }
 
 #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
 #[test_case::test_case(&["turbo", "--no-daemon", "watch", "build"]; "before watch")]
 fn test_no_run_args_outside_of_run(args: &[&str]) {
     let os_args = args.iter().map(|s| OsString::from(*s)).collect();
-    let err = Args::parse(os_args).unwrap_err();
+    let err = Args::parse_args(os_args).unwrap_err();
     assert_snapshot!(args.join("-").as_str(), err);
 }
 
@@ -1856,7 +1849,7 @@ fn test_no_run_args_outside_of_run(args: &[&str]) {
 #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
 fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
     let os_args = args.iter().map(|s| OsString::from(*s)).collect();
-    let cli = Args::parse(os_args);
+    let cli = Args::parse_args(os_args);
     if is_okay {
         cli.unwrap();
     } else {
@@ -1869,7 +1862,7 @@ fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
 #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
 fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
     let os_args = args.iter().map(|s| OsString::from(*s)).collect();
-    let cli = Args::parse(os_args);
+    let cli = Args::parse_args(os_args);
     if is_okay {
         cli.unwrap();
     } else {
@@ -1885,7 +1878,7 @@ fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
 #[test_case::test_case(&["turbo", "boundaries", "--filter", "ui"], true; "with filter")]
 fn test_boundaries(args: &[&str], is_okay: bool) {
     let os_args = args.iter().map(|s| OsString::from(*s)).collect();
-    let cli = Args::parse(os_args);
+    let cli = Args::parse_args(os_args);
     if is_okay {
         cli.unwrap();
     } else {
@@ -1896,7 +1889,7 @@ fn test_boundaries(args: &[&str], is_okay: bool) {
 
 #[test]
 fn test_query_affected_no_args() {
-    let args = Args::try_parse_from(["turbo", "query", "affected"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected"]).unwrap();
     assert_eq!(
         args.command,
         Some(Command::Query {
@@ -1916,7 +1909,7 @@ fn test_query_affected_no_args() {
 
 #[test]
 fn test_query_affected_bare_packages_flag() {
-    let args = Args::try_parse_from(["turbo", "query", "affected", "--packages"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--packages"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -1928,7 +1921,7 @@ fn test_query_affected_bare_packages_flag() {
 
 #[test]
 fn test_query_affected_with_packages() {
-    let args = Args::try_parse_from(["turbo", "query", "affected", "--packages", "web"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--packages", "web"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -1940,8 +1933,7 @@ fn test_query_affected_with_packages() {
 
 #[test]
 fn test_query_affected_with_multiple_packages() {
-    let args =
-        Args::try_parse_from(["turbo", "query", "affected", "--packages", "web", "docs"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--packages", "web", "docs"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -1953,7 +1945,7 @@ fn test_query_affected_with_multiple_packages() {
 
 #[test]
 fn test_query_affected_bare_tasks_flag() {
-    let args = Args::try_parse_from(["turbo", "query", "affected", "--tasks"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--tasks"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -1965,7 +1957,7 @@ fn test_query_affected_bare_tasks_flag() {
 
 #[test]
 fn test_query_affected_with_tasks() {
-    let args = Args::try_parse_from(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -1977,7 +1969,7 @@ fn test_query_affected_with_tasks() {
 
 #[test]
 fn test_query_affected_with_base_head() {
-    let args = Args::try_parse_from([
+    let args = parse_args([
         "turbo", "query", "affected", "--base", "main", "--head", "HEAD",
     ])
     .unwrap();
@@ -1992,7 +1984,7 @@ fn test_query_affected_with_base_head() {
 
 #[test]
 fn test_query_affected_combined_packages_and_tasks() {
-    let args = Args::try_parse_from([
+    let args = parse_args([
         "turbo",
         "query",
         "affected",
@@ -2014,8 +2006,7 @@ fn test_query_affected_combined_packages_and_tasks() {
 
 #[test]
 fn test_query_affected_combined_bare_packages_and_bare_tasks() {
-    let args =
-        Args::try_parse_from(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -2027,7 +2018,7 @@ fn test_query_affected_combined_bare_packages_and_bare_tasks() {
 
 #[test]
 fn test_query_affected_exit_code_flag() {
-    let args = Args::try_parse_from(["turbo", "query", "affected", "--exit-code"]).unwrap();
+    let args = parse_args(["turbo", "query", "affected", "--exit-code"]).unwrap();
     assert_matches!(
         args.command,
         Some(Command::Query {
@@ -2039,7 +2030,7 @@ fn test_query_affected_exit_code_flag() {
 
 #[test]
 fn test_query_raw_graphql_still_works() {
-    let args = Args::try_parse_from(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
+    let args = parse_args(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
     assert_eq!(
         args.command,
         Some(Command::Query {
@@ -2053,7 +2044,7 @@ fn test_query_raw_graphql_still_works() {
 
 #[test]
 fn test_query_schema_still_works() {
-    let args = Args::try_parse_from(["turbo", "query", "--schema"]).unwrap();
+    let args = parse_args(["turbo", "query", "--schema"]).unwrap();
     assert_eq!(
         args.command,
         Some(Command::Query {

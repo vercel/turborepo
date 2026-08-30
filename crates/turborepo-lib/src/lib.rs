@@ -1,4 +1,3 @@
-#![feature(box_patterns)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -8,6 +7,9 @@
 #![allow(dead_code)]
 
 mod child;
+#[cfg(feature = "cli-fuzz")]
+pub mod cli;
+#[cfg(not(feature = "cli-fuzz"))]
 mod cli;
 mod commands;
 mod config;

@@ -11,6 +11,8 @@ default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 heap-dhat = ["dep:dhat"]
+# Exposes the argv parser to the out-of-workspace cargo-fuzz target only.
+cli-fuzz = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -22,6 +24,7 @@ insta = { workspace = true }
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = "1.7.0"
 serial_test = "3.0"
 temp-env = { workspace = true }
 tempfile = { workspace = true }
@@ -39,8 +42,6 @@ workspace = true
 [dependencies]
 camino = "1.1.4"
 chrono = { workspace = true, features = ["serde"] }
-clap = { workspace = true, features = ["derive", "env"] }
-clap_complete = { workspace = true }
 console = { workspace = true }
 convert_case = "0.6.0"
 ctrlc = { version = "3.4.0", features = ["termination"] }
@@ -94,6 +95,7 @@ tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true }
+usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
