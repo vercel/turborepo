@@ -579,6 +579,33 @@ fn test_cargo_semantic_environment_changes_task_hash() {
 }
 
 #[test]
+fn test_cargo_location_environment_hashes_effective_semantics() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let first_home = tempdir.path().join("cargo-home-a");
+    let second_home = tempdir.path().join("cargo-home-b");
+    fs::create_dir_all(&first_home).unwrap();
+    fs::create_dir_all(&second_home).unwrap();
+    let first_home = first_home.to_string_lossy();
+    let second_home = second_home.to_string_lossy();
+    assert_eq!(
+        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &first_home)]),
+        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &second_home)]),
+        "empty Cargo homes must not fragment task hashes by absolute path"
+    );
+
+    let relative_target = "equivalent-target";
+    let absolute_target = tempdir.path().join(relative_target);
+    let absolute_target = absolute_target.to_string_lossy();
+    assert_eq!(
+        cargo_build_hash(tempdir.path(), &[("CARGO_TARGET_DIR", relative_target)]),
+        cargo_build_hash(tempdir.path(), &[("CARGO_TARGET_DIR", &absolute_target)]),
+        "equivalent target directories must hash by resolved output paths"
+    );
+}
+
+#[test]
 fn test_rustup_selection_reaches_strict_and_loose_execution() {
     let toolchain = active_rustup_toolchain().expect("test toolchain is managed by rustup");
     let rustup_home = rustup_home().expect("rustup home is available");
@@ -613,9 +640,12 @@ fn test_rustup_selection_reaches_strict_and_loose_execution() {
         let declared = task["resolvedTaskDefinition"]["env"]
             .as_array()
             .expect("declared task environment");
-        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
-            assert!(declared.iter().any(|value| value == variable));
-        }
+        assert!(declared.iter().any(|value| value == "RUSTUP_TOOLCHAIN"));
+        assert!(!declared.iter().any(|value| value == "RUSTUP_HOME"));
+        let pass_through = task["resolvedTaskDefinition"]["passThroughEnv"]
+            .as_array()
+            .expect("projected task environment");
+        assert!(pass_through.iter().any(|value| value == "RUSTUP_HOME"));
 
         let output = run_turbo_with_env(
             tempdir.path(),

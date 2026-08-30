@@ -392,8 +392,10 @@ contract domain. Dependency source participation is likewise declared by each
 scope contract rather than inferred from contributor provenance.
 Dependency tasks do not inherit arguments for a different requested task, each
 contract can observe only the variables it declares, Windows lookup remains
-case-insensitive, and every declared pattern automatically participates in task
-hashing. If a user env exclusion matches a projected contract-derived I/O variable,
+case-insensitive, and contracts separately declare which projected values
+participate verbatim in task hashing. Location-only values can instead be
+represented by resolved I/O paths or toolchain identity. If a user env exclusion
+matches a projected contract-derived I/O variable,
 automatic outputs become unavailable rather than deriving cacheable paths from
 an unhashed value. Derived outputs distinguish exact/resolved paths from
 unavailable automatic resolution. When outputs are unavailable, the engine
