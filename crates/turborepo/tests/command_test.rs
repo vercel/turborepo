@@ -17,6 +17,25 @@ fn version_txt() -> String {
 }
 
 #[test]
+fn test_no_args_prints_help() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let output = run_turbo(tempdir.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success());
+    assert!(
+        stdout.contains("The build system that makes ship happen")
+            && stdout.contains("Usage: turbo")
+            && stdout.contains("Commands:"),
+        "expected top-level help in stdout, got: {stdout}"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "expected no stderr, got: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn test_version_flag_matches_version_txt() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &["--version"]);

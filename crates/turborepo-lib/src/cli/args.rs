@@ -1,7 +1,15 @@
-use std::{env, ffi::OsString, fmt, str::FromStr};
+use std::{
+    env,
+    ffi::OsString,
+    fmt,
+    io::{self, Write},
+    str::FromStr,
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use miette::{Diagnostic, Report, SourceSpan};
 use serde::Serialize;
+use thiserror::Error;
 use tracing::{error, log::warn};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventType},
@@ -23,7 +31,7 @@ const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
 /// or mutating this directly, and instead use the fully canonicalized `Opts`
 /// struct.
 #[derive(Cli, Clone, Default, Debug, PartialEq)]
-#[usage(author = "Vercel", about = "The build system that makes ship happen")]
+#[usage(about = "The build system that makes ship happen")]
 #[usage(disable_help_subcommand = true)]
 #[usage(disable_version_flag = true)]
 #[usage(
@@ -187,11 +195,12 @@ pub enum EnvModeArg {
 }
 impl FromStr for EnvModeArg {
     type Err = String;
-    fn from_str(v: &str) -> Result<Self, String> {
-        match v {
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
             "loose" => Ok(Self::Loose),
             "strict" => Ok(Self::Strict),
-            _ => Err(format!("invalid env mode: {v}")),
+            _ => Err("expected one of: loose, strict".into()),
         }
     }
 }
@@ -545,6 +554,58 @@ pub enum TelemetryCommand {
     Status,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("the argument '{flag}' cannot be used multiple times")]
+struct DuplicateArgument {
+    flag: String,
+    #[source_code]
+    args: String,
+    #[label("first flag declared here")]
+    first: SourceSpan,
+    #[label("but second flag declared here")]
+    second: SourceSpan,
+}
+
+fn duplicate_argument(os_args: &[OsString], error_text: &str) -> Option<DuplicateArgument> {
+    let prefix = "error: the argument '";
+    let suffix = "' cannot be used multiple times";
+    let flag = error_text.strip_prefix(prefix)?.strip_suffix(suffix)?;
+    let mut args = String::new();
+    let mut spans = Vec::new();
+
+    for arg in os_args.iter().skip(1) {
+        if !args.is_empty() {
+            args.push(' ');
+        }
+        let start = args.len();
+        let arg = arg.to_string_lossy();
+        args.push_str(&arg);
+        if arg == flag
+            || arg
+                .strip_prefix(flag)
+                .is_some_and(|rest| rest.starts_with('='))
+        {
+            spans.push((start, arg.len()).into());
+        }
+    }
+
+    Some(DuplicateArgument {
+        flag: flag.into(),
+        args,
+        first: *spans.first()?,
+        second: *spans.get(1)?,
+    })
+}
+
+fn print_help(help: &str) {
+    let result = io::stdout().write_all(unwrap_flag_help(help).as_bytes());
+    if let Err(error) = result {
+        if error.kind() != io::ErrorKind::BrokenPipe {
+            error!("failed to print help: {error}");
+        }
+    }
+}
+
 pub(super) fn unwrap_flag_help(help: &str) -> String {
     let mut output = String::with_capacity(help.len());
     let mut joining_flag = false;
@@ -574,8 +635,9 @@ impl Args {
     #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
         if os_args.len() == 1 {
-            if let Some(help) = Args::render_help(Args::command(), false) {
-                eprint!("{help}");
+            let help_args = [OsString::from("--help")];
+            if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
+                print_help(&exit.text);
             }
             exit_with_heap_profile(1);
         }
@@ -587,19 +649,23 @@ impl Args {
         if help_requested {
             let help_args: Vec<_> = os_args.into_iter().skip(1).collect();
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
-                print!("{}", unwrap_flag_help(&exit.text));
+                print_help(&exit.text);
                 exit_with_heap_profile(exit.code);
             }
             unreachable!("a help flag must produce an exit outcome");
         }
 
-        let clap_args = match Args::parse_args(os_args) {
+        let clap_args = match Args::parse_args(os_args.clone()) {
             Ok(args) => args,
             Err(error_text) => {
-                error!(
-                    "{}",
-                    error_text.strip_prefix("error: ").unwrap_or(&error_text)
-                );
+                if let Some(error) = duplicate_argument(&os_args, &error_text) {
+                    eprintln!("{:?}", Report::new(error));
+                } else {
+                    error!(
+                        "{}",
+                        error_text.strip_prefix("error: ").unwrap_or(&error_text)
+                    );
+                }
                 exit_with_heap_profile(1);
             }
         };
