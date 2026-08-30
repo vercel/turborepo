@@ -428,6 +428,16 @@ impl Subscriber {
             return None;
         };
 
+        let package_paths = hash_scopes(&pkg_dep_graph)
+            .map(|package| package.path)
+            .collect();
+        if let Err(error) = self.hash_watcher.set_package_paths(package_paths).await {
+            tracing::debug!(
+                ?error,
+                "repository graph package paths unavailable to hash watcher"
+            );
+        }
+
         // Use custom turbo.json path if provided, otherwise use standard paths
         let config_path = if let Some(custom_path) = &self.custom_turbo_json_path {
             custom_path.clone()
@@ -1757,7 +1767,7 @@ mod test {
         // These must be kept alive to prevent the HashWatcher from busy-looping
         // on closed channels.
         _pkg_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
-        _hash_events_tx: WatchEventSender,
+        hash_events_tx: WatchEventSender,
     }
 
     /// Create a PackageChangesWatcher backed by a synthetic file event channel.
@@ -1773,9 +1783,8 @@ mod test {
         let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
-        // on a closed watch channel. The hash watcher subscriber won't find any
-        // packages, so get_file_hashes will return Err and is_same_hash
-        // returns false (meaning: hash changed, send event).
+        // on a closed watch channel. Repository graph paths are registered by
+        // PackageChangesWatcher after graph construction.
         let (pkg_discovery_tx, pkg_discovery_rx) = watch::channel(None);
 
         let scm = SCM::new(repo_root);
@@ -1807,7 +1816,7 @@ mod test {
             watcher,
             file_events_tx,
             _pkg_discovery_tx: pkg_discovery_tx,
-            _hash_events_tx: hash_events_tx,
+            hash_events_tx,
         }
     }
 
@@ -1943,6 +1952,13 @@ mod test {
         // Send multiple events to be safe (the subscriber may have
         // lagged the first one)
         let changed_file = repo_root.join_components(&["packages", "a", "index.ts"]);
+        changed_file
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        handle
+            .hash_events_tx
+            .send(Ok(make_notify_event_from(&[&changed_file])))
+            .unwrap();
         for _ in 0..3 {
             let _ = file_tx.send(Ok(make_notify_event_from(&[&changed_file])));
             tokio::time::sleep(Duration::from_millis(150)).await;
@@ -1971,6 +1987,30 @@ mod test {
             has_package_event,
             "expected Package or Rediscover event, got: {:?}",
             events
+        );
+    }
+
+    #[tokio::test]
+    async fn watcher_suppresses_file_event_when_content_hash_is_unchanged() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let handle = create_test_watcher(&repo_root);
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let initial = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(matches!(initial, Some(PackageChangeEvent::Rediscover)));
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let unchanged_file = repo_root.join_components(&["packages", "a", "index.ts"]);
+        unchanged_file
+            .create_with_contents(b"export const a = 1;")
+            .unwrap();
+        let event = make_notify_event_from(&[&unchanged_file]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+
+        assert!(
+            recv_event(&mut rx, Duration::from_secs(1)).await.is_none(),
+            "unchanged content should be deduplicated"
         );
     }
 
@@ -2280,6 +2320,13 @@ mod test {
                 .unwrap();
         }
         let source_path = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source_path
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        handle
+            .hash_events_tx
+            .send(Ok(make_notify_event_from(&[&source_path])))
+            .unwrap();
         handle
             .file_events_tx
             .send(Ok(make_notify_event_from(&[&source_path])))
