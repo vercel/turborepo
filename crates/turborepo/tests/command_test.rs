@@ -20,18 +20,14 @@ fn version_txt() -> String {
 fn test_no_args_prints_help() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &[]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success());
+    // `arg_required_else_help` prints help to stderr (clap parity).
     assert!(
-        stdout.contains("The build system that makes ship happen")
-            && stdout.contains("Usage: turbo")
-            && stdout.contains("Commands:"),
-        "expected top-level help in stdout, got: {stdout}"
-    );
-    assert!(
-        output.stderr.is_empty(),
-        "expected no stderr, got: {}",
-        String::from_utf8_lossy(&output.stderr)
+        stderr.contains("The build system that makes ship happen")
+            && stderr.contains("Usage: turbo")
+            && stderr.contains("Commands:"),
+        "expected top-level help in stderr, got: {stderr}"
     );
 }
 

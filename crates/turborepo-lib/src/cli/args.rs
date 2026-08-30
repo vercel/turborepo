@@ -606,6 +606,15 @@ fn print_help(help: &str) {
     }
 }
 
+fn eprint_help(help: &str) {
+    let result = io::stderr().write_all(unwrap_flag_help(help).as_bytes());
+    if let Err(error) = result {
+        if error.kind() != io::ErrorKind::BrokenPipe {
+            error!("failed to print help: {error}");
+        }
+    }
+}
+
 pub(super) fn unwrap_flag_help(help: &str) -> String {
     let mut output = String::with_capacity(help.len());
     let mut joining_flag = false;
@@ -637,7 +646,8 @@ impl Args {
         if os_args.len() == 1 {
             let help_args = [OsString::from("--help")];
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
-                print_help(&exit.text);
+                // `arg_required_else_help` prints help to stderr (clap parity).
+                eprint_help(&exit.text);
             }
             exit_with_heap_profile(1);
         }
