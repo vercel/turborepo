@@ -555,18 +555,17 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WRAPPER",
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
-    "RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
     "RUSTDOCFLAGS",
     "CARGO_ENCODED_RUSTDOCFLAGS",
-    // Environment equivalents of Cargo's [build] configuration.
-    "CARGO_HOME",
-    "CARGO_TARGET_DIR",
-    "CARGO_BUILD_TARGET_DIR",
-    "CARGO_BUILD_ARTIFACT_DIR",
+    // Environment equivalents of Cargo's [build] configuration. Location-only
+    // settings are projected for derived I/O below, but are not hashed
+    // verbatim. Cargo home configuration is checked separately; supported
+    // target directories participate through derived output paths; unsupported
+    // automatic layouts fail closed to uncached execution.
     "CARGO_BUILD_BUILD_DIR",
     "CARGO_BUILD_TARGET",
     "CARGO_BUILD_RUSTC",
@@ -580,7 +579,9 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     // Cargo normalizes profile names and target triples into these families.
     "CARGO_PROFILE_*",
     "CARGO_PROFILE_*_DIR_NAME",
-    "CARGO_TARGET_*",
+    // Target-table settings have at least a target and key component. Avoid
+    // matching the location-only CARGO_TARGET_DIR variable.
+    "CARGO_TARGET_*_*",
     // Native toolchain variables recognized by cc-rs. `VAR_*` covers both
     // raw and underscore-normalized target suffixes.
     "CC",
@@ -2812,11 +2813,25 @@ dependencies = ["lib-a"]
     }
 
     #[test]
-    fn test_rustup_selection_environment_is_hashed_and_projected() {
-        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
-            assert!(HASHED_ENV_VARS.contains(&variable));
+    fn test_location_only_environment_is_projected_but_not_hashed_verbatim() {
+        for variable in [
+            "CARGO_BUILD_ARTIFACT_DIR",
+            "CARGO_BUILD_TARGET_DIR",
+            "CARGO_HOME",
+            "CARGO_TARGET_DIR",
+            "RUSTUP_HOME",
+        ] {
+            assert!(!HASHED_ENV_VARS.contains(&variable));
             assert!(TASK_IO_ENV_VARS.contains(&variable));
         }
+    }
+
+    #[test]
+    fn test_rustup_selector_and_location_environment_are_classified() {
+        assert!(HASHED_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_HOME"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_HOME"));
         assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_DIST_SERVER"));
         assert!(!TASK_IO_ENV_VARS.contains(&"RUSTUP_UPDATE_ROOT"));
     }
@@ -4273,11 +4288,11 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
-        assert!(io.env.contains(&"RUSTUP_HOME".to_string()));
+        assert!(!io.env.contains(&"RUSTUP_HOME".to_string()));
         assert!(io.env.contains(&"RUSTUP_TOOLCHAIN".to_string()));
         assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
         assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
-        assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
+        assert!(io.env.contains(&"CARGO_TARGET_*_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
 

@@ -889,11 +889,17 @@ fn apply_derived_task_io(
     had_explicit_outputs: bool,
     had_explicit_cache: bool,
 ) {
+    // Projected values must reach strict-mode execution, but they need not be
+    // hashed verbatim. Contracts separately put semantic values in
+    // `derived.env`; location-only settings can instead participate through
+    // resolved input/output paths or toolchain identity.
+    let pass_through_env = task_def.pass_through_env.get_or_insert_default();
     for var in task_io_env_vars {
-        if !task_def.env.iter().any(|existing| existing == var) {
-            task_def.env.push((*var).to_string());
+        if !pass_through_env.iter().any(|existing| existing == var) {
+            pass_through_env.push((*var).to_string());
         }
     }
+    pass_through_env.sort();
     task_def.inputs.globs.extend(derived.input_globs);
     if let Some(default) = derived.package_default_inputs {
         task_def.inputs.default = default;
@@ -1184,7 +1190,7 @@ mod derived_io_tests {
     }
 
     #[test]
-    fn resolved_outputs_and_declared_environment_are_applied() {
+    fn resolved_outputs_and_hash_environment_are_applied() {
         let mut task = TaskDefinition::default();
         apply_derived_task_io(
             &mut task,
@@ -1199,7 +1205,8 @@ mod derived_io_tests {
         );
 
         assert_eq!(task.outputs.inclusions, ["dist/file"]);
-        assert_eq!(task.env, ["DERIVED_ENV", "LAYOUT_*"]);
+        assert_eq!(task.env, ["DERIVED_ENV"]);
+        assert_eq!(task.pass_through_env, Some(vec!["LAYOUT_*".to_string()]));
         assert!(task.cache);
     }
 }

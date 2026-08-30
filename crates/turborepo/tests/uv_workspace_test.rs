@@ -732,6 +732,63 @@ fn test_uv_quality_tasks_are_cacheable_with_toolchain_identity() {
 }
 
 #[test]
+fn test_uv_python_selector_is_projected_without_raw_value_hashing() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+
+    let python = std::process::Command::new("uv")
+        .args(["python", "find", "--resolve-links", "--no-python-downloads"])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv python find runs");
+    assert_command_success(&python, "uv python find");
+    let python = String::from_utf8(python.stdout).unwrap();
+
+    let dry_run = |home: &Path| {
+        fs::create_dir_all(home).unwrap();
+        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+        let output = common::turbo_command(tempdir.path())
+            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+            .env("UV_NO_CONFIG", "1")
+            .env("UV_PYTHON", python.trim())
+            .env("HOME", home)
+            .env("APPDATA", home)
+            .env("XDG_CONFIG_HOME", home)
+            .args(["build", "--filter=py-app", "--dry-run=json"])
+            .output()
+            .expect("failed to execute turbo");
+        assert_command_success(&output, "UV_PYTHON dry-run");
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
+    };
+    let first = dry_run(&tempdir.path().join("home-a"));
+    let second = dry_run(&tempdir.path().join("home-b"));
+    let first_task = find_task(&first, "py-app#build");
+    assert_eq!(
+        first_task["hash"],
+        find_task(&second, "py-app#build")["hash"],
+        "config roots must not fragment hashes when external config is disabled"
+    );
+    let definition = &first_task["resolvedTaskDefinition"];
+    assert!(
+        !definition["env"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "UV_PYTHON")
+    );
+    assert!(
+        definition["passThroughEnv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "UV_PYTHON")
+    );
+}
+
+#[test]
 fn test_uv_virtual_environment_is_hashed_and_excluded_from_inputs() {
     if !uv_available() {
         return;
