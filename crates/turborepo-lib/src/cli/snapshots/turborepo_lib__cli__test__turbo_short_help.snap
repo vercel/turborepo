@@ -1,5 +1,5 @@
 ---
-source: crates/turborepo-lib/src/cli/mod.rs
+source: crates/turborepo-lib/src/cli/test.rs
 expression: "String::from_utf8(buf).unwrap()"
 ---
 The build system that makes ship happen
@@ -130,7 +130,7 @@ Run Arguments:
       --env-mode [<ENV_MODE>]
           Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
   -F, --filter <FILTER>
-          Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
+          Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/run#--filter-string
       --affected
           Filter to only packages that are affected by changes between the current branch and `main`
       --output-logs <OUTPUT_LOGS>
