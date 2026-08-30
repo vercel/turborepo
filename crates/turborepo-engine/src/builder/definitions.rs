@@ -895,6 +895,9 @@ fn apply_derived_task_io(
     // resolved input/output paths or toolchain identity.
     let pass_through_env = task_def.pass_through_env.get_or_insert_default();
     for var in task_io_env_vars {
+        if derived.env.iter().any(|hashed| hashed == var) {
+            continue;
+        }
         if !pass_through_env.iter().any(|existing| existing == var) {
             pass_through_env.push((*var).to_string());
         }
@@ -1199,7 +1202,7 @@ mod derived_io_tests {
                 outputs: DerivedOutputs::Resolved(vec!["dist/file".to_string()]),
                 ..Default::default()
             },
-            &["LAYOUT_*"],
+            &["DERIVED_ENV", "LAYOUT_*"],
             false,
             false,
         );
