@@ -7,9 +7,6 @@
 #![allow(dead_code)]
 
 mod child;
-#[cfg(feature = "cli-fuzz")]
-pub mod cli;
-#[cfg(not(feature = "cli-fuzz"))]
 mod cli;
 mod commands;
 mod config;

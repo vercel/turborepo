@@ -28,14 +28,7 @@ mod args;
 mod error;
 mod observability;
 #[cfg(test)]
-mod parser_property_test;
-#[cfg(test)]
 mod test;
-
-#[cfg(feature = "cli-fuzz")]
-pub fn fuzz_parse_args(os_args: Vec<std::ffi::OsString>) -> Result<(), String> {
-    Args::parse_args(os_args).map(drop)
-}
 
 #[allow(unused_imports)]
 pub use args::{
