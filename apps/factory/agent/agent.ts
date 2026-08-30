@@ -8,6 +8,16 @@ import { selectedOperatorModel } from "./lib/operator-console.js";
 import { sessionDate } from "./lib/repo.js";
 
 export default defineAgent({
+  build: {
+    // Harness adapters load sandbox bootstrap assets relative to import.meta.url.
+    // Preserve their package layout in Eve's hosted output.
+    externalDependencies: [
+      "@ai-sdk/harness-acp",
+      "@ai-sdk/harness-claude-code",
+      "@ai-sdk/harness-codex",
+      "@ai-sdk/harness-opencode"
+    ]
+  },
   model: defineDynamic({
     events: {
       // A dynamic model has no compiled default and a resolver that throws

@@ -281,6 +281,9 @@ importers:
       '@ai-sdk/harness':
         specifier: 1.0.92
         version: 1.0.92(ws@8.21.3)(zod@4.4.3)
+      '@ai-sdk/harness-acp':
+        specifier: 1.0.30
+        version: 1.0.30(zod@4.4.3)
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.96
         version: 1.0.96(zod@4.4.3)
@@ -11884,11 +11887,11 @@ snapshots:
 
   '@aws-sdk/credential-provider-web-identity@3.972.49':
     dependencies:
-      '@aws-sdk/core': 3.977.7
-      '@aws-sdk/nested-clients': 3.997.42
-      '@aws-sdk/types': 3.974.3
-      '@smithy/core': 3.32.0
-      '@smithy/types': 4.17.0
+      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/nested-clients': 3.997.44
+      '@aws-sdk/types': 3.974.5
+      '@smithy/core': 3.33.3
+      '@smithy/types': 4.17.2
       tslib: 2.8.1
     optional: true
 
@@ -15655,8 +15658,8 @@ snapshots:
 
   '@smithy/signature-v4@5.7.0':
     dependencies:
-      '@smithy/core': 3.32.0
-      '@smithy/types': 4.17.0
+      '@smithy/core': 3.33.3
+      '@smithy/types': 4.17.2
       tslib: 2.8.1
 
   '@smithy/types@4.17.0':
@@ -18210,7 +18213,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.15.1
+      qs: 6.15.3
       range-parser: 1.2.1
       router: 2.2.0(supports-color@8.1.1)
       send: 1.2.1(supports-color@8.1.1)
@@ -19671,7 +19674,7 @@ snapshots:
       lodash.isstring: 4.0.1
       lodash.once: 4.1.1
       ms: 2.1.3
-      semver: 7.8.5
+      semver: 7.7.3
 
   jwa@2.0.1:
     dependencies:
@@ -22187,7 +22190,8 @@ snapshots:
 
   semver@7.8.4: {}
 
-  semver@7.8.5: {}
+  semver@7.8.5:
+    optional: true
 
   send@1.2.1(supports-color@8.1.1):
     dependencies:
