@@ -2529,6 +2529,37 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
 }
 
 #[test]
+fn test_ls_and_query_show_implicit_cargo_task_commands() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "app", "--output", "json"]);
+    assert!(output.status.success(), "ls failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    insta::assert_json_snapshot!("cargo_native_tasks_ls", json["packages"][0]["tasks"]);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { package(name: \"app\") { tasks { items { name script command } } } }",
+        ],
+    );
+    assert!(output.status.success(), "query failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    insta::assert_json_snapshot!("cargo_native_tasks_query", json["data"]["package"]["tasks"]);
+}
+
+#[test]
 fn test_affected_includes_cargo_dev_dependency_cycles() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
