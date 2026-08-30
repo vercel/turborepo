@@ -579,26 +579,51 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_symlink() {
-        let (_, tmp_root) = tmp_dir();
-        let git_root = tmp_root.join_component("actual_repo");
-        git_root.create_dir_all().unwrap();
-        setup_repository(&git_root);
-        git_root.join_component("inside").create_dir_all().unwrap();
-        let link = git_root.join_component("link");
-        link.symlink_to_dir("inside").unwrap();
-        let to_hash = vec![RelativeUnixPathBuf::new("link").unwrap()];
-        let mut hashes = GitHashes::new();
-        // FIXME: This test verifies a bug: we don't hash symlinks.
-        // TODO: update this test to point at get_package_file_hashes
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
-        assert!(hashes.is_empty());
+    fn test_hash_symlink_matches_git_and_manual_paths() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        repo_root
+            .join_component("inside")
+            .create_with_contents("referent")
+            .unwrap();
+        let link = repo_root.join_component("link");
+        link.symlink_to_file("inside").unwrap();
+        commit_all(&repo_root);
 
-        let pkg_path = git_root.anchor(&git_root).unwrap();
-        let manual_hashes =
-            get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
-                .unwrap();
-        assert!(manual_hashes.is_empty());
+        let expected = crate::crlf::hash_bytes_as_blob(b"inside").unwrap();
+        let link_path = AnchoredSystemPathBuf::from_raw("link").unwrap();
+        let package_path = AnchoredSystemPathBuf::from_raw("").unwrap();
+        let scm = SCM::new(&repo_root);
+
+        let explicit = scm
+            .get_hashes_for_files(&repo_root, std::slice::from_ref(&link_path), false)
+            .unwrap();
+        let discovered = scm
+            .hash_discovered_files(&repo_root, std::slice::from_ref(&link_path).iter())
+            .unwrap();
+        let git_package = scm
+            .get_package_file_hashes(&repo_root, &package_path, &["l*"], false, None, None)
+            .unwrap();
+        let manual_package = get_package_file_hashes_without_git(
+            &repo_root,
+            &package_path,
+            &["l*"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        for hashes in [&explicit, &discovered, &git_package, &manual_package] {
+            assert_eq!(
+                hashes.get(&RelativeUnixPathBuf::new("link").unwrap()),
+                Some(&expected)
+            );
+        }
     }
 
     #[test]

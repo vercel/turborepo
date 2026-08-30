@@ -258,7 +258,7 @@ mod test {
 
     #[cfg(unix)]
     #[test]
-    fn test_non_regular_symlink_is_skipped() {
+    fn test_symlink_to_non_regular_target_hashes_target_path() {
         use std::os::unix::net::UnixListener;
 
         let tmp = tempfile::tempdir().unwrap();
@@ -279,7 +279,10 @@ mod test {
         )
         .unwrap();
 
-        assert!(hashes.is_empty());
+        assert_eq!(
+            hashes.get(&RelativeUnixPathBuf::new("socket-link").unwrap()),
+            Some(&crate::crlf::hash_bytes_as_blob(socket.as_str().as_bytes()).unwrap()),
+        );
     }
 
     /// Verify that our blob hashing produces OIDs identical to `git

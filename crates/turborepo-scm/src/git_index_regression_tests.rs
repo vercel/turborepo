@@ -363,7 +363,7 @@ fn test_index_and_no_index_agree_on_mixed_state() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_symlink_file_skipped() {
+fn test_untracked_symlink_is_hashed() {
     let repo = TestRepo::new();
 
     repo.create_file("my-pkg/real-file.ts", "real content");
@@ -376,7 +376,64 @@ fn test_symlink_file_skipped() {
     let hashes = repo.get_hashes("my-pkg");
     assert!(hashes.contains_key(&path("real-file.ts")));
     assert!(hashes.contains_key(&path("package.json")));
-    // Symlinks should not cause errors — that's the important invariant
+    assert_eq!(
+        hashes.get(&path("link")),
+        Some(&crate::crlf::hash_bytes_as_blob(b"real-file.ts").unwrap()),
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_symlink_hashes_track_target_text_with_and_without_repo_index() {
+    let repo = TestRepo::new();
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.create_file("my-pkg/first-target", "first contents");
+    repo.create_file("my-pkg/second-target", "second contents");
+    std::os::unix::fs::symlink(
+        "first-target",
+        repo.root
+            .join_unix_path(path("my-pkg/tracked-link"))
+            .as_std_path(),
+    )
+    .unwrap();
+    repo.commit_all();
+
+    let link = path("tracked-link");
+    let first_hash = crate::crlf::hash_bytes_as_blob(b"first-target").unwrap();
+    let with_index = repo.get_hashes("my-pkg");
+    let without_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(with_index, without_index);
+    assert_eq!(with_index.get(&link), Some(&first_hash));
+
+    // The symlink blob is independent of referent contents.
+    repo.create_file("my-pkg/first-target", "changed referent contents");
+    assert_eq!(repo.get_hashes("my-pkg").get(&link), Some(&first_hash));
+
+    // Retargeting changes the blob in both the repo-index and status paths.
+    let tracked_link = repo.root.join_unix_path(path("my-pkg/tracked-link"));
+    std::fs::remove_file(tracked_link.as_std_path()).unwrap();
+    std::os::unix::fs::symlink("second-target", tracked_link.as_std_path()).unwrap();
+    let second_hash = crate::crlf::hash_bytes_as_blob(b"second-target").unwrap();
+    let with_index = repo.get_hashes("my-pkg");
+    let without_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(with_index, without_index);
+    assert_eq!(with_index.get(&link), Some(&second_hash));
+    assert_ne!(first_hash, second_hash);
+
+    // Broken untracked links are discoverable inputs and use the same bytes.
+    std::os::unix::fs::symlink(
+        "missing-target",
+        repo.root
+            .join_unix_path(path("my-pkg/untracked-link"))
+            .as_std_path(),
+    )
+    .unwrap();
+    let untracked = path("untracked-link");
+    let untracked_hash = crate::crlf::hash_bytes_as_blob(b"missing-target").unwrap();
+    let with_index = repo.get_hashes("my-pkg");
+    let without_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(with_index, without_index);
+    assert_eq!(with_index.get(&untracked), Some(&untracked_hash));
 }
 
 #[test]

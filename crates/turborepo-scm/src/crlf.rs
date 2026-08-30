@@ -314,13 +314,37 @@ impl BlobHasher {
     }
 }
 
-/// Hash a byte slice as a git blob. Used to verify symlink entries, whose
-/// blob content is the link target path (no filters ever apply).
+/// Hash a byte slice as a git blob.
 pub(crate) fn hash_bytes_as_blob(bytes: &[u8]) -> Result<OidHash, std::io::Error> {
     let mut hasher = BlobHasher::new();
     hasher.write_blob_header(bytes.len() as u64);
     hasher.update(bytes);
     hasher.finalize()
+}
+
+/// Hash a symlink exactly as Git does for mode 120000: the blob contains the
+/// link target pathname bytes, never the contents of the referent.
+pub(crate) fn hash_symlink_as_git_blob(
+    path: &AbsoluteSystemPath,
+) -> Result<OidHash, std::io::Error> {
+    let target = std::fs::read_link(path.as_std_path())?;
+    #[cfg(unix)]
+    let target_bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        target.as_os_str().as_bytes()
+    };
+    #[cfg(not(unix))]
+    let target_bytes = target
+        .to_str()
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "symlink target is not valid Unicode",
+            )
+        })?
+        .as_bytes();
+
+    hash_bytes_as_blob(target_bytes)
 }
 
 fn validate_file_type(
@@ -436,9 +460,16 @@ pub(crate) fn hash_file_as_git_blob(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
+    // Use symlink_metadata so links are hashed as mode 120000 blobs rather than
+    // followed. This covers file, directory, broken, and external targets
+    // uniformly and ensures referent changes do not affect the hash.
+    let path_metadata = std::fs::symlink_metadata(path)?;
+    if path_metadata.is_symlink() {
+        return hash_symlink_as_git_blob(path).map(Some);
+    }
     // Avoid opening sockets, FIFOs, devices, and directories. Metadata from the
     // opened handle below remains authoritative if the path changes afterward.
-    if !std::fs::metadata(path)?.is_file() {
+    if !path_metadata.is_file() {
         return Ok(None);
     }
 
@@ -469,6 +500,9 @@ pub(crate) fn manual_hash_file_maybe_normalized(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<OidHash, crate::Error> {
+    if std::fs::symlink_metadata(path)?.is_symlink() {
+        return Ok(hash_symlink_as_git_blob(path)?);
+    }
     let mut file = path.open()?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
@@ -853,6 +887,22 @@ mod tests {
     fn test_gitattrs_returns_none_when_missing() {
         let (_tmp, root) = tmp_dir();
         assert!(GitAttrs::load(&root).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_symlink_hash_preserves_raw_target_bytes() {
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+        let (_tmp, root) = tmp_dir();
+        let link = root.join_component("link");
+        let target = b"non-utf8-\xff-target";
+        std::os::unix::fs::symlink(OsStr::from_bytes(target), link.as_std_path()).unwrap();
+
+        assert_eq!(
+            hash_file_as_git_blob(&link, TextAttr::Set).unwrap(),
+            Some(hash_bytes_as_blob(target).unwrap()),
+        );
     }
 
     // -- hash_file_as_git_blob edge-case tests --

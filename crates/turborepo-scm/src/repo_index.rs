@@ -690,6 +690,17 @@ impl RepoGitIndex {
                 to_hash.push(entry.path.clone());
             }
         }
+        if prefix_is_empty {
+            to_hash.extend(self.untracked_symlinks.iter().cloned());
+        } else {
+            let lo = self
+                .untracked_symlinks
+                .partition_point(|path| path.as_str() < range_start.as_str());
+            let hi = self
+                .untracked_symlinks
+                .partition_point(|path| path.as_str() < range_end.as_str());
+            to_hash.extend(self.untracked_symlinks[lo..hi].iter().cloned());
+        }
 
         trace!(
             "filtered repo index for package: pkg_prefix={:?}, ls_tree_matched={}, \
@@ -744,9 +755,8 @@ impl RepoGitIndex {
 
 struct WalkedPaths {
     paths: Vec<RelativeUnixPathBuf>,
-    /// Untracked symlinks. Kept separate from `paths` because per-package
-    /// hashing intentionally ignores symlinks, while dirty-hash provenance
-    /// must still account for them (git treats symlinks as trackable).
+    /// Untracked symlinks. Kept separate from `paths` so callers can preserve
+    /// their path type and hash the target pathname rather than the referent.
     symlink_paths: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
 }
@@ -1545,20 +1555,7 @@ fn verify_candidate(
             if !fs_meta.is_symlink() {
                 return modified(rel_path);
             }
-            let Ok(target) = std::fs::read_link(abs_path.as_std_path()) else {
-                return modified(rel_path);
-            };
-            #[cfg(unix)]
-            let target_bytes = {
-                use std::os::unix::ffi::OsStrExt;
-                target.as_os_str().as_bytes().to_vec()
-            };
-            #[cfg(not(unix))]
-            let target_bytes = match target.to_str() {
-                Some(s) => s.as_bytes().to_vec(),
-                None => return modified(rel_path),
-            };
-            match crate::crlf::hash_bytes_as_blob(&target_bytes) {
+            match crate::crlf::hash_symlink_as_git_blob(abs_path) {
                 Ok(oid) if oid == index_oid => EntryClassification::Clean {
                     path: rel_path,
                     oid,

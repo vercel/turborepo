@@ -279,10 +279,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             }
             Err(error) => return Err(error.into()),
         };
-        // Skip anything that isn't a regular file (directories, symlinks,
-        // sockets, FIFOs, device nodes). This must be here rather than as a
-        // walker filter because the root directory is always yielded.
-        if !metadata.is_file() {
+        // Skip anything other than a regular file or symlink. This must be
+        // here rather than as a walker filter because the root directory is
+        // always yielded. Symlinks are hashed without following their target.
+        if !metadata.is_file() && !metadata.file_type().is_symlink() {
             continue;
         }
 
@@ -335,10 +335,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                 }
                 Err(error) => return Err(error.into()),
             };
-            // Skip anything that isn't a regular file. Must be here rather
-            // than as a walker filter because the root directory is always
-            // yielded.
-            if !metadata.is_file() {
+            // Skip anything other than a regular file or symlink. Must be
+            // here rather than as a walker filter because the root directory
+            // is always yielded.
+            if !metadata.is_file() && !metadata.file_type().is_symlink() {
                 continue;
             }
 
@@ -379,8 +379,6 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches;
-
     use test_case::test_case;
     use turbopath::{
         AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf,
@@ -429,108 +427,60 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_symlink() {
+    fn test_hash_symlink_target_path() {
         let (_tmp, turbo_root) = tmp_dir();
-        let from_to_file = turbo_root.join_component("symlink-from-to-file");
-        let from_to_dir = turbo_root.join_component("symlink-from-to-dir");
-        let broken = turbo_root.join_component("symlink-broken");
+        let file_link = turbo_root.join_component("file-link");
+        let directory_link = turbo_root.join_component("directory-link");
+        let broken_link = turbo_root.join_component("broken-link");
+        let file_target = turbo_root.join_component("file-target");
+        let directory_target = turbo_root.join_component("directory-target");
+        file_target.create_with_contents("contents").unwrap();
+        directory_target.create_dir_all().unwrap();
 
-        let to_file = turbo_root.join_component("the-file-target");
-        to_file.create_with_contents("contents").unwrap();
+        file_link.symlink_to_file("file-target").unwrap();
+        directory_link.symlink_to_dir("directory-target").unwrap();
+        broken_link.symlink_to_file("missing-target").unwrap();
 
-        let to_dir = turbo_root.join_component("the-dir-target");
-        to_dir.create_dir_all().unwrap();
-
-        from_to_file.symlink_to_file(to_file.to_string()).unwrap();
-        from_to_dir.symlink_to_dir(to_dir.to_string()).unwrap();
-        broken.symlink_to_file("does-not-exist").unwrap();
-
-        // Symlink to file.
-        let out = hash_files(
-            &turbo_root,
-            [AnchoredSystemPathBuf::from_raw("symlink-from-to-file").unwrap()].iter(),
-            true,
-            None,
-            None,
-        )
-        .unwrap();
-        let from_to_file_hash = out
-            .get(&RelativeUnixPathBuf::new("symlink-from-to-file").unwrap())
-            .unwrap();
-        assert_eq!(
-            from_to_file_hash,
-            "0839b2e9412b314cb8bb9a20f587aa13752ae310"
-        );
-
-        // Symlink to dir, allow_missing = true.
-        #[cfg(not(windows))]
-        {
-            let out = hash_files(
-                &turbo_root,
-                [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
-                true,
-                None,
-                None,
+        let files = ["file-link", "directory-link", "broken-link"]
+            .map(|path| AnchoredSystemPathBuf::from_raw(path).unwrap());
+        let hashes = hash_files(&turbo_root, files.iter(), false, None, None).unwrap();
+        for (path, target) in [
+            ("file-link", b"file-target".as_slice()),
+            ("directory-link", b"directory-target".as_slice()),
+            ("broken-link", b"missing-target".as_slice()),
+        ] {
+            assert_eq!(
+                hashes.get(&RelativeUnixPathBuf::new(path).unwrap()),
+                Some(&crate::crlf::hash_bytes_as_blob(target).unwrap()),
             );
-            match out.err().unwrap() {
-                Error::HashFile { path, source, .. } => {
-                    assert_eq!(path, from_to_dir);
-                    assert_eq!(source.kind(), ErrorKind::IsADirectory);
-                }
-                _ => panic!("wrong error"),
-            };
         }
 
-        // Symlink to dir, allow_missing = false.
-        let out = hash_files(
-            &turbo_root,
-            [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
-            false,
-            None,
-            None,
-        );
-        #[cfg(windows)]
-        let expected_err_kind = ErrorKind::PermissionDenied;
-        #[cfg(not(windows))]
-        let expected_err_kind = ErrorKind::IsADirectory;
-        assert_matches!(
-            out.unwrap_err(),
-            Error::HashFile { path, source, .. }
-                if path == from_to_dir && source.kind() == expected_err_kind
+        let original = hashes[&RelativeUnixPathBuf::new("file-link").unwrap()];
+        file_target
+            .create_with_contents("changed referent")
+            .unwrap();
+        let unchanged = hash_files(&turbo_root, files[..1].iter(), false, None, None).unwrap();
+        assert_eq!(
+            unchanged[&RelativeUnixPathBuf::new("file-link").unwrap()],
+            original
         );
 
-        // Broken symlink with allow_missing = true.
-        let out = hash_files(
-            &turbo_root,
-            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
-            true,
-            None,
-            None,
-        )
-        .unwrap();
-        let broken_hash = out.get(&RelativeUnixPathBuf::new("symlink-broken").unwrap());
-        assert_eq!(broken_hash, None);
-
-        // Broken symlink with allow_missing = false.
-        let out = hash_files(
-            &turbo_root,
-            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
-            false,
-            None,
-            None,
+        std::fs::remove_file(file_link.as_std_path()).unwrap();
+        file_link.symlink_to_file("other-target").unwrap();
+        let retargeted = hash_files(&turbo_root, files[..1].iter(), false, None, None).unwrap();
+        assert_eq!(
+            retargeted[&RelativeUnixPathBuf::new("file-link").unwrap()],
+            crate::crlf::hash_bytes_as_blob(b"other-target").unwrap(),
         );
-        match out.err().unwrap() {
-            Error::HashFile { path, source, .. } => {
-                assert_eq!(path, broken);
-                assert_eq!(source.kind(), ErrorKind::NotFound);
-            }
-            _ => panic!("wrong error"),
-        };
+        assert_ne!(
+            retargeted[&RelativeUnixPathBuf::new("file-link").unwrap()],
+            original
+        );
     }
 
     #[cfg(unix)]
     #[test]
-    fn test_external_recursive_input_skips_directory_symlink() {
+    fn test_external_recursive_input_hashes_but_does_not_follow_directory_symlink() {
         let (_tmp, turbo_root) = tmp_dir();
         let pkg_path = AnchoredSystemPathBuf::from_raw("packages/app").unwrap();
         let pkg_dir = turbo_root.resolve(&pkg_path);
@@ -563,7 +513,15 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()));
+        assert_eq!(
+            hashes.get(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()),
+            Some(&crate::crlf::hash_bytes_as_blob(store_dir.as_str().as_bytes()).unwrap()),
+        );
+        assert!(
+            !hashes.contains_key(
+                &RelativeUnixPathBuf::new("../../node_modules/dep/index.js").unwrap()
+            )
+        );
         assert!(hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()));
     }
 
