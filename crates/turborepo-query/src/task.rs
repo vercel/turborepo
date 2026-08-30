@@ -46,6 +46,28 @@ impl RepositoryTask {
         }
     }
 
+    pub fn resolved_command(&self) -> Option<String> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        match self
+            .package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.command.as_ref())
+        {
+            Some(TaskCommandOverride::Argv(argv)) => Some(argv.join(" ")),
+            Some(TaskCommandOverride::OptOut) => None,
+            None => self
+                .package
+                .run()
+                .pkg_dep_graph()
+                .package_task_context(self.package.get_name())
+                .and_then(|context| context.native_tasks().get(&self.name))
+                .and_then(|task| task.display())
+                .map(str::to_string),
+        }
+    }
+
     pub fn participates_in_run(&self) -> bool {
         if self.executes() {
             return true;
@@ -102,6 +124,12 @@ impl RepositoryTask {
 
     async fn script(&self) -> Option<String> {
         self.script.as_ref().map(|script| script.value.to_string())
+    }
+
+    /// The command Turbo will execute for this task, including implicit native
+    /// tasks and command overrides.
+    async fn command(&self) -> Option<String> {
+        self.resolved_command()
     }
 
     /// The fully resolved `experimentalCI` configuration for this task from

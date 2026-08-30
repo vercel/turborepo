@@ -2529,6 +2529,57 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
 }
 
 #[test]
+fn test_ls_and_query_show_implicit_cargo_task_commands() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "app", "--output", "json"]);
+    assert!(output.status.success(), "ls failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["packages"][0]["tasks"]["items"]
+        .as_array()
+        .expect("tasks array");
+    let command = |name: &str| {
+        tasks
+            .iter()
+            .find(|task| task["name"] == name)
+            .and_then(|task| task["command"].as_str())
+    };
+    assert_eq!(command("build"), Some("cargo build --package=app --locked"));
+    assert_eq!(command("test"), Some("cargo test --package=app --locked"));
+    assert_eq!(command("run"), Some("cargo run --package=app --locked"));
+    assert_eq!(command("lint"), Some("cargo clippy --package=app --locked"));
+    assert_eq!(command("format"), Some("cargo fmt --package=app"));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { package(name: \"app\") { tasks { items { name script command } } } }",
+        ],
+    );
+    assert!(output.status.success(), "query failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let build = json["data"]["package"]["tasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["name"] == "build")
+        .expect("implicit build task");
+    assert_eq!(build["script"], serde_json::Value::Null);
+    assert_eq!(build["command"], "cargo build --package=app --locked");
+}
+
+#[test]
 fn test_affected_includes_cargo_dev_dependency_cycles() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
