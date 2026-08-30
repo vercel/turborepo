@@ -95,24 +95,6 @@ pub enum Error {
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;
 
-/// Common build and interpreter caches that should not become implicit task
-/// inputs merely because they are untracked and absent from `.gitignore`.
-/// Tracked files still come from the Git index, and explicit task inputs use a
-/// separate filesystem walk, so both SCM state and user intent take precedence.
-const DEFAULT_UNTRACKED_EXCLUDED_DIRS: &[&str] = &["target", ".venv", "__pycache__"];
-
-fn is_default_untracked_excluded_dir(name: &std::ffi::OsStr) -> bool {
-    DEFAULT_UNTRACKED_EXCLUDED_DIRS
-        .iter()
-        .any(|excluded| name == *excluded)
-}
-
-fn is_default_untracked_excluded_path(path: &turbopath::RelativeUnixPath) -> bool {
-    path.as_str()
-        .split('/')
-        .any(|component| DEFAULT_UNTRACKED_EXCLUDED_DIRS.contains(&component))
-}
-
 fn is_os_resource_error(e: &std::io::Error) -> bool {
     matches!(
         e.raw_os_error(),

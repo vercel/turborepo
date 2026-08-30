@@ -818,9 +818,6 @@ fn walk_candidate_files_with_unsupported(
                     return false;
                 }
                 let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
-                if is_dir && crate::is_default_untracked_excluded_dir(entry.file_name()) {
-                    return false;
-                }
                 let path = entry.path();
 
                 let rel_path = match path.strip_prefix(root.as_path()) {
@@ -1075,9 +1072,6 @@ fn find_untracked_files(
                     return false;
                 }
                 let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
-                if is_dir && crate::is_default_untracked_excluded_dir(entry.file_name()) {
-                    return false;
-                }
                 let path = entry.path();
 
                 let rel_path = match path.strip_prefix(root.as_path()) {

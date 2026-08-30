@@ -25,7 +25,7 @@ impl GitRepo {
         let mut git = Command::new(self.bin.as_std_path())
             .args([
                 "status",
-                "--untracked-files=no",
+                "--untracked-files",
                 "--no-renames",
                 "-z",
                 "--",
@@ -46,42 +46,7 @@ impl GitRepo {
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
         let parse_result = read_status(stdout, root_path, pkg_prefix, hashes);
-        let mut to_hash =
-            wait_for_success(git, &mut stderr, "git status", root_path, parse_result)?;
-
-        // Discover untracked inputs separately so Git can prune common
-        // toolchain caches before descending into them. Explicit task input
-        // globs are walked separately and can still opt these paths back in.
-        let output = Command::new(self.bin.as_std_path())
-            .args([
-                "ls-files",
-                "--others",
-                "--exclude-standard",
-                "--full-name",
-                "-z",
-                "--",
-                ".",
-                ":(exclude,glob)**/target/**",
-                ":(exclude,glob)**/.venv/**",
-                ":(exclude,glob)**/__pycache__/**",
-            ])
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .current_dir(root_path)
-            .output()?;
-        if !output.status.success() {
-            return Err(Error::git_error(String::from_utf8_lossy(&output.stderr)));
-        }
-        for filename in output.stdout.split(|byte| *byte == b'\0') {
-            if filename.is_empty() {
-                continue;
-            }
-            let path = require_git_path(filename, "git ls-files path")?;
-            if !crate::is_default_untracked_excluded_path(&path) {
-                to_hash.push(path);
-            }
-        }
-
-        Ok(to_hash)
+        wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
     }
 }
 
