@@ -169,6 +169,8 @@ function WorkspaceChat({
 }) {
   const [draft, setDraft] = useState("");
   const [externalEvents, setExternalEvents] = useState(initialEvents);
+  const reconnectStream = useRef<() => void>(() => {});
+  const streamIndex = useRef(initialEvents.length);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(
     null
   );
@@ -184,26 +186,59 @@ function WorkspaceChat({
   });
 
   useEffect(() => {
-    const controller = new AbortController();
-    const session = new Client({
-      headers: CONSOLE_HEADERS,
-      host: ""
-    }).sessions.attach(workspace.sessionId!, {
-      streamIndex: initialEvents.length
-    });
-    void (async () => {
-      try {
-        for await (const event of session.stream({
-          signal: controller.signal
-        })) {
-          setExternalEvents((current) => appendUniqueEvent(current, event));
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) console.error(cause);
+    let controller: AbortController | undefined;
+    let disposed = false;
+    let reconnectRequested = false;
+    let restarting = false;
+    let streamTask: Promise<void> = Promise.resolve();
+
+    const reconnect = async () => {
+      reconnectRequested = true;
+      controller?.abort();
+      if (restarting) return;
+
+      restarting = true;
+      while (reconnectRequested && !disposed) {
+        await streamTask;
+        if (disposed) break;
+
+        reconnectRequested = false;
+        controller = new AbortController();
+        const session = new Client({
+          headers: CONSOLE_HEADERS,
+          host: ""
+        }).sessions.attach(workspace.sessionId!, {
+          streamIndex: streamIndex.current
+        });
+        streamTask = (async () => {
+          try {
+            for await (const event of session.stream({
+              signal: controller?.signal
+            })) {
+              streamIndex.current = session.state.streamIndex;
+              setExternalEvents((current) => appendUniqueEvent(current, event));
+            }
+          } catch (cause) {
+            if (!controller?.signal.aborted) console.error(cause);
+          }
+        })();
       }
-    })();
-    return () => controller.abort();
-  }, [initialEvents.length, workspace.sessionId]);
+      restarting = false;
+    };
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === "visible") void reconnect();
+    };
+
+    reconnectStream.current = () => void reconnect();
+    void reconnect();
+    document.addEventListener("visibilitychange", reconnectWhenVisible);
+    return () => {
+      disposed = true;
+      controller?.abort();
+      reconnectStream.current = () => {};
+      document.removeEventListener("visibilitychange", reconnectWhenVisible);
+    };
+  }, [workspace.sessionId]);
 
   const events = useMemo(
     () => mergeEvents(externalEvents, agent.events),
@@ -280,6 +315,9 @@ function WorkspaceChat({
     <main
       className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
       id="main-content"
+      onFocus={(event) => {
+        if (!event.relatedTarget) reconnectStream.current();
+      }}
     >
       <header className="shrink-0 border-b border-border/70 px-6 py-4 max-[520px]:px-4">
         <div className="flex items-start justify-between gap-5">
