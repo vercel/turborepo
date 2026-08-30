@@ -169,6 +169,7 @@ function WorkspaceChat({
 }) {
   const [draft, setDraft] = useState("");
   const [externalEvents, setExternalEvents] = useState(initialEvents);
+  const reconnectStream = useRef<() => void>(() => {});
   const streamIndex = useRef(initialEvents.length);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(
     null
@@ -228,14 +229,14 @@ function WorkspaceChat({
       if (document.visibilityState === "visible") void reconnect();
     };
 
+    reconnectStream.current = () => void reconnect();
     void reconnect();
     document.addEventListener("visibilitychange", reconnectWhenVisible);
-    window.addEventListener("focus", reconnectWhenVisible);
     return () => {
       disposed = true;
       controller?.abort();
+      reconnectStream.current = () => {};
       document.removeEventListener("visibilitychange", reconnectWhenVisible);
-      window.removeEventListener("focus", reconnectWhenVisible);
     };
   }, [workspace.sessionId]);
 
@@ -314,6 +315,9 @@ function WorkspaceChat({
     <main
       className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
       id="main-content"
+      onFocus={(event) => {
+        if (!event.relatedTarget) reconnectStream.current();
+      }}
     >
       <header className="shrink-0 border-b border-border/70 px-6 py-4 max-[520px]:px-4">
         <div className="flex items-start justify-between gap-5">
