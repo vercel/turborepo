@@ -253,7 +253,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
     if !has_local_inclusions {
         let git_metadata_path = git_metadata_path.clone();
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+        walker_builder.filter_entry(move |entry| {
+            entry.path() != git_metadata_path.as_std_path()
+                && !(entry.file_type().is_some_and(|kind| kind.is_dir())
+                    && crate::is_default_untracked_excluded_dir(entry.file_name()))
+        });
     }
 
     let walker = walker_builder
@@ -313,7 +317,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     // If we're including default files, we need to walk again, but this time with
     // git_ignore enabled
     if include_default_files {
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+        walker_builder.filter_entry(move |entry| {
+            entry.path() != git_metadata_path.as_std_path()
+                && !(entry.file_type().is_some_and(|kind| kind.is_dir())
+                    && crate::is_default_untracked_excluded_dir(entry.file_name()))
+        });
         let walker = walker_builder
             .follow_links(false)
             .git_ignore(true)
