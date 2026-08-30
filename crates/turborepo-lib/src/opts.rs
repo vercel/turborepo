@@ -1019,14 +1019,16 @@ mod test {
     )]
     fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
         with_clean_turbo_env(|| {
-            let mut args = Args::default();
-            args.command = Some(Command::Run {
-                execution_args: Default::default(),
-                run_args,
-            });
-            // set token and team to simulate a logged in/linked user
-            args.token = Some("token".to_string());
-            args.team = Some("team".to_string());
+            let args = Args {
+                command: Some(Command::Run {
+                    execution_args: Default::default(),
+                    run_args,
+                }),
+                // set token and team to simulate a logged in/linked user
+                token: Some("token".to_string()),
+                team: Some("team".to_string()),
+                ..Default::default()
+            };
 
             let cache_config = CommandBase::new(
                 args,
@@ -1080,18 +1082,19 @@ mod test {
                 }))?,
             )?;
 
-            let mut args = Args::default();
-            args.command = Some(Command::Run {
-                execution_args: Default::default(),
-                run_args: RunArgs {
-                    force: Some(Some(true)),
-                    ..Default::default()
-                },
-            });
-
-            // set token and team to simulate a logged in/linked user
-            args.token = Some("token".to_string());
-            args.team = Some("team".to_string());
+            let args = Args {
+                command: Some(Command::Run {
+                    execution_args: Default::default(),
+                    run_args: RunArgs {
+                        force: Some(Some(true)),
+                        ..Default::default()
+                    },
+                }),
+                // set token and team to simulate a logged in/linked user
+                token: Some("token".to_string()),
+                team: Some("team".to_string()),
+                ..Default::default()
+            };
 
             let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
             let actual = base.opts().cache_opts.cache;

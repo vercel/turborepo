@@ -107,6 +107,10 @@ pub struct Args {
     /// this field because they have no command-local `ExecutionArgs`.
     #[usage(skip)]
     pub(crate) single_package: bool,
+    #[usage(skip)]
+    pub(crate) config_execution_args: Option<ExecutionArgs>,
+    #[usage(skip)]
+    pub(crate) config_run_args: Option<RunArgs>,
     #[usage(subcommand)]
     pub command: Option<Command>,
 }
@@ -139,8 +143,9 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ContinueModeArg {
+    #[default]
     Never,
     DependenciesSuccessful,
     Always,
@@ -163,11 +168,6 @@ impl From<ContinueModeArg> for ContinueMode {
             ContinueModeArg::DependenciesSuccessful => Self::DependenciesSuccessful,
             ContinueModeArg::Always => Self::Always,
         }
-    }
-}
-impl Default for ContinueModeArg {
-    fn default() -> Self {
-        Self::Never
     }
 }
 impl fmt::Display for ContinueModeArg {
@@ -239,8 +239,9 @@ impl From<LogOrderArg> for LogOrder {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LogPrefixArg {
+    #[default]
     Auto,
     None,
     Task,
@@ -263,11 +264,6 @@ impl From<LogPrefixArg> for LogPrefix {
             LogPrefixArg::None => Self::None,
             LogPrefixArg::Task => Self::Task,
         }
-    }
-}
-impl Default for LogPrefixArg {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 
@@ -577,6 +573,13 @@ pub(super) fn unwrap_flag_help(help: &str) -> String {
 impl Args {
     #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
+        if os_args.len() == 1 {
+            if let Some(help) = Args::render_help(Args::command(), false) {
+                eprint!("{help}");
+            }
+            exit_with_heap_profile(1);
+        }
+
         let help_requested = os_args
             .iter()
             .take_while(|arg| *arg != "--")
@@ -679,7 +682,31 @@ impl Args {
 
     pub(crate) fn parse_args(os_args: Vec<OsString>) -> Result<Self, String> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
-        let words: Vec<OsString> = single_package_free.collect();
+        let mut words: Vec<OsString> = single_package_free.collect();
+        let config_flags = [
+            "--cache",
+            "--cache-dir",
+            "--concurrency",
+            "--daemon",
+            "--env-mode",
+            "--force",
+            "--log-order",
+            "--no-daemon",
+            "--remote-cache-read-only",
+            "--remote-only",
+            "--summarize",
+        ];
+        let trailing_config = words.last().is_some_and(|word| word == "config")
+            && words[1..words.len() - 1].iter().any(|word| {
+                word.to_str().is_some_and(|word| {
+                    let flag = word.split_once('=').map_or(word, |(flag, _)| flag);
+                    config_flags.contains(&flag)
+                })
+            });
+        if trailing_config {
+            words.pop();
+            words.insert(1, OsString::from("__turbo_config_options"));
+        }
         Self::reject_duplicate_scalar_flags(&words)?;
         for word in &words {
             if matches!(
@@ -702,6 +729,19 @@ impl Args {
         let refs: Vec<&std::ffi::OsStr> = words.iter().map(OsString::as_os_str).collect();
         let mut args = Args::try_parse_from(&refs)
             .map_err(|error| Args::render_failure(&refs[1..], &error))?;
+        if trailing_config {
+            let Some(Command::Run {
+                mut execution_args,
+                run_args,
+            }) = args.command.take()
+            else {
+                return Err("error: expected config options to parse as run options".to_string());
+            };
+            execution_args.tasks.clear();
+            args.command = Some(Command::Config);
+            args.config_execution_args = Some(execution_args);
+            args.config_run_args = Some(run_args);
+        }
         if let Some(Command::Query {
             subcommand: Some(QuerySubcommand::Affected(affected)),
             ..
@@ -807,10 +847,10 @@ impl Args {
 
     /// Fetch the run args supplied to the command
     pub fn run_args(&self) -> Option<&RunArgs> {
-        if let Some(Command::Run { run_args, .. }) = &self.command {
-            Some(run_args)
-        } else {
-            None
+        match &self.command {
+            Some(Command::Run { run_args, .. }) => Some(run_args),
+            Some(Command::Config) => self.config_run_args.as_ref(),
+            _ => None,
         }
     }
 
@@ -819,6 +859,7 @@ impl Args {
         match &self.command {
             Some(Command::Run { execution_args, .. }) => Some(execution_args),
             Some(Command::Watch { execution_args, .. }) => Some(execution_args),
+            Some(Command::Config) => self.config_execution_args.as_ref(),
             _ => None,
         }
     }

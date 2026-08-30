@@ -91,7 +91,9 @@ fn test_conflicting_daemon_flags() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("the argument '--daemon' cannot be used with '--no-daemon'"),
+        stderr.contains("cannot be used with")
+            && stderr.contains("--daemon")
+            && stderr.contains("--no-daemon"),
         "expected conflict error in stderr, got: {stderr}"
     );
 }

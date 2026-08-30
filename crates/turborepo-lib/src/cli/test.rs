@@ -66,6 +66,39 @@ fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<
 }
 
 #[test]
+fn config_accepts_run_configuration_flags_before_command() {
+    let args = parse_args([
+        "turbo",
+        "--concurrency=5",
+        "--env-mode=loose",
+        "--cache-dir=.turbo",
+        "config",
+    ])
+    .unwrap();
+
+    assert_eq!(args.command, Some(Command::Config));
+    let execution_args = args.execution_args().unwrap();
+    assert_eq!(execution_args.concurrency.as_deref(), Some("5"));
+    assert_eq!(execution_args.env_mode, Some(EnvModeArg::Loose));
+    assert_eq!(
+        execution_args
+            .cache_dir
+            .as_ref()
+            .map(|path| path.0.as_str()),
+        Some(".turbo")
+    );
+
+    let task = parse_args(["turbo", "build", "config"]).unwrap();
+    assert!(matches!(
+        task.command,
+        Some(Command::Run {
+            execution_args: ExecutionArgs { ref tasks, .. },
+            ..
+        }) if tasks == &["build", "config"]
+    ));
+}
+
+#[test]
 fn turbo_short_help() {
     assert_snapshot!(Args::render_help(Args::command(), false).unwrap());
 }
