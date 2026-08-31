@@ -13,9 +13,15 @@ Boundaries enforce package isolation by detecting:
 
 ```bash
 turbo boundaries
+turbo boundaries --filter=web
+turbo boundaries --ignore=all --reason="legacy package"
 ```
 
 Run this to check for workspace violations across your monorepo.
+
+- `--filter` / `-F`: limit checks to matching packages (same syntax as `turbo run --filter`)
+- `--ignore` / `--ignore=prompt` / `--ignore=all`: add `@boundaries-ignore` comments for violations
+- `--reason`: reason text for generated ignore comments (requires `--ignore`)
 
 ## Tags
 

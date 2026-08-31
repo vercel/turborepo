@@ -58,3 +58,13 @@ If you have tasks that write to files checked into source control, there is a po
 files for changes and will re-run tasks in packages that have changed. If a task creates a change, then that will trigger the task again.
 
 Watch Mode has some logic to prevent this from happening using file hashes, but it isn't foolproof. To avoid this issue, we recommend removing any task outputs from git.
+
+### Startup timeout
+
+`turbo watch` waits for the file watcher and initial package hash to become ready before running tasks. The default timeout is **120 seconds**.
+
+If startup times out (for example because a large file is slowing the initial hash), raise the limit with `TURBO_WATCH_STARTUP_TIMEOUT` (seconds), or remove / `.gitignore` the large file:
+
+```bash title="Terminal"
+TURBO_WATCH_STARTUP_TIMEOUT=300 turbo watch build
+```

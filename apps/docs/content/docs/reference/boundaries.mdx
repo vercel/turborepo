@@ -104,3 +104,34 @@ Package names can also be used in place of a tag in allow and deny lists.
 Tags allow you to ensure that the wrong package isn't getting imported somewhere in your graph. These rules are
 applied even for dependencies of dependencies, so if you import a package that in turn imports another package
 with a denied tag, you will still get a rule violation.
+
+## Flags
+
+### `--filter` (`-F`)
+
+Use pnpm-style package selectors to limit which packages Boundaries checks. Same syntax as [`turbo run --filter`](/docs/reference/run#--filter-string).
+
+```bash title="Terminal"
+turbo boundaries --filter=web
+turbo boundaries -F ./apps/*
+```
+
+### `--ignore`
+
+Automatically add `@boundaries-ignore` comments for reported violations.
+
+- `--ignore` or `--ignore=prompt` (default when the flag is present): prompt before adding each comment
+- `--ignore=all`: add comments everywhere possible without prompting
+
+```bash title="Terminal"
+turbo boundaries --ignore
+turbo boundaries --ignore=all
+```
+
+### `--reason <string>`
+
+When using `--ignore`, set the reason recorded in the generated `@boundaries-ignore` comments. Requires `--ignore`.
+
+```bash title="Terminal"
+turbo boundaries --ignore=all --reason="legacy package"
+```

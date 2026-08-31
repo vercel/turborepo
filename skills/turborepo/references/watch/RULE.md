@@ -78,6 +78,14 @@ If tasks write files tracked by git, watch mode may loop infinitely. Watch mode 
 
 **Recommendation**: Remove task outputs from git.
 
+### Startup Timeout
+
+`turbo watch` waits up to **120 seconds** for the file watcher / initial hash to become ready. Override with `TURBO_WATCH_STARTUP_TIMEOUT` (seconds) if a large file slows startup:
+
+```bash
+TURBO_WATCH_STARTUP_TIMEOUT=300 turbo watch build
+```
+
 ## vs turbo run
 
 | Feature           | `turbo run` | `turbo watch` |

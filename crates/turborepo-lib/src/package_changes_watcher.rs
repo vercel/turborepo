@@ -852,7 +852,13 @@ impl Subscriber {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
+    use std::{
+        collections::HashSet,
+        env,
+        path::PathBuf,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use ignore::gitignore::GitignoreBuilder;
     use notify::event::{CreateKind, EventKind};
@@ -872,8 +878,9 @@ mod test {
 
     use super::{
         ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
-        is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
+        is_in_git_folder, startup_timeout_secs, ChangedFiles, FileChangeAction, PackageChangeEvent,
         PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
+        DEFAULT_STARTUP_TIMEOUT_SECS,
     };
     use crate::repository_graph::RepositoryGraphFeatures;
 
@@ -2337,5 +2344,66 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Package { .. })),
             "ignored burst should not cause rediscovery before source change, got {event:?}"
         );
+    }
+
+    static STARTUP_TIMEOUT_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn startup_timeout_defaults_when_unset() {
+        let _lock = STARTUP_TIMEOUT_ENV_LOCK
+            .lock()
+            .expect("startup timeout env lock poisoned");
+        unsafe {
+            env::remove_var("TURBO_WATCH_STARTUP_TIMEOUT");
+        }
+        assert_eq!(startup_timeout_secs(), DEFAULT_STARTUP_TIMEOUT_SECS);
+    }
+
+    #[test]
+    fn startup_timeout_parses_valid_override() {
+        let _lock = STARTUP_TIMEOUT_ENV_LOCK
+            .lock()
+            .expect("startup timeout env lock poisoned");
+        unsafe {
+            env::set_var("TURBO_WATCH_STARTUP_TIMEOUT", "30");
+        }
+        assert_eq!(startup_timeout_secs(), 30);
+        unsafe {
+            env::remove_var("TURBO_WATCH_STARTUP_TIMEOUT");
+        }
+    }
+
+    #[test]
+    fn startup_timeout_allows_zero() {
+        let _lock = STARTUP_TIMEOUT_ENV_LOCK
+            .lock()
+            .expect("startup timeout env lock poisoned");
+        unsafe {
+            env::set_var("TURBO_WATCH_STARTUP_TIMEOUT", "0");
+        }
+        assert_eq!(startup_timeout_secs(), 0);
+        unsafe {
+            env::remove_var("TURBO_WATCH_STARTUP_TIMEOUT");
+        }
+    }
+
+    #[test]
+    fn startup_timeout_falls_back_on_invalid_values() {
+        let _lock = STARTUP_TIMEOUT_ENV_LOCK
+            .lock()
+            .expect("startup timeout env lock poisoned");
+        for invalid in ["", "abc", "-1", "12.5", " 30 "] {
+            unsafe {
+                env::set_var("TURBO_WATCH_STARTUP_TIMEOUT", invalid);
+            }
+            assert_eq!(
+                startup_timeout_secs(),
+                DEFAULT_STARTUP_TIMEOUT_SECS,
+                "expected default for invalid value {invalid:?}"
+            );
+        }
+        unsafe {
+            env::remove_var("TURBO_WATCH_STARTUP_TIMEOUT");
+        }
     }
 }
