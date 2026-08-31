@@ -1,9 +1,9 @@
 ---
-source: crates/turborepo-lib/src/cli/mod.rs
+source: crates/turborepo-lib/src/cli/test.rs
 expression: err
 ---
-error: Cannot use run arguments before `run` subcommand
+error: unexpected argument '--filter' found
 
-Usage: turbo [OPTIONS] [COMMAND]
+Usage: turbo [FLAGS] <SUBCOMMAND>
 
 For more information, try '--help'.

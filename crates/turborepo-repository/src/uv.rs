@@ -1567,8 +1567,6 @@ fn python_tasks_for_package(
 /// invocation resolves, installs, or builds. Credentials and purely
 /// cosmetic settings are deliberately excluded.
 pub const HASHED_ENV_VARS: &[&str] = &[
-    "APPDATA",
-    "HOME",
     "UV_BUILD_CONSTRAINT",
     "UV_COMPILE_BYTECODE",
     "UV_CONFIG_FILE",
@@ -1586,12 +1584,8 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "UV_GIT_LFS",
     "UV_INSECURE_HOST",
     "UV_LINK_MODE",
-    "UV_MANAGED_PYTHON",
     "UV_NO_BUILD_ISOLATION",
     "UV_NO_BUILD_ISOLATION_PACKAGE",
-    "UV_PYTHON",
-    "UV_PYTHON_DOWNLOADS",
-    "UV_PYTHON_PREFERENCE",
     "UV_PROJECT",
     "UV_PROJECT_ENVIRONMENT",
     "UV_NO_BINARY",
@@ -1603,7 +1597,6 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "UV_NO_DEV",
     "UV_NO_EDITABLE",
     "UV_NO_ENV_FILE",
-    "UV_NO_MANAGED_PYTHON",
     "UV_NO_PROJECT",
     "UV_NO_GROUP",
     "UV_NO_SOURCES_PACKAGE",
@@ -1617,12 +1610,28 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "UV_SYSTEM_CERTS",
     "UV_ISOLATED",
     "UV_WORKING_DIR",
-    "XDG_CONFIG_HOME",
     "PIP_INDEX_URL",
     "PIP_EXTRA_INDEX_URL",
     "PYTHONHOME",
     "PYTHONPATH",
     "VIRTUAL_ENV",
+];
+
+/// Variables needed for task-I/O derivation or strict-mode execution whose raw
+/// values are represented semantically elsewhere rather than in the task hash.
+pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &[
+    // Config roots affect uv only when a config exists there; that condition
+    // disables implicit caching in `untracked_uv_configuration_reason`.
+    "APPDATA",
+    "HOME",
+    "XDG_CONFIG_HOME",
+    // Interpreter policy and selectors are represented by the exact resolved
+    // Python executable, version, and host compatibility identity.
+    "UV_MANAGED_PYTHON",
+    "UV_NO_MANAGED_PYTHON",
+    "UV_PYTHON",
+    "UV_PYTHON_DOWNLOADS",
+    "UV_PYTHON_PREFERENCE",
 ];
 
 const UV_PATH_ENV_VARS: &[&str] = &[
@@ -3612,6 +3621,25 @@ version = "0.1.0"
         assert!(!bundled_uv_build_matches("uv_build>=0.13", &version));
         assert!(!bundled_uv_build_matches("uv_build~=0.12", &version));
         assert!(!bundled_uv_build_matches("hatchling>=1", &version));
+    }
+
+    #[test]
+    fn test_location_and_python_selection_environment_is_projected_not_hashed() {
+        for variable in PROJECTED_ONLY_ENV_VARS {
+            assert!(!HASHED_ENV_VARS.contains(variable));
+        }
+        for variable in [
+            "APPDATA",
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "UV_MANAGED_PYTHON",
+            "UV_NO_MANAGED_PYTHON",
+            "UV_PYTHON",
+            "UV_PYTHON_DOWNLOADS",
+            "UV_PYTHON_PREFERENCE",
+        ] {
+            assert!(PROJECTED_ONLY_ENV_VARS.contains(&variable));
+        }
     }
 
     #[test]

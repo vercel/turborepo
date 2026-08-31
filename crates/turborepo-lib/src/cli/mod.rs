@@ -1,8 +1,6 @@
-use std::{env, io, mem, process, sync::Arc};
+use std::{env, mem, process, sync::Arc};
 
 use camino::Utf8Path;
-use clap::CommandFactory;
-use clap_complete::generate;
 pub use error::Error;
 use tracing::{debug, error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -34,9 +32,10 @@ mod test;
 
 #[allow(unused_imports)]
 pub use args::{
-    AffectedArgs, Args, BoundariesIgnore, Command, DaemonCommand, ExecutionArgs, GenerateCommand,
-    GenerateWorkspaceArgs, GeneratorCustomArgs, LsArgs, OutputFormat, QuerySubcommand, RunArgs,
-    TelemetryCommand, Verbosity,
+    AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
+    EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
+    GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
+    QuerySubcommand, RunArgs, TelemetryCommand, Verbosity,
 };
 
 fn exit_with_heap_profile(code: i32) -> ! {
@@ -212,23 +211,22 @@ fn inferred_package_root(
 }
 
 fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
-    let run_args = cli_args.run_args.clone().unwrap_or_default();
+    let run_args = cli_args.run_args().cloned().unwrap_or_default();
     let execution_args = cli_args
-        .execution_args
-        // We clone instead of take as take would leave the command base a copy of cli_args
-        // missing any execution args.
-        .clone()
+        .execution_args()
+        .cloned()
         .ok_or_else(|| Error::NoCommand)?;
 
     if execution_args.tasks.is_empty() {
-        let mut cmd = <Args as CommandFactory>::command();
-        let _ = cmd.print_help();
+        if let Some(help) = Args::render_help(Args::command(), false) {
+            print!("{help}");
+        }
         exit_with_heap_profile(1);
     }
 
     Ok(Command::Run {
-        run_args: Box::new(run_args),
-        execution_args: Box::new(execution_args),
+        run_args,
+        execution_args,
     })
 }
 
@@ -548,7 +546,7 @@ async fn run_main(
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
-            logout::logout(&mut base, invalidate, event_child).await?;
+            logout::logout(&mut base, invalidate.unwrap_or(true), event_child).await?;
 
             Ok(0)
         }
@@ -744,7 +742,7 @@ async fn run_main(
             CommandEventBuilder::new("completion")
                 .with_parent(&root_telemetry)
                 .track_call();
-            generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
+            print!("{}", Args::completion_script((*shell).into()));
             Ok(0)
         }
     };

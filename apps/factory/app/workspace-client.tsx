@@ -24,6 +24,7 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   Loader2Icon,
+  MessageSquareIcon,
   SquareIcon,
   XIcon
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
 import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
 import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
+import { WorkspaceDiff } from "./workspace-diff";
 import {
   latestWorkspaceFailure,
   type PublicWorkspace,
@@ -169,11 +171,14 @@ function WorkspaceChat({
 }) {
   const [draft, setDraft] = useState("");
   const [externalEvents, setExternalEvents] = useState(initialEvents);
+  const reconnectStream = useRef<() => void>(() => {});
+  const streamIndex = useRef(initialEvents.length);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(
     null
   );
   const [stopping, setStopping] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [view, setView] = useState<"chat" | "diff">("chat");
   const agent = useEveAgent({
     headers: CONSOLE_HEADERS,
     initialEvents,
@@ -184,26 +189,59 @@ function WorkspaceChat({
   });
 
   useEffect(() => {
-    const controller = new AbortController();
-    const session = new Client({
-      headers: CONSOLE_HEADERS,
-      host: ""
-    }).sessions.attach(workspace.sessionId!, {
-      streamIndex: initialEvents.length
-    });
-    void (async () => {
-      try {
-        for await (const event of session.stream({
-          signal: controller.signal
-        })) {
-          setExternalEvents((current) => appendUniqueEvent(current, event));
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) console.error(cause);
+    let controller: AbortController | undefined;
+    let disposed = false;
+    let reconnectRequested = false;
+    let restarting = false;
+    let streamTask: Promise<void> = Promise.resolve();
+
+    const reconnect = async () => {
+      reconnectRequested = true;
+      controller?.abort();
+      if (restarting) return;
+
+      restarting = true;
+      while (reconnectRequested && !disposed) {
+        await streamTask;
+        if (disposed) break;
+
+        reconnectRequested = false;
+        controller = new AbortController();
+        const session = new Client({
+          headers: CONSOLE_HEADERS,
+          host: ""
+        }).sessions.attach(workspace.sessionId!, {
+          streamIndex: streamIndex.current
+        });
+        streamTask = (async () => {
+          try {
+            for await (const event of session.stream({
+              signal: controller?.signal
+            })) {
+              streamIndex.current = session.state.streamIndex;
+              setExternalEvents((current) => appendUniqueEvent(current, event));
+            }
+          } catch (cause) {
+            if (!controller?.signal.aborted) console.error(cause);
+          }
+        })();
       }
-    })();
-    return () => controller.abort();
-  }, [initialEvents.length, workspace.sessionId]);
+      restarting = false;
+    };
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === "visible") void reconnect();
+    };
+
+    reconnectStream.current = () => void reconnect();
+    void reconnect();
+    document.addEventListener("visibilitychange", reconnectWhenVisible);
+    return () => {
+      disposed = true;
+      controller?.abort();
+      reconnectStream.current = () => {};
+      document.removeEventListener("visibilitychange", reconnectWhenVisible);
+    };
+  }, [workspace.sessionId]);
 
   const events = useMemo(
     () => mergeEvents(externalEvents, agent.events),
@@ -280,6 +318,9 @@ function WorkspaceChat({
     <main
       className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
       id="main-content"
+      onFocus={(event) => {
+        if (!event.relatedTarget) reconnectStream.current();
+      }}
     >
       <header className="shrink-0 border-b border-border/70 px-6 py-4 max-[520px]:px-4">
         <div className="flex items-start justify-between gap-5">
@@ -340,36 +381,74 @@ function WorkspaceChat({
             </details>
           </div>
         </div>
+        <div
+          aria-label="Workspace view"
+          className="mt-4 flex gap-1"
+          role="tablist"
+        >
+          <button
+            aria-controls="workspace-chat-panel"
+            aria-selected={view === "chat"}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${view === "chat" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            id="workspace-chat-tab"
+            onClick={() => setView("chat")}
+            role="tab"
+            type="button"
+          >
+            <MessageSquareIcon className="size-3.5" />
+            Chat
+          </button>
+          <button
+            aria-controls="workspace-diff-panel"
+            aria-selected={view === "diff"}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${view === "diff" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            id="workspace-diff-tab"
+            onClick={() => setView("diff")}
+            role="tab"
+            type="button"
+          >
+            Diff
+          </button>
+        </div>
       </header>
 
-      <ChatConversation>
-        <StickToBottom.Content className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-7 max-[520px]:px-4">
-          {messages.map((message, index) => (
-            <WorkspaceMessage
-              canRespond={agent.status !== "error"}
-              isStreaming={busy && index === messages.length - 1}
-              key={message.id}
-              message={message}
-              onRespond={answer}
-            />
-          ))}
-          {busy && !hasAssistantProgress ? <ThinkingMessage /> : null}
-        </StickToBottom.Content>
-        <ScrollToBottomButton />
-      </ChatConversation>
+      {view === "chat" ? (
+        <>
+          <ChatConversation>
+            <StickToBottom.Content
+              className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-7 max-[520px]:px-4"
+              role="log"
+            >
+              {messages.map((message, index) => (
+                <WorkspaceMessage
+                  canRespond={agent.status !== "error"}
+                  isStreaming={busy && index === messages.length - 1}
+                  key={message.id}
+                  message={message}
+                  onRespond={answer}
+                />
+              ))}
+              {busy && !hasAssistantProgress ? <ThinkingMessage /> : null}
+            </StickToBottom.Content>
+            <ScrollToBottomButton />
+          </ChatConversation>
 
-      <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
-        {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
-        <ChatComposer
-          busy={busy}
-          disabled={busy}
-          onChange={setDraft}
-          onStop={stop}
-          onSubmit={submit}
-          stopping={stopping}
-          value={draft}
-        />
-      </div>
+          <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
+            {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
+            <ChatComposer
+              busy={busy}
+              disabled={busy}
+              onChange={setDraft}
+              onStop={stop}
+              onSubmit={submit}
+              stopping={stopping}
+              value={draft}
+            />
+          </div>
+        </>
+      ) : (
+        <WorkspaceDiff busy={busy} workspaceId={workspace.id} />
+      )}
     </main>
   );
 }
@@ -407,10 +486,12 @@ function ChatConversation({
 }) {
   return (
     <StickToBottom
+      aria-labelledby="workspace-chat-tab"
       className="relative min-h-0 flex-1 overflow-y-hidden"
+      id="workspace-chat-panel"
       initial="instant"
       resize="instant"
-      role="log"
+      role="tabpanel"
     >
       {children}
     </StickToBottom>

@@ -28,7 +28,7 @@ pub enum Error {
 // GraphQL query: list all packages with name and path
 const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
 
-const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name script } length } \
+const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } length } \
                                      allDependencies { items { name } length } allDependents { \
                                      items { name } length }";
 
@@ -106,6 +106,14 @@ pub async fn run(
     let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
         || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder = RunBuilder::new(base, None)?.skip_repo_index_and_scm_state();
+    // Package details include tasks, so build the complete engine just as the
+    // general-purpose query command does. A repository-only listing does not
+    // need to pay that cost.
+    let run_builder = if packages.is_empty() {
+        run_builder
+    } else {
+        run_builder.add_all_tasks().do_not_validate_engine()
+    };
     let run_builder = if needs_external_dependencies {
         run_builder
     } else {
@@ -282,7 +290,7 @@ fn parse_package_detail(
                 .filter_map(|t| {
                     let name = t.get("name")?.as_str()?.to_string();
                     let command = t
-                        .get("script")
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();

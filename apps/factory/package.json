@@ -8,7 +8,7 @@
     "#factory-image": "./agent/lib/factory-image.ts"
   },
   "scripts": {
-    "build": "eve build && next build",
+    "build": "eve build && node scripts/stage-harness-assets.mjs && next build",
     "dev": "next dev",
     "factory": "node scripts/factory.mjs",
     "start": "next start",
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/harness": "1.0.92",
+    "@ai-sdk/harness-acp": "1.0.30",
     "@ai-sdk/harness-claude-code": "1.0.96",
     "@ai-sdk/harness-codex": "1.0.94",
     "@ai-sdk/harness-cursor": "1.0.5",
@@ -23,6 +24,7 @@
     "@ai-sdk/harness-opencode": "1.0.94",
     "@ai-sdk/harness-pi": "1.0.94",
     "@ai-sdk/sandbox-vercel": "1.0.92",
+    "@pierre/diffs": "^1.3.6",
     "@radix-ui/react-slot": "1.2.4",
     "@streamdown/cjk": "1.0.3",
     "@streamdown/code": "1.1.1",
