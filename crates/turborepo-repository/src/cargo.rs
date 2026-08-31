@@ -1382,11 +1382,26 @@ impl PruneDomain for CargoPruneKnowledge {
 /// root contains a `Cargo.toml`.
 pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
+    resolve_external_dependencies: bool,
 }
 
 impl CargoContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
-        Arc::new(Self { repo_root })
+        Self::new_with_external_dependencies(repo_root, true)
+    }
+
+    pub(crate) fn new_without_external_dependencies(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+        Self::new_with_external_dependencies(repo_root, false)
+    }
+
+    fn new_with_external_dependencies(
+        repo_root: AbsoluteSystemPathBuf,
+        resolve_external_dependencies: bool,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repo_root,
+            resolve_external_dependencies,
+        })
     }
 }
 
@@ -1557,7 +1572,12 @@ impl RepositoryContributor for CargoContributor {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
             let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
-                discover_contributor_workspace(&self.repo_root)
+                if self.resolve_external_dependencies {
+                    discover_contributor_workspace(&self.repo_root)
+                } else {
+                    discover_crates(&self.repo_root)
+                        .map(|workspace| (workspace, ContributorMetadata::Absent))
+                }
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
