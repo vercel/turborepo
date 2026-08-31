@@ -431,6 +431,9 @@ fn test_uv_untracked_configuration_warns_when_caching_is_disabled() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("An issue occurred while configuring caching for py-app#build")
+            && stderr.contains(
+                "Turborepo will still function, but caching has been disabled for this task"
+            )
             && stderr.contains("UV_CONFIG_FILE points to inputs Turborepo cannot hash"),
         "external uv config must explain why caching is disabled: {output:?}"
     );
