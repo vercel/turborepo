@@ -324,7 +324,12 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Enable Cargo repository contribution for this graph generation.
     pub fn with_cargo(self) -> Self {
         let repo_root = self.repo_root.to_owned();
-        self.with_contributor(crate::cargo::CargoContributor::new(repo_root))
+        let contributor = if self.load_lockfile {
+            crate::cargo::CargoContributor::new(repo_root)
+        } else {
+            crate::cargo::CargoContributor::new_without_external_dependencies(repo_root)
+        };
+        self.with_contributor(contributor)
     }
 
     /// Enable uv (Python) repository contribution for this graph generation.
