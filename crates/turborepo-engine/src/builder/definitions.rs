@@ -517,8 +517,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 );
                 if let Some(reason) = cache_reason {
                     tracing::warn!(
-                        "caching disabled for task {}: {reason}; set `cache` explicitly to \
-                         override",
+                        "An issue occurred while configuring caching for {}. Turborepo will still \
+                         function, but caching has been disabled for this task:\n {reason}\nSet \
+                         `cache` explicitly to override.",
                         task_id.as_inner()
                     );
                 }

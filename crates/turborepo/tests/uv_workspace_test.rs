@@ -415,6 +415,28 @@ fn test_uv_member_pytest_tasks_run_per_declaring_package() {
 }
 
 #[test]
+fn test_uv_untracked_configuration_warns_when_caching_is_disabled() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let config = tempdir.path().join("external-uv.toml");
+    fs::write(&config, "").unwrap();
+    let config = config.to_string_lossy();
+
+    let output = common::run_turbo_with_env(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+        &[("UV_CONFIG_FILE", config.as_ref())],
+    );
+    assert_command_success(&output, "uv build dry-run with external configuration");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("An issue occurred while configuring caching for py-app#build")
+            && stderr.contains("UV_CONFIG_FILE points to inputs Turborepo cannot hash"),
+        "external uv config must explain why caching is disabled: {output:?}"
+    );
+}
+
+#[test]
 fn test_uv_explicit_test_command_does_not_require_pytest_declaration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());

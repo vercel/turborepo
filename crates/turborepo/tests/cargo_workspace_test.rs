@@ -1080,10 +1080,12 @@ fn test_external_cargo_home_config_is_uncached_in_strict_mode() {
             String::from_utf8_lossy(&output.stdout).contains("cache bypass"),
             "external Cargo config must disable implicit caching"
         );
+        let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains(
-                "Cargo configuration outside the repository is not included in the task hash"
-            ),
+            stderr.contains("An issue occurred while configuring caching for app#build")
+                && stderr.contains(
+                    "Cargo configuration outside the repository is not included in the task hash"
+                ),
             "external Cargo config must explain why caching is disabled: {output:?}"
         );
     }
