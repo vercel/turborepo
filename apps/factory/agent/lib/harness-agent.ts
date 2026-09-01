@@ -106,9 +106,10 @@ export function createFactoryHarness(
         webSearch: true
       });
     }
-    case "cursor":
+    case "cursor": {
       // Cursor controls provider routing itself. Keep its native default model.
       return createCursor({ auth: "auto", port: FACTORY_HARNESS_PORT });
+    }
     case "opencode": {
       const selected = splitGatewayModel(model);
       return createOpenCode({
@@ -119,17 +120,19 @@ export function createFactoryHarness(
         port: FACTORY_HARNESS_PORT
       });
     }
-    case "pi":
+    case "pi": {
       return createPi({
         auth: "ai-gateway",
         ...(model === undefined ? {} : { model })
       });
-    case "fx":
+    }
+    case "fx": {
       return createFx({
         auth: "ai-gateway",
         ...(model === undefined ? {} : { model }),
         port: FACTORY_HARNESS_PORT
       });
+    }
   }
 }
 
