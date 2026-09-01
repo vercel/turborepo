@@ -89,6 +89,15 @@ export default function generator(plop: any): void {
 }
 `;
 
+const TS_CONFIG_WITH_NO_ACTIONS = `
+export default function generator(plop: any): void {
+  plop.setGenerator("no-actions", {
+    prompts: [],
+    actions: []
+  });
+}
+`;
+
 // CJS config (works for .js without "type":"module" and .cjs)
 const JS_CJS_CONFIG = (name: string) => `
 module.exports = function generator(plop) {
@@ -228,6 +237,31 @@ describeIfBuilt("@turbo/gen CLI", () => {
       expect(out).toContain("run");
       expect(out).toContain("workspace");
     });
+  });
+
+  it("reports when no actions were taken", () => {
+    const projectDir = path.join(tmpDir, "no-actions");
+    fs.mkdirSync(projectDir, { recursive: true });
+    createProject(projectDir, {
+      configFile: "config.ts",
+      configContent: TS_CONFIG_WITH_NO_ACTIONS
+    });
+
+    const output = run(
+      [
+        "raw",
+        "run",
+        "--json",
+        JSON.stringify({
+          root: projectDir,
+          generator_name: "no-actions"
+        })
+      ],
+      projectDir
+    );
+
+    expect(output).toContain("No actions were taken.");
+    expect(output).not.toContain("Actions completed:");
   });
 
   // Regression test for https://github.com/vercel/turborepo/issues/13909

@@ -404,5 +404,7 @@ export async function runCustomGenerator({
         logger.item(`${c.path} (${c.type})`);
       }
     }
+  } else {
+    logger.info("No actions were taken.");
   }
 }
