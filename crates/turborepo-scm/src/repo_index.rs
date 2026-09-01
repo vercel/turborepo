@@ -995,7 +995,7 @@ fn find_untracked_files(
                     .filter(|e| !e.is_delete)
                     .map(|e| e.path.as_str()),
             )
-            .filter(|s| *s == ".gitignore" || s.ends_with("/.gitignore"))
+            .filter(|s| is_gitignore_file(s))
             .collect();
         gitignore_paths.sort_unstable();
         gitignore_paths.dedup();
@@ -1225,7 +1225,7 @@ fn find_untracked_files(
     let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
         .paths
         .iter()
-        .filter(|p| p.as_str().ends_with(".gitignore"))
+        .filter(|p| is_gitignore_file(p.as_str()))
         .collect();
 
     if !untracked_gitignores.is_empty() {
@@ -1244,7 +1244,7 @@ fn find_untracked_files(
         }
         if !extra_matchers.is_empty() {
             let not_ignored = |p: &RelativeUnixPathBuf| {
-                if p.as_str().ends_with(".gitignore") {
+                if is_gitignore_file(p.as_str()) {
                     return true;
                 }
                 let abs = root.join(p.as_str());
@@ -1355,6 +1355,10 @@ impl UntrackedScope {
             rel_path == prefix || is_nested_path_bytes(rel_path, prefix)
         })
     }
+}
+
+fn is_gitignore_file(path: &str) -> bool {
+    path == ".gitignore" || path.ends_with("/.gitignore")
 }
 
 fn is_nested_path(path: &str, prefix: &str) -> bool {
@@ -2089,6 +2093,29 @@ mod tests {
         untracked.sort();
 
         assert_eq!(untracked, vec![path("pkg/debug.log")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_ignores_untracked_suffix_named_gitignore_files() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        write_file(root, "pkg/Node.gitignore", "*.log\n");
+        write_file(root, "pkg/debug.log", "untracked");
+
+        let index = make_index(vec![], vec![]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(
+            untracked,
+            vec![path("pkg/Node.gitignore"), path("pkg/debug.log")]
+        );
     }
 
     #[test]
