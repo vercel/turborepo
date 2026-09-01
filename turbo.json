@@ -38,19 +38,20 @@
       // actually need to build before running tests.
       "dependsOn": ["^build"]
     },
-    // The Rust workspace tests run through nextest with per-test process
-    // isolation. Some tests read root-level config and integration fixtures
-    // outside the Cargo workspace, so declare them explicitly.
-    // Excludes mirror the CI invocations: turborepo-lsp, schema-gen, and
-    // napi need extra build environments.
     "turborepo-crates#test": {
       "dependsOn": [],
       "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/Cargo.toml",
+        "$TURBO_ROOT$/Cargo.lock",
+        "$TURBO_ROOT$/rust-toolchain.toml",
+        "$TURBO_ROOT$/.cargo/**",
         "$TURBO_ROOT$/.config/nextest.toml",
         "$TURBO_ROOT$/.config/insta.yaml",
-        "$TURBO_ROOT$/turborepo-tests/integration/**"
+        "$TURBO_ROOT$/crates/**",
+        "$TURBO_ROOT$/packages/turbo-repository/rust/**",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json",
+        "$TURBO_ROOT$/turborepo-tests/integration/**",
+        "$TURBO_ROOT$/version.txt"
       ],
       "command": [
         "cargo",
