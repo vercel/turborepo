@@ -75,6 +75,20 @@ export default function generator(plop: any): void {
 }
 `;
 
+const TS_CONFIG_WITH_NO_OP_APPEND = `
+export default function generator(plop: any): void {
+  plop.setGenerator("no-op-append", {
+    prompts: [],
+    actions: [{
+      type: "append",
+      path: "target.txt",
+      pattern: /missing anchor/,
+      template: "appended content"
+    }]
+  });
+}
+`;
+
 // CJS config (works for .js without "type":"module" and .cjs)
 const JS_CJS_CONFIG = (name: string) => `
 module.exports = function generator(plop) {
@@ -214,6 +228,36 @@ describeIfBuilt("@turbo/gen CLI", () => {
       expect(out).toContain("run");
       expect(out).toContain("workspace");
     });
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/13909
+  it("does not report a no-op append as a change", () => {
+    const projectDir = path.join(tmpDir, "no-op-append");
+    fs.mkdirSync(projectDir, { recursive: true });
+    createProject(projectDir, {
+      configFile: "config.ts",
+      configContent: TS_CONFIG_WITH_NO_OP_APPEND
+    });
+    fs.writeFileSync(path.join(projectDir, "target.txt"), "unchanged\n");
+
+    const output = run(
+      [
+        "raw",
+        "run",
+        "--json",
+        JSON.stringify({
+          root: projectDir,
+          generator_name: "no-op-append"
+        })
+      ],
+      projectDir
+    );
+
+    expect(output).toContain("Actions completed:");
+    expect(output).not.toContain("Changes made:");
+    expect(fs.readFileSync(path.join(projectDir, "target.txt"), "utf8")).toBe(
+      "unchanged\n"
+    );
   });
 
   // Regression test for https://github.com/vercel/turborepo/issues/13735
