@@ -245,8 +245,8 @@ impl RunTracker {
         let end_time = Local::now();
 
         // For the common case (no --dry, no --summarize, no observability),
-        // skip the expensive TaskSummary construction, SCMState::get (2 git
-        // subprocesses), and full RunSummary assembly. We only need execution
+        // skip the expensive TaskSummary construction, SCMState::get (a git
+        // subprocess), and full RunSummary assembly. We only need execution
         // stats and failed task identification for terminal output.
         if run_opts.dry_run().is_none()
             && run_opts.summarize().is_none()
