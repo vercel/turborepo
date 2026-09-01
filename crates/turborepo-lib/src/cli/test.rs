@@ -145,6 +145,12 @@ fn logout_short_help() {
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
+#[test]
+fn devtools_short_help() {
+    let cmd = get_subcommand("devtools");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
 struct CommandTestCase {
     command: &'static str,
     command_args: Vec<Vec<&'static str>>,

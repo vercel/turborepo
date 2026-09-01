@@ -1008,7 +1008,7 @@ pub enum Command {
     /// Visualize your monorepo's package graph in the browser
     Devtools {
         /// Port for the WebSocket server
-        #[usage(long, default_value_t = turborepo_devtools::DEFAULT_PORT, default = "9789")]
+        #[usage(long, default_value_t = turborepo_devtools::DEFAULT_PORT, default = "9876")]
         port: u16,
         /// Don't automatically open the browser
         #[usage(long)]
