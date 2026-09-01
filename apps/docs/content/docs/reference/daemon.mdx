@@ -1,0 +1,93 @@
+---
+title: daemon
+description: API reference for the `turbo daemon` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo daemon` command that manages the Turborepo background daemon.
+related:
+  - /docs/reference/watch
+  - /docs/reference/run
+  - /docs/reference/configuration
+---
+
+Manage the Turborepo background daemon (`turbod`).
+
+```bash title="Terminal"
+turbo daemon [subcommand] [flags]
+```
+
+The daemon is no longer used for [`turbo run`](/docs/reference/run#--daemon-and---no-daemon). It is still used by [`turbo watch`](/docs/reference/watch) and the Turborepo LSP.
+
+When invoked without a subcommand, `turbo daemon` starts the daemon server.
+
+## Subcommands
+
+### `start`
+
+Ensure the daemon is running.
+
+```bash title="Terminal"
+turbo daemon start
+```
+
+### `stop`
+
+Stop the daemon.
+
+```bash title="Terminal"
+turbo daemon stop
+```
+
+### `restart`
+
+Restart the daemon.
+
+```bash title="Terminal"
+turbo daemon restart
+```
+
+### `status`
+
+Report whether the daemon is running.
+
+```bash title="Terminal"
+turbo daemon status
+turbo daemon status --json
+```
+
+Pass `--json` to print machine-readable status.
+
+### `clean`
+
+Stop the daemon if it is running and remove stale daemon state.
+
+```bash title="Terminal"
+turbo daemon clean
+turbo daemon clean --clean-logs=false
+```
+
+### `logs`
+
+Show daemon logs.
+
+```bash title="Terminal"
+turbo daemon logs
+```
+
+## Flags
+
+### `--idle-time <duration>`
+
+Set how long the daemon waits before shutting down when idle. Defaults to `4h0m0s`.
+
+```bash title="Terminal"
+turbo daemon --idle-time=30m0s start
+```
+
+### `--turbo-json-path <path>`
+
+Path to a custom `turbo.json` file for the daemon to watch.
+
+```bash title="Terminal"
+turbo daemon --turbo-json-path=./config/turbo.json start
+```

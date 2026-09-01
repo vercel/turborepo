@@ -355,10 +355,25 @@ turbo query ls --affected                              # affected packages only
 turbo query affected                                   # affected tasks (replaces turbo-ignore)
 ```
 
+## turbo daemon
+
+Manage the Turborepo background daemon. No longer used for `turbo run`; still used by `turbo watch` and the Turborepo LSP.
+
+```bash
+turbo daemon start
+turbo daemon status
+turbo daemon status --json
+turbo daemon stop
+turbo daemon restart
+turbo daemon clean
+turbo daemon logs
+```
+
+See `references/daemon/` for details.
+
 ## More
 
 - `turbo devtools` - visualize the package graph in the browser
 - `turbo info` - print debugging information
 - `turbo bin` - print the path to the turbo binary
-- `turbo daemon` - run/manage the background daemon
 - `turbo telemetry` - enable or disable anonymous telemetry
