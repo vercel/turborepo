@@ -357,9 +357,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .map(|(definition, _)| definition),
         );
         let had_explicit_cache = processed_task_definition.cache.is_some();
-        if should_apply_toolchain_defaults(command_override.as_ref())
-            && let Some(context) = package_context.as_ref()
-        {
+        if let Some(context) = package_context.as_ref() {
             let defaults = native_contract
                 .as_ref()
                 .map(|contract| contract.defaults().clone())
@@ -439,19 +437,18 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // `$TURBO_DEFAULT$` on a derived task means "everything the toolchain
         // derives automatically", so explicit `inputs` can append without
         // forfeiting automatic invalidation; explicit inputs without
-        // `$TURBO_DEFAULT$` take full control.
-        if inherits_toolchain_task_io(task_def.command.as_ref())
-            && let Some(package_context) = package_context.as_ref().filter(|context| {
-                native_contract.as_ref().map_or_else(
-                    || {
-                        context
-                            .task_contract()
-                            .derives_task_io(task_id.as_inner().task())
-                    },
-                    NativeTaskContract::derives_io,
-                )
-            })
-        {
+        // `$TURBO_DEFAULT$` take full control. Command overrides replace only
+        // task execution and keep the native task's complete contract.
+        if let Some(package_context) = package_context.as_ref().filter(|context| {
+            native_contract.as_ref().map_or_else(
+                || {
+                    context
+                        .task_contract()
+                        .derives_task_io(task_id.as_inner().task())
+                },
+                NativeTaskContract::derives_io,
+            )
+        }) {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
             // Only assembled when the toolchain will actually use it:
             // `dependencies` walks the package's full transitive closure,
@@ -974,24 +971,13 @@ fn resolve_command_override(
     }
 }
 
-fn should_apply_toolchain_defaults(command: Option<&TaskCommandOverride>) -> bool {
-    command.is_none()
-}
-
-/// Native hash wiring describes a toolchain-synthesized command. An argv
-/// override executes arbitrary user-selected work, so only turbo.json can
-/// soundly describe its inputs, outputs, and environment.
-fn inherits_toolchain_task_io(command: Option<&TaskCommandOverride>) -> bool {
-    !matches!(command, Some(TaskCommandOverride::Argv(_)))
-}
-
 #[cfg(test)]
 mod command_override_tests {
     use turborepo_errors::Spanned;
     use turborepo_repository::task_contracts::{CommandMapTarget, ScopeTaskContract};
     use turborepo_types::TaskCommandOverride;
 
-    use super::{ProcessedCommand, inherits_toolchain_task_io, resolve_command_override};
+    use super::{ProcessedCommand, resolve_command_override};
 
     fn argv(items: &[&str]) -> ProcessedCommand {
         ProcessedCommand::Argv(Spanned::new(items.iter().map(|s| s.to_string()).collect()))
@@ -1072,36 +1058,6 @@ mod command_override_tests {
 
         // Level 5: nothing configured → the toolchain resolves as usual.
         assert_eq!(resolve_command_override(None, None, Some(rust)), None,);
-    }
-
-    #[test]
-    fn only_native_commands_inherit_toolchain_defaults() {
-        assert!(super::should_apply_toolchain_defaults(None));
-        assert!(!super::should_apply_toolchain_defaults(Some(
-            &TaskCommandOverride::Argv(vec!["node".to_string()])
-        )));
-        assert!(!super::should_apply_toolchain_defaults(Some(
-            &TaskCommandOverride::OptOut
-        )));
-    }
-
-    #[test]
-    fn synthesized_commands_inherit_toolchain_task_io() {
-        assert!(inherits_toolchain_task_io(None));
-    }
-
-    #[test]
-    fn command_opt_out_preserves_toolchain_task_io() {
-        assert!(inherits_toolchain_task_io(Some(
-            &TaskCommandOverride::OptOut
-        )));
-    }
-
-    #[test]
-    fn argv_override_does_not_inherit_toolchain_task_io() {
-        assert!(!inherits_toolchain_task_io(Some(
-            &TaskCommandOverride::Argv(vec!["node".to_string(), "build.js".to_string(),])
-        )));
     }
 }
 
