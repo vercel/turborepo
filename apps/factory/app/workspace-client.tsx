@@ -201,12 +201,13 @@ function WorkspaceChat({
       if (restarting) return;
 
       restarting = true;
-      while (reconnectRequested && !disposed) {
+      while (reconnectRequested) {
         await streamTask;
         if (disposed) break;
 
         reconnectRequested = false;
-        controller = new AbortController();
+        const streamController = new AbortController();
+        controller = streamController;
         const session = new Client({
           headers: CONSOLE_HEADERS,
           host: ""
@@ -216,13 +217,13 @@ function WorkspaceChat({
         streamTask = (async () => {
           try {
             for await (const event of session.stream({
-              signal: controller?.signal
+              signal: streamController.signal
             })) {
               streamIndex.current = session.state.streamIndex;
               setExternalEvents((current) => appendUniqueEvent(current, event));
             }
           } catch (cause) {
-            if (!controller?.signal.aborted) console.error(cause);
+            if (!streamController.signal.aborted) console.error(cause);
           }
         })();
       }
