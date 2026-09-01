@@ -1372,7 +1372,7 @@ fn test_unavailable_outputs_preserve_explicit_intent() {
 }
 
 #[test]
-fn test_cargo_command_override_uses_only_configured_io() {
+fn test_cargo_command_override_preserves_native_task_contract() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
@@ -1390,7 +1390,7 @@ fn test_cargo_command_override_uses_only_configured_io() {
         "-e",
         "require('fs').writeFileSync('custom-output.txt', process.env.OVERRIDE_ENV)"
       ],
-      "inputs": ["Cargo.toml"],
+      "inputs": ["$TURBO_DEFAULT$", "custom-input.txt"],
       "outputs": ["custom-output.txt"],
       "env": ["OVERRIDE_ENV"]
     }
@@ -1398,6 +1398,7 @@ fn test_cargo_command_override_uses_only_configured_io() {
 }"#,
     )
     .unwrap();
+    fs::write(tempdir.path().join("crates/app/custom-input.txt"), "input").unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -1411,15 +1412,40 @@ fn test_cargo_command_override_uses_only_configured_io() {
         .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
         .expect("app#build in graph");
     let definition = &build["resolvedTaskDefinition"];
-    assert_eq!(definition["inputs"], serde_json::json!(["Cargo.toml"]));
-    assert_eq!(
-        definition["outputs"],
-        serde_json::json!(["custom-output.txt"])
+    let inputs = definition["inputs"].as_array().expect("resolved inputs");
+    assert!(
+        inputs.iter().any(|input| input == "../../Cargo.toml"),
+        "override should preserve the native Cargo workspace inputs: {inputs:?}"
     );
-    assert_eq!(definition["env"], serde_json::json!(["OVERRIDE_ENV"]));
+    assert!(
+        inputs.iter().any(|input| input == "../../crates/lib-a/**"),
+        "override should preserve native dependency inputs: {inputs:?}"
+    );
+    assert!(
+        inputs.iter().any(|input| input == "custom-input.txt"),
+        "override should append explicitly configured inputs: {inputs:?}"
+    );
+    let outputs = definition["outputs"].as_array().expect("resolved outputs");
+    assert!(
+        outputs.iter().any(|output| output == "custom-output.txt"),
+        "override should preserve explicitly configured outputs: {outputs:?}"
+    );
+    let output_name = if cfg!(windows) { "app.exe" } else { "app" };
+    let cargo_output = format!("../../target/debug/{output_name}");
+    assert!(
+        outputs.iter().any(|output| output == &cargo_output),
+        "override should preserve native Cargo outputs: {outputs:?}"
+    );
+    let env = definition["env"].as_array().expect("resolved environment");
+    assert!(env.iter().any(|value| value == "OVERRIDE_ENV"));
+    assert!(
+        env.iter().any(|value| value == "RUSTFLAGS"),
+        "override should preserve native Cargo hash environment: {env:?}"
+    );
+    assert_eq!(definition["cache"], true);
 
-    // A stale Cargo deliverable present on the override's cache miss must not
-    // become one of that arbitrary command's cached outputs.
+    // A stale Cargo deliverable present on the override's cache miss becomes
+    // part of the task's native output contract.
     let bin = tempdir
         .path()
         .join("target")
@@ -1450,7 +1476,7 @@ fn test_cargo_command_override_uses_only_configured_io() {
         "expected cache hit: {stdout}"
     );
     assert!(custom_output.exists(), "configured output must be restored");
-    assert!(!bin.exists(), "Cargo deliverable must not be restored");
+    assert!(bin.exists(), "native Cargo output must be restored");
 }
 
 #[test]
@@ -1531,7 +1557,7 @@ fn test_explicit_cache_overrides_cargo_run_default() {
 }
 
 #[test]
-fn test_command_override_uses_generic_cache_default_across_toolchains() {
+fn test_command_override_preserves_native_cache_defaults() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
@@ -1568,16 +1594,22 @@ fn test_command_override_uses_generic_cache_default_across_toolchains() {
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
     let tasks = json["tasks"].as_array().expect("tasks array");
-    for task_id in ["app#run", "js-pkg#run"] {
-        let task = tasks
-            .iter()
-            .find(|task| task["taskId"] == task_id)
-            .unwrap_or_else(|| panic!("{task_id} in graph"));
-        assert_eq!(
-            task["resolvedTaskDefinition"]["cache"], true,
-            "{task_id} should use the generic cache default"
-        );
-    }
+    let cargo_run = tasks
+        .iter()
+        .find(|task| task["taskId"] == "app#run")
+        .expect("app#run in graph");
+    assert_eq!(
+        cargo_run["resolvedTaskDefinition"]["cache"], false,
+        "the command override should preserve Cargo's uncached run default"
+    );
+    let js_run = tasks
+        .iter()
+        .find(|task| task["taskId"] == "js-pkg#run")
+        .expect("js-pkg#run in graph");
+    assert_eq!(
+        js_run["resolvedTaskDefinition"]["cache"], true,
+        "the command override should preserve JavaScript's cache default"
+    );
 
     let output = run_turbo(
         tempdir.path(),
