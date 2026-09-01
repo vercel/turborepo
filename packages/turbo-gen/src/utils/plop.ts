@@ -398,11 +398,13 @@ export async function runCustomGenerator({
   }
 
   if (results.changes.length > 0) {
-    logger.info("Changes made:");
+    logger.info("Actions completed:");
     for (const c of results.changes) {
       if (c.path) {
         logger.item(`${c.path} (${c.type})`);
       }
     }
+  } else {
+    logger.info("No actions were taken.");
   }
 }
