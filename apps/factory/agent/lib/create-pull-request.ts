@@ -16,6 +16,7 @@ import {
 } from "./performance-validation";
 import {
   buildDraftPullRequest,
+  formatPullRequestSlackNotification,
   resolvePullRequestTitle,
   updateBranchRefWithLease
 } from "./pull-request";
@@ -53,6 +54,7 @@ type PullRequestResponse = {
   head?: { ref?: string; sha?: string };
   html_url?: string;
   number?: number;
+  title?: string;
 };
 type ValidatedPullRequest = {
   number: number;
@@ -138,7 +140,7 @@ async function reconcileCreatedPullRequest(
 
 async function github<T>(input: {
   body?: unknown;
-  method: "GET" | "POST";
+  method: "GET" | "PATCH" | "POST";
   owner: string;
   path: string;
   repo: string;
@@ -185,6 +187,22 @@ async function publishBranchUpdateWithLease(input: {
     ...input,
     repositoryId: repository.node_id,
     token: await getGitHubToken()
+  });
+}
+
+async function updateFactoryPullRequestTitle(
+  factoryChange: boolean,
+  currentTitle: string | undefined,
+  changeTitle: string,
+  pullRequestNumber: number
+): Promise<void> {
+  if (!factoryChange || currentTitle === changeTitle) return;
+  await github({
+    method: "PATCH",
+    owner,
+    repo,
+    path: `/pulls/${pullRequestNumber}`,
+    body: { title: changeTitle }
   });
 }
 
@@ -252,8 +270,12 @@ export async function createPullRequest(
       "Factory pull request feedback can update only its authenticated branch."
     );
   }
+  const factoryChange = changedPaths.some((path) =>
+    path.startsWith("apps/factory/")
+  );
   const changeTitle = resolvePullRequestTitle({
     automatedExample: selection?.example,
+    factory: factoryChange,
     performance: performanceState !== null,
     requestedTitle: input.title
   });
@@ -382,6 +404,12 @@ export async function createPullRequest(
       pullRequestUrl: validatedPullRequest.url
     });
     if (update === "unchanged") {
+      await updateFactoryPullRequestTitle(
+        factoryChange,
+        existingPullRequest.title,
+        changeTitle,
+        validatedPullRequest.number
+      );
       return {
         created: false,
         existing: true,
@@ -413,6 +441,12 @@ export async function createPullRequest(
       expectedSha: headSha,
       newSha: updatedCommitSha
     });
+    await updateFactoryPullRequestTitle(
+      factoryChange,
+      existingPullRequest.title,
+      changeTitle,
+      validatedPullRequest.number
+    );
 
     return {
       created: false,
@@ -493,14 +527,26 @@ export async function createPullRequest(
     newCommitSha
   );
 
-  const { deliverSlackMessage } = await import("./slack");
+  const { deliverSlackMessage, recordPullRequestSlackNotification } =
+    await import("./slack");
   const slackNotification = await deliverSlackMessage(
-    `A new Turborepo pull request was created: #${validatedPullRequest.number} ${validatedPullRequest.url}`,
+    formatPullRequestSlackNotification(changeTitle, validatedPullRequest.url),
     {
       event: "pull_request_notification",
       metadata: { pullRequestNumber: validatedPullRequest.number }
     }
   );
+  try {
+    await recordPullRequestSlackNotification(
+      validatedPullRequest.number,
+      slackNotification
+    );
+  } catch (error) {
+    console.warn("Could not record the Factory pull request Slack message.", {
+      error,
+      pullRequestNumber: validatedPullRequest.number
+    });
+  }
 
   return {
     created: true,

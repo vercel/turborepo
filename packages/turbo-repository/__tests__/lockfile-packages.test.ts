@@ -7,6 +7,14 @@ import { Workspace } from "../js/dist/index.js";
 
 const PNPM_MONOREPO_PATH = path.resolve(__dirname, "./fixtures/monorepo");
 const NPM_MONOREPO_PATH = path.resolve(__dirname, "./fixtures/npm-monorepo");
+const NPM_SINGLE_PACKAGE_PATH = path.resolve(
+  __dirname,
+  "./fixtures/npm-single-package"
+);
+const LOCKFILE_FIXTURES_PATH = path.resolve(
+  __dirname,
+  "../../../lockfile-tests/fixtures"
+);
 
 // The set of typed error categories `lockfilePackages` may report. Keep in
 // sync with the `LockfileErrorKind` enum in the native module.
@@ -14,7 +22,9 @@ const LOCKFILE_ERROR_KINDS = [
   "NoLockfile",
   "LockfileUnreadable",
   "ResolutionFailed",
-  "UnparseableEntry"
+  "UnparseableEntry",
+  "UnsupportedNpmLockfileVersion",
+  "UnsupportedBunLockfile"
 ];
 
 describe("packagesFromLockfile", () => {
@@ -79,6 +89,54 @@ describe("lockfilePackages", () => {
       `Expected microdiff, got: ${JSON.stringify(packages)}`
     );
     assert.equal(microdiff.version, "1.4.0");
+    assert.equal(microdiff.source, "registry");
+  });
+
+  it("returns lockfile and package-manager metadata", async () => {
+    const workspace = await Workspace.find(PNPM_MONOREPO_PATH);
+    const result = await workspace.lockfilePackages();
+
+    assert.equal(
+      result.lockfilePath,
+      path.join(PNPM_MONOREPO_PATH, "pnpm-lock.yaml")
+    );
+    assert.equal(result.lockfileFormat, "pnpm");
+    assert.equal(result.lockfileVersion, "9.0");
+    assert.equal(result.packageManager, "pnpm9");
+    assert.equal(result.packageManagerVersion, "9.15.9");
+  });
+
+  it("uses lockfile-test fixtures, including Yarn 1 resolved versions", async () => {
+    const workspace = await Workspace.find(
+      path.join(LOCKFILE_FIXTURES_PATH, "yarn1-file-dep")
+    );
+    const result = await workspace.lockfilePackages();
+
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.lockfileFormat, "yarn");
+    assert.equal(result.lockfileVersion, "1");
+    assert.equal(result.packageManager, "yarn");
+    assert.equal(result.packageManagerVersion, "1.22.22");
+    assert.ok(
+      result.packages.some(
+        (pkg) =>
+          pkg.name === "is-number" &&
+          pkg.version === "7.0.0" &&
+          pkg.source === "registry"
+      )
+    );
+  });
+
+  it("returns direct and transitive packages from a non-monorepo lockfile", async () => {
+    const workspace = await Workspace.find(NPM_SINGLE_PACKAGE_PATH);
+    const { packages, errors } = await workspace.lockfilePackages();
+
+    assert.equal(workspace.isMultiPackage, false);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(packages, [
+      { name: "is-number", version: "6.0.0", source: "registry" },
+      { name: "is-odd", version: "3.0.1", source: "registry" }
+    ]);
   });
 
   it("returns flat, fully-qualified names without peer closures", async () => {
@@ -117,6 +175,44 @@ describe("lockfilePackages", () => {
 
     assert.deepEqual(packages, [], "Expected no packages");
     assert.deepEqual(errors, [], "Expected no parse errors");
+  });
+
+  it("reports typed errors for unsupported npm v1 and bun.lockb", async () => {
+    const npmDir = fs.mkdtempSync(path.join(os.tmpdir(), "npm-v1-lockfile-"));
+    fs.writeFileSync(
+      path.join(npmDir, "package.json"),
+      JSON.stringify({
+        name: "npm-v1",
+        version: "1.0.0",
+        packageManager: "npm@6.14.18",
+        dependencies: { lodash: "^4.17.21" }
+      })
+    );
+    fs.writeFileSync(
+      path.join(npmDir, "package-lock.json"),
+      JSON.stringify({
+        name: "npm-v1",
+        version: "1.0.0",
+        lockfileVersion: 1,
+        dependencies: { lodash: { version: "4.17.21" } }
+      })
+    );
+    const npmResult = await (await Workspace.find(npmDir)).lockfilePackages();
+    assert.equal(npmResult.errors[0]?.kind, "UnsupportedNpmLockfileVersion");
+
+    const bunDir = fs.mkdtempSync(path.join(os.tmpdir(), "bun-lockb-"));
+    fs.writeFileSync(
+      path.join(bunDir, "package.json"),
+      JSON.stringify({
+        name: "bun-lockb",
+        version: "1.0.0",
+        packageManager: "bun@1.2.0"
+      })
+    );
+    fs.writeFileSync(path.join(bunDir, "bun.lockb"), "binary");
+    const bunResult = await (await Workspace.find(bunDir)).lockfilePackages();
+    assert.equal(bunResult.errors[0]?.kind, "UnsupportedBunLockfile");
+    assert.equal(bunResult.lockfilePath, path.join(bunDir, "bun.lockb"));
   });
 
   it("reports a typed error instead of throwing when there is no lockfile", async () => {

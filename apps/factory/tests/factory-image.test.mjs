@@ -38,6 +38,12 @@ function fakeRunner(failOn) {
   };
 }
 
+test("new workspaces update their checkout to main", () => {
+  const hook = repositoryFile("apps/factory/agent/hooks/refresh-workspace.ts");
+  assert.match(hook, /fetch --depth=1 --force origin main/);
+  assert.match(hook, /reset --hard FETCH_HEAD/);
+});
+
 test("the image includes tmux for shared interactive fx sessions", () => {
   const packages = factoryImagePhases({ revision: COMMIT }).find(
     ({ id }) => id === "system-packages"

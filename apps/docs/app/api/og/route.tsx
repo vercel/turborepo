@@ -1,21 +1,10 @@
+import { readFile } from "node:fs/promises";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
-import { verifyOgSignatureEdge } from "@/lib/og/sign-edge";
-
-export const runtime = "edge";
+import { verifyOgSignature } from "@/lib/og/sign";
 
 const OG_BACKGROUND_URL =
   "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/docs-og-background.png";
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
 
 export async function GET(req: NextRequest): Promise<Response> {
   try {
@@ -26,7 +15,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     const sig = searchParams.get("sig") || "";
 
     // Verify signature - title can be empty for home page
-    const isValid = await verifyOgSignatureEdge(
+    const isValid = verifyOgSignature(
       searchParams.has("section") ? { title, section } : { title },
       sig
     );
@@ -35,20 +24,15 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
 
     const [geist, geistMono, bg] = await Promise.all([
-      fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
-        res.arrayBuffer()
-      ),
-      fetch(new URL("./GeistMono-Regular.ttf", import.meta.url)).then((res) =>
-        res.arrayBuffer()
-      ),
-      arrayBufferToBase64(
-        await fetch(OG_BACKGROUND_URL).then((res) => {
-          if (!res.ok) {
-            throw new Error(`Failed to load OG background: ${res.status}`);
-          }
-          return res.arrayBuffer();
-        })
-      )
+      readFile(new URL("./Geist-Regular.ttf", import.meta.url)),
+      readFile(new URL("./GeistMono-Regular.ttf", import.meta.url)),
+      fetch(OG_BACKGROUND_URL).then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load OG background: ${res.status}`);
+        }
+
+        return Buffer.from(await res.arrayBuffer()).toString("base64");
+      })
     ]);
 
     return new ImageResponse(
@@ -129,7 +113,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turborepo.dev/og-image.png"
+          Location: new URL("/og-image.png", req.url).toString()
         }
       });
     }

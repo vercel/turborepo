@@ -96,14 +96,19 @@ pub(super) fn unavailable_resolution(
         .into_iter()
         .map(|(identity, _)| identity.to_string())
         .collect::<Vec<_>>();
-    domains.push(ExternalResolutionDomain::new(
-        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
-        ToolchainId::JAVASCRIPT,
-        AnchoredSystemPathBuf::default(),
-        members,
-        [definition_source],
-        ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
-    ));
+    domains.push(
+        ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            members,
+            [definition_source],
+            ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
+        )
+        .with_fallback_inputs([
+            AnchoredSystemPathBuf::from_raw("package.json").expect("static path is valid")
+        ]),
+    );
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {

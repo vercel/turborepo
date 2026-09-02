@@ -175,12 +175,14 @@ impl ScopeTaskContract {
 
     pub(crate) fn python(contract: crate::uv::UvTaskContract) -> Self {
         let dependency_source_inputs = contract.dependency_source_inputs();
+        let mut environment_vars = crate::uv::HASHED_ENV_VARS.to_vec();
+        environment_vars.extend(crate::uv::PROJECTED_ONLY_ENV_VARS);
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
             environment: Some(TaskEnvironmentRequirement::new(
                 TaskEnvironmentDomain(Cow::Borrowed("uv-task-io")),
-                crate::uv::HASHED_ENV_VARS.to_vec(),
+                environment_vars,
             )),
             toolchain: Some(ToolchainId::PYTHON),
             command_map_target: Some(CommandMapTarget::Python),

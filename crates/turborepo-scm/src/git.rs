@@ -35,7 +35,10 @@ impl SCM {
         _path: &AbsoluteSystemPath,
     ) -> (Option<String>, Option<String>) {
         match self {
-            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
+            Self::Git(git) => git.get_current_branch_and_sha().unwrap_or_else(|_| {
+                // Preserve partial results for unusual states such as an unborn branch.
+                (git.get_current_branch().ok(), git.get_current_sha().ok())
+            }),
             Self::Manual => (None, None),
         }
     }
@@ -197,6 +200,30 @@ impl CIEnv {
 }
 
 impl GitRepo {
+    fn get_current_branch_and_sha(&self) -> Result<(Option<String>, Option<String>), Error> {
+        let output =
+            self.execute_git_command(&["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"], "")?;
+        let output = String::from_utf8(output)?;
+        let mut lines = output.lines();
+        let sha = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return HEAD"))?;
+        let branch = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return the current branch"))?;
+        if lines.next().is_some() {
+            return Err(Error::git_error("git returned unexpected revision output"));
+        }
+
+        // Match `git branch --show-current`: only a local branch is reported, without
+        // its `refs/heads/` prefix. Detached HEAD and other symbolic refs are empty.
+        let branch = branch
+            .strip_prefix("refs/heads/")
+            .unwrap_or_default()
+            .to_owned();
+        Ok((Some(branch), Some(sha.to_owned())))
+    }
+
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
@@ -793,6 +820,43 @@ mod tests {
         run_git(repo_root, &["add", &dest.to_string_lossy()]);
         run_git(repo_root, &["commit", "-m", "Commit"]);
         run_git(repo_root, &["rev-parse", "HEAD"])
+    }
+
+    #[test]
+    fn test_current_branch_and_sha() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        fs::write(root.join("file.txt"), "contents")?;
+        let sha = commit_file(&root, Path::new("file.txt"), None);
+        // A tag that shadows the branch name must not make Git disambiguate the
+        // reported branch as `heads/main`.
+        run_git(&root, &["tag", "main"]);
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), Some(sha.clone()))
+        );
+
+        run_git(root.as_std_path(), &["checkout", "--detach", &sha]);
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some(String::new()), Some(sha))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_current_branch_and_sha_on_unborn_branch() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), None)
+        );
+        Ok(())
     }
 
     #[test]

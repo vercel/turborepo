@@ -25,7 +25,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     discovery::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
-        WorkspaceData,
+        WorkspaceData, discover_turbo_config_path,
     },
     package_manager::{self, PackageManager},
     workspaces::WorkspaceGlobs,
@@ -477,6 +477,7 @@ impl Subscriber {
 
         // here, we can only update if we have a valid package state
         let mut changed = false;
+        let mut rediscover = false;
         // if a path is not a valid utf8 string, it is not a valid path, so ignore
         for path in file_event
             .paths
@@ -515,32 +516,28 @@ impl Subscriber {
 
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
-            let turbo_json = path_workspace.join_component("turbo.json");
-            let turbo_jsonc = path_workspace.join_component("turbo.jsonc");
-
-            let (package_exists, turbo_json_exists, turbo_jsonc_exists) = join!(
+            let (package_exists, turbo_json) = join!(
                 // It's possible that an IO error could occur other than the file not existing, but
                 // we will treat it like the file doesn't exist. It's possible we'll need to
                 // revisit this, depending on what kind of errors occur.
                 tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
-                tokio::fs::try_exists(&turbo_json),
-                tokio::fs::try_exists(&turbo_jsonc)
+                discover_turbo_config_path(path_workspace)
             );
 
             changed |= if package_exists {
+                let turbo_json = match turbo_json {
+                    Ok(path) => path,
+                    Err(_) => {
+                        rediscover = true;
+                        break;
+                    }
+                };
                 workspaces
                     .insert(
                         path_workspace.to_owned(),
                         WorkspaceData {
                             package_json,
-                            turbo_json: turbo_json_exists
-                                .unwrap_or_default()
-                                .then_some(turbo_json)
-                                .or_else(|| {
-                                    turbo_jsonc_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_jsonc)
-                                }),
+                            turbo_json,
                         },
                     )
                     .is_none()
@@ -549,7 +546,9 @@ impl Subscriber {
             }
         }
 
-        if changed {
+        if rediscover {
+            self.bump_or_queue_rediscovery(state, package_state_tx);
+        } else if changed {
             self.write_state(package_state);
         }
     }
@@ -651,6 +650,52 @@ mod test {
     use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
 
     use crate::{FileSystemWatcher, cookies::CookieWriter, package_watcher::PackageWatcher};
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn initial_discovery_detects_package_turbo_jsonc() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let workspace_dir = repo_root.join_components(&["apps", "web"]);
+        let package_json = workspace_dir.join_component("package.json");
+        let turbo_jsonc = workspace_dir.join_component("turbo.jsonc");
+
+        package_json.ensure_dir().unwrap();
+        package_json
+            .create_with_contents(r#"{"name":"web"}"#)
+            .unwrap();
+        turbo_jsonc.create_with_contents("{}").unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["apps/*"], "packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let package_watcher = PackageWatcher::new(repo_root, recv, cookie_writer, false).unwrap();
+
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+
+        assert_eq!(
+            data.workspaces,
+            vec![WorkspaceData {
+                package_json,
+                turbo_json: Some(turbo_jsonc),
+            }]
+        );
+    }
 
     #[tokio::test]
     #[tracing_test::traced_test]

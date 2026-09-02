@@ -17,6 +17,21 @@ fn version_txt() -> String {
 }
 
 #[test]
+fn test_no_args_prints_help() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let output = run_turbo(tempdir.path(), &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    // `arg_required_else_help` prints help to stderr (clap parity).
+    assert!(
+        stderr.contains("The build system that makes ship happen")
+            && stderr.contains("Usage: turbo")
+            && stderr.contains("Commands:"),
+        "expected top-level help in stderr, got: {stderr}"
+    );
+}
+
+#[test]
 fn test_version_flag_matches_version_txt() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &["--version"]);
@@ -91,7 +106,9 @@ fn test_conflicting_daemon_flags() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("the argument '--daemon' cannot be used with '--no-daemon'"),
+        stderr.contains("cannot be used with")
+            && stderr.contains("--daemon")
+            && stderr.contains("--no-daemon"),
         "expected conflict error in stderr, got: {stderr}"
     );
 }

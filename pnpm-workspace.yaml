@@ -15,12 +15,18 @@ minimumReleaseAgeExclude:
   # Eve security and correctness releases must be adoptable immediately.
   - eve
 
-onlyBuiltDependencies:
-  - "@swc/core"
-  - "@vercel/speed-insights"
-  - core-js-pure
-  - esbuild
-  - sharp
+allowBuilds:
+  "@google/genai": true
+  "@swc/core": true
+  "@vercel/speed-insights": true
+  "@vscode/vsce-sign": false
+  core-js-pure: true
+  esbuild: true
+  keytar: false
+  phase: false
+  protobufjs: true
+  sharp: true
+  unrs-resolver: false
 
 overrides:
   esbuild: 0.28.1

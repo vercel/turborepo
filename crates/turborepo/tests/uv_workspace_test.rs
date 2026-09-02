@@ -528,6 +528,56 @@ fn test_uv_flag_disabled_hints_at_opt_in() {
 }
 
 #[test]
+fn test_uv_workspace_falls_back_without_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let lockfile = tempdir.path().join("uv.lock");
+    fs::remove_file(&lockfile).unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(output.status.success());
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined.contains("using conservative Python task hashing"));
+    assert!(combined.contains("py-app#build"));
+    assert!(!lockfile.exists());
+}
+
+#[test]
+fn test_uv_workspace_falls_back_with_unparsable_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    let lockfile = tempdir.path().join("uv.lock");
+    fs::write(&lockfile, "not valid lockfile TOML").unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(output.status.success());
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined.contains("using conservative Python task hashing"));
+    let first: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let first_hash = first["tasks"][0]["hash"].as_str().unwrap().to_string();
+    fs::write(&lockfile, "still invalid, but different").unwrap();
+    let second = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    assert!(second.status.success());
+    let second: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    assert_ne!(first_hash, second["tasks"][0]["hash"].as_str().unwrap());
+}
+
+#[test]
 fn test_uv_lock_metadata_only_change_affects_no_packages() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
@@ -678,6 +728,63 @@ fn test_uv_quality_tasks_are_cacheable_with_toolchain_identity() {
     assert_eq!(
         find_task(&dry_run, "py-lib#lint:ruff")["resolvedTaskDefinition"]["cache"],
         true
+    );
+}
+
+#[test]
+fn test_uv_python_selector_is_projected_without_raw_value_hashing() {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+
+    let python = std::process::Command::new("uv")
+        .args(["python", "find", "--resolve-links", "--no-python-downloads"])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("uv python find runs");
+    assert_command_success(&python, "uv python find");
+    let python = String::from_utf8(python.stdout).unwrap();
+
+    let dry_run = |home: &Path| {
+        fs::create_dir_all(home).unwrap();
+        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+        let output = common::turbo_command(tempdir.path())
+            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+            .env("UV_NO_CONFIG", "1")
+            .env("UV_PYTHON", python.trim())
+            .env("HOME", home)
+            .env("APPDATA", home)
+            .env("XDG_CONFIG_HOME", home)
+            .args(["build", "--filter=py-app", "--dry-run=json"])
+            .output()
+            .expect("failed to execute turbo");
+        assert_command_success(&output, "UV_PYTHON dry-run");
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
+    };
+    let first = dry_run(&tempdir.path().join("home-a"));
+    let second = dry_run(&tempdir.path().join("home-b"));
+    let first_task = find_task(&first, "py-app#build");
+    assert_eq!(
+        first_task["hash"],
+        find_task(&second, "py-app#build")["hash"],
+        "config roots must not fragment hashes when external config is disabled"
+    );
+    let definition = &first_task["resolvedTaskDefinition"];
+    assert!(
+        !definition["env"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "UV_PYTHON")
+    );
+    assert!(
+        definition["passThroughEnv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "UV_PYTHON")
     );
 }
 

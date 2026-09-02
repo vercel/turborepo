@@ -35,17 +35,17 @@ pub fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOptions, Erro
         token: args.token.clone(),
         timeout: args.remote_cache_timeout,
         preflight: args.preflight.then_some(true),
-        ui: args.ui,
+        ui: args.ui.map(Into::into),
         allow_no_package_manager: args
             .dangerously_disable_package_manager_check
             .then_some(true),
         daemon: args.run_args().and_then(|run_args| run_args.daemon()),
         env_mode: args
             .execution_args()
-            .and_then(|execution_args| execution_args.env_mode),
+            .and_then(|execution_args| execution_args.env_mode.map(Into::into)),
         cache_dir: args
             .execution_args()
-            .and_then(|execution_args| execution_args.cache_dir.clone()),
+            .and_then(|execution_args| execution_args.cache_dir.clone().map(Into::into)),
         root_turbo_json_path: args
             .root_turbo_json
             .clone()
@@ -56,7 +56,7 @@ pub fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOptions, Erro
             .and_then(|run_args| run_args.force.map(|value| value.unwrap_or(true))),
         log_order: args
             .execution_args()
-            .and_then(|execution_args| execution_args.log_order),
+            .and_then(|execution_args| execution_args.log_order.map(Into::into)),
         remote_only: args.run_args().and_then(|run_args| run_args.remote_only()),
         remote_cache_read_only: args
             .run_args()
@@ -125,7 +125,7 @@ mod tests {
     };
 
     fn parse_args(args: &[&str]) -> Args {
-        Args::parse(args.iter().map(OsString::from).collect()).unwrap()
+        Args::parse_args(args.iter().map(OsString::from).collect()).unwrap()
     }
 
     #[test]

@@ -126,6 +126,8 @@ pub enum Error {
     },
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
+    #[error("Cargo dependency resolution is unavailable: {0}")]
+    ResolutionUnavailable(String),
     #[error("failed to run `rustc -vV`: {0}")]
     RustcSpawn(#[source] io::Error),
     #[error("`rustc -vV` failed: {stderr}")]
@@ -553,18 +555,17 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WRAPPER",
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
-    "RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
     "RUSTDOCFLAGS",
     "CARGO_ENCODED_RUSTDOCFLAGS",
-    // Environment equivalents of Cargo's [build] configuration.
-    "CARGO_HOME",
-    "CARGO_TARGET_DIR",
-    "CARGO_BUILD_TARGET_DIR",
-    "CARGO_BUILD_ARTIFACT_DIR",
+    // Environment equivalents of Cargo's [build] configuration. Location-only
+    // settings are projected for derived I/O below, but are not hashed
+    // verbatim. Cargo home configuration is checked separately; supported
+    // target directories participate through derived output paths; unsupported
+    // automatic layouts fail closed to uncached execution.
     "CARGO_BUILD_BUILD_DIR",
     "CARGO_BUILD_TARGET",
     "CARGO_BUILD_RUSTC",
@@ -578,7 +579,9 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     // Cargo normalizes profile names and target triples into these families.
     "CARGO_PROFILE_*",
     "CARGO_PROFILE_*_DIR_NAME",
-    "CARGO_TARGET_*",
+    // Target-table settings have at least a target and key component. Avoid
+    // matching the location-only CARGO_TARGET_DIR variable.
+    "CARGO_TARGET_*_*",
     // Native toolchain variables recognized by cc-rs. `VAR_*` covers both
     // raw and underscore-normalized target suffixes.
     "CC",
@@ -1155,25 +1158,31 @@ fn contains_glob_syntax(value: &str) -> bool {
         .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']' | b'{' | b'}'))
 }
 
+fn normalize_target_directory(
+    repo_root: &AbsoluteSystemPath,
+    target_directory: &AbsoluteSystemPath,
+) -> Option<AbsoluteSystemPathBuf> {
+    let real_repo_root = dunce::canonicalize(repo_root.as_std_path()).ok()?;
+    let mut existing_ancestor = target_directory.as_std_path();
+    let mut missing_components = Vec::new();
+    while !existing_ancestor.exists() {
+        missing_components.push(existing_ancestor.file_name()?.to_os_string());
+        existing_ancestor = existing_ancestor.parent()?;
+    }
+    let mut normalized = dunce::canonicalize(existing_ancestor).ok()?;
+    if !normalized.starts_with(real_repo_root) {
+        return None;
+    }
+    normalized.extend(missing_components.into_iter().rev());
+    AbsoluteSystemPathBuf::new(normalized.to_str()?.to_string()).ok()
+}
+
+#[cfg(test)]
 fn target_directory_within_repo(
     repo_root: &AbsoluteSystemPath,
     target_directory: &AbsoluteSystemPath,
 ) -> bool {
-    if !repo_root.contains(target_directory) {
-        return false;
-    }
-    let Ok(real_repo_root) = dunce::canonicalize(repo_root.as_std_path()) else {
-        return false;
-    };
-    let mut existing_ancestor = target_directory.as_std_path();
-    while !existing_ancestor.exists() {
-        let Some(parent) = existing_ancestor.parent() else {
-            return false;
-        };
-        existing_ancestor = parent;
-    }
-    dunce::canonicalize(existing_ancestor)
-        .is_ok_and(|ancestor| ancestor.starts_with(real_repo_root))
+    normalize_target_directory(repo_root, target_directory).is_some()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1245,11 +1254,10 @@ fn cargo_output_layout(
     } else {
         workspace.target_directory.clone()
     };
-    if contains_glob_syntax(target_directory.as_str())
-        || !target_directory_within_repo(repo_root, &target_directory)
-    {
+    if contains_glob_syntax(target_directory.as_str()) {
         return None;
     }
+    let target_directory = normalize_target_directory(repo_root, &target_directory)?;
 
     Some(CargoOutputLayout {
         profile: arguments.profile,
@@ -1278,7 +1286,7 @@ fn cargo_change_observation(
 #[derive(Debug)]
 struct CargoPruneKnowledge {
     domain: crate::prune_knowledge::PruneDomainId,
-    lockfile: String,
+    lockfile: Result<String, String>,
     root_manifest: String,
     package_directories: HashMap<String, String>,
 }
@@ -1287,7 +1295,7 @@ impl CargoPruneKnowledge {
     fn discover(
         repo_root: &AbsoluteSystemPath,
         crates: &[CargoCrate],
-        lockfile: String,
+        lockfile: Result<String, String>,
     ) -> Result<Self, Error> {
         let root_manifest = repo_root
             .join_component(CARGO_TOML)
@@ -1323,7 +1331,11 @@ impl PruneDomain for CargoPruneKnowledge {
             return Ok(None);
         }
         let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
-        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&self.lockfile, kept_packages)
+        let lockfile = self
+            .lockfile
+            .as_ref()
+            .map_err(|reason| failed(Error::ResolutionUnavailable(reason.clone())))?;
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(lockfile, kept_packages)
             .map_err(|error| failed(Error::Lockfile(error)))?;
 
         let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
@@ -1370,11 +1382,26 @@ impl PruneDomain for CargoPruneKnowledge {
 /// root contains a `Cargo.toml`.
 pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
+    resolve_external_dependencies: bool,
 }
 
 impl CargoContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
-        Arc::new(Self { repo_root })
+        Self::new_with_external_dependencies(repo_root, true)
+    }
+
+    pub(crate) fn new_without_external_dependencies(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+        Self::new_with_external_dependencies(repo_root, false)
+    }
+
+    fn new_with_external_dependencies(
+        repo_root: AbsoluteSystemPathBuf,
+        resolve_external_dependencies: bool,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repo_root,
+            resolve_external_dependencies,
+        })
     }
 }
 
@@ -1459,6 +1486,19 @@ enum ContributorMetadata {
     Unresolved(Error),
 }
 
+impl Error {
+    fn supports_lockfile_fallback(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingLockfile
+                | Self::LockfileRead(_)
+                | Self::Lockfile(_)
+                | Self::InvalidLockfile { .. }
+                | Self::LockfileValidationSpawn(_)
+        )
+    }
+}
+
 impl ContributorMetadata {
     fn lockfile(&self) -> Option<&str> {
         match self {
@@ -1532,7 +1572,12 @@ impl RepositoryContributor for CargoContributor {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
             let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
-                discover_contributor_workspace(&self.repo_root)
+                if self.resolve_external_dependencies {
+                    discover_contributor_workspace(&self.repo_root)
+                } else {
+                    discover_crates(&self.repo_root)
+                        .map(|workspace| (workspace, ContributorMetadata::Absent))
+                }
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
@@ -1566,31 +1611,46 @@ impl RepositoryContributor for CargoContributor {
 
             let change_observation =
                 cargo_change_observation(&self.repo_root, target_directory.as_deref());
-            let lockfile = if let Some(lockfile) = metadata.lockfile() {
-                lockfile.to_string()
-            } else {
-                read_lockfile(&self.repo_root)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?
+            // Exact lockfile resolution is optional for graph construction.
+            // When it fails, retain Cargo's lockfile-independent `--no-deps`
+            // package graph and let the generic resolution-domain fallback
+            // hash manifests plus raw Cargo.lock bytes conservatively.
+            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
+            let resolution_result = turborepo_rayon_compat::block_in_place(|| {
+                let lockfile = metadata
+                    .lockfile()
+                    .map(str::to_string)
+                    .or_else(|| read_lockfile(&self.repo_root).ok());
+                validate_contributor_metadata(&self.repo_root, metadata)?;
+                let lockfile = lockfile.ok_or(Error::MissingLockfile)?;
+                let closures = external_closures_from_lockfile(&lockfile, &all_names)?;
+                Ok::<_, Error>((lockfile, closures))
+            });
+            let (lockfile, mut closures, resolution_incomplete) = match resolution_result {
+                Ok((lockfile, closures)) => (Ok(lockfile), closures, None),
+                Err(error) => {
+                    if !error.supports_lockfile_fallback() {
+                        return Err(toolchain::Error::Failed(Box::new(error)));
+                    }
+                    let message = error.to_string();
+                    tracing::warn!(
+                        "Unable to resolve Cargo.lock; using conservative Cargo task hashing. Run                          `cargo generate-lockfile` or `cargo update` and commit Cargo.lock to restore                          dependency-aware caching: {}",
+                        message
+                    );
+                    (
+                        Err(message.clone()),
+                        HashMap::new(),
+                        Some(crate::external_resolution::ResolutionIncompleteReason::new(
+                            "cargo-lockfile-unavailable",
+                            message,
+                        )),
+                    )
+                }
             };
             let prune_domain =
                 CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile.clone())
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            // Each crate contributes its already-classified native internal
-            // relationships directly. No JavaScript dependency descriptor or
-            // package-manager policy participates in Cargo graph assembly.
-            // External dependencies (locked crates.io/git packages plus the
-            // compiler itself) participate in each crate task's hash through
-            // the same external-dependency mechanism JS packages use, scoped
-            // to the crate's transitive closure — a dependency bump only
-            // invalidates crates that actually depend on it, and a toolchain
-            // change invalidates everything.
-            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let mut closures = turborepo_rayon_compat::block_in_place(|| {
-                validate_contributor_metadata(&self.repo_root, metadata)?;
-                external_closures_from_lockfile(&lockfile, &all_names)
-            })
-            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let compiler_identity =
                 turborepo_rayon_compat::block_in_place(|| rustc_info(&self.repo_root));
             if let Err(reason) = &compiler_identity {
@@ -1634,6 +1694,13 @@ impl RepositoryContributor for CargoContributor {
                 .chain(rustc.cloned())
                 .collect();
 
+            let fallback_inputs = std::iter::once(
+                AnchoredSystemPathBuf::from_raw(CARGO_TOML).expect("static path is valid"),
+            )
+            .chain(crates.iter().filter_map(|cargo_crate| {
+                AnchoredSystemPathBuf::new(&self.repo_root, &cargo_crate.manifest_path).ok()
+            }))
+            .collect::<Vec<_>>();
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut resolutions = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
@@ -1733,10 +1800,14 @@ impl RepositoryContributor for CargoContributor {
                     .map_err(Error::from)
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
                 ExternalResolutionData::Resolved {
-                    completeness: ResolutionCompleteness::Complete,
+                    completeness: resolution_incomplete.map_or(
+                        ResolutionCompleteness::Complete,
+                        ResolutionCompleteness::Partial,
+                    ),
                     packages: resolutions,
                 },
-            );
+            )
+            .with_fallback_inputs(fallback_inputs);
             Ok(DiscoveredPackages::new(packages, workspace_roots)
                 .with_external_resolution(resolution)
                 .with_change_observation(change_observation)
@@ -2767,11 +2838,25 @@ dependencies = ["lib-a"]
     }
 
     #[test]
-    fn test_rustup_selection_environment_is_hashed_and_projected() {
-        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
-            assert!(HASHED_ENV_VARS.contains(&variable));
+    fn test_location_only_environment_is_projected_but_not_hashed_verbatim() {
+        for variable in [
+            "CARGO_BUILD_ARTIFACT_DIR",
+            "CARGO_BUILD_TARGET_DIR",
+            "CARGO_HOME",
+            "CARGO_TARGET_DIR",
+            "RUSTUP_HOME",
+        ] {
+            assert!(!HASHED_ENV_VARS.contains(&variable));
             assert!(TASK_IO_ENV_VARS.contains(&variable));
         }
+    }
+
+    #[test]
+    fn test_rustup_selector_and_location_environment_are_classified() {
+        assert!(HASHED_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_HOME"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_HOME"));
         assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_DIST_SERVER"));
         assert!(!TASK_IO_ENV_VARS.contains(&"RUSTUP_UPDATE_ROOT"));
     }
@@ -3093,6 +3178,17 @@ dependencies = ["lib-a"]
         )
         .unwrap();
         assert!(!target_directory_within_repo(&root, &outside_path));
+
+        #[cfg(unix)]
+        {
+            let alias = root.join_component("root-alias");
+            std::os::unix::fs::symlink(&root, &alias).unwrap();
+            let aliased_target = alias.join_components(&["new", "target"]);
+            assert_eq!(
+                normalize_target_directory(&root, &aliased_target),
+                Some(root.join_components(&["new", "target"]))
+            );
+        }
 
         #[cfg(windows)]
         {
@@ -3672,6 +3768,35 @@ release: 1.96.0-nightly\n",
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_falls_back_without_lockfile() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        std::fs::remove_file(root.join_component(CARGO_LOCK).as_std_path()).unwrap();
+        let (packages, _, resolutions, _, prune_domains) = CargoContributor::new(root)
+            .discover_packages()
+            .await
+            .unwrap()
+            .into_parts();
+        assert_eq!(packages.len(), 4);
+        let ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Partial(reason),
+            packages: resolved,
+        } = resolutions[0].data()
+        else {
+            panic!("missing Cargo.lock should produce partial resolution")
+        };
+        assert_eq!(reason.code(), "cargo-lockfile-unavailable");
+        assert_eq!(resolved.len(), 4);
+        assert!(
+            resolutions[0]
+                .fallback_inputs()
+                .iter()
+                .any(|path| path.as_str().ends_with(CARGO_TOML))
+        );
+        assert!(prune_domains[0].plan(&["app".to_string()]).is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_emits_native_relationships_without_dependency_descriptors() {
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
@@ -4199,11 +4324,11 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
-        assert!(io.env.contains(&"RUSTUP_HOME".to_string()));
+        assert!(!io.env.contains(&"RUSTUP_HOME".to_string()));
         assert!(io.env.contains(&"RUSTUP_TOOLCHAIN".to_string()));
         assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
         assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
-        assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
+        assert!(io.env.contains(&"CARGO_TARGET_*_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
 

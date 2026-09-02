@@ -14,6 +14,7 @@ import {
   externalBlogMeta,
   extraDocs,
   extraMeta,
+  openapi,
   openapiDocs,
   openapiMeta
 } from "@/.source/server";
@@ -29,6 +30,14 @@ export const geistdocsSource = createSource({
 });
 
 export const source = geistdocsSource.source;
+
+export const openapiGeistdocsSource = createSource({
+  baseUrl: "/docs/openapi",
+  config,
+  docs: openapi,
+  id: "openapi",
+  label: "Remote Cache API"
+});
 
 /**
  * Full LLM-ready markdown for a docs page (frontmatter + processed body +

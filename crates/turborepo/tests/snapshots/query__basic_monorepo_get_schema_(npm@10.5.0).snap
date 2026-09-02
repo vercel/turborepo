@@ -352,6 +352,18 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "command",
+              "description": "The command Turbo will execute for this task, including implicit native\ntasks and command overrides.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "experimentalCI",
               "description": "The fully resolved `experimentalCI` configuration for this task from\nturbo.json, including Package Configuration overrides. Either a\nboolean or an object with arbitrary keys. Null if the key is not set.",
               "args": [],
@@ -2472,6 +2484,18 @@ expression: query_output
             {
               "name": "script",
               "description": null,
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "command",
+              "description": "The command Turbo will execute for this task, including implicit native\ntasks and command overrides.",
               "args": [],
               "type": {
                 "kind": "SCALAR",
