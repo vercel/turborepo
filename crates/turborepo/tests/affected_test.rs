@@ -500,7 +500,10 @@ fn test_filter_merge_base_range_with_filter_using_tasks() {
     );
     fs::write(&turbo_json_path, turbo_json).unwrap();
     git(tempdir.path(), &["add", "turbo.json"]);
-    git(tempdir.path(), &["commit", "-m", "configure future flags", "--quiet"]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "configure future flags", "--quiet"],
+    );
     git(tempdir.path(), &["checkout", "-b", "my-branch", "--quiet"]);
 
     let pkg_path = tempdir.path().join("apps/my-app/package.json");
@@ -509,7 +512,10 @@ fn test_filter_merge_base_range_with_filter_using_tasks() {
     pkg["description"] = serde_json::Value::String("foo".to_string());
     fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
     git(tempdir.path(), &["add", "."]);
-    git(tempdir.path(), &["commit", "-m", "change my-app", "--quiet"]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change my-app", "--quiet"],
+    );
 
     git(tempdir.path(), &["checkout", "main", "--quiet"]);
     let index_path = tempdir.path().join("packages/util/index.js");
@@ -517,7 +523,10 @@ fn test_filter_merge_base_range_with_filter_using_tasks() {
     idx.push_str("\nfoo");
     fs::write(&index_path, idx).unwrap();
     git(tempdir.path(), &["add", "."]);
-    git(tempdir.path(), &["commit", "-m", "change util on main", "--quiet"]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change util on main", "--quiet"],
+    );
     git(tempdir.path(), &["checkout", "my-branch", "--quiet"]);
 
     let output = run_turbo(
@@ -540,7 +549,8 @@ fn test_filter_merge_base_range_with_filter_using_tasks() {
     assert!(tasks.contains("my-app#build"), "{tasks:?}");
     assert!(
         !tasks.contains("util#build"),
-        "util changed on main after the branch point, a merge-base range must not select it: {tasks:?}"
+        "util changed on main after the branch point, a merge-base range must not select it: \
+         {tasks:?}"
     );
 }
 
