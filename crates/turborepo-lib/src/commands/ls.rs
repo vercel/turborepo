@@ -11,9 +11,9 @@ use serde::Serialize;
 use thiserror::Error;
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
+use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cprint, cprintln};
 
 use crate::{cli, cli::OutputFormat, commands::CommandBase, run::builder::RunBuilder};
 
@@ -31,11 +31,6 @@ const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
 const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } length } \
                                      allDependencies { items { name } length } allDependents { \
                                      items { name } length }";
-
-fn package_detail_query(name: &str) -> String {
-    let escaped = super::query::escape_graphql_string(name);
-    format!(r#"{{ package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }} }}"#)
-}
 
 fn package_details_query(packages: &[String]) -> String {
     let mut query = String::from("{");
@@ -144,9 +139,29 @@ pub async fn run(
                 println!("{}", serde_json::to_string_pretty(&list)?);
             }
             Some(OutputFormat::Pretty) | None => {
-                for package in &packages {
-                    let detail = query_package_detail(run.clone(), query_server, package).await?;
-                    print_package_detail(&detail, color_config);
+                // Preserve the existing partial-output behavior when an argument is missing:
+                // print every valid package before reporting the first missing package.
+                let valid_count = packages
+                    .iter()
+                    .position(|package| {
+                        run.pkg_dep_graph()
+                            .package_view(&PackageName::from(package.as_str()))
+                            .is_none()
+                    })
+                    .unwrap_or(packages.len());
+                if valid_count > 0 {
+                    let details =
+                        query_package_details(run.clone(), query_server, &packages[..valid_count])
+                            .await?;
+                    for detail in &details {
+                        print_package_detail(detail, color_config);
+                    }
+                }
+                if let Some(package) = packages.get(valid_count) {
+                    return Err(Error::PackageNotFound {
+                        package: package.clone(),
+                    }
+                    .into());
                 }
             }
         }
@@ -240,31 +255,6 @@ async fn query_package_details(
             parse_package_detail(pkg, package)
         })
         .collect()
-}
-
-async fn query_package_detail(
-    run: Arc<dyn QueryRun>,
-    query_server: &dyn QueryServer,
-    package: &str,
-) -> Result<PackageDetailsDisplay, cli::Error> {
-    let query = package_detail_query(package);
-    let result = query_server.execute_query(run, &query, None).await?;
-
-    if !result.errors.is_empty() {
-        return Err(Error::PackageNotFound {
-            package: package.to_string(),
-        }
-        .into());
-    }
-
-    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
-    let pkg = value
-        .pointer("/data/package")
-        .ok_or_else(|| Error::PackageNotFound {
-            package: package.to_string(),
-        })?;
-
-    parse_package_detail(pkg, package)
 }
 
 fn parse_package_detail(
