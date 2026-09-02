@@ -434,7 +434,9 @@ impl<'a> Visitor<'a> {
                     producer_directory,
                     &declared_output_globs,
                     false,
-                    self.repo_index,
+                    // The producer has already run, so the repo index captured at startup may
+                    // contain stale hashes for outputs it changed.
+                    None,
                 )?
             } else {
                 let requested_hashes = turborepo_task_hash::file_hashes_for_inputs(
@@ -443,7 +445,9 @@ impl<'a> Visitor<'a> {
                     producer_directory,
                     &dependency_outputs.globs,
                     false,
-                    self.repo_index,
+                    // The producer has already run, so the repo index captured at startup may
+                    // contain stale hashes for outputs it changed.
+                    None,
                 )?;
                 filter_hashes_to_declared_outputs(&requested_hashes, &declared_output_globs)
             };
@@ -800,7 +804,9 @@ impl<'a> Visitor<'a> {
                                 task_hash_telemetry,
                                 self.scm,
                                 self.repo_root,
-                                self.repo_index,
+                                // Deferred inputs are hashed after dependencies run. Read them
+                                // from disk instead of consulting the run-start repo index.
+                                None,
                                 dependency_output_hashes,
                                 &dependency_output_producers,
                             ) {
