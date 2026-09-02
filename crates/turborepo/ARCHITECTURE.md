@@ -372,10 +372,13 @@ entrypoint classification, and whether that task derives I/O. Broader behavior
 such as environment projection, dependency-source participation, dynamic I/O,
 pruning, and command-map capability remains on `ScopeTaskContract`. Engine
 composition uses the task-local contract when present and the scope contract
-only as a fallback. Definition memoization keys include native execution and
-task-local contract facts, and it is disabled for package-scoped definitions or
-per-package derived I/O. This prevents scopes with the same turbo.json chain but
-different aggregates or contracts from sharing an invalid definition.
+only as a fallback. An explicit argv override replaces only native execution;
+defaults, inputs, outputs, environment, and cache policy continue to come from
+the same native task contract and authored configuration.
+Definition memoization keys include native execution and task-local contract
+facts, and it is disabled for package-scoped definitions or per-package derived
+I/O. This prevents scopes with the same turbo.json chain but different
+aggregates or contracts from sharing an invalid definition.
 
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
