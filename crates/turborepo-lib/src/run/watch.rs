@@ -314,6 +314,7 @@ impl WatchClient {
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
             graph_features,
+            base.opts().future_flags,
         );
 
         // Subscribe before building the Run so we don't miss the initial

@@ -29,7 +29,7 @@ use turborepo_scm::GitHashes;
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
     repository_graph::RepositoryGraphFeatures,
-    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
+    turbo_json::{FutureFlags, TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
 /// Watches for changes to a package's files and directories.
@@ -70,6 +70,7 @@ impl PackageChangesWatcher {
         single_package: bool,
         allow_no_package_manager: bool,
         graph_features: RepositoryGraphFeatures,
+        future_flags: FutureFlags,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -83,6 +84,7 @@ impl PackageChangesWatcher {
             single_package,
             allow_no_package_manager,
             graph_features,
+            future_flags,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -134,6 +136,7 @@ struct Subscriber {
     single_package: bool,
     allow_no_package_manager: bool,
     graph_features: RepositoryGraphFeatures,
+    future_flags: FutureFlags,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -354,6 +357,7 @@ impl Subscriber {
         single_package: bool,
         allow_no_package_manager: bool,
         graph_features: RepositoryGraphFeatures,
+        future_flags: FutureFlags,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -406,6 +410,7 @@ impl Subscriber {
             single_package,
             allow_no_package_manager,
             graph_features,
+            future_flags,
         }
     }
 
@@ -458,7 +463,8 @@ impl Subscriber {
             }
         };
 
-        let reader = TurboJsonReader::new(self.repo_root.clone());
+        let reader =
+            TurboJsonReader::new(self.repo_root.clone()).with_future_flags(self.future_flags);
         let root_turbo_json = if self.single_package {
             let root_scripts = pkg_dep_graph
                 .package_task_context(&PackageName::Root)
@@ -803,11 +809,12 @@ impl Subscriber {
                         // In single-package mode the root IS the only package, so
                         // all changes must propagate regardless.
                         if !self.single_package && filtered_pkgs.contains(&root_pkg) {
-                            let has_root_tasks = repo_state
-                                .root_turbo_json
-                                .as_ref()
-                                .is_some_and(|turbo| turbo.has_root_tasks());
-                            if !has_root_tasks {
+                            let keep_root =
+                                repo_state.root_turbo_json.as_ref().is_some_and(|turbo| {
+                                    turbo.has_root_tasks()
+                                        || turbo.future_flags.watch_using_task_inputs
+                                });
+                            if !keep_root {
                                 filtered_pkgs.remove(&root_pkg);
                             }
                         }
@@ -875,7 +882,7 @@ mod test {
         is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
         PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
     };
-    use crate::repository_graph::RepositoryGraphFeatures;
+    use crate::{repository_graph::RepositoryGraphFeatures, turbo_json::FutureFlags};
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf::try_from(s).unwrap()
@@ -980,6 +987,7 @@ mod test {
                 cargo: cargo_enabled,
                 python: false,
             },
+            FutureFlags::default(),
         )
     }
 
@@ -1810,6 +1818,7 @@ mod test {
                 cargo: false,
                 python: false,
             },
+            FutureFlags::default(),
         );
 
         TestWatcherHandle {
