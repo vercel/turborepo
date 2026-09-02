@@ -607,7 +607,7 @@ impl WatchClient {
             );
         }
 
-        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        let mut stoppers = std::mem::take(&mut self.background_stoppers);
         for stopper in &stoppers {
             if graceful_shutdown {
                 stopper

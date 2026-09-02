@@ -38,7 +38,7 @@ pub enum Error {
     #[error("Failed to initialize telemetry.")]
     InitError(#[from] ConfigError),
     #[error("Failed to send telemetry event.")]
-    SendError(#[from] mpsc::error::SendError<TelemetryEvent>),
+    SendError(#[from] Box<mpsc::error::SendError<TelemetryEvent>>),
     #[error("Failed to record telemetry.")]
     Join(#[from] JoinError),
     #[error("Telemetry already initialized.")]
