@@ -78,34 +78,29 @@ jobs:
 
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
+            container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
             install: |
-              apk update && apk upgrade
-              apk add libc6-compat curl
+              apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
+              rustup-init -y --default-toolchain none
               npm i -g --force pnpm@12.0.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
-              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
-              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-              rustup show active-toolchain
-              dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install --filter @turbo/repository --frozen-lockfile
 
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
+            container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
             install: |
-              apk update && apk upgrade
-              apk add libc6-compat curl
+              apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
+              rustup-init -y --default-toolchain none
               npm i -g --force pnpm@12.0.0
+              curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location --output aarch64-linux-musl-cross.tgz https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4010/aarch64-linux-musl-cross.tgz
+              echo "0f18a885b161815520bbb5757a4b4ab40d0898c29bebee58d0cddd6112e59cc6  aarch64-linux-musl-cross.tgz" | sha256sum -c
+              tar -xzf aarch64-linux-musl-cross.tgz -C /
+              rm aarch64-linux-musl-cross.tgz
               echo /root/.cargo/bin >> ${GITHUB_PATH}
-              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
             setup: |
-              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-              rustup show active-toolchain
-              rustup target add aarch64-unknown-linux-musl
-              dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install --filter @turbo/repository --frozen-lockfile
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
