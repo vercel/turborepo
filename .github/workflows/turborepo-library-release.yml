@@ -226,14 +226,14 @@ jobs:
 
       - name: Move artifacts into place
         run: |
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node" packages/turbo-repository/npm/darwin-arm64/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node" packages/turbo-repository/npm/darwin-x64/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node" packages/turbo-repository/npm/linux-arm64-gnu/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node" packages/turbo-repository/npm/linux-arm64-musl/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node" packages/turbo-repository/npm/linux-x64-gnu/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node" packages/turbo-repository/npm/linux-x64-musl/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node" packages/turbo-repository/npm/win32-arm64-msvc/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node" packages/turbo-repository/npm/win32-x64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-apple-darwin/repository.darwin-arm64.node" packages/turbo-repository/npm/darwin-arm64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-apple-darwin/repository.darwin-x64.node" packages/turbo-repository/npm/darwin-x64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-gnu/repository.linux-arm64-gnu.node" packages/turbo-repository/npm/linux-arm64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-musl/repository.linux-arm64-musl.node" packages/turbo-repository/npm/linux-arm64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-gnu/repository.linux-x64-gnu.node" packages/turbo-repository/npm/linux-x64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-musl/repository.linux-x64-musl.node" packages/turbo-repository/npm/linux-x64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-pc-windows-msvc/repository.win32-arm64-msvc.node" packages/turbo-repository/npm/win32-arm64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-pc-windows-msvc/repository.win32-x64-msvc.node" packages/turbo-repository/npm/win32-x64-msvc/
 
       - name: Build Meta Package
         run: |
