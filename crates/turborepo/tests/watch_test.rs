@@ -417,6 +417,75 @@ fn watch_task_inputs_reruns_deferred_dependency_output_consumers() {
     );
 }
 
+fn setup_watch_turbo_root_input_test() -> (tempfile::TempDir, PathBuf) {
+    let (tempdir, test_dir) = setup_watch_test();
+
+    fs::write(test_dir.join("schema.json"), "{\"v\":1}\n").unwrap();
+    fs::write(
+        test_dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "watchUsingTaskInputs": true
+  },
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/schema.json"],
+      "outputs": []
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &[
+            "commit",
+            "-m",
+            "configure turbo root input watch test",
+            "--quiet",
+        ],
+    );
+
+    (tempdir, test_dir)
+}
+
+#[test]
+fn watch_task_inputs_reruns_on_turbo_root_input_without_root_tasks() {
+    let (_tempdir, test_dir) = setup_watch_turbo_root_input_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let before = marker_count(&test_dir, "a");
+    let mut after = before;
+    for attempt in 0..3 {
+        fs::write(
+            test_dir.join("schema.json"),
+            format!("{{\"v\":{}}}\n", 2 + attempt),
+        )
+        .unwrap();
+        common::git(&test_dir, &["add", "."]);
+        common::git(&test_dir, &["commit", "-m", "change schema", "--quiet"]);
+        after = wait_for_markers(&test_dir, "a", before + 1, Duration::from_secs(15));
+        if after > before {
+            break;
+        }
+    }
+
+    drop(guard);
+
+    assert!(
+        after > before,
+        "package a declares $TURBO_ROOT$/schema.json as an input and turbo.json has no root \
+         tasks, so a root file change must still rerun it. before: {before}, after: {after}"
+    );
+}
+
 #[test]
 fn watch_file_change_reruns_affected_package() {
     let (_tempdir, test_dir) = setup_watch_test();
