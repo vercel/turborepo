@@ -5,10 +5,9 @@ user_provided_flags="$@"
 script_provided_flags="\
   --platform \
   -p=turborepo-napi \
-  --cargo-cwd=../../ \
-  --cargo-name=turborepo_napi \
-  native \
-  --js=false \
+  --manifest-path=rust/Cargo.toml \
+  --output-dir=native \
+  --no-js \
 "
 
 for flag in $user_provided_flags; do
@@ -16,10 +15,9 @@ for flag in $user_provided_flags; do
     target=${flag#*=}
     rustup toolchain install nightly-2026-07-03 --target "$target"
 
-    # For we need to cross-compile some targets with Zig
-    # Fortunately, napi comes with a `--zig` flag
+    # Cross-compile Linux GNU targets with cargo-zigbuild.
     if [[ $target == x86_64-unknown-linux-gnu || $target == aarch64-unknown-linux-gnu ]]; then
-      script_provided_flags+=" --zig"
+      script_provided_flags+=" --cross-compile"
     fi
   fi
 done
