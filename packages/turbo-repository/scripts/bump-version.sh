@@ -23,7 +23,7 @@ echo "Version: ${TARGET}"
 for dir in "${PKG_ROOT}"/npm/*; do
   dep="@turbo/repository-$(basename "${dir}")"
   # bump the native dependency version
-  cd "${dir}" && pnpm version "${TARGET}" --allow-same-version
+  cd "${dir}" && pnpm version "${TARGET}" --allow-same-version --no-git-checks
 
   # bump the optional dependency listed in the metapackage
   update_dep=$(jq ".optionalDependencies.\"${dep}\" = \$newVal" --arg newVal "${TARGET}" "${JS_PACKAGE_JSON}")
@@ -31,4 +31,4 @@ for dir in "${PKG_ROOT}"/npm/*; do
 done
 
 #finally, bump the top-level version of the metapackage
-cd "${PKG_ROOT}/js" && pnpm version "${TARGET}" --allow-same-version
+cd "${PKG_ROOT}/js" && pnpm version "${TARGET}" --allow-same-version --no-git-checks
