@@ -6,7 +6,7 @@ use turbopath::{AbsoluteSystemPathBuf, PathError};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     inference::{self, RepoMode as WorkspaceType, RepoState as WorkspaceState},
-    package_graph::{PackageGraph, PackageGraphBuilder},
+    package_graph::{PackageGraph, PackageGraphBuilder, lockfile_closure},
     package_json::{DependencyKind, PackageJson},
     package_manager,
 };
@@ -19,7 +19,7 @@ use crate::{
     Package, PackageManager, Workspace, package_source_name, split_identity,
 };
 
-enum SinglePackageLockfileRead {
+enum DirectLockfileRead {
     Loaded(Box<dyn Lockfile>),
     Missing(String),
     Unreadable {
@@ -28,71 +28,100 @@ enum SinglePackageLockfileRead {
     },
 }
 
-pub(crate) struct SinglePackageLockfile {
-    lockfile: SinglePackageLockfileRead,
-    dependencies: BTreeMap<String, String>,
+/// Resolves the workspace lockfile directly from the root `package.json`,
+/// bypassing the package graph. Used for single-package repositories (whose
+/// core graph intentionally skips lockfile resolution) and for multi-package
+/// repositories opened with `skipPackageGraph`.
+pub(crate) struct DirectLockfile {
+    workspace_root: AbsoluteSystemPathBuf,
+    package_manager: package_manager::PackageManager,
+    root_package_json: PackageJson,
+    lockfile: DirectLockfileRead,
 }
 
-impl SinglePackageLockfile {
+impl DirectLockfile {
     fn new(
         workspace_root: &turbopath::AbsoluteSystemPath,
         package_manager: &package_manager::PackageManager,
         package_json: &PackageJson,
     ) -> Self {
-        let mut dependencies = BTreeMap::new();
-        for (name, specifier, kind) in package_json.dependencies_with_kind() {
-            if !matches!(kind, DependencyKind::Peer { .. }) {
-                dependencies
-                    .entry(name.clone())
-                    .or_insert_with(|| specifier.clone());
-            }
-        }
         let lockfile = match package_manager.read_lockfile(workspace_root, package_json) {
-            Ok(lockfile) => SinglePackageLockfileRead::Loaded(lockfile),
+            Ok(lockfile) => DirectLockfileRead::Loaded(lockfile),
             Err(package_manager::Error::LockfileMissing(_))
                 if matches!(
                     package_manager.lockfile_manager(),
                     package_manager::PackageManager::Bun
                 ) && workspace_root.join_component("bun.lockb").exists() =>
             {
-                SinglePackageLockfileRead::Unreadable {
+                DirectLockfileRead::Unreadable {
                     kind: LockfileErrorKind::UnsupportedBunLockfile,
                     message: "Only found bun.lockb, please run `bun install --save-text-lockfile`"
                         .to_string(),
                 }
             }
             Err(package_manager::Error::LockfileMissing(path)) => {
-                SinglePackageLockfileRead::Missing(format!("Lockfile not found at {path}"))
+                DirectLockfileRead::Missing(format!("Lockfile not found at {path}"))
             }
-            Err(error) => SinglePackageLockfileRead::Unreadable {
+            Err(error) => DirectLockfileRead::Unreadable {
                 kind: classify_package_manager_error(&error),
                 message: error.to_string(),
             },
         };
         Self {
+            workspace_root: workspace_root.to_owned(),
+            package_manager: package_manager.clone(),
+            root_package_json: package_json.clone(),
             lockfile,
-            dependencies,
         }
     }
 
     pub(crate) fn error_kind(&self) -> Option<LockfileErrorKind> {
         match &self.lockfile {
-            SinglePackageLockfileRead::Loaded(_) => None,
-            SinglePackageLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
-            SinglePackageLockfileRead::Unreadable { kind, .. } => Some(*kind),
+            DirectLockfileRead::Loaded(_) => None,
+            DirectLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
+            DirectLockfileRead::Unreadable { kind, .. } => Some(*kind),
         }
     }
 
     pub(crate) fn error_message(&self) -> Option<String> {
         match &self.lockfile {
-            SinglePackageLockfileRead::Loaded(_) => None,
-            SinglePackageLockfileRead::Missing(message)
-            | SinglePackageLockfileRead::Unreadable { message, .. } => Some(message.clone()),
+            DirectLockfileRead::Loaded(_) => None,
+            DirectLockfileRead::Missing(message)
+            | DirectLockfileRead::Unreadable { message, .. } => Some(message.clone()),
         }
+    }
+
+    /// The transitive closure of the root `package.json` declarations only.
+    /// Single-package repositories have no other manifests.
+    fn root_closure(
+        &self,
+        lockfile: &dyn Lockfile,
+    ) -> Result<Vec<turborepo_lockfiles::Package>, String> {
+        let mut dependencies = BTreeMap::new();
+        for (name, specifier, kind) in self.root_package_json.dependencies_with_kind() {
+            if !matches!(kind, DependencyKind::Peer { .. }) {
+                dependencies
+                    .entry(name.clone())
+                    .or_insert_with(|| specifier.clone());
+            }
+        }
+        let mut closures = turborepo_lockfiles::all_transitive_closures_sorted(
+            lockfile,
+            HashMap::from([(String::new(), dependencies)]),
+            false,
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(closures
+            .remove("")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|package| (*package).clone())
+            .collect())
     }
 
     pub(crate) fn packages(
         &self,
+        is_multi_package: bool,
         lockfile_path: &str,
         lockfile_format: &str,
         package_manager: &PackageManager,
@@ -105,8 +134,8 @@ impl SinglePackageLockfile {
             package_manager_version: package_manager.version.clone(),
         };
         let lockfile = match &self.lockfile {
-            SinglePackageLockfileRead::Loaded(lockfile) => lockfile,
-            SinglePackageLockfileRead::Missing(message) => {
+            DirectLockfileRead::Loaded(lockfile) => lockfile.as_ref(),
+            DirectLockfileRead::Missing(message) => {
                 return LockfilePackages::new(
                     Vec::new(),
                     vec![LockfileError {
@@ -116,7 +145,7 @@ impl SinglePackageLockfile {
                     metadata(None),
                 );
             }
-            SinglePackageLockfileRead::Unreadable { kind, message } => {
+            DirectLockfileRead::Unreadable { kind, message } => {
                 return LockfilePackages::new(
                     Vec::new(),
                     vec![LockfileError {
@@ -128,18 +157,25 @@ impl SinglePackageLockfile {
             }
         };
 
-        let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
-            lockfile.as_ref(),
-            HashMap::from([(String::new(), self.dependencies.clone())]),
-            false,
-        ) {
-            Ok(closures) => closures,
-            Err(error) => {
+        let closure = if is_multi_package {
+            lockfile_closure::external_packages(
+                &self.workspace_root,
+                &self.package_manager,
+                &self.root_package_json,
+                lockfile,
+            )
+            .map_err(|error| error.to_string())
+        } else {
+            self.root_closure(lockfile)
+        };
+        let closure = match closure {
+            Ok(closure) => closure,
+            Err(message) => {
                 return LockfilePackages::new(
                     Vec::new(),
                     vec![LockfileError {
                         kind: LockfileErrorKind::ResolutionFailed,
-                        message: error.to_string(),
+                        message,
                     }],
                     metadata(lockfile.format_version()),
                 );
@@ -148,7 +184,7 @@ impl SinglePackageLockfile {
 
         let mut packages = Vec::new();
         let mut errors = Vec::new();
-        for package in closures.get("").into_iter().flatten() {
+        for package in &closure {
             let display_name = lockfile
                 .human_name(package)
                 .unwrap_or_else(|| package.key.clone());
@@ -208,6 +244,11 @@ pub(crate) enum Error {
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error("turbo.json error: {0}")]
     TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error(
+        "package graph is unavailable because the workspace was opened with skipPackageGraph; \
+         only lockfilePackages() is supported"
+    )]
+    PackageGraphSkipped,
 }
 
 impl From<Error> for napi::Error<Status> {
@@ -217,7 +258,10 @@ impl From<Error> for napi::Error<Status> {
 }
 
 impl Workspace {
-    pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
+    pub(crate) async fn find_internal(
+        path: Option<String>,
+        skip_package_graph: bool,
+    ) -> Result<Self, Error> {
         let reference_dir = match path {
             Some(path) => {
                 AbsoluteSystemPathBuf::from_cwd(&path).map_err(|path_error| Error::StartingPath {
@@ -317,18 +361,22 @@ impl Workspace {
         };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
-        let lockfile =
-            SinglePackageLockfile::new(workspace_root, package_manager, &root_package_json);
-        let mut package_graph_builder = PackageGraphBuilder::new(workspace_root, root_package_json)
-            .with_single_package_mode(!is_multi_package)
-            .with_package_manager(package_manager.clone());
-        if turbo_json.future_flags.experimental_cargo_workspaces {
-            package_graph_builder = package_graph_builder.with_cargo();
-        }
-        if turbo_json.future_flags.experimental_python_workspaces {
-            package_graph_builder = package_graph_builder.with_uv();
-        }
-        let package_graph = package_graph_builder.build().await?;
+        let lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
+        let package_graph = if skip_package_graph {
+            None
+        } else {
+            let mut package_graph_builder =
+                PackageGraphBuilder::new(workspace_root, root_package_json)
+                    .with_single_package_mode(!is_multi_package)
+                    .with_package_manager(package_manager.clone());
+            if turbo_json.future_flags.experimental_cargo_workspaces {
+                package_graph_builder = package_graph_builder.with_cargo();
+            }
+            if turbo_json.future_flags.experimental_python_workspaces {
+                package_graph_builder = package_graph_builder.with_uv();
+            }
+            Some(package_graph_builder.build().await?)
+        };
 
         Ok(Self {
             absolute_path: workspace_state.root.to_string(),
@@ -344,8 +392,14 @@ impl Workspace {
         })
     }
 
+    /// The package graph, or an error when the workspace was opened with
+    /// `skipPackageGraph`.
+    pub(crate) fn graph(&self) -> Result<&PackageGraph, Error> {
+        self.graph.as_ref().ok_or(Error::PackageGraphSkipped)
+    }
+
     pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
-        packages_from_graph(&self.graph)
+        packages_from_graph(self.graph()?)
     }
 }
 

@@ -197,7 +197,11 @@ Represents the workspace structure and package dependencies:
   the same resolution generation (including a lazy compact reverse index)
   rather than retained manifest payloads or live lockfile human-name callbacks.
   N-API JavaScript lockfile package listing uses the JavaScript domain of that
-  generation. The JavaScript
+  generation; when the N-API caller opts out of graph construction
+  (`skipPackageGraph`), `package_graph/lockfile_closure.rs` computes the same
+  external closure directly from workspace manifests and the lockfile, reusing
+  the internal/external `DependencySplitter` without building repository or
+  relationship knowledge. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
