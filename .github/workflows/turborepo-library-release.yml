@@ -52,6 +52,7 @@ jobs:
               rm zig.tar.xz
               export PATH=$PATH:$(pwd)/zig
               echo "$(pwd)/zig" >> $GITHUB_PATH
+              cargo install cargo-zigbuild --version 0.23.4 --locked
 
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
@@ -73,6 +74,7 @@ jobs:
               echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |
               pnpm install --frozen-lockfile
+              cargo install cargo-zigbuild --version 0.23.4 --locked
 
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-musl

@@ -85,6 +85,7 @@ pub struct LockfilePackage {
 /// Stable across releases so consumers can group failures in metrics without
 /// parsing human-readable messages.
 #[napi(string_enum)]
+#[derive(Clone, Copy)]
 pub enum LockfileErrorKind {
     /// No JavaScript lockfile resolution is available for this workspace (for
     /// example a single-package workspace, or one with no lockfile at all).
@@ -168,7 +169,7 @@ impl LockfilePackages {
 }
 
 /// Options for [`Workspace::find`].
-#[napi(object)]
+#[napi(object, object_from_js = true)]
 #[derive(Default)]
 pub struct WorkspaceFindOptions {
     /// Skip constructing the package graph. Only
@@ -176,6 +177,7 @@ pub struct WorkspaceFindOptions {
     /// workspace; every graph-backed method rejects. Use this when you only
     /// need the lockfile closure (for example dependency auditing) and want to
     /// avoid the cost of building the full monorepo graph.
+    #[napi(js_name = "skipPackageGraph")]
     pub skip_package_graph: Option<bool>,
 }
 
@@ -188,8 +190,7 @@ pub struct Workspace {
     #[napi(readonly)]
     pub is_multi_package: bool,
     /// The package manager used by the workspace.
-    #[napi(readonly)]
-    pub package_manager: PackageManager,
+    package_manager: PackageManager,
     /// The package graph for the workspace. `None` when opened with
     /// `skipPackageGraph`.
     graph: Option<PackageGraph>,
@@ -262,6 +263,11 @@ impl Package {
 
 #[napi]
 impl Workspace {
+    #[napi(getter)]
+    pub fn package_manager(&self) -> PackageManager {
+        self.package_manager.clone()
+    }
+
     /// Finds the workspace root from the given path, and returns a new
     /// Workspace.
     #[napi(factory)]
@@ -272,6 +278,16 @@ impl Workspace {
         let skip_package_graph = options
             .and_then(|options| options.skip_package_graph)
             .unwrap_or(false);
+        Self::find_internal(path, skip_package_graph)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[napi(factory, js_name = "findWithSkipPackageGraph", skip_typescript)]
+    pub async fn find_with_skip_package_graph(
+        path: Option<String>,
+        skip_package_graph: bool,
+    ) -> Result<Workspace, napi::Error> {
         Self::find_internal(path, skip_package_graph)
             .await
             .map_err(|e| e.into())
@@ -492,13 +508,13 @@ impl Workspace {
     pub async fn affected_packages(
         &self,
         files: Vec<String>,
-        base: Option<&str>, // this is required when optimize_global_invalidations is true
+        base: Option<String>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
         let graph = self.graph()?;
         let base = matches!(optimize_global_invalidations, Some(true))
             .then(|| {
-                base.ok_or_else(|| {
+                base.as_deref().ok_or_else(|| {
                     Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
                 })
             })
