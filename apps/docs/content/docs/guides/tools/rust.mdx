@@ -13,10 +13,13 @@ related:
   - /docs/crafting-your-repository/running-tasks
 ---
 
-Turborepo can discover packages across languages and toolchains. It can discover the crates in [a Cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to Cargo commands.
+Turborepo can discover the crates in [a Cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to Cargo commands.
 
 <Callout type="warn">
-  Cargo workspace support is experimental and may change.
+  Rust support is experimental and can change at any time. We encourage you to
+  try it out in side projects, proof-of-concepts, and other environments where
+  stability is not essential. Please provide feedback on the [Rust
+  RFC](https://github.com/vercel/turborepo/discussions/13415).
 </Callout>
 
 ## Enable Cargo workspaces
