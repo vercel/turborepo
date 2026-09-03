@@ -13,10 +13,13 @@ related:
   - /docs/crafting-your-repository/running-tasks
 ---
 
-Turborepo can discover packages across languages and toolchains. It can discover the members of [a uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to uv commands.
+Turborepo can discover the members of [a uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to uv commands.
 
 <Callout type="warn">
-  uv workspace support is experimental and may change.
+  uv support is experimental and can change at any time. We encourage you to try
+  it out in side projects, proof-of-concepts, and other environments where
+  stability is not essential. Please provide feedback on the [Python
+  RFC](https://github.com/vercel/turborepo/discussions/13625).
 </Callout>
 
 ## Enable uv workspaces
