@@ -96,14 +96,19 @@ pub(super) fn unavailable_resolution(
         .into_iter()
         .map(|(identity, _)| identity.to_string())
         .collect::<Vec<_>>();
-    domains.push(ExternalResolutionDomain::new(
-        JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
-        ToolchainId::JAVASCRIPT,
-        AnchoredSystemPathBuf::default(),
-        members,
-        [definition_source],
-        ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
-    ));
+    domains.push(
+        ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            members,
+            [definition_source],
+            ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(code, message)),
+        )
+        .with_fallback_inputs([
+            AnchoredSystemPathBuf::from_raw("package.json").expect("static path is valid")
+        ]),
+    );
     let generation = ExternalResolutionGeneration::build(knowledge, domains)
         .map_err(|error| error.to_string())?;
     Ok(ResolutionSnapshot {
@@ -261,7 +266,7 @@ fn resolution_data(
 }
 
 impl PackageGraph {
-    pub fn changed_packages_from_lockfile_contents(
+    pub(super) fn changed_javascript_packages_from_lockfile_contents(
         &self,
         previous_lockfile_contents: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
@@ -379,4 +384,8 @@ pub enum ChangedPackagesError {
     PackageManager(#[from] crate::package_manager::Error),
     #[error("Yarn config error: {0}")]
     Yarnrc(#[from] crate::package_manager::yarnrc::Error),
+    #[error("uv lockfile error: {0}")]
+    Uv(#[from] turborepo_lockfiles::UvLockError),
+    #[error("Lockfile content is not UTF-8")]
+    NonUtf8Lockfile,
 }

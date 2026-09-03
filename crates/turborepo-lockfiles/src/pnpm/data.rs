@@ -45,6 +45,20 @@ pub struct PnpmLockfile {
     package_extensions_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
+    // pnpm 6 single-project lockfiles store the project snapshot at the root
+    // instead of under `importers["."]`. These fields are normalized into an
+    // importer immediately after parsing.
+    #[serde(default, skip_serializing)]
+    specifiers: Option<Map<String, String>>,
+    #[serde(default, skip_serializing)]
+    dependencies: Option<Map<String, String>>,
+    #[serde(default, rename = "optionalDependencies", skip_serializing)]
+    optional_dependencies: Option<Map<String, String>>,
+    #[serde(default, rename = "devDependencies", skip_serializing)]
+    dev_dependencies: Option<Map<String, String>>,
+    #[serde(default, rename = "dependenciesMeta", skip_serializing)]
+    root_dependencies_meta: Option<Map<String, DependenciesMeta>>,
+    #[serde(default)]
     importers: BTreeMap<String, ProjectSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Packages>,
@@ -291,15 +305,46 @@ impl PnpmLockfile {
 
             let mut this: Self = Self::deserialize(document)?;
             this.leading_documents = leading_documents;
+            this.normalize_single_project_lockfile();
             this.cached_version = this.compute_version();
             this.build_dependency_index();
             return Ok(this);
         }
 
         let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
+        this.normalize_single_project_lockfile();
         this.cached_version = this.compute_version();
         this.build_dependency_index();
         Ok(this)
+    }
+
+    fn normalize_single_project_lockfile(&mut self) {
+        if !self.importers.is_empty() {
+            return;
+        }
+
+        let has_root_project = self.specifiers.is_some()
+            || self.dependencies.is_some()
+            || self.optional_dependencies.is_some()
+            || self.dev_dependencies.is_some()
+            || self.root_dependencies_meta.is_some();
+        if !has_root_project {
+            return;
+        }
+
+        self.importers.insert(
+            ".".to_string(),
+            ProjectSnapshot {
+                dependencies: DependencyInfo::PreV6 {
+                    specifiers: self.specifiers.take(),
+                    dependencies: self.dependencies.take(),
+                    optional_dependencies: self.optional_dependencies.take(),
+                    dev_dependencies: self.dev_dependencies.take(),
+                },
+                dependencies_meta: self.root_dependencies_meta.take(),
+                publish_directory: None,
+            },
+        );
     }
 
     /// Merge per-workspace lockfiles into this lockfile.
@@ -318,7 +363,7 @@ impl PnpmLockfile {
         workspace_lockfiles: &[(&str, &[u8])],
     ) -> Result<(), crate::Error> {
         for &(workspace_path, bytes) in workspace_lockfiles {
-            let ws_lockfile: PnpmLockfile = serde_yaml_ng::from_slice(bytes)?;
+            let ws_lockfile = PnpmLockfile::from_bytes(bytes)?;
 
             // Re-key the "." importer to the workspace's relative path
             for (key, snapshot) in ws_lockfile.importers {
@@ -938,6 +983,11 @@ impl crate::Lockfile for PnpmLockfile {
             overrides: self.overrides.clone(),
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
+            specifiers: None,
+            dependencies: None,
+            optional_dependencies: None,
+            dev_dependencies: None,
+            root_dependencies_meta: None,
             snapshots: pruned_snapshots,
             dependency_index: FxHashMap::default(),
             time: None,
@@ -1010,6 +1060,10 @@ impl crate::Lockfile for PnpmLockfile {
             .unwrap_or(turbo_version);
         Version::parse(base_version).ok()?;
         Some(turbo_version.to_owned())
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some(self.lockfile_version.version.clone())
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
@@ -1216,6 +1270,34 @@ mod tests {
 
     use super::*;
     use crate::Lockfile;
+
+    #[test]
+    fn test_parses_pnpm_v6_single_project_lockfile() {
+        let yaml = r#"lockfileVersion: 5.3
+
+specifiers:
+  is-odd: ^3.0.1
+
+dependencies:
+  is-odd: 3.0.1
+
+packages:
+  /is-odd/3.0.1:
+    resolution: {integrity: sha512-test}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let root = lockfile.importers.get(".").unwrap();
+        assert_eq!(
+            root.dependencies.find_resolution("is-odd"),
+            Some(("^3.0.1", "3.0.1"))
+        );
+
+        let encoded = lockfile.encode().unwrap();
+        let encoded = std::str::from_utf8(&encoded).unwrap();
+        assert!(encoded.contains("importers:"));
+        assert!(!encoded.starts_with("specifiers:"));
+    }
 
     #[test]
     fn test_injected_package_round_trip() {

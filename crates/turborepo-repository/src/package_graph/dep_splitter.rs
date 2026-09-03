@@ -22,12 +22,19 @@ impl<'a> WorkspacePathIndex<'a> {
     /// Builds the production index from authoritative package definitions
     /// rather than transient descriptors or contributor identity.
     pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
-        Self(
+        Self::from_directories(
             knowledge
                 .package_json_packages()
-                .map(|(identity, directory)| (directory, PackageName::from(identity)))
-                .collect(),
+                .map(|(identity, directory)| (directory, PackageName::from(identity))),
         )
+    }
+
+    /// Builds the index from explicit package directories, for callers that
+    /// resolve manifests without constructing repository knowledge.
+    pub(crate) fn from_directories(
+        directories: impl IntoIterator<Item = (&'a AnchoredSystemPath, PackageName)>,
+    ) -> Self {
+        Self(directories.into_iter().collect())
     }
 }
 

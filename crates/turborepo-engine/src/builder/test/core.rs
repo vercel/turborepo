@@ -1288,7 +1288,11 @@ fn test_unavailable_outputs_respect_merged_task_configuration() {
             .unwrap();
         assert_eq!(task.cache, expected_cache);
         assert_eq!(task.outputs.inclusions, expected_outputs);
-        assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+        assert!(
+            task.pass_through_env
+                .as_ref()
+                .is_some_and(|env| env.contains(&"STUB_LAYOUT".to_string()))
+        );
     }
 }
 
@@ -1349,7 +1353,11 @@ fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
             assert!(!task.cache, "{env_mode} {exclusion} must fail closed");
             assert!(task.outputs.inclusions.is_empty());
             assert!(task.env.contains(&exclusion.to_string()));
-            assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+            assert!(
+                task.pass_through_env
+                    .as_ref()
+                    .is_some_and(|env| env.contains(&"STUB_LAYOUT".to_string()))
+            );
         }
     }
 

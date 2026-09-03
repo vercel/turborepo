@@ -271,7 +271,7 @@ mod tests {
     }
 
     fn builder(root: &AbsoluteSystemPathBuf) -> ProperTaskGraphBuilder {
-        let args = Args::parse(
+        let args = Args::parse_args(
             ["turbo", "devtools", "--no-open"]
                 .into_iter()
                 .map(OsString::from)
@@ -285,7 +285,7 @@ mod tests {
         root: &AbsoluteSystemPathBuf,
         config: &AbsoluteSystemPathBuf,
     ) -> ProperTaskGraphBuilder {
-        let args = Args::parse(vec![
+        let args = Args::parse_args(vec![
             OsString::from("turbo"),
             OsString::from(format!("--root-turbo-json={config}")),
             OsString::from("devtools"),

@@ -11,6 +11,7 @@ import {
   title,
   translations
 } from "@/geistdocs";
+import { siteUrl } from "./site-url";
 
 export const config = defineConfig({
   title,
@@ -23,8 +24,17 @@ export const config = defineConfig({
   navbarActiveProduct: "turborepo",
   basePath,
   siteId,
+  siteUrl: siteUrl.toString(),
   translations,
-  content: [{ id: "docs", label: "Docs", dir: "content/docs", route: "/docs" }],
+  content: [
+    { id: "docs", label: "Docs", dir: "content/docs", route: "/docs" },
+    {
+      id: "openapi",
+      label: "Remote Cache API",
+      dir: "content/openapi",
+      route: "/docs/openapi"
+    }
+  ],
   ai: {
     prompt,
     suggestions

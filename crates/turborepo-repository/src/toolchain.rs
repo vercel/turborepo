@@ -540,7 +540,12 @@ pub struct DerivedTaskIO {
     pub package_default_inputs: Option<bool>,
     /// Env vars that participate in the task hash.
     pub env: Vec<String>,
+    /// Directory prefixes that must not be cached as task outputs.
+    pub forbidden_output_prefixes: Vec<String>,
     pub input_safety: DerivedInputSafety,
+    /// User-facing explanation when derived inputs or outputs disable implicit
+    /// caching.
+    pub cache_reason: Option<String>,
     pub outputs: DerivedOutputs,
 }
 

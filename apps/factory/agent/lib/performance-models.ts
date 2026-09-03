@@ -1,5 +1,5 @@
 export const GPT_SOL_MODEL = "openai/gpt-5.6-sol";
-export const CLAUDE_FABLE_MODEL = "anthropic/claude-fable-5";
+export const CLAUDE_FABLE_MODEL = "anthropic/claude-fable-5.1";
 
 export type PerformanceReviewer =
   | "fable_performance_reviewer"

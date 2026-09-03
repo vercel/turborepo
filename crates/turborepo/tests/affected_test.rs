@@ -486,6 +486,74 @@ fn test_affected_merge_base_diverged() {
     );
 }
 
+#[test]
+fn test_filter_merge_base_range_with_filter_using_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap();
+    let turbo_json = turbo_json.replacen(
+        "{\n",
+        "{\n  \"futureFlags\": { \"filterUsingTasks\": true },\n",
+        1,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+    git(tempdir.path(), &["add", "turbo.json"]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "configure future flags", "--quiet"],
+    );
+    git(tempdir.path(), &["checkout", "-b", "my-branch", "--quiet"]);
+
+    let pkg_path = tempdir.path().join("apps/my-app/package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg["description"] = serde_json::Value::String("foo".to_string());
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change my-app", "--quiet"],
+    );
+
+    git(tempdir.path(), &["checkout", "main", "--quiet"]);
+    let index_path = tempdir.path().join("packages/util/index.js");
+    let mut idx = fs::read_to_string(&index_path).unwrap_or_default();
+    idx.push_str("\nfoo");
+    fs::write(&index_path, idx).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change util on main", "--quiet"],
+    );
+    git(tempdir.path(), &["checkout", "my-branch", "--quiet"]);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=[main...HEAD]", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks: std::collections::HashSet<String> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(tasks.contains("my-app#build"), "{tasks:?}");
+    assert!(
+        !tasks.contains("util#build"),
+        "util changed on main after the branch point, a merge-base range must not select it: \
+         {tasks:?}"
+    );
+}
+
 // ── affectedTasks tests ──
 
 #[test]

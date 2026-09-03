@@ -236,7 +236,7 @@ export function FlowDiagram({ graph }: FlowDiagramProps) {
         maxZoom={1.5}
       >
         <Controls
-          showInteractiveToggle={false}
+          showInteractive={false}
           style={{
             borderColor: isDark ? "rgb(60, 60, 60)" : "rgb(200, 200, 200)"
           }}

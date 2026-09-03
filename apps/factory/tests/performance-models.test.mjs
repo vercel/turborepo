@@ -7,6 +7,10 @@ import {
   selectPerformanceModels
 } from "../agent/lib/performance-models.ts";
 
+test("uses Claude Fable 5.1", () => {
+  assert.equal(CLAUDE_FABLE_MODEL, "anthropic/claude-fable-5.1");
+});
+
 test("uses GPT Sol to author and Fable to review on even UTC days", () => {
   assert.deepEqual(selectPerformanceModels(new Date("2026-08-12T23:59:00Z")), {
     authorModel: GPT_SOL_MODEL,

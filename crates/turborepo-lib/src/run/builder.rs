@@ -118,6 +118,7 @@ pub struct RunBuilder {
     // Package listing needs SCM queries for affected filters, but never hashes files or uses
     // cache provenance. Skip the repository-wide work that only serves those consumers.
     skip_repo_index_and_scm_state: bool,
+    skip_external_dependencies: bool,
 }
 
 impl RunBuilder {
@@ -159,11 +160,17 @@ impl RunBuilder {
             query_server: None,
             changed_files_for_watch: None,
             skip_repo_index_and_scm_state: false,
+            skip_external_dependencies: false,
         })
     }
 
     pub fn skip_repo_index_and_scm_state(mut self) -> Self {
         self.skip_repo_index_and_scm_state = true;
+        self
+    }
+
+    pub fn skip_external_dependencies(mut self) -> Self {
+        self.skip_external_dependencies = true;
         self
     }
 
@@ -591,6 +598,11 @@ impl RunBuilder {
                 PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                     .with_single_package_mode(self.opts.run_opts.single_package)
                     .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let builder = if self.skip_external_dependencies {
+                builder.without_external_dependencies()
+            } else {
+                builder
+            };
             let builder = graph_features.configure(builder);
 
             let graph = builder

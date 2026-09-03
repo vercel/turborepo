@@ -118,11 +118,6 @@ pub enum Error {
          `[workspace].exclude`."
     )]
     NonMemberLocalPackage { name: String, manifest_path: String },
-    #[error(
-        "Cargo package {name:?} is defined in the root Cargo.toml, which Turborepo cannot model \
-         as a package safely. Move it into a subdirectory and add it to `[workspace].members`."
-    )]
-    UnsupportedRootPackage { name: String },
     #[error("failed to resolve Cargo local package path {path}: {source}")]
     LocalPackagePath {
         path: String,
@@ -131,6 +126,8 @@ pub enum Error {
     },
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
+    #[error("Cargo dependency resolution is unavailable: {0}")]
+    ResolutionUnavailable(String),
     #[error("failed to run `rustc -vV`: {0}")]
     RustcSpawn(#[source] io::Error),
     #[error("`rustc -vV` failed: {stderr}")]
@@ -307,7 +304,6 @@ fn validate_resolved_local_packages(
             path: repo_root.to_string(),
             source,
         })?;
-    let root_manifest_path = real_repo_root.join_component(CARGO_TOML);
     for package in &metadata.packages {
         if package.source.is_some() {
             continue;
@@ -329,11 +325,6 @@ fn validate_resolved_local_packages(
             return Err(Error::OutsideRepositoryLocalPackage {
                 name: package.name.clone(),
                 manifest_path: package.manifest_path.clone(),
-            });
-        }
-        if real_manifest_path == root_manifest_path {
-            return Err(Error::UnsupportedRootPackage {
-                name: package.name.clone(),
             });
         }
         if !metadata.workspace_members.contains(&package.id) {
@@ -564,18 +555,17 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WRAPPER",
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
-    "RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
     "RUSTDOCFLAGS",
     "CARGO_ENCODED_RUSTDOCFLAGS",
-    // Environment equivalents of Cargo's [build] configuration.
-    "CARGO_HOME",
-    "CARGO_TARGET_DIR",
-    "CARGO_BUILD_TARGET_DIR",
-    "CARGO_BUILD_ARTIFACT_DIR",
+    // Environment equivalents of Cargo's [build] configuration. Location-only
+    // settings are projected for derived I/O below, but are not hashed
+    // verbatim. Cargo home configuration is checked separately; supported
+    // target directories participate through derived output paths; unsupported
+    // automatic layouts fail closed to uncached execution.
     "CARGO_BUILD_BUILD_DIR",
     "CARGO_BUILD_TARGET",
     "CARGO_BUILD_RUSTC",
@@ -589,7 +579,9 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     // Cargo normalizes profile names and target triples into these families.
     "CARGO_PROFILE_*",
     "CARGO_PROFILE_*_DIR_NAME",
-    "CARGO_TARGET_*",
+    // Target-table settings have at least a target and key component. Avoid
+    // matching the location-only CARGO_TARGET_DIR variable.
+    "CARGO_TARGET_*_*",
     // Native toolchain variables recognized by cc-rs. `VAR_*` covers both
     // raw and underscore-normalized target suffixes.
     "CC",
@@ -785,8 +777,9 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CargoWorkspaceDetails {
     target_directory: AbsoluteSystemPathBuf,
-    host_target: String,
+    host_target: Option<String>,
     supported_targets: HashSet<String>,
+    compiler_identified: bool,
     repository_config_alters_output_layout: bool,
     repository_config_untracked: bool,
     external_config_present: bool,
@@ -853,13 +846,25 @@ impl CargoTaskContract {
             io.env.push("RUSTFMT".to_string());
         }
         if let Some(workspace) = &self.workspace
+            && !workspace.compiler_identified
+        {
+            io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            io.cache_reason = Some("Turborepo could not identify the Rust compiler".to_string());
+        } else if let Some(workspace) = &self.workspace
             && (workspace.repository_config_untracked || workspace.external_config_present)
         {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
             if workspace.repository_config_untracked {
+                io.cache_reason =
+                    Some("repository Cargo configuration cannot be hashed safely".to_string());
                 io.input_globs.retain(|glob| {
                     !glob.ends_with(".cargo/config.toml") && !glob.ends_with(".cargo/config")
                 });
+            } else {
+                io.cache_reason = Some(
+                    "Cargo configuration outside the repository is not included in the task hash"
+                        .to_string(),
+                );
             }
         }
 
@@ -899,6 +904,11 @@ impl CargoTaskContract {
                 if subcommand == "build" {
                     if self.package.kind == CargoPackageKind::Library {
                         io.outputs = toolchain::DerivedOutputs::Unavailable;
+                        io.cache_reason = Some(
+                            "Cargo library artifacts have no stable outputs for Turborepo to \
+                             restore"
+                                .to_string(),
+                        );
                     } else {
                         io.outputs = self
                             .workspace
@@ -910,8 +920,10 @@ impl CargoTaskContract {
                                     &self.package,
                                     context,
                                 )?;
-                                let effective_target =
-                                    layout.target.as_deref().unwrap_or(&workspace.host_target);
+                                let effective_target = layout
+                                    .target
+                                    .as_deref()
+                                    .or(workspace.host_target.as_deref())?;
                                 let platform = target_platform(effective_target)?;
                                 let package_directory = self.repo_root.resolve(package.directory());
                                 let target_directory =
@@ -1146,25 +1158,31 @@ fn contains_glob_syntax(value: &str) -> bool {
         .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']' | b'{' | b'}'))
 }
 
+fn normalize_target_directory(
+    repo_root: &AbsoluteSystemPath,
+    target_directory: &AbsoluteSystemPath,
+) -> Option<AbsoluteSystemPathBuf> {
+    let real_repo_root = dunce::canonicalize(repo_root.as_std_path()).ok()?;
+    let mut existing_ancestor = target_directory.as_std_path();
+    let mut missing_components = Vec::new();
+    while !existing_ancestor.exists() {
+        missing_components.push(existing_ancestor.file_name()?.to_os_string());
+        existing_ancestor = existing_ancestor.parent()?;
+    }
+    let mut normalized = dunce::canonicalize(existing_ancestor).ok()?;
+    if !normalized.starts_with(real_repo_root) {
+        return None;
+    }
+    normalized.extend(missing_components.into_iter().rev());
+    AbsoluteSystemPathBuf::new(normalized.to_str()?.to_string()).ok()
+}
+
+#[cfg(test)]
 fn target_directory_within_repo(
     repo_root: &AbsoluteSystemPath,
     target_directory: &AbsoluteSystemPath,
 ) -> bool {
-    if !repo_root.contains(target_directory) {
-        return false;
-    }
-    let Ok(real_repo_root) = dunce::canonicalize(repo_root.as_std_path()) else {
-        return false;
-    };
-    let mut existing_ancestor = target_directory.as_std_path();
-    while !existing_ancestor.exists() {
-        let Some(parent) = existing_ancestor.parent() else {
-            return false;
-        };
-        existing_ancestor = parent;
-    }
-    dunce::canonicalize(existing_ancestor)
-        .is_ok_and(|ancestor| ancestor.starts_with(real_repo_root))
+    normalize_target_directory(repo_root, target_directory).is_some()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1236,11 +1254,10 @@ fn cargo_output_layout(
     } else {
         workspace.target_directory.clone()
     };
-    if contains_glob_syntax(target_directory.as_str())
-        || !target_directory_within_repo(repo_root, &target_directory)
-    {
+    if contains_glob_syntax(target_directory.as_str()) {
         return None;
     }
+    let target_directory = normalize_target_directory(repo_root, &target_directory)?;
 
     Some(CargoOutputLayout {
         profile: arguments.profile,
@@ -1269,7 +1286,7 @@ fn cargo_change_observation(
 #[derive(Debug)]
 struct CargoPruneKnowledge {
     domain: crate::prune_knowledge::PruneDomainId,
-    lockfile: String,
+    lockfile: Result<String, String>,
     root_manifest: String,
     package_directories: HashMap<String, String>,
 }
@@ -1278,7 +1295,7 @@ impl CargoPruneKnowledge {
     fn discover(
         repo_root: &AbsoluteSystemPath,
         crates: &[CargoCrate],
-        lockfile: String,
+        lockfile: Result<String, String>,
     ) -> Result<Self, Error> {
         let root_manifest = repo_root
             .join_component(CARGO_TOML)
@@ -1314,7 +1331,11 @@ impl PruneDomain for CargoPruneKnowledge {
             return Ok(None);
         }
         let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
-        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&self.lockfile, kept_packages)
+        let lockfile = self
+            .lockfile
+            .as_ref()
+            .map_err(|reason| failed(Error::ResolutionUnavailable(reason.clone())))?;
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(lockfile, kept_packages)
             .map_err(|error| failed(Error::Lockfile(error)))?;
 
         let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
@@ -1361,11 +1382,26 @@ impl PruneDomain for CargoPruneKnowledge {
 /// root contains a `Cargo.toml`.
 pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
+    resolve_external_dependencies: bool,
 }
 
 impl CargoContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
-        Arc::new(Self { repo_root })
+        Self::new_with_external_dependencies(repo_root, true)
+    }
+
+    pub(crate) fn new_without_external_dependencies(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+        Self::new_with_external_dependencies(repo_root, false)
+    }
+
+    fn new_with_external_dependencies(
+        repo_root: AbsoluteSystemPathBuf,
+        resolve_external_dependencies: bool,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repo_root,
+            resolve_external_dependencies,
+        })
     }
 }
 
@@ -1450,6 +1486,19 @@ enum ContributorMetadata {
     Unresolved(Error),
 }
 
+impl Error {
+    fn supports_lockfile_fallback(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingLockfile
+                | Self::LockfileRead(_)
+                | Self::Lockfile(_)
+                | Self::InvalidLockfile { .. }
+                | Self::LockfileValidationSpawn(_)
+        )
+    }
+}
+
 impl ContributorMetadata {
     fn lockfile(&self) -> Option<&str> {
         match self {
@@ -1479,7 +1528,7 @@ fn discover_contributor_workspace(
 
     match locked_metadata(repo_root) {
         Ok(metadata) => {
-            let workspace = workspace_from_metadata(repo_root, &root_manifest_path, &metadata)?;
+            let workspace = workspace_from_metadata(repo_root, &metadata)?;
             Ok((
                 workspace,
                 ContributorMetadata::Resolved { metadata, lockfile },
@@ -1523,7 +1572,12 @@ impl RepositoryContributor for CargoContributor {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
             let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
-                discover_contributor_workspace(&self.repo_root)
+                if self.resolve_external_dependencies {
+                    discover_contributor_workspace(&self.repo_root)
+                } else {
+                    discover_crates(&self.repo_root)
+                        .map(|workspace| (workspace, ContributorMetadata::Absent))
+                }
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
@@ -1557,40 +1611,68 @@ impl RepositoryContributor for CargoContributor {
 
             let change_observation =
                 cargo_change_observation(&self.repo_root, target_directory.as_deref());
-            let lockfile = if let Some(lockfile) = metadata.lockfile() {
-                lockfile.to_string()
-            } else {
-                read_lockfile(&self.repo_root)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?
+            // Exact lockfile resolution is optional for graph construction.
+            // When it fails, retain Cargo's lockfile-independent `--no-deps`
+            // package graph and let the generic resolution-domain fallback
+            // hash manifests plus raw Cargo.lock bytes conservatively.
+            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
+            let resolution_result = turborepo_rayon_compat::block_in_place(|| {
+                let lockfile = metadata
+                    .lockfile()
+                    .map(str::to_string)
+                    .or_else(|| read_lockfile(&self.repo_root).ok());
+                validate_contributor_metadata(&self.repo_root, metadata)?;
+                let lockfile = lockfile.ok_or(Error::MissingLockfile)?;
+                let closures = external_closures_from_lockfile(&lockfile, &all_names)?;
+                Ok::<_, Error>((lockfile, closures))
+            });
+            let (lockfile, mut closures, resolution_incomplete) = match resolution_result {
+                Ok((lockfile, closures)) => (Ok(lockfile), closures, None),
+                Err(error) => {
+                    if !error.supports_lockfile_fallback() {
+                        return Err(toolchain::Error::Failed(Box::new(error)));
+                    }
+                    let message = error.to_string();
+                    tracing::warn!(
+                        "Unable to resolve Cargo.lock; using conservative Cargo task hashing. Run                          `cargo generate-lockfile` or `cargo update` and commit Cargo.lock to restore                          dependency-aware caching: {}",
+                        message
+                    );
+                    (
+                        Err(message.clone()),
+                        HashMap::new(),
+                        Some(crate::external_resolution::ResolutionIncompleteReason::new(
+                            "cargo-lockfile-unavailable",
+                            message,
+                        )),
+                    )
+                }
             };
             let prune_domain =
                 CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile.clone())
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            // Each crate contributes its already-classified native internal
-            // relationships directly. No JavaScript dependency descriptor or
-            // package-manager policy participates in Cargo graph assembly.
-            // External dependencies (locked crates.io/git packages plus the
-            // compiler itself) participate in each crate task's hash through
-            // the same external-dependency mechanism JS packages use, scoped
-            // to the crate's transitive closure — a dependency bump only
-            // invalidates crates that actually depend on it, and a toolchain
-            // change invalidates everything.
-            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let (rustc, host_target, supported_targets, mut closures) =
-                turborepo_rayon_compat::block_in_place(|| {
-                    validate_contributor_metadata(&self.repo_root, metadata)?;
-                    let (rustc, host_target) = rustc_info(&self.repo_root)?;
-                    let mut supported_targets = rustc_supported_targets(&self.repo_root);
-                    supported_targets.insert(host_target.clone());
-                    Ok::<_, Error>((
-                        rustc,
-                        host_target,
-                        supported_targets,
-                        external_closures_from_lockfile(&lockfile, &all_names)?,
-                    ))
-                })
-                .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let compiler_identity =
+                turborepo_rayon_compat::block_in_place(|| rustc_info(&self.repo_root));
+            if let Err(reason) = &compiler_identity {
+                tracing::warn!(
+                    "Cargo task caching is disabled because Turborepo could not identify the Rust \
+                     compiler: {reason}"
+                );
+            }
+            let compiler_identity = compiler_identity.ok();
+            let compiler_identified = compiler_identity.is_some();
+            let rustc = compiler_identity.as_ref().map(|(identity, _)| identity);
+            let host_target = compiler_identity
+                .as_ref()
+                .map(|(_, host_target)| host_target.clone());
+            let mut supported_targets = if compiler_identified {
+                rustc_supported_targets(&self.repo_root)
+            } else {
+                HashSet::new()
+            };
+            if let Some(host_target) = &host_target {
+                supported_targets.insert(host_target.clone());
+            }
             let workspace_contract_details = target_directory.map(|target_directory| {
                 let startup_environment = CargoHomeEnvironment::current();
                 let config = cargo_config_influence(&self.repo_root, &startup_environment);
@@ -1598,6 +1680,7 @@ impl RepositoryContributor for CargoContributor {
                     target_directory,
                     host_target,
                     supported_targets,
+                    compiler_identified,
                     repository_config_alters_output_layout: config.repository_alters_output_layout,
                     repository_config_untracked: config.repository_config_untracked,
                     external_config_present: config.external_present,
@@ -1608,9 +1691,16 @@ impl RepositoryContributor for CargoContributor {
                 .values()
                 .flatten()
                 .cloned()
-                .chain(std::iter::once(rustc.clone()))
+                .chain(rustc.cloned())
                 .collect();
 
+            let fallback_inputs = std::iter::once(
+                AnchoredSystemPathBuf::from_raw(CARGO_TOML).expect("static path is valid"),
+            )
+            .chain(crates.iter().filter_map(|cargo_crate| {
+                AnchoredSystemPathBuf::new(&self.repo_root, &cargo_crate.manifest_path).ok()
+            }))
+            .collect::<Vec<_>>();
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut resolutions = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
@@ -1636,7 +1726,7 @@ impl RepositoryContributor for CargoContributor {
                     .remove(&cargo_crate.name)
                     .unwrap_or_default()
                     .into_iter()
-                    .chain(std::iter::once(rustc.clone()))
+                    .chain(rustc.cloned())
                     .collect();
                 resolutions.push(package_resolution(
                     cargo_crate.name.clone(),
@@ -1710,10 +1800,14 @@ impl RepositoryContributor for CargoContributor {
                     .map_err(Error::from)
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
                 ExternalResolutionData::Resolved {
-                    completeness: ResolutionCompleteness::Complete,
+                    completeness: resolution_incomplete.map_or(
+                        ResolutionCompleteness::Complete,
+                        ResolutionCompleteness::Partial,
+                    ),
                     packages: resolutions,
                 },
-            );
+            )
+            .with_fallback_inputs(fallback_inputs);
             Ok(DiscoveredPackages::new(packages, workspace_roots)
                 .with_external_resolution(resolution)
                 .with_change_observation(change_observation)
@@ -1988,8 +2082,8 @@ fn cargo_config_influence(
 /// is required.
 ///
 /// Crates whose manifests live outside the repository root, or whose names
-/// are invalid, are skipped with a warning. A `[package]` in the root
-/// manifest is skipped too: its directory would be the entire repository.
+/// are invalid, are skipped with a warning. A `[package]` in the root manifest
+/// is modeled as a normal Cargo package anchored at the repository root.
 pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
     let root_manifest_path = repo_root.join_component(CARGO_TOML);
     if !root_manifest_path.exists() {
@@ -2020,12 +2114,11 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
     }
     let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
-    workspace_from_metadata(repo_root, &root_manifest_path, &metadata)
+    workspace_from_metadata(repo_root, &metadata)
 }
 
 fn workspace_from_metadata(
     repo_root: &AbsoluteSystemPath,
-    root_manifest_path: &AbsoluteSystemPath,
     metadata: &Metadata,
 ) -> Result<DiscoveredWorkspace, Error> {
     let has_packages = !metadata.workspace_members.is_empty();
@@ -2037,7 +2130,7 @@ fn workspace_from_metadata(
         .filter(|package| metadata.workspace_members.contains(&package.id))
         .cloned()
         .collect();
-    let crates = connect_crates(parse_members(repo_root, root_manifest_path, packages));
+    let crates = connect_crates(parse_members(repo_root, packages));
 
     if let Some(name) = &name
         && let Some(collision) = crates.iter().find(|c| &c.name == name)
@@ -2149,7 +2242,6 @@ fn manifest_alters_output_layout(manifest_path: &AbsoluteSystemPath) -> bool {
 
 fn parse_members(
     repo_root: &AbsoluteSystemPath,
-    root_manifest_path: &AbsoluteSystemPath,
     packages: Vec<MetadataPackage>,
 ) -> Vec<ParsedCrate> {
     let mut parsed = Vec::new();
@@ -2162,13 +2254,6 @@ fn parse_members(
             );
             continue;
         };
-        if &*manifest_path == root_manifest_path {
-            tracing::warn!(
-                "ignoring [package] in the root Cargo.toml: a crate at the repository root is not \
-                 supported as a Turborepo package"
-            );
-            continue;
-        }
         if !repo_root.contains(&manifest_path) {
             tracing::warn!(
                 "skipping Cargo crate {}: manifest {manifest_path} is outside the repository",
@@ -2391,7 +2476,6 @@ mod test {
     #[test]
     fn full_metadata_discovers_only_workspace_members() {
         let (_temp, root) = tempdir_root();
-        let root_manifest = root.join_component(CARGO_TOML);
         let member_manifest = root.join_components(&["crates", "member", CARGO_TOML]);
         let metadata = Metadata {
             packages: vec![
@@ -2419,7 +2503,7 @@ mod test {
             metadata: serde_json::json!({ "name": "workspace" }),
         };
 
-        let workspace = workspace_from_metadata(&root, &root_manifest, &metadata).unwrap();
+        let workspace = workspace_from_metadata(&root, &metadata).unwrap();
         assert!(workspace.has_packages);
         assert_eq!(workspace.crates.len(), 1);
         assert_eq!(workspace.crates[0].name, "member");
@@ -2701,37 +2785,40 @@ dependencies = ["lib-a"]
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_cargo_toolchain_rejects_root_package() {
+    async fn test_cargo_toolchain_accepts_root_package() {
         let (_tmp, root) = tempdir_root();
         write(
             &root,
             &["Cargo.toml"],
             "[package]\nname = \"root-package\"\nversion = \"0.1.0\"\nedition = \
-             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \"2\"\n",
+             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"root-workspace\"\n",
         );
         write(&root, &["src", "lib.rs"], "");
         generate_lockfile(&root);
 
-        let error = CargoContributor::new(root)
+        let discovered = CargoContributor::new(root)
             .discover_packages()
             .await
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("root-package")
-                && error.to_string().contains("root Cargo.toml"),
-            "unexpected validation result: {error}"
-        );
+            .unwrap();
+        let names: Vec<_> = discovered
+            .packages()
+            .iter()
+            .filter_map(|package| package.clone().into_parts().name)
+            .collect();
+        assert_eq!(names, ["root-package", "root-workspace"]);
     }
 
     fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
         CargoWorkspaceDetails {
             target_directory: root.join_component(TARGET_DIR),
-            host_target: "x86_64-unknown-linux-gnu".to_string(),
+            host_target: Some("x86_64-unknown-linux-gnu".to_string()),
             supported_targets: HashSet::from([
                 "x86_64-unknown-linux-gnu".to_string(),
                 "aarch64-apple-darwin".to_string(),
                 "x86_64-pc-windows-msvc".to_string(),
             ]),
+            compiler_identified: true,
             repository_config_alters_output_layout: false,
             repository_config_untracked: false,
             external_config_present: false,
@@ -2751,11 +2838,25 @@ dependencies = ["lib-a"]
     }
 
     #[test]
-    fn test_rustup_selection_environment_is_hashed_and_projected() {
-        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
-            assert!(HASHED_ENV_VARS.contains(&variable));
+    fn test_location_only_environment_is_projected_but_not_hashed_verbatim() {
+        for variable in [
+            "CARGO_BUILD_ARTIFACT_DIR",
+            "CARGO_BUILD_TARGET_DIR",
+            "CARGO_HOME",
+            "CARGO_TARGET_DIR",
+            "RUSTUP_HOME",
+        ] {
+            assert!(!HASHED_ENV_VARS.contains(&variable));
             assert!(TASK_IO_ENV_VARS.contains(&variable));
         }
+    }
+
+    #[test]
+    fn test_rustup_selector_and_location_environment_are_classified() {
+        assert!(HASHED_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_TOOLCHAIN"));
+        assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_HOME"));
+        assert!(TASK_IO_ENV_VARS.contains(&"RUSTUP_HOME"));
         assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_DIST_SERVER"));
         assert!(!TASK_IO_ENV_VARS.contains(&"RUSTUP_UPDATE_ROOT"));
     }
@@ -3077,6 +3178,17 @@ dependencies = ["lib-a"]
         )
         .unwrap();
         assert!(!target_directory_within_repo(&root, &outside_path));
+
+        #[cfg(unix)]
+        {
+            let alias = root.join_component("root-alias");
+            std::os::unix::fs::symlink(&root, &alias).unwrap();
+            let aliased_target = alias.join_components(&["new", "target"]);
+            assert_eq!(
+                normalize_target_directory(&root, &aliased_target),
+                Some(root.join_components(&["new", "target"]))
+            );
+        }
 
         #[cfg(windows)]
         {
@@ -3502,7 +3614,7 @@ release: 1.96.0-nightly\n",
     }
 
     #[test]
-    fn test_discover_crates_skips_root_crate() {
+    fn test_discover_crates_includes_root_crate() {
         let (_tmp, root) = tempdir_root();
         write(
             &root,
@@ -3521,8 +3633,7 @@ release: 1.96.0-nightly\n",
         let crates = discover_crates(&root).unwrap().crates;
         assert_eq!(
             crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
-            vec!["member"],
-            "the root crate's directory is the whole repository, so it is not a package"
+            vec!["member", "root-crate"]
         );
     }
 
@@ -3654,6 +3765,35 @@ release: 1.96.0-nightly\n",
         let env =
             std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "1".to_string())]);
         assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_falls_back_without_lockfile() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        std::fs::remove_file(root.join_component(CARGO_LOCK).as_std_path()).unwrap();
+        let (packages, _, resolutions, _, prune_domains) = CargoContributor::new(root)
+            .discover_packages()
+            .await
+            .unwrap()
+            .into_parts();
+        assert_eq!(packages.len(), 4);
+        let ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Partial(reason),
+            packages: resolved,
+        } = resolutions[0].data()
+        else {
+            panic!("missing Cargo.lock should produce partial resolution")
+        };
+        assert_eq!(reason.code(), "cargo-lockfile-unavailable");
+        assert_eq!(resolved.len(), 4);
+        assert!(
+            resolutions[0]
+                .fallback_inputs()
+                .iter()
+                .any(|path| path.as_str().ends_with(CARGO_TOML))
+        );
+        assert!(prune_domains[0].plan(&["app".to_string()]).is_err());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -4135,6 +4275,30 @@ release: 1.96.0-nightly\n",
         let io = app_contract
             .derived_task_io(&app_ctx, "build", "../..", &deps, true, &context)
             .expect("entrypoint build derives IO");
+        let mut unidentified_workspace = output_test_workspace(&root);
+        unidentified_workspace.compiler_identified = false;
+        unidentified_workspace.host_target = None;
+        unidentified_workspace.supported_targets.clear();
+        let unidentified_contract = CargoTaskContract::new(
+            root.clone(),
+            output_test_package(),
+            Some(unidentified_workspace),
+        );
+        let unidentified_io = unidentified_contract
+            .derived_task_io(&app_ctx, "build", "../..", &deps, true, &context)
+            .expect("entrypoint build remains runnable without compiler identity");
+        assert_eq!(
+            unidentified_io.input_safety,
+            toolchain::DerivedInputSafety::Untracked
+        );
+        assert_eq!(
+            unidentified_io.cache_reason.as_deref(),
+            Some("Turborepo could not identify the Rust compiler")
+        );
+        assert_eq!(
+            unidentified_io.outputs,
+            toolchain::DerivedOutputs::Unavailable
+        );
         assert!(
             !io.input_globs
                 .iter()
@@ -4160,11 +4324,11 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
-        assert!(io.env.contains(&"RUSTUP_HOME".to_string()));
+        assert!(!io.env.contains(&"RUSTUP_HOME".to_string()));
         assert!(io.env.contains(&"RUSTUP_TOOLCHAIN".to_string()));
         assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
         assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
-        assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
+        assert!(io.env.contains(&"CARGO_TARGET_*_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
 

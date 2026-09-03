@@ -3,6 +3,8 @@
 //! This module houses the daemon server. For more information, go to the
 //! [daemon module](std::daemon).
 
+#![allow(clippy::result_large_err)]
+
 use std::{
     collections::{HashMap, HashSet},
     sync::{

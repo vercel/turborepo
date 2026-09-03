@@ -69,4 +69,4 @@ Use only the reviewer returned by `begin_performance_improvement`; it is the opp
 
 # Publishing
 
-Open a draft PR only through `create_pull_request` after all gates pass. Use a `perf: Description` title with an uppercase description and no scope. The body must state the author and reviewer models, hypothesis, exact methodology, before/after evidence, validation, review outcome, and limitations.
+Open a draft PR only through `create_pull_request` after all gates pass. Use a `perf: Description` title with an uppercase description and no scope. The body must state the author and reviewer models, hypothesis, exact methodology, before/after evidence, review outcome, and limitations. Do not list routine tests, builds, lint, or type checks that CI will run; mention validation only when the change required non-routine manual testing beyond the performance measurements and test suite.

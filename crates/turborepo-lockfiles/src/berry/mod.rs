@@ -771,6 +771,14 @@ impl Lockfile for BerryLockfile {
         let version = &berry_package.version;
         Some(format!("{name}@{version}"))
     }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        crate::package_source_from_identifier(&package.key)
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some(self.data.metadata.version.clone())
+    }
 }
 
 impl LockfileData {

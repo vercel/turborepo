@@ -1,17 +1,6 @@
 import type { Metadata } from "next/types";
+import { siteUrl } from "@/lib/geistdocs/site-url";
 import { createSignedOgUrl } from "@/lib/og/sign";
-
-const getBaseURL = (): URL => {
-  if (process.env.VERCEL_ENV === "production") {
-    return new URL(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
-  }
-
-  if (process.env.VERCEL_ENV === "preview") {
-    return new URL(`https://${process.env.VERCEL_URL}`);
-  }
-
-  return new URL(`http://localhost:${process.env.PORT || 3000}`);
-};
 
 /**
  * Creates a signed OG image URL for the given title.
@@ -56,7 +45,7 @@ export const createMetadata = ({
   }
 
   return {
-    metadataBase: getBaseURL(),
+    metadataBase: siteUrl,
     title: title ? `${title} | Turborepo` : "Turborepo",
     description,
     openGraph: {

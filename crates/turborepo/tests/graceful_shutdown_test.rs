@@ -295,11 +295,14 @@ mod unix {
 
     fn spawn_noninteractive_turbo(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new(turbo_bin());
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         cmd.arg("run").arg("dev").arg("--filter=app-a");
         for key in common::ambient_turbo_env_keys() {
             cmd.env_remove(&key);
         }
-        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home())
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             .env("DO_NOT_TRACK", "1")
@@ -316,6 +319,7 @@ mod unix {
 
     fn spawn_noninteractive_turbo_via_node_wrapper(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new("node");
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         cmd.arg(turbo_node_wrapper())
             .arg("run")
             .arg("dev")
@@ -323,7 +327,9 @@ mod unix {
         for key in common::ambient_turbo_env_keys() {
             cmd.env_remove(&key);
         }
-        cmd.env("TURBO_BINARY_PATH", turbo_bin())
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home())
+            .env("TURBO_BINARY_PATH", turbo_bin())
             .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
@@ -349,6 +355,7 @@ mod unix {
     }
 
     fn spawn_interactive_turbo_command(test_dir: &Path, via_node_wrapper: bool) -> PtyTurbo {
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -397,6 +404,8 @@ mod unix {
         for key in common::ambient_turbo_env_keys() {
             command.env_remove(&key);
         }
+        command.env("PATH", setup::prepend_to_path(&corepack_dir));
+        command.env("COREPACK_HOME", setup::corepack_home());
         command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
         command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
         command.env("TURBO_PRINT_VERSION_DISABLED", "1");

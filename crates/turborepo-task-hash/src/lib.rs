@@ -1080,12 +1080,23 @@ impl turborepo_task_executor::HashTrackerProvider for TaskHashTracker {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use serde_json::json;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_repository::{
+        external_resolution::{
+            CARGO_RESOLUTION_DOMAIN, ExternalPackageIdentity, ExternalResolutionData,
+            ExternalResolutionDomain, PackageResolution, ResolutionCompleteness,
+        },
         package_graph::{PackageGraph, PackageTaskContextKind},
         package_json::PackageJson,
+        relationships::{DependencyKind, Relationship},
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
+        },
     };
     use turborepo_types::{RunOptsHashInfo, TaskDefinition};
 
@@ -1143,41 +1154,75 @@ mod test {
             .unwrap()
     }
 
-    async fn cargo_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
-        repo_root
-            .join_component("Cargo.toml")
-            .create_with_contents(
-                "[workspace]\nmembers = [\"crates/app\"]\nresolver = \
-                 \"2\"\n\n[workspace.metadata]\nname = \"cargo-workspace\"\n",
-            )
-            .unwrap();
-        repo_root
-            .join_components(&["crates", "app", "Cargo.toml"])
-            .ensure_dir()
-            .unwrap();
-        repo_root
-            .join_components(&["crates", "app", "Cargo.toml"])
-            .create_with_contents(
-                "[package]\nname = \"cargo-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-            )
-            .unwrap();
-        repo_root
-            .join_components(&["crates", "app", "src", "lib.rs"])
-            .ensure_dir()
-            .unwrap();
-        repo_root
-            .join_components(&["crates", "app", "src", "lib.rs"])
-            .create_with_contents("")
-            .unwrap();
-        repo_root
-            .join_component("Cargo.lock")
-            .create_with_contents(
-                "version = 4\n\n[[package]]\nname = \"cargo-app\"\nversion = \"0.1.0\"\n",
-            )
-            .unwrap();
+    const FIXTURE_RUSTC_VERSION: &str = concat!(
+        "rustc 1.96.0-nightly (f5eca4fcf 2026-04-09)\n",
+        "binary: rustc\n",
+        "commit-hash: f5eca4fcf\n",
+        "host: x86_64-unknown-linux-gnu\n",
+        "release: 1.96.0-nightly",
+    );
 
+    struct CargoFixtureContributor {
+        repo_root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for CargoFixtureContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::RUST
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let crate_name = "cargo-app".to_string();
+                let workspace_name = "cargo-workspace".to_string();
+                let compiler = ExternalPackageIdentity::new("rustc", FIXTURE_RUSTC_VERSION);
+                let packages = vec![
+                    DiscoveredPackage::package(
+                        Some(crate_name.clone()),
+                        PackageJson::default(),
+                        self.repo_root
+                            .join_components(&["crates", "app", "Cargo.toml"]),
+                    )
+                    .with_native_relationships(Vec::new()),
+                    DiscoveredPackage::aggregate(
+                        workspace_name.clone(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Cargo.toml"),
+                    )
+                    .with_native_relationships(vec![Relationship::internal(
+                        crate_name.clone(),
+                        DependencyKind::Production,
+                    )]),
+                ];
+                let resolution = ExternalResolutionDomain::new(
+                    CARGO_RESOLUTION_DOMAIN.clone(),
+                    ToolchainId::RUST,
+                    AnchoredSystemPathBuf::default(),
+                    [crate_name.clone(), workspace_name.clone()],
+                    [AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap()],
+                    ExternalResolutionData::Resolved {
+                        completeness: ResolutionCompleteness::Complete,
+                        packages: vec![
+                            PackageResolution::new(crate_name, [compiler.clone()]),
+                            PackageResolution::new(workspace_name, [compiler]),
+                        ],
+                    },
+                );
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("cargo", self.repo_root.clone())],
+                )
+                .with_external_resolution(resolution))
+            })
+        }
+    }
+
+    async fn cargo_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
         PackageGraph::builder_optional(repo_root, None)
-            .with_cargo()
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(CargoFixtureContributor {
+                repo_root: repo_root.clone(),
+            }))
             .build()
             .await
             .unwrap()
@@ -1606,12 +1651,9 @@ mod test {
         .unwrap();
         let cargo_graph = cargo_graph(&cargo_root).await;
         let cargo_cache = compute_external_deps_hashes(&cargo_graph).unwrap();
-        let (external_hash, app_task_hash, workspace_task_hash) = match std::env::consts::OS {
-            "macos" => ("2ccf3983a6195c83", "16148055db78eed5", "3adbee17ca01f306"),
-            "linux" => ("9fae73876995db4d", "bed5df30b6563a22", "a5d3d2445a0e2df2"),
-            "windows" => ("538ddb6706883af6", "9d061b914e2d64aa", "af00aca4864ca739"),
-            os => panic!("add exact Cargo compatibility hashes for {os}"),
-        };
+        let external_hash = "bef1fc07e0fccabe";
+        let app_task_hash = "24cf5aae0bca8de3";
+        let workspace_task_hash = "7d86d24eb004e72c";
         assert_eq!(
             cargo_cache,
             HashMap::from([

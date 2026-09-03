@@ -196,6 +196,7 @@ pub async fn daemon_server(
         {
             let graph_features =
                 crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+            let future_flags = base.opts().future_flags;
             move |args| {
                 PackageChangesWatcher::new(
                     args.repo_root,
@@ -205,6 +206,7 @@ pub async fn daemon_server(
                     false,
                     args.allow_no_package_manager,
                     graph_features,
+                    future_flags,
                 )
             }
         },

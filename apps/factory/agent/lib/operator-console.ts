@@ -9,6 +9,24 @@
  * past a preflight either.
  */
 
+import type { WorkspaceHarness } from "./workspace";
+
+const WORKSPACE_HARNESS_IDS = new Set<WorkspaceHarness>([
+  "fx",
+  "claude-code",
+  "codex",
+  "cursor",
+  "opencode",
+  "pi"
+]);
+
+function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
+  return (
+    typeof value === "string" &&
+    WORKSPACE_HARNESS_IDS.has(value as WorkspaceHarness)
+  );
+}
+
 export const OPERATOR_ACTION_HEADER = "x-operator-action";
 export const OPERATOR_SESSION_ACTION = "access-workspace-session";
 
@@ -36,31 +54,41 @@ export const OPERATOR_SESSION_PRINCIPAL = {
   principalType: "user"
 } as const;
 
-export function operatorSessionPrincipal(model?: string) {
+export function operatorSessionPrincipal(
+  model?: string,
+  harness?: WorkspaceHarness
+) {
+  const attributes: Record<string, string> = {};
   if (
-    model === undefined ||
-    !/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(model)
+    model !== undefined &&
+    /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(model)
   ) {
-    return OPERATOR_SESSION_PRINCIPAL;
+    attributes.selectedModel = model;
   }
-  return {
-    ...OPERATOR_SESSION_PRINCIPAL,
-    attributes: { selectedModel: model }
-  };
+  if (harness !== undefined && isWorkspaceHarness(harness)) {
+    attributes.selectedHarness = harness;
+  }
+  return Object.keys(attributes).length === 0
+    ? OPERATOR_SESSION_PRINCIPAL
+    : { ...OPERATOR_SESSION_PRINCIPAL, attributes };
+}
+
+interface OperatorAuth {
+  readonly attributes: Readonly<Record<string, string | readonly string[]>>;
 }
 
 export function selectedOperatorModel(
-  auth:
-    | {
-        readonly attributes: Readonly<
-          Record<string, string | readonly string[]>
-        >;
-      }
-    | null
-    | undefined
+  auth: OperatorAuth | null | undefined
 ): string | undefined {
   const model = auth?.attributes.selectedModel;
   return typeof model === "string" ? model : undefined;
+}
+
+export function selectedOperatorHarness(
+  auth: OperatorAuth | null | undefined
+): WorkspaceHarness | undefined {
+  const harness = auth?.attributes.selectedHarness;
+  return isWorkspaceHarness(harness) ? harness : undefined;
 }
 
 export function isOperatorSessionPrincipal(

@@ -43,6 +43,7 @@ impl DaemonClient<()> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 impl<T> DaemonClient<T> {
     /// Interrogate the server for its version.
     #[tracing::instrument(skip(self))]
@@ -178,6 +179,7 @@ impl<T> DaemonClient<T> {
 
 impl DaemonClient<DaemonConnector> {
     /// Stops the daemon, closes the connection, and opens a new connection.
+    #[allow(clippy::result_large_err)]
     pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
         self.stop().await?.connect().await.map_err(Into::into)
     }

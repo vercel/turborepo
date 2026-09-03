@@ -50,7 +50,7 @@ function isMusl() {
 }
 
 // TODO: find-up to turbo-repository? This currently only works from turbo-repository/js/dist
-const localPath = join(__dirname, "..", "..", "native", "@turbo");
+const localPath = join(__dirname, "..", "..", "native");
 const pkgRoot = "@turbo/repository";
 
 function loadViaSuffix(suffix) {
@@ -118,7 +118,21 @@ switch (platform) {
 
 nativeBinding = loadViaSuffix(suffix);
 
-const { PackageDetails, PackageManager, Workspace, Package } = nativeBinding;
+const {
+  PackageDetails,
+  PackageManager,
+  Workspace: NativeWorkspace,
+  Package
+} = nativeBinding;
+
+class Workspace extends NativeWorkspace {
+  static find(path, options) {
+    return NativeWorkspace.findWithSkipPackageGraph(
+      path,
+      options?.skipPackageGraph ?? false
+    );
+  }
+}
 
 module.exports.PackageManager = PackageManager;
 module.exports.Workspace = Workspace;

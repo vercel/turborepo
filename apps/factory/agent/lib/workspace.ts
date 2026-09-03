@@ -4,6 +4,16 @@ export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 export type WorkspaceStatus = "idle" | "running" | "error";
 
 export const DEFAULT_WORKSPACE_MODEL = "openai/gpt-5.6-sol";
+export const DEFAULT_WORKSPACE_HARNESS = "fx" as const;
+export const WORKSPACE_HARNESSES = [
+  { id: "fx", name: "fx" },
+  { id: "claude-code", name: "Claude Code" },
+  { id: "codex", name: "Codex" },
+  { id: "cursor", name: "Cursor" },
+  { id: "opencode", name: "OpenCode" },
+  { id: "pi", name: "Pi" }
+] as const;
+export type WorkspaceHarness = (typeof WORKSPACE_HARNESSES)[number]["id"];
 
 export interface WorkspaceMessage {
   readonly createdAt: string;
@@ -17,6 +27,7 @@ export interface WorkspaceRecord {
   readonly createdAt: string;
   readonly error?: string;
   readonly agent: "eve";
+  readonly harness?: WorkspaceHarness;
   readonly id: string;
   readonly messages: readonly WorkspaceMessage[];
   readonly model?: string;
@@ -51,6 +62,7 @@ export function isWorkspaceId(value: unknown): value is string {
 }
 
 export function parseCreateWorkspaceInput(value: unknown): {
+  readonly harness: WorkspaceHarness;
   readonly model: string;
   readonly prompt?: string;
   readonly title: string;
@@ -60,6 +72,8 @@ export function parseCreateWorkspaceInput(value: unknown): {
   if (value.prompt !== undefined && typeof value.prompt !== "string")
     return null;
   if (value.model !== undefined && !isWorkspaceModel(value.model)) return null;
+  if (value.harness !== undefined && !isWorkspaceHarness(value.harness))
+    return null;
   const prompt = value.prompt?.trim();
   const title = value.title?.trim() || prompt?.split("\n", 1)[0]?.slice(0, 120);
   if (
@@ -69,6 +83,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   )
     return null;
   return {
+    harness: value.harness ?? DEFAULT_WORKSPACE_HARNESS,
     model: value.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(prompt === undefined ? {} : { prompt }),
     title
@@ -100,6 +115,7 @@ export function toWorkspaceView(
     createdAt: workspace.createdAt,
     ...(workspace.error === undefined ? {} : { error: workspace.error }),
     agent: workspace.agent,
+    ...(workspace.harness === undefined ? {} : { harness: workspace.harness }),
     id: workspace.id,
     messages: workspace.messages,
     model: workspace.model ?? DEFAULT_WORKSPACE_MODEL,
@@ -140,6 +156,7 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
       value.status === "running" ||
       value.status === "error") &&
     value.agent === "eve" &&
+    (value.harness === undefined || isWorkspaceHarness(value.harness)) &&
     (value.model === undefined || isWorkspaceModel(value.model)) &&
     optionalString(value.sessionId, 256) &&
     isObject(sandbox) &&
@@ -156,6 +173,10 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     optionalString(value.error, 2000) &&
     (value.pullRequest === undefined || isPullRequest(value.pullRequest))
   );
+}
+
+export function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
+  return WORKSPACE_HARNESSES.some((harness) => harness.id === value);
 }
 
 export function isWorkspaceModel(value: unknown): value is string {

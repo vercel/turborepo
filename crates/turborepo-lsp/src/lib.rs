@@ -876,6 +876,7 @@ impl Backend {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     async fn package_discovery(&self) -> Result<Arc<LspPackages>, package_graph::Error> {
         if let Some(packages) = self.packages.get() {
             return Ok(packages);

@@ -437,6 +437,9 @@ pub struct ExternalResolutionDomain {
     root: AnchoredSystemPathBuf,
     members: Vec<String>,
     definition_sources: Vec<AnchoredSystemPathBuf>,
+    /// Conservative files to hash when exact resolution is unavailable.
+    /// Paths are relative to `root` and apply uniformly to every toolchain.
+    fallback_inputs: Vec<AnchoredSystemPathBuf>,
     data: ExternalResolutionData,
 }
 
@@ -452,14 +455,27 @@ impl ExternalResolutionDomain {
         definition_sources: impl IntoIterator<Item = AnchoredSystemPathBuf>,
         data: ExternalResolutionData,
     ) -> Self {
+        let definition_sources: Vec<_> = definition_sources.into_iter().collect();
         Self {
             id,
             toolchain,
             root,
             members: members.into_iter().collect(),
-            definition_sources: definition_sources.into_iter().collect(),
+            fallback_inputs: definition_sources.clone(),
+            definition_sources,
             data,
         }
+    }
+
+    /// Adds conservative inputs used when this domain cannot provide exact
+    /// package-level resolution. This keeps fallback policy on the generic
+    /// contributor boundary rather than in JavaScript-specific engine code.
+    pub fn with_fallback_inputs(
+        mut self,
+        inputs: impl IntoIterator<Item = AnchoredSystemPathBuf>,
+    ) -> Self {
+        self.fallback_inputs.extend(inputs);
+        self
     }
 
     /// Behavioral domain identity, independent from retained provenance.
@@ -482,6 +498,10 @@ impl ExternalResolutionDomain {
 
     pub fn definition_sources(&self) -> &[AnchoredSystemPathBuf] {
         &self.definition_sources
+    }
+
+    pub fn fallback_inputs(&self) -> &[AnchoredSystemPathBuf] {
+        &self.fallback_inputs
     }
 
     pub fn data(&self) -> &ExternalResolutionData {
@@ -513,6 +533,8 @@ impl ExternalResolutionGeneration {
             domain.members.dedup();
             domain.definition_sources.sort();
             domain.definition_sources.dedup();
+            domain.fallback_inputs.sort();
+            domain.fallback_inputs.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
                 // Identity lists are sorted and deduped at construction
                 // (`PackageResolution::new`) and immutable afterward, and
