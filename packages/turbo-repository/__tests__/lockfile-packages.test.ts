@@ -245,6 +245,62 @@ describe("lockfilePackages", () => {
   });
 });
 
+describe("lockfilePackages with skipPackageGraph", () => {
+  it("matches the package-graph result for a pnpm monorepo", async () => {
+    const withGraph = await (
+      await Workspace.find(PNPM_MONOREPO_PATH)
+    ).lockfilePackages();
+    const withoutGraph = await (
+      await Workspace.find(PNPM_MONOREPO_PATH, { skipPackageGraph: true })
+    ).lockfilePackages();
+
+    assert.ok(
+      withoutGraph.packages.length > 0,
+      "Expected at least one package"
+    );
+    assert.deepEqual(withoutGraph, withGraph);
+  });
+
+  it("matches the package-graph result for a Yarn 1 fixture", async () => {
+    const dir = path.join(LOCKFILE_FIXTURES_PATH, "yarn1-file-dep");
+    const withGraph = await (await Workspace.find(dir)).lockfilePackages();
+    const withoutGraph = await (
+      await Workspace.find(dir, { skipPackageGraph: true })
+    ).lockfilePackages();
+
+    assert.deepEqual(withoutGraph, withGraph);
+  });
+
+  it("still works for single-package repos", async () => {
+    const withGraph = await (
+      await Workspace.find(NPM_SINGLE_PACKAGE_PATH)
+    ).lockfilePackages();
+    const withoutGraph = await (
+      await Workspace.find(NPM_SINGLE_PACKAGE_PATH, { skipPackageGraph: true })
+    ).lockfilePackages();
+
+    assert.deepEqual(withoutGraph, withGraph);
+  });
+
+  it("rejects graph-backed methods with a clear error", async () => {
+    const workspace = await Workspace.find(PNPM_MONOREPO_PATH, {
+      skipPackageGraph: true
+    });
+    assert.equal(workspace.isMultiPackage, true);
+    assert.equal(workspace.packageManager.version, "9.15.9");
+
+    for (const call of [
+      () => workspace.findPackages(),
+      () => workspace.findPackagesWithGraph(),
+      () => workspace.packagesFromLockfile(),
+      () => workspace.affectedPackages([]),
+      () => workspace.findPackageByPath("apps/app/index.js")
+    ]) {
+      await assert.rejects(call, /skipPackageGraph/);
+    }
+  });
+});
+
 describe("packageManager version", () => {
   it("exposes the version from the packageManager field", async () => {
     const workspace = await Workspace.find(PNPM_MONOREPO_PATH);

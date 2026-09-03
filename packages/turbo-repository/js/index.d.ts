@@ -84,6 +84,17 @@ export interface LockfilePackages {
   /** Declared package-manager version, when available. */
   packageManagerVersion?: string;
 }
+/** Options for [`Workspace::find`]. */
+export interface WorkspaceFindOptions {
+  /**
+   * Skip constructing the package graph. Only
+   * [`Workspace::lockfile_packages`] is available on the resulting
+   * workspace; every graph-backed method rejects. Use this when you only
+   * need the lockfile closure (for example dependency auditing) and want to
+   * avoid the cost of building the full monorepo graph.
+   */
+  skipPackageGraph?: boolean;
+}
 export class Package {
   name: string;
   /** The absolute path to the package root. */
@@ -121,7 +132,10 @@ export class Workspace {
    * Finds the workspace root from the given path, and returns a new
    * Workspace.
    */
-  static find(path?: string | undefined | null): Promise<Workspace>;
+  static find(
+    path?: string | undefined | null,
+    options?: WorkspaceFindOptions | undefined | null
+  ): Promise<Workspace>;
   /** Finds and returns packages within the workspace. */
   findPackages(): Promise<Array<Package>>;
   /**
@@ -151,6 +165,10 @@ export class Workspace {
    * `errors` list rather than an exception, so callers can emit metrics on
    * both success and failure. Package manager identity is exposed separately
    * on [`Workspace::package_manager`].
+   *
+   * This is the only method available on a workspace opened with
+   * `skipPackageGraph`; in that mode the closure is computed directly from
+   * the workspace manifests and lockfile.
    */
   lockfilePackages(): Promise<LockfilePackages>;
   /**

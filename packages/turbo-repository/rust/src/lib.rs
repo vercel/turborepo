@@ -167,6 +167,18 @@ impl LockfilePackages {
     }
 }
 
+/// Options for [`Workspace::find`].
+#[napi(object)]
+#[derive(Default)]
+pub struct WorkspaceFindOptions {
+    /// Skip constructing the package graph. Only
+    /// [`Workspace::lockfile_packages`] is available on the resulting
+    /// workspace; every graph-backed method rejects. Use this when you only
+    /// need the lockfile closure (for example dependency auditing) and want to
+    /// avoid the cost of building the full monorepo graph.
+    pub skip_package_graph: Option<bool>,
+}
+
 #[napi]
 pub struct Workspace {
     /// The absolute path to the workspace root.
@@ -178,12 +190,13 @@ pub struct Workspace {
     /// The package manager used by the workspace.
     #[napi(readonly)]
     pub package_manager: PackageManager,
-    /// The package graph for the workspace.
-    graph: PackageGraph,
-    /// Inputs for resolving a single-package repository's root lockfile on
-    /// demand. Core single-package graphs intentionally skip lockfile
-    /// resolution, so the JS API retains this repository-local fallback.
-    lockfile: internal::SinglePackageLockfile,
+    /// The package graph for the workspace. `None` when opened with
+    /// `skipPackageGraph`.
+    graph: Option<PackageGraph>,
+    /// Inputs for resolving the root lockfile without the package graph.
+    /// Used for single-package repositories (whose core graph intentionally
+    /// skips lockfile resolution) and for `skipPackageGraph` workspaces.
+    lockfile: internal::DirectLockfile,
     lockfile_path: String,
     lockfile_format: String,
 }
@@ -252,8 +265,16 @@ impl Workspace {
     /// Finds the workspace root from the given path, and returns a new
     /// Workspace.
     #[napi(factory)]
-    pub async fn find(path: Option<String>) -> Result<Workspace, napi::Error> {
-        Self::find_internal(path).await.map_err(|e| e.into())
+    pub async fn find(
+        path: Option<String>,
+        options: Option<WorkspaceFindOptions>,
+    ) -> Result<Workspace, napi::Error> {
+        let skip_package_graph = options
+            .and_then(|options| options.skip_package_graph)
+            .unwrap_or(false);
+        Self::find_internal(path, skip_package_graph)
+            .await
+            .map_err(|e| e.into())
     }
 
     /// Finds and returns packages within the workspace.
@@ -272,6 +293,7 @@ impl Workspace {
     ///  }
     #[napi]
     pub async fn find_packages_with_graph(&self) -> Result<HashMap<String, PackageDetails>, Error> {
+        let graph = self.graph()?;
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
@@ -284,12 +306,12 @@ impl Workspace {
             .map(|package| {
                 let details = PackageDetails {
                     dependencies: package
-                        .dependencies(&self.graph, workspace_path)
+                        .dependencies(graph, workspace_path)
                         .into_iter()
                         .map(|p| p.relative_path)
                         .collect(),
                     dependents: package
-                        .dependents(&self.graph, workspace_path)
+                        .dependents(graph, workspace_path)
                         .into_iter()
                         .map(|p| p.relative_path)
                         .collect(),
@@ -307,8 +329,9 @@ impl Workspace {
     /// preserve the historical lockfile-only listing.
     #[napi]
     pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
-        let identities = self.graph.javascript_external_package_identities();
-        if identities.is_empty() && self.graph.lockfile().is_none() {
+        let graph = self.graph()?;
+        let identities = graph.javascript_external_package_identities();
+        if identities.is_empty() && graph.lockfile().is_none() {
             return Err(napi::Error::from_reason("No lockfile found"));
         }
 
@@ -332,18 +355,22 @@ impl Workspace {
     /// `errors` list rather than an exception, so callers can emit metrics on
     /// both success and failure. Package manager identity is exposed separately
     /// on [`Workspace::package_manager`].
+    ///
+    /// This is the only method available on a workspace opened with
+    /// `skipPackageGraph`; in that mode the closure is computed directly from
+    /// the workspace manifests and lockfile.
     #[napi]
     pub async fn lockfile_packages(&self) -> LockfilePackages {
-        if !self.is_multi_package {
+        let Some(graph) = self.graph.as_ref().filter(|_| self.is_multi_package) else {
             return self.lockfile.packages(
+                self.is_multi_package,
                 &self.lockfile_path,
                 &self.lockfile_format,
                 &self.package_manager,
             );
-        }
+        };
 
-        let lockfile_version = self
-            .graph
+        let lockfile_version = graph
             .lockfile()
             .and_then(|lockfile| lockfile.format_version());
         let metadata = || LockfilePackagesMetadata {
@@ -354,15 +381,14 @@ impl Workspace {
             package_manager_version: self.package_manager.version.clone(),
         };
 
-        match self.graph.javascript_external_resolution() {
+        match graph.javascript_external_resolution() {
             JavascriptExternalResolution::Resolved(identities) => {
                 let mut packages = Vec::with_capacity(identities.len());
                 let mut errors = Vec::new();
                 for identity in identities {
                     match split_identity(identity.display_name()) {
                         Some((name, version)) => {
-                            let source = self
-                                .graph
+                            let source = graph
                                 .lockfile()
                                 .map(|lockfile| {
                                     lockfile.package_source(&ResolvedPackage {
@@ -425,21 +451,21 @@ impl Workspace {
         }
     }
 
-    pub fn get_lockfile_contents(
-        &self,
+    fn get_lockfile_contents(
+        graph: &PackageGraph,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         workspace_root: &AbsoluteSystemPath,
         from_commit: &str,
     ) -> LockfileContents {
-        let Some(lockfile_path) = self
-            .graph
-            .change_knowledge()
-            .resolution_paths()
-            .iter()
-            .find_map(|path| {
-                let path = AnchoredSystemPath::new(path).ok()?;
-                changed_files.contains(path).then_some(path)
-            })
+        let Some(lockfile_path) =
+            graph
+                .change_knowledge()
+                .resolution_paths()
+                .iter()
+                .find_map(|path| {
+                    let path = AnchoredSystemPath::new(path).ok()?;
+                    changed_files.contains(path).then_some(path)
+                })
         else {
             return LockfileContents::Unchanged;
         };
@@ -469,6 +495,7 @@ impl Workspace {
         base: Option<&str>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
+        let graph = self.graph()?;
         let base = matches!(optimize_global_invalidations, Some(true))
             .then(|| {
                 base.ok_or_else(|| {
@@ -491,16 +518,15 @@ impl Workspace {
 
         // Create a ChangeMapper with no ignore patterns
         let change_detector = if base.is_some() {
-            Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph))
+            Either::Left(DefaultPackageChangeMapperWithLockfile::new(graph))
         } else {
-            Either::Right(DefaultPackageChangeMapper::new(&self.graph))
+            Either::Right(DefaultPackageChangeMapper::new(graph))
         };
-        let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
+        let mapper = ChangeMapper::new(graph, vec![], change_detector);
 
         let lockfile_contents = if let Some(base) = base {
-            self.get_lockfile_contents(&changed_files, workspace_root, base)
-        } else if self
-            .graph
+            Self::get_lockfile_contents(graph, &changed_files, workspace_root, base)
+        } else if graph
             .change_knowledge()
             .resolution_paths()
             .iter()
@@ -518,8 +544,7 @@ impl Workspace {
         };
 
         let packages = match package_changes {
-            PackageChanges::All(_) => self
-                .graph
+            PackageChanges::All(_) => graph
                 .package_task_contexts()
                 .map(|context| WorkspacePackage {
                     name: context.package().clone(),
@@ -529,7 +554,7 @@ impl Workspace {
             PackageChanges::Some(packages) => packages.into_keys().collect(),
         };
 
-        self.serialize_packages(packages)
+        self.serialize_packages(graph, packages)
     }
 
     /// Given a path (relative to the workspace root), returns the
@@ -541,7 +566,7 @@ impl Workspace {
     /// containing-package of every ancestor.
     #[napi]
     pub async fn find_package_by_path(&self, path: String) -> Result<Package, Error> {
-        let package_mapper = DefaultPackageChangeMapper::new(&self.graph);
+        let package_mapper = DefaultPackageChangeMapper::new(self.graph()?);
         let anchored_path = AnchoredSystemPath::new(&path)
             .map_err(|e| Error::from_reason(e.to_string()))?
             .clean();
@@ -566,13 +591,14 @@ impl Workspace {
 
     fn serialize_packages(
         &self,
+        graph: &PackageGraph,
         packages: impl IntoIterator<Item = WorkspacePackage>,
     ) -> Result<Vec<Package>, Error> {
         let workspace_root = AbsoluteSystemPath::new(&self.absolute_path)
             .map_err(|error| Error::from_reason(error.to_string()))?;
         let mut packages = packages
             .into_iter()
-            .filter(|package| self.graph.is_real_package(&package.name))
+            .filter(|package| graph.is_real_package(&package.name))
             .map(|package| {
                 let package_path = workspace_root.resolve(&package.path);
                 Package::new(package.name.to_string(), workspace_root, &package_path)

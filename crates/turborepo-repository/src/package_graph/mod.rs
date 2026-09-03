@@ -32,6 +32,7 @@ use crate::{
 pub mod builder;
 mod dep_splitter;
 mod javascript;
+pub mod lockfile_closure;
 mod projections;
 
 pub use builder::{Error, PackageGraphBuilder};
