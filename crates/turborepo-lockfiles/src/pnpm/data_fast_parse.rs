@@ -1235,8 +1235,11 @@ impl TopLevelFields {
             overrides: self.overrides,
             package_extensions_checksum: self.package_extensions_checksum,
             patched_dependencies: self.patched_dependencies,
-            // `importers` has no `#[serde(default)]`; a missing field is a
-            // serde error, so let the fallback path report it.
+            specifiers: None,
+            dependencies: None,
+            optional_dependencies: None,
+            dev_dependencies: None,
+            root_dependencies_meta: None,
             importers: self.importers.ok_or_else(Unsupported::here)?,
             packages: self.packages,
             snapshots: self.snapshots,
