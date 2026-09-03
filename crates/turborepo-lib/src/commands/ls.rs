@@ -11,9 +11,9 @@ use serde::Serialize;
 use thiserror::Error;
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::{SignalHandler, listeners::get_signal};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cprint, cprintln};
+use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{cli, cli::OutputFormat, commands::CommandBase, run::builder::RunBuilder};
 
