@@ -57,6 +57,7 @@ jobs:
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             container: amazon/aws-lambda-nodejs:20@sha256:a7ac1ea17664bc42317bf0f4b25482413dc6427e73c319b4e46ac63a2b4cad73
+            install_shell: bash -leo pipefail {0}
             install: |
               microdnf install -y gcc gcc-c++ git tar xz make
               curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location --output rustup-init https://static.rust-lang.org/rustup/archive/1.29.0/x86_64-unknown-linux-gnu/rustup-init
@@ -79,6 +80,7 @@ jobs:
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
+            install_shell: sh -e {0}
             install: |
               apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
               rustup-init -y --default-toolchain none
@@ -90,6 +92,7 @@ jobs:
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-musl
             container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
+            install_shell: sh -e {0}
             install: |
               apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
               rustup-init -y --default-toolchain none
@@ -117,6 +120,7 @@ jobs:
     steps:
       - name: Install Packages
         run: ${{ matrix.settings.install }}
+        shell: ${{ matrix.settings.install_shell }}
         if: ${{ matrix.settings.install }}
 
       - name: Checkout
