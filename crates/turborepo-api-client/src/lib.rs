@@ -304,6 +304,8 @@ impl CacheClient for APIClient {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
 
+        Self::add_team_params_to_url(&mut request_url, team_id, team_slug);
+
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
@@ -325,8 +327,6 @@ impl CacheClient for APIClient {
         if allow_auth {
             request_builder = request_builder.bearer_auth(token.expose());
         }
-
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
@@ -380,6 +380,8 @@ impl CacheClient for APIClient {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
 
+        Self::add_team_params_to_url(&mut request_url, team_id, team_slug);
+
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
@@ -408,8 +410,6 @@ impl CacheClient for APIClient {
         if allow_auth {
             request_builder = request_builder.bearer_auth(token.expose());
         }
-
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
         request_builder = Self::add_ci_header(request_builder);
 
@@ -920,6 +920,8 @@ impl APIClient {
             team_slug,
         } = api_auth;
 
+        Self::add_team_params_to_url(&mut url, team_id.as_deref(), team_slug.as_deref());
+
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
@@ -942,14 +944,36 @@ impl APIClient {
             request_builder = request_builder.bearer_auth(token.expose());
         }
 
-        request_builder =
-            Self::add_team_params(request_builder, team_id.as_deref(), team_slug.as_deref());
-
         if let Some(constant) = turborepo_ci::Vendor::get_constant() {
             request_builder = request_builder.header("x-artifact-client-ci", constant);
         }
 
         Ok(request_builder)
+    }
+
+    /// Adds the team parameters to a URL before a preflight request is made.
+    ///
+    /// Remote Caches need the team to resolve a request, so the parameters have
+    /// to be part of the preflight request itself. They must not be appended
+    /// afterwards either: a preflight response may point at signed storage, and
+    /// such URLs sign their own query string, so appending a parameter to the
+    /// returned location invalidates the signature.
+    fn add_team_params_to_url(url: &mut Url, team_id: Option<&str>, team_slug: Option<&str>) {
+        let team_id = team_id.filter(|team_id| team_id.starts_with("team_"));
+
+        if team_id.is_none() && team_slug.is_none() {
+            return;
+        }
+
+        let mut query = url.query_pairs_mut();
+
+        if let Some(team_id) = team_id {
+            query.append_pair("teamId", team_id);
+        }
+
+        if let Some(team_slug) = team_slug {
+            query.append_pair("slug", team_slug);
+        }
     }
 
     fn add_team_params(
@@ -1218,6 +1242,51 @@ mod test {
         assert!(debug.contains("***"));
         assert!(debug.contains("team-123"));
         assert!(debug.contains("my-team"));
+    }
+
+    #[test]
+    fn add_team_params_to_url_appends_slug() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, None, Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_appends_team_id_and_slug() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, Some("team_123"), Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?teamId=team_123&slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_ignores_team_id_without_prefix() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, Some("123"), Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_leaves_url_untouched_when_unlinked() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, None, None);
+
+        assert_eq!(url.as_str(), "https://cache.example/v8/artifacts/abc123");
     }
 
     #[tokio::test]
