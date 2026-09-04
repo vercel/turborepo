@@ -4,17 +4,17 @@ The operator page and its API routes rely on Vercel Deployment Protection for ac
 
 ## Workspaces
 
-"Start work" creates a durable Factory workspace driven by
-[`fx`](https://fx.sh/). Each workspace has one server-side record, named Vercel
-Sandbox, fx session, transcript, and shareable `/workspaces/<id>` URL. A
-Workflow advances the same saved fx session one turn at a time, so another
-browser or operator can reopen the URL and continue the same conversation and
-checkout.
+"Start work" creates a durable Factory workspace backed by AI SDK
+`HarnessAgent`. Operators choose fx, Claude Code, Codex, Cursor, OpenCode, or Pi
+when creating the workspace. Each workspace has one server-side record, named
+Vercel Sandbox, resumable harness session, transcript, and shareable
+`/workspaces/<id>` URL. Eve advances the workspace one turn at a time, so
+another browser or operator can reopen the URL and continue the same
+conversation and checkout.
 
 The workspace page can load the current Git status and a capped diff on demand,
-and exposes a browser terminal, the `sandbox ssh <name>` command, and the exact
-`fx resume --id <session>` command for rejoining the chat after connecting.
-Workflow observability remains the full execution audit. When fx reports a
+and exposes a browser terminal and the `sandbox ssh <name>` command. Workflow
+observability remains the full execution audit. When the coding agent reports a
 Turborepo pull request URL, the workspace records and links it.
 
 The Eve GitHub channel automatically handles newly opened public issues. A
@@ -58,8 +58,8 @@ pnpm --filter examples-agent factory start "Investigate the affected warning and
 pnpm --filter examples-agent factory ssh ws_...
 ```
 
-The SSH command prints the exact fx resume command before connecting. The same
-workspace remains available from the web while the local terminal is attached.
+The same workspace remains available from the web while the local terminal is
+attached.
 
 ## Factory image
 
@@ -104,13 +104,13 @@ Configure it with:
 
 - A private Vercel Blob store (the ledger lives beside the run
   registry).
-- A GitHub Vercel Connect connector subscribed to `push`, `issues`,
-  `issue_comment`, and `pull_request_review_comment`, with pull-request
-  read/write, issue read/write, contents write, and repository collaborator
-  metadata read permissions. Route
-  `push` to `/api/github/push`, and route `issues` plus both comment events to
-  `/eve/v1/github` (including the Deployment Protection bypass query parameter
-  on both destinations).
+- A GitHub Vercel Connect connector subscribed to `push`, `pull_request`, and
+  `pull_request_review_comment`, with pull-request read/write, contents write,
+  and repository collaborator metadata read permissions. Route `push` to
+  `/api/github/push`, and route `pull_request` and
+  `pull_request_review_comment` to `/eve/v1/github`
+  (including the Deployment Protection bypass query parameter on both
+  destinations).
 - `FACTORY_IMAGE_CONNECTOR_ID` set to that connector's stable `scl_...` ID.
 - A Production trigger destination for the `turborepo-factory` project at
   `/api/github/push`. Because Deployment Protection covers that path, append
@@ -130,9 +130,9 @@ and recent builds, and can start a build for the current `main` head with
 Eve freezes `revalidationKey` at build time, so the template rotates when
 the toolchain fingerprint changes or a newer image is published, and
 boots from the published snapshot when one matches. Each session then
-fast-forwards its checkout to the current `main`. New fx workspaces do the same,
+fast-forwards its checkout to the current `main`. New HarnessAgent workspaces do the same,
 and provision the shared image phases before their first turn when no matching
-image exists. Resumed workspaces preserve their checkout, fx session, and
+image exists. Resumed workspaces preserve their checkout, selected harness session, and
 uncommitted changes.
 
 A toolchain change provisions the template from scratch during the next
@@ -148,8 +148,8 @@ Configure `GITHUB_TOKEN_EXCHANGE_URL`. The exchange endpoint receives Vercel OID
 ## Agent Runs
 
 The operator page links to Vercel Agent Runs, the audit record for Eve schedules.
-fx workspace turns are audited through Workflow observability. Workspace Blob
-records hold the resumable UI transcript and control-plane state, not the
-complete execution audit.
+HarnessAgent workspace turns are audited through Workflow observability.
+Workspace Blob records hold the resumable UI transcript and control-plane
+state, not the complete execution audit.
 
 An Eve run's model is recorded when its first model step starts rather than when the session starts. The agent selects its author model dynamically, so `session.started` carries no model id and the ledger fills the field from `step.started` instead.

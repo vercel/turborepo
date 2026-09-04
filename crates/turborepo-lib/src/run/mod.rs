@@ -430,8 +430,13 @@ impl Run {
             turborepo_log::info(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!(
-                    "{pad}• Running {targets_list} in {} packages",
-                    self.filtered_pkgs.len()
+                    "{pad}• Running {targets_list} in {package_count} {package_label}",
+                    package_count = self.filtered_pkgs.len(),
+                    package_label = if self.filtered_pkgs.len() == 1 {
+                        "package"
+                    } else {
+                        "packages"
+                    }
                 ),
             )
             .emit();
@@ -1193,7 +1198,7 @@ impl Run {
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
                     let resolution_file_fallback = self
                         .pkg_dep_graph
-                        .external_resolution_global_file_fallback()
+                        .external_resolution_fallback_inputs()
                         .unwrap_or_default();
                     let root_engines = self.pkg_dep_graph.root_engines();
                     let root_engines = (!root_engines.is_empty()).then_some(root_engines);

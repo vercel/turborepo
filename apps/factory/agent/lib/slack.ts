@@ -1,4 +1,5 @@
 import { connectSlackCredentials } from "@vercel/connect/eve";
+import { get, put } from "@vercel/blob";
 import {
   callSlackApi,
   type SlackBotToken,
@@ -202,6 +203,97 @@ export async function deliverSlackMessage(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+interface PullRequestSlackNotification {
+  readonly channel: string;
+  readonly timestamp: string;
+}
+
+const pullRequestNotificationPrefix = "factory-pull-request-slack/v1/";
+
+type SlackRequest = (
+  operation: string,
+  body: Readonly<Record<string, unknown>>
+) => Promise<SlackApiResponse>;
+
+export async function recordPullRequestSlackNotification(
+  pullRequestNumber: number,
+  delivery: SlackDeliveryResult
+): Promise<void> {
+  if (!delivery.ok || delivery.timestamp === null) return;
+  await put(
+    `${pullRequestNotificationPrefix}${pullRequestNumber}.json`,
+    JSON.stringify({
+      channel: delivery.channel,
+      timestamp: delivery.timestamp
+    }),
+    {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json"
+    }
+  );
+}
+
+export async function markPullRequestSlackNotificationMerged(
+  pullRequestNumber: number,
+  text: string,
+  options: {
+    readonly notification?: PullRequestSlackNotification | null;
+    readonly request?: SlackRequest;
+  } = {}
+): Promise<boolean> {
+  const notification =
+    options.notification === undefined
+      ? await readPullRequestSlackNotification(pullRequestNumber)
+      : options.notification;
+  if (notification === null) return false;
+
+  const response = await (options.request ?? requestSlackApi)("chat.update", {
+    channel: notification.channel,
+    ts: notification.timestamp,
+    text
+  });
+  if (response.ok !== true) {
+    throw new Error(
+      typeof response.error === "string"
+        ? `Slack API returned ${response.error}.`
+        : "Slack API rejected the message."
+    );
+  }
+  return true;
+}
+
+async function readPullRequestSlackNotification(
+  pullRequestNumber: number
+): Promise<PullRequestSlackNotification | null> {
+  const result = await get(
+    `${pullRequestNotificationPrefix}${pullRequestNumber}.json`,
+    { access: "private", useCache: false }
+  );
+  if (!result || result.statusCode !== 200) return null;
+  const value: unknown = await new Response(result.stream)
+    .json()
+    .catch(() => null);
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Readonly<Record<string, unknown>>;
+  return typeof record.channel === "string" &&
+    typeof record.timestamp === "string"
+    ? { channel: record.channel, timestamp: record.timestamp }
+    : null;
+}
+
+async function requestSlackApi(
+  operation: string,
+  body: Readonly<Record<string, unknown>>
+): Promise<SlackApiResponse> {
+  return callSlackApi({
+    botToken: slackCredentials.botToken,
+    operation,
+    body
+  });
 }
 
 interface IssueAlert {

@@ -24,6 +24,9 @@
     "jest/require-hook": "off",
     "no-inline-comments": "off",
     "unicorn/numeric-separators-style": "off",
+    // Workspace.find(dir, options) trips no-array-method-this-argument because
+    // the rule mistakes the options argument for an array method `thisArg`.
+    "unicorn/no-array-method-this-argument": "off",
     "typescript/consistent-type-definitions": "off",
     "no-use-before-define": "off",
     "promise/prefer-await-to-then": "off",

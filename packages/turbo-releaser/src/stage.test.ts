@@ -45,6 +45,7 @@ describe("prepareStage", () => {
       "version",
       "1.2.3",
       "--allow-same-version",
+      "--no-git-checks",
       "--no-git-tag-version"
     ]);
     assert.match(

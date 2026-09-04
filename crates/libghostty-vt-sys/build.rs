@@ -80,7 +80,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=HOST");
     println!("cargo:rerun-if-env-changed=DEBUG");
     println!("cargo:rerun-if-env-changed=OPT_LEVEL");
-    println!("cargo:rerun-if-changed=crates/libghostty-vt-sys/build.rs");
+    println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
+    println!("cargo:rerun-if-changed=build.rs");
 
     // An explicit source override should stay authoritative even when the
     // pkg-config feature is enabled, so local Ghostty checkouts remain easy to
@@ -119,7 +120,15 @@ fn build_vendored(link_mode: LinkMode) {
             );
             p
         }
-        Err(_) => fetch_ghostty(&out_dir),
+        Err(_) => {
+            let dir = fetch_ghostty(&out_dir);
+            if target.contains("apple-darwin") {
+                let deployment_target = env::var("MACOSX_DEPLOYMENT_TARGET")
+                    .expect("MACOSX_DEPLOYMENT_TARGET must be set for macOS builds");
+                set_ghostty_macos_deployment_target(&dir, &deployment_target);
+            }
+            dir
+        }
     };
 
     // Build libghostty-vt via zig.
@@ -168,11 +177,21 @@ fn build_vendored(link_mode: LinkMode) {
             .arg(&zig_global_cache_dir);
     }
 
-    // Only pass -Dtarget when cross-compiling. For native builds, let zig
-    // auto-detect the host (matches how ghostty's own CMakeLists.txt works).
-    if target != host {
-        let zig_target = zig_target(&target);
-        build.arg(format!("-Dtarget={zig_target}"));
+    // Always pass an explicit macOS target so Zig uses the same deployment
+    // target as rustc and native dependencies built through cc-rs. Otherwise,
+    // Zig derives its minimum from the host and produces objects that cannot be
+    // linked cleanly into binaries targeting older macOS releases.
+    if target.contains("apple-darwin") {
+        let deployment_target = env::var("MACOSX_DEPLOYMENT_TARGET")
+            .expect("MACOSX_DEPLOYMENT_TARGET must be set for macOS builds");
+        let architecture = target
+            .strip_suffix("-apple-darwin")
+            .expect("macOS target must end in -apple-darwin");
+        build.arg(format!(
+            "-Dtarget={architecture}-macos.{deployment_target}-none"
+        ));
+    } else if target != host {
+        build.arg(format!("-Dtarget={}", zig_target(&target)));
     }
 
     run(build, "zig build");
@@ -377,6 +396,35 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
     src_dir
 }
 
+fn set_ghostty_macos_deployment_target(ghostty_dir: &Path, deployment_target: &str) {
+    let major = deployment_target
+        .split('.')
+        .next()
+        .expect("macOS deployment target must contain a major version");
+    assert!(
+        major.parse::<u16>().is_ok(),
+        "invalid MACOSX_DEPLOYMENT_TARGET: {deployment_target}"
+    );
+
+    let config_path = ghostty_dir.join("src/build/Config.zig");
+    let source = std::fs::read_to_string(&config_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", config_path.display()));
+    let old = "            .major = 13,";
+    let new = format!("            .major = {major},");
+
+    if source.contains(&new) {
+        return;
+    }
+    assert!(
+        source.contains(old),
+        "expected Ghostty macOS deployment target in {}",
+        config_path.display()
+    );
+
+    std::fs::write(&config_path, source.replacen(old, &new, 1))
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", config_path.display()));
+}
+
 fn run(mut command: Command, context: &str) {
     let status = command
         .status()
@@ -401,8 +449,6 @@ fn zig_target(target: &str) -> String {
         "x86_64-unknown-linux-musl" => "x86_64-linux-musl",
         "aarch64-unknown-linux-gnu" => "aarch64-linux-gnu",
         "aarch64-unknown-linux-musl" => "aarch64-linux-musl",
-        "aarch64-apple-darwin" => "aarch64-macos-none",
-        "x86_64-apple-darwin" => "x86_64-macos-none",
         "x86_64-pc-windows-gnu" => "x86_64-windows-gnu",
         "aarch64-pc-windows-gnullvm" => "aarch64-windows-gnu",
         "x86_64-pc-windows-msvc" => "x86_64-windows-msvc",

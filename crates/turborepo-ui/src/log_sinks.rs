@@ -72,6 +72,7 @@ impl LogSinks {
     /// Re-enable all terminal output when the TUI didn't start
     /// (stream mode, web mode, terminal too small).
     pub fn enable_for_stream(&self) {
+        self.tui.disable();
         self.terminal.enable();
     }
 }

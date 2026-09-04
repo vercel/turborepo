@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { connection, type NextRequest } from "next/server";
 
 type NonEmptyArray<T> = Array<T> & { 0: T };
 
@@ -77,6 +77,8 @@ Errors (400 | 404 | 500):
 */
 
 export async function GET(req: NextRequest): Promise<Response> {
+  await connection();
+
   if (!SUPPORTED_METHODS.includes(req.method)) {
     return errorResponse({
       status: 404,

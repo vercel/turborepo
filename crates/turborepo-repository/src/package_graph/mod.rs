@@ -32,6 +32,7 @@ use crate::{
 pub mod builder;
 mod dep_splitter;
 mod javascript;
+pub mod lockfile_closure;
 mod projections;
 
 pub use builder::{Error, PackageGraphBuilder};
@@ -1505,14 +1506,13 @@ impl PackageGraph {
         identities
     }
 
-    /// Global-hash file fallback when JavaScript resolution is unavailable.
+    /// Conservative global-hash inputs for every toolchain whose exact
+    /// external resolution is unavailable or partial.
     ///
-    /// Mirrors the historical behavior of hashing `package.json` plus the
-    /// package-manager lockfile path when a lockfile object was not loaded:
-    /// include the repository root `package.json` and any existing resolution
-    /// definition sources from the JavaScript domain. Single-package mode has
-    /// no resolution generation, so it retains the package-manager fallback.
-    pub fn external_resolution_global_file_fallback(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
+    /// Contributors declare these paths on their resolution domains, keeping
+    /// the main engine parser-neutral. The historical single-package
+    /// JavaScript fallback is retained for graphs without a generation.
+    pub fn external_resolution_fallback_inputs(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
         let Some(generation) = self.resolution_generation() else {
             let package_manager = self.package_manager()?;
             let mut paths = vec![self.repo_root().join_component("package.json")];
@@ -1522,20 +1522,33 @@ impl PackageGraph {
             }
             return Some(paths);
         };
-        let domain = generation.domain(&JAVASCRIPT_RESOLUTION_DOMAIN)?;
-        match domain.data() {
-            ExternalResolutionData::Resolved { .. } => None,
-            ExternalResolutionData::Unavailable(_) => {
-                let mut paths = vec![self.repo_root().join_component("package.json")];
-                for source in domain.definition_sources() {
-                    let path = self.repo_root().resolve(source);
-                    if path.exists() {
-                        paths.push(path);
+
+        let mut paths = Vec::new();
+        for domain in generation.domains() {
+            let needs_fallback = matches!(
+                domain.data(),
+                ExternalResolutionData::Unavailable(_)
+                    | ExternalResolutionData::Resolved {
+                        completeness: crate::external_resolution::ResolutionCompleteness::Partial(
+                            _
+                        ),
+                        ..
                     }
+            );
+            if !needs_fallback {
+                continue;
+            }
+            let domain_root = self.repo_root().resolve(domain.root());
+            for input in domain.fallback_inputs() {
+                let path = domain_root.resolve(input);
+                if path.exists() || !domain.definition_sources().contains(input) {
+                    paths.push(path);
                 }
-                Some(paths)
             }
         }
+        paths.sort();
+        paths.dedup();
+        (!paths.is_empty()).then_some(paths)
     }
 
     /// Resolve a lockfile package to the generation identity that shares its
@@ -2467,14 +2480,10 @@ mod test {
             panic!("expected unavailable terminal data")
         };
         assert_eq!(reason.code(), "lockfile-unavailable");
-        assert!(
-            unavailable
-                .external_resolution_global_file_fallback()
-                .is_some()
-        );
+        assert!(unavailable.external_resolution_fallback_inputs().is_some());
 
         let fallback = unavailable
-            .external_resolution_global_file_fallback()
+            .external_resolution_fallback_inputs()
             .expect("unavailable JS resolution should expose a global file fallback");
         assert!(
             fallback
@@ -2482,9 +2491,7 @@ mod test {
                 .any(|path| path.file_name() == Some("package.json"))
         );
         assert!(
-            resolved
-                .external_resolution_global_file_fallback()
-                .is_none(),
+            resolved.external_resolution_fallback_inputs().is_none(),
             "resolved domains must not use the global file fallback"
         );
     }

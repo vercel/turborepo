@@ -65,6 +65,7 @@ export default defineChannel<
         agent: "eve",
         activeTurnId: turnId,
         createdAt: now,
+        harness: input.harness,
         id,
         messages: [
           { createdAt: now, id: turnId, role: "user", text: input.prompt }
@@ -80,7 +81,7 @@ export default defineChannel<
 
       try {
         const session = await from(id).send(input.prompt, {
-          auth: operatorSessionPrincipal(input.model),
+          auth: operatorSessionPrincipal(input.model, input.harness),
           mode: WORKSPACE_RUN_MODE,
           state: { workspaceId: id },
           title: input.title
@@ -94,7 +95,11 @@ export default defineChannel<
           headers: { "cache-control": "no-store" }
         });
       } catch (error) {
-        await failWorkspace(id, "Could not start the Eve workspace session.");
+        const reason =
+          error instanceof Error && error.message.trim()
+            ? `Could not start the workspace session: ${error.message.trim()}`
+            : "Could not start the workspace session.";
+        await failWorkspace(id, reason);
         throw error;
       }
     })

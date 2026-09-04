@@ -197,7 +197,11 @@ Represents the workspace structure and package dependencies:
   the same resolution generation (including a lazy compact reverse index)
   rather than retained manifest payloads or live lockfile human-name callbacks.
   N-API JavaScript lockfile package listing uses the JavaScript domain of that
-  generation. The JavaScript
+  generation; when the N-API caller opts out of graph construction
+  (`skipPackageGraph`), `package_graph/lockfile_closure.rs` computes the same
+  external closure directly from workspace manifests and the lockfile, reusing
+  the internal/external `DependencySplitter` without building repository or
+  relationship knowledge. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
@@ -372,10 +376,13 @@ entrypoint classification, and whether that task derives I/O. Broader behavior
 such as environment projection, dependency-source participation, dynamic I/O,
 pruning, and command-map capability remains on `ScopeTaskContract`. Engine
 composition uses the task-local contract when present and the scope contract
-only as a fallback. Definition memoization keys include native execution and
-task-local contract facts, and it is disabled for package-scoped definitions or
-per-package derived I/O. This prevents scopes with the same turbo.json chain but
-different aggregates or contracts from sharing an invalid definition.
+only as a fallback. An explicit argv override replaces only native execution;
+defaults, inputs, outputs, environment, and cache policy continue to come from
+the same native task contract and authored configuration.
+Definition memoization keys include native execution and task-local contract
+facts, and it is disabled for package-scoped definitions or per-package derived
+I/O. This prevents scopes with the same turbo.json chain but different
+aggregates or contracts from sharing an invalid definition.
 
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
@@ -392,8 +399,10 @@ contract domain. Dependency source participation is likewise declared by each
 scope contract rather than inferred from contributor provenance.
 Dependency tasks do not inherit arguments for a different requested task, each
 contract can observe only the variables it declares, Windows lookup remains
-case-insensitive, and every declared pattern automatically participates in task
-hashing. If a user env exclusion matches a projected contract-derived I/O variable,
+case-insensitive, and contracts separately declare which projected values
+participate verbatim in task hashing. Location-only values can instead be
+represented by resolved I/O paths or toolchain identity. If a user env exclusion
+matches a projected contract-derived I/O variable,
 automatic outputs become unavailable rather than deriving cacheable paths from
 an unhashed value. Derived outputs distinguish exact/resolved paths from
 unavailable automatic resolution. When outputs are unavailable, the engine
@@ -573,9 +582,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   graph through the same construction path as a run, so watch sees the same
   package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
-  all-packages fallback. Known gap: the hash watcher's content-hash dedup
-  is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
-  fast cache hit rather than being suppressed.
+  all-packages fallback. The repository graph registers every execution
+  scope with the hash watcher, so content-hash deduplication applies equally
+  to JavaScript, Cargo, and Python packages.
 
 - **Prune** (`PruneKnowledge` and `PruneDomain::{plan, finalize}`, consumed by
   `turborepo-lib/src/commands/prune.rs`): each generation-owned domain reports

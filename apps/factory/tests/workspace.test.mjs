@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isWorkspaceHarness,
   isWorkspaceMutationRequest,
   isWorkspaceModel,
   isWorkspaceRecord,
   parseCreateWorkspaceInput,
+  DEFAULT_WORKSPACE_HARNESS,
   DEFAULT_WORKSPACE_MODEL,
   toWorkspaceSummary,
   WORKSPACE_RUN_MODE,
@@ -38,6 +40,8 @@ test("validates Eve workspace records", () => {
   assert.equal(isWorkspaceRecord(workspace()), true);
   assert.equal(isWorkspaceRecord(workspace({ sessionId: undefined })), true);
   assert.equal(isWorkspaceRecord(workspace({ agent: "fx" })), false);
+  assert.equal(isWorkspaceRecord(workspace({ harness: "codex" })), true);
+  assert.equal(isWorkspaceRecord(workspace({ harness: "unknown" })), false);
   assert.equal(isWorkspaceRecord(workspace({ version: 1 })), false);
 });
 
@@ -52,6 +56,7 @@ test("workspace views whitelist fields and omit opaque state", () => {
   assert.equal(view.sessionId, "wrun_abc");
   assert.equal(view.sandbox.id, "eve-sandbox-abc");
   assert.equal(view.model, DEFAULT_WORKSPACE_MODEL);
+  assert.equal(view.harness, undefined);
 });
 
 test("workspace summaries omit transcripts and sandbox identifiers", () => {
@@ -77,30 +82,52 @@ test("workspaces use a resumable conversation session", () => {
 
 test("validates create bodies", () => {
   assert.deepEqual(parseCreateWorkspaceInput({ title: "  Work  " }), {
+    harness: DEFAULT_WORKSPACE_HARNESS,
     model: DEFAULT_WORKSPACE_MODEL,
     title: "Work"
   });
   assert.deepEqual(parseCreateWorkspaceInput({ prompt: "  Fix cache  " }), {
+    harness: DEFAULT_WORKSPACE_HARNESS,
     model: DEFAULT_WORKSPACE_MODEL,
     prompt: "Fix cache",
     title: "Fix cache"
   });
   assert.deepEqual(
     parseCreateWorkspaceInput({
+      harness: "claude-code",
       model: "anthropic/claude-sonnet-5",
       prompt: "Fix cache"
     }),
     {
+      harness: "claude-code",
       model: "anthropic/claude-sonnet-5",
       prompt: "Fix cache",
       title: "Fix cache"
     }
   );
   assert.equal(
+    parseCreateWorkspaceInput({ harness: "unknown", prompt: "Fix cache" }),
+    null
+  );
+  assert.equal(
     parseCreateWorkspaceInput({ model: "not a model", prompt: "Fix cache" }),
     null
   );
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
+});
+
+test("validates workspace harness identifiers", () => {
+  for (const harness of [
+    "fx",
+    "claude-code",
+    "codex",
+    "cursor",
+    "opencode",
+    "pi"
+  ]) {
+    assert.equal(isWorkspaceHarness(harness), true);
+  }
+  assert.equal(isWorkspaceHarness("unknown"), false);
 });
 
 test("validates workspace model identifiers", () => {

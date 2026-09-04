@@ -1527,6 +1527,12 @@ fn test_dependency_outputs_hashes_materialized_dependency_outputs() {
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
     fs::write(tempdir.path().join("apps/my-app/seed.txt"), "v1\n").unwrap();
+    fs::create_dir_all(tempdir.path().join("apps/my-app/src/generated")).unwrap();
+    fs::write(
+        tempdir.path().join("apps/my-app/src/generated/schema.txt"),
+        "v1\n",
+    )
+    .unwrap();
     fs::write(
         tempdir.path().join("apps/my-app/package.json"),
         r#"{
@@ -1572,6 +1578,11 @@ fn test_dependency_outputs_hashes_materialized_dependency_outputs() {
 "#,
     )
     .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "commit generated output", "--quiet"],
+    );
 
     let output = run_turbo(
         tempdir.path(),
@@ -1594,6 +1605,10 @@ fn test_dependency_outputs_hashes_materialized_dependency_outputs() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
+    assert_eq!(
+        fs::read_to_string(tempdir.path().join("apps/my-app/.output/result.txt")).unwrap(),
+        "v2\n"
+    );
 }
 
 #[test]

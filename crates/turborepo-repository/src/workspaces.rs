@@ -172,6 +172,41 @@ impl WorkspaceGlobs {
         }
         Ok(files.into_iter())
     }
+
+    /// Finds manifests for another toolchain using the same validated
+    /// workspace glob and repository-boundary semantics as JavaScript.
+    pub fn get_manifests(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        manifest_name: &str,
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
+        let inclusions = self
+            .raw_inclusions
+            .iter()
+            .map(|pattern| {
+                ValidatedGlob::from_str(&format!(
+                    "{}/{}",
+                    pattern.trim_end_matches('/'),
+                    manifest_name
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let files = globwalk::globwalk_with_settings(
+            repo_root,
+            &inclusions,
+            &self.validated_exclusions,
+            globwalk::WalkType::Files,
+            globwalk::Settings::default(),
+        )?;
+        let real_repo_root = repo_root.to_realpath()?;
+        for file in &files {
+            let real_file = file.to_realpath()?;
+            if !real_file.starts_with(&real_repo_root) {
+                return Err(Error::WorkspacePackageOutsideRepo(file.to_string()));
+            }
+        }
+        Ok(files.into_iter())
+    }
 }
 
 #[cfg(test)]

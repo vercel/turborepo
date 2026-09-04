@@ -73,7 +73,6 @@ impl GroupingLayer {
             task_id: id,
             layer: Arc::clone(self),
             buffer,
-            accumulated_bytes: Vec::new(),
         }
     }
 
@@ -92,7 +91,6 @@ impl GroupingLayer {
             display_label: display_label.into(),
             layer: Arc::clone(self),
             buffer,
-            accumulated_bytes: Vec::new(),
         }
     }
 }
@@ -111,10 +109,6 @@ enum TaskEvent {
 /// In passthrough mode, all calls forward to the logger immediately.
 /// In grouped mode, calls are buffered and flushed atomically when
 /// [`finish`](Self::finish) is called.
-///
-/// `accumulated_bytes` always collects all output bytes regardless of
-/// mode — these are returned by `finish()` for cache log writing and
-/// run summary use.
 pub struct TaskHandle {
     task_id: String,
     /// Human-facing label for CI group markers. Defaults to `task_id`.
@@ -122,7 +116,6 @@ pub struct TaskHandle {
     layer: Arc<GroupingLayer>,
     /// `None` in passthrough mode; `Some` in grouped mode.
     buffer: Option<Vec<TaskEvent>>,
-    accumulated_bytes: Vec<u8>,
 }
 
 impl TaskHandle {
@@ -141,7 +134,6 @@ impl TaskHandle {
 
     /// Write raw child process output bytes for this task.
     pub fn task_output(&mut self, channel: OutputChannel, bytes: &[u8]) {
-        self.accumulated_bytes.extend_from_slice(bytes);
         match &mut self.buffer {
             None => {
                 self.layer.logger.task_output(&self.task_id, channel, bytes);
@@ -160,10 +152,7 @@ impl TaskHandle {
     /// In grouped mode, acquires the flush lock to prevent interleaving
     /// with other tasks, then replays all buffered events and output
     /// through the logger bracketed by `begin/end_task_group` calls.
-    ///
-    /// Returns all accumulated output bytes (useful for cache log
-    /// writing and run summary).
-    pub fn finish(self, is_error: bool) -> Vec<u8> {
+    pub fn finish(self, is_error: bool) {
         if let Some(buffer) = self.buffer
             && !buffer.is_empty()
         {
@@ -192,7 +181,6 @@ impl TaskHandle {
                 .logger
                 .end_task_group(&self.display_label, is_error);
         }
-        self.accumulated_bytes
     }
 
     /// Create a writer that forwards to [`task_output`](Self::task_output).
@@ -304,8 +292,7 @@ mod tests {
         handle.task_output(OutputChannel::Stdout, b"hello\n");
         assert_eq!(sink.output_chunks.lock().unwrap().len(), 1);
 
-        let bytes = handle.finish(false);
-        assert_eq!(bytes, b"hello\n");
+        handle.finish(false);
 
         // No group markers in passthrough
         assert!(sink.group_begins.lock().unwrap().is_empty());
@@ -325,7 +312,7 @@ mod tests {
         assert!(sink.events.lock().unwrap().is_empty());
         assert!(sink.output_chunks.lock().unwrap().is_empty());
 
-        let bytes = handle.finish(false);
+        handle.finish(false);
 
         // Now everything flushed
         assert_eq!(sink.events.lock().unwrap().len(), 1);
@@ -339,9 +326,6 @@ mod tests {
         let ends = sink.group_ends.lock().unwrap();
         assert_eq!(ends.len(), 1);
         assert_eq!(ends[0], ("web#build".to_string(), false));
-
-        // Accumulated bytes contain both chunks
-        assert_eq!(bytes, b"building...\nwarning: unused var\n");
     }
 
     #[test]
@@ -369,18 +353,6 @@ mod tests {
 
         assert!(sink.group_begins.lock().unwrap().is_empty());
         assert!(sink.group_ends.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn passthrough_accumulates_bytes() {
-        let (_sink, layer) = setup(GroupingMode::Passthrough);
-        let mut handle = layer.task("web#build");
-
-        handle.task_output(OutputChannel::Stdout, b"line 1\n");
-        handle.task_output(OutputChannel::Stderr, b"line 2\n");
-
-        let bytes = handle.finish(false);
-        assert_eq!(bytes, b"line 1\nline 2\n");
     }
 
     #[test]

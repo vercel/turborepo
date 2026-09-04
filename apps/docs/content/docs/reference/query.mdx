@@ -9,13 +9,15 @@ related:
   - /docs/reference/system-environment-variables
 ---
 
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
 Run GraphQL queries against your monorepo.
 
 ```bash title="Terminal"
 turbo query [query] [flags]
 ```
 
-To quickly get the GraphQL schema, use the `--schema`flag.
+To quickly get the GraphQL schema, use the `--schema` flag.
 
 ```bash title="Terminal"
 turbo query --schema
@@ -97,7 +99,7 @@ turbo query ls --affected
 turbo query ls --affected --filter=web
 ```
 
-#### `--output`
+#### `--output` <ExperimentalBadge />
 
 Control the output format. Defaults to `pretty` (human-readable).
 

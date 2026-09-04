@@ -332,13 +332,13 @@ turbo docs "prune" --docs-version=2.7.5  # override docs version (minimum: 2.7.5
 
 ## turbo ls
 
-List packages in the monorepo (experimental).
+List packages in the monorepo.
 
 ```bash
 turbo ls                 # all packages
 turbo ls web             # details for a specific package
 turbo ls --affected      # only packages changed vs main
-turbo ls --output=json   # machine-readable (default: pretty)
+turbo ls --output=json   # machine-readable (default: pretty; --output is experimental)
 ```
 
 ## turbo query
@@ -349,6 +349,10 @@ Query the monorepo using GraphQL.
 turbo query                                          # spins up GraphiQL server
 turbo query "query { packages { items { name } } }"  # run a query string
 turbo query ./query.gql                              # run a query from a file
+turbo query ls                                         # list packages (shorthand)
+turbo query ls web                                     # package details
+turbo query ls --affected                              # affected packages only
+turbo query affected                                   # affected tasks (replaces turbo-ignore)
 ```
 
 ## More

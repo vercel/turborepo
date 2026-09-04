@@ -13,24 +13,24 @@
     "build:release": "bash scripts/build.sh --release"
   },
   "devDependencies": {
-    "@napi-rs/cli": "2.16.3",
+    "@napi-rs/cli": "3.8.6",
     "execa": "8.0.1",
     "fs-extra": "11.1.1",
     "prettier": "3.3.3",
     "tsx": "4.21.0"
   },
   "napi": {
-    "name": "@turbo/repository",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "x86_64-apple-darwin",
-        "aarch64-apple-darwin",
-        "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-pc-windows-msvc",
-        "aarch64-pc-windows-msvc"
-      ]
-    }
+    "binaryName": "repository",
+    "packageName": "@turbo/repository",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc"
+    ]
   }
 }

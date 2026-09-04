@@ -64,9 +64,17 @@ export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
   }
 });
 
-export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
-  dir: "content/openapi"
+export const openapi = defineDocs({
+  dir: "content/openapi",
+  docs: {
+    schema: geistdocsFrontmatterSchema,
+    postprocess: {
+      includeProcessedMarkdown: true
+    }
+  }
 });
+
+export const { docs: openapiDocs, meta: openapiMeta } = openapi;
 
 export const { docs: extraDocs, meta: extraMeta } = defineDocs({
   dir: "content/extra",

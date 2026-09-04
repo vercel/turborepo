@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { absoluteUrl } from "@/lib/geistdocs/site-url";
 
 const PRODUCTION_DOMAIN = "turborepo.dev";
 
@@ -14,7 +15,10 @@ export default function robots(): MetadataRoute.Robots {
   // For subdomains, this will be "v1.turborepo.dev", etc.
   const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "";
 
-  if (productionUrl !== PRODUCTION_DOMAIN) {
+  if (
+    process.env.VERCEL_ENV !== "production" ||
+    productionUrl !== PRODUCTION_DOMAIN
+  ) {
     return {
       rules: {
         userAgent: "*",
@@ -28,6 +32,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/"
     },
-    sitemap: `https://${PRODUCTION_DOMAIN}/sitemap.xml`
+    sitemap: absoluteUrl("/sitemap.xml")
   };
 }

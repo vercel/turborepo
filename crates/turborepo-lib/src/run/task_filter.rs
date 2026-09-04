@@ -442,8 +442,8 @@ fn get_changed_files(
         git_range.from_ref.as_deref(),
         git_range.to_ref.as_deref(),
         git_range.include_uncommitted,
-        git_range.merge_base,
         git_range.allow_unknown_objects,
+        git_range.merge_base,
     )?;
     Ok(result)
 }

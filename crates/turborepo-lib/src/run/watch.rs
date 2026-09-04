@@ -314,6 +314,7 @@ impl WatchClient {
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
             graph_features,
+            base.opts().future_flags,
         );
 
         // Subscribe before building the Run so we don't miss the initial
@@ -607,7 +608,7 @@ impl WatchClient {
             );
         }
 
-        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        let mut stoppers = std::mem::take(&mut self.background_stoppers);
         for stopper in &stoppers {
             if graceful_shutdown {
                 stopper

@@ -22,7 +22,6 @@
     clippy::explicit_into_iter_loop,
     clippy::filter_map_next,
     clippy::flat_map_option,
-    clippy::from_iter_instead_of_collect,
     clippy::if_not_else,
     clippy::manual_ok_or,
     clippy::map_unwrap_or,

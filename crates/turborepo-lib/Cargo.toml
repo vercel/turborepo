@@ -39,8 +39,6 @@ workspace = true
 [dependencies]
 camino = "1.1.4"
 chrono = { workspace = true, features = ["serde"] }
-clap = { workspace = true, features = ["derive", "env"] }
-clap_complete = { workspace = true }
 console = { workspace = true }
 convert_case = "0.6.0"
 ctrlc = { version = "3.4.0", features = ["termination"] }
@@ -94,6 +92,7 @@ tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true }
+usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
