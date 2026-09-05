@@ -29,6 +29,7 @@ struct AppInfo {
 struct TrieNode {
     exact_children: HashMap<Arc<str>, TrieNode>,
     param_child: Option<Box<TrieNode>>,
+    excluded_param_children: Vec<(Vec<Arc<str>>, TrieNode)>,
     wildcard_match: Option<usize>,      // for * (zero or more)
     wildcard_plus_match: Option<usize>, // for + (one or more)
     terminal_match: Option<usize>,
@@ -50,6 +51,7 @@ struct PathPattern {
 enum Segment {
     Exact(Arc<str>),
     Param,
+    ParamExcluding(Vec<Arc<str>>),
     Wildcard,     // matches zero or more segments (*)
     WildcardPlus, // matches one or more segments (+)
 }
@@ -192,6 +194,20 @@ impl TrieNode {
                     .get_or_insert_with(|| Box::new(TrieNode::default()));
                 child.insert(&segments[1..], app_idx);
             }
+            Segment::ParamExcluding(exclusions) => {
+                if let Some((_, child)) = self
+                    .excluded_param_children
+                    .iter_mut()
+                    .find(|(existing, _)| existing == exclusions)
+                {
+                    child.insert(&segments[1..], app_idx);
+                } else {
+                    let mut child = TrieNode::default();
+                    child.insert(&segments[1..], app_idx);
+                    self.excluded_param_children
+                        .push((exclusions.clone(), child));
+                }
+            }
             Segment::Wildcard => {
                 self.wildcard_match = Some(app_idx);
             }
@@ -211,6 +227,16 @@ impl TrieNode {
             && let Some(app_idx) = child.lookup(&segments[1..])
         {
             return Some(app_idx);
+        }
+
+        for (exclusions, child) in &self.excluded_param_children {
+            if !exclusions
+                .iter()
+                .any(|excluded| excluded.as_ref() == segments[0])
+                && let Some(app_idx) = child.lookup(&segments[1..])
+            {
+                return Some(app_idx);
+            }
         }
 
         if let Some(child) = &self.param_child
@@ -274,6 +300,61 @@ fn validate_path_expression(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn unescape_regex_literal(literal: &str) -> String {
+    // Config strings retain the JSONC escape layer, while direct parser inputs only
+    // contain the regex escape layer. Unescape until both representations converge.
+    let mut unescaped = literal.to_string();
+    loop {
+        let mut next = String::with_capacity(unescaped.len());
+        let mut chars = unescaped.chars();
+        let mut changed = false;
+        while let Some(ch) = chars.next() {
+            if ch == '\\' {
+                if let Some(escaped) = chars.next() {
+                    next.push(escaped);
+                    changed = true;
+                } else {
+                    next.push(ch);
+                }
+            } else {
+                next.push(ch);
+            }
+        }
+        unescaped = next;
+        if !changed {
+            return unescaped;
+        }
+    }
+}
+
+fn parse_negative_lookahead(param: &str) -> Option<Result<Vec<Arc<str>>, String>> {
+    let (name, expression) = param.split_once("((?!")?;
+    if name.is_empty() {
+        return Some(Err(format!(
+            "Parameter name cannot be empty in negative lookahead: {param}"
+        )));
+    }
+    let Some(alternatives) = expression.strip_suffix(").*)") else {
+        return Some(Err(format!(
+            "Unsupported regular expression wildcard: {param}"
+        )));
+    };
+
+    let exclusions = alternatives
+        .split('|')
+        .filter(|alternative| !alternative.is_empty())
+        .map(|alternative| Arc::from(unescape_regex_literal(alternative)))
+        .collect::<Vec<_>>();
+
+    if exclusions.is_empty() {
+        Some(Err(format!(
+            "Negative lookahead must contain at least one exclusion: {param}"
+        )))
+    } else {
+        Some(Ok(exclusions))
+    }
+}
+
 impl PathPattern {
     fn parse(pattern: &str) -> Result<Self, String> {
         if pattern.is_empty() {
@@ -312,12 +393,23 @@ impl PathPattern {
                     );
                 }
 
-                // Check for regex patterns (not supported in our basic implementation)
+                // Proxy supports a limited regex subset and compares negative-lookahead
+                // alternatives as exact path segments.
                 if param_name.contains('(') && !param_name.contains("\\(") {
-                    return Err(format!(
-                        "Path {pattern} cannot use regular expression wildcards. Only simple \
-                         parameter names are supported (e.g., ':id', ':path*', ':slug+')"
-                    ));
+                    match parse_negative_lookahead(param_name) {
+                        Some(Ok(exclusions)) => {
+                            segments.push(Segment::ParamExcluding(exclusions));
+                            continue;
+                        }
+                        Some(Err(error)) => return Err(error),
+                        None => {
+                            return Err(format!(
+                                "Path {pattern} cannot use regular expression wildcards. Only \
+                                 simple parameter names and negative lookaheads are supported \
+                                 (e.g., ':id', ':path*', ':slug+', ':path((?!foo|bar).*)')"
+                            ));
+                        }
+                    }
                 }
 
                 // Handle modifiers
@@ -390,6 +482,16 @@ impl PathPattern {
                     path_idx += 1;
                 }
                 Segment::Param => {
+                    pattern_idx += 1;
+                    path_idx += 1;
+                }
+                Segment::ParamExcluding(exclusions) => {
+                    if exclusions
+                        .iter()
+                        .any(|excluded| excluded.as_ref() == path_segments[path_idx])
+                    {
+                        return false;
+                    }
                     pattern_idx += 1;
                     path_idx += 1;
                 }
@@ -701,6 +803,23 @@ mod tests {
     fn test_reject_regex_patterns() {
         let err = PathPattern::parse("/:lang(en|es|de)/blog").unwrap_err();
         assert!(err.contains("regular expression"));
+    }
+
+    #[test]
+    fn test_negative_lookahead_matches_proxy_exact_exclusions() {
+        let pattern = PathPattern::parse("/oss/:path((?!program-badge).*)/:path*").unwrap();
+        assert!(!pattern.matches("/oss/program-badge"));
+        assert!(pattern.matches("/oss/program-badge.svg"));
+        assert!(pattern.matches("/oss/program-badge-2026.svg"));
+        assert!(pattern.matches("/oss/project/readme"));
+
+        let pattern =
+            PathPattern::parse("/oss/:path((?!program-badge\\.svg|program-badge-).*)/:path*")
+                .unwrap();
+        assert!(!pattern.matches("/oss/program-badge.svg"));
+        assert!(!pattern.matches("/oss/program-badge-"));
+        assert!(pattern.matches("/oss/program-badge-2026.svg"));
+        assert!(pattern.matches("/oss/project/readme"));
     }
 
     #[test]
