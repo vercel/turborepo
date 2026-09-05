@@ -1,6 +1,8 @@
 ## Repositories
 
-Provides JS repository analysis functionality, scoped to the JS ecosystem.
+Provides Turborepo repository analysis for JavaScript, Cargo, and uv workspaces
+from a JavaScript API. Cargo and uv discovery follows the corresponding
+`turbo.json` future flags.
 
 Note that this is not yet a stable package, and functionality, API, and naming may all change.
 

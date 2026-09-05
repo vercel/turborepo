@@ -29,8 +29,6 @@ pub enum RemoteCacheDisabledReason {
     TokenWithoutTeam,
     /// `remoteCache.enabled: false` in turbo.json.
     InConfig,
-    /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
-    InEnvVar,
     /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
     /// disabled both remote read and write.
     ByFlags,
@@ -157,16 +155,18 @@ impl Opts {
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
-        let default_execution_args = Box::new(ExecutionArgs {
+        let default_execution_args = ExecutionArgs {
             single_package: args.single_package,
             ..Default::default()
-        });
-        let (execution_args, run_args) = match &args.command {
+        };
+        let (execution_args, run_args): (ExecutionArgs, RunArgs) = match &args.command {
             Some(Command::Run {
                 run_args,
                 execution_args,
-            }) => (execution_args, run_args),
-            Some(Command::Watch { execution_args, .. }) => (execution_args, &Box::default()),
+            }) => (execution_args.clone(), run_args.clone()),
+            Some(Command::Watch { execution_args, .. }) => {
+                (execution_args.clone(), RunArgs::default())
+            }
             Some(Command::Ls {
                 affected, filter, ..
             }) => {
@@ -176,7 +176,7 @@ impl Opts {
                     ..Default::default()
                 };
 
-                (&Box::new(execution_args), &Box::default())
+                (execution_args, RunArgs::default())
             }
             Some(Command::Boundaries { filter, .. }) => {
                 let execution_args = ExecutionArgs {
@@ -184,7 +184,7 @@ impl Opts {
                     ..Default::default()
                 };
 
-                (&Box::new(execution_args), &Box::default())
+                (execution_args, RunArgs::default())
             }
             Some(Command::Query {
                 subcommand: Some(QuerySubcommand::Ls(ls_args)),
@@ -196,9 +196,9 @@ impl Opts {
                     ..Default::default()
                 };
 
-                (&Box::new(execution_args), &Box::default())
+                (execution_args, RunArgs::default())
             }
-            _ => (&default_execution_args, &Box::default()),
+            _ => (default_execution_args, RunArgs::default()),
         };
 
         // Resolve cache directory once to avoid duplicate git process spawning.
@@ -211,8 +211,8 @@ impl Opts {
 
         let inputs = OptsInputs {
             repo_root,
-            run_args: run_args.as_ref(),
-            execution_args: execution_args.as_ref(),
+            run_args: &run_args,
+            execution_args: &execution_args,
             config: &config,
             api_auth: &api_auth,
             cache_dir_result: &cache_dir_result,
@@ -246,15 +246,7 @@ impl Opts {
                     Some(RemoteCacheDisabledReason::NotLinked)
                 }
             } else if config.enabled == Some(false) {
-                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
-                    .ok()
-                    .filter(|v| v == "0")
-                    .is_some();
-                if disabled_by_env {
-                    Some(RemoteCacheDisabledReason::InEnvVar)
-                } else {
-                    Some(RemoteCacheDisabledReason::InConfig)
-                }
+                Some(RemoteCacheDisabledReason::InConfig)
             } else {
                 // Linked and enabled in config, but remote cache is still disabled.
                 // This means CLI flags (--no-cache + --force, or --cache=local:rw)
@@ -391,7 +383,7 @@ struct OptsInputs<'a> {
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            task_output_logs_override: inputs.execution_args.output_logs,
+            task_output_logs_override: inputs.execution_args.output_logs.map(Into::into),
             errors_only_show_hash: inputs.config.future_flags().errors_only_show_hash,
         }
     }
@@ -470,7 +462,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
                 true,
                 ResolvedLogOrder::Grouped,
                 match inputs.execution_args.log_prefix {
-                    LogPrefix::Task => ResolvedLogPrefix::Task,
+                    crate::cli::LogPrefixArg::Task => ResolvedLogPrefix::Task,
                     _ => ResolvedLogPrefix::None,
                 },
             ),
@@ -479,12 +471,12 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             LogOrder::Auto | LogOrder::Stream => (
                 false,
                 ResolvedLogOrder::Stream,
-                inputs.execution_args.log_prefix.into(),
+                LogPrefix::from(inputs.execution_args.log_prefix).into(),
             ),
             LogOrder::Grouped => (
                 false,
                 ResolvedLogOrder::Grouped,
-                inputs.execution_args.log_prefix.into(),
+                LogPrefix::from(inputs.execution_args.log_prefix).into(),
             ),
         };
 
@@ -500,17 +492,17 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             log_prefix,
             log_order,
             summarize: inputs.config.run_summary(),
-            framework_inference: inputs.execution_args.framework_inference,
+            framework_inference: inputs.execution_args.framework_inference.unwrap_or(true),
             concurrency,
             parallel: inputs.run_args.parallel,
             profile: inputs.run_args.profile.clone(),
-            continue_on_error: inputs.execution_args.continue_execution,
+            continue_on_error: inputs.execution_args.continue_execution.into(),
             pass_through_args: inputs.execution_args.pass_through_args.clone(),
             only: inputs.execution_args.only,
             daemon: inputs.config.daemon(),
             single_package: inputs.execution_args.single_package,
             graph,
-            dry_run: inputs.run_args.dry_run,
+            dry_run: inputs.run_args.dry_run.map(Into::into),
             env_mode: inputs.config.env_mode(),
             // Use pre-computed cache directory to avoid duplicate git process spawning
             cache_dir: inputs.cache_dir_result.path.clone(),
@@ -752,7 +744,6 @@ impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
 
 #[cfg(test)]
 mod test {
-    use clap::Parser;
     use itertools::Itertools;
     use serde_json::json;
     use tempfile::TempDir;
@@ -790,7 +781,7 @@ mod test {
     fn devtools_preserves_global_single_package_option() {
         let tempdir = TempDir::new().expect("create temporary repository");
         let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).expect("absolute path");
-        let args = Args::parse(
+        let args = Args::parse_args(
             ["turbo", "--single-package", "devtools", "--no-open"]
                 .into_iter()
                 .map(Into::into)
@@ -1028,14 +1019,16 @@ mod test {
     )]
     fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
         with_clean_turbo_env(|| {
-            let mut args = Args::default();
-            args.command = Some(Command::Run {
-                execution_args: Box::default(),
-                run_args: Box::new(run_args),
-            });
-            // set token and team to simulate a logged in/linked user
-            args.token = Some("token".to_string());
-            args.team = Some("team".to_string());
+            let args = Args {
+                command: Some(Command::Run {
+                    execution_args: Default::default(),
+                    run_args,
+                }),
+                // set token and team to simulate a logged in/linked user
+                token: Some("token".to_string()),
+                team: Some("team".to_string()),
+                ..Default::default()
+            };
 
             let cache_config = CommandBase::new(
                 args,
@@ -1066,7 +1059,6 @@ mod test {
             "TURBO_FORCE",
             "TURBO_LOGIN",
             "TURBO_PREFLIGHT",
-            "TURBO_REMOTE_CACHE_ENABLED",
             "TURBO_REMOTE_CACHE_READ_ONLY",
             "TURBO_REMOTE_ONLY",
             "TURBO_TEAM",
@@ -1090,18 +1082,19 @@ mod test {
                 }))?,
             )?;
 
-            let mut args = Args::default();
-            args.command = Some(Command::Run {
-                execution_args: Box::default(),
-                run_args: Box::new(RunArgs {
-                    force: Some(Some(true)),
-                    ..Default::default()
+            let args = Args {
+                command: Some(Command::Run {
+                    execution_args: Default::default(),
+                    run_args: RunArgs {
+                        force: Some(Some(true)),
+                        ..Default::default()
+                    },
                 }),
-            });
-
-            // set token and team to simulate a logged in/linked user
-            args.token = Some("token".to_string());
-            args.team = Some("team".to_string());
+                // set token and team to simulate a logged in/linked user
+                token: Some("token".to_string()),
+                team: Some("team".to_string()),
+                ..Default::default()
+            };
 
             let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
             let actual = base.opts().cache_opts.cache;
@@ -1141,7 +1134,8 @@ mod test {
         "boundaries"
     )]
     fn test_derive_opts_from_args(args_str: Vec<&str>) -> Result<(), anyhow::Error> {
-        let args = Args::try_parse_from(&args_str)?;
+        let args = Args::parse_args(args_str.iter().map(Into::into).collect())
+            .map_err(anyhow::Error::msg)?;
         let opts = Opts::new(
             &AbsoluteSystemPathBuf::default(),
             &args,

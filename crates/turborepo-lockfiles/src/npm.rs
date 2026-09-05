@@ -15,6 +15,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
+    #[serde(default)]
     packages: HashMap<String, NpmPackage>,
     // We parse this so it doesn't end up in 'other' and we don't need to worry
     // about accidentally serializing it.
@@ -169,6 +170,10 @@ impl Lockfile for NpmLockfile {
         Ok(Some(std::borrow::Cow::Owned(deps)))
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(NpmEdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -241,6 +246,55 @@ impl Lockfile for NpmLockfile {
         let version = npm_package.version.as_deref()?;
         let name = package.key.split("node_modules/").last()?;
         Some(format!("{name}@{version}"))
+    }
+
+    fn package_source(&self, package: &Package) -> crate::PackageSource {
+        let Some(entry) = self.packages.get(&package.key) else {
+            return crate::PackageSource::Registry;
+        };
+        if entry.link {
+            crate::PackageSource::Link
+        } else {
+            entry
+                .resolved
+                .as_deref()
+                .map(crate::package_source_from_identifier)
+                .unwrap_or(crate::PackageSource::Registry)
+        }
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some(self.lockfile_version.to_string())
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// npm transitive edges come from `all_dependencies`, which emits fully
+/// resolved lockfile keys (`find_dep_in_lockfile` only returns keys present
+/// in the packages map). `resolve_package`'s first candidate matches such a
+/// key directly without consulting the workspace, so every workspace
+/// resolves the edge identically. A name that is not a lockfile key would
+/// fall through to the workspace-scoped candidates, so report it sensitive
+/// (defensive; unreachable via `all_dependencies` output).
+struct NpmEdgeResolver<'a> {
+    lockfile: &'a NpmLockfile,
+}
+
+impl crate::TransitiveEdgeResolver for NpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        _version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(match self.lockfile.packages.get(name) {
+            // Mirrors the `name` candidate in `resolve_package`.
+            Some(pkg) => crate::TransitiveEdgeResolution::Global(Some(Package {
+                key: name.to_string(),
+                version: pkg.version.clone().unwrap_or_default(),
+            })),
+            None => crate::TransitiveEdgeResolution::WorkspaceSensitive,
+        })
     }
 }
 

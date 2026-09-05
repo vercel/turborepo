@@ -45,6 +45,7 @@ pub struct PackageGraphBuilder<'a, T> {
     is_single_package: bool,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
+    load_lockfile: bool,
     package_discovery: T,
     package_manager: Option<PackageManager>,
     /// Toolchains registered in addition to JavaScript (e.g. Cargo when
@@ -250,17 +251,21 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
         repo_root: &'a AbsoluteSystemPath,
         root_package_json: Option<PackageJson>,
     ) -> Self {
+        let mut package_discovery = LocalPackageDiscoveryBuilder::new(
+            repo_root.to_owned(),
+            None,
+            root_package_json.clone(),
+        );
+        package_discovery.with_turbo_json_discovery(false);
+
         Self {
-            package_discovery: LocalPackageDiscoveryBuilder::new(
-                repo_root.to_owned(),
-                None,
-                root_package_json.clone(),
-            ),
+            package_discovery,
             repo_root,
             root_package_json,
             is_single_package: false,
             package_jsons: None,
             lockfile: None,
+            load_lockfile: true,
             package_manager: None,
             extra_contributors: Vec::new(),
         }
@@ -299,6 +304,15 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Skip reading and resolving the lockfile when the caller only needs the
+    /// workspace graph. Internal package relationships still come from the
+    /// package manifests.
+    pub fn without_external_dependencies(mut self) -> Self {
+        self.load_lockfile = false;
+        self.lockfile = None;
+        self
+    }
+
     /// Register a contributor in addition to JavaScript. Its packages are
     /// discovered alongside JavaScript packages; a package name collision
     /// across ecosystems are a hard error, like any duplicate package name.
@@ -310,7 +324,12 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Enable Cargo repository contribution for this graph generation.
     pub fn with_cargo(self) -> Self {
         let repo_root = self.repo_root.to_owned();
-        self.with_contributor(crate::cargo::CargoContributor::new(repo_root))
+        let contributor = if self.load_lockfile {
+            crate::cargo::CargoContributor::new(repo_root)
+        } else {
+            crate::cargo::CargoContributor::new_without_external_dependencies(repo_root)
+        };
+        self.with_contributor(contributor)
     }
 
     /// Enable uv (Python) repository contribution for this graph generation.
@@ -332,6 +351,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             is_single_package: self.is_single_package,
             package_jsons: self.package_jsons,
             lockfile: self.lockfile,
+            load_lockfile: self.load_lockfile,
             package_discovery: discovery,
             package_manager: self.package_manager,
             extra_contributors: self.extra_contributors,
@@ -366,7 +386,8 @@ where
             })
             .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
         self.package_manager.clone_from(&known_pm);
-        let lockfile_future = if !is_single_package && self.lockfile.is_none() {
+        let lockfile_future = if self.load_lockfile && !is_single_package && self.lockfile.is_none()
+        {
             if let (Some(pm), Some(root_package_json)) =
                 (known_pm.clone(), self.root_package_json.clone())
             {
@@ -411,6 +432,7 @@ struct BuildState<'a, S, T> {
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
     lockfile: Option<Box<dyn Lockfile>>,
+    load_lockfile: bool,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
@@ -535,16 +557,38 @@ impl PackageGraphAssembler {
         &mut self,
         relationships: &RelationshipKnowledge,
     ) -> Result<(), Error> {
+        // Index workspace nodes by identity string once, so each group and
+        // each dependency edge probes by `&str` instead of allocating a
+        // `PackageName` + `PackageNode` per lookup (previously one per edge).
+        // Borrow the graph fields disjointly: the index reads `node_lookup`
+        // while `add_edge` mutates `workspace_graph`.
+        let Self {
+            node_lookup,
+            workspace_graph,
+            package_jsons,
+            root_node_index,
+            ..
+        } = self;
+        let root_node_index = *root_node_index;
+        let node_of: HashMap<&str, NodeIndex> = node_lookup
+            .iter()
+            .filter_map(|(node, &idx)| match node {
+                PackageNode::Workspace(PackageName::Other(name)) => Some((name.as_str(), idx)),
+                PackageNode::Workspace(PackageName::Root) => Some(("//", idx)),
+                PackageNode::Root => None,
+            })
+            .collect();
+        let mut seen = HashSet::new();
+        let mut internal = HashMap::<&str, DependencyKind>::new();
         for group in relationships.groups() {
             let identity = group.source();
-            let name = package_name_from_identity(identity);
-            if !self.package_jsons.contains_key(&name) {
+            if !package_jsons.contains_key(&package_name_from_identity(identity)) {
                 return Err(Error::MissingDescriptor {
                     name: identity.to_string(),
                 });
             }
-            let mut seen = HashSet::new();
-            let mut internal = HashMap::<&str, DependencyKind>::new();
+            seen.clear();
+            internal.clear();
             for relationship in group.relationships() {
                 if !relationship.orders_tasks() {
                     continue;
@@ -574,32 +618,22 @@ impl PackageGraphAssembler {
                     ) => {}
                 }
             }
-            let node_idx = self
-                .node_lookup
-                .get(&PackageNode::Workspace(name.clone()))
-                .copied()
+            let node_idx = *node_of
+                .get(identity)
                 .ok_or_else(|| Error::MissingDescriptor {
                     name: identity.to_string(),
                 })?;
             if internal.is_empty() {
-                self.workspace_graph.add_edge(
-                    node_idx,
-                    self.root_node_index,
-                    DependencyKind::Production,
-                );
+                workspace_graph.add_edge(node_idx, root_node_index, DependencyKind::Production);
             }
-            for (dependency, kind) in internal {
-                let dependency_idx = self
-                    .node_lookup
-                    .get(&PackageNode::Workspace(package_name_from_identity(
-                        dependency,
-                    )))
-                    .copied()
-                    .ok_or_else(|| Error::UnknownRelationshipTarget {
-                        identity: dependency.to_string(),
-                    })?;
-                self.workspace_graph
-                    .add_edge(node_idx, dependency_idx, kind);
+            for (dependency, kind) in &internal {
+                let dependency_idx =
+                    *node_of
+                        .get(*dependency)
+                        .ok_or_else(|| Error::UnknownRelationshipTarget {
+                            identity: dependency.to_string(),
+                        })?;
+                workspace_graph.add_edge(node_idx, dependency_idx, *kind);
             }
         }
         Ok(())
@@ -641,6 +675,7 @@ where
 
             package_jsons,
             lockfile,
+            load_lockfile,
             package_discovery,
             package_manager,
             extra_contributors,
@@ -693,6 +728,7 @@ where
             native_change_observations: Vec::new(),
             native_prune_domains: Vec::new(),
             lockfile,
+            load_lockfile,
             package_manager: None,
             package_jsons,
             root_package_json,
@@ -862,6 +898,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_prune_domains,
             root_package_json,
             lockfile,
+            load_lockfile,
             package_manager,
             javascript,
             extra_contributors,
@@ -880,6 +917,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             native_prune_domains,
             root_package_json,
             lockfile,
+            load_lockfile,
             package_manager,
             javascript,
             extra_contributors,
@@ -1158,31 +1196,36 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             self.connect_internal_dependencies(package_manager.as_ref())
         })?;
 
-        if let Some(handle) = lockfile_future
+        if self.load_lockfile
+            && let Some(handle) = lockfile_future
             && let Ok(Some(lockfile)) = handle.await
         {
             self.lockfile = Some(lockfile);
         }
 
-        let lockfile = match package_manager.as_ref() {
-            // No JavaScript package manager (pure Cargo): no JS lockfile to
-            // parse. Cargo's own lockfile is handled by the Cargo toolchain.
-            None => None,
-            Some(package_manager) => match self.populate_lockfile(package_manager).await {
-                Ok(lockfile) => Some(lockfile),
-                Err(e) => {
-                    let problematic_file_path =
-                        extract_file_path_from_error(&e, package_manager, self.repo_root);
+        let lockfile = if self.load_lockfile {
+            match package_manager.as_ref() {
+                // No JavaScript package manager (pure Cargo): no JS lockfile to
+                // parse. Cargo's own lockfile is handled by the Cargo toolchain.
+                None => None,
+                Some(package_manager) => match self.populate_lockfile(package_manager).await {
+                    Ok(lockfile) => Some(lockfile),
+                    Err(e) => {
+                        let problematic_file_path =
+                            extract_file_path_from_error(&e, package_manager, self.repo_root);
 
-                    warn!(
-                        "An issue occurred while attempting to parse {}. Turborepo will still \
-                         function, but some features may not be available:\n {:?}",
-                        problematic_file_path,
-                        Report::new(e)
-                    );
-                    None
-                }
-            },
+                        warn!(
+                            "An issue occurred while attempting to parse {}. Turborepo will still \
+                             function, but some features may not be available:\n {:?}",
+                            problematic_file_path,
+                            Report::new(e)
+                        );
+                        None
+                    }
+                },
+            }
+        } else {
+            None
         };
 
         let Self {
@@ -1196,6 +1239,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_change_observations,
             native_prune_domains,
             root_package_json,
+            load_lockfile,
             javascript,
             extra_contributors,
             ..
@@ -1214,6 +1258,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             native_prune_domains,
             root_package_json,
             lockfile,
+            load_lockfile,
             package_manager,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -1273,7 +1318,9 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
         let mut external_resolution = ExternalResolutionKnowledge::absent();
         let mut native_external_resolutions = std::mem::take(&mut self.native_external_resolutions);
 
-        if let Some(definition_source) = definition_source {
+        if self.load_lockfile
+            && let Some(definition_source) = definition_source
+        {
             if let Some(lockfile) = arc_lockfile.clone() {
                 match self.all_external_dependencies() {
                     Ok(external_dependencies) => {
@@ -1321,7 +1368,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 .map_err(|message| build_failure(Error::ExternalResolution(message)))?;
                 external_resolution = ExternalResolutionKnowledge::complete(snapshot.generation);
             }
-        } else if !native_external_resolutions.is_empty() {
+        } else if self.load_lockfile && !native_external_resolutions.is_empty() {
             let generation =
                 ExternalResolutionGeneration::build(&knowledge, native_external_resolutions)
                     .map_err(|error| build_failure(Error::ExternalResolution(error.to_string())))?;
@@ -1913,7 +1960,7 @@ mod test {
         );
         assert_eq!(retained_generation.packages().count(), 0);
         assert_eq!(
-            graph.external_resolution_global_file_fallback(),
+            graph.external_resolution_fallback_inputs(),
             Some(vec![root.join_component("package.json")]),
             "single-package mode must preserve package.json as a global hash input"
         );

@@ -1,34 +1,87 @@
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Grid } from "@/components/grid/grid";
-import { GridCell } from "@/components/grid/grid-cell";
-import { Snippet } from "@/components/snippet";
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import {
+  CommandPromptContent,
+  CommandPromptCopy,
+  CommandPromptList,
+  CommandPromptPrefix,
+  CommandPromptRoot,
+  CommandPromptSurface,
+  CommandPromptTrigger,
+  CommandPromptTriggerDivider,
+  CommandPromptViewport
+} from "@vercel/geistdocs/components/command-prompt";
+import { Button } from "@vercel/geistdocs/components/button";
 import { Testimonials } from "@/components/testimonials";
-import { ArrowRight } from "@/components/icons/arrow-right";
-import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 import { createMetadata } from "@/lib/create-metadata";
-import { shikiTheme } from "@/lib/shiki-theme";
-import { CiProviders } from "./graphics/providers";
-import { RemoteCachingGraphic } from "./graphics/remote-caching";
-import { EffortlessGraphic } from "./graphics/effortless";
-import { DottedLines } from "./graphics/dotted-lines";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
+import { getRootLang } from "@/lib/geistdocs/root-params";
+import { HighlightedCode } from "./highlighted-code";
+import { OpenSourceMetrics } from "./open-source-metrics";
+import { ProviderBadges } from "./graphics/provider-badges";
+import { RemoteCacheVisual } from "./graphics/remote-cache-visual";
+import { RemoteCacheGauge } from "./graphics/remote-cache-gauge";
+import { MonorepoVisual } from "./graphics/monorepo-visual";
+import {
+  AgentSkillsVisual,
+  TurboDocsVisual,
+  ValidationLoopsVisual
+} from "./graphics/agent-workflow-visuals";
 
-const FEATURES = [
+type HomepageFeature = {
+  title: string;
+  description: ReactNode;
+  illustration: ReactNode;
+};
+
+const FEATURES: HomepageFeature[] = [
   {
     title: "Works with any provider",
-    description: "Integrate with any CI provider for speed at all scales",
-    illustration: <CiProviders />
+    description:
+      "Integrate with any CI provider to keep workflows fast as your team and codebase grow.",
+    illustration: <ProviderBadges />
   },
   {
     title: "Remote Caching",
-    description: "Never do the same work twice",
-    illustration: <RemoteCachingGraphic />
+    description:
+      "Share task outputs across machines and CI so your team never repeats the same work.",
+    illustration: <RemoteCacheVisual />
   },
   {
     title: "Effortless monorepos",
-    description: "Easily define your workflows for local development and CI",
-    illustration: <EffortlessGraphic />
+    description:
+      "Define dependable workflows once, then run them consistently across local development and CI.",
+    illustration: <MonorepoVisual />
+  }
+];
+
+const AGENT_FEATURES: HomepageFeature[] = [
+  {
+    title: "Faster validation loops",
+    description:
+      "Run only the checks affected by each change, so agents can verify their work and iterate without waiting on the entire repository.",
+    illustration: <ValidationLoopsVisual />
+  },
+  {
+    title: "Monorepo expertise, on demand",
+    description:
+      "Agent Skills give your coding agent Turborepo best practices and the context it needs to make the right changes across your monorepo.",
+    illustration: <AgentSkillsVisual />
+  },
+  {
+    title: "Docs, right when they’re needed",
+    description: (
+      <>
+        The{" "}
+        <code className="px-1.5 py-0.5 bg-gray-200 rounded-md text-copy-14-mono">
+          turbo docs
+        </code>{" "}
+        command lets agents search current Turborepo documentation from the
+        terminal, without interrupting their work.
+      </>
+    ),
+    illustration: <TurboDocsVisual />
   }
 ];
 
@@ -40,159 +93,208 @@ const simpleTurboJson = `{
   }
 }`;
 
-const remoteCachingCommands = `# Login to Remote Cache
+const remoteCachingCommands = `# Link to Remote Cache
 turbo login
-# Link to Remote Cache
 turbo link
 
 # Run tasks
-turbo run build`;
+turbo run build
+turbo run build --affected`;
 
-export const metadata = createMetadata({
-  description:
-    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
-  canonicalPath: "/"
-});
+const intelligenceCommands = `# Find tasks
+turbo run
+# Find packages
+turbo ls
 
-export default function HomePage() {
+# Get deep repository context
+turbo query --schema`;
+
+export const generateMetadata = async ({
+  params
+}: PageProps<"/[lang]">): Promise<Metadata> => {
+  const { lang } = await params;
+  const canonicalPath = getLocalizedPath(lang, "/");
+  const metadata = createMetadata({
+    description: "Turborepo is the build system for coding agents.",
+    canonicalPath
+  });
+
+  return {
+    ...metadata,
+    alternates: {
+      ...metadata.alternates,
+      types: {
+        "text/markdown": getLocalizedPath(lang, "/agents.md")
+      }
+    },
+    openGraph: {
+      ...metadata.openGraph,
+      images: [
+        "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/og-homepage.png"
+      ]
+    }
+  };
+};
+
+export default async function HomePage() {
+  const lang = await getRootLang();
+
   return (
-    <div className="py-6 max-w-6xl px-3 sm:px-6 md:py-12 lg:px-12 mx-auto">
-      <Grid
-        columns={{
-          sm: 1,
-          md: 2
-        }}
-        className="relative border border-border/50"
-      >
-        <GridCell className="relative border-b border-border/50 col-span-full px-6 py-12 xs:px-6 xs:py-12 md:p-16">
-          <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
-          <div className="relative z-1 flex flex-col justify-center">
-            <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
-              Make ship happen
-            </h1>
-            <p className="max-w-[380px] m-auto mb-4 font-normal text-center text-muted-foreground text-lg md:text-xl">
-              Turborepo is the build system for JavaScript and TypeScript
-              codebases
-            </p>
-            <div className="flex justify-center mt-2 mb-10">
-              <div className="relative inline-flex w-full xs:w-auto">
-                <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
-                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background dark:bg-black px-2 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
-                  <span className="flex flex-col gap-0 items-center xs:flex-row xs:gap-1 text-base md:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
-                    <RemoteCacheCounterClient className="" />
-                    <span className="whitespace-nowrap">hours of compute saved</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="w-full flex flex-wrap h-fit gap-3 2xs:gap-2 sm:gap-4 justify-center items-center">
-              <Button
-                asChild
-                className="text-sm sm:h-12 sm:text-base bg-foreground text-background hover:bg-foreground/90"
-              >
-                <Link href="/docs">Get started</Link>
-              </Button>
-              <Snippet
-                code="npm i turbo"
-                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-border/50 justify-start font-mono bg-card"
-              />
-            </div>
-          </div>
-        </GridCell>
-        <GridCell className="border-0 h-fit col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
-          <h2 className="mb-1 text-[32px] font-semibold tracking-tighter">
-            Scale your workflows
-          </h2>
-          <p className="max-w-prose text-balance text-muted-foreground text-base">
-            Optimize your local and CI tasks to save years of engineering time
-            and compute.
+    <div className="mx-auto w-full max-w-[1448px] px-4 sm:px-6">
+      <section className="relative grid grid-cols-1 items-center gap-12 py-0 lg:py-40 lg:grid-cols-12 lg:gap-0">
+        <div className="relative z-1 flex flex-col justify-center lg:col-span-7 lg:pr-16">
+          <h1 className="lg:max-w-[700px] text-heading-40 sm:text-heading-48 xl:text-heading-64">
+            Your codebase, faster
+          </h1>
+          <p className="mt-6 text-balance  text-gray-900 text-copy-18">
+            Turborepo is the build system for coding agents. Developers, CI, and
+            agents never do the same work twice.
           </p>
-          <div className="my-8 grid h-fit gap-y-12 md:grid-cols-3 md:gap-x-8">
-            {FEATURES.map((feature) => (
-              <div key={feature.title} className="w-full">
-                {feature.illustration}
-                <h3 className="mt-2 text-2xl font-semibold tracking-tighter">
-                  {feature.title}
-                </h3>
-                <p className="mt-1.5 text-muted-foreground text-base md:mt-2 text-pretty">
-                  {feature.description}
-                </p>
-              </div>
-            ))}
+          <CommandPromptRoot className="items-start mt-4" defaultValue="humans">
+            <CommandPromptList>
+              <CommandPromptTrigger value="humans">
+                For humans
+              </CommandPromptTrigger>
+              <CommandPromptTriggerDivider />
+              <CommandPromptTrigger value="agents">
+                For agents
+              </CommandPromptTrigger>
+            </CommandPromptList>
+            <CommandPromptSurface>
+              <CommandPromptPrefix>$</CommandPromptPrefix>
+              <CommandPromptViewport>
+                <CommandPromptContent copyValue="npm i turbo" value="humans">
+                  npm i turbo
+                </CommandPromptContent>
+                <CommandPromptContent
+                  copyValue="npx skills add vercel/turborepo"
+                  value="agents"
+                >
+                  npx skills add vercel/turborepo
+                </CommandPromptContent>
+              </CommandPromptViewport>
+              <CommandPromptCopy />
+            </CommandPromptSurface>
+          </CommandPromptRoot>
+        </div>
+        <div className="relative order-first mx-auto flex min-h-56 w-full items-center justify-center pt-10 lg:order-last lg:col-span-5 lg:min-h-80 lg:pt-0">
+          <RemoteCacheGauge />
+        </div>
+      </section>
+      <OpenSourceMetrics />
+      <FeatureSection
+        description="Optimize your local and CI tasks to save years of engineering time and compute."
+        features={FEATURES}
+        title="Scale your workflows"
+      />
+      <FeatureSection
+        description="Give coding agents the context and immediate feedback they need to work accurately across your repository."
+        features={AGENT_FEATURES}
+        title="Built for coding agents"
+      />
+      <section className="py-10 sm:py-14">
+        <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
+          <div className="flex flex-col gap-y-1">
+            <h2 className="text-heading-32 lg:text-heading-40">Simple setup</h2>
+            <p className="text-muted-foreground text-base leading-6 text-pretty">
+              Start a new repository or migrate an existing repo incrementally
+              in minutes.
+            </p>
           </div>
-        </GridCell>
-        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
-          <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
-            <div className="flex flex-col gap-y-1">
-              <h2 className="text-[32px] font-semibold tracking-tighter">
-                Simple setup
-              </h2>
-              <p className="text-muted-foreground text-base leading-6 text-pretty">
-                Start a new repository or migrate an existing repo incrementally
-                in minutes.
-              </p>
-            </div>
-            <Button
-              asChild
-              className="text-sm sm:h-12 sm:text-base"
-              variant="outline"
-            >
-              <Link href="/repo/docs">
-                Read the docs
-                <ArrowRight />
+          <Button asChild className="rounded-full" size="lg" variant="outline">
+            <Link href={getLocalizedPath(lang, "/repo/docs")} prefetch>
+              Read the docs
+            </Link>
+          </Button>
+        </div>
+        <div className="mt-6 grid w-full auto-rows-fr grid-cols-1 items-stretch gap-x-6 gap-y-6 md:grid-cols-3 md:gap-y-10 lg:gap-y-12">
+          <HighlightedCode
+            caption="Declare a build task"
+            lang="json"
+            code={simpleTurboJson}
+          />
+          <HighlightedCode
+            caption="Link to Remote Cache and run tasks"
+            lang="bash"
+            code={remoteCachingCommands}
+          />
+          <HighlightedCode
+            caption="Streamline monorepo intelligence"
+            lang="bash"
+            code={intelligenceCommands}
+          />
+        </div>
+      </section>
+      <section className="py-10 sm:py-14">
+        <h2 className="text-heading-32 sm:text-center sm:text-balance lg:text-heading-40">
+          What builders say about Turborepo
+        </h2>
+        <Testimonials />
+      </section>
+      <section className="py-10 sm:py-14">
+        <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
+          <h2 className="text-heading-32 md:whitespace-nowrap lg:text-heading-40">
+            Deploy your Turborepo today
+          </h2>
+          <div className="flex flex-col w-full items-start gap-3 sm:flex-row sm:items-center md:justify-end">
+            <Button asChild className="w-full sm:w-fit rounded-full" size="lg">
+              <Link href={getLocalizedPath(lang, "/docs")} prefetch>
+                Get started
               </Link>
             </Button>
+            <CommandPromptRoot
+              className="w-full sm:w-auto items-start"
+              defaultValue="install"
+            >
+              <CommandPromptSurface className="h-10 w-full sm:w-fit max-w-none pr-1.5">
+                <CommandPromptPrefix>$</CommandPromptPrefix>
+                <CommandPromptViewport className="w-full sm:w-fit">
+                  <CommandPromptContent copyValue="npm i turbo" value="install">
+                    npm i turbo
+                  </CommandPromptContent>
+                </CommandPromptViewport>
+                <CommandPromptCopy />
+              </CommandPromptSurface>
+            </CommandPromptRoot>
           </div>
-          <div className="mt-6 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
-            <div className="mb-6 md:mb-0">
-              <DynamicCodeBlock
-                lang="json"
-                code={simpleTurboJson}
-                options={{ themes: { light: shikiTheme, dark: shikiTheme } }}
-              />
-              <span className="text-xs text-muted-foreground">
-                Declaring a build task
-              </span>
-            </div>
-            <div>
-              <DynamicCodeBlock
-                lang="bash"
-                code={remoteCachingCommands}
-                options={{ themes: { light: shikiTheme, dark: shikiTheme } }}
-              />
-              <span className="text-xs text-muted-foreground">
-                Linking to Remote Cache and running tasks
-              </span>
-            </div>
-          </div>
-        </GridCell>
-        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12 border-b border-border/50">
-          <h2 className="text-[32px] font-semibold tracking-tighter">
-            What builders say about Turborepo
-          </h2>
-
-          <Testimonials />
-        </GridCell>
-        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
-          <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
-            <h2 className="text-[32px] font-semibold tracking-tighter md:text-[40px]">
-              Deploy your Turborepo today.
-            </h2>
-            <div className="flex flex-wrap gap-3 justify-start md:justify-end items-center">
-              <Button
-                asChild
-                className="text-sm sm:h-12 sm:text-base bg-foreground text-background hover:bg-foreground/90"
-              >
-                <Link href="/docs">Get started</Link>
-              </Button>
-              <Snippet
-                code="npm i turbo"
-                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-border/50 justify-start font-mono bg-card"
-              />
-            </div>
-          </div>
-        </GridCell>
-      </Grid>
+        </div>
+      </section>
     </div>
+  );
+}
+
+function FeatureSection({
+  description,
+  features,
+  title
+}: {
+  description: string;
+  features: HomepageFeature[];
+  title: string;
+}) {
+  return (
+    <section className="py-10 sm:py-20">
+      <h2 className="mb-1 text-heading-32 lg:text-heading-40">{title}</h2>
+      <p className="max-w-prose text-balance text-gray-900 text-copy-18">
+        {description}
+      </p>
+      <ul className="my-8 grid list-none gap-x-6 gap-y-6 md:grid-cols-2 md:gap-y-10 lg:grid-cols-3 lg:gap-y-12">
+        {features.map((feature) => (
+          <li key={feature.title} className="flex w-full flex-col gap-8">
+            <div className="aspect-[40/27] overflow-hidden rounded-xs border border-solid border-gray-300">
+              {feature.illustration}
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="font-[450] text-copy-16 text-gray-1000">
+                {feature.title}
+              </h3>
+              <p className="text-balance text-copy-16 text-gray-900">
+                {feature.description}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

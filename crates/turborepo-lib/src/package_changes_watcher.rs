@@ -29,7 +29,7 @@ use turborepo_scm::GitHashes;
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
     repository_graph::RepositoryGraphFeatures,
-    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
+    turbo_json::{FutureFlags, TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
 /// Watches for changes to a package's files and directories.
@@ -70,6 +70,7 @@ impl PackageChangesWatcher {
         single_package: bool,
         allow_no_package_manager: bool,
         graph_features: RepositoryGraphFeatures,
+        future_flags: FutureFlags,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -83,6 +84,7 @@ impl PackageChangesWatcher {
             single_package,
             allow_no_package_manager,
             graph_features,
+            future_flags,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -134,6 +136,7 @@ struct Subscriber {
     single_package: bool,
     allow_no_package_manager: bool,
     graph_features: RepositoryGraphFeatures,
+    future_flags: FutureFlags,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -354,6 +357,7 @@ impl Subscriber {
         single_package: bool,
         allow_no_package_manager: bool,
         graph_features: RepositoryGraphFeatures,
+        future_flags: FutureFlags,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -406,6 +410,7 @@ impl Subscriber {
             single_package,
             allow_no_package_manager,
             graph_features,
+            future_flags,
         }
     }
 
@@ -428,6 +433,16 @@ impl Subscriber {
             return None;
         };
 
+        let package_paths = hash_scopes(&pkg_dep_graph)
+            .map(|package| package.path)
+            .collect();
+        if let Err(error) = self.hash_watcher.set_package_paths(package_paths).await {
+            tracing::debug!(
+                ?error,
+                "repository graph package paths unavailable to hash watcher"
+            );
+        }
+
         // Use custom turbo.json path if provided, otherwise use standard paths
         let config_path = if let Some(custom_path) = &self.custom_turbo_json_path {
             custom_path.clone()
@@ -448,7 +463,8 @@ impl Subscriber {
             }
         };
 
-        let reader = TurboJsonReader::new(self.repo_root.clone());
+        let reader =
+            TurboJsonReader::new(self.repo_root.clone()).with_future_flags(self.future_flags);
         let root_turbo_json = if self.single_package {
             let root_scripts = pkg_dep_graph
                 .package_task_context(&PackageName::Root)
@@ -457,7 +473,7 @@ impl Subscriber {
                         .native_tasks()
                         .tasks()
                         .iter()
-                        .filter(|task| task.executable() || task.authored())
+                        .filter(|task| task.participates() || task.authored())
                         .map(|task| task.name().to_string())
                         .collect()
                 })
@@ -793,11 +809,12 @@ impl Subscriber {
                         // In single-package mode the root IS the only package, so
                         // all changes must propagate regardless.
                         if !self.single_package && filtered_pkgs.contains(&root_pkg) {
-                            let has_root_tasks = repo_state
-                                .root_turbo_json
-                                .as_ref()
-                                .is_some_and(|turbo| turbo.has_root_tasks());
-                            if !has_root_tasks {
+                            let keep_root =
+                                repo_state.root_turbo_json.as_ref().is_some_and(|turbo| {
+                                    turbo.has_root_tasks()
+                                        || turbo.future_flags.watch_using_task_inputs
+                                });
+                            if !keep_root {
                                 filtered_pkgs.remove(&root_pkg);
                             }
                         }
@@ -865,7 +882,7 @@ mod test {
         is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
         PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
     };
-    use crate::repository_graph::RepositoryGraphFeatures;
+    use crate::{repository_graph::RepositoryGraphFeatures, turbo_json::FutureFlags};
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf::try_from(s).unwrap()
@@ -970,6 +987,7 @@ mod test {
                 cargo: cargo_enabled,
                 python: false,
             },
+            FutureFlags::default(),
         )
     }
 
@@ -1757,7 +1775,7 @@ mod test {
         // These must be kept alive to prevent the HashWatcher from busy-looping
         // on closed channels.
         _pkg_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
-        _hash_events_tx: WatchEventSender,
+        hash_events_tx: WatchEventSender,
     }
 
     /// Create a PackageChangesWatcher backed by a synthetic file event channel.
@@ -1773,9 +1791,8 @@ mod test {
         let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
-        // on a closed watch channel. The hash watcher subscriber won't find any
-        // packages, so get_file_hashes will return Err and is_same_hash
-        // returns false (meaning: hash changed, send event).
+        // on a closed watch channel. Repository graph paths are registered by
+        // PackageChangesWatcher after graph construction.
         let (pkg_discovery_tx, pkg_discovery_rx) = watch::channel(None);
 
         let scm = SCM::new(repo_root);
@@ -1801,13 +1818,14 @@ mod test {
                 cargo: false,
                 python: false,
             },
+            FutureFlags::default(),
         );
 
         TestWatcherHandle {
             watcher,
             file_events_tx,
             _pkg_discovery_tx: pkg_discovery_tx,
-            _hash_events_tx: hash_events_tx,
+            hash_events_tx,
         }
     }
 
@@ -1943,6 +1961,13 @@ mod test {
         // Send multiple events to be safe (the subscriber may have
         // lagged the first one)
         let changed_file = repo_root.join_components(&["packages", "a", "index.ts"]);
+        changed_file
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        handle
+            .hash_events_tx
+            .send(Ok(make_notify_event_from(&[&changed_file])))
+            .unwrap();
         for _ in 0..3 {
             let _ = file_tx.send(Ok(make_notify_event_from(&[&changed_file])));
             tokio::time::sleep(Duration::from_millis(150)).await;
@@ -1971,6 +1996,30 @@ mod test {
             has_package_event,
             "expected Package or Rediscover event, got: {:?}",
             events
+        );
+    }
+
+    #[tokio::test]
+    async fn watcher_suppresses_file_event_when_content_hash_is_unchanged() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let handle = create_test_watcher(&repo_root);
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let initial = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(matches!(initial, Some(PackageChangeEvent::Rediscover)));
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let unchanged_file = repo_root.join_components(&["packages", "a", "index.ts"]);
+        unchanged_file
+            .create_with_contents(b"export const a = 1;")
+            .unwrap();
+        let event = make_notify_event_from(&[&unchanged_file]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+
+        assert!(
+            recv_event(&mut rx, Duration::from_secs(1)).await.is_none(),
+            "unchanged content should be deduplicated"
         );
     }
 
@@ -2280,6 +2329,13 @@ mod test {
                 .unwrap();
         }
         let source_path = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source_path
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        handle
+            .hash_events_tx
+            .send(Ok(make_notify_event_from(&[&source_path])))
+            .unwrap();
         handle
             .file_events_tx
             .send(Ok(make_notify_event_from(&[&source_path])))

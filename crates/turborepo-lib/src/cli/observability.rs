@@ -1,10 +1,19 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
-use clap::Parser;
+use usage::Args as UsageArgs;
 
 use crate::config::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyValuePair(String, String);
+impl FromStr for KeyValuePair {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        parse_key_val_pair(value).map(|(key, value)| Self(key, value))
+    }
+}
 
 /// CLI arguments for experimental OpenTelemetry metrics export.
 ///
@@ -16,21 +25,21 @@ use crate::config::{
 /// Note: `futureFlags.experimentalObservability` is a hard gate. If it is not
 /// enabled in `turbo.json`, configuring observability from any source is
 /// rejected.
-#[derive(Parser, Clone, Debug, Default, PartialEq)]
+#[derive(UsageArgs, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
     /// Enable or disable OpenTelemetry metrics export.
-    #[clap(
+    #[usage(
         long = "experimental-otel-enabled",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true",
+        default_missing = "true",
         help = "Enable OpenTelemetry metrics export"
     )]
     pub enabled: Option<bool>,
 
     /// Transport protocol to use for the OTLP exporter.
     /// Supported values: grpc, http-protobuf
-    #[clap(
+    #[usage(
         long = "experimental-otel-protocol",
         global = true,
         value_name = "PROTOCOL",
@@ -39,7 +48,7 @@ pub struct ExperimentalOtelCliArgs {
     pub protocol: Option<ExperimentalOtelProtocol>,
 
     /// OTLP endpoint URL (must use HTTPS, e.g. https://collector.example.com:4317).
-    #[clap(
+    #[usage(
         long = "experimental-otel-endpoint",
         global = true,
         value_name = "URL",
@@ -48,7 +57,7 @@ pub struct ExperimentalOtelCliArgs {
     pub endpoint: Option<String>,
 
     /// Timeout for OTLP export requests in milliseconds.
-    #[clap(
+    #[usage(
         long = "experimental-otel-timeout-ms",
         global = true,
         value_name = "MILLISECONDS",
@@ -57,7 +66,7 @@ pub struct ExperimentalOtelCliArgs {
     pub timeout_ms: Option<u64>,
 
     /// Interval between periodic exports in milliseconds.
-    #[clap(
+    #[usage(
         long = "experimental-otel-interval-ms",
         global = true,
         value_name = "MILLISECONDS",
@@ -67,55 +76,53 @@ pub struct ExperimentalOtelCliArgs {
 
     /// Additional headers to send with OTLP requests.
     /// Can be specified multiple times. Useful for authentication.
-    #[clap(
+    #[usage(
         long = "experimental-otel-header",
         global = true,
-        value_parser = parse_key_val_pair,
         value_name = "KEY=VALUE",
         help = "Add header to OTLP requests (can be repeated)"
     )]
-    pub headers: Vec<(String, String)>,
+    pub headers: Vec<KeyValuePair>,
 
     /// OpenTelemetry resource attributes to attach to all metrics.
     /// Can be specified multiple times (e.g., service.name=my-app).
-    #[clap(
+    #[usage(
         long = "experimental-otel-resource",
         global = true,
-        value_parser = parse_key_val_pair,
         value_name = "KEY=VALUE",
         help = "Add resource attribute to metrics (can be repeated)"
     )]
-    pub resource_attributes: Vec<(String, String)>,
+    pub resource_attributes: Vec<KeyValuePair>,
 
     /// Enable run-level summary metrics (duration, task counts).
     /// Enabled by default when OTEL is configured.
-    #[clap(
+    #[usage(
         long = "experimental-otel-metrics-run-summary",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true",
+        default_missing = "true",
         help = "Emit run-level summary metrics (default: true)"
     )]
     pub metrics_run_summary: Option<bool>,
 
     /// Enable per-task detail metrics (individual task durations, cache
     /// status). Disabled by default due to higher cardinality.
-    #[clap(
+    #[usage(
         long = "experimental-otel-metrics-task-details",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true",
+        default_missing = "true",
         help = "Emit per-task detail metrics (default: false)"
     )]
     pub metrics_task_details: Option<bool>,
 
     /// Use the Vercel remote cache authentication token for OTLP requests.
     /// Automatically adds an Authorization header with the token.
-    #[clap(
+    #[usage(
         long = "experimental-otel-use-remote-cache-token",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true",
+        default_missing = "true",
         help = "Use remote cache token for OTLP authentication"
     )]
     pub use_remote_cache_token: Option<bool>,
@@ -148,16 +155,16 @@ impl ExperimentalOtelCliArgs {
         }
         if !self.headers.is_empty() {
             let mut map = BTreeMap::new();
-            for (key, value) in &self.headers {
-                map.insert(key.clone(), value.clone());
+            for pair in &self.headers {
+                map.insert(pair.0.clone(), pair.1.clone());
             }
             options.headers = Some(map);
             touched = true;
         }
         if !self.resource_attributes.is_empty() {
             let mut map = BTreeMap::new();
-            for (key, value) in &self.resource_attributes {
-                map.insert(key.clone(), value.clone());
+            for pair in &self.resource_attributes {
+                map.insert(pair.0.clone(), pair.1.clone());
             }
             options.resource = Some(map);
             touched = true;
@@ -296,7 +303,7 @@ mod tests {
     #[test]
     fn test_experimental_otel_cli_args_headers_single() {
         let args = ExperimentalOtelCliArgs {
-            headers: vec![("key1".to_string(), "value1".to_string())],
+            headers: vec![KeyValuePair("key1".to_string(), "value1".to_string())],
             ..Default::default()
         };
         let result = args.to_config();
@@ -309,8 +316,8 @@ mod tests {
     fn test_experimental_otel_cli_args_headers_multiple() {
         let args = ExperimentalOtelCliArgs {
             headers: vec![
-                ("key1".to_string(), "value1".to_string()),
-                ("key2".to_string(), "value2".to_string()),
+                KeyValuePair("key1".to_string(), "value1".to_string()),
+                KeyValuePair("key2".to_string(), "value2".to_string()),
             ],
             ..Default::default()
         };
@@ -334,7 +341,10 @@ mod tests {
     #[test]
     fn test_experimental_otel_cli_args_resource_single() {
         let args = ExperimentalOtelCliArgs {
-            resource_attributes: vec![("service.name".to_string(), "my-service".to_string())],
+            resource_attributes: vec![KeyValuePair(
+                "service.name".to_string(),
+                "my-service".to_string(),
+            )],
             ..Default::default()
         };
         let result = args.to_config();
@@ -350,8 +360,8 @@ mod tests {
     fn test_experimental_otel_cli_args_resource_multiple() {
         let args = ExperimentalOtelCliArgs {
             resource_attributes: vec![
-                ("service.name".to_string(), "my-service".to_string()),
-                ("env".to_string(), "production".to_string()),
+                KeyValuePair("service.name".to_string(), "my-service".to_string()),
+                KeyValuePair("env".to_string(), "production".to_string()),
             ],
             ..Default::default()
         };
@@ -435,8 +445,8 @@ mod tests {
             endpoint: Some("https://example.com/otel".to_string()),
             timeout_ms: Some(15000),
             interval_ms: Some(30000),
-            headers: vec![("auth".to_string(), "token123".to_string())],
-            resource_attributes: vec![("service.name".to_string(), "test".to_string())],
+            headers: vec![KeyValuePair("auth".to_string(), "token123".to_string())],
+            resource_attributes: vec![KeyValuePair("service.name".to_string(), "test".to_string())],
             metrics_run_summary: Some(true),
             metrics_task_details: Some(false),
             use_remote_cache_token: None,

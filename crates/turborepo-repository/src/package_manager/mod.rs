@@ -991,11 +991,10 @@ impl PackageManager {
                 });
         // nub is recognized ONLY through the `packageManager` field /
         // `devEngines.packageManager` (handled in `get_package_manager`), never
-        // from the presence of its `lock.yaml`: nub's lockfile name is
-        // deliberately neutral and nub is lockfile-compatible with whatever the
-        // project already uses, so the file's presence is not a reliable nub
-        // signal. Lockfile parsing still happens once nub is detected via the
-        // field — only the name-based *detection* is dropped here.
+        // from the presence of its lockfile: nub is lockfile-compatible with
+        // whatever the project already uses, so a file alone is not a reliable
+        // nub signal. Lockfile parsing still happens once nub is detected via
+        // the field — only name-based *detection* is excluded here.
         let detected_package_managers = native_aube
             .into_iter()
             .map(Ok)
@@ -1032,9 +1031,7 @@ impl PackageManager {
         })
     }
 
-    pub(crate) fn parse_package_manager_string(
-        manager: &Spanned<String>,
-    ) -> Result<(&str, &str), Error> {
+    pub fn parse_package_manager_string(manager: &Spanned<String>) -> Result<(&str, &str), Error> {
         let package_manager_pattern = regex!(
             r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
         );
@@ -1097,14 +1094,19 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        if let PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } = self {
-            let native_lockfile = match self {
-                PackageManager::Nub { .. } => nub::LOCKFILE,
-                PackageManager::Aube { .. } => aube::LOCKFILE,
-                _ => unreachable!(),
-            };
-            if root_path.join_component(native_lockfile).exists() {
-                let contents = root_path.join_component(native_lockfile).read()?;
+        if let PackageManager::Nub { lockfile } = self {
+            if lockfile.is_pnpm_family()
+                && let Some(native_lockfile) = nub::native_lockfile_path(root_path)
+            {
+                let contents = native_lockfile.read()?;
+                return lockfile.parse_lockfile(root_package_json, &contents, None);
+            }
+            return lockfile.read_lockfile(root_path, root_package_json);
+        }
+        if let PackageManager::Aube { lockfile } = self {
+            let native_lockfile = root_path.join_component(aube::LOCKFILE);
+            if native_lockfile.exists() {
+                let contents = native_lockfile.read()?;
                 return lockfile.parse_lockfile(root_package_json, &contents, None);
             }
             return lockfile.read_lockfile(root_path, root_package_json);
@@ -1277,10 +1279,10 @@ impl PackageManager {
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        if matches!(self, PackageManager::Nub { .. })
-            && turbo_root.join_component(nub::LOCKFILE).exists()
+        if matches!(self, PackageManager::Nub { lockfile } if lockfile.is_pnpm_family())
+            && let Some(native_lockfile) = nub::native_lockfile_path(turbo_root)
         {
-            return turbo_root.join_component(nub::LOCKFILE);
+            return native_lockfile;
         }
         if matches!(self, PackageManager::Aube { .. })
             && turbo_root.join_component(aube::LOCKFILE).exists()
@@ -1966,7 +1968,7 @@ mod tests {
     #[test]
     fn test_native_nub_lockfile_is_ignored_by_detection() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
-        // A native `lock.yaml` does not participate in detection (nub is
+        // A native `nub.lock` does not participate in detection (nub is
         // field-only), so a co-present `pnpm-lock.yaml` resolves cleanly to pnpm
         // rather than producing an ambiguous multi-manager result.
         std::fs::write(
@@ -2139,6 +2141,31 @@ mod tests {
             repo_root.join_component(nub::LOCKFILE)
         );
         package_manager.read_lockfile(&repo_root, &package_json)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_nub_prefers_selected_bun_lockfile_over_native_lockfile() -> Result<(), Error>
+    {
+        let (_dir, repo_root) = temp_repo_root()?;
+        repo_root.join_component(bun::LOCKFILE).create()?;
+        repo_root
+            .join_component(nub::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")?;
+        let package_json = dev_engines_package_manager(json!("nub"), json!("0.6.0"));
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+
+        assert_eq!(
+            package_manager,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Bun)
+            }
+        );
+        assert_eq!(
+            package_manager.lockfile_path(&repo_root),
+            repo_root.join_component(bun::LOCKFILE)
+        );
         Ok(())
     }
 

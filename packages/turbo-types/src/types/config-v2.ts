@@ -355,9 +355,10 @@ export interface FutureFlags {
    * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
    * package graph: they resolve in `--filter` expressions, propagate
    * `--affected`, and appear in `turbo query`. Buildable packages register `build`
-   * (`uv build --package`), and all packages register `format` and `check`;
-   * the user-named workspace package registers workspace-wide versions of the
-   * quality tasks. External dependencies hash from `uv.lock` per
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
    * package, and `turbo prune` produces a reachability-pruned `uv.lock`
    * and root `pyproject.toml`. uv is the only supported Python package
    * manager. This feature is experimental.

@@ -14,6 +14,7 @@ use std::{
 use de::Entry;
 use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
+use rustc_hash::FxHashMap;
 use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
@@ -58,6 +59,9 @@ pub enum Error {
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 type CatalogMap = Map<String, Map<String, String>>;
+// See the `overrides` field of `BerryLockfile` for why overrides are grouped
+// by the unscoped name of the dependency they target.
+type OverridesByName = FxHashMap<String, Vec<(Resolution, String)>>;
 type PackageExtensionMap = Map<String, Map<String, String>>;
 type ManifestParts = (Map<Resolution, String>, CatalogMap, PackageExtensionMap);
 
@@ -74,8 +78,17 @@ pub struct BerryLockfile {
     extensions: HashSet<Descriptor<'static>>,
     // Project-defined package extensions and the descriptors they inject.
     project_extensions: Vec<(Descriptor<'static>, Vec<Descriptor<'static>>)>,
-    // Package overrides
-    overrides: Map<Resolution, String>,
+    // Package overrides from the root package.json `resolutions` field,
+    // grouped by the unscoped name of the dependency each override targets.
+    // Override matching runs for every dependency edge during lockfile
+    // parsing (`populate_extensions`) and again during transitive closure
+    // calculation, so scanning every override per edge is
+    // O(edges x overrides). Grouping by target name turns that scan into a
+    // single hash lookup per edge. Each bucket preserves the ordered
+    // `Map<Resolution, String>` iteration order so the first matching
+    // override still wins, and overrides targeting other names can never
+    // match. `Arc` makes the per-`subgraph` clone a refcount bump.
+    overrides: Arc<OverridesByName>,
     // Map from workspace paths to package locators
     workspace_path_to_locator: HashMap<String, Locator<'static>>,
     // Yarn 4+ catalog support
@@ -194,7 +207,7 @@ impl BerryLockfile {
             locator_package,
             resolver,
             patches,
-            overrides,
+            overrides: Arc::new(group_overrides_by_name(overrides)),
             extensions: Default::default(),
             project_extensions: Vec::new(),
             workspace_path_to_locator,
@@ -549,7 +562,7 @@ impl BerryLockfile {
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             project_extensions: self.project_extensions.clone(),
-            overrides: self.overrides.clone(),
+            overrides: Arc::clone(&self.overrides),
             workspace_path_to_locator: self.workspace_path_to_locator.clone(),
             catalogs: Arc::clone(&self.catalogs),
         })
@@ -592,12 +605,16 @@ impl BerryLockfile {
             dependency.range = range.to_string().into();
         }
 
-        for (resolution, reference) in &self.overrides {
-            if let Some(override_dependency) =
-                resolution.reduce_dependency(reference, &dependency, locator)
-            {
-                dependency = override_dependency;
-                break;
+        if !self.overrides.is_empty()
+            && let Some(candidates) = self.overrides.get(dependency.ident.name())
+        {
+            for (resolution, reference) in candidates {
+                if let Some(override_dependency) =
+                    resolution.reduce_dependency(reference, &dependency, locator)
+                {
+                    dependency = override_dependency;
+                    break;
+                }
             }
         }
 
@@ -617,6 +634,20 @@ impl BerryLockfile {
                 })
             })
     }
+}
+
+/// Groups overrides by the unscoped name of the dependency they target,
+/// preserving the ordered map's iteration order within each bucket so the
+/// first matching override still wins.
+fn group_overrides_by_name(overrides: Map<Resolution, String>) -> OverridesByName {
+    let mut by_name = OverridesByName::default();
+    for (resolution, reference) in overrides {
+        by_name
+            .entry(resolution.target_name().to_string())
+            .or_default()
+            .push((resolution, reference));
+    }
+    by_name
 }
 
 impl Lockfile for BerryLockfile {
@@ -669,12 +700,16 @@ impl Lockfile for BerryLockfile {
         let mut map = std::collections::BTreeMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
             let mut dependency = Descriptor::new(name, version.as_ref()).map_err(Error::from)?;
-            for (resolution, reference) in &self.overrides {
-                if let Some(override_dependency) =
-                    resolution.reduce_dependency(reference, &dependency, &locator)
-                {
-                    dependency = override_dependency;
-                    break;
+            if !self.overrides.is_empty()
+                && let Some(candidates) = self.overrides.get(dependency.ident.name())
+            {
+                for (resolution, reference) in candidates {
+                    if let Some(override_dependency) =
+                        resolution.reduce_dependency(reference, &dependency, &locator)
+                    {
+                        dependency = override_dependency;
+                        break;
+                    }
                 }
             }
             map.insert(dependency.ident.to_string(), dependency.range.to_string());
@@ -735,6 +770,14 @@ impl Lockfile for BerryLockfile {
         let name = locator.ident.to_string();
         let version = &berry_package.version;
         Some(format!("{name}@{version}"))
+    }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        crate::package_source_from_identifier(&package.key)
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some(self.data.metadata.version.clone())
     }
 }
 

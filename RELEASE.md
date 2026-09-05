@@ -9,7 +9,7 @@ Canary releases run on an hourly schedule via the [Release workflow][1]:
 1. Runs every hour via cron, skipping if no relevant files in `crates/` or `packages/` changed since the last canary tag
 2. Skips if the latest commit is a release PR merge (to avoid releasing the version bump itself)
 3. Publishes to npm with the `canary` tag
-4. Opens a PR with auto-merge enabled to merge the version bump back to `main`
+4. Opens and merges a PR to return the version bump to `main` after required checks pass
 
 No manual intervention required for canary releases.
 
@@ -20,7 +20,7 @@ No manual intervention required for canary releases.
    - For custom pre-releases, use `prepatch`, `preminor`, or `premajor`
    - Check the "Dry Run" box to test the workflow without publishing
 
-2. A PR is automatically opened, approved, and queued to merge the release branch back into `main` after required checks pass.
+2. A PR is automatically opened and merged into `main` after its required workflows are approved and pass.
 
 ### Release `@turbo/repository`
 
@@ -28,7 +28,7 @@ No manual intervention required for canary releases.
 
 2. Create a release by triggering the [Turborepo Library Release][5] workflow.
    - Check the "Dry Run" box to run the full release workflow without publishing any packages.
-   - The release PR is automatically approved and queued to merge after required checks pass.
+   - The release PR is automatically merged after its required workflows are approved and pass.
 
 ### Notes
 
@@ -96,7 +96,7 @@ The canary release system runs on an hourly cron schedule, publishing a new cana
 │ - Builds binaries                                            │
 │ - Publishes to npm                                           │
 │ - Aliases versioned docs                                     │
-│ - Creates PR with auto-merge                                 │
+│ - Creates and merges the release PR after required checks    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -406,7 +406,7 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. It dispatches the release review gate on the pinned staging head. The gate validates the exact generated manifest, skill, and version changes and supplies the required semantic and test summary checks. The release workflow then revalidates the head SHA and squash-merges the PR.
+For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. After validating the exact generated manifest, skill, and version changes, it approves only the held release review, Turborepo test, and JavaScript package test workflows for the pinned staging head. Those workflows validate the generated file set but skip their test matrices for release PRs. The release workflow waits for their required summary checks, revalidates the PR metadata and immutable SHAs, and squash-merges the pinned head.
 
 The PR includes:
 
@@ -593,7 +593,7 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 3. **Use dry run for testing**: When in doubt, use `dry_run: true` to test the entire pipeline without publishing.
 
-4. **Monitor canary PRs**: Canary release PRs have auto-merge enabled, but check that they're merging successfully. If a canary PR fails to merge, investigate promptly.
+4. **Monitor canary PRs**: Canary release PRs merge automatically after required checks pass. If a canary PR fails to merge, investigate promptly.
 
 5. **Check npm after publishing**: Verify that all packages were published correctly:
 
@@ -657,16 +657,17 @@ If a canary release fails after some packages were published but before others:
    npm publish ./path/to/package --tag canary
    ```
 
-#### Canary PR Won't Auto-Merge
+#### Canary PR Won't Merge Automatically
 
-If a canary release PR is created but fails to auto-merge:
+If a canary release PR is created but fails to merge automatically:
 
 1. **Check semantic validation**: Inspect the `Release review gate` workflow for unexpected files or manifest fields.
 2. **Check branch protection**: Ensure `Release Semantic Validation`, `Test Summary`, and `JS Test Summary` are passing.
-3. **Check the PR head**: A new commit invalidates the dispatched head SHA and requires validation to restart.
-4. **Check for conflicts**: The staging branch may have diverged from `main`.
-5. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
-6. **Cleanup if abandoned**: If you need to abandon the release:
+3. **Check workflow approval**: Ensure the release job found and approved the three allowlisted workflow runs for the release head SHA.
+4. **Check the PR head**: A new commit invalidates the validated head SHA and requires validation to restart.
+5. **Check for conflicts**: The staging branch may have diverged from `main`.
+6. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
+7. **Cleanup if abandoned**: If you need to abandon the release:
 
    ```bash
    # Delete the staging branch

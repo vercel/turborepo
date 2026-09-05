@@ -16,9 +16,14 @@ turbo watch build
 
 # Watch multiple tasks
 turbo watch build test lint
+
+# No tasks: lists available tasks and exits non-zero
+turbo watch
 ```
 
 Tasks re-run in order configured in `turbo.json` when source files change.
+
+By default, any file change in a package re-runs all of that package's tasks. Enable `futureFlags.watchUsingTaskInputs` in `turbo.json` to re-run only tasks whose `inputs` globs match the changed files.
 
 ## With Persistent Tasks
 

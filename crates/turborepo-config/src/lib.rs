@@ -47,7 +47,10 @@ use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::{
+    discovery::{MultipleTurboConfigsError, select_turbo_config_path},
+    package_graph::PackageName,
+};
 use turborepo_scm::WorktreeInfo;
 use turborepo_turbo_json::FutureFlags;
 use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
@@ -187,8 +190,6 @@ pub enum Error {
     Encoding(String),
     #[error("TURBO_SIGNATURE should be either 1 or 0.")]
     InvalidSignature,
-    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
-    InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]
@@ -741,20 +742,15 @@ pub fn resolve_turbo_config_path(
     let turbo_json_path = dir_path.join_component(CONFIG_FILE);
     let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
 
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::TurboJsonError(
-            turborepo_turbo_json::Error::MultipleTurboConfigs {
-                directory: dir_path.to_string(),
-            },
-        )),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
-    }
+    select_turbo_config_path(
+        dir_path,
+        turbo_json_path.try_exists()?,
+        turbo_jsonc_path.try_exists()?,
+    )
+    .map(|path| path.unwrap_or(turbo_json_path))
+    .map_err(|MultipleTurboConfigsError { directory }| {
+        Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { directory })
+    })
 }
 
 #[cfg(test)]

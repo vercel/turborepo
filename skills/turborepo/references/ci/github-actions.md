@@ -96,7 +96,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: vercel/setup-turborepo-remote-cache-action@v1.0.0
+      - uses: vercel/setup-turborepo-remote-cache-action@v1.1.0
         with:
           team: ${{ vars.TURBO_TEAM }}
 ```
@@ -161,7 +161,7 @@ jobs:
           node-version: 20
           cache: "pnpm"
 
-      - uses: vercel/setup-turborepo-remote-cache-action@v1.0.0
+      - uses: vercel/setup-turborepo-remote-cache-action@v1.1.0
         with:
           team: ${{ vars.TURBO_TEAM }}
 

@@ -552,14 +552,6 @@ impl ProcessedWith {
     }
 }
 
-/// A processed incremental cache partition with validated output and input
-/// globs.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedIncrementalPartition {
-    pub outputs: ProcessedOutputs,
-    pub inputs: Option<ProcessedInputs>,
-}
-
 /// The canonical toolchain ids accepted as `command` map keys, alongside
 /// their accepted aliases. Kept as literals: this crate sits below the
 /// toolchain registry, and these ids are stable public API.
@@ -741,7 +733,6 @@ pub struct ProcessedTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
     pub env_mode: Option<Spanned<EnvMode>>,
     pub with: Option<ProcessedWith>,
-    pub incremental: Option<Vec<ProcessedIncrementalPartition>>,
     pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
     pub command: Option<ProcessedCommand>,
 }
@@ -752,56 +743,6 @@ impl ProcessedTaskDefinition {
         raw_task: RawTaskDefinition,
         future_flags: &FutureFlags,
     ) -> Result<Self, Error> {
-        let incremental = raw_task
-            .incremental
-            .map(|partitions| {
-                partitions
-                    .into_iter()
-                    .filter_map(|partition| {
-                        let outputs = match partition
-                            .outputs
-                            .map(|o| ProcessedOutputs::new(o, future_flags))
-                            .transpose()
-                        {
-                            Ok(o) => o.unwrap_or_default(),
-                            Err(e) => return Some(Err(e)),
-                        };
-                        // Skip partitions with no output globs — they'd never
-                        // match any files and are almost certainly a config error.
-                        if outputs.globs.is_empty() {
-                            return None;
-                        }
-                        // Reject task-input DSL tokens in
-                        // incremental inputs — these DSL tokens only apply to
-                        // regular task inputs and have no meaning here.
-                        if let Some(ref raw_inputs) = partition.inputs {
-                            for input in raw_inputs {
-                                if input.as_str() == TURBO_DEFAULT
-                                    || input.as_str() == TURBO_EXTENDS
-                                {
-                                    let (span, text) = input.span_and_text("turbo.json");
-                                    return Some(Err(Error::InvalidIncrementalInput {
-                                        value: input.as_str().to_string(),
-                                        span,
-                                        text,
-                                    }));
-                                }
-                            }
-                        }
-                        let inputs = match partition
-                            .inputs
-                            .map(|i| ProcessedInputs::new_legacy(i, future_flags))
-                            .transpose()
-                        {
-                            Ok(i) => i,
-                            Err(e) => return Some(Err(e)),
-                        };
-                        Some(Ok(ProcessedIncrementalPartition { outputs, inputs }))
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
-            })
-            .transpose()?;
-
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             description: raw_task.description,
@@ -835,7 +776,6 @@ impl ProcessedTaskDefinition {
                 .with
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
-            incremental,
             experimental_ci: raw_task.experimental_ci,
             command: raw_task
                 .command
@@ -858,7 +798,6 @@ impl ProcessedTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
-            || self.incremental.is_some()
             || self.experimental_ci.is_some()
             || self.command.is_some()
     }
@@ -1126,39 +1065,6 @@ mod tests {
             ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(absolute_path)));
 
         assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
-    }
-
-    #[test]
-    fn test_incremental_outputs_allow_parent_directory_segments() {
-        let raw_task = RawTaskDefinition {
-            incremental: Some(vec![crate::raw::RawIncrementalPartition {
-                outputs: Some(vec![Spanned::new(UnescapedString::from("../target.txt"))]),
-                ..Default::default()
-            }]),
-            ..Default::default()
-        };
-
-        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_incremental_negated_outputs_allow_parent_directory_segments() {
-        let raw_task = RawTaskDefinition {
-            incremental: Some(vec![crate::raw::RawIncrementalPartition {
-                outputs: Some(vec![
-                    Spanned::new(UnescapedString::from("dist/**")),
-                    Spanned::new(UnescapedString::from("!../../secret.txt")),
-                ]),
-                ..Default::default()
-            }]),
-            ..Default::default()
-        };
-
-        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
-
-        assert!(result.is_ok());
     }
 
     #[test]

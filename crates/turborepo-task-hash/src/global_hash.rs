@@ -156,31 +156,37 @@ pub fn collect_global_file_hash_inputs<'a>(
         global_hashable_env_vars.all.names()
     );
 
-    let mut global_deps =
+    let mut discovered_global_deps =
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
-
-    for path in resolution_file_fallback {
-        global_deps.insert(path.clone());
-    }
 
     // .gitattributes drives CRLF→LF normalization which affects file hashes.
     // Including it in the global hash ensures cache invalidation when
     // normalization rules change.
     let gitattributes_path = root_path.join_component(".gitattributes");
     if gitattributes_path.exists() {
-        global_deps.insert(gitattributes_path);
+        discovered_global_deps.insert(gitattributes_path);
     }
 
-    let global_deps_paths = global_deps
+    let discovered_global_deps_paths = discovered_global_deps
+        .iter()
+        .map(|p| root_path.anchor(p).map_err(Error::from))
+        .collect::<Result<Vec<_>, _>>()?;
+    let resolution_file_fallback_paths = resolution_file_fallback
         .iter()
         .map(|p| root_path.anchor(p).map_err(Error::from))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let global_file_hash_map = hasher
-        .get_hashes_for_files(root_path, &global_deps_paths, false)?
+    let mut global_file_hash_map = hasher
+        .hash_discovered_files(root_path, discovered_global_deps_paths.iter())?
         .into_iter()
         .map(|(k, v)| (k, String::from(v)))
-        .collect();
+        .collect::<HashMap<_, _>>();
+    global_file_hash_map.extend(
+        hasher
+            .hash_files(root_path, resolution_file_fallback_paths.iter())?
+            .into_iter()
+            .map(|(k, v)| (k, String::from(v))),
+    );
 
     Ok(GlobalFileHashInputs {
         global_file_hash_map,

@@ -531,7 +531,7 @@ dependencies = [
  "bitflags 2.13.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -1078,7 +1078,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading",
+ "libloading 0.8.1",
 ]
 
 [[package]]
@@ -1101,15 +1101,6 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
-]
-
-[[package]]
-name = "clap_complete"
-version = "4.5.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d7db6eca8c205649e8d3ccd05aa5042b1800a784e56bc7c43524fde8abbfa9b"
-dependencies = [
- "clap",
 ]
 
 [[package]]
@@ -1305,6 +1296,15 @@ name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1519,13 +1519,9 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.2.0"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd4056f63fce3b82d852c3da92b08ea59959890813a7f4ce9c0ff85b10cf301b"
-dependencies = [
- "quote",
- "syn 2.0.117",
-]
+checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 
 [[package]]
 name = "ctrlc"
@@ -2768,9 +2764,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "globset"
-version = "0.4.14"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57da3b9b5b85bd66f31093f8c408b90a74431672542466497dcbdfdc02034be1"
+checksum = "e47d37d2ae4464254884b60ab7071be2b876a9c35b696bd018ddcc76847309cd"
 dependencies = [
  "aho-corasick",
  "bstr 1.12.1",
@@ -3344,9 +3340,9 @@ dependencies = [
 
 [[package]]
 name = "ignore"
-version = "0.4.22"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b46810df39e66e925525d6e38ce1e7f6e1d208f72dc39757880fcb66e2c58af1"
+checksum = "0b17771570a2b94107741a7b033f19132c2eee21d59d21b24d2ced26500bd66e"
 dependencies = [
  "crossbeam-deque",
  "globset",
@@ -3751,6 +3747,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4127,32 +4133,35 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "2.15.0"
+version = "3.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efbf98e1bcb85cc441bbf7cdfb11070d2537a100e2697d75397b2584c32492d1"
+checksum = "58c5f4d5375213fdb7be2655e152386e82f026f9a5ba36a75556e11359aafe09"
 dependencies = [
  "bitflags 2.13.0",
  "ctor",
- "napi-derive",
+ "futures",
+ "libc",
+ "napi-build",
  "napi-sys",
- "once_cell",
+ "nohash-hasher",
+ "rustc-hash 2.1.3",
  "tokio",
 ]
 
 [[package]]
 name = "napi-build"
-version = "2.0.1"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882a73d9ef23e8dc2ebbffb6a6ae2ef467c0f18ac10711e4cc59c5485d41df0e"
+checksum = "60fdf9b392c50e7c4170fa633bd909490ed7835cea4c046776d1a4dd8d2ae0ab"
 
 [[package]]
 name = "napi-derive"
-version = "2.15.0"
+version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7622f0dbe0968af2dacdd64870eee6dee94f93c989c841f1ad8f300cf1abd514"
+checksum = "0fa55ea69990c90b888e9e77044410e304ce7f35de599dc6d0b5c1923d2e59af"
 dependencies = [
- "cfg-if",
- "convert_case 0.6.0",
+ "convert_case 0.11.0",
+ "ctor",
  "napi-derive-backend",
  "proc-macro2",
  "quote",
@@ -4161,26 +4170,24 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "1.0.60"
+version = "6.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cf2d74ac66fd1cccb646be75fdd1c1dce8acfe20a68f61566a31da0d3eb9786"
+checksum = "df4056ac7c18e4438ccf0edaed4340ca0d269278c8ec19284f7b23cb039fd0ae"
 dependencies = [
- "convert_case 0.6.0",
- "once_cell",
+ "convert_case 0.11.0",
  "proc-macro2",
  "quote",
- "regex",
  "semver 1.0.23",
  "syn 2.0.117",
 ]
 
 [[package]]
 name = "napi-sys"
-version = "2.3.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2503fa6af34dc83fb74888df8b22afe933b58d37daf7d80424b1c60c68196b8b"
+checksum = "85fbf1fa9f1babfe396d74bbbf52b3643770243e8f5b0b46715d4caf7f0dfc9a"
 dependencies = [
- "libloading",
+ "libloading 0.9.0",
 ]
 
 [[package]]
@@ -4265,6 +4272,12 @@ dependencies = [
  "serde",
  "thiserror 1.0.63",
 ]
+
+[[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "nom"
@@ -8436,6 +8449,7 @@ dependencies = [
  "pidlock",
  "prost 0.14.3",
  "semver 1.0.23",
+ "serde",
  "serde_json",
  "sha2",
  "sysinfo",
@@ -8458,6 +8472,7 @@ dependencies = [
  "turborepo-scm",
  "turborepo-types",
  "uds_windows",
+ "which 4.4.0",
  "windows-sys 0.59.0",
 ]
 
@@ -8522,6 +8537,7 @@ dependencies = [
  "turborepo-task-id",
  "turborepo-turbo-json",
  "turborepo-types",
+ "wax",
  "which 4.4.0",
 ]
 
@@ -8675,8 +8691,6 @@ dependencies = [
  "biome_json_parser",
  "camino",
  "chrono",
- "clap",
- "clap_complete",
  "console 0.16.2",
  "convert_case 0.6.0",
  "ctrlc",
@@ -8785,6 +8799,7 @@ dependencies = [
  "turborepo-vercel-api-mock",
  "unrs_resolver",
  "url",
+ "usage-rs",
  "wax",
  "webbrowser",
  "which 4.4.0",
@@ -8849,7 +8864,10 @@ dependencies = [
 name = "turborepo-lsp"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "crop",
+ "go-parse-duration",
+ "humantime",
  "itertools 0.14.0",
  "jsonc-parser 0.23.0",
  "pidlock",
@@ -8858,8 +8876,11 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "tower-lsp",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "turbopath",
- "turborepo-lib",
+ "turborepo-daemon",
  "turborepo-repository",
  "wax",
 ]
@@ -8920,6 +8941,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-turbo-json",
 ]
 
 [[package]]
@@ -9076,13 +9098,10 @@ dependencies = [
 name = "turborepo-run-cache"
 version = "0.1.0"
 dependencies = [
- "futures",
  "globwalk",
- "hex",
  "itertools 0.14.0",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -9296,6 +9315,7 @@ dependencies = [
 name = "turborepo-task-hash"
 version = "0.1.0"
 dependencies = [
+ "dashmap 6.1.0",
  "dunce",
  "either",
  "globwalk",
@@ -9716,6 +9736,43 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "usage-argv"
+version = "6.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cf8735c2d0154550e8241d30579e28b2840394c7a3efaf33b28ce706babe6f4"
+
+[[package]]
+name = "usage-derive"
+version = "6.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa7bc7653408788950770f2aa53f0600e025d50c8b049cdab054284436d2413"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "usage-rs"
+version = "6.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c12de82d13507fdafd64170f5f735bd5fa7778f94b1f4a55e3b66e8ea3bde301"
+dependencies = [
+ "usage-argv",
+ "usage-derive",
+ "usage-test",
+]
+
+[[package]]
+name = "usage-test"
+version = "6.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d3b624c2128c68c730930654cb718ef03c3792bfd7b2e8d4447ee58c2e4dfe7"
+dependencies = [
+ "usage-argv",
 ]
 
 [[package]]

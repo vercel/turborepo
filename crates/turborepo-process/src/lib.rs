@@ -16,6 +16,8 @@ mod child;
 mod command;
 #[cfg(windows)]
 mod job_object;
+#[cfg(any(windows, test))]
+mod process_tree;
 
 use std::{
     collections::HashMap,

@@ -102,6 +102,10 @@ impl Lockfile for Yarn1Lockfile {
         })
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(Yarn1EdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -161,9 +165,48 @@ impl Lockfile for Yarn1Lockfile {
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         let entry = self.inner.get(&package.key)?;
-        let name = entry.name.as_deref()?;
+        let name = entry
+            .name
+            .as_deref()
+            .or_else(|| package_name_from_key(&package.key))?;
         let version = &entry.version;
         Some(format!("{name}@{version}"))
+    }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        let Some(entry) = self.inner.get(&package.key) else {
+            return crate::PackageSource::Registry;
+        };
+        entry
+            .resolved
+            .as_deref()
+            .map(crate::package_source_from_identifier)
+            .unwrap_or_else(|| crate::package_source_from_identifier(&package.key))
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some("1".to_string())
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// yarn1 resolution never consults the workspace: `resolve_package` ignores
+/// its workspace argument entirely and resolves purely from the lockfile's
+/// `name@specifier` keys, so every edge is globally uniform by construction.
+struct Yarn1EdgeResolver<'a> {
+    lockfile: &'a Yarn1Lockfile,
+}
+
+impl crate::TransitiveEdgeResolver for Yarn1EdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile.resolve_package("", name, version)?,
+        ))
     }
 }
 
@@ -203,6 +246,12 @@ fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = St
         .map(move |protocol| format!("{name}@{protocol}{version}"))
 }
 
+fn package_name_from_key(key: &str) -> Option<&str> {
+    let search_start = usize::from(key.starts_with('@'));
+    let delimiter = key[search_start..].find('@')? + search_start;
+    Some(&key[..delimiter])
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -219,6 +268,36 @@ mod test {
         );
         assert_eq!(extract_file_path("lodash@^4.17.21"), None);
         assert_eq!(extract_file_path("@scope/pkg@npm:1.0.0"), None);
+    }
+
+    #[test]
+    fn test_human_name_uses_resolved_version() {
+        let lockfile = Yarn1Lockfile::from_str(
+            r#"# yarn lockfile v1
+
+lodash@^4.17.21:
+  version "4.17.21"
+
+"@scope/pkg@npm:^1.0.0":
+  version "1.2.3"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "lodash@^4.17.21".to_string(),
+                version: "4.17.21".to_string(),
+            }),
+            Some("lodash@4.17.21".to_string())
+        );
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "@scope/pkg@npm:^1.0.0".to_string(),
+                version: "1.2.3".to_string(),
+            }),
+            Some("@scope/pkg@1.2.3".to_string())
+        );
     }
 
     #[test]

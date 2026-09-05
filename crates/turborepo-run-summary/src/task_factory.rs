@@ -268,7 +268,15 @@ fn summary_command(
         None => package_context
             .native_tasks()
             .get(task)
-            .and_then(|native_task| native_task.display().map(str::to_string))
+            .map(|native_task| match native_task.execution() {
+                turborepo_repository::native_tasks::NativeTaskExecution::Aggregate(_) => {
+                    "<AGGREGATE>".to_string()
+                }
+                _ => native_task
+                    .display()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
+            })
             .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
     }
 }

@@ -2,7 +2,6 @@
 
 pub mod builder;
 mod error;
-pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
 pub(crate) mod task_filter;
@@ -170,9 +169,6 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
                 }
                 RemoteCacheDisabledReason::InConfig => {
                     "Remote caching disabled (in configuration)".to_string()
-                }
-                RemoteCacheDisabledReason::InEnvVar => {
-                    "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
                 }
                 RemoteCacheDisabledReason::ByFlags => {
                     "Remote caching disabled (by flags)".to_string()
@@ -434,8 +430,13 @@ impl Run {
             turborepo_log::info(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!(
-                    "{pad}• Running {targets_list} in {} packages",
-                    self.filtered_pkgs.len()
+                    "{pad}• Running {targets_list} in {package_count} {package_label}",
+                    package_count = self.filtered_pkgs.len(),
+                    package_label = if self.filtered_pkgs.len() == 1 {
+                        "package"
+                    } else {
+                        "packages"
+                    }
                 ),
             )
             .emit();
@@ -523,7 +524,7 @@ impl Run {
             // Authored scripts and registered native tasks both come from the
             // native-task catalog produced at repository construction.
             for native_task in context.native_tasks().tasks() {
-                if !native_task.executable() && !native_task.registered() {
+                if !native_task.participates() && !native_task.registered() {
                     continue;
                 }
                 tasks
@@ -1197,7 +1198,7 @@ impl Run {
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
                     let resolution_file_fallback = self
                         .pkg_dep_graph
-                        .external_resolution_global_file_fallback()
+                        .external_resolution_fallback_inputs()
                         .unwrap_or_default();
                     let root_engines = self.pkg_dep_graph.root_engines();
                     let root_engines = (!root_engines.is_empty()).then_some(root_engines);

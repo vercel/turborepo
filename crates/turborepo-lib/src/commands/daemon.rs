@@ -1,19 +1,13 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
-use camino::Utf8PathBuf;
 use futures::FutureExt;
-use pidlock::PidlockError::AlreadyOwned;
 use serde_json::json;
-use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
-use tracing::{trace, warn};
-use turbopath::AbsoluteSystemPath;
 use turborepo_daemon::{
-    endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
-    Paths, TurboGrpcService,
+    clean_daemon, follow_daemon_logs, serve, CloseReason, DaemonError, DaemonLifecycleCommand,
+    DaemonLifecycleOutput, Paths,
 };
 use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
-use which::which;
 
 use super::CommandBase;
 use crate::{
@@ -48,40 +42,16 @@ pub async fn daemon_client(
     base: &CommandBase,
     custom_turbo_json_path: Option<camino::Utf8PathBuf>,
 ) -> Result<(), DaemonError> {
-    let (can_start_server, can_kill_server) = match command {
-        DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
-        DaemonCommand::Stop => (false, true),
-        DaemonCommand::Restart | DaemonCommand::Start => (true, true),
-        DaemonCommand::Clean { .. } => (false, true),
-    };
-
     let custom_turbo_json_path = convert_turbo_json_path(custom_turbo_json_path.as_deref())?;
-
-    let connector = DaemonConnector::new(
-        can_start_server,
-        can_kill_server,
-        &base.repo_root,
-        custom_turbo_json_path,
-    )?;
 
     match command {
         DaemonCommand::Restart => {
-            let result: Result<_, DaemonError> = try {
-                let client = connector
-                    .clone()
-                    .connect()
-                    .await
-                    .map_err(DaemonError::DaemonConnect)?;
-                client.restart().await?
-            };
-
-            if let Err(e) = result {
-                tracing::debug!("failed to restart the daemon: {:?}", e);
-                tracing::debug!("falling back to clean");
-                clean(&connector.paths.pid_file, &connector.paths.sock_file)?;
-                tracing::debug!("connecting for second time");
-                let _ = connector.connect().await?;
-            }
+            let _ = turborepo_daemon::run_lifecycle_command(
+                DaemonLifecycleCommand::Restart,
+                &base.repo_root,
+                custom_turbo_json_path.clone(),
+            )
+            .await?;
 
             println!(
                 "{} restarted daemon",
@@ -89,42 +59,46 @@ pub async fn daemon_client(
             );
         }
         DaemonCommand::Start => {
-            // We don't care about the client, but we do care that we can connect
-            // which ensures that daemon is started if it wasn't already.
-            let _ = connector.connect().await?;
+            let _ = turborepo_daemon::run_lifecycle_command(
+                DaemonLifecycleCommand::Start,
+                &base.repo_root,
+                custom_turbo_json_path.clone(),
+            )
+            .await?;
             println!(
                 "{} daemon is running",
                 color!(base.color_config, BOLD_GREEN, "✓")
             );
         }
         DaemonCommand::Stop => {
-            let client = match connector.connect().await {
-                Ok(client) => client,
-                Err(DaemonConnectorError::NotRunning) => {
-                    println!(
-                        "{} stopped daemon",
-                        color!(base.color_config, BOLD_GREEN, "✓")
-                    );
-                    return Ok(());
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            };
-            client.stop().await?;
+            let _ = turborepo_daemon::run_lifecycle_command(
+                DaemonLifecycleCommand::Stop,
+                &base.repo_root,
+                custom_turbo_json_path.clone(),
+            )
+            .await?;
             println!(
                 "{} stopped daemon",
                 color!(base.color_config, BOLD_GREEN, "✓")
             );
         }
         DaemonCommand::Status { json } => {
-            let mut client = match connector.connect().await {
-                Ok(status) => status,
-                Err(DaemonConnectorError::NotRunning) if *json => {
+            let output = turborepo_daemon::run_lifecycle_command(
+                DaemonLifecycleCommand::Status,
+                &base.repo_root,
+                custom_turbo_json_path.clone(),
+            )
+            .await?;
+            let DaemonLifecycleOutput::Status(status) = output else {
+                unreachable!("status command must return status output");
+            };
+            let status = match status {
+                Some(status) => status,
+                None if *json => {
                     println!("{}", json!({ "error": DAEMON_NOT_RUNNING_MESSAGE }));
                     return Ok(());
                 }
-                Err(DaemonConnectorError::NotRunning) => {
+                None => {
                     println!(
                         "{} {}",
                         color!(base.color_config, BOLD_RED, "x"),
@@ -132,18 +106,6 @@ pub async fn daemon_client(
                     );
                     return Ok(());
                 }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            };
-            let status = client.status().await?;
-            let log_file = log_filename(&status.log_file)?;
-            let paths = client.paths();
-            let status = DaemonStatus {
-                uptime_ms: status.uptime_msec,
-                log_file: log_file.into(),
-                pid_file: paths.pid_file.to_owned(),
-                sock_file: paths.sock_file.to_owned(),
             };
 
             if *json {
@@ -177,133 +139,22 @@ pub async fn daemon_client(
             }
         }
         DaemonCommand::Logs => {
-            let log_file = if let Ok(log_file) = get_log_file_from_daemon(connector).await {
-                log_file
-            } else {
-                get_log_file_from_folder(base).await?
-            };
-
-            let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
-
-            if let Err(err) = std::process::Command::new(tail)
-                .arg("-f")
-                .arg(log_file)
-                .status()
-            {
-                tracing::error!("failed to execute tail: {err}");
-            }
+            follow_daemon_logs(&base.repo_root, custom_turbo_json_path.clone()).await?;
         }
         DaemonCommand::Clean {
             clean_logs: should_clean_logs,
         } => {
-            // try to connect and shutdown the daemon
-            let paths = connector.paths.clone();
-            let client = connector.connect().await;
-            match client {
-                Ok(client) => match client.stop().await {
-                    Ok(_) => {
-                        tracing::trace!("successfully stopped the daemon");
-                    }
-                    Err(e) => {
-                        tracing::trace!("unable to stop the daemon: {:?}", e);
-                    }
-                },
-                Err(e) => {
-                    tracing::trace!("unable to connect to the daemon: {:?}", e);
-                }
-            }
-            clean(&paths.pid_file, &paths.sock_file)?;
-            if *should_clean_logs {
-                clean_logs(&paths.log_folder)?;
-            }
+            clean_daemon(
+                &base.repo_root,
+                custom_turbo_json_path.clone(),
+                *should_clean_logs,
+            )
+            .await?;
             println!("Done");
         }
     };
 
     Ok(())
-}
-
-async fn get_log_file_from_daemon(connector: DaemonConnector) -> Result<PathBuf, DaemonError> {
-    let mut client = connector.connect().await?;
-    let status = client.status().await?;
-    Ok(PathBuf::from(log_filename(&status.log_file)?))
-}
-
-async fn get_log_file_from_folder(base: &CommandBase) -> Result<PathBuf, DaemonError> {
-    warn!("couldn't connect to daemon, looking for old log files");
-    let log_folder = base.repo_root.join_components(&[".turbo", "daemon"]);
-    latest_log_file_from_dir(&log_folder)
-}
-
-fn latest_log_file_from_dir(log_folder: &AbsoluteSystemPath) -> Result<PathBuf, DaemonError> {
-    let Ok(dir) = std::fs::read_dir(log_folder) else {
-        return Err(DaemonError::LogFileNotFound);
-    };
-
-    let (latest_file, _) = dir
-        .flatten()
-        .filter_map(|entry| {
-            let modified_time = entry.metadata().ok()?.modified().ok()?;
-            Some((entry, modified_time))
-        })
-        .max_by(|(_, mt1), (_, mt2)| mt1.cmp(mt2))
-        .ok_or(DaemonError::LogFileNotFound)?;
-
-    Ok(latest_file.path())
-}
-
-fn clean(pid_file: &AbsoluteSystemPath, sock_file: &AbsoluteSystemPath) -> Result<(), DaemonError> {
-    // remove pid and sock files
-    let mut success = true;
-    trace!("cleaning up daemon files");
-    // if the pid_file and sock_file still exist, remove them:
-    if pid_file.exists() {
-        let result = pid_file.remove_file();
-        // ignore this error
-        if let Err(e) = result {
-            println!("Failed to remove pid file: {e}");
-            println!("Please remove manually: {pid_file}");
-            success = false;
-        }
-    }
-    if sock_file.exists() {
-        let result = sock_file.remove_file();
-        // ignore this error
-        if let Err(e) = result {
-            println!("Failed to remove socket file: {e}");
-            println!("Please remove manually: {sock_file}");
-            success = false;
-        }
-    }
-
-    if success {
-        Ok(())
-    } else {
-        // return error
-        Err(DaemonError::CleanFailed)
-    }
-}
-
-fn clean_logs(log_folder: &AbsoluteSystemPath) -> Result<(), DaemonError> {
-    trace!("cleaning up log files");
-    // clear all files in the log folder. we want to keep the
-    // folder just remove the contents
-    // `remove_dir_all_recursive` is lifted from `std`
-    log_folder.remove_dir_all().map_err(|e| {
-        println!("Failed to remove log files: {e}");
-        println!("Please remove manually: {log_folder}");
-        DaemonError::CleanFailed
-    })
-}
-
-// log_filename matches the algorithm used by tracing_appender::Rotation::DAILY
-// to generate the log filename. This is kind of a hack, but there didn't appear
-// to be a simple way to grab the generated filename.
-fn log_filename(base_filename: &str) -> Result<String, time::Error> {
-    let now = OffsetDateTime::now_utc();
-    let format = format_description::parse("[year]-[month]-[day]")?;
-    let date = now.format(&format)?;
-    Ok(format!("{base_filename}.{date}"))
 }
 
 #[tracing::instrument(skip(base, logging), fields(repo_root = %base.repo_root))]
@@ -336,9 +187,8 @@ pub async fn daemon_server(
     });
     let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path.as_deref())?;
     let allow_no_package_manager = base.opts().repo_opts.allow_no_package_manager;
-    let server = TurboGrpcService::new(
+    serve(
         base.repo_root.clone(),
-        paths,
         timeout,
         exit_signal,
         custom_turbo_json_path,
@@ -346,6 +196,7 @@ pub async fn daemon_server(
         {
             let graph_features =
                 crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+            let future_flags = base.opts().future_flags;
             move |args| {
                 PackageChangesWatcher::new(
                     args.repo_root,
@@ -355,61 +206,10 @@ pub async fn daemon_server(
                     false,
                     args.allow_no_package_manager,
                     graph_features,
+                    future_flags,
                 )
             }
         },
-    );
-
-    let reason = server.serve().await?;
-
-    match reason {
-        CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
-            warn!("daemon already running");
-        }
-        CloseReason::SocketOpenError(e) => return Err(e.into()),
-        CloseReason::WatcherSetupError(e) => return Err(e.into()),
-        CloseReason::Interrupt
-        | CloseReason::ServerClosed
-        | CloseReason::WatcherClosed
-        | CloseReason::Timeout
-        | CloseReason::Shutdown => {
-            // these are all ok, just exit
-            trace!("shutting down daemon: {:?}", reason);
-        }
-    };
-
-    Ok(())
-}
-
-#[derive(serde::Serialize)]
-pub struct DaemonStatus {
-    pub uptime_ms: u64,
-    // this comes from the daemon server, so we trust that
-    // it is correct
-    pub log_file: Utf8PathBuf,
-    pub pid_file: turbopath::AbsoluteSystemPathBuf,
-    pub sock_file: turbopath::AbsoluteSystemPathBuf,
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(all(unix, not(target_os = "macos")))]
-    #[test]
-    fn latest_log_file_from_dir_returns_non_utf8_path() {
-        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-
-        use turbopath::AbsoluteSystemPathBuf;
-
-        let tempdir = tempfile::tempdir().unwrap();
-        let log_folder = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        let log_file = log_folder
-            .as_std_path()
-            .join(OsString::from_vec(b"turbo-\xFF.log".to_vec()));
-        std::fs::write(&log_file, "").unwrap();
-
-        assert_eq!(
-            super::latest_log_file_from_dir(&log_folder).unwrap(),
-            log_file
-        );
-    }
+    )
+    .await
 }

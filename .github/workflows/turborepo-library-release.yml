@@ -52,6 +52,7 @@ jobs:
               rm zig.tar.xz
               export PATH=$PATH:$(pwd)/zig
               echo "$(pwd)/zig" >> $GITHUB_PATH
+              cargo install cargo-zigbuild --version 0.23.4 --locked
 
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
@@ -63,7 +64,7 @@ jobs:
               chmod +x rustup-init
               ./rustup-init -y
               rm rustup-init
-              npm i -g --force pnpm@10.28.0
+              npm i -g --force pnpm@12.0.0
               mkdir ../zig
               curl --fail --show-error --silent --location --output zig.tar.xz https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
               echo "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982  zig.tar.xz" | sha256sum --check --strict
@@ -73,38 +74,34 @@ jobs:
               echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |
               pnpm install --frozen-lockfile
+              cargo install cargo-zigbuild --version 0.23.4 --locked
 
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
+            container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
             install: |
-              apk update && apk upgrade
-              apk add libc6-compat curl
-              npm i -g --force pnpm@10.28.0
+              apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
+              rustup-init -y --default-toolchain none
+              npm i -g --force pnpm@12.0.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
-              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
-              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-              rustup show active-toolchain
-              dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install --frozen-lockfile
+              pnpm install --filter @turbo/repository --frozen-lockfile
 
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
+            container: node:20-alpine@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb
             install: |
-              apk update && apk upgrade
-              apk add libc6-compat curl
-              npm i -g --force pnpm@10.28.0
+              apk add --no-cache bash build-base curl git libc6-compat python3 rustup tar xz
+              rustup-init -y --default-toolchain none
+              npm i -g --force pnpm@12.0.0
+              curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location --output aarch64-linux-musl-cross.tgz https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4010/aarch64-linux-musl-cross.tgz
+              echo "0f18a885b161815520bbb5757a4b4ab40d0898c29bebee58d0cddd6112e59cc6  aarch64-linux-musl-cross.tgz" | sha256sum -c
+              tar -xzf aarch64-linux-musl-cross.tgz -C /
+              rm aarch64-linux-musl-cross.tgz
               echo /root/.cargo/bin >> ${GITHUB_PATH}
-              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
             setup: |
-              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-              rustup show active-toolchain
-              rustup target add aarch64-unknown-linux-musl
-              dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install --frozen-lockfile
+              pnpm install --filter @turbo/repository --frozen-lockfile
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
           - host: windows-2022
@@ -120,6 +117,7 @@ jobs:
     steps:
       - name: Install Packages
         run: ${{ matrix.settings.install }}
+        shell: sh -e {0}
         if: ${{ matrix.settings.install }}
 
       - name: Checkout
@@ -142,8 +140,6 @@ jobs:
 
           - name: Setup Node
             uses: ./.github/actions/setup-node
-            with:
-              enable-corepack: false
             if: ${{ !matrix.settings.install }}
 
           - name: Setup capnproto
@@ -192,7 +188,6 @@ jobs:
           - name: Setup Node
             uses: ./.github/actions/setup-node
             with:
-              enable-corepack: false
               package-install: false
 
           - name: Download Artifacts
@@ -231,14 +226,14 @@ jobs:
 
       - name: Move artifacts into place
         run: |
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node" packages/turbo-repository/npm/darwin-arm64/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node" packages/turbo-repository/npm/darwin-x64/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node" packages/turbo-repository/npm/linux-arm64-gnu/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node" packages/turbo-repository/npm/linux-arm64-musl/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node" packages/turbo-repository/npm/linux-x64-gnu/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node" packages/turbo-repository/npm/linux-x64-musl/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node" packages/turbo-repository/npm/win32-arm64-msvc/
-          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node" packages/turbo-repository/npm/win32-x64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-apple-darwin/repository.darwin-arm64.node" packages/turbo-repository/npm/darwin-arm64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-apple-darwin/repository.darwin-x64.node" packages/turbo-repository/npm/darwin-x64/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-gnu/repository.linux-arm64-gnu.node" packages/turbo-repository/npm/linux-arm64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-unknown-linux-musl/repository.linux-arm64-musl.node" packages/turbo-repository/npm/linux-arm64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-gnu/repository.linux-x64-gnu.node" packages/turbo-repository/npm/linux-x64-gnu/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-unknown-linux-musl/repository.linux-x64-musl.node" packages/turbo-repository/npm/linux-x64-musl/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-aarch64-pc-windows-msvc/repository.win32-arm64-msvc.node" packages/turbo-repository/npm/win32-arm64-msvc/
+          mv "$RUNNER_TEMP/native-packages/turbo-library-x86_64-pc-windows-msvc/repository.win32-x64-msvc.node" packages/turbo-repository/npm/win32-x64-msvc/
 
       - name: Build Meta Package
         run: |
@@ -285,7 +280,7 @@ jobs:
   create-release-pr:
     name: Create Release PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: write
@@ -325,39 +320,37 @@ jobs:
           PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
           BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
           HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_CREATED_AT=$(jq -r '.created_at' <<< "$PR")
           PR_BASE_SHA="$BASE_SHA" \
           PR_HEAD_SHA="$HEAD_SHA" \
           PR_HEAD_REF="$BRANCH" \
           PR_TITLE="chore: Release Turbo repository packages ${VERSION}" \
             node scripts/validate-release-pr.mjs
 
-          DISPATCH_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PR_NUM}"
-          gh workflow run release-pr-checks.yml \
-            --ref "$BRANCH" \
-            -f pr-number="$PR_NUM" \
-            -f expected-head-sha="$HEAD_SHA" \
-            -f run-id="$DISPATCH_ID"
-
-          CHECK_RUN_ID=""
-          for _ in $(seq 1 30); do
-            CHECK_RUN_ID=$(gh run list \
-              --workflow release-pr-checks.yml \
-              --branch "$BRANCH" \
-              --event workflow_dispatch \
-              --limit 20 \
-              --json databaseId,displayTitle,headSha \
-              --jq "[.[] | select(.displayTitle == \"Release PR checks ${DISPATCH_ID}\" and .headSha == \"${HEAD_SHA}\")][0].databaseId // \"\"")
-            if [ -n "$CHECK_RUN_ID" ]; then
-              break
+          for WORKFLOW in release-review-gate.yml turborepo-test.yml test-js-packages.yml; do
+            RUN_ID=""
+            for _ in $(seq 1 30); do
+              RUN_ID=$(gh api --method GET \
+                "repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs" \
+                -f event=pull_request \
+                -f per_page=20 \
+                --jq "[.workflow_runs[] | select(.event == \"pull_request\" and .head_sha == \"${HEAD_SHA}\" and .head_branch == \"${BRANCH}\" and .head_repository.full_name == \"${{ github.repository }}\" and .actor.login == \"github-actions[bot]\" and .triggering_actor.login == \"github-actions[bot]\" and .created_at >= \"${PR_CREATED_AT}\" and (([.pull_requests[].number] | length) == 0 or ([.pull_requests[].number] | index(${PR_NUM})) != null))][0].id // \"\"")
+              if [ -n "$RUN_ID" ]; then
+                break
+              fi
+              sleep 2
+            done
+            if [ -z "$RUN_ID" ]; then
+              echo "::error::Unable to find approval-required ${WORKFLOW} run for ${HEAD_SHA}"
+              exit 1
             fi
-            sleep 2
+            RUN_CONCLUSION=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" --jq '.conclusion // ""')
+            if [ "$RUN_CONCLUSION" = "action_required" ]; then
+              gh api --method POST "repos/${{ github.repository }}/actions/runs/${RUN_ID}/approve" --silent
+            fi
           done
-          if [ -z "$CHECK_RUN_ID" ]; then
-            echo "::error::Unable to find dispatched release PR checks run"
-            exit 1
-          fi
 
-          gh run watch "$CHECK_RUN_ID" --exit-status
+          gh pr checks "$PR_NUM" --repo "${{ github.repository }}" --required --watch --fail-fast
           CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
           if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
                 "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \

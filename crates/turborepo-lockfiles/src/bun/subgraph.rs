@@ -8,6 +8,9 @@ use super::{
 };
 
 fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+    if version == "*" {
+        return Some(name);
+    }
     let specifier = version.strip_prefix("workspace:")?;
     match specifier.rsplit_once('@') {
         Some((target, "*" | "^" | "~")) if !target.is_empty() => Some(target),
@@ -80,10 +83,11 @@ impl BunLockfile {
             lockfile_version: self.data.lockfile_version,
             config_version: self.data.config_version,
             workspaces: Map::new(),
-            // trustedDependencies are intentionally left empty. turbo prune
-            // copies the root package.json which is the source of truth for
-            // trusted scripts; bun re-derives the set at install time.
-            trusted_dependencies: Vec::new(),
+            // Copied verbatim for the same reason as overrides below: turbo
+            // prune copies the root package.json unchanged, and bun diffs the
+            // lockfile's trustedDependencies against package.json's on install.
+            // Dropping the section makes every entry register as newly added.
+            trusted_dependencies: self.data.trusted_dependencies.clone(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
@@ -478,6 +482,7 @@ impl BunLockfile {
                             registry: None,
                             info: Some(info),
                             checksum: None,
+                            integrity: None,
                             root: None,
                         };
                         pruned_data.packages.insert(key.clone(), entry);

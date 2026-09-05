@@ -1,10 +1,6 @@
 name: "Turborepo Node.js Setup"
 description: "Sets Node.js up for CI"
 inputs:
-  enable-corepack:
-    description: "Control turning on corepack."
-    required: false
-    default: "true"
   extra-flags:
     description: "Extra flags to pass to the pnpm install."
     required: false
@@ -29,21 +25,6 @@ runs:
         # node-version-file is the default, but can be overridden using node-version
         node-version-file: "package.json"
         node-version: ${{ inputs.node-version }}
-
-    - name: Upgrade corepack
-      if: ${{ inputs.enable-corepack == 'true' }}
-      shell: bash
-      # Forcibly upgrade our available version of corepack.
-      # The bundled version in node 16 has known issues.
-      # Prepends the npm bin dir so that it is always first.
-      run: |
-        npm install --force --global corepack@0.32.0
-        npm config get prefix >> $GITHUB_PATH
-
-    - name: Configure corepack
-      if: ${{ inputs.enable-corepack == 'true' }}
-      shell: bash
-      run: corepack enable
 
     - name: Get pnpm store path
       if: ${{ inputs.package-install == 'true' }}

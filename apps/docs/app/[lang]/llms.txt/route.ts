@@ -1,16 +1,15 @@
-import { source } from "@/lib/geistdocs/source";
+import { cacheLife } from "next/cache";
+import { agent } from "@/geistdocs";
+import { openapiGeistdocsSource, source } from "@/lib/geistdocs/source";
 
-export const revalidate = false;
+const getLlmsIndex = async (lang: string) => {
+  "use cache";
+  cacheLife("max");
 
-const TURBO_SLOGAN =
-  "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.";
-
-export const GET = async (
-  _req: Request,
-  { params }: RouteContext<"/[lang]/llms.txt">
-) => {
-  const { lang } = await params;
-  const pages = source.getPages(lang);
+  const pages = [
+    ...source.getPages(lang),
+    ...openapiGeistdocsSource.source.getPages(lang)
+  ];
 
   const links = pages
     .sort((a, b) => a.url.localeCompare(b.url))
@@ -25,19 +24,36 @@ export const GET = async (
       return `- [${page.data.title}](${mdPath}): ${page.data.description ?? ""}`;
     });
 
-  const header = `# Turborepo documentation
+  const product = agent.product;
+  const header = `# ${product.name} documentation
 
 Generated at: ${new Date().toUTCString()}
 
-## Turborepo
+> ${product.description}
 
-> ${TURBO_SLOGAN}
+## When to use ${product.name}
+
+- Category: ${product.category}
+- Audience: ${product.audience.join(", ")}
+
+Common use cases:
+
+${product.useCases.map((useCase) => `- ${useCase}`).join("\n")}
 
 ## Docs
 
 `;
 
-  return new Response(header + links.join("\n"), {
+  return header + links.join("\n");
+};
+
+export const GET = async (
+  _req: Request,
+  { params }: RouteContext<"/[lang]/llms.txt">
+) => {
+  const { lang } = await params;
+
+  return new Response(await getLlmsIndex(lang), {
     headers: {
       "Content-Type": "text/markdown; charset=utf-8"
     }

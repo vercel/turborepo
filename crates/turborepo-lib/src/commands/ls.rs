@@ -4,7 +4,7 @@
 //! retrieval is done through the query server (GraphQL execution), keeping
 //! the ls command in sync with `turbo query` semantics.
 
-use std::sync::Arc;
+use std::{fmt::Write, sync::Arc};
 
 use miette::Diagnostic;
 use serde::Serialize;
@@ -28,11 +28,21 @@ pub enum Error {
 // GraphQL query: list all packages with name and path
 const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
 
-fn package_detail_query(name: &str) -> String {
-    let escaped = super::query::escape_graphql_string(name);
-    format!(
-        r#"{{ package(name: "{escaped}") {{ name path tasks {{ items {{ name script }} length }} allDependencies {{ items {{ name }} length }} allDependents {{ items {{ name }} length }} }} }}"#
-    )
+const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } length } \
+                                     allDependencies { items { name } length } allDependents { \
+                                     items { name } length }";
+
+fn package_details_query(packages: &[String]) -> String {
+    let mut query = String::from("{");
+    for (index, package) in packages.iter().enumerate() {
+        let escaped = super::query::escape_graphql_string(package);
+        let _ = write!(
+            query,
+            r#" package{index}: package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }}"#
+        );
+    }
+    query.push_str(" }");
+    query
 }
 
 #[derive(Serialize)]
@@ -86,7 +96,24 @@ pub async fn run(
 
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base, None)?;
+    // Git-aware filters use lockfile changes while resolving package scope.
+    // Plain listings and package details only query workspace relationships.
+    let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
+        || !base.opts.scope_opts.filter_patterns.is_empty();
+    let run_builder = RunBuilder::new(base, None)?.skip_repo_index_and_scm_state();
+    // Package details include tasks, so build the complete engine just as the
+    // general-purpose query command does. A repository-only listing does not
+    // need to pay that cost.
+    let run_builder = if packages.is_empty() {
+        run_builder
+    } else {
+        run_builder.add_all_tasks().do_not_validate_engine()
+    };
+    let run_builder = if needs_external_dependencies {
+        run_builder
+    } else {
+        run_builder.skip_external_dependencies()
+    };
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
     // A pure Cargo workspace has no JavaScript package manager to display.
@@ -104,20 +131,37 @@ pub async fn run(
     } else {
         match output {
             Some(OutputFormat::Json) => {
-                let mut details_list = Vec::new();
-                for package in &packages {
-                    let detail = query_package_detail(run.clone(), query_server, package).await?;
-                    details_list.push(detail);
-                }
+                let details_list =
+                    query_package_details(run.clone(), query_server, &packages).await?;
                 let list = PackageDetailsList {
                     packages: details_list,
                 };
                 println!("{}", serde_json::to_string_pretty(&list)?);
             }
             Some(OutputFormat::Pretty) | None => {
-                for package in &packages {
-                    let detail = query_package_detail(run.clone(), query_server, package).await?;
-                    print_package_detail(&detail, color_config);
+                // Preserve the existing partial-output behavior when an argument is missing:
+                // print every valid package before reporting the first missing package.
+                let valid_count = packages
+                    .iter()
+                    .position(|package| {
+                        run.pkg_dep_graph()
+                            .package_view(&PackageName::from(package.as_str()))
+                            .is_none()
+                    })
+                    .unwrap_or(packages.len());
+                if valid_count > 0 {
+                    let details =
+                        query_package_details(run.clone(), query_server, &packages[..valid_count])
+                            .await?;
+                    for detail in &details {
+                        print_package_detail(detail, color_config);
+                    }
+                }
+                if let Some(package) = packages.get(valid_count) {
+                    return Err(Error::PackageNotFound {
+                        package: package.clone(),
+                    }
+                    .into());
                 }
             }
         }
@@ -173,28 +217,50 @@ async fn query_packages(
     })
 }
 
-async fn query_package_detail(
+async fn query_package_details(
     run: Arc<dyn QueryRun>,
     query_server: &dyn QueryServer,
-    package: &str,
-) -> Result<PackageDetailsDisplay, cli::Error> {
-    let query = package_detail_query(package);
-    let result = query_server.execute_query(run, &query, None).await?;
-
-    if !result.errors.is_empty() {
-        return Err(Error::PackageNotFound {
-            package: package.to_string(),
+    packages: &[String],
+) -> Result<Vec<PackageDetailsDisplay>, cli::Error> {
+    for package in packages {
+        if run
+            .pkg_dep_graph()
+            .package_view(&PackageName::from(package.as_str()))
+            .is_none()
+        {
+            return Err(Error::PackageNotFound {
+                package: package.clone(),
+            }
+            .into());
         }
-        .into());
+    }
+
+    let query = package_details_query(packages);
+    let result = query_server.execute_query(run, &query, None).await?;
+    if !result.errors.is_empty() {
+        return Err(Error::QueryError.into());
     }
 
     let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
-    let pkg = value
-        .pointer("/data/package")
-        .ok_or_else(|| Error::PackageNotFound {
-            package: package.to_string(),
-        })?;
+    packages
+        .iter()
+        .enumerate()
+        .map(|(index, package)| {
+            let pointer = format!("/data/package{index}");
+            let pkg = value
+                .pointer(&pointer)
+                .ok_or_else(|| Error::PackageNotFound {
+                    package: package.clone(),
+                })?;
+            parse_package_detail(pkg, package)
+        })
+        .collect()
+}
 
+fn parse_package_detail(
+    pkg: &serde_json::Value,
+    package: &str,
+) -> Result<PackageDetailsDisplay, cli::Error> {
     let name = pkg
         .get("name")
         .and_then(|v| v.as_str())
@@ -214,7 +280,7 @@ async fn query_package_detail(
                 .filter_map(|t| {
                     let name = t.get("name")?.as_str()?.to_string();
                     let command = t
-                        .get("script")
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();

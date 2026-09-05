@@ -90,6 +90,20 @@ behavior:
 - Existing final-output coverage should continue proving that shutdown keeps the
   UI and log pipeline alive long enough to drain task output.
 
+### Daemon Lifecycle
+
+`crates/turborepo-daemon` owns daemon lifecycle operations, server shutdown
+semantics, and the daemon-backed package-discovery adapter. Both the `turbo`
+application and the standalone `turborepo-lsp` binary use this shared API, so a
+`DaemonConnector` can start the current executable with `--skip-infer daemon`
+without requiring the LSP to depend on `turborepo-lib`.
+
+The `turbo` application supplies its package-graph-aware change watcher and
+keeps CLI-specific rendering in `turborepo-lib`. The standalone LSP supplies a
+conservative daemon-owned watcher that emits full rediscovery for filesystem
+changes. This preserves correctness when the packaged LSP hosts the daemon,
+while the richer watcher avoids unnecessary rediscovery when `turbo` hosts it.
+
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
 **Key responsibilities:**
@@ -121,10 +135,18 @@ construction:
    Shared with `turbo query { affectedTasks }`.
 3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
    Determines directly affected tasks, handling global deps and per-task inputs
-4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
-   containing directly affected tasks, their transitive dependents, and all
-   transitive dependencies required for execution (upstream tasks needed as
-   cache hits)
+4. **Affected expansion**: The engine expands directly affected tasks to their
+   transitive dependents, without adding upstream execution dependencies yet.
+5. **Package scope composition**: When package scope is present, it intersects
+   with those affected entrypoints. This prevents an unaffected upstream
+   dependency from becoming selected merely because it was needed by an
+   out-of-scope task. The run's reported packages come from these selected
+   entrypoints, not from a separate package-level affected calculation.
+6. **Co-scheduled task expansion**: Selected entrypoints expand through `with`
+   relationships, which are not represented by task graph edges.
+7. **Engine pruning** (`Engine::retain_filtered_tasks`): The engine retains the
+   selected tasks and adds their transitive execution dependencies (upstream
+   tasks needed as cache hits).
 
 This differs from the default `--affected` behavior which operates at the
 package level (all tasks in changed packages run).
@@ -175,7 +197,11 @@ Represents the workspace structure and package dependencies:
   the same resolution generation (including a lazy compact reverse index)
   rather than retained manifest payloads or live lockfile human-name callbacks.
   N-API JavaScript lockfile package listing uses the JavaScript domain of that
-  generation. The JavaScript
+  generation; when the N-API caller opts out of graph construction
+  (`skipPackageGraph`), `package_graph/lockfile_closure.rs` computes the same
+  external closure directly from workspace manifests and the lockfile, reusing
+  the internal/external `DependencySplitter` without building repository or
+  relationship knowledge. The JavaScript
   adapter owns package-manager configuration, previous-lockfile parsing, and
   resolution through the same producer used at graph construction. Core
   compares the resulting normalized package identities without parser or
@@ -317,6 +343,47 @@ JavaScript task contracts; core defaults omitted contracts to empty behavior
 without consulting contributor identity. Generic argv overrides for scopes
 without native tasks are core execution policy; pure-root execution is one case
 and does not depend on whether provenance is present.
+
+#### Native Task Execution and Contracts (`crates/turborepo-repository/src/native_tasks.rs`)
+
+The immutable native-task catalog classifies each task as `Command`,
+`Aggregate`, or `None`. `Command` stores a declarative program, argument layout,
+working-directory policy, and serial group. `Aggregate` runs no process; it adds
+same-scope task dependencies. `None` carries classification or contract facts
+without making the task runnable.
+
+Aggregate children are validated while the catalog is built. They must be
+unqualified, participating tasks in the same observed scope and cannot name the
+aggregate itself. Duplicate children are removed. The engine merges these
+implicit dependencies with authored `dependsOn` entries, deduplicates by the
+effective same-scope task ID, and subjects the result to normal cycle
+validation. An explicit argv `command` or `command: null` replaces the native
+aggregate in either direction, while Package Configuration `extends: false`
+can remove the inherited task. A scoped definition that adds configuration
+after `extends: false` participates normally and restores the native aggregate.
+Arguments cannot target an active aggregate because it has no process; the
+error directs users to its package-qualified child tasks.
+
+`NativeCommandArguments` models fixed prefixes and suffixes, pass-through
+placement before or after the suffix, and optional fixed or package-manager
+separators. This keeps Cargo, uv, and JavaScript argument behavior in data
+rather than executor branches. Argument lookup remains task-specific, so a
+dependency task does not inherit arguments supplied for another requested
+task.
+
+Behavior that varies by native task lives in `NativeTaskContract`: defaults,
+entrypoint classification, and whether that task derives I/O. Broader behavior
+such as environment projection, dependency-source participation, dynamic I/O,
+pruning, and command-map capability remains on `ScopeTaskContract`. Engine
+composition uses the task-local contract when present and the scope contract
+only as a fallback. An explicit argv override replaces only native execution;
+defaults, inputs, outputs, environment, and cache policy continue to come from
+the same native task contract and authored configuration.
+Definition memoization keys include native execution and task-local contract
+facts, and it is disabled for package-scoped definitions or per-package derived
+I/O. This prevents scopes with the same turbo.json chain but different
+aggregates or contracts from sharing an invalid definition.
+
 JavaScript is the first production producer. Machinery that predates the
 abstraction (package-manager resolution for dependency splitting and the JS
 lockfile closure phase) remains documented debt.
@@ -332,8 +399,10 @@ contract domain. Dependency source participation is likewise declared by each
 scope contract rather than inferred from contributor provenance.
 Dependency tasks do not inherit arguments for a different requested task, each
 contract can observe only the variables it declares, Windows lookup remains
-case-insensitive, and every declared pattern automatically participates in task
-hashing. If a user env exclusion matches a projected contract-derived I/O variable,
+case-insensitive, and contracts separately declare which projected values
+participate verbatim in task hashing. Location-only values can instead be
+represented by resolved I/O paths or toolchain identity. If a user env exclusion
+matches a projected contract-derived I/O variable,
 automatic outputs become unavailable rather than deriving cacheable paths from
 an unhashed value. Derived outputs distinguish exact/resolved paths from
 unavailable automatic resolution. When outputs are unavailable, the engine
@@ -368,10 +437,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   or package-manager policy. The same snapshot validates resolution and every
   resolved local package. `--no-deps` is used only to preserve error precedence
   and classify memberless workspaces when locked metadata cannot be obtained.
-  Automatic in-repository workspace members are supported, while
-  excluded/non-member, outside-repository, and root-manifest local packages
-  hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo contributor reports the current workspace root.
+  Automatic in-repository workspace members and a package defined by the root
+  manifest are supported, while excluded/non-member and outside-repository local
+  packages hard-error because Turborepo cannot hash, watch, or prune their
+  sources safely. A root package can execute but cannot be a prune target because
+  its package directory is the entire repository. The Cargo contributor reports
+  the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
@@ -440,7 +511,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
-  `include_str!` from outside any crate directory) are additive.
+  `include_str!` from outside any crate directory) are additive. Unsafe
+  repository Cargo configuration and configuration inherited from outside the
+  repository disable implicit caching and emit the reason as a warning.
 - **External dependencies** (`turborepo-lockfiles/src/cargo.rs`): locked
   registry/git packages and the compiler itself flow through the same
   `ExternalResolutionGeneration` and resolution fingerprint used by JavaScript
@@ -456,9 +529,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
   through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
-  repository `build.target` stays conservatively unavailable. Failure to
-  resolve the compiler identity is
-  a hard error. Every non-empty Cargo workspace must have a current
+  repository `build.target` stays conservatively unavailable. If the compiler
+  identity cannot be resolved, Cargo tasks remain runnable but implicit caching
+  is disabled with a warning, matching the uv toolchain's identity fallback.
+  Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
@@ -491,7 +565,8 @@ whether anything changed; Cargo decides how and in what order to build.**
   toggling it invalidates caches. Entrypoint `run`/`dev` tasks and library
   `build` tasks default to `cache: false`: a cache hit must not suppress a
   requested process, and library artifacts have no stable final path to restore.
-  An explicit turbo.json `cache` setting overrides the toolchain default.
+  Turborepo warns when unavailable library outputs disable implicit caching. An
+  explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`ChangeKnowledge` and `PackageGraph::active_watch_spec`,
   consumed by `turborepo-lib/src/package_changes_watcher.rs`): discovery
@@ -507,9 +582,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   graph through the same construction path as a run, so watch sees the same
   package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
-  all-packages fallback. Known gap: the hash watcher's content-hash dedup
-  is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
-  fast cache hit rather than being suppressed.
+  all-packages fallback. The repository graph registers every execution
+  scope with the hash watcher, so content-hash deduplication applies equally
+  to JavaScript, Cargo, and Python packages.
 
 - **Prune** (`PruneKnowledge` and `PruneDomain::{plan, finalize}`, consumed by
   `turborepo-lib/src/commands/prune.rs`): each generation-owned domain reports
@@ -596,32 +671,116 @@ involved. `UvContributor` contributes pre-classified relationships, native
 tasks, external resolution, change observations, and a prune domain through
 the shared repository graph.
 
-- **Discovery** parses `[tool.uv.workspace] members` and `exclude` globs
-  in-process, so graph construction does not require the `uv` binary. Names
-  are PEP 503-normalized. Dependencies become internal graph edges only when
+- **Discovery** invokes `uv workspace metadata --frozen --offline` once and uses
+  its member list and resolution graph as authoritative. Turborepo parses each
+  returned `pyproject.toml` only for task/tool declarations and dependency-kind
+  labels. For git-range affectedness, `uv.lock` package tables are diffed
+  mechanically and changed package names are intersected with these
+  metadata-derived closures; unrelated workspace packages remain unaffected.
+  Discovery also probes uv and the Python interpreter selected by
+  `uv python find` for cache identity. Missing identities and repository-local
+  uv executables fail closed to uncached tasks. Names are PEP 503-normalized.
+  Dependencies become internal graph edges only when
   their effective `[tool.uv.sources]` entry selects `workspace = true`.
   Development edges that would create a cycle become non-ordering input
   edges. A root `[project]` participates in hashing and pruning but is not a
   package. A synthetic workspace package, named by `[tool.turbo] name`,
   depends on every member and hosts workspace-wide quality tasks.
-- **Execution** registers `build` for buildable members and `format` and
-  `check` for all members. Unfiltered quality runs prefer the workspace
-  aggregate; filtered runs target selected members. `check` tasks share a
-  serial group because uv synchronizes their environment. Built-in tasks
-  default to uncached until uv, Python, ty, and build-backend identities are
-  represented in task hashes.
+- **Quality-tool discovery** recognizes direct, unconditional declarations of
+  Ruff, Black, mypy, ty, and Pyright in `[project].dependencies`, recursive
+  `[dependency-groups]` (including `include-group`), and legacy
+  `[tool.uv].dev-dependencies`. Optional dependencies and declarations with an
+  environment marker are excluded. Discovery records whether a declaration
+  belongs to the root or a member and whether its dependency group is active by
+  default. For each role, a member's declarations replace the root
+  declarations; an empty member role inherits the root role. Ruff supplies both
+  lint and format roles.
+- **Pytest discovery** uses the same declaration sources and precedence but not
+  quality-role inheritance. A root declaration belongs only to the synthetic
+  workspace package, while a member declaration belongs only to that member.
+  Dependency ownership therefore distinguishes a repository-wide suite from
+  independently runnable package suites without reproducing pytest collection.
+- **Execution** registers `build` for buildable members. Without a recognized
+  tool, all members receive fallback `format` and `check` commands. Recognized
+  tools add qualified `lint:<tool>`, `format:<tool>`, and `check:<tool>` tasks;
+  `lint` and `check` are same-scope aggregates of their qualified tasks.
+  Canonical `format` selects Ruff before Black and warns once per selected
+  scope when both are declared, while qualified tasks remain available for an
+  explicit choice. If every member has the same tools, owner, and non-default
+  activation group for a role, unfiltered runs use the workspace scope;
+  member-owned tools add `--all-packages`. Otherwise, member scopes are the
+  entrypoints for that role. Filtered runs use member commands. A root pytest
+  declaration registers a workspace `test`; direct member declarations register
+  member `test` tasks. An unfiltered run retains both root and member tasks when
+  both declare pytest, accepting possible duplicate collection rather than
+  silently skipping either scope. A package filter can select only a directly
+  declaring member. Member pytest tasks have no shared serial group and can run
+  in parallel.
+- **Command shapes** are `uv build --package=<name>`, or `uv run --active --frozen`
+  followed by owner selection (`--package <name>` for a member and
+  `--all-packages` for homogeneous member ownership or root pytest so src-layout
+  workspace members are installed), non-default group activation (`--no-default-groups
+  --group <group>`), the tool and subcommand, pass-through arguments, and the
+  member-directory targets. Ruff uses `check`/`format`; ty uses `check`.
+  Fallbacks remain `uv format -- <dirs...>` and either
+  `uv check --frozen --package=<name>` or `uv check --frozen --all-packages`;
+  `uv check` runs uv's bundled ty type checker. Detected-tool and fallback check
+  commands use the `uv` serial group. Detected lint, check, test, and fallback
+  `uv check` commands default to cacheable when uv and Python identities resolve;
+  otherwise they fail closed to uncached. Builds using
+  `uv_build` cache when their sole build requirement accepts the identified uv
+  executable's bundled backend version. Other PEP 517 builds remain uncached,
+  and format commands remain uncached because they mutate source. Detected-tool commands use `--frozen`;
+  Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
+  inserted before path targets. Active aggregates reject them and name the
+  package-qualified child tasks that can receive them.
+  Pytest commands are `uv run --active --frozen --all-packages pytest` for the workspace or `uv run
+  --active --frozen --package <name> pytest <member-dir>` for members, with non-default
+  group activation inserted before pytest and pass-through arguments inserted
+  before the member target.
 - **Hashing and affectedness** include member sources, relevant workspace
-  files and uv/pip environment variables, internal source closures for
-  checks, and each member's external dependency closure from `uv.lock`.
-  Package identities include version, source, and artifact hashes. A
-  `uv.lock` change across git refs conservatively affects all uv packages.
-- **Watch mode** rediscoveries follow any `pyproject.toml` and the root
-  `uv.lock`; root `.venv/` and `dist/` events are ignored as task byproducts.
-- **Prune** walks `uv.lock` reachability, including dependency groups and
-  optional extras, and preserves retained package metadata through
-  `toml_edit`. It rewrites root workspace members, removes dangling uv source
-  entries, and copies `.python-version` and `uv.toml` when present. Reachable
-  local dependencies that are not workspace members fail closed.
+  files, supported tool configuration, and semantic uv environment variables;
+  `check`, `check:*`, and member `test` also include internal source closures.
+  Quality workspace tasks include every member's sources; a bare workspace
+  pytest task hashes the full repository because pytest controls collection.
+  The manual (Git-free) hasher normalizes leading `./` in local input and
+  exclusion patterns so native workspace inputs match package-relative paths.
+  Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
+  `VIRTUAL_ENV` is hashed and native `uv run` tasks opt into it with `--active`;
+  otherwise `UV_PROJECT_ENVIRONMENT` or the root `.venv` determines the effective
+  environment directory. An in-repository environment is excluded from task inputs,
+  and output globs that would archive it are rejected because virtual environments
+  are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`,
+  user/system uv configuration with unknown or semantic fields, and any
+  pass-through arguments make automatic inputs untracked. Frozen lint, check,
+  and test tasks allow external configuration limited to resolution/download
+  policy and local materialization fields; builds conservatively reject any
+  external uv configuration. Unless `cache` is explicitly configured,
+  Turborepo disables caching and emits the reason as a warning. Turborepo invokes
+  `uv workspace metadata --frozen --offline` and
+  hashes each scope's external dependency closure from uv's JSON resolution
+  graph; root-owned tools conservatively add the workspace closure. Package
+  identities include version, source, and artifact hashes. Turborepo therefore
+  does not interpret `uv.lock` for task hashing; pruning also uses metadata for
+  reachability and only parses TOML to filter selected package tables. Every scope also
+  includes path-independent uv and Python identities containing uv and Python
+  versions, operating system, architecture, libc, variant, and host compatibility.
+  If either
+  identity probe fails, native uv command tasks fail closed to uncached and emit one
+  warning for the workspace with the concrete probe failure. A `uv.lock` change across git refs conservatively affects
+  all uv packages. Build output inference covers the bare command's matching
+  `dist/` artifacts and becomes unavailable when arguments are present.
+- **Watch mode** rediscoveries follow any `pyproject.toml`, the root `uv.lock`,
+  `.python-version`, and `uv.toml`. In-repository `VIRTUAL_ENV` and
+  `UV_PROJECT_ENVIRONMENT` directories, root `.venv/` and `dist/`, plus known quality-tool and Python cache
+  directories at the root and member scopes, are ignored as task byproducts.
+- **Prune** uses the same uv metadata graph for reachability, including
+  dependency groups and optional extras. It mechanically filters matching
+  `uv.lock` package tables with `toml_edit`, preserving retained metadata and
+  conservatively keeping all same-name/version forks. It rewrites root workspace
+  members, removes dangling uv source entries, and copies `.python-version` and
+  `uv.toml` when present. Reachable local dependencies that are not workspace
+  members fail closed.
 
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
@@ -746,10 +905,13 @@ The core task graph consists of:
   refreshes the active `WatchSpec` from the current graph generation whenever
   the package graph is initialized or rediscovered. Turbo config and ecosystem definition changes
   trigger full rediscovery after routing.
-- Git index and `.git/info/exclude` control paths are watched separately so
-  tracked-file and exclude state stays current without exposing `.git` events
-  to normal consumers. Backend rescan signals bypass path scopes and invoke
-  each consumer's conservative recovery.
+- Git index, `.git/info/exclude`, `core.excludesFile`, and repository Git config
+  control paths are watched separately so tracked-file and exclude state stays
+  current without exposing `.git` events to normal consumers. Refreshes publish
+  the complete control-path and ignore snapshot as one generation and
+  conservatively invalidate consumers when `core.worktree` changes. Backend
+  rescan signals bypass path scopes and invoke each consumer's conservative
+  recovery.
 - Output and hash watchers retain their independent event requirements: ignored
   outputs and explicitly configured inputs may still be relevant to those
   consumers. Git-ignore filtering is therefore consumer-specific rather than a
@@ -908,6 +1070,14 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Global Hash**: Package manager lockfile, global dependencies, environment variables
 - **Task Hash**: Task definition, package dependencies, input files, environment variables
 - **File Hashing**: Uses git for tracking file changes efficiently
+- **Discovery Races**: Files requiring content hashing after repo-index or glob
+  discovery, including `globalDependencies`, are omitted if they disappear
+  before hashing. Required resolution fallback files remain strict. Verbose
+  tracing records final-stage candidates that disappear or are rejected as
+  non-regular, plus path-specific hashing failures.
+- **Configured Git Metadata**: Input patterns are respected literally. If a
+  configured task or global input matches `.git`, that metadata participates in
+  the hash and transient entries use the same discovery-race behavior.
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
@@ -1067,30 +1237,6 @@ TaskCache.save_outputs()
   ├── Compress to tar
   ├── Save to Local Cache
   └── Upload to Remote Cache (async)
-```
-
-#### Incremental Cache (`crates/turborepo-run-cache/src/incremental.rs`)
-
-Handles tool-managed incremental artifacts (e.g., `.tsbuildinfo`) that persist
-across runs via remote cache, speeding up cache misses by restoring prior
-incremental state before execution.
-
-- Gated behind the `incrementalTasks` future flag
-- Operates per-partition with independent cache keys
-- Fetch completes before task execution begins (strict ordering)
-- Upload happens after successful execution, in parallel with regular cache save
-- All blocking filesystem operations run on `spawn_blocking` threads
-- See `SPEC.md` for full specification
-
-```
-On Cache Miss:
-  Visitor.visit()
-    ├── Calculate Hash → Cache Miss
-    ├── Fetch Incremental Artifacts (sequential per-partition, must complete before exec)
-    ├── Execute Task
-    ├── Save to Cache
-    ├── Upload Incremental Artifacts (concurrent per-partition, parallel with cache save)
-    └── Track Results
 ```
 
 ### 5. Data Collection and Summary

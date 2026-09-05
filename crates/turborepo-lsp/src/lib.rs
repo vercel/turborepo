@@ -31,9 +31,9 @@ use tower_lsp::{
     lsp_types::*,
 };
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lib::{
+use turborepo_daemon::{
     DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
-    DaemonPaths,
+    Paths as DaemonPaths,
 };
 use turborepo_repository::{
     discovery::{self, PackageDiscovery},
@@ -876,6 +876,7 @@ impl Backend {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     async fn package_discovery(&self) -> Result<Arc<LspPackages>, package_graph::Error> {
         if let Some(packages) = self.packages.get() {
             return Ok(packages);

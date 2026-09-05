@@ -122,13 +122,13 @@ fn call_turbo_gen(
 pub fn run(
     repo_root: &AbsoluteSystemPath,
     tag: &String,
-    command: &Option<Box<GenerateCommand>>,
+    command: &Option<GenerateCommand>,
     args: &GeneratorCustomArgs,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_generator_tag(tag);
     // check if a subcommand was passed
-    if let Some(box GenerateCommand::Workspace(workspace_args)) = command {
+    if let Some(GenerateCommand::Workspace(workspace_args)) = command {
         let raw_args = serde_json::to_string(&workspace_args)?;
         telemetry.track_generator_option("workspace");
         call_turbo_gen(repo_root, "workspace", tag, &raw_args)?;

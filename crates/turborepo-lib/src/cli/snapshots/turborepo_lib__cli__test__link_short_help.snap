@@ -1,13 +1,63 @@
 ---
-source: crates/turborepo-lib/src/cli/mod.rs
-expression: "String::from_utf8(buf).unwrap()"
+source: crates/turborepo-lib/src/cli/test.rs
+expression: "Args::render_help(cmd, false).unwrap()"
 ---
-Link your local directory to a Vercel organization and enable remote caching
+Link your local directory to a Vercel organization and enable remote caching.
 
-Usage: link [OPTIONS]
+Usage: turbo link [FLAGS]
 
-Options:
-      --no-gitignore   Do not create or modify .gitignore (default false)
-      --scope <SCOPE>  The scope, i.e. Vercel team, to which you are linking
-  -y, --yes            Answer yes to all prompts (default false)
-  -h, --help           Print help
+Flags:
+      --no-gitignore              Do not create or modify .gitignore (default
+                                  false)
+      --scope <SCOPE>             The scope, i.e. Vercel team, to which you are
+                                  linking
+  -y, --yes                       Answer yes to all prompts (default false)
+  -h, --help                      Print help
+
+Global flags:
+      --version
+      --skip-infer                Skip any attempts to infer which version of
+                                  Turbo the project is configured to use
+      --no-update-notifier        Disable the turbo update notification
+      --api <API>                 Override the endpoint for API calls
+      --color                     Force color usage in the terminal
+      --cwd <CWD>                 The directory in which to run turbo
+      --heap <HEAP>               Specify a file to save a pprof heap profile
+      --ui <UI>                   Specify whether to use the streaming UI or TUI
+      --login <LOGIN>             Override the login endpoint
+      --no-color                  Suppress color usage in the terminal
+      --preflight                 When enabled, turbo will precede HTTP requests
+                                  with an OPTIONS request for authorization
+      --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests.
+      --team <TEAM>               Set the team slug for API calls
+      --token <TOKEN>             Set the auth token for API calls
+      --trace <TRACE>             Specify a file to save a pprof trace
+      --verbosity <COUNT>         Verbosity level. Useful when debugging
+                                  Turborepo or creating logs for issue reports
+      --experimental-otel-enabled [EXPERIMENTAL_OTEL_ENABLED]
+                                  Enable OpenTelemetry metrics export
+      --experimental-otel-protocol <PROTOCOL>  OTLP transport protocol (grpc or
+                                  http-protobuf)
+      --experimental-otel-endpoint <URL>  OTLP collector endpoint URL
+      --experimental-otel-timeout-ms <MILLISECONDS>
+                                  OTLP export timeout in milliseconds (default:
+                                  10000)
+      --experimental-otel-interval-ms <MILLISECONDS>
+                                  OTLP export interval in milliseconds (default:
+                                  15000)
+      --experimental-otel-header <KEY=VALUE>  Add header to OTLP requests (can
+                                  be repeated)
+      --experimental-otel-resource <KEY=VALUE>  Add resource attribute to
+                                  metrics (can be repeated)
+      --experimental-otel-metrics-run-summary [EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY]
+                                  Emit run-level summary metrics (default: true)
+      --experimental-otel-metrics-task-details [EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS]
+                                  Emit per-task detail metrics (default: false)
+      --experimental-otel-use-remote-cache-token [EXPERIMENTAL_OTEL_USE_REMOTE_CACHE_TOKEN]
+                                  Use remote cache token for OTLP authentication
+      --dangerously-disable-package-manager-check
+                                  Allow for missing `packageManager` in
+                                  `package.json`.
+      --root-turbo-json <ROOT_TURBO_JSON>  Use the `turbo.json` located at the
+                                  provided path instead of one at the
+                                  root of the repository.

@@ -74,7 +74,13 @@ export async function prepareStage({
   for (const releasePackage of releasePackages) {
     dependencies.run(
       "pnpm",
-      ["version", version, "--allow-same-version", "--no-git-tag-version"],
+      [
+        "version",
+        version,
+        "--allow-same-version",
+        "--no-git-checks",
+        "--no-git-tag-version"
+      ],
       { cwd: path.join(root, releasePackage.directory), stdio: "inherit" }
     );
   }

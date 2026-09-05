@@ -42,6 +42,59 @@ mod unix {
             self.child.as_mut().expect("child guard consumed")
         }
 
+        /// Wait for a task to write its readiness marker, reporting turbo's
+        /// output if the run exits first or never gets there. Without this the
+        /// only signal is a bare marker-file timeout, which hides startup
+        /// failures such as an unusable package manager.
+        fn wait_for_startup_marker(&mut self, path: &Path, timeout: Duration) {
+            let start = Instant::now();
+            loop {
+                if path.exists() {
+                    return;
+                }
+                let exited = self
+                    .child_mut()
+                    .try_wait()
+                    .expect("failed waiting for child exit")
+                    .is_some();
+                if exited {
+                    // The marker may have landed in the same tick turbo exited.
+                    if path.exists() {
+                        return;
+                    }
+                    panic!(
+                        "turbo exited before {} was created\n{}",
+                        path.display(),
+                        self.collect_output()
+                    );
+                }
+                if start.elapsed() > timeout {
+                    panic!(
+                        "timed out waiting for {}\n{}",
+                        path.display(),
+                        self.collect_output()
+                    );
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+
+        /// Stop the run if it is still alive and return everything it wrote.
+        fn collect_output(&mut self) -> String {
+            let Some(mut child) = self.child.take() else {
+                return String::new();
+            };
+            let _ = child.kill();
+            match child.wait_with_output() {
+                Ok(output) => normalize_output(&format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+                Err(err) => format!("failed to read turbo output: {err}"),
+            }
+        }
+
         fn into_output(mut self, timeout: Duration) -> Output {
             let _ = wait_for_process_exit(self.child_mut(), timeout);
             self.child
@@ -92,6 +145,47 @@ mod unix {
             }
         }
 
+        /// Wait for a task to write its readiness marker, reporting the pty
+        /// transcript if turbo exits first or never gets there.
+        fn wait_for_startup_marker(&mut self, path: &Path, timeout: Duration) {
+            let start = Instant::now();
+            loop {
+                if path.exists() {
+                    return;
+                }
+                let exited = self
+                    .child
+                    .as_mut()
+                    .expect("pty child guard consumed")
+                    .try_wait()
+                    .expect("failed waiting for pty child")
+                    .is_some();
+                if exited {
+                    // The marker may have landed in the same tick turbo exited.
+                    if path.exists() {
+                        return;
+                    }
+                    panic!(
+                        "turbo exited before {} was created\n{}",
+                        path.display(),
+                        self.transcript()
+                    );
+                }
+                if start.elapsed() > timeout {
+                    panic!(
+                        "timed out waiting for {}\n{}",
+                        path.display(),
+                        self.transcript()
+                    );
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+
+        fn transcript(&self) -> String {
+            normalize_output(String::from_utf8_lossy(&self.output.lock().unwrap()).as_ref())
+        }
+
         fn finish(mut self, timeout: Duration) -> String {
             let start = Instant::now();
             loop {
@@ -116,7 +210,7 @@ mod unix {
                 reader_thread.join().expect("pty reader thread panicked");
             }
 
-            normalize_output(String::from_utf8_lossy(&self.output.lock().unwrap()).as_ref())
+            self.transcript()
         }
     }
 
@@ -142,14 +236,20 @@ mod unix {
         }
     }
 
-    fn example_fixture_dir() -> PathBuf {
-        common::manifest_dir().join("../../examples/with-shell-commands")
-    }
-
-    fn setup_shutdown_example(script_name: &str, script_contents: &str) -> (TempDir, PathBuf) {
+    /// Stage the shutdown fixture with `script_name` wired up as `app-a`'s
+    /// persistent `dev` task.
+    ///
+    /// This deliberately uses a dedicated integration fixture rather than one
+    /// of the published examples: examples are version-bumped on their own
+    /// cadence, and a `packageManager` pin that outruns the Node.js version
+    /// this suite runs on takes every test here down with it. The fixture's pin
+    /// is owned by the test suite, and `turborepo-tests/integration/**` is a
+    /// declared input of the Rust test task, so changing it invalidates the
+    /// cached task.
+    fn setup_shutdown_fixture(script_name: &str, script_contents: &str) -> (TempDir, PathBuf) {
         let tempdir = tempfile::tempdir().expect("failed to create tempdir");
         let test_dir = tempdir.path().to_path_buf();
-        setup::copy_dir_all(&example_fixture_dir(), &test_dir).expect("failed to copy example");
+        setup::copy_fixture("graceful_shutdown", &test_dir).expect("failed to copy fixture");
         setup::prepare_corepack_from_package_json(&test_dir);
 
         let app_dir = test_dir.join("apps/app-a");
@@ -195,11 +295,14 @@ mod unix {
 
     fn spawn_noninteractive_turbo(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new(turbo_bin());
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         cmd.arg("run").arg("dev").arg("--filter=app-a");
         for key in common::ambient_turbo_env_keys() {
             cmd.env_remove(&key);
         }
-        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home())
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             .env("DO_NOT_TRACK", "1")
@@ -216,6 +319,7 @@ mod unix {
 
     fn spawn_noninteractive_turbo_via_node_wrapper(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new("node");
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         cmd.arg(turbo_node_wrapper())
             .arg("run")
             .arg("dev")
@@ -223,7 +327,9 @@ mod unix {
         for key in common::ambient_turbo_env_keys() {
             cmd.env_remove(&key);
         }
-        cmd.env("TURBO_BINARY_PATH", turbo_bin())
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home())
+            .env("TURBO_BINARY_PATH", turbo_bin())
             .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
@@ -249,6 +355,7 @@ mod unix {
     }
 
     fn spawn_interactive_turbo_command(test_dir: &Path, via_node_wrapper: bool) -> PtyTurbo {
+        let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -297,6 +404,8 @@ mod unix {
         for key in common::ambient_turbo_env_keys() {
             command.env_remove(&key);
         }
+        command.env("PATH", setup::prepend_to_path(&corepack_dir));
+        command.env("COREPACK_HOME", setup::corepack_home());
         command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
         command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
         command.env("TURBO_PRINT_VERSION_DISABLED", "1");
@@ -335,16 +444,6 @@ mod unix {
                 Err(_) if start.elapsed() <= timeout => thread::sleep(Duration::from_millis(100)),
                 Err(err) => panic!("timed out waiting for pid file {}: {err}", path.display()),
             }
-        }
-    }
-
-    fn wait_for_path(path: &Path, timeout: Duration) {
-        let start = Instant::now();
-        while !path.exists() {
-            if start.elapsed() > timeout {
-                panic!("timed out waiting for {}", path.display());
-            }
-            thread::sleep(Duration::from_millis(100));
         }
     }
 
@@ -411,7 +510,7 @@ mod unix {
 
     #[test]
     fn run_finishes_successfully_without_shutdown_banner() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "fast-success.sh",
             r#"#!/usr/bin/env bash
 set -eu
@@ -440,7 +539,7 @@ exit 0
 
     #[test]
     fn run_gracefully_shuts_down_on_first_sigint_in_tty() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "graceful.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -455,7 +554,7 @@ while true; do sleep 0.2 || true; done
         let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
 
         let mut child = spawn_interactive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
 
         child.send_ctrl_c();
         let transcript = child.finish(EXIT_TIMEOUT);
@@ -488,7 +587,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn run_gracefully_shuts_down_on_first_sigint_without_tty_and_exits_zero() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "graceful.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -503,7 +602,7 @@ while true; do sleep 0.2 || true; done
         let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
 
         let mut child = spawn_noninteractive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
 
         send_signal(child.child_mut().id() as i32, Signal::SIGINT);
         let output = child.into_output(EXIT_TIMEOUT);
@@ -529,7 +628,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn second_ctrl_c_force_kills_with_task_through_node_wrapper() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "dev-sigint.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -587,8 +686,8 @@ while true; do sleep 0.2 || true; done
         let sidecar_child_pid_file = app_dir.join("sidecar-child.pid");
 
         let mut child = spawn_interactive_turbo_via_node_wrapper(&test_dir);
-        wait_for_path(&dev_ready_file, START_TIMEOUT);
-        wait_for_path(&sidecar_ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&dev_ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&sidecar_ready_file, START_TIMEOUT);
         let sidecar_child_pid = wait_for_pid_file(&sidecar_child_pid_file, START_TIMEOUT);
 
         child.send_ctrl_c();
@@ -607,7 +706,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn node_wrapper_waits_for_graceful_shutdown_on_sigint() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "slow-graceful.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -622,7 +721,7 @@ while true; do sleep 0.2 || true; done
         let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
 
         let mut child = spawn_noninteractive_turbo_via_node_wrapper(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
 
         let wrapper_pid = child.child_mut().id() as i32;
         send_signal_to_process_group(wrapper_pid, Signal::SIGINT);
@@ -661,7 +760,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn node_wrapper_forwards_sigterm_to_turbo() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "slow-sigterm.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -676,7 +775,7 @@ while true; do sleep 0.2 || true; done
         let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
 
         let mut child = spawn_noninteractive_turbo_via_node_wrapper(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
 
         let wrapper_pid = child.child_mut().id() as i32;
         send_signal(wrapper_pid, Signal::SIGTERM);
@@ -719,7 +818,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn run_force_kills_on_second_sigint_in_tty() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "stubborn.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -737,7 +836,7 @@ while true; do sleep 0.2 || true; done
         let child_pid_file = test_dir.join("apps/app-a/child.pid");
 
         let mut child = spawn_interactive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
         let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
 
         child.send_ctrl_c();
@@ -780,7 +879,7 @@ while true; do sleep 0.2 || true; done
 
     #[test]
     fn run_force_kills_after_timeout_without_tty() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
             "stubborn.sh",
             r#"#!/usr/bin/env bash
 set -u
@@ -798,7 +897,7 @@ while true; do sleep 0.2 || true; done
         let child_pid_file = test_dir.join("apps/app-a/child.pid");
 
         let mut child = spawn_noninteractive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
         let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
 
         let started = Instant::now();

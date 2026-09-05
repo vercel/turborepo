@@ -136,7 +136,7 @@ impl std::fmt::Display for Slug {
 pub fn infer_framework(
     declarations: PackageExternalDeclarations<'_>,
     is_monorepo: bool,
-) -> Option<&Framework> {
+) -> Option<&'static Framework> {
     let frameworks = get_frameworks().ok()?;
 
     frameworks

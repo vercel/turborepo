@@ -7,7 +7,7 @@
   "type": "module",
   "exports": "./dist/index.js",
   "scripts": {
-    "check-links": "cd ../../apps/docs/content && node --experimental-strip-types ../../link-checker/src/validate-docs-links.ts"
+    "check-links": "cd ../../apps/docs/content && node --experimental-strip-types ../../../docs/link-checker/src/validate-docs-links.ts"
   },
   "dependencies": {
     "github-slugger": "2.0.0",
@@ -22,6 +22,6 @@
   },
   "devDependencies": {
     "@types/node": "22.7.8",
-    "typescript": "5.5.4"
+    "typescript-7": "npm:typescript@7.0.2"
   }
 }

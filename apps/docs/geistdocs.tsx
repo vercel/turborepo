@@ -1,17 +1,14 @@
 import type { GeistdocsAgentReadinessConfig } from "@vercel/geistdocs/config";
-import {
-  TurborepoLogo,
-  TurborepoWordmarkDark,
-  TurborepoWordmarkLight
-} from "@/components/logos";
+import { LogoTurborepo } from "@vercel/geistdocs/assets/logos/logo-turborepo";
+import { TurborepoLogo } from "@/components/logos";
 
 export const Logo = () => (
   <>
-    {/* Logo icon only on screens <= 480px and between 768px-940px */}
-    <TurborepoLogo className="block h-6 w-auto min-[481px]:hidden min-[768px]:block min-[941px]:hidden" />
-    {/* Wordmark on screens 481px-767px and > 940px */}
-    <TurborepoWordmarkDark className="hidden h-6 w-auto dark:min-[481px]:block dark:min-[768px]:hidden dark:min-[941px]:block" />
-    <TurborepoWordmarkLight className="hidden h-6 w-auto min-[481px]:block dark:min-[481px]:hidden min-[768px]:hidden min-[941px]:block dark:min-[941px]:hidden" />
+    <TurborepoLogo
+      className="size-[22px] text-gray-1000 @min-[640px]:hidden"
+      monochrome
+    />
+    <LogoTurborepo className="hidden @min-[640px]:block" />
   </>
 );
 
@@ -75,13 +72,13 @@ export const suggestions = [
 
 export const title = "Turborepo Documentation";
 
-export const prompt = `You are a helpful assistant specializing in answering questions about Turborepo, a high-performance build system for JavaScript and TypeScript monorepos. You help users understand caching, task configuration, and monorepo best practices. Be concise.`;
+export const prompt = `You are a helpful assistant specializing in answering questions about Turborepo, the build system for coding agents. You help users understand caching, task configuration, and monorepo best practices. Be concise.`;
 
 export const agent = {
   product: {
     name: "Turborepo",
     description:
-      "Turborepo is a high-performance build system for JavaScript and TypeScript monorepos, written in Rust. It provides incremental task running, local and remote caching, and parallel execution.",
+      "Turborepo is the build system for coding agents. It provides incremental task running, local and remote caching, and parallel execution.",
     category: "Build system",
     audience: [
       "JavaScript and TypeScript developers",
@@ -95,6 +92,15 @@ export const agent = {
       "Prune monorepos for lightweight deploys"
     ]
   },
+  api: {
+    openApiUrl: "/api/remote-cache-spec"
+  },
+  instructions: [
+    "Use /sitemap.md to identify the most relevant documentation pages before answering broad questions.",
+    "Use /llms.txt to find individual documentation pages and /llms-full.txt when you need the complete documentation corpus as Markdown context.",
+    "Fetch individual documentation pages with a .md or .mdx extension for focused page-level context.",
+    "Only use product capabilities and integration surfaces that are explicitly listed in this file."
+  ],
   links: [
     {
       label: "Turborepo source",

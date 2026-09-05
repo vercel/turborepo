@@ -40,6 +40,11 @@ pub struct Locator<'a> {
 }
 
 impl Ident<'_> {
+    /// The unscoped package name, e.g. `core` for `@babel/core`.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Clones underlying strings and changes lifetime to represent this
     pub fn to_owned(&self) -> Ident<'static> {
         let Ident { scope, name } = self;
@@ -52,19 +57,66 @@ impl Ident<'_> {
     }
 }
 
+/// Splits an identifier into its optional scope and name, mirroring the
+/// regex `^(?:@([^/]+?)/)?([^@/]+)$` exactly: an identifier starting with
+/// `@` must contain a `/`; the scope is everything between the `@` and the
+/// *first* `/` (non-empty, may contain `@`); the name is everything that
+/// remains and may contain neither `@` nor `/`. Hand-rolled because
+/// identifier parsing is hot: it runs for every dependency edge of every
+/// lockfile entry during parsing and again during transitive-closure
+/// resolution, where regex capture extraction dominated the profile.
+fn parse_ident(value: &str) -> Option<(Option<&str>, &str)> {
+    let (scope, name) = match value.strip_prefix('@') {
+        Some(rest) => {
+            let (scope, name) = rest.split_once('/')?;
+            if scope.is_empty() {
+                return None;
+            }
+            (Some(scope), name)
+        }
+        None => (None, value),
+    };
+    if name.is_empty() || name.contains(['@', '/']) {
+        return None;
+    }
+    Some((scope, name))
+}
+
+/// Splits a descriptor/locator into scope, name, and range, mirroring the
+/// regex `^(?:@([^/]+?)/)?([^@/]+?)(?:@(.+))$` exactly: after the optional
+/// scope (as in [`parse_ident`]), the name runs to the first `@` and may
+/// not contain `/`; the range is everything after that `@`, must be
+/// non-empty, and — matching `.+`'s default semantics — may not contain a
+/// newline.
+fn parse_descriptor(value: &str) -> Option<(Option<&str>, &str, &str)> {
+    let (scope, rest) = match value.strip_prefix('@') {
+        Some(rest) => {
+            let (scope, rest) = rest.split_once('/')?;
+            if scope.is_empty() {
+                return None;
+            }
+            (Some(scope), rest)
+        }
+        None => (None, value),
+    };
+    let (name, range) = rest.split_once('@')?;
+    if name.is_empty() || name.contains('/') || range.is_empty() || range.contains('\n') {
+        return None;
+    }
+    Some((scope, name, range))
+}
+
 // These TryFrom impls should be FromStr, but to avoid unnecessary copying we
 // use TryFrom so we can use a lifetime.
 impl<'a> TryFrom<&'a str> for Ident<'a> {
     type Error = Error;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let make_err = || Error::Ident(value.to_string());
-        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+)$")
-            .captures(value)
-            .ok_or_else(make_err)?;
-        let scope = captures.get(1).map(|m| Cow::Borrowed(m.as_str()));
-        let name = Cow::Borrowed(captures.get(2).map(|m| m.as_str()).ok_or_else(make_err)?);
-        Ok(Self { scope, name })
+        let (scope, name) = parse_ident(value).ok_or_else(|| Error::Ident(value.to_string()))?;
+        Ok(Self {
+            scope: scope.map(Cow::Borrowed),
+            name: Cow::Borrowed(name),
+        })
     }
 }
 
@@ -81,15 +133,16 @@ impl<'a> TryFrom<&'a str> for Descriptor<'a> {
     type Error = Error;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let make_err = || Error::Descriptor(value.to_string());
-        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+?)(?:@(.+))$")
-            .captures(value)
-            .ok_or_else(make_err)?;
-        let scope = captures.get(1).map(|m| Cow::Borrowed(m.as_str()));
-        let name = Cow::Borrowed(captures.get(2).map(|m| m.as_str()).ok_or_else(make_err)?);
-        let range = Cow::Borrowed(captures.get(3).map(|m| m.as_str()).ok_or_else(make_err)?);
-        let ident = Ident { scope, name };
-        Ok(Descriptor { ident, range })
+        let (scope, name, range) =
+            parse_descriptor(value).ok_or_else(|| Error::Descriptor(value.to_string()))?;
+        let ident = Ident {
+            scope: scope.map(Cow::Borrowed),
+            name: Cow::Borrowed(name),
+        };
+        Ok(Descriptor {
+            ident,
+            range: Cow::Borrowed(range),
+        })
     }
 }
 
@@ -366,6 +419,96 @@ mod test {
         .unwrap();
         let original = locator.patched_locator().unwrap();
         assert_eq!(original, Locator::try_from("lodash@npm:4.17.21").unwrap())
+    }
+
+    /// The regexes these parsers replaced, kept as test oracles.
+    fn ident_oracle(value: &str) -> Option<(Option<&str>, &str)> {
+        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+)$").captures(value)?;
+        let scope = captures.get(1).map(|m| m.as_str());
+        let name = captures.get(2).map(|m| m.as_str())?;
+        Some((scope, name))
+    }
+
+    fn descriptor_oracle(value: &str) -> Option<(Option<&str>, &str, &str)> {
+        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+?)(?:@(.+))$").captures(value)?;
+        let scope = captures.get(1).map(|m| m.as_str());
+        let name = captures.get(2).map(|m| m.as_str())?;
+        let range = captures.get(3).map(|m| m.as_str())?;
+        Some((scope, name, range))
+    }
+
+    /// Exhaustively compare the hand-rolled parsers against the original
+    /// regexes over every string up to length 6 drawn from an alphabet of
+    /// the structural characters plus fillers (including `\n`, which only
+    /// `.+` excludes).
+    #[test]
+    fn test_parsers_match_regex_exhaustively() {
+        const ALPHABET: [char; 6] = ['@', '/', 'a', 'b', ':', '\n'];
+        let mut inputs = vec![String::new()];
+        let mut frontier = vec![String::new()];
+        for _ in 0..6 {
+            let mut next = Vec::new();
+            for prefix in &frontier {
+                for ch in ALPHABET {
+                    let mut s = prefix.clone();
+                    s.push(ch);
+                    next.push(s);
+                }
+            }
+            inputs.extend(next.iter().cloned());
+            frontier = next;
+        }
+        for input in &inputs {
+            assert_eq!(
+                parse_ident(input),
+                ident_oracle(input),
+                "ident mismatch for {input:?}"
+            );
+            assert_eq!(
+                parse_descriptor(input),
+                descriptor_oracle(input),
+                "descriptor mismatch for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parsers_match_regex_on_realistic_inputs() {
+        for input in [
+            "typescript",
+            "@babel/core",
+            "@babel/code-frame@npm:7.12.11",
+            "is-even@^1.0.0",
+            "next@npm:13.0.0",
+            "web@workspace:*",
+            "@types/node@npm:^18",
+            "a@patch:a@npm%3A1.0.0#./p.patch::locator=x%40workspace%3A.",
+            "@a@b/c@1.0.0",
+            "@scope/name@npm:1.2.3-beta.1+build",
+            "@s/n@rc:@x/y@1",
+            "name@",
+            "@scope/name@",
+            "@/name@1.0.0",
+            "@scope/",
+            "@scope",
+            "a/b@1.0.0",
+            "a@b@c",
+            "\u{e9}tude@npm:1.0.0",
+            "@caf\u{e9}/latt\u{e9}@workspace:packages/latt\u{e9}",
+            "pkg@npm:1.0.0\nextra",
+            "",
+        ] {
+            assert_eq!(
+                parse_ident(input),
+                ident_oracle(input),
+                "ident mismatch for {input:?}"
+            );
+            assert_eq!(
+                parse_descriptor(input),
+                descriptor_oracle(input),
+                "descriptor mismatch for {input:?}"
+            );
+        }
     }
 
     #[test]

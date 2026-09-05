@@ -1,6 +1,10 @@
 import { createMdxComponents } from "@vercel/geistdocs/mdx";
 import { DynamicLink } from "fumadocs-core/dynamic-link";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import {
+  Card as FumadocsCard,
+  type CardProps
+} from "fumadocs-ui/components/card";
 import { Heading } from "fumadocs-ui/components/heading";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import type { MDXComponents } from "mdx/types";
@@ -54,9 +58,13 @@ function HeadingWithBadges({
 
 interface GetMDXComponentsOptions {
   components?: MDXComponents;
-  /** Use the old site's typography styling for H1 elements (centered, semibold) */
+  /** Center blog article titles while using the shared heading typography. */
   isBlog?: boolean;
 }
+
+const PrefetchedCard = (props: CardProps) => (
+  <FumadocsCard {...props} {...{ prefetch: true }} />
+);
 
 export const getMDXComponents = (
   options: GetMDXComponentsOptions = {}
@@ -86,7 +94,7 @@ export const getMDXComponents = (
         return (
           <HeadingWithBadges
             className={cn(
-              "font-semibold text-center text-4xl tracking-wide!",
+              "text-center text-heading-32 lg:text-heading-40",
               className
             )}
             as="h1"
@@ -95,20 +103,24 @@ export const getMDXComponents = (
         );
       }
     }),
-    a: ({ href, ...props }: React.ComponentProps<"a">) =>
-      href?.startsWith("/") ? (
-        <DynamicLink
-          className="font-normal text-primary no-underline"
-          href={`/[lang]${href}`}
-          {...props}
-        />
-      ) : (
-        <a
-          href={href}
-          {...props}
-          className="font-normal text-primary no-underline"
-        />
-      ),
+    a:
+      components?.a ??
+      (({ href, ...props }: React.ComponentProps<"a">) =>
+        href?.startsWith("/") ? (
+          <DynamicLink
+            className="font-normal text-primary no-underline"
+            href={`/[lang]${href}`}
+            prefetch
+            {...props}
+          />
+        ) : (
+          <a
+            href={href}
+            {...props}
+            className="font-normal text-primary no-underline"
+          />
+        )),
+    Card: PrefetchedCard,
     Tabs,
     Tab,
     PackageManagerTabs,

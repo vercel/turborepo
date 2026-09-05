@@ -11,15 +11,8 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
+pub use crate::native_tasks::TaskEntrypoint;
 use crate::toolchain::{TaskDefaults, ToolchainId};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskEntrypoint {
-    Preferred,
-    PreferredOnly,
-    Candidate,
-    Excluded,
-}
 
 /// Groups scopes whose preferred entrypoints compete with one another.
 /// Deliberately independent from ecosystem provenance.
@@ -182,12 +175,14 @@ impl ScopeTaskContract {
 
     pub(crate) fn python(contract: crate::uv::UvTaskContract) -> Self {
         let dependency_source_inputs = contract.dependency_source_inputs();
+        let mut environment_vars = crate::uv::HASHED_ENV_VARS.to_vec();
+        environment_vars.extend(crate::uv::PROJECTED_ONLY_ENV_VARS);
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
             environment: Some(TaskEnvironmentRequirement::new(
                 TaskEnvironmentDomain(Cow::Borrowed("uv-task-io")),
-                crate::uv::HASHED_ENV_VARS.to_vec(),
+                environment_vars,
             )),
             toolchain: Some(ToolchainId::PYTHON),
             command_map_target: Some(CommandMapTarget::Python),
@@ -285,12 +280,6 @@ impl ScopeTaskContract {
     }
 
     pub fn defaults_for_task(&self, task: &str) -> TaskDefaults {
-        if let Some(dynamic) = self.dynamic.as_ref() {
-            return match dynamic {
-                DynamicTaskContract::Cargo(contract) => contract.task_defaults(task),
-                DynamicTaskContract::Python(contract) => contract.task_defaults(task),
-            };
-        }
         self.static_defaults
             .get(task)
             .cloned()
@@ -299,10 +288,6 @@ impl ScopeTaskContract {
 
     pub fn derives_task_io(&self, task: &str) -> bool {
         self.static_io.contains_key(task)
-            || self.dynamic.as_ref().is_some_and(|dynamic| match dynamic {
-                DynamicTaskContract::Cargo(contract) => contract.derives_task_io(task),
-                DynamicTaskContract::Python(contract) => contract.derives_task_io(task),
-            })
     }
 
     pub fn derived_task_io(
@@ -338,13 +323,7 @@ impl ScopeTaskContract {
     }
 
     pub fn task_entrypoint(&self, task: &str) -> Option<TaskEntrypoint> {
-        self.static_entrypoints
-            .get(task)
-            .copied()
-            .or_else(|| match self.dynamic.as_ref()? {
-                DynamicTaskContract::Cargo(contract) => contract.task_entrypoint(task),
-                DynamicTaskContract::Python(contract) => contract.task_entrypoint(task),
-            })
+        self.static_entrypoints.get(task).copied()
     }
 
     pub fn task_entrypoint_domain(&self) -> Option<&TaskEntrypointDomain> {

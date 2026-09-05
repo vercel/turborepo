@@ -12,14 +12,15 @@ workspace = true
 
 [dependencies]
 either = { workspace = true }
-napi = { version = "2.14.0", features = ["tokio_rt"] }
-napi-derive = "2.14.0"
+napi = { version = "3.12.2", features = ["compat-mode", "tokio_rt"] }
+napi-derive = "3.6.3"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-repository = { workspace = true }
 turborepo-scm = { workspace = true }
+turborepo-turbo-json = { workspace = true }
 tracing = "0.1.37"
 
 [dev-dependencies]

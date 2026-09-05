@@ -115,6 +115,10 @@ pub struct RunBuilder {
     // the set of changed files that triggered the rebuild. Used to filter
     // the engine down to only tasks whose declared inputs match.
     changed_files_for_watch: Option<HashSet<turbopath::AnchoredSystemPathBuf>>,
+    // Package listing needs SCM queries for affected filters, but never hashes files or uses
+    // cache provenance. Skip the repository-wide work that only serves those consumers.
+    skip_repo_index_and_scm_state: bool,
+    skip_external_dependencies: bool,
 }
 
 impl RunBuilder {
@@ -155,7 +159,19 @@ impl RunBuilder {
             output_watcher: None,
             query_server: None,
             changed_files_for_watch: None,
+            skip_repo_index_and_scm_state: false,
+            skip_external_dependencies: false,
         })
+    }
+
+    pub fn skip_repo_index_and_scm_state(mut self) -> Self {
+        self.skip_repo_index_and_scm_state = true;
+        self
+    }
+
+    pub fn skip_external_dependencies(mut self) -> Self {
+        self.skip_external_dependencies = true;
+        self
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
@@ -495,6 +511,7 @@ impl RunBuilder {
                 .opts
                 .future_flags
                 .github_actions_remote_base_ref_fallback;
+            let skip_repo_index = self.skip_repo_index_and_scm_state;
             tokio::task::spawn_blocking(move || {
                 let scm = match git_root {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
@@ -503,6 +520,10 @@ impl RunBuilder {
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
+                if skip_repo_index {
+                    let _ = scm_tx.send(scm);
+                    return None;
+                }
                 // The tracked half of the repo index only needs `.git/index`.
                 let tracked_index = {
                     let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
@@ -577,6 +598,11 @@ impl RunBuilder {
                 PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
                     .with_single_package_mode(self.opts.run_opts.single_package)
                     .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let builder = if self.skip_external_dependencies {
+                builder.without_external_dependencies()
+            } else {
+                builder
+            };
             let builder = graph_features.configure(builder);
 
             let graph = builder
@@ -681,14 +707,14 @@ impl RunBuilder {
             .unzip();
 
         let scm_state = LazyScmState::new();
-        let scm_state_task = {
+        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
                 let _span = tracing::info_span!("capture_scm_sha").entered();
                 scm.get_current_sha(&repo_root).ok()
             })
-        };
+        });
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
@@ -732,7 +758,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.participates() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect::<Vec<_>>()
                     })
@@ -754,7 +780,7 @@ impl RunBuilder {
                             .native_tasks()
                             .tasks()
                             .iter()
-                            .filter(|task| task.executable() || task.authored())
+                            .filter(|task| task.participates() || task.authored())
                             .map(|task| task.name().to_string())
                             .collect();
                         Ok((package, scripts))
@@ -801,19 +827,46 @@ impl RunBuilder {
             turbo_json_loader.preload_all();
         });
 
+        // When filterUsingTasks is active, --affected is handled by the
+        // same task-level filter rather than a separate codepath.
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.affected_range.is_some());
+
+        let use_task_level_affected = !use_task_level_filter
+            && self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        let has_task_level_affected_package_scope = use_task_level_affected
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.pkg_inference_root.is_some());
+
+        // Task-level affectedness replaces package-level affectedness. Resolve
+        // package constraints independently so SCM is queried only by the task
+        // detector and the final package list can come from selected tasks.
+        let package_scope_opts = use_task_level_affected.then(|| {
+            let mut opts = self.opts.clone();
+            opts.scope_opts.affected_range = None;
+            opts
+        });
+        let package_resolution_opts = package_scope_opts.as_ref().unwrap_or(&self.opts);
+
         // Resolution knowledge is complete at package-graph construction, so
         // scope filtering can read lockfile-affected packages without joining
         // deferred closure work.
-        let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
+        let (mut filtered_pkgs, mut filter_mode, unqualified_entrypoint_packages) = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
                 &self.repo_root,
-                &self.opts,
+                package_resolution_opts,
                 &pkg_dep_graph,
                 &scm,
                 &root_turbo_json,
             )?
         };
+        if use_task_level_affected {
+            filter_mode = FilterMode::ExplicitSelection;
+        }
         // The root Turbo task namespace exists independently of a root
         // JavaScript package scope. Non-root namespaces, including aggregate
         // scopes, come from authoritative repository knowledge.
@@ -845,15 +898,11 @@ impl RunBuilder {
         scoped_entrypoint_exclusions
             .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
-        // When filterUsingTasks is active, --affected is handled by the
-        // same task-level filter rather than a separate codepath.
-        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
-            && (!self.opts.scope_opts.filter_patterns.is_empty()
-                || self.opts.scope_opts.affected_range.is_some());
-
-        let use_task_level_affected = !use_task_level_filter
-            && self.opts.scope_opts.affected_range.is_some()
-            && self.opts.future_flags.affected_using_task_inputs;
+        let task_level_affected_package_scope = if has_task_level_affected_package_scope {
+            Some(filtered_pkgs.keys().cloned().collect())
+        } else {
+            None
+        };
 
         let use_watch_task_level_filter = self
             .changed_files_for_watch
@@ -1000,12 +1049,17 @@ impl RunBuilder {
 
         // Task-level --affected detection (separate from --filter).
         if use_task_level_affected {
-            engine = self.filter_engine_to_affected_tasks(
+            let (affected_engine, selected_packages) = self.filter_engine_to_affected_tasks(
                 engine,
                 &pkg_dep_graph,
                 &root_turbo_json,
                 &scm,
+                task_level_affected_package_scope.as_ref(),
             )?;
+            engine = affected_engine;
+            if let Some(selected_packages) = selected_packages {
+                filtered_pkgs.retain(|package, _| selected_packages.contains(package));
+            }
         }
 
         if needs_all_packages {
@@ -1095,7 +1149,7 @@ impl RunBuilder {
         // hashing overlap the scan.
         let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
 
-        {
+        if let Some(scm_state_task) = scm_state_task {
             let scm_state = scm_state.clone();
             let scm = scm.clone();
             let repo_index = repo_index.clone();
@@ -1120,6 +1174,8 @@ impl RunBuilder {
                 }
                 .instrument(tracing::info_span!("capture_scm_state")),
             );
+        } else {
+            scm_state.resolve(None);
         }
 
         Ok((
@@ -1171,7 +1227,8 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         scm: &SCM,
-    ) -> Result<Engine, Error> {
+        package_scope: Option<&HashSet<PackageName>>,
+    ) -> Result<(Engine, Option<HashSet<PackageName>>), Error> {
         let (from_ref, to_ref) = self
             .opts
             .scope_opts
@@ -1202,7 +1259,26 @@ impl RunBuilder {
                     changed_files = changed_files.len(),
                     "task-level affected detection complete"
                 );
-                Ok(engine.retain_affected_tasks(&affected_tasks))
+                // Scope affected entrypoints before retaining their execution
+                // dependencies. Scoping the fully expanded execution graph
+                // would incorrectly promote unaffected upstream dependencies
+                // to selected tasks.
+                let mut affected_entrypoints = engine.collect_task_dependents(&affected_tasks);
+                affected_entrypoints.extend(affected_tasks);
+                if let Some(package_scope) = package_scope {
+                    let scoped_tasks = engine.task_ids_for_packages(package_scope);
+                    affected_entrypoints.retain(|task| scoped_tasks.contains(task));
+                }
+                let selected_packages = affected_entrypoints
+                    .iter()
+                    .map(|task| PackageName::from(task.package()))
+                    .collect();
+                let affected_entrypoints =
+                    super::task_filter::expand_with_siblings(&engine, affected_entrypoints);
+                Ok((
+                    engine.retain_filtered_tasks(&affected_entrypoints),
+                    Some(selected_packages),
+                ))
             }
             Err(e) => {
                 tracing::warn!(
@@ -1216,7 +1292,12 @@ impl RunBuilder {
                 )
                 .field("error", format!("{e:?}"))
                 .emit();
-                Ok(engine)
+                let Some(package_scope) = package_scope else {
+                    return Ok((engine, None));
+                };
+                let scoped_tasks = engine.task_ids_for_packages(package_scope);
+                let scoped_tasks = super::task_filter::expand_with_siblings(&engine, scoped_tasks);
+                Ok((engine.retain_filtered_tasks(&scoped_tasks), None))
             }
         }
     }
@@ -1273,12 +1354,12 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph
+            let has_participant = pkg_dep_graph
                 .package_task_contexts()
-                .any(|context| context.native_tasks().defines(task.task()))
+                .any(|context| context.native_tasks().participates(task.task()))
                 || engine.task_ids().any(|task_id| {
                     task_id.task() == task.task()
-                        && task_has_command(engine, pkg_dep_graph, task_id)
+                        && crate::engine::task_participates(engine, pkg_dep_graph, task_id)
                 });
 
             for package in candidate_packages {
@@ -1288,9 +1369,11 @@ impl RunBuilder {
                 }
 
                 selection.candidates.insert(task_id.clone());
-                if !has_command || task_has_command(engine, pkg_dep_graph, &task_id) {
+                if !has_participant
+                    || crate::engine::task_participates(engine, pkg_dep_graph, &task_id)
+                {
                     selection.selected.insert(task_id.clone());
-                    if !has_command {
+                    if !has_participant {
                         selection
                             .orchestration
                             .entry(task.task().to_string())

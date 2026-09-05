@@ -1,3 +1,5 @@
+import { siteUrl } from "@/lib/geistdocs/site-url";
+
 const PRODUCT_DOMAIN = "turborepo.dev";
 
 /**
@@ -73,7 +75,7 @@ const vercelEnv = process.env.VERCEL_ENV || "development";
 
 export const SITEMAP_CONFIG = {
   /** Base URL for the sitemap */
-  baseUrl: `https://${PRODUCT_DOMAIN}`,
+  baseUrl: siteUrl.origin,
   /** Request timeout in milliseconds */
   timeout: 30000,
   /** User agent string */

@@ -7,10 +7,13 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^8.57.0",
-    "prettier": "^3.2.5",
-    "turbo": "^2.9.6"
+    "eslint": "10.8.1",
+    "prettier": "3.9.6",
+    "turbo": "2.10.9"
   },
-  "packageManager": "pnpm@8.15.6",
+  "engines": {
+    "node": ">=24.19.0"
+  },
+  "packageManager": "pnpm@11.21.0",
   "name": "with-rollup"
 }

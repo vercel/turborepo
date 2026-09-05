@@ -13,18 +13,18 @@ related:
   - /docs/crafting-your-repository/running-tasks
 ---
 
-Turborepo can discover packages across languages and toolchains. It can discover the members of [a uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to uv commands. uv remains responsible for resolution, environments, and installation, and is the only supported Python package manager.
+Turborepo can discover the members of [a uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) as packages, add their dependency relationships to the Package Graph, and map common Turborepo tasks to uv commands.
 
 <Callout type="warn">
-  uv workspace support is experimental and may change. Use a version of `turbo`
-  that recognizes `experimentalPythonWorkspaces` everywhere the repository
-  runs, including local hooks and CI. Older versions reject unknown future
-  flags.
+  uv support is experimental and can change at any time. We encourage you to try
+  it out in side projects, proof-of-concepts, and other environments where
+  stability is not essential. Please provide feedback on the [Python
+  RFC](https://github.com/vercel/turborepo/discussions/13625).
 </Callout>
 
 ## Enable uv workspaces
 
-Set the future flag in the root `turbo.json`:
+Set the Future Flag in the root `turbo.json`:
 
 ```json title="./turbo.json"
 {
@@ -40,10 +40,14 @@ Set the future flag in the root `turbo.json`:
 
 To work with Python, the repository root must contain:
 
-- `turbo` and `uv` available on `PATH` (`uv` is required to run tasks; discovery works without it)
-- A root `pyproject.toml` containing a `[tool.uv.workspace]` table
-- A valid, unique `[tool.turbo] name`, used for a synthetic Turborepo package that represents the uv workspace
-- A root `uv.lock`
+- `uv` available on `PATH`
+- A root `pyproject.toml` containing a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
+- A valid `[tool.turbo].name` for identity in Turborepo's graph
+- A root `uv.lock`. Turborepo never creates or updates it; run `uv lock` to refresh it.
+
+### Repository structure
+
+[uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/) are natively understood by Turborepo.
 
 ```toml title="./pyproject.toml"
 [tool.turbo]
@@ -53,94 +57,111 @@ name = "acme-python"
 members = ["packages/*"]
 ```
 
-<Callout type="info">
-  The workspace root may also define its own `[project]`. That root project is
-  not modeled as a Turborepo package (its directory would be the whole
-  repository), but its locked dependencies still participate in
-  workspace-scoped hashing and pruning.
-</Callout>
+In the example above, members are defined as `packages/*`. uv then uses every `packages/*/pyproject.toml` as a member in the workspace. Each member is added to Turborepo's understanding of your repository, identified by its [PEP 503-normalized](https://peps.python.org/pep-0503/#normalized-names) project name.
 
-### Repository structure
+uv packages come in two types:
 
-In the example above, members are defined as `packages/*`. Every matched non-root directory whose `pyproject.toml` declares `[project].name` becomes a package in the workspace, identified by its [PEP 503-normalized](https://peps.python.org/pep-0503/#normalized-names) project name. Member and exclude patterns must be relative to the repository, cannot contain `..`, and do not follow directory symlinks.
+- **Member packages** are Package Graph nodes so filtering and affectedness calculations follow Python dependency relationships. They expose verification tasks, and buildable members (those with a `[build-system]` table or `[tool.uv] package = true`) also expose `build`.
+- **The root workspace package** uses `[tool.turbo] name`, depends on every member, and runs verification tasks across the whole uv workspace.
 
-A dependency between two members, declared in `[project.dependencies]`, `[project.optional-dependencies]`, `[dependency-groups]`, or legacy `[tool.uv].dev-dependencies` and resolved to the workspace via `[tool.uv.sources]`, becomes an edge in the Package Graph, so filtering and affectedness calculations follow Python dependency relationships.
-
-The synthetic workspace package uses `[tool.turbo] name`, depends on every member, and runs workspace-scoped tasks.
+Both package types can be used as targets for [`--filter`](/docs/reference/run#--filter-string) and [`affected`](/docs/reference/run#--affected) calculations.
 
 ## Built-in tasks
 
-Turborepo implicitly registers these task mappings, since they are common to all uv workspaces.
+Turborepo natively registers tasks that are common to all uv workspaces.
 
-| Package           | Turbo task | uv command                              |
-| ----------------- | ---------- | --------------------------------------- |
-| Buildable member  | `build`    | `uv build --package=<name>`             |
-| Any member        | `format`   | `uv format -- <member-dir>`             |
-| Any member        | `check`    | `uv check --package=<name>`             |
-| Workspace package | `format`   | `uv format -- <member-dirs...>`         |
-| Workspace package | `check`    | `uv check --all-packages`               |
+| Package           | Turbo task     | uv command                           |
+| ----------------- | -------------- | ------------------------------------ |
+| Buildable member  | `turbo build`  | `uv build --package=<name>`          |
+| Any member        | `turbo format` | `uv format -- <member-dir>`          |
+| Any member        | `turbo check`  | `uv check --frozen --package=<name>` |
+| Workspace package | `turbo format` | `uv format -- <member-dirs...>`      |
+| Workspace package | `turbo check`  | `uv check --frozen --all-packages`   |
 
-Without a filter, quality tasks use the workspace-wide command instead of creating one task per member. Filtered runs scope formatting or type checking to the selected member. `uv check` uses ty for type checking.
+Turborepo also detects common Python tools declared in `[project].dependencies`, `[dependency-groups]`, or `[tool.uv].dev-dependencies` and maps tasks to them. Detected tools replace the `format` and `check` fallbacks above.
 
-Built-in uv tasks default to `cache: false` until the uv, Python, ty, and isolated build-backend versions participate in their fingerprints. Type-checking tasks run serially because `uv check` synchronizes the shared environment; build and format tasks can run in parallel for separate members.
+| Declared tool | Turbo task                           | uv command                                                    |
+| ------------- | ------------------------------------ | ------------------------------------------------------------- |
+| Ruff          | `turbo lint`, `turbo lint:ruff`      | `uv run --active --frozen --package <name> ruff check <dir>`  |
+| Ruff          | `turbo format`, `turbo format:ruff`  | `uv run --active --frozen --package <name> ruff format <dir>` |
+| Black         | `turbo format`, `turbo format:black` | `uv run --active --frozen --package <name> black <dir>`       |
+| mypy          | `turbo check`, `turbo check:mypy`    | `uv run --active --frozen --package <name> mypy <dir>`        |
+| ty            | `turbo check`, `turbo check:ty`      | `uv run --active --frozen --package <name> ty check <dir>`    |
+| Pyright       | `turbo check`, `turbo check:pyright` | `uv run --active --frozen --package <name> pyright <dir>`     |
+| pytest        | `turbo test`                         | `uv run --active --frozen --package <name> pytest <dir>`      |
 
-### Pass uv flags
+Tools declared in the root `pyproject.toml` apply to every member unless a member declares its own tool for that role, and root-declared tools run once without `--package`. `lint` and `check` run every detected tool for that role.
 
-Arguments after Turborepo's `--` are passed to the mapped command:
+- `format` runs one formatter, preferring Ruff over Black.
+- A root pytest declaration creates one repository-wide `test` task running `uv run --active --frozen --all-packages pytest`, installing src-layout workspace members before collection. A member declaration creates `test` for that member only. When both declare pytest, both scopes run.
+- Without a declared type checker, the built-in `check` task runs uv's bundled ty type checker. Declared mypy, ty, or Pyright tools take precedence when present.
+
+You can use [`--filter`](/docs/reference/run#--filter-string) to target a specific member in the workspace.
+
+### Pass uv arguments
+
+Arguments after Turborepo's `--` are passed to the mapped command. For detected tools, Turborepo inserts them before the member directory targets:
 
 ```bash title="Terminal"
-turbo run check --filter=py-api -- --python-version=3.13
+turbo run lint:ruff --filter=py-api -- --fix
+turbo run test --filter=py-api -- -k smoke
+turbo run format -- --check
 ```
 
-Passing output-affecting flags to `build` (like `--out-dir`) disables automatic output detection, so configure [`outputs`](/docs/reference/configuration#outputs) explicitly in that case.
+`lint` and `check` reject arguments because they may fan out to several tools. Run the qualified task named in the error instead, such as `turbo run check:mypy --filter=py-api -- --strict`. Arguments to `build` are appended to `uv build --package=<name>` and disable automatic output detection because options such as `--out-dir` can relocate artifacts.
 
-## Filtering, affected packages, and queries
+## Create your own tasks
 
-You can use the uv workspace or its members as entrypoints for [filters](/docs/reference/run#--filter-string):
+To define a uv-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `docs` task and a member can make its `lint` task stricter:
 
-```bash title="Terminal"
-# Execute builds for all toolchains
-turbo run build
-
-# Build one Python package's sdist and wheel
-turbo run build --filter=py-api
-
-# Format the entire uv workspace once
-turbo run format
-
-# Type check the entire uv workspace once
-turbo run check
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalPythonWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "acme-python#docs": {
+      "command": ["uv", "run", "--frozen", "mkdocs", "build"]
+    },
+    "py-api#lint": {
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "--package",
+        "py-api",
+        "ruff",
+        "check",
+        "--select",
+        "ALL"
+      ]
+    }
+  }
+}
 ```
-
-Additionally, [`turbo query`](/docs/reference/query) can be used to understand your repository's graphs and more.
 
 ## Caching behavior
 
-For the built-in uv tasks, Turborepo creates task hashes using:
+With zero configuration, Turborepo creates task hashes using:
 
-- The selected member's source files, plus its internal dependency sources for `check`
-- Every member's source files when quality tasks run through the workspace package
-- The root `pyproject.toml`, `uv.toml`, and `.python-version`
-- Relevant uv and pip environment variables (index selection, resolution mode, Python selection)
-- The resolved external dependency closure from `uv.lock`, scoped to each member; a dependency bump only invalidates the packages that depend on it
+- The selected member's source files, plus its internal dependency sources for `check` and `test`
+- Every member's source files when verification runs through the workspace package, and the whole repository for a root pytest task because pytest controls collection
+- Root uv files (`pyproject.toml`, `uv.toml`, `.python-version`) and supported tool configuration such as `ruff.toml`, `mypy.ini`, `pyrightconfig.json`, `pytest.ini`, and `ty.toml`
+- Relevant uv and pip environment variables
+- The resolved external dependency closure from `uv.lock`, scoped to each member
+- The uv and Python interpreter identities. If Turborepo cannot resolve them, uv tasks remain runnable but implicit caching is disabled with a warning.
+
+Automatic inputs exclude `.venv`, `__pycache__`, and tool cache directories such as `.ruff_cache`, `.mypy_cache`, and `.pytest_cache` at any depth. Because formatting mutates source files, `format` tasks default to uncached. The built-in `uv check` task is cacheable when Turborepo can identify uv and Python.
 
 Project-specific hashing inputs must be accounted for manually. This includes:
 
-- Environment variables read by your tools, declared in the task's [`env`](/docs/reference/configuration#env) configuration
+- Environment variables read by your tools still need to be declared in the task's [`env`](/docs/reference/configuration#env) configuration
 - File inputs that are not included by default. Use [`inputs`](/docs/reference/configuration#inputs) to define your own file inputs and [`$TURBO_DEFAULT$`](/docs/reference/configuration#turbo_default) to preserve zero-configuration file inputs
 
-### Build outputs
+### Output caching
 
-Turborepo detects the sdist and wheel that `uv build` writes to the workspace `dist/` directory, but the built-in task defaults to uncached. Projects that pin the uv, Python, and build-backend versions can opt into caching explicitly. The `.venv` directory is never a task output; it remains uv's own materialized environment.
+Automatic output caching stores only the sdist and wheel that a bare `uv build` writes to the workspace `dist/` directory. It does not cache `.venv`, which remains uv's own materialized environment.
 
-## Pruning
-
-`turbo prune <package>` produces a self-contained partial workspace: the kept package directories, a `uv.lock` subset to the reachable closure (dependency groups and optional extras included, so `uv sync --frozen` succeeds), and a root `pyproject.toml` rewritten with the explicit kept member list. `.python-version` and `uv.toml` are carried over when present.
-
-## Limitations
-
-- Only the root uv workspace is discovered. A standalone `pyproject.toml` without `[tool.uv.workspace]` is not modeled, and nested workspaces are not independently discovered.
-- Turborepo never creates or refreshes `uv.lock`; run `uv lock` to refresh and commit it. Use `uv lock --check` to validate it in CI. Turborepo rejects a missing lockfile and structural inconsistencies it can detect, but does not perform uv's complete manifest freshness validation during graph construction.
-- Reachable local path, directory, editable, or virtual dependencies must be discovered workspace members at the same path recorded in `uv.lock`. Other local sources prevent graph construction because Turborepo cannot yet content-hash or prune them safely.
-- The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune a member instead.
-- Only the built-in `build`, `format`, and `check` tasks are currently supported through the public configuration schema.
+Builds whose only build requirement is `uv_build` are cacheable by default. Other PEP 517 build backends default to `cache: false` because uv resolves their isolated build dependencies independently of `uv.lock`. Enabling those builds requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts.

@@ -1630,6 +1630,7 @@ fn route_materialized_interests(
     route_event(registry, Ok(&event));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_watcher(
     #[cfg(target_os = "macos")] backend: MacOsBackend,
     root: &AbsoluteSystemPath,
