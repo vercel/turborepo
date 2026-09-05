@@ -39,13 +39,12 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    io::{self, Read},
+    io,
     process::Command,
     sync::Arc,
 };
 
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
@@ -1179,17 +1178,18 @@ fn uv_command_task(
         toolchain::TaskDefaults {
             cache: Some(cacheable),
         },
-        Some(uv_task_entrypoint(kind)),
+        Some(uv_task_entrypoint(kind, name)),
         true,
     ))
 }
 
-fn uv_task_entrypoint(kind: UvPackageKind) -> crate::native_tasks::TaskEntrypoint {
+fn uv_task_entrypoint(kind: UvPackageKind, task: &str) -> crate::native_tasks::TaskEntrypoint {
     use crate::native_tasks::TaskEntrypoint;
 
-    match kind {
-        UvPackageKind::Workspace => TaskEntrypoint::PreferredOnly,
-        UvPackageKind::Package | UvPackageKind::VirtualPackage => TaskEntrypoint::Candidate,
+    match (kind, task) {
+        (UvPackageKind::Workspace, "test") => TaskEntrypoint::Candidate,
+        (UvPackageKind::Workspace, _) => TaskEntrypoint::PreferredOnly,
+        (UvPackageKind::Package | UvPackageKind::VirtualPackage, _) => TaskEntrypoint::Candidate,
     }
 }
 
@@ -1270,20 +1270,16 @@ pub fn native_tasks_for_package(
     ));
 
     let check_arguments = match kind {
-        UvPackageKind::Package | UvPackageKind::VirtualPackage => {
-            vec![
-                "check".to_string(),
-                "--frozen".to_string(),
-                format!("--package={package}"),
-            ]
-        }
-        UvPackageKind::Workspace => {
-            vec![
-                "check".to_string(),
-                "--frozen".to_string(),
-                "--all-packages".to_string(),
-            ]
-        }
+        UvPackageKind::Package | UvPackageKind::VirtualPackage => vec![
+            "check".to_string(),
+            "--frozen".to_string(),
+            format!("--package={package}"),
+        ],
+        UvPackageKind::Workspace => vec![
+            "check".to_string(),
+            "--frozen".to_string(),
+            "--all-packages".to_string(),
+        ],
     };
     tasks.push(uv_command_task(
         kind,
@@ -1309,7 +1305,7 @@ fn aggregate_task(
 
     NativeTask::aggregate(name, children).with_contract(NativeTaskContract::new(
         toolchain::TaskDefaults::default(),
-        Some(uv_task_entrypoint(kind)),
+        Some(uv_task_entrypoint(kind, name)),
         false,
     ))
 }
@@ -1330,6 +1326,9 @@ fn declared_tool_task(
         "--frozen".to_string(),
     ];
     match execution.owner {
+        ExecutionOwner::Root if kind == UvPackageKind::Workspace && tool == PythonTool::Pytest => {
+            prefix.push("--all-packages".to_string());
+        }
         ExecutionOwner::Root => {}
         ExecutionOwner::Member => {
             prefix.extend(["--package".to_string(), package.to_string()]);
@@ -1563,26 +1562,19 @@ fn python_tasks_for_package(
 // Task contract
 // ---------------------------------------------------------------------------
 
-/// Standard uv and pip environment variables that can change what a uv
-/// invocation resolves, installs, or builds. Credentials and purely
-/// cosmetic settings are deliberately excluded.
+/// Standard uv environment variables that can change what an invocation
+/// executes or builds. Download locations are deliberately excluded because
+/// frozen tasks are identified by their lockfile closure and URLs can contain
+/// credentials, which must never enter a task hash.
 pub const HASHED_ENV_VARS: &[&str] = &[
     "UV_BUILD_CONSTRAINT",
     "UV_COMPILE_BYTECODE",
     "UV_CONFIG_FILE",
     "UV_CONSTRAINT",
-    "UV_DEFAULT_INDEX",
     "UV_EXCLUDE",
-    "UV_EXCLUDE_NEWER",
     "UV_ENV_FILE",
-    "UV_INDEX",
-    "UV_INDEX_STRATEGY",
-    "UV_INDEX_URL",
-    "UV_EXTRA_INDEX_URL",
-    "UV_FIND_LINKS",
     "UV_FORK_STRATEGY",
     "UV_GIT_LFS",
-    "UV_INSECURE_HOST",
     "UV_LINK_MODE",
     "UV_NO_BUILD_ISOLATION",
     "UV_NO_BUILD_ISOLATION_PACKAGE",
@@ -1605,13 +1597,8 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "UV_NO_SYNC",
     "UV_OFFLINE",
     "UV_OVERRIDE",
-    "UV_RESOLUTION",
-    "UV_PRERELEASE",
-    "UV_SYSTEM_CERTS",
     "UV_ISOLATED",
     "UV_WORKING_DIR",
-    "PIP_INDEX_URL",
-    "PIP_EXTRA_INDEX_URL",
     "PYTHONHOME",
     "PYTHONPATH",
     "VIRTUAL_ENV",
@@ -1620,8 +1607,8 @@ pub const HASHED_ENV_VARS: &[&str] = &[
 /// Variables needed for task-I/O derivation or strict-mode execution whose raw
 /// values are represented semantically elsewhere rather than in the task hash.
 pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &[
-    // Config roots affect uv only when a config exists there; that condition
-    // disables implicit caching in `untracked_uv_configuration_reason`.
+    // Config roots locate uv configuration. Frozen verification tasks classify
+    // its fields, while builds conservatively disable implicit caching.
     "APPDATA",
     "HOME",
     "XDG_CONFIG_HOME",
@@ -1632,6 +1619,37 @@ pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &[
     "UV_PYTHON",
     "UV_PYTHON_DOWNLOADS",
     "UV_PYTHON_PREFERENCE",
+    // Frozen resolution is represented by the lockfile closure. Keep download
+    // policy available to uv without hashing URLs that may embed credentials.
+    "UV_DEFAULT_INDEX",
+    "UV_EXCLUDE_NEWER",
+    "UV_INDEX",
+    "UV_INDEX_STRATEGY",
+    "UV_INDEX_URL",
+    "UV_EXTRA_INDEX_URL",
+    "UV_FIND_LINKS",
+    "UV_INSECURE_HOST",
+    "UV_RESOLUTION",
+    "UV_PRERELEASE",
+    "UV_SYSTEM_CERTS",
+    "PIP_INDEX_URL",
+    "PIP_EXTRA_INDEX_URL",
+];
+
+const UV_DOWNLOAD_POLICY_ENV_VARS: &[&str] = &[
+    "UV_DEFAULT_INDEX",
+    "UV_EXCLUDE_NEWER",
+    "UV_INDEX",
+    "UV_INDEX_STRATEGY",
+    "UV_INDEX_URL",
+    "UV_EXTRA_INDEX_URL",
+    "UV_FIND_LINKS",
+    "UV_INSECURE_HOST",
+    "UV_RESOLUTION",
+    "UV_PRERELEASE",
+    "UV_SYSTEM_CERTS",
+    "PIP_INDEX_URL",
+    "PIP_EXTRA_INDEX_URL",
 ];
 
 const UV_PATH_ENV_VARS: &[&str] = &[
@@ -1687,22 +1705,35 @@ fn environment_flag(environment: &toolchain::TaskIOEnvironment, name: &str) -> b
     })
 }
 
-fn untracked_uv_configuration_reason(environment: &toolchain::TaskIOEnvironment) -> Option<String> {
-    if let Some(name) = UV_PATH_ENV_VARS
-        .iter()
-        .find(|name| environment.get(name).is_some())
-    {
-        return Some(format!("{name} points to inputs Turborepo cannot hash"));
-    }
-    if environment_flag(environment, "UV_NO_SYNC") {
-        return Some("UV_NO_SYNC can use an environment Turborepo cannot hash".to_string());
-    }
-    if environment_flag(environment, "UV_NO_PROJECT") {
-        return Some("UV_NO_PROJECT can select inputs Turborepo cannot hash".to_string());
-    }
-    if environment_flag(environment, "UV_NO_CONFIG") {
-        return None;
-    }
+const FROZEN_VERIFICATION_CONFIG_KEYS: &[&str] = &[
+    // Resolution and download policy cannot change an already-locked frozen
+    // invocation. Credentials are deliberately neither inspected nor hashed.
+    "allow-insecure-host",
+    "default-index",
+    "exclude-newer",
+    "exclude-newer-package",
+    "extra-index-url",
+    "find-links",
+    "fork-strategy",
+    "index",
+    "index-strategy",
+    "index-url",
+    "keyring-provider",
+    "native-tls",
+    "offline",
+    "prerelease",
+    "resolution",
+    "system-certs",
+    // These only control local storage or environment materialization.
+    "cache-dir",
+    "compile-bytecode",
+    "link-mode",
+    "no-cache",
+    "refresh",
+    "refresh-package",
+];
+
+fn external_uv_config_paths(environment: &toolchain::TaskIOEnvironment) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
     if let Some(config_home) = environment.get("XDG_CONFIG_HOME") {
         paths.push(std::path::PathBuf::from(config_home).join("uv/uv.toml"));
@@ -1717,11 +1748,59 @@ fn untracked_uv_configuration_reason(environment: &toolchain::TaskIOEnvironment)
     }
     #[cfg(unix)]
     paths.push(std::path::PathBuf::from("/etc/uv/uv.toml"));
-
     paths
+}
+
+fn external_uv_config_is_safe_for_frozen_verification(path: &std::path::Path) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(toml::Value::Table(settings)) = toml::from_str(&contents) else {
+        return false;
+    };
+    settings
+        .keys()
+        .all(|key| FROZEN_VERIFICATION_CONFIG_KEYS.contains(&key.as_str()))
+}
+
+fn untracked_uv_configuration_reason(
+    task_class: UvTaskClass,
+    environment: &toolchain::TaskIOEnvironment,
+) -> Option<String> {
+    if let Some(name) = UV_PATH_ENV_VARS
+        .iter()
+        .find(|name| environment.get(name).is_some())
+    {
+        return Some(format!("{name} points to inputs Turborepo cannot hash"));
+    }
+    if task_class == UvTaskClass::Build
+        && let Some(name) = UV_DOWNLOAD_POLICY_ENV_VARS
+            .iter()
+            .find(|name| environment.get(name).is_some())
+    {
+        return Some(format!(
+            "{name} can change build inputs without exposing credentials to the task hash"
+        ));
+    }
+    if environment_flag(environment, "UV_NO_SYNC") {
+        return Some("UV_NO_SYNC can use an environment Turborepo cannot hash".to_string());
+    }
+    if environment_flag(environment, "UV_NO_PROJECT") {
+        return Some("UV_NO_PROJECT can select inputs Turborepo cannot hash".to_string());
+    }
+    if environment_flag(environment, "UV_NO_CONFIG") {
+        return None;
+    }
+
+    let external_config = external_uv_config_paths(environment)
         .into_iter()
-        .any(|path| path.is_file())
-        .then(|| "user or system uv configuration is outside the task hash".to_string())
+        .filter(|path| path.is_file())
+        .any(|path| {
+            task_class == UvTaskClass::Build
+                || !external_uv_config_is_safe_for_frozen_verification(&path)
+        });
+    external_config
+        .then(|| "user or system uv configuration contains untracked semantic inputs".to_string())
 }
 
 /// Input globs whose changes should invalidate a Python task's cache: the
@@ -1762,12 +1841,12 @@ pub fn hash_input_globs(prefix: &str) -> Vec<String> {
 }
 
 const PYTHON_CACHE_GLOBS: [&str; 7] = [
-    ".venv/**",
-    ".pytest_cache/**",
-    ".ruff_cache/**",
-    ".mypy_cache/**",
-    ".pyright/**",
-    ".ty/**",
+    "**/.venv/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "**/.mypy_cache/**",
+    "**/.pyright/**",
+    "**/.ty/**",
     "**/__pycache__/**",
 ];
 
@@ -1847,7 +1926,7 @@ impl UvTaskContract {
         // These variables point at files whose contents affect uv. Until the
         // paths can be resolved against the repository safely, fail closed
         // instead of restoring an artifact hashed only by the path string.
-        if let Some(reason) = untracked_uv_configuration_reason(context.environment) {
+        if let Some(reason) = untracked_uv_configuration_reason(task_class, context.environment) {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
             io.cache_reason = Some(reason);
         }
@@ -1991,20 +2070,6 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-fn file_sha256(path: &std::path::Path) -> Result<String, std::io::Error> {
-    let mut file = std::fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
 #[cfg(target_os = "linux")]
 fn host_compatibility_identity() -> Option<String> {
     let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
@@ -2082,9 +2147,6 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIde
     if uv.starts_with(repo_root.as_std_path()) {
         return Err("the uv executable is inside the repository".to_string());
     }
-    let uv_sha256 = file_sha256(&uv)
-        .map_err(|error| format!("unable to hash uv at {}: {error}", uv.display()))?;
-
     let mut uv_version = Command::new(&uv);
     uv_version
         .arg("--version")
@@ -2096,19 +2158,13 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIde
         .ok_or_else(|| format!("unexpected uv version output: {uv_version_output}"))?;
     let uv_version = node_semver::Version::parse(version)
         .map_err(|error| format!("unable to parse uv version {version:?}: {error}"))?;
-    let uv_identity = format!("{uv_version_output}\nsha256:{uv_sha256}");
+    let uv_identity = uv_version_output;
 
     let mut python = Command::new(&uv);
     python
         .args(["python", "find", "--resolve-links", "--no-python-downloads"])
         .current_dir(repo_root.as_std_path());
     let python_path = std::path::PathBuf::from(identity_stdout(python, "uv python find")?);
-    let python_sha256 = file_sha256(&python_path).map_err(|error| {
-        format!(
-            "unable to hash Python interpreter at {}: {error}",
-            python_path.display()
-        )
-    })?;
     let host = host_compatibility_identity()
         .ok_or_else(|| "unable to identify host compatibility".to_string())?;
 
@@ -2117,7 +2173,7 @@ fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIde
         .args(["--version"])
         .current_dir(repo_root.as_std_path());
     let python_version = identity_stdout(python_version, "Python --version")?;
-    let python_identity = format!("{python_version}\nsha256:{python_sha256}\nhost:{host}");
+    let python_identity = format!("{python_version}\nhost:{host}");
 
     Ok(UvToolchainIdentity {
         packages: [
@@ -3640,6 +3696,10 @@ version = "0.1.0"
         ] {
             assert!(PROJECTED_ONLY_ENV_VARS.contains(&variable));
         }
+        for variable in UV_DOWNLOAD_POLICY_ENV_VARS {
+            assert!(!HASHED_ENV_VARS.contains(variable));
+            assert!(PROJECTED_ONLY_ENV_VARS.contains(variable));
+        }
     }
 
     #[test]
@@ -3649,11 +3709,14 @@ version = "0.1.0"
             "/outside/uv.toml".to_string(),
         )]));
         assert_eq!(
-            untracked_uv_configuration_reason(&environment).as_deref(),
+            untracked_uv_configuration_reason(UvTaskClass::Quality, &environment).as_deref(),
             Some("UV_CONFIG_FILE points to inputs Turborepo cannot hash")
         );
         assert_eq!(
-            untracked_uv_configuration_reason(&toolchain::TaskIOEnvironment::default()),
+            untracked_uv_configuration_reason(
+                UvTaskClass::Quality,
+                &toolchain::TaskIOEnvironment::default()
+            ),
             None
         );
 
@@ -3662,7 +3725,7 @@ version = "0.1.0"
             "true".to_string(),
         )]));
         assert_eq!(
-            untracked_uv_configuration_reason(&no_sync).as_deref(),
+            untracked_uv_configuration_reason(UvTaskClass::Quality, &no_sync).as_deref(),
             Some("UV_NO_SYNC can use an environment Turborepo cannot hash")
         );
     }
@@ -3676,23 +3739,48 @@ version = "0.1.0"
                 "/outside/constraints.txt".to_string(),
             ),
         ]));
-        assert!(untracked_uv_configuration_reason(&environment).is_some());
+        assert!(untracked_uv_configuration_reason(UvTaskClass::Quality, &environment).is_some());
     }
 
     #[test]
-    fn test_user_uv_config_disables_automatic_inputs() {
+    fn test_user_uv_config_is_classified_by_task_effect() {
         let tempdir = tempfile::tempdir().unwrap();
         let config_dir = tempdir.path().join("uv");
         std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(config_dir.join("uv.toml"), "offline = true\n").unwrap();
+        let config_path = config_dir.join("uv.toml");
+        std::fs::write(
+            &config_path,
+            "exclude-newer = \"2026-01-01T00:00:00Z\"\noffline = true\nlink-mode = \"copy\"\n",
+        )
+        .unwrap();
         let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
             "XDG_CONFIG_HOME".to_string(),
             tempdir.path().to_string_lossy().to_string(),
         )]));
         assert_eq!(
-            untracked_uv_configuration_reason(&environment).as_deref(),
-            Some("user or system uv configuration is outside the task hash")
+            untracked_uv_configuration_reason(UvTaskClass::Quality, &environment),
+            None
         );
+        assert_eq!(
+            untracked_uv_configuration_reason(UvTaskClass::Test, &environment),
+            None
+        );
+        assert!(untracked_uv_configuration_reason(UvTaskClass::Build, &environment).is_some());
+
+        let index_environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "UV_INDEX_URL".to_string(),
+            "https://user:secret@example.com/simple".to_string(),
+        )]));
+        assert_eq!(
+            untracked_uv_configuration_reason(UvTaskClass::Quality, &index_environment),
+            None
+        );
+        assert!(
+            untracked_uv_configuration_reason(UvTaskClass::Build, &index_environment).is_some()
+        );
+
+        std::fs::write(&config_path, "constraint-dependencies = [\"foo==1\"]\n").unwrap();
+        assert!(untracked_uv_configuration_reason(UvTaskClass::Quality, &environment).is_some());
     }
 
     #[test]
@@ -3741,12 +3829,25 @@ version = "0.1.0"
         assert_eq!(display("build"), Some("uv build --package=py-app"));
         assert_eq!(display("format"), Some("uv format -- packages/py-app"));
         assert_eq!(display("check"), Some("uv check --frozen --package=py-app"));
+        let workspace_tasks = native_tasks_for_package(
+            UvPackageKind::Workspace,
+            "acme",
+            ".",
+            &["packages/py-app".to_string()],
+            true,
+            false,
+        );
+        assert_eq!(
+            workspace_tasks
+                .iter()
+                .find(|task| task.name() == "check")
+                .and_then(|task| task.display()),
+            Some("uv check --frozen --all-packages")
+        );
         let build = tasks.iter().find(|task| task.name() == "build").unwrap();
         assert_eq!(build.contract().defaults().cache, Some(false));
         let format = tasks.iter().find(|task| task.name() == "format").unwrap();
         assert_eq!(format.contract().defaults().cache, Some(false));
-        let check = tasks.iter().find(|task| task.name() == "check").unwrap();
-        assert_eq!(check.contract().defaults().cache, Some(true));
         assert_eq!(
             build.contract().entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Candidate)
@@ -3785,10 +3886,13 @@ version = "0.1.0"
             .iter()
             .find(|task| task.name() == "test")
             .unwrap();
-        assert_eq!(root_test.display(), Some("uv run --active --frozen pytest"));
+        assert_eq!(
+            root_test.display(),
+            Some("uv run --active --frozen --all-packages pytest")
+        );
         assert_eq!(
             root_test.contract().entrypoint(),
-            Some(crate::native_tasks::TaskEntrypoint::PreferredOnly)
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
         );
 
         let member: PyProjectManifest =
@@ -4067,6 +4171,7 @@ version = "0.1.0"
             false,
         );
         let check = tasks.iter().find(|task| task.name() == "check").unwrap();
+        assert_eq!(check.display(), Some("uv check --frozen --package=py-app"));
         assert_eq!(check.contract().defaults().cache, Some(true));
     }
 
@@ -4145,10 +4250,11 @@ version = "0.1.0"
         );
         assert!(
             io.input_globs
-                .contains(&"!../../packages/lib/.mypy_cache/**".to_string())
+                .contains(&"!../../packages/lib/**/.mypy_cache/**".to_string())
         );
         assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
-        assert!(io.input_globs.contains(&"!.pytest_cache/**".to_string()));
+        assert!(io.input_globs.contains(&"!**/.pytest_cache/**".to_string()));
+        assert!(io.input_globs.contains(&"!**/.ruff_cache/**".to_string()));
 
         let args = vec!["--fix".to_string()];
         let context = toolchain::TaskIOContext {
@@ -4209,6 +4315,24 @@ version = "0.1.0"
             !workspace_io
                 .input_globs
                 .contains(&"packages/app/**".to_string())
+        );
+
+        let workspace_lint = UvTaskContract::workspace(
+            "acme",
+            vec!["packages/app".to_string(), "packages/lib".to_string()],
+        )
+        .derived_task_io(&package, "lint:ruff", "", &[], true, &context)
+        .unwrap();
+        assert_eq!(workspace_lint.package_default_inputs, Some(false));
+        assert!(
+            workspace_lint
+                .input_globs
+                .contains(&"packages/app/**".to_string())
+        );
+        assert!(
+            workspace_lint
+                .input_globs
+                .contains(&"packages/lib/**".to_string())
         );
     }
 

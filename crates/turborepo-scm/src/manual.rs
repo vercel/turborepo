@@ -31,7 +31,9 @@ fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a
 
 fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
-    let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
+    // Walked paths are package-relative and never start with `./`. Native
+    // workspace contracts and authored inputs may include that prefix.
+    let g = Glob::new(glob.as_str().trim_start_matches("./")).map(|g| g.into_owned())?;
 
     Ok(g)
 }
@@ -426,6 +428,40 @@ mod tests {
             Err(e) => assert!(want_err, "unexpected error {e}"),
             Ok(hashes) => assert_eq!(hashes, expected),
         }
+    }
+
+    #[test_case("./src/**"; "glob")]
+    #[test_case("./src/"; "directory")]
+    #[test_case("././src/**"; "repeated current directory")]
+    fn test_current_directory_inputs_without_git(source_input: &str) {
+        let (_tmp, root) = tmp_dir();
+        root.join_component("src").create_dir_all().unwrap();
+        root.join_components(&["src", "main.py"])
+            .create_with_contents("VALUE = 1\n")
+            .unwrap();
+        root.join_components(&["src", "ignored.py"])
+            .create_with_contents("ignored\n")
+            .unwrap();
+        root.join_component("pyproject.toml")
+            .create_with_contents("[project]\n")
+            .unwrap();
+        let hash = |inputs: &[&str]| {
+            get_package_file_hashes_without_git(
+                &root,
+                AnchoredSystemPath::new("").unwrap(),
+                inputs,
+                false,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let expected = hash(&["src/**", "pyproject.toml", "!src/ignored.py"]);
+        assert_eq!(expected.len(), 2);
+        assert_eq!(
+            hash(&[source_input, "./pyproject.toml", "!./src/ignored.py"]),
+            expected
+        );
     }
 
     #[test]
