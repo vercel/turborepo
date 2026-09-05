@@ -200,6 +200,13 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::bun::LOCKFILE,
 ];
 
+fn workspace_path_for_event(path: &AbsoluteSystemPath) -> Option<&AbsoluteSystemPath> {
+    match path.file_name() {
+        Some("package.json" | "turbo.json" | "turbo.jsonc") => path.parent(),
+        _ => Some(path),
+    }
+}
+
 impl Subscriber {
     /// Creates a new instance of PackageDiscovery. This will start a task that
     /// performs the initial discovery using the `backup_discovery` of your
@@ -235,20 +242,15 @@ impl Subscriber {
                 let Ok(path) = AbsoluteSystemPath::from_std_path(path) else {
                     return false;
                 };
-                let workspace_path = if path.file_name() == Some("package.json") {
-                    let Some(parent) = path.parent() else {
-                        return false;
-                    };
-                    parent
-                } else {
-                    path
-                };
                 let workspace_globs = workspace_globs
                     .read()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 let Some(globs) = workspace_globs.as_ref() else {
                     return path.file_name() == Some("package.json")
                         && repository_ignore.is_relevant(path.as_std_path(), false);
+                };
+                let Some(workspace_path) = workspace_path_for_event(path) else {
+                    return false;
                 };
                 globs
                     .target_is_workspace(&repo_root, workspace_path)
@@ -487,32 +489,16 @@ impl Subscriber {
             let Ok(path_file) = AbsoluteSystemPathBuf::new(path) else {
                 continue;
             };
-            let path_workspace: &AbsoluteSystemPath =
-                if path_file.file_name() == Some("package.json") {
-                    // The file event is for a package.json file. Check if the parent is a workspace
-                    let Some(path_parent) = path_file.parent() else {
-                        continue;
-                    };
-                    if filter
-                        .target_is_workspace(&self.repo_root, path_parent)
-                        .unwrap_or(false)
-                    {
-                        path_parent
-                    } else {
-                        // irrelevant package.json file update, it's not in a directory
-                        // matching workspace globs
-                        continue;
-                    }
-                } else if filter
-                    .target_is_workspace(&self.repo_root, &path_file)
-                    .unwrap_or(false)
-                {
-                    // The file event is for a workspace directory itself
-                    &path_file
-                } else {
-                    // irrelevant file update, it's not a package.json file or a workspace directory
-                    continue;
-                };
+            let Some(path_workspace) = workspace_path_for_event(&path_file) else {
+                continue;
+            };
+            if !filter
+                .target_is_workspace(&self.repo_root, path_workspace)
+                .unwrap_or(false)
+            {
+                // Ignore files that are not in a directory matching workspace globs.
+                continue;
+            }
 
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
@@ -532,15 +518,15 @@ impl Subscriber {
                         break;
                     }
                 };
-                workspaces
-                    .insert(
-                        path_workspace.to_owned(),
-                        WorkspaceData {
-                            package_json,
-                            turbo_json,
-                        },
-                    )
-                    .is_none()
+                let workspace_data = WorkspaceData {
+                    package_json,
+                    turbo_json,
+                };
+                let changed = workspaces
+                    .get(path_workspace)
+                    .map_or(true, |existing| existing != &workspace_data);
+                workspaces.insert(path_workspace.to_owned(), workspace_data);
+                changed
             } else {
                 workspaces.remove(path_workspace).is_some()
             }
@@ -695,6 +681,58 @@ mod test {
                 turbo_json: Some(turbo_jsonc),
             }]
         );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn incremental_discovery_updates_package_turbo_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let workspace_dir = repo_root.join_components(&["apps", "web"]);
+        let package_json = workspace_dir.join_component("package.json");
+        let turbo_json = workspace_dir.join_component("turbo.json");
+        let turbo_jsonc = workspace_dir.join_component("turbo.jsonc");
+
+        package_json.ensure_dir().unwrap();
+        package_json
+            .create_with_contents(r#"{"name":"web"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["apps/*"], "packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let package_watcher = PackageWatcher::new(repo_root, recv, cookie_writer, false).unwrap();
+
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json, None);
+
+        turbo_json.create_with_contents("{}").unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json, Some(turbo_json.clone()));
+
+        turbo_json.remove_file().unwrap();
+        turbo_jsonc.create_with_contents("{}").unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json, Some(turbo_jsonc.clone()));
+
+        turbo_jsonc.remove_file().unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json, None);
     }
 
     #[tokio::test]
