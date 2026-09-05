@@ -61,6 +61,33 @@ pnpm --filter examples-agent factory ssh ws_...
 The same workspace remains available from the web while the local terminal is
 attached.
 
+## Start work from Linear
+
+`agent/channels/linear.ts` is the Linear connector: delegating an issue to the
+agent or mentioning it in a Linear Agent Session starts the same kind of ad-hoc
+Eve session the operator page opens, on the factory image and the current
+`main`. Progress, questions, and answers render as native Agent Activities in
+the session, and Linear webhook actors dispatch as _user_ principals, so the
+`create_pull_request` approval gate stays on and the automated scope gates stay
+off, exactly like operator chat.
+
+Credentials run through Vercel Connect; there is no Linear API key or webhook
+secret to hold. Configure it with:
+
+- A Linear Vercel Connect connector provisioned with the `app:assignable` and
+  `app:mentionable` scopes, subscribed to `AgentSessionEvent`, and forwarding
+  to this deployment at `/eve/v1/linear`. Because Deployment Protection covers
+  that path, append the automation bypass token as the
+  `x-vercel-protection-bypass` query parameter on the trigger destination.
+- `LINEAR_CONNECT_UID` set to that connector's stable `scl_...` ID.
+- Optionally `LINEAR_INSTALLATION_ID` to pin one workspace install when the
+  app is installed in more than one Linear workspace.
+
+`agent/lib/linear.ts` resolves those credentials lazily per request, so a
+deployment without the connector configured rejects Linear webhooks instead of
+failing at build or module load. Connect-forwarded webhooks are verified by
+their Vercel OIDC signature rather than a Linear webhook secret.
+
 ## Factory image
 
 Every agent in this app runs against the same sandbox base layer, the
