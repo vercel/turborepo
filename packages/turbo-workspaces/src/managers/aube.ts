@@ -226,7 +226,8 @@ async function convertLock(args: ConvertArgs): Promise<void> {
     }
     case "npm":
     case "nub":
-    case "aube": {
+    case "aube":
+    case "utoo": {
       break;
     }
   }

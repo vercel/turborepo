@@ -103,6 +103,18 @@ export const PACKAGE_MANAGERS: Record<
       semver: "*",
       default: true
     }
+  ],
+  utoo: [
+    {
+      name: "utoo",
+      template: "utoo",
+      command: "ut",
+      installArgs: ["install"],
+      version: "latest",
+      executable: "utx",
+      semver: "*",
+      default: true
+    }
   ]
 };
 
