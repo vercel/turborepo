@@ -117,15 +117,34 @@ Turborepo can now discover packages and dependency relationships from Cargo and 
 
 You can use any of these languages by themselves or bring JavaScript, Rust, and Python together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
 
-| Turborepo command  | Task examples                                   |
-| ------------------ | ----------------------------------------------- |
-| `turbo run build`  | `tsc build` + `cargo build` + `uv build`        |
-| `turbo run test`   | `vitest run` + `cargo test` + `uv run pytest`   |
-| `turbo run check`  | `tsc` + `cargo check` + `uv run mypy`           |
-| `turbo run lint`   | `eslint` + `cargo clippy` + `uv run ruff check` |
-| `turbo run format` | `prettier` + `cargo fmt` + `uv run ruff format` |
+| Turborepo command                        | Task examples                                   |
+| ---------------------------------------- | ----------------------------------------------- |
+| `turbo run build`                        | `tsc build` + `cargo build` + `uv build`        |
+| `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest`   |
+| `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`           |
+| `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` |
+| `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` |
+| `turbo run build test check lint format` | All of the commands above run in parallel       |
 
-Native Rust and Python support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback on this expanded language support in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
+You can also create cross-toolchain dependencies in `turbo.json`. In the example below, tests for a Python API server wait for a Rust core package to be built:
+
+```json title="turbo.json"
+{
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalPythonWorkspaces": true
+  },
+  "tasks": {
+    "my-dango-api#test": {
+      "dependsOn": ["rust-api-core#build"]
+    }
+  }
+}
+```
+
+Once the Rust dependency is done building, the Django server will run its Python tests.
+
+Native Rust and Python support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
 
 ### Rust with Cargo
 
@@ -151,7 +170,7 @@ Turborepo infers common tasks and maps them to Cargo commands:
 
 Cargo remains responsible for installing dependencies, resolving dependencies, compiling crates, and scheduling the Cargo-internal build graph. The Cargo workspace continues to work the way you are used to under the hood.
 
-To learn more, [read the Rust guide](/docs/guides/tools/rust). We look forward to hearing your feedback on the [Rust support RFC](https://github.com/vercel/turborepo/discussions/13415).
+To learn more, [read the Rust guide](/docs/guides/tools/rust). We look forward to hearing your feedback on [the RFC for Rust support](https://github.com/vercel/turborepo/discussions/13415).
 
 ### Python with uv
 
@@ -165,7 +184,7 @@ Enable uv workspace support with `experimentalPythonWorkspaces` in your root `tu
 }
 ```
 
-Turborepo reads the tools your `pyproject.toml` manifests already declare and maps common tasks to them:
+With zero configuration, Turborepo reads the tools in your `pyproject.toml` and runs them as native tasks:
 
 | Turborepo command  | uv-native task                |
 | ------------------ | ----------------------------- |
@@ -175,23 +194,7 @@ Turborepo reads the tools your `pyproject.toml` manifests already declare and ma
 | `turbo run lint`   | `uv run --frozen ruff check`  |
 | `turbo run format` | `uv run --frozen ruff format` |
 
-Ruff, Black, mypy, ty, Pyright, and pytest are detected from direct, unconditional declarations in `[project].dependencies`, `[dependency-groups]`, and legacy `[tool.uv].dev-dependencies`. `lint` and `check` fan out to every tool detected for that role, like `lint:ruff` and `check:mypy`. When a role has no detected tool, `check` and `format` fall back to `uv check` and `uv format`.
-
-`turbo run test` is a native task, too. Where you declare pytest decides how your suites are scheduled. A declaration in the root manifest creates one repository-wide `test` task, so pytest collects the whole suite in a single process. A declaration on a member creates `test` for that package only, and those suites run in parallel:
-
-```bash title="Terminal"
-# Root declaration: one repository-wide suite
-uv run --frozen pytest
-
-# Member declaration: one suite per declaring package, in parallel
-uv run --frozen --package py-api pytest packages/py-api
-```
-
-When the root and its members both declare pytest, an unfiltered run uses the root suite, and `--filter` selects a member's suite only when that member declares pytest itself.
-
-Turborepo hands the package directory to pytest instead of collecting tests itself, so `tests/` directories, colocated tests, and `conftest.py` files keep behaving exactly as pytest defines them. Non-default dependency groups are activated for the run, arguments after `--` are forwarded ahead of the target (`turbo run test --filter=py-api -- -k smoke`), and pytest's exit code `5` for an empty selection is preserved.
-
-To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
+Ruff, Black, mypy, ty, Pyright and pytest all require zero-configuration. To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
 
 ## `devEngines.packageManager` support
 
@@ -202,13 +205,15 @@ For JavaScript toolchains, the `devEngines.packageManager` field is the modern w
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "10.0.0"
+      "version": "12.0.0"
     }
   }
 }
 ```
 
-In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the rest of the JavaScript ecosystem. We encourage migrating your repository to `devEngines.packageManager`.
+Starting with this release, Turborepo respects this field.
+
+In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository to `devEngines.packageManager`.
 
 [Read the package manager documentation](/docs/crafting-your-repository/structuring-a-repository#root-packagejson) to learn more.
 
@@ -228,7 +233,7 @@ Declare nub in your root `package.json`:
   "devEngines": {
     "packageManager": {
       "name": "nub",
-      "version": "0.6.0"
+      "version": "0.8.3"
     }
   }
 }
@@ -243,7 +248,7 @@ Declare nub in your root `package.json`:
   "devEngines": {
     "packageManager": {
       "name": "aube",
-      "version": "1.37.0"
+      "version": "2.2.9"
     }
   }
 }
@@ -266,7 +271,7 @@ aubx create-turbo -m aube
 
 When preparing a deployment from a monorepo, it can be tricky to right-size your Docker images. Turborepo's `prune` command is meant to solve this problem, trimming your monorepo down to only the code that is needed for the application to deploy and run successfully.
 
-Until today, Turborepo would include workspace packages referenced through both dependencies _and_ development dependencies while calculating the pruning dependency closure. While this is a safe default, you may also want to remove development-only workspace packages from the production image to optimize further.
+Until today, Turborepo would include workspace packages referenced through both dependencies _and_ development dependencies while calculating the pruning dependency closure. While this is a safe default, removing development-only workspace packages from the production image can optimize further.
 
 In this release, we're giving you control to exclude workspace packages that are only reachable through `devDependencies` with the new `--production` flag for `turbo prune`:
 
@@ -274,7 +279,7 @@ In this release, we're giving you control to exclude workspace packages that are
 turbo prune web --production
 ```
 
-This works across all natively supported languages, including the Experimental ones [introduced in this release](/blog/2-11#native-support-for-rust-and-python-experimental).
+This works across all natively supported languages, including the Experimental ones introduced in this release.
 
 [Visit the `turbo prune` documentation](/docs/reference/prune#--production) to learn more.
 
