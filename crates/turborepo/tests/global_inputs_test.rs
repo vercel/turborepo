@@ -29,6 +29,20 @@ const TURBO_JSON_GLOBAL_INPUTS: &str = r#"{
 }
 "#;
 
+const TURBO_JSON_GLOBAL_INPUTS_JIT: &str = r#"{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": ["config.txt"]
+  },
+  "tasks": {
+    "build": {
+      "inputs": [{ "mode": "jit", "globs": ["src/**"] }],
+      "outputs": []
+    }
+  }
+}
+"#;
+
 const TURBO_JSON_GLOBAL_INPUTS_TOPO: &str = r#"{
   "futureFlags": { "globalConfiguration": true },
   "global": {
@@ -280,5 +294,48 @@ fn test_global_inputs_exclusion_not_defeated_by_phantom_dependency_tasks() {
     assert!(
         combined.contains("app-b:build") && combined.contains("cache hit"),
         "expected app-b cache hit (phantom dep should not defeat negation), got: {combined}"
+    );
+}
+
+/// A task whose only `inputs` are JIT still has `global.inputs` prepended to
+/// its eager globs, so a change to a global input file must invalidate it.
+#[test]
+fn test_global_inputs_invalidate_jit_only_task() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_fixture(tempdir.path(), TURBO_JSON_GLOBAL_INPUTS_JIT);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "-F", "app-a", "--output-logs=hash-only"],
+    );
+    assert!(output.status.success());
+    let combined = combined_output(&output);
+    assert!(
+        combined.contains("cache miss"),
+        "expected cache miss on first run, got: {combined}"
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "-F", "app-a", "--output-logs=hash-only"],
+    );
+    assert!(output.status.success());
+    let combined = combined_output(&output);
+    assert!(
+        combined.contains("cache hit"),
+        "expected cache hit on second run, got: {combined}"
+    );
+
+    fs::write(tempdir.path().join("config.txt"), "changed value").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "-F", "app-a", "--output-logs=hash-only"],
+    );
+    assert!(output.status.success());
+    let combined = combined_output(&output);
+    assert!(
+        combined.contains("cache miss"),
+        "expected cache miss after changing a global input, got: {combined}"
     );
 }

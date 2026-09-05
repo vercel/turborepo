@@ -177,6 +177,7 @@ pub fn prepend_global_inputs(
         .collect();
     global_globs.append(&mut inputs.globs);
     inputs.globs = global_globs;
+    inputs.refresh_eager();
 }
 
 #[cfg(test)]
@@ -210,6 +211,54 @@ mod tests {
         assert!(
             !inputs.default,
             "default should remain false when task had explicit inputs"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_marks_jit_only_task_eager() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(inputs.globs, vec!["../../config.txt"]);
+        assert!(
+            inputs.eager,
+            "task is no longer jit only once global inputs are prepended, so the eager pass has \
+             to run or those globs never get hashed"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_leaves_jit_only_task_alone_without_global_inputs() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(&mut inputs, true, &[], &path_to_root);
+
+        assert!(inputs.globs.is_empty());
+        assert!(
+            !inputs.eager,
+            "a task that is still jit only should not start hashing eagerly"
         );
     }
 
