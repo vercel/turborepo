@@ -1,14 +1,14 @@
 //! Byte-compatible hashing for normalized lockfile package closures.
 
-// Generated Cap'n Proto setters use infallible unwraps.
-#![allow(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 use capnp::{
     message::{Builder, HeapAllocator},
     traits::{Owned, SetterInput},
 };
 
-#[allow(dead_code)]
+// Generated Cap'n Proto setters use infallible unwraps.
+#[allow(dead_code, clippy::unwrap_used)]
 mod proto_capnp {
     include!(concat!(env!("OUT_DIR"), "/src/proto_capnp.rs"));
 }
