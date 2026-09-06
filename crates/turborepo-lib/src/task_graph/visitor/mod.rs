@@ -1166,20 +1166,36 @@ fn filter_hashes_to_declared_outputs(
     ))
 }
 
-fn directory_glob_variants(glob: &str, is_exclusion: bool) -> Vec<String> {
-    if glob.ends_with("/**") {
-        return vec![glob.to_owned()];
-    }
+/// same set turborepo-globwalk skips on in add_doublestar_to_dir
+const GLOB_META: [char; 13] = [
+    '?', '*', '$', ':', '<', '>', '(', ')', '[', ']', '{', '}', ',',
+];
 
-    let has_meta = glob.contains([
-        '?', '*', '$', ':', '<', '>', '(', ')', '[', ']', '{', '}', ',',
-    ]);
-    if has_meta && !is_exclusion {
+/// mirrors add_doublestar_to_dir in turborepo-globwalk, without the on disk
+/// check, which we cannot do here because we only have the glob
+fn inclusion_glob_variants(glob: &str) -> Vec<String> {
+    if glob.ends_with("/**") || glob.contains(GLOB_META) {
         return vec![glob.to_owned()];
     }
 
     let trimmed = glob.strip_suffix('/').unwrap_or(glob);
     vec![trimmed.to_owned(), format!("{trimmed}/**")]
+}
+
+/// mirrors add_trailing_double_star in turborepo-globwalk
+fn exclusion_glob_variants(glob: &str) -> Vec<String> {
+    if let Some(stripped) = glob.strip_suffix('/') {
+        if stripped.ends_with("**") {
+            return vec![stripped.to_owned()];
+        }
+        return vec![format!("{glob}**")];
+    }
+
+    if glob.ends_with("/**") {
+        return vec![glob.to_owned()];
+    }
+
+    vec![format!("{glob}/**"), glob.to_owned()]
 }
 
 struct CompiledOutputGlobs {
@@ -1194,13 +1210,13 @@ impl CompiledOutputGlobs {
 
         for glob in globs {
             if let Some(exclusion) = glob.strip_prefix('!') {
-                for variant in directory_glob_variants(exclusion, true) {
+                for variant in exclusion_glob_variants(exclusion) {
                     if let Ok(glob) = wax::Glob::new(&variant) {
                         exclusions.push(glob.into_owned());
                     }
                 }
             } else {
-                for variant in directory_glob_variants(glob, false) {
+                for variant in inclusion_glob_variants(glob) {
                     if let Ok(glob) = wax::Glob::new(&variant) {
                         inclusions.push(glob.into_owned());
                     }
