@@ -472,6 +472,10 @@ mod tests {
 
     use super::*;
 
+    fn go_available() -> bool {
+        which::which("go").is_ok()
+    }
+
     fn write_workspace(root: &AbsoluteSystemPath, layout: &[(&str, &str, &str)]) {
         fs::create_dir_all(root.as_std_path()).unwrap();
         let mut work = String::from("go 1.22\n\nuse (\n");
@@ -497,6 +501,10 @@ mod tests {
 
     #[test]
     fn discovers_multiple_modules() {
+        if !go_available() {
+            return;
+        }
+
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         write_workspace(
@@ -530,6 +538,10 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_module_identity() {
+        if !go_available() {
+            return;
+        }
+
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         write_workspace(
@@ -549,6 +561,10 @@ mod tests {
 
     #[test]
     fn rejects_member_outside_repository() {
+        if !go_available() {
+            return;
+        }
+
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         root.join_component(GO_WORK)
@@ -564,6 +580,10 @@ mod tests {
 
     #[test]
     fn models_internal_relationships() {
+        if !go_available() {
+            return;
+        }
+
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         write_workspace(

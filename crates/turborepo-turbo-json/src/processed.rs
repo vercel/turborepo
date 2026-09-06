@@ -911,11 +911,19 @@ mod tests {
 
     #[test]
     fn test_command_unknown_toolchain_hints() {
-        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go"])]), &command_flags())
+        let err = ProcessedCommand::from_raw(spanned_map(&[("ruby", &["ruby"])]), &command_flags())
             .unwrap_err();
         assert!(
             matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
                 if hint.contains("javascript") && hint.contains("rust")),
+            "got: {err}"
+        );
+
+        let err = ProcessedCommand::from_raw(spanned_map(&[("golang", &["go"])]), &command_flags())
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
+                if hint.contains(r#""go" toolchain"#)),
             "got: {err}"
         );
 
@@ -939,6 +947,20 @@ mod tests {
             ..Default::default()
         };
         let err = ProcessedCommand::from_raw(spanned_map(&[("rust", &["cargo", "test"])]), &flags)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::TaskCommandToolchainRequiresFlag { .. }
+        ));
+    }
+
+    #[test]
+    fn test_command_go_key_requires_go_flag() {
+        let flags = FutureFlags {
+            experimental_task_command: true,
+            ..Default::default()
+        };
+        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go", "test"])]), &flags)
             .unwrap_err();
         assert!(matches!(
             err,
