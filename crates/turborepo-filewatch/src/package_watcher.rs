@@ -556,9 +556,7 @@ impl Subscriber {
                         break;
                     }
                 };
-                let changed = workspaces
-                    .get(path_workspace)
-                    .map_or(true, |existing| existing != &workspace_data);
+                let changed = workspaces.get(path_workspace) != Some(&workspace_data);
                 workspaces.insert(path_workspace.to_owned(), workspace_data);
                 changed
             } else {

@@ -154,16 +154,16 @@ impl LspPackages {
             response
                 .scopes
                 .into_iter()
-                .filter_map(|scope| {
+                .map(|scope| {
                     let source_path = scope.manifest_path;
                     let identity = scope.name;
                     let source = std::fs::read_to_string(&source_path).ok();
-                    Some(LspPackage {
+                    LspPackage {
                         identity: Some(identity),
                         source_path,
                         source,
                         tasks: scope.tasks,
-                    })
+                    }
                 })
                 .collect(),
         )

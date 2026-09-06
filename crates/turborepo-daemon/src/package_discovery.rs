@@ -62,6 +62,32 @@ fn discovery_response_from_proto(
     })
 }
 
+impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using daemon");
+
+        let mut daemon = self.daemon.clone();
+        let response = daemon
+            .discover_packages()
+            .await
+            .map_err(|e| Error::Failed(Box::new(e)))?;
+
+        discovery_response_from_proto(response, &self.repo_root)
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using daemon");
+
+        let mut daemon = self.daemon.clone();
+        let response = daemon
+            .discover_packages_blocking()
+            .await
+            .map_err(|e| Error::Failed(Box::new(e)))?;
+
+        discovery_response_from_proto(response, &self.repo_root)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,31 +119,5 @@ mod tests {
             .unwrap()
             .is_some());
         assert!(javascript_workspace_from_proto(rust).unwrap().is_none());
-    }
-}
-
-impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
-    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
-        tracing::debug!("discovering packages using daemon");
-
-        let mut daemon = self.daemon.clone();
-        let response = daemon
-            .discover_packages()
-            .await
-            .map_err(|e| Error::Failed(Box::new(e)))?;
-
-        discovery_response_from_proto(response, &self.repo_root)
-    }
-
-    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
-        tracing::debug!("discovering packages using daemon");
-
-        let mut daemon = self.daemon.clone();
-        let response = daemon
-            .discover_packages_blocking()
-            .await
-            .map_err(|e| Error::Failed(Box::new(e)))?;
-
-        discovery_response_from_proto(response, &self.repo_root)
     }
 }
