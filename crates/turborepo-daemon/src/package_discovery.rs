@@ -1,11 +1,14 @@
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{
     discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData},
+    package_graph::PackageName,
+    package_json::PackageJson,
     package_manager::PackageManager,
+    toolchain::ToolchainId,
 };
 
 use crate::{
-    proto::{DiscoverPackagesResponse, PackageFiles, PackageManager as ProtoPackageManager},
+    proto::{DiscoverPackagesResponse, RepositoryScope},
     DaemonClient,
 };
 
@@ -21,41 +24,36 @@ impl<C> DaemonPackageDiscovery<C> {
     }
 }
 
-fn workspace_data_from_proto(package_files: PackageFiles) -> Result<WorkspaceData, Error> {
-    let package_json = AbsoluteSystemPathBuf::new(package_files.package_json).map_err(|err| {
-        Error::InvalidResponse(format!("daemon returned invalid package.json path: {err}"))
-    })?;
-    let turbo_json = package_files
-        .turbo_json
-        .map(|path| {
-            AbsoluteSystemPathBuf::new(path).map_err(|err| {
-                Error::InvalidResponse(format!("daemon returned invalid turbo.json path: {err}"))
-            })
-        })
-        .transpose()?;
+fn javascript_workspace_from_proto(scope: RepositoryScope) -> Result<Option<WorkspaceData>, Error> {
+    if scope.toolchain != ToolchainId::JAVASCRIPT.as_str()
+        || scope.name == PackageName::Root.as_str()
+    {
+        return Ok(None);
+    }
 
-    Ok(WorkspaceData {
-        package_json,
-        turbo_json,
-    })
+    let package_json = AbsoluteSystemPathBuf::new(scope.manifest_path).map_err(|err| {
+        Error::InvalidResponse(format!(
+            "daemon returned invalid JavaScript manifest path: {err}"
+        ))
+    })?;
+
+    WorkspaceData::new(package_json, None).map(Some)
 }
 
 fn discovery_response_from_proto(
     response: DiscoverPackagesResponse,
     repo_root: &turbopath::AbsoluteSystemPath,
 ) -> Result<DiscoveryResponse, Error> {
-    let package_manager: PackageManager = ProtoPackageManager::try_from(response.package_manager)
-        .map_err(|_| {
-            Error::InvalidResponse(format!(
-                "daemon returned invalid package manager: {}",
-                response.package_manager
-            ))
-        })?
-        .into();
+    let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))
+        .map_err(|error| Error::Failed(Box::new(error)))?;
+    let package_manager =
+        PackageManager::read_or_detect_package_manager(&root_package_json, repo_root)
+            .map_err(|error| Error::Failed(Box::new(error)))?;
     let workspaces = response
-        .package_files
+        .scopes
         .into_iter()
-        .map(workspace_data_from_proto)
+        .map(javascript_workspace_from_proto)
+        .filter_map(Result::transpose)
         .collect::<Result<_, _>>()?;
 
     Ok(DiscoveryResponse {
@@ -64,13 +62,43 @@ fn discovery_response_from_proto(
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn javascript_adapter_filters_generic_repository_scopes() {
+        let javascript = RepositoryScope {
+            name: "web".to_string(),
+            toolchain: ToolchainId::JAVASCRIPT.as_str().to_string(),
+            manifest_path: if cfg!(windows) {
+                r"C:\repo\apps\web\package.json".to_string()
+            } else {
+                "/repo/apps/web/package.json".to_string()
+            },
+        };
+        let rust = RepositoryScope {
+            name: "api".to_string(),
+            toolchain: ToolchainId::RUST.as_str().to_string(),
+            manifest_path: if cfg!(windows) {
+                r"C:\repo\crates\api\Cargo.toml".to_string()
+            } else {
+                "/repo/crates/api/Cargo.toml".to_string()
+            },
+        };
+
+        assert!(javascript_workspace_from_proto(javascript)
+            .unwrap()
+            .is_some());
+        assert!(javascript_workspace_from_proto(rust).unwrap().is_none());
+    }
+}
+
 impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
     async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using daemon");
 
-        // clone here so we can make concurrent requests
         let mut daemon = self.daemon.clone();
-
         let response = daemon
             .discover_packages()
             .await
@@ -82,9 +110,7 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
     async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using daemon");
 
-        // clone here so we can make concurrent requests
         let mut daemon = self.daemon.clone();
-
         let response = daemon
             .discover_packages_blocking()
             .await

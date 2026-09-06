@@ -12,7 +12,7 @@
 use futures::StreamExt;
 use tokio::time::error::Elapsed;
 use tracing::Instrument;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
     package_json::PackageJson,
@@ -21,8 +21,50 @@ use crate::{
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WorkspaceData {
-    pub package_json: AbsoluteSystemPathBuf,
-    pub turbo_json: Option<AbsoluteSystemPathBuf>,
+    workspace_root: AbsoluteSystemPathBuf,
+    package_json: AbsoluteSystemPathBuf,
+    turbo_json: Option<AbsoluteSystemPathBuf>,
+}
+
+impl WorkspaceData {
+    pub fn new(
+        package_json: AbsoluteSystemPathBuf,
+        turbo_json: Option<AbsoluteSystemPathBuf>,
+    ) -> Result<Self, Error> {
+        let workspace_root = package_json.parent().ok_or_else(|| {
+            Error::InvalidResponse("workspace package.json has no parent directory".into())
+        })?;
+        if turbo_json
+            .as_deref()
+            .is_some_and(|turbo_json| turbo_json.parent() != Some(workspace_root))
+        {
+            return Err(Error::InvalidResponse(
+                "workspace turbo.json must be in the same directory as package.json".into(),
+            ));
+        }
+
+        Ok(Self {
+            workspace_root: workspace_root.to_owned(),
+            package_json,
+            turbo_json,
+        })
+    }
+
+    pub fn workspace_root(&self) -> &AbsoluteSystemPath {
+        &self.workspace_root
+    }
+
+    pub fn package_json(&self) -> &AbsoluteSystemPath {
+        &self.package_json
+    }
+
+    pub fn turbo_json(&self) -> Option<&AbsoluteSystemPath> {
+        self.turbo_json.as_deref()
+    }
+
+    pub fn into_paths(self) -> (AbsoluteSystemPathBuf, Option<AbsoluteSystemPathBuf>) {
+        (self.package_json, self.turbo_json)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -218,11 +260,8 @@ impl PackageDiscovery for LocalPackageDiscovery {
             return Ok(DiscoveryResponse {
                 workspaces: package_paths
                     .into_iter()
-                    .map(|package_json| WorkspaceData {
-                        package_json,
-                        turbo_json: None,
-                    })
-                    .collect(),
+                    .map(|package_json| WorkspaceData::new(package_json, None))
+                    .collect::<Result<_, _>>()?,
                 package_manager: self.package_manager.clone(),
             });
         }
@@ -234,10 +273,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
             let package_dir = path.parent().expect("non-root");
             let turbo_json = discover_turbo_config_path(package_dir).await?;
 
-            Ok(WorkspaceData {
-                package_json: path,
-                turbo_json,
-            })
+            WorkspaceData::new(path, turbo_json)
         }))
         .buffered(64)
         .collect::<Vec<Result<WorkspaceData, Error>>>()
@@ -379,6 +415,25 @@ mod local_tests {
     use turbopath::AbsoluteSystemPath;
 
     use super::*;
+
+    #[test]
+    fn workspace_data_owns_valid_workspace_paths() {
+        let (_dir, repo_root) = npm_workspace();
+        let workspace_root = repo_root.join_components(&["apps", "web"]);
+        let package_json = workspace_root.join_component("package.json");
+        let turbo_json = workspace_root.join_component("turbo.json");
+
+        let workspace = WorkspaceData::new(package_json.clone(), Some(turbo_json.clone())).unwrap();
+        assert_eq!(workspace.workspace_root(), &*workspace_root);
+        assert_eq!(workspace.package_json(), &*package_json);
+        assert_eq!(workspace.turbo_json(), Some(&*turbo_json));
+
+        let other_turbo_json = repo_root.join_components(&["apps", "other", "turbo.json"]);
+        assert!(WorkspaceData::new(package_json, Some(other_turbo_json)).is_err());
+
+        let other_manifest = workspace_root.join_component("pyproject.toml");
+        assert!(WorkspaceData::new(other_manifest, None).is_ok());
+    }
 
     fn npm_workspace() -> (TempDir, AbsoluteSystemPathBuf) {
         let dir = TempDir::new().unwrap();

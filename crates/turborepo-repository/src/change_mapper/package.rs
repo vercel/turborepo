@@ -263,14 +263,8 @@ mod tests {
                     // Parent first reproduces the observation order that used
                     // to make it incorrectly claim the child's files.
                     workspaces: vec![
-                        discovery::WorkspaceData {
-                            package_json: self.parent_manifest.clone(),
-                            turbo_json: None,
-                        },
-                        discovery::WorkspaceData {
-                            package_json: self.child_manifest.clone(),
-                            turbo_json: None,
-                        },
+                        discovery::WorkspaceData::new(self.parent_manifest.clone(), None)?,
+                        discovery::WorkspaceData::new(self.child_manifest.clone(), None)?,
                     ],
                 })
             }
@@ -337,18 +331,15 @@ mod tests {
                 Ok(discovery::DiscoveryResponse {
                     package_manager: PackageManager::Npm,
                     workspaces: vec![
-                        discovery::WorkspaceData {
-                            package_json: self.root.join_component("package.json"),
-                            turbo_json: None,
-                        },
-                        discovery::WorkspaceData {
-                            package_json: self.root.join_components(&[
-                                "packages",
-                                "lib-a",
-                                "package.json",
-                            ]),
-                            turbo_json: None,
-                        },
+                        discovery::WorkspaceData::new(
+                            self.root.join_component("package.json"),
+                            None,
+                        )?,
+                        discovery::WorkspaceData::new(
+                            self.root
+                                .join_components(&["packages", "lib-a", "package.json"]),
+                            None,
+                        )?,
                     ],
                 })
             }
