@@ -370,6 +370,20 @@ fn go_toolchain_identity(repo_root: &AbsoluteSystemPath) -> Result<GoToolchainId
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default()
         .to_string();
+    let details = stable_toolchain_details(repo_root, &values);
+    let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
+    Ok(GoToolchainIdentity {
+        package: ExternalPackageIdentity::new("go", format!("{version}\n{details}"))
+            .with_human_name("go"),
+        target_os,
+        environment: values,
+    })
+}
+
+fn stable_toolchain_details(
+    repo_root: &AbsoluteSystemPath,
+    values: &BTreeMap<String, serde_json::Value>,
+) -> String {
     let stable_names = [
         "GO111MODULE",
         "GO386",
@@ -416,13 +430,7 @@ fn go_toolchain_identity(repo_root: &AbsoluteSystemPath) -> Result<GoToolchainId
         .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>()
         .join("\n");
-    let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
-    Ok(GoToolchainIdentity {
-        package: ExternalPackageIdentity::new("go", format!("{version}\n{details}"))
-            .with_human_name("go"),
-        target_os,
-        environment: values,
-    })
+    details
 }
 
 fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, Error> {
@@ -1809,5 +1817,87 @@ mod tests {
             .find(|resolution| resolution.package() == GO_WORKSPACE_SCOPE)
             .expect("aggregate resolution");
         assert_eq!(aggregate.identities().len(), 3);
+    }
+
+    #[test]
+    fn replacement_and_integrity_facts_change_external_identity() {
+        let base = GoListModule {
+            path: "example.net/dependency".to_string(),
+            version: "v1.0.0".to_string(),
+            sum: "h1:archive".to_string(),
+            go_mod_sum: "h1:manifest".to_string(),
+            main: false,
+            replace: None,
+        };
+        let original = module_identity(&base);
+        let replaced = module_identity(&GoListModule {
+            replace: Some(Box::new(GoListModule {
+                path: "example.net/fork".to_string(),
+                version: "v1.0.1".to_string(),
+                sum: "h1:fork-archive".to_string(),
+                go_mod_sum: "h1:fork-manifest".to_string(),
+                main: false,
+                replace: None,
+            })),
+            ..base
+        });
+        assert_ne!(original, replaced);
+        assert!(replaced.version().contains("replace=path=example.net/fork"));
+        assert!(replaced.version().contains("sum=h1:fork-archive"));
+    }
+
+    #[test]
+    fn toolchain_details_include_behavior_but_exclude_paths_and_credentials() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
+            .expect("root path");
+        let values = BTreeMap::from([
+            ("GOOS".to_string(), serde_json::json!("linux")),
+            ("GOARCH".to_string(), serde_json::json!("amd64")),
+            (
+                "GOFLAGS".to_string(),
+                serde_json::json!(format!("-modfile={}/alternate.mod", root)),
+            ),
+            (
+                "GOCACHE".to_string(),
+                serde_json::json!(format!("{}/.cache/go", root)),
+            ),
+            (
+                "GOPROXY".to_string(),
+                serde_json::json!("https://token@example.test"),
+            ),
+        ]);
+        let details = stable_toolchain_details(&root, &values);
+        assert!(details.contains("GOOS=linux"));
+        assert!(details.contains("GOARCH=amd64"));
+        assert!(details.contains("GOFLAGS=-modfile=$TURBO_ROOT$/alternate.mod"));
+        assert!(!details.contains("GOCACHE"));
+        assert!(!details.contains("GOPROXY"));
+        assert!(!details.contains(root.as_str()));
+    }
+
+    #[test]
+    fn change_observation_covers_workspace_module_sums_and_caches() {
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: AbsoluteSystemPathBuf::new(if cfg!(windows) {
+                r"C:\repo\apps\api\go.mod"
+            } else {
+                "/repo/apps/api/go.mod"
+            })
+            .expect("manifest path"),
+            directory: AnchoredSystemPathBuf::from_raw("apps/api").expect("relative path"),
+            relationships: Vec::new(),
+            runnable: None,
+        };
+        let observation = go_change_observation(&[module], &[".cache/go-build".to_string()]);
+        assert_eq!(
+            observation,
+            ChangeObservation::new()
+                .with_rediscovery_file_name(GO_WORK)
+                .with_rediscovery_file_name(GO_MOD)
+                .with_resolution_path(GO_WORK_SUM)
+                .with_resolution_path("apps/api/go.sum")
+                .with_ignore_prefix(".cache/go-build")
+        );
     }
 }

@@ -332,6 +332,42 @@ fn test_go_task_hash_tracks_dependencies_but_not_unrelated_files() {
 }
 
 #[test]
+fn test_affected_go_tasks_follow_internal_module_relationships() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("packages/lib/lib.go"),
+        "package lib\n\nfunc Greet() { println(\"affected\") }\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"build\"]) { items { name package { name } } } }",
+        ],
+    );
+    assert_command_success(&output, "Go affected task query");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("affected query JSON");
+    let tasks = json["data"]["affectedTasks"]["items"]
+        .as_array()
+        .expect("affected tasks");
+    for package in ["example.com/lib", "example.com/api"] {
+        assert!(
+            tasks
+                .iter()
+                .any(|task| task["name"] == "build" && task["package"]["name"] == package),
+            "{package}#build must be affected: {tasks:?}"
+        );
+    }
+}
+
+#[test]
 fn test_query_exposes_go_tasks_and_package_exclusion() {
     if !go_available() {
         return;
