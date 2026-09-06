@@ -529,7 +529,7 @@ pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::Na
             WorkingDirectoryPolicy::PackageDirectory,
         ),
         go_command_task(
-            "vet",
+            "lint",
             "vet",
             vec!["./...".to_string()],
             PassThroughPlacement::BeforeSuffix,
@@ -575,12 +575,12 @@ pub fn native_tasks_for_workspace(
     let mut module_patterns = module_patterns.to_vec();
     module_patterns.sort();
     module_patterns.dedup();
-    let mut tasks = ["test", "vet", "format"]
+    let mut tasks = [("test", "test"), ("lint", "vet"), ("format", "fmt")]
         .into_iter()
-        .map(|name| {
+        .map(|(name, subcommand)| {
             go_command_task(
                 name,
-                if name == "format" { "fmt" } else { name },
+                subcommand,
                 module_patterns.clone(),
                 PassThroughPlacement::BeforeSuffix,
                 (name == "format").then_some(false),
@@ -918,6 +918,17 @@ mod tests {
             ["build", "-race", "./..."].map(std::ffi::OsString::from)
         );
         assert_eq!(build.cwd, root.join_components(&["apps", "api"]));
+        let lint = resolve_go_cmd(&context, "lint", Some(&["-json".to_string()]), None);
+        assert_eq!(
+            lint.args,
+            ["vet", "-json", "./..."].map(std::ffi::OsString::from)
+        );
+        assert!(!context.native_tasks().contains_key("vet"));
+        assert!(
+            !native_tasks_for_workspace(&["./apps/api/...".to_string()])
+                .iter()
+                .any(|task| task.name() == "vet")
+        );
         assert_eq!(
             context
                 .native_tasks()

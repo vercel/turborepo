@@ -240,6 +240,21 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     assert_eq!(task["command"], "go test ./apps/api/... ./packages/lib/...");
     assert_eq!(task["directory"], "");
 
+    let output = run_turbo(tempdir.path(), &["run", "lint", "--dry-run=json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
+    let lint = dry_run_task(&output, "go-workspace#lint");
+    assert_eq!(lint["command"], "go vet ./apps/api/... ./packages/lib/...");
+    assert_eq!(lint["directory"], "");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+    );
+    let lint = dry_run_task(&output, "example.com/lib#lint");
+    assert_eq!(lint["command"], "go vet ./...");
+
     let output = run_turbo(
         tempdir.path(),
         &["run", "build", "--filter=example.com/lib", "--dry-run=json"],
@@ -266,7 +281,7 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
     "experimentalTaskCommand": true
   },
   "tasks": {
-    "build": { "command": { "go": ["go", "version"] } }
+    "lint": { "command": { "go": ["go", "version"] } }
   }
 }"#,
     )
@@ -274,10 +289,10 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "build", "--filter=example.com/lib", "--dry-run=json"],
+        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
     );
-    let build = dry_run_task(&output, "example.com/lib#build");
-    assert_eq!(build["command"], "go version");
+    let lint = dry_run_task(&output, "example.com/lib#lint");
+    assert_eq!(lint["command"], "go version");
 
     fs::write(
         tempdir.path().join("apps/api/turbo.json"),
@@ -302,6 +317,8 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
     let tasks = json["data"]["package"]["tasks"]["items"]
         .as_array()
         .expect("task items");
+    assert!(tasks.iter().any(|task| task["name"] == "lint"));
+    assert!(!tasks.iter().any(|task| task["name"] == "vet"));
     assert!(!tasks.iter().any(|task| task["name"] == "run"));
     assert!(!tasks.iter().any(|task| task["name"] == "dev"));
 }
