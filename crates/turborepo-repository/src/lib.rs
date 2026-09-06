@@ -12,6 +12,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 pub mod cargo;
+pub mod go;
 pub mod change_knowledge;
 pub mod change_mapper;
 pub mod discovery;

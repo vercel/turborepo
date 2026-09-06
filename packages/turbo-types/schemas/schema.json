@@ -315,6 +315,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalGoWorkspaces": {
+          "description": "Treat the modules listed in a `go.work` file as Turborepo packages.\n\nWhen enabled, Go modules are discovered from the repository-root `go.work` via the Go toolchain and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "filterUsingTasks": {
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
           "default": false,

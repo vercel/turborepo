@@ -77,6 +77,11 @@ impl ToolchainId {
     /// `futureFlags.experimentalPythonWorkspaces`.
     pub const PYTHON: ToolchainId = ToolchainId(Cow::Borrowed("python"));
 
+    /// The Go toolchain: modules discovered from a `go.work` workspace (see
+    /// [`crate::go`]). Experimental, gated behind
+    /// `futureFlags.experimentalGoWorkspaces`.
+    pub const GO: ToolchainId = ToolchainId(Cow::Borrowed("go"));
+
     pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
         Self(id.into())
     }

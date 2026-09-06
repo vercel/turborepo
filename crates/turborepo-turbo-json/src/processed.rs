@@ -555,7 +555,7 @@ impl ProcessedWith {
 /// The canonical toolchain ids accepted as `command` map keys, alongside
 /// their accepted aliases. Kept as literals: this crate sits below the
 /// toolchain registry, and these ids are stable public API.
-const KNOWN_TOOLCHAINS: [&str; 3] = ["javascript", "rust", "python"];
+const KNOWN_TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
 const TOOLCHAIN_ALIASES: [(&str, &str); 1] = [("typescript", "javascript")];
 
 /// A task `command` after alias resolution and validation: the argv the
@@ -627,6 +627,8 @@ impl ProcessedCommand {
                 r#"Rust crates are the "rust" toolchain."#.to_string()
             } else if raw_key == "uv" {
                 r#"Python packages are the "python" toolchain."#.to_string()
+            } else if raw_key == "golang" {
+                r#"Go modules are the "go" toolchain."#.to_string()
             } else {
                 format!(
                     "Known toolchains: {}.",
@@ -650,6 +652,9 @@ impl ProcessedCommand {
             }
             "python" if !future_flags.experimental_python_workspaces => {
                 Some("experimentalPythonWorkspaces")
+            }
+            "go" if !future_flags.experimental_go_workspaces => {
+                Some("experimentalGoWorkspaces")
             }
             _ => None,
         };

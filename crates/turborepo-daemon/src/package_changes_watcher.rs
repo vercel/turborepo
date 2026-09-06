@@ -67,8 +67,12 @@ async fn repository_discovery_snapshot(
         .repo_root
         .join_component(turborepo_repository::uv::PYPROJECT_TOML)
         .exists();
+    let go_enabled = args
+        .repo_root
+        .join_component(turborepo_repository::go::GO_WORK)
+        .exists();
     let root_package_json = PackageJson::load(&package_json_path).ok();
-    if root_package_json.is_none() && !cargo_enabled && !python_enabled {
+    if root_package_json.is_none() && !cargo_enabled && !python_enabled && !go_enabled {
         return None;
     }
 
@@ -79,6 +83,9 @@ async fn repository_discovery_snapshot(
     }
     if python_enabled {
         builder = builder.with_uv();
+    }
+    if go_enabled {
+        builder = builder.with_go();
     }
     builder
         .build()
