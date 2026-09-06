@@ -652,6 +652,19 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
         "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n\t./tools/independent\n)\n",
     )
     .unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true,
+    "affectedUsingTaskInputs": true
+  },
+  "tasks": { "build": {} }
+}"#,
+    )
+    .unwrap();
     common::git(tempdir.path(), &["add", "."]);
     common::git(
         tempdir.path(),
