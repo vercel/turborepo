@@ -81,8 +81,14 @@ fn test_pure_go_workspace_lists_modules() {
     setup_go_pure_workspace(tempdir.path());
 
     let names = package_names(tempdir.path());
-    assert!(names.contains(&"example.com/api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"example.com/lib".to_string()), "names: {names:?}");
+    assert!(
+        names.contains(&"example.com/api".to_string()),
+        "names: {names:?}"
+    );
+    assert!(
+        names.contains(&"example.com/lib".to_string()),
+        "names: {names:?}"
+    );
 }
 
 #[test]
@@ -96,8 +102,14 @@ fn test_mixed_go_workspace_lists_js_and_go_packages() {
 
     let names = package_names(tempdir.path());
     assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
-    assert!(names.contains(&"example.com/api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"example.com/lib".to_string()), "names: {names:?}");
+    assert!(
+        names.contains(&"example.com/api".to_string()),
+        "names: {names:?}"
+    );
+    assert!(
+        names.contains(&"example.com/lib".to_string()),
+        "names: {names:?}"
+    );
 }
 
 #[test]

@@ -561,9 +561,9 @@ impl RunBuilder {
         };
         // A pure native workspace (experimentalCargoWorkspaces,
         // experimentalPythonWorkspaces, or experimentalGoWorkspaces, no root
-        // package.json) has no JavaScript root manifest. A *missing* file is only tolerated in
-        // those modes; a malformed one always fails, and a missing one
-        // without native support keeps the original hard error.
+        // package.json) has no JavaScript root manifest. A *missing* file is only
+        // tolerated in those modes; a malformed one always fails, and a missing
+        // one without native support keeps the original hard error.
         let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
         let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);

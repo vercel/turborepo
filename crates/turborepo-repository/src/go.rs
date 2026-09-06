@@ -8,7 +8,8 @@
 //! Discovery reads workspace membership from `go work edit -json`, module paths
 //! from `go mod edit -json`, and internal relationships from `go mod graph`.
 //!
-//! Support is experimental and gated behind `futureFlags.experimentalGoWorkspaces`.
+//! Support is experimental and gated behind
+//! `futureFlags.experimentalGoWorkspaces`.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -64,9 +65,7 @@ pub enum Error {
     MissingGoMod { path: String },
     #[error("go.mod at {path} has no module path")]
     MissingModulePath { path: String },
-    #[error(
-        "duplicate Go module identity {module_path:?} (also declared at {other_manifest})"
-    )]
+    #[error("duplicate Go module identity {module_path:?} (also declared at {other_manifest})")]
     DuplicateModuleIdentity {
         module_path: String,
         other_manifest: String,
@@ -75,10 +74,7 @@ pub enum Error {
         "go.work member at {path} resolves to module {module_path:?}, which collides with the \
          repository root module definition"
     )]
-    RootDefinitionCollision {
-        path: String,
-        module_path: String,
-    },
+    RootDefinitionCollision { path: String, module_path: String },
     #[error(
         "local Go module {module_path:?} at {manifest_path} is outside the repository and cannot \
          be cached, watched, or pruned safely"
@@ -149,6 +145,7 @@ struct GoModModule {
 #[derive(Debug, Deserialize)]
 struct GoModReplace {
     #[serde(rename = "Old")]
+    #[allow(dead_code)]
     old: GoModModuleRef,
     #[serde(rename = "New")]
     new: GoModModuleRef,
@@ -306,7 +303,10 @@ fn relationships_from_mod_graph(
             relationships
                 .entry(from.to_string())
                 .or_default()
-                .push(Relationship::internal(dependency, DependencyKind::Production));
+                .push(Relationship::internal(
+                    dependency,
+                    DependencyKind::Production,
+                ));
         }
     }
     Ok(relationships)
@@ -326,10 +326,12 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     }
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
-        go_mod_edit_json(repo_root, repo_root).ok().and_then(|json| {
-            let path = json.module.path;
-            (!path.is_empty()).then_some(path)
-        })
+        go_mod_edit_json(repo_root, repo_root)
+            .ok()
+            .and_then(|json| {
+                let path = json.module.path;
+                (!path.is_empty()).then_some(path)
+            })
     } else {
         None
     };
@@ -383,11 +385,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             member_dir.join_component(GO_MOD).to_string(),
         );
         member_paths.insert(module_path.clone());
-        pending_replacements.push((
-            member_dir.clone(),
-            module_path.clone(),
-            module_json.replace,
-        ));
+        pending_replacements.push((member_dir.clone(), module_path.clone(), module_json.replace));
 
         modules.push(GoModule {
             module_path,
@@ -449,10 +447,9 @@ impl RepositoryContributor for GoContributor {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let workspace = turborepo_rayon_compat::block_in_place(|| {
-                discover_workspace(&self.repo_root)
-            })
-            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let workspace =
+                turborepo_rayon_compat::block_in_place(|| discover_workspace(&self.repo_root))
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
             let workspace_roots = self
                 .repo_root
@@ -462,11 +459,7 @@ impl RepositoryContributor for GoContributor {
                 .into_iter()
                 .collect();
 
-            let packages = workspace
-                .modules
-                .iter()
-                .map(package_from_module)
-                .collect();
+            let packages = workspace.modules.iter().map(package_from_module).collect();
 
             Ok(DiscoveredPackages::new(packages, workspace_roots))
         })
@@ -475,14 +468,15 @@ impl RepositoryContributor for GoContributor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
+    use super::*;
 
     fn write_workspace(root: &AbsoluteSystemPath, layout: &[(&str, &str, &str)]) {
         fs::create_dir_all(root.as_std_path()).unwrap();
         let mut work = String::from("go 1.22\n\nuse (\n");
         for (dir, module_path, contents) in layout {
-            let module_dir = join_relative_path(&root, dir).unwrap();
+            let module_dir = join_relative_path(root, dir).unwrap();
             fs::create_dir_all(module_dir.as_std_path()).unwrap();
             let go_mod = if contents.is_empty() {
                 format!("module {module_path}\n\ngo 1.22\n")
@@ -578,7 +572,8 @@ mod tests {
                 (
                     "apps/api",
                     "example.com/api",
-                    "module example.com/api\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace example.com/lib => ../../packages/lib\n",
+                    "module example.com/api\n\ngo 1.22\n\nrequire example.com/lib \
+                     v0.0.0\n\nreplace example.com/lib => ../../packages/lib\n",
                 ),
                 ("packages/lib", "example.com/lib", ""),
             ],
@@ -610,10 +605,8 @@ mod tests {
     #[test]
     fn relationships_from_mod_graph_parses_workspace_edges() {
         let graph = "example.com/api example.com/lib@v0.0.0\nexample.com/api go@1.22\n";
-        let module_paths = HashSet::from([
-            "example.com/api".to_string(),
-            "example.com/lib".to_string(),
-        ]);
+        let module_paths =
+            HashSet::from(["example.com/api".to_string(), "example.com/lib".to_string()]);
         let relationships = relationships_from_mod_graph(graph, &module_paths).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
     }

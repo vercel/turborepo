@@ -653,9 +653,7 @@ impl ProcessedCommand {
             "python" if !future_flags.experimental_python_workspaces => {
                 Some("experimentalPythonWorkspaces")
             }
-            "go" if !future_flags.experimental_go_workspaces => {
-                Some("experimentalGoWorkspaces")
-            }
+            "go" if !future_flags.experimental_go_workspaces => Some("experimentalGoWorkspaces"),
             _ => None,
         };
         if let Some(flag) = missing_flag {
