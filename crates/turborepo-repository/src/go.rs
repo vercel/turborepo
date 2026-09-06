@@ -109,7 +109,8 @@ pub struct GoModule {
     pub manifest_path: AbsoluteSystemPathBuf,
     /// Direct internal relationships to other workspace modules.
     pub relationships: Vec<Relationship>,
-    /// Package pattern for the sole runnable `main` package, when unambiguous.
+    /// Package pattern for the sole `main` package used by the `dev` task, when
+    /// unambiguous.
     pub runnable_target: Option<String>,
 }
 
@@ -236,8 +237,8 @@ fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Er
     const COMMAND: &str = "go list -find -json ./...";
 
     let output = run_go(module_dir, &["list", "-find", "-json", "./..."], COMMAND)?;
-    // Runnable defaults are optional. If Go cannot classify every package
-    // without error, omit them rather than making workspace discovery fail.
+    // The native dev default is optional. If Go cannot classify every package
+    // without error, omit it rather than making workspace discovery fail.
     if !output.status.success() {
         return Ok(None);
     }
@@ -548,17 +549,15 @@ pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::Na
         ),
     ];
     if let Some(target) = &module.runnable_target {
-        for name in ["run", "dev"] {
-            tasks.push(go_command_task(
-                name,
-                "run",
-                vec![target.clone()],
-                PassThroughPlacement::AfterSuffix,
-                Some(false),
-                TaskEntrypoint::Candidate,
-                WorkingDirectoryPolicy::PackageDirectory,
-            ));
-        }
+        tasks.push(go_command_task(
+            "dev",
+            "run",
+            vec![target.clone()],
+            PassThroughPlacement::AfterSuffix,
+            Some(false),
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ));
     }
     tasks
 }
@@ -939,20 +938,21 @@ mod tests {
             Some(crate::native_tasks::TaskEntrypoint::Preferred)
         );
 
-        let run = resolve_go_cmd(
+        let dev = resolve_go_cmd(
             &context,
-            "run",
+            "dev",
             Some(&["--port".to_string(), "3000".to_string()]),
             None,
         );
         assert_eq!(
-            run.args,
+            dev.args,
             ["run", "./cmd/api", "--port", "3000"].map(std::ffi::OsString::from)
         );
+        assert!(context.native_tasks().get("run").is_none());
     }
 
     #[test]
-    fn ambiguous_main_packages_do_not_register_run_defaults() {
+    fn ambiguous_main_packages_do_not_register_dev_default() {
         if !go_available() {
             return;
         }
@@ -975,11 +975,8 @@ mod tests {
         let module = &workspace.modules[0];
         assert_eq!(module.runnable_target, None);
         let tasks = native_tasks_for_module(module);
-        assert!(
-            !tasks
-                .iter()
-                .any(|task| matches!(task.name(), "run" | "dev"))
-        );
+        assert!(!tasks.iter().any(|task| task.name() == "dev"));
+        assert!(!tasks.iter().any(|task| task.name() == "run"));
         assert_eq!(
             tasks
                 .iter()
