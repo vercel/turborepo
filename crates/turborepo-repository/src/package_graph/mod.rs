@@ -155,6 +155,7 @@ pub struct RepositoryDiscoveryScope {
     pub name: PackageName,
     pub toolchain: crate::toolchain::ToolchainId,
     pub manifest_path: AbsoluteSystemPathBuf,
+    pub tasks: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -726,14 +727,19 @@ impl PackageGraph {
     /// repository consumers such as the daemon.
     pub fn repository_discovery_snapshot(&self) -> RepositoryDiscoverySnapshot {
         let scopes = self
-            .package_scope_directories()
-            .filter_map(|(name, _)| {
+            .package_task_contexts()
+            .filter_map(|context| {
                 Some(RepositoryDiscoveryScope {
-                    toolchain: self.package_toolchain(&name)?.clone(),
-                    manifest_path: self
-                        .repo_root()
-                        .resolve(self.package_definition_path(&name)?),
-                    name,
+                    name: context.package().clone(),
+                    toolchain: context.toolchain()?.clone(),
+                    manifest_path: self.repo_root().resolve(context.definition_path?),
+                    tasks: context
+                        .native_tasks()
+                        .tasks()
+                        .iter()
+                        .filter(|task| task.authored() || task.registered())
+                        .map(|task| task.name().to_string())
+                        .collect(),
                 })
             })
             .collect();
@@ -3088,11 +3094,13 @@ version = "0.1.0"
                 scope.name == PackageName::from("js-pkg")
                     && scope.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT
                     && scope.manifest_path.ends_with("js-pkg/package.json")
+                    && scope.tasks.is_empty()
             }));
             assert!(discovery.scopes.iter().any(|scope| {
                 scope.name == PackageName::from("app")
                     && scope.toolchain == crate::toolchain::ToolchainId::RUST
                     && scope.manifest_path.ends_with("rust/app/Cargo.toml")
+                    && scope.tasks.contains(&"build".to_string())
             }));
             assert!(discovery.workspace_roots.iter().any(|workspace_root| {
                 workspace_root.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT

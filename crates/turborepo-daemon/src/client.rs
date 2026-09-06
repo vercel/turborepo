@@ -6,6 +6,13 @@ use thiserror::Error;
 use tonic::{Code, IntoRequest, Status};
 use tracing::info;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, PathError};
+use turborepo_repository::{
+    package_graph::{
+        PackageName, RepositoryDiscoveryScope, RepositoryDiscoverySnapshot,
+        RepositoryDiscoveryWorkspaceRoot,
+    },
+    toolchain::ToolchainId,
+};
 use turborepo_types::TaskInputs;
 
 use super::{
@@ -15,6 +22,41 @@ use super::{
     Paths,
 };
 use crate::proto::{self, PackageChangeEvent};
+
+fn repository_discovery_from_proto(
+    response: DiscoverPackagesResponse,
+) -> Result<RepositoryDiscoverySnapshot, DaemonError> {
+    let scopes = response
+        .scopes
+        .into_iter()
+        .map(|scope| {
+            Ok::<_, DaemonError>(RepositoryDiscoveryScope {
+                name: PackageName::from(scope.name),
+                toolchain: ToolchainId::new(scope.toolchain),
+                manifest_path: AbsoluteSystemPathBuf::new(scope.manifest_path)
+                    .map_err(|_| DaemonError::MalformedResponse)?,
+                tasks: scope.tasks,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    let workspace_roots = response
+        .workspace_roots
+        .into_iter()
+        .map(|root| {
+            Ok::<_, DaemonError>(RepositoryDiscoveryWorkspaceRoot {
+                toolchain: ToolchainId::new(root.toolchain),
+                kind: root.kind,
+                path: AbsoluteSystemPathBuf::new(root.path)
+                    .map_err(|_| DaemonError::MalformedResponse)?,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    Ok(RepositoryDiscoverySnapshot {
+        scopes,
+        workspace_roots,
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -148,6 +190,12 @@ impl<T> DaemonClient<T> {
         Ok(response)
     }
 
+    pub async fn discover_repository_blocking(
+        &mut self,
+    ) -> Result<RepositoryDiscoverySnapshot, DaemonError> {
+        repository_discovery_from_proto(self.discover_packages_blocking().await?)
+    }
+
     pub async fn package_changes(
         &mut self,
     ) -> Result<tonic::codec::Streaming<PackageChangeEvent>, DaemonError> {
@@ -276,7 +324,10 @@ impl From<Status> for DaemonError {
 mod test {
     use std::path::MAIN_SEPARATOR_STR;
 
-    use crate::client::format_repo_relative_glob;
+    use crate::{
+        client::{format_repo_relative_glob, repository_discovery_from_proto},
+        proto::{DiscoverPackagesResponse, RepositoryScope, RepositoryWorkspaceRoot},
+    };
 
     #[test]
     fn test_format_repo_relative_glob() {
@@ -288,5 +339,37 @@ mod test {
 
         let result = format_repo_relative_glob(&raw_glob);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn decodes_generic_repository_discovery() {
+        let manifest_path = if cfg!(windows) {
+            r"C:\repo\Cargo.toml"
+        } else {
+            "/repo/Cargo.toml"
+        };
+        let response = DiscoverPackagesResponse {
+            scopes: vec![RepositoryScope {
+                name: "api".to_string(),
+                toolchain: "rust".to_string(),
+                manifest_path: manifest_path.to_string(),
+                tasks: vec!["build".to_string(), "test".to_string()],
+            }],
+            workspace_roots: vec![RepositoryWorkspaceRoot {
+                toolchain: "rust".to_string(),
+                kind: "cargo".to_string(),
+                path: if cfg!(windows) {
+                    r"C:\repo".to_string()
+                } else {
+                    "/repo".to_string()
+                },
+            }],
+        };
+
+        let snapshot = repository_discovery_from_proto(response).unwrap();
+        assert_eq!(snapshot.scopes[0].name.as_str(), "api");
+        assert_eq!(snapshot.scopes[0].toolchain.as_str(), "rust");
+        assert_eq!(snapshot.scopes[0].tasks, ["build", "test"]);
+        assert_eq!(snapshot.workspace_roots[0].kind, "cargo");
     }
 }

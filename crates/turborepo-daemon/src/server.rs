@@ -502,6 +502,7 @@ fn discovery_response(
                 name: scope.name.as_str().to_string(),
                 toolchain: scope.toolchain.as_str().to_string(),
                 manifest_path: scope.manifest_path.to_string(),
+                tasks: scope.tasks.clone(),
             })
             .collect(),
         workspace_roots: snapshot
