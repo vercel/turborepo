@@ -200,18 +200,51 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::bun::LOCKFILE,
 ];
 
+fn matches_workspace_glob(
+    repo_root: &AbsoluteSystemPath,
+    workspace_globs: &WorkspaceGlobs,
+    path: &AbsoluteSystemPath,
+) -> bool {
+    workspace_globs
+        .target_is_workspace(repo_root, path)
+        .unwrap_or(false)
+}
+
+fn workspace_event_is_relevant(
+    repo_root: &AbsoluteSystemPath,
+    workspace_globs: &WorkspaceGlobs,
+    path: &AbsoluteSystemPath,
+) -> bool {
+    std::iter::once(path)
+        .chain(path.parent())
+        .any(|candidate| matches_workspace_glob(repo_root, workspace_globs, candidate))
+}
+
 fn workspace_path_for_event<'a>(
     repo_root: &AbsoluteSystemPath,
     workspace_globs: &WorkspaceGlobs,
+    workspaces: &HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
     path: &'a AbsoluteSystemPath,
 ) -> Option<&'a AbsoluteSystemPath> {
-    std::iter::once(path)
-        .chain(path.parent())
-        .find(|candidate| {
-            workspace_globs
-                .target_is_workspace(repo_root, candidate)
-                .unwrap_or(false)
-        })
+    if workspaces.contains_key(path) {
+        return Some(path);
+    }
+
+    let parent = path.parent();
+    if parent.is_some_and(|parent| workspaces.contains_key(parent)) {
+        return parent;
+    }
+
+    // A directory that still exists is unambiguous. For file events (including
+    // removed files), prefer the parent before testing the path itself: recursive
+    // globs such as `**` can also match the file path.
+    if path.as_std_path().is_dir() && matches_workspace_glob(repo_root, workspace_globs, path) {
+        return Some(path);
+    }
+    if parent.is_some_and(|parent| matches_workspace_glob(repo_root, workspace_globs, parent)) {
+        return parent;
+    }
+    matches_workspace_glob(repo_root, workspace_globs, path).then_some(path)
 }
 
 impl Subscriber {
@@ -256,7 +289,7 @@ impl Subscriber {
                     return path.file_name() == Some("package.json")
                         && repository_ignore.is_relevant(path.as_std_path(), false);
                 };
-                workspace_path_for_event(&repo_root, globs, path).is_some()
+                workspace_event_is_relevant(&repo_root, globs, path)
             })
         };
         Ok(Self {
@@ -492,7 +525,7 @@ impl Subscriber {
                 continue;
             };
             let Some(path_workspace) =
-                workspace_path_for_event(&self.repo_root, filter, &path_file)
+                workspace_path_for_event(&self.repo_root, filter, workspaces, &path_file)
             else {
                 // Ignore paths that do not identify a workspace or a direct child of one.
                 continue;
@@ -628,7 +661,7 @@ async fn discover_packages(
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{collections::HashMap, time::Duration};
 
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
@@ -647,15 +680,17 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let workspace = repo_root.join_components(&["apps", "web"]);
         let globs = WorkspaceGlobs::new(vec!["apps/*"], Vec::<&str>::new()).unwrap();
+        let workspaces = HashMap::new();
 
         assert_eq!(
-            workspace_path_for_event(&repo_root, &globs, &workspace),
+            workspace_path_for_event(&repo_root, &globs, &workspaces, &workspace),
             Some(&*workspace)
         );
         assert_eq!(
             workspace_path_for_event(
                 &repo_root,
                 &globs,
+                &workspaces,
                 &workspace.join_component("future-workspace-metadata.toml")
             ),
             Some(&*workspace)
@@ -664,9 +699,20 @@ mod test {
             workspace_path_for_event(
                 &repo_root,
                 &globs,
+                &workspaces,
                 &workspace.join_components(&["src", "index.ts"])
             ),
             None
+        );
+
+        let recursive_globs = WorkspaceGlobs::new(vec!["**"], Vec::<&str>::new()).unwrap();
+        let package_json = workspace.join_component("package.json");
+        package_json.ensure_dir().unwrap();
+        package_json.create_with_contents("{}").unwrap();
+        assert_eq!(
+            workspace_path_for_event(&repo_root, &recursive_globs, &workspaces, &package_json),
+            Some(&*workspace),
+            "recursive globs must not resolve a manifest event to the manifest itself"
         );
     }
 
