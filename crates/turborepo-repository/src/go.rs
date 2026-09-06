@@ -162,21 +162,11 @@ pub struct GoRunnable {
 }
 
 /// The result of Go workspace discovery.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DiscoveredWorkspace {
     pub modules: Vec<GoModule>,
     work: GoWorkJson,
     graph: String,
-}
-
-impl Default for DiscoveredWorkspace {
-    fn default() -> Self {
-        Self {
-            modules: Vec::new(),
-            work: GoWorkJson::default(),
-            graph: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -419,7 +409,7 @@ fn stable_toolchain_details(
         "PKG_CONFIG",
     ];
     let root = repo_root.as_str();
-    let details = stable_names
+    stable_names
         .iter()
         .filter_map(|name| {
             values
@@ -435,8 +425,7 @@ fn stable_toolchain_details(
         })
         .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>()
-        .join("\n");
-    details
+        .join("\n")
 }
 
 fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, Error> {
@@ -947,7 +936,7 @@ fn go_tasks_for_package(
     match kind {
         GoPackageKind::Module { runnable } => {
             let (prefix, suffix, cache) = if let Some(runnable) = runnable {
-                let extension = (target_os == "windows").then_some(".exe").unwrap_or("");
+                let extension = if target_os == "windows" { ".exe" } else { "" };
                 (
                     vec![
                         "build".to_string(),
@@ -1129,9 +1118,11 @@ impl GoTaskContract {
                 GoPackageKind::Module {
                     runnable: Some(runnable),
                 } if context.task_args.is_none_or(<[_]>::is_empty) => {
-                    let extension = (self.target_os == "windows")
-                        .then_some(".exe")
-                        .unwrap_or("");
+                    let extension = if self.target_os == "windows" {
+                        ".exe"
+                    } else {
+                        ""
+                    };
                     DerivedOutputs::Resolved(vec![format!(
                         "{GO_DIST_DIR}/{}{extension}",
                         runnable.output_name
