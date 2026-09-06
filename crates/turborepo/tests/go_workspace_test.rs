@@ -321,7 +321,7 @@ fn test_go_task_hash_tracks_dependencies_but_not_unrelated_files() {
 
     fs::write(
         tempdir.path().join("packages/lib/lib.go"),
-        "package lib\n\nfunc Greet() {}\n",
+        "package lib\n\nfunc Greet() { println(\"changed\") }\n",
     )
     .unwrap();
     assert_ne!(
