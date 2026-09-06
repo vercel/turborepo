@@ -560,15 +560,6 @@ impl Default for TaskInputs {
 }
 
 impl TaskInputs {
-    /// Recomputes `eager` from the current globs. Call this after changing
-    /// `globs` or `default`, otherwise a task that started out JIT-only keeps
-    /// `eager: false` and its eager globs never get hashed.
-    pub fn refresh_eager(&mut self) {
-        self.eager = self.default
-            || !self.globs.is_empty()
-            || (!self.jit_default && self.jit_globs.is_empty());
-    }
-
     /// Creates a new TaskInputs with the given globs and default set to false
     pub fn new(globs: Vec<String>) -> Self {
         Self {

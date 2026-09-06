@@ -388,17 +388,16 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
                         .map(|glob| glob.resolve(turbo_root_path))
                         .collect(),
                 });
-        let mut inputs = turborepo_types::TaskInputs {
+        let eager = default || !globs.is_empty() || (!jit_default && jit_globs.is_empty());
+
+        Ok(turborepo_types::TaskInputs {
             globs,
             default,
             jit_globs,
             jit_default,
             dependency_outputs,
-            eager: false,
-        };
-        inputs.refresh_eager();
-
-        Ok(inputs)
+            eager,
+        })
     }
 }
 

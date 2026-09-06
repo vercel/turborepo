@@ -177,7 +177,7 @@ pub fn prepend_global_inputs(
         .collect();
     global_globs.append(&mut inputs.globs);
     inputs.globs = global_globs;
-    inputs.refresh_eager();
+    inputs.eager = true;
 }
 
 #[cfg(test)]
