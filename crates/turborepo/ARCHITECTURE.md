@@ -801,20 +801,44 @@ the shared repository graph.
 Behind `futureFlags.experimentalGoWorkspaces`, `turbo run` discovers Go modules
 from the repository-root `go.work` and adds them to the package graph. Go
 workspaces can stand alone or coexist with JavaScript, Cargo, and uv
-workspaces. `GoContributor` contributes pre-classified internal relationships
-through the shared repository graph.
+workspaces. `GoContributor` contributes pre-classified internal relationships,
+native tasks and contracts, external resolution, change observations, and a
+prune domain through the shared repository graph.
 
 - **Discovery** invokes `go work edit -json` for workspace membership and
   `go mod edit -json` for each member's module path. Module paths are package
-  identities and `go.mod` files are native definition paths.
+  identities and `go.mod` files are native definition paths. `go list -json
+  ./...` identifies modules with exactly one runnable main package. A
+  deterministic `go-workspace` aggregate depends on every module and hosts
+  workspace verification.
 - **Relationships** come from `go mod graph`: dependencies whose resolved
   module path is another workspace member become internal graph edges. Local
   `replace` directives outside the repository or to non-members are rejected.
+- **Execution** registers `build`, `test`, `vet`, `lint`, and `format` for each
+  module. A module with exactly one main package also receives `run` and `dev`;
+  its build writes one stable `dist/` binary. The workspace aggregate runs
+  verification over explicit member patterns. Library builds, run/dev, and
+  formatting default to uncached; command overrides and package exclusions use
+  the shared task configuration machinery.
+- **Hashing** includes module and internal dependency sources, workspace
+  definitions, per-module external closures from `go list -m -json all`, and a
+  path-normalized `go version`/`go env -json` identity. Module versions,
+  replacements, and checksums remain scoped to the modules that reach them.
+  Mutable Go caches, credentials, proxy settings, and checkout paths are
+  excluded. Go build and module caches are never task outputs.
+- **Change knowledge** rediscoveries follow `go.work` and any `go.mod`;
+  `go.work.sum` and per-module `go.sum` paths are resolution inputs.
+  In-repository `GOCACHE` and `GOMODCACHE` directories are ignored as
+  byproducts.
+- **Prune** retains selected modules and internal dependencies, rewrites
+  `go.work` deterministically, preserves workspace directives and applicable
+  replacements, and copies `go.work.sum` plus retained module trees.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 
 End-to-end graph coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
-against the `go_pure_workspace` and `go_monorepo` fixtures.
+against the `go_pure_workspace` and `go_monorepo` fixtures, including execution,
+cache restoration, hashing, query, and prune behavior.
 
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,

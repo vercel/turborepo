@@ -1,21 +1,22 @@
 ---
 title: Multi-language support
-description: Integrate unsupported languages with package scripts and workspace boundaries.
+description: Integrate languages with package scripts and workspace boundaries.
 product: turborepo
 type: guide
-summary: Add unsupported languages such as Go to Turborepo by wrapping projects in package-manager workspaces.
+summary: Add tools without native workspace support by wrapping projects in package-manager workspaces.
 prerequisites:
   - /docs/crafting-your-repository/structuring-a-repository
   - /docs/crafting-your-repository/configuring-tasks
 related:
   - /docs/guides/tools/rust
   - /docs/guides/tools/python
+  - /docs/guides/tools/go
   - /docs/guides/migrating-from-nx
 ---
 
 Turborepo uses package-manager workspaces and `package.json` scripts to discover most packages and tasks. A script can invoke any toolchain, so you can integrate a language without native Turborepo support by giving each independently cacheable project a package boundary.
 
-This guide uses Go as an example. Turborepo sees the package scripts, files, outputs, and package-manager dependency relationships. The Go toolchain remains responsible for resolving Go modules and compiling code; Turborepo does not infer the Go package graph.
+This guide uses Go as an example of the package-script integration, which remains available without experimental flags. Turborepo can also interpret `go.work` and `go.mod` through [experimental native Go workspace support](/docs/guides/tools/go). Without that opt-in, Turborepo sees only the package scripts, files, outputs, and package-manager dependency relationships described here.
 
 ## Add the project to the workspace
 
@@ -107,7 +108,7 @@ func main() {
 }
 ```
 
-Turborepo does not interpret `go.mod` or Go imports. It hashes files inside `services/api` as package inputs, then runs the declared scripts and lets Go resolve its own module graph.
+In this package-script setup, Turborepo does not interpret `go.mod` or Go imports. It hashes files inside `services/api` as package inputs, then runs the declared scripts and lets Go resolve its own module graph. Enable [native Go workspace support](/docs/guides/tools/go) when Turborepo should discover those module relationships directly.
 
 ## Declare outputs
 

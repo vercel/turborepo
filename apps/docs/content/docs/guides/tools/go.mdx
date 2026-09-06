@@ -1,0 +1,164 @@
+---
+title: Go (Experimental)
+description: Use experimental native Go workspace support with Turborepo.
+product: turborepo
+type: integration
+summary: Discover go.work modules as Turborepo packages and run native Go tasks.
+prerequisites:
+  - /docs/crafting-your-repository/structuring-a-repository
+  - /docs/crafting-your-repository/configuring-tasks
+related:
+  - /docs/guides/multi-language
+  - /docs/crafting-your-repository/caching
+  - /docs/crafting-your-repository/running-tasks
+---
+
+Turborepo can discover modules in a repository-root [`go.work`](https://go.dev/ref/mod#workspaces) as packages, add their module dependencies to the Package Graph, and map common tasks to standard Go commands.
+
+<Callout type="warn">
+  Native Go workspace support is experimental and can change at any time. The
+  initial supported range is Go 1.22 and newer.
+</Callout>
+
+## Enable Go workspaces
+
+Set the Future Flag in the root `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true
+  },
+  "tasks": {}
+}
+```
+
+Remove the flag to return to package-manager workspace behavior. A repository that uses the package script integration described in the [multi-language guide](/docs/guides/multi-language) continues to work without native support.
+
+## Prerequisites
+
+The repository root must contain:
+
+- Go 1.22 or newer available as `go` on `PATH`
+- A `go.work` whose `use` directives identify at least one module inside the repository
+- A `go.mod` with a module path in every member
+- Current `go.sum` and `go.work.sum` files when the resolved graph requires them
+
+Pure Go repositories do not need a `package.json`. Mixed JavaScript, Rust, Python, and Go repositories use each ecosystem's own contributor.
+
+```text title="./go.work"
+go 1.22
+
+use (
+  ./apps/api
+  ./packages/lib
+)
+```
+
+Each module path is its stable Turborepo package identity:
+
+```bash title="Terminal"
+turbo ls --filter=example.com/acme/api
+turbo run test --filter=example.com/acme/api
+```
+
+The synthetic `go-workspace` scope depends on every member and hosts workspace-wide verification. Module paths cannot use that reserved identity.
+
+## Built-in tasks
+
+| Scope | Turbo task | Go command |
+| --- | --- | --- |
+| Any module | `turbo build` | `go build ./...` |
+| Module with exactly one `main` package | `turbo build` | `go build -o dist/<name> <import-path>` |
+| Module with exactly one `main` package | `turbo run`, `turbo dev` | `go run <import-path>` |
+| Any module | `turbo test` | `go test ./...` |
+| Any module | `turbo vet` | `go vet ./...` |
+| Any module | `turbo lint` | The built-in `vet` task |
+| Any module | `turbo format` | `go fmt ./...` |
+| `go-workspace` | `test`, `vet`, `lint`, `format` | The same command with every member directory pattern |
+
+Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `run` or `dev`.
+
+Arguments after Turborepo's `--` are placed before package patterns for `build`, `test`, `vet`, and `format`. Arguments to `run` and `dev` follow the main import path and become program arguments.
+
+```bash title="Terminal"
+turbo run test --filter=example.com/acme/api -- -run TestHTTP
+turbo run run --filter=example.com/acme/api -- --port 8080
+```
+
+## Override or remove defaults
+
+Normal task configuration applies to built-in tasks. Package Configuration can remove a default:
+
+```json title="./apps/api/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "format": {
+      "extends": false
+    }
+  }
+}
+```
+
+Enable `experimentalTaskCommand` to replace a command without a shell:
+
+```json title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "test": {
+      "command": {
+        "go": ["go", "test", "-race", "./..."]
+      }
+    }
+  }
+}
+```
+
+## Hashing and caching
+
+Native task hashes include:
+
+- Module sources and transitive internal module sources
+- `go.mod`, `go.sum`, `go.work`, and `go.work.sum`
+- Each module's transitive external module identities, versions, replacements, and checksums
+- `go version` and stable target/compiler fields from `go env -json`
+- Behavior-changing variables such as `GOOS`, `GOARCH`, `GOFLAGS`, `GOTOOLCHAIN`, `CGO_ENABLED`, and C toolchain flags
+
+Checkout paths, `GOCACHE`, `GOMODCACHE`, credentials, proxy authentication, and telemetry settings are excluded. Go's mutable build and module caches remain Go's responsibility and are never Turborepo outputs.
+
+A module with one runnable main package gets one restorable `dist/<name>` binary. Library builds default to uncached because Go's internal build artifacts have no stable output for Turborepo to restore. `run`, `dev`, and source-mutating `format` tasks are uncached. Build arguments disable automatic output caching because flags can relocate or reshape the binary.
+
+## Affectedness and watch mode
+
+Source changes affect their owning module and internal dependents. `go.mod` and `go.work` changes trigger repository rediscovery; `go.sum` and `go.work.sum` changes invalidate resolution. In-repository Go build and module caches are ignored by the watcher.
+
+`--affected`, dependency filters, `^task` ordering, `turbo query`, and `turbo watch` consume the same module relationships.
+
+## Prune
+
+```bash title="Terminal"
+turbo prune example.com/acme/api
+```
+
+The output keeps the selected module and required internal dependencies, rewrites `go.work` with deterministic explicit members, preserves `go`, `toolchain`, `godebug`, and applicable replacement directives, and copies `go.work.sum` plus each retained module directory.
+
+Validate a pruned output with ordinary Go commands:
+
+```bash title="Terminal"
+cd out/apps/api
+go test ./...
+```
+
+## Limitations and troubleshooting
+
+- The workspace must be rooted at the Turborepo root. Members and local replacements outside the repository, or local replacements to non-members, are rejected.
+- A root module that collides with a listed member, duplicate module paths, and the reserved `go-workspace` identity are rejected.
+- Vendoring is not interpreted as a separate resolution source. Use current module/workspace sums and standard workspace module mode.
+- Turborepo does not auto-detect `golangci-lint` and does not proxy Go's build cache.
+- If Go reports a stale graph or checksum error, run the appropriate `go mod tidy` and `go work sync` commands, review the changes, and commit the updated files.
