@@ -4,6 +4,11 @@
 mod common;
 
 use std::{fs, path::Path};
+#[cfg(unix)]
+use std::{
+    process::{Child, Stdio},
+    time::Duration,
+};
 
 use common::setup;
 
@@ -73,6 +78,75 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[cfg(unix)]
+fn wait_for_path(path: &Path, timeout: Duration) -> bool {
+    let started = std::time::Instant::now();
+    while started.elapsed() < timeout {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    path.exists()
+}
+
+#[cfg(unix)]
+struct GoWatchGuard(Option<Child>);
+
+#[cfg(unix)]
+impl GoWatchGuard {
+    fn spawn(dir: &Path) -> Self {
+        use std::os::unix::process::CommandExt;
+
+        let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("turbo"));
+        command.process_group(0);
+        for name in AMBIENT_GO_ENV {
+            command.env_remove(name);
+        }
+        for name in common::ambient_turbo_env_keys() {
+            command.env_remove(name);
+        }
+        command
+            .args(["watch", "build"])
+            .env("GOENV", "off")
+            .env("GOTOOLCHAIN", "local")
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            .env("DO_NOT_TRACK", "1")
+            .current_dir(dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        Self(Some(command.spawn().expect("failed to spawn turbo watch")))
+    }
+}
+
+#[cfg(unix)]
+impl Drop for GoWatchGuard {
+    fn drop(&mut self) {
+        use nix::{
+            sys::signal::{self, Signal},
+            unistd::Pid,
+        };
+
+        let Some(mut child) = self.0.take() else {
+            return;
+        };
+        let group = Pid::from_raw(-(child.id() as i32));
+        let _ = signal::kill(group, Signal::SIGTERM);
+        let started = std::time::Instant::now();
+        while started.elapsed() < Duration::from_secs(10) {
+            match child.try_wait() {
+                Ok(Some(_)) | Err(_) => return,
+                Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        let _ = signal::kill(group, Signal::SIGKILL);
+        let _ = child.wait();
+    }
 }
 
 fn package_names(dir: &Path) -> Vec<String> {
@@ -210,6 +284,19 @@ fn test_disabled_go_workspace_does_not_invoke_go() {
         .filter_map(|package| package["name"].as_str())
         .collect::<Vec<_>>();
     assert_eq!(names, ["js-pkg"]);
+}
+
+#[test]
+fn test_enabled_go_workspace_reports_missing_go_executable() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("failed to run `go work edit -json`"),
+        "missing Go diagnostic must identify the command: {stderr}"
+    );
 }
 
 #[test]
@@ -701,6 +788,51 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
             "{package} must remain unaffected: {tasks:?}"
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_go_watch_rediscovers_workspace_members() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let _watch = GoWatchGuard::spawn(tempdir.path());
+    let api_binary = tempdir.path().join("apps/api/dist/api");
+    assert!(
+        wait_for_path(&api_binary, Duration::from_secs(30)),
+        "initial Go watch build did not produce {api_binary:?}"
+    );
+
+    let worker = tempdir.path().join("apps/worker");
+    fs::create_dir_all(&worker).unwrap();
+    fs::write(
+        worker.join("go.mod"),
+        "module example.com/worker\n\ngo 1.22\n",
+    )
+    .unwrap();
+    fs::write(
+        worker.join("main.go"),
+        "package main\n\nfunc main() { println(\"worker\") }\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("go.work"),
+        "go 1.22\n\nuse (\n\t./apps/api\n\t./apps/worker\n\t./packages/lib\n)\n",
+    )
+    .unwrap();
+    common::git(tempdir.path(), &["add", "."]);
+    common::git(
+        tempdir.path(),
+        &["commit", "-m", "add worker module", "--quiet"],
+    );
+
+    let worker_binary = worker.join("dist/worker");
+    assert!(
+        wait_for_path(&worker_binary, Duration::from_secs(30)),
+        "turbo watch did not rediscover and build {worker_binary:?}"
+    );
 }
 
 #[test]
