@@ -746,15 +746,19 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         member_paths.insert(module_path.clone());
         pending_replacements.push((member_dir.clone(), module_path.clone(), module_json.replace));
         let directory = AnchoredSystemPathBuf::new(repo_root, &member_dir)?;
-        let runnable = runnable_package(repo_root, &member_dir, &module_path)?;
 
         modules.push(GoModule {
             module_path,
             manifest_path: member_dir.join_component(GO_MOD),
             directory,
             relationships: Vec::new(),
-            runnable,
+            runnable: None,
         });
+    }
+
+    for module in &mut modules {
+        let module_dir = repo_root.resolve(&module.directory);
+        module.runnable = runnable_package(repo_root, &module_dir, &module.module_path)?;
     }
 
     for (member_dir, module_path, replacements) in pending_replacements {
