@@ -132,7 +132,7 @@ pub enum Error {
     ModulePath {
         path: String,
         #[source]
-        source: io::Error,
+        source: turbopath::PathError,
     },
     #[error("go.work has no `go` directive")]
     MissingGoDirective,
@@ -550,7 +550,7 @@ fn path_is_within_repository(
     Ok(real_root.contains(&real_path))
 }
 
-fn module_path<'a>(
+fn required_module_path<'a>(
     module: &'a GoModEditJson,
     manifest_path: &AbsoluteSystemPath,
 ) -> Result<&'a str, Error> {
@@ -591,7 +591,7 @@ fn validate_local_replacements(
             }
             let module = go_mod_edit_json(repo_root, &resolved)?;
             let resolved_module_path =
-                module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
+                required_module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
             if !member_paths.contains(&resolved_module_path) {
                 return Err(Error::NonMemberLocalModule {
                     module_path: resolved_module_path,
@@ -730,7 +730,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
         let root_module = go_mod_edit_json(repo_root, repo_root)?;
-        Some(module_path(&root_module, &repo_root.join_component(GO_MOD))?.to_string())
+        Some(required_module_path(&root_module, &repo_root.join_component(GO_MOD))?.to_string())
     } else {
         None
     };
@@ -756,14 +756,12 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         }
 
         let module_json = go_mod_edit_json(repo_root, &member_dir)?;
-        let module_path = entry
-            .module_path
-            .filter(|path| !path.is_empty())
-            .unwrap_or(module_path(
-                &module_json,
-                &member_dir.join_component(GO_MOD),
-            )?)
-            .to_string();
+        let module_path = match entry.module_path.filter(|path| !path.is_empty()) {
+            Some(path) => path,
+            None => {
+                required_module_path(&module_json, &member_dir.join_component(GO_MOD))?.to_string()
+            }
+        };
         if module_path == GO_WORKSPACE_SCOPE {
             return Err(Error::WorkspaceNameCollision {
                 name: GO_WORKSPACE_SCOPE.to_string(),
@@ -830,7 +828,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         }
         let module = go_mod_edit_json(repo_root, &resolved)?;
         let resolved_module_path =
-            module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
+            required_module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
         if !member_paths.contains(&resolved_module_path) {
             return Err(Error::NonMemberLocalModule {
                 module_path: resolved_module_path,
