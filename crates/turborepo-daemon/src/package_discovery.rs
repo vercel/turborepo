@@ -34,10 +34,7 @@ fn workspace_data_from_proto(package_files: PackageFiles) -> Result<WorkspaceDat
         })
         .transpose()?;
 
-    Ok(WorkspaceData {
-        package_json,
-        turbo_json,
-    })
+    WorkspaceData::new(package_json, turbo_json)
 }
 
 fn discovery_response_from_proto(

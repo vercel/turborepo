@@ -924,16 +924,16 @@ impl Backend {
         let mut package_jsons = HashMap::with_capacity(response.workspaces.len());
         let mut sources = HashMap::with_capacity(response.workspaces.len() + 1);
         for workspace in response.workspaces {
-            let Ok(text) = std::fs::read_to_string(&workspace.package_json) else {
+            let (package_json_path, _) = workspace.into_paths();
+            let Ok(text) = std::fs::read_to_string(&package_json_path) else {
                 continue;
             };
-            let Ok(package_json) =
-                PackageJson::load_from_str(&text, workspace.package_json.as_str())
+            let Ok(package_json) = PackageJson::load_from_str(&text, package_json_path.as_str())
             else {
                 continue;
             };
-            package_jsons.insert(workspace.package_json.clone(), package_json.clone());
-            sources.insert(workspace.package_json, PackageSource { text, package_json });
+            package_jsons.insert(package_json_path.clone(), package_json.clone());
+            sources.insert(package_json_path, PackageSource { text, package_json });
         }
         retain_unique_named(&mut package_jsons);
 

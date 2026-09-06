@@ -949,10 +949,11 @@ impl Subscriber {
         debug!("handling package data {:?}", package_data);
         let mut package_paths = graph_package_paths.clone();
         if let Some(Ok(data)) = package_data {
-            package_paths.extend(data.workspaces.iter().filter_map(|ws| {
-                let package_dir = ws.package_json.parent()?;
-                self.repo_root.anchor(package_dir).ok()
-            }));
+            package_paths.extend(
+                data.workspaces
+                    .iter()
+                    .filter_map(|ws| self.repo_root.anchor(ws.workspace_root()).ok()),
+            );
         } else if package_paths.is_empty() {
             hashes.drain("package discovery is unavailable");
             return;
