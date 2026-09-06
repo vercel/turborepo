@@ -1290,6 +1290,49 @@ mod test {
     }
 
     #[tokio::test]
+    async fn fetch_artifact_does_not_leak_credentials_to_preflight_location() -> anyhow::Result<()>
+    {
+        let storage = httpmock::MockServer::start_async().await;
+        let get = storage
+            .mock_async(|w, t| {
+                w.method(httpmock::Method::GET)
+                    .path("/signed/artifact")
+                    .query_param("sig", "abc")
+                    .query_param_missing("teamId")
+                    .query_param_missing("slug")
+                    .header_missing("authorization");
+                t.status(200).body("artifact");
+            })
+            .await;
+        let cache = httpmock::MockServer::start_async().await;
+        let location = format!("{}/signed/artifact?sig=abc", storage.base_url());
+        let options = cache
+            .mock_async(|w, t| {
+                w.method(httpmock::Method::OPTIONS)
+                    .path("/v8/artifacts/security-test")
+                    .query_param("slug", "my-team");
+                t.status(200).header("Location", &location);
+            })
+            .await;
+        let client = APIClient::new(
+            cache.base_url(),
+            Some(Duration::from_secs(10)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let token = SecretString::new("secret-token".into());
+        let response = client
+            .fetch_artifact("security-test", &token, None, Some("my-team"))
+            .await?
+            .unwrap();
+        assert_eq!(response.text().await?, "artifact");
+        options.assert_calls_async(1).await;
+        get.assert_calls_async(1).await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
