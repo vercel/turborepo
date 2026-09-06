@@ -1166,6 +1166,38 @@ fn filter_hashes_to_declared_outputs(
     ))
 }
 
+/// same set turborepo-globwalk skips on in add_doublestar_to_dir
+const GLOB_META: [char; 13] = [
+    '?', '*', '$', ':', '<', '>', '(', ')', '[', ']', '{', '}', ',',
+];
+
+/// mirrors add_doublestar_to_dir in turborepo-globwalk, without the on disk
+/// check, which we cannot do here because we only have the glob
+fn inclusion_glob_variants(glob: &str) -> Vec<String> {
+    if glob.ends_with("/**") || glob.contains(GLOB_META) {
+        return vec![glob.to_owned()];
+    }
+
+    let trimmed = glob.strip_suffix('/').unwrap_or(glob);
+    vec![trimmed.to_owned(), format!("{trimmed}/**")]
+}
+
+/// mirrors add_trailing_double_star in turborepo-globwalk
+fn exclusion_glob_variants(glob: &str) -> Vec<String> {
+    if let Some(stripped) = glob.strip_suffix('/') {
+        if stripped.ends_with("**") {
+            return vec![stripped.to_owned()];
+        }
+        return vec![format!("{glob}**")];
+    }
+
+    if glob.ends_with("/**") {
+        return vec![glob.to_owned()];
+    }
+
+    vec![format!("{glob}/**"), glob.to_owned()]
+}
+
 struct CompiledOutputGlobs {
     inclusions: Vec<wax::Glob<'static>>,
     exclusions: Vec<wax::Glob<'static>>,
@@ -1178,11 +1210,17 @@ impl CompiledOutputGlobs {
 
         for glob in globs {
             if let Some(exclusion) = glob.strip_prefix('!') {
-                if let Ok(glob) = wax::Glob::new(exclusion) {
-                    exclusions.push(glob.into_owned());
+                for variant in exclusion_glob_variants(exclusion) {
+                    if let Ok(glob) = wax::Glob::new(&variant) {
+                        exclusions.push(glob.into_owned());
+                    }
                 }
-            } else if let Ok(glob) = wax::Glob::new(glob) {
-                inclusions.push(glob.into_owned());
+            } else {
+                for variant in inclusion_glob_variants(glob) {
+                    if let Ok(glob) = wax::Glob::new(&variant) {
+                        inclusions.push(glob.into_owned());
+                    }
+                }
             }
         }
 
@@ -1198,5 +1236,47 @@ impl CompiledOutputGlobs {
         }
 
         self.inclusions.iter().any(|glob| glob.is_match(path))
+    }
+}
+
+#[cfg(test)]
+mod compiled_output_globs_tests {
+    use super::CompiledOutputGlobs;
+
+    #[test]
+    fn bare_directory_output_matches_files_inside_it() {
+        let globs = CompiledOutputGlobs::new(&["dist".to_owned()]);
+        assert!(globs.matches("dist/generated.txt"));
+        assert!(globs.matches("dist/nested/generated.txt"));
+        assert!(globs.matches("dist"));
+        assert!(!globs.matches("other/generated.txt"));
+    }
+
+    #[test]
+    fn trailing_slash_directory_output_matches_files_inside_it() {
+        let globs = CompiledOutputGlobs::new(&["dist/".to_owned()]);
+        assert!(globs.matches("dist/generated.txt"));
+    }
+
+    #[test]
+    fn doublestar_output_still_matches() {
+        let globs = CompiledOutputGlobs::new(&["dist/**".to_owned()]);
+        assert!(globs.matches("dist/generated.txt"));
+        assert!(!globs.matches("other/generated.txt"));
+    }
+
+    #[test]
+    fn bare_directory_exclusion_excludes_files_inside_it() {
+        let globs = CompiledOutputGlobs::new(&["dist/**".to_owned(), "!dist/cache".to_owned()]);
+        assert!(globs.matches("dist/generated.txt"));
+        assert!(!globs.matches("dist/cache/tmp.txt"));
+        assert!(!globs.matches("dist/cache"));
+    }
+
+    #[test]
+    fn literal_file_output_is_unaffected() {
+        let globs = CompiledOutputGlobs::new(&["dist/only.txt".to_owned()]);
+        assert!(globs.matches("dist/only.txt"));
+        assert!(!globs.matches("dist/other.txt"));
     }
 }
