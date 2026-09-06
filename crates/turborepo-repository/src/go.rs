@@ -970,13 +970,17 @@ fn go_tasks_for_package(
     tasks
 }
 
-fn source_globs(prefix: &str, directory: &str) -> [String; 2] {
+fn source_globs(prefix: &str, directory: &str) -> [String; 3] {
     let base = if prefix.is_empty() {
         directory.to_string()
     } else {
         format!("{prefix}/{directory}")
     };
-    [format!("{base}/**"), format!("!{base}/.turbo/**")]
+    [
+        format!("{base}/**"),
+        format!("!{base}/.turbo/**"),
+        format!("!{base}/{GO_DIST_DIR}/**"),
+    ]
 }
 
 fn root_input(prefix: &str, file: &str) -> String {
@@ -992,14 +996,21 @@ pub struct GoTaskContract {
     kind: GoPackageKind,
     toolchain_identified: bool,
     target_os: String,
+    cache_prefixes: Vec<String>,
 }
 
 impl GoTaskContract {
-    fn new(kind: GoPackageKind, toolchain_identified: bool, target_os: String) -> Self {
+    fn new(
+        kind: GoPackageKind,
+        toolchain_identified: bool,
+        target_os: String,
+        cache_prefixes: Vec<String>,
+    ) -> Self {
         Self {
             kind,
             toolchain_identified,
             target_os,
+            cache_prefixes,
         }
     }
 
@@ -1036,13 +1047,21 @@ impl GoTaskContract {
             ],
             ..Default::default()
         };
+        io.forbidden_output_prefixes.extend(
+            self.cache_prefixes
+                .iter()
+                .map(|prefix| root_input(path_to_root, prefix)),
+        );
         if !self.toolchain_identified {
             io.input_safety = DerivedInputSafety::Untracked;
             io.cache_reason = Some("Turborepo could not identify the Go toolchain".to_string());
         }
         if wants_automatic_inputs {
             match &self.kind {
-                GoPackageKind::Module { .. } => io.package_default_inputs = Some(true),
+                GoPackageKind::Module { .. } => {
+                    io.package_default_inputs = Some(true);
+                    io.input_globs.push(format!("!{GO_DIST_DIR}/**"));
+                }
                 GoPackageKind::Workspace => io.package_default_inputs = Some(false),
             }
             for dependency in dependencies {
@@ -1096,6 +1115,7 @@ fn package_from_module(
     module: &GoModule,
     toolchain_identified: bool,
     target_os: &str,
+    cache_prefixes: &[String],
     workspace_module_patterns: &[String],
 ) -> DiscoveredPackage {
     let kind = GoPackageKind::Module {
@@ -1117,15 +1137,40 @@ fn package_from_module(
         workspace_module_patterns,
     ))
     .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
-        GoTaskContract::new(kind, toolchain_identified, target_os.to_string()),
+        GoTaskContract::new(
+            kind,
+            toolchain_identified,
+            target_os.to_string(),
+            cache_prefixes.to_vec(),
+        ),
     ))
 }
 
-fn go_change_observation(
+fn go_cache_prefixes(
     repo_root: &AbsoluteSystemPath,
-    modules: &[GoModule],
     environment: &BTreeMap<String, serde_json::Value>,
-) -> ChangeObservation {
+) -> Vec<String> {
+    let mut prefixes = Vec::new();
+    for name in ["GOCACHE", "GOMODCACHE"] {
+        let Some(path) = environment
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .map(|path| AbsoluteSystemPathBuf::from_unknown(repo_root, path))
+        else {
+            continue;
+        };
+        if let Ok(prefix) = AnchoredSystemPathBuf::new(repo_root, &path)
+            && prefix.components().next().is_some()
+        {
+            prefixes.push(prefix.to_unix().to_string());
+        }
+    }
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+fn go_change_observation(modules: &[GoModule], cache_prefixes: &[String]) -> ChangeObservation {
     let mut observation = ChangeObservation::new()
         .with_rediscovery_file_name(GO_WORK)
         .with_rediscovery_file_name(GO_MOD)
@@ -1139,19 +1184,8 @@ fn go_change_observation(
                 .to_string(),
         );
     }
-    for name in ["GOCACHE", "GOMODCACHE"] {
-        let Some(path) = environment
-            .get(name)
-            .and_then(serde_json::Value::as_str)
-            .map(|path| AbsoluteSystemPathBuf::from_unknown(repo_root, path))
-        else {
-            continue;
-        };
-        if let Ok(prefix) = AnchoredSystemPathBuf::new(repo_root, &path)
-            && prefix.components().next().is_some()
-        {
-            observation = observation.with_ignore_prefix(prefix.to_unix().to_string());
-        }
+    for prefix in cache_prefixes {
+        observation = observation.with_ignore_prefix(prefix.clone());
     }
     observation
 }
@@ -1354,6 +1388,8 @@ impl RepositoryContributor for GoContributor {
             let Some(toolchain_identity) = toolchain else {
                 return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
             };
+            let cache_prefixes =
+                go_cache_prefixes(&self.repo_root, &toolchain_identity.environment);
             let workspace_patterns = workspace
                 .modules
                 .iter()
@@ -1367,6 +1403,7 @@ impl RepositoryContributor for GoContributor {
                         module,
                         true,
                         &toolchain_identity.target_os,
+                        &cache_prefixes,
                         &workspace_patterns,
                     )
                 })
@@ -1392,7 +1429,12 @@ impl RepositoryContributor for GoContributor {
                     &workspace_patterns,
                 ))
                 .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
-                    GoTaskContract::new(workspace_kind, true, toolchain_identity.target_os.clone()),
+                    GoTaskContract::new(
+                        workspace_kind,
+                        true,
+                        toolchain_identity.target_os.clone(),
+                        cache_prefixes.clone(),
+                    ),
                 )),
             );
             let resolutions = external_resolutions(
@@ -1437,11 +1479,7 @@ impl RepositoryContributor for GoContributor {
                     packages: resolutions,
                 },
             );
-            let change_observation = go_change_observation(
-                &self.repo_root,
-                &workspace.modules,
-                &toolchain_identity.environment,
-            );
+            let change_observation = go_change_observation(&workspace.modules, &cache_prefixes);
             let prune = GoPruneKnowledge::new(&workspace);
             Ok(DiscoveredPackages::new(packages, workspace_roots)
                 .with_external_resolution(resolution)
