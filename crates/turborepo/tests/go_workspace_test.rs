@@ -47,6 +47,16 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
     );
 }
 
+fn dry_run_task(output: &std::process::Output, task_id: &str) -> serde_json::Value {
+    assert_command_success(output, "Go task dry run");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == task_id))
+        .cloned()
+        .unwrap_or_else(|| panic!("{task_id} in task graph"))
+}
+
 fn package_names(dir: &Path) -> Vec<String> {
     let output = run_turbo(dir, &["ls", "--output=json"]);
     assert_command_success(&output, "turbo ls");
@@ -201,4 +211,110 @@ fn test_pure_go_workspace_has_no_package_json() {
         !tempdir.path().join("package.json").exists(),
         "turbo must not create a package.json for a pure Go workspace"
     );
+}
+
+#[test]
+fn test_go_native_tasks_and_workspace_aggregate() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalGoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--dry-run=json"],
+    );
+    let task = dry_run_task(&output, "go-workspace#test");
+    assert_eq!(
+        task["command"],
+        "go test ./apps/api/... ./packages/lib/..."
+    );
+    assert_eq!(task["directory"], "");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--filter=example.com/lib",
+            "--dry-run=json",
+        ],
+    );
+    let build = dry_run_task(&output, "example.com/lib#build");
+    assert_eq!(build["command"], "go build ./...");
+    assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
+}
+
+#[test]
+fn test_go_native_tasks_are_overrideable_and_excludable() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "build": { "command": { "go": ["go", "version"] } }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--filter=example.com/lib",
+            "--dry-run=json",
+        ],
+    );
+    let build = dry_run_task(&output, "example.com/lib#build");
+    assert_eq!(build["command"], "go version");
+
+    fs::write(
+        tempdir.path().join("apps/api/turbo.json"),
+        r#"{
+  "extends": ["//"],
+  "tasks": {
+    "run": { "extends": false },
+    "dev": { "extends": false }
+  }
+}"#,
+    )
+    .unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { package(name: \"example.com/api\") { tasks { items { name } } } }",
+        ],
+    );
+    assert_command_success(&output, "query excluded Go tasks");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("query emits JSON");
+    let tasks = json["data"]["package"]["tasks"]["items"]
+        .as_array()
+        .expect("task items");
+    assert!(!tasks.iter().any(|task| task["name"] == "run"));
+    assert!(!tasks.iter().any(|task| task["name"] == "dev"));
 }
