@@ -290,7 +290,7 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         ],
     );
     let dev = dry_run_task(&output, "example.com/api#dev");
-    assert_eq!(dev["command"], "go run . --port 3000");
+    assert_eq!(dev["command"], "go run .");
 
     let tasks = package_task_names(tempdir.path(), "example.com/api");
     assert!(tasks.iter().any(|task| task == "dev"), "tasks: {tasks:?}");
