@@ -202,8 +202,8 @@ fn test_disabled_go_workspace_does_not_invoke_go() {
 
     let output = run_turbo_with_env(tempdir.path(), &["ls", "--output=json"], &[("PATH", "")]);
     assert_command_success(&output, "disabled Go workspace listing without tools");
-    let names = serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("ls emits JSON")
-        ["packages"]["items"]
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("ls emits JSON");
+    let names = json["packages"]["items"]
         .as_array()
         .expect("package items")
         .iter()
