@@ -150,6 +150,27 @@ pub struct PackageGraph {
 /// There are other structs in this module that have "Workspace" in the name,
 /// but they do NOT follow the glossary, and instead mean "package" when they
 /// say Workspace. Some of these are labeled as such.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepositoryDiscoveryScope {
+    pub name: PackageName,
+    pub toolchain: crate::toolchain::ToolchainId,
+    pub manifest_path: AbsoluteSystemPathBuf,
+    pub tasks: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepositoryDiscoveryWorkspaceRoot {
+    pub toolchain: crate::toolchain::ToolchainId,
+    pub kind: String,
+    pub path: AbsoluteSystemPathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepositoryDiscoverySnapshot {
+    pub scopes: Vec<RepositoryDiscoveryScope>,
+    pub workspace_roots: Vec<RepositoryDiscoveryWorkspaceRoot>,
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct WorkspacePackage {
     pub name: PackageName,
@@ -700,6 +721,42 @@ impl PackageGraph {
 
     pub fn package_manager(&self) -> Option<&PackageManager> {
         self.package_manager.as_ref()
+    }
+
+    /// Immutable, parser-neutral discovery facts suitable for sharing with
+    /// repository consumers such as the daemon.
+    pub fn repository_discovery_snapshot(&self) -> RepositoryDiscoverySnapshot {
+        let scopes = self
+            .package_task_contexts()
+            .filter_map(|context| {
+                Some(RepositoryDiscoveryScope {
+                    name: context.package().clone(),
+                    toolchain: context.toolchain()?.clone(),
+                    manifest_path: self.repo_root().resolve(context.definition_path?),
+                    tasks: context
+                        .native_tasks()
+                        .tasks()
+                        .iter()
+                        .filter(|task| task.authored() || task.registered())
+                        .map(|task| task.name().to_string())
+                        .collect(),
+                })
+            })
+            .collect();
+        let workspace_roots = self
+            .knowledge
+            .workspace_roots()
+            .map(|root| RepositoryDiscoveryWorkspaceRoot {
+                toolchain: root.toolchain().clone(),
+                kind: root.kind().to_string(),
+                path: self.repo_root().resolve(root.path()),
+            })
+            .collect();
+
+        RepositoryDiscoverySnapshot {
+            scopes,
+            workspace_roots,
+        }
     }
 
     /// Root `engines` captured into task-contract knowledge at construction.
@@ -3031,6 +3088,30 @@ version = "0.1.0"
                 pkg_graph.package_toolchain(&PackageName::from("acme")),
                 Some(&crate::toolchain::ToolchainId::RUST)
             );
+
+            let discovery = pkg_graph.repository_discovery_snapshot();
+            assert!(discovery.scopes.iter().any(|scope| {
+                scope.name == PackageName::from("js-pkg")
+                    && scope.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT
+                    && scope.manifest_path.ends_with("js-pkg/package.json")
+                    && scope.tasks.is_empty()
+            }));
+            assert!(discovery.scopes.iter().any(|scope| {
+                scope.name == PackageName::from("app")
+                    && scope.toolchain == crate::toolchain::ToolchainId::RUST
+                    && scope.manifest_path.ends_with("rust/app/Cargo.toml")
+                    && scope.tasks.contains(&"build".to_string())
+            }));
+            assert!(discovery.workspace_roots.iter().any(|workspace_root| {
+                workspace_root.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT
+                    && workspace_root.kind == "npm"
+                    && workspace_root.path == root
+            }));
+            assert!(discovery.workspace_roots.iter().any(|workspace_root| {
+                workspace_root.toolchain == crate::toolchain::ToolchainId::RUST
+                    && workspace_root.kind == "cargo"
+                    && workspace_root.path == root
+            }));
 
             let knowledge = pkg_graph.repository_knowledge();
             let cargo_app = knowledge.scope("app").expect("Cargo crate is a package");

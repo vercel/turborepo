@@ -118,25 +118,22 @@ message PackageChanged {
 message RediscoverPackages {}
 
 message DiscoverPackagesResponse {
-  repeated PackageFiles package_files = 1;
-  PackageManager package_manager = 2;
+  repeated RepositoryScope scopes = 1;
+  reserved 2;
+  repeated RepositoryWorkspaceRoot workspace_roots = 3;
 }
 
-message PackageFiles {
-  string package_json = 1;
-  optional string turbo_json = 2;
+message RepositoryScope {
+  string name = 1;
+  string toolchain = 2;
+  string manifest_path = 3;
+  repeated string tasks = 4;
 }
 
-enum PackageManager {
-  Berry = 0;
-  Npm = 1;
-  Pnpm = 2;
-  Pnpm6 = 3;
-  Yarn = 4;
-  Bun = 5;
-  Pnpm9 = 6;
-  Nub = 7;
-  Aube = 8;
+message RepositoryWorkspaceRoot {
+  string toolchain = 1;
+  string kind = 2;
+  string path = 3;
 }
 
 message GetFileHashesRequest {

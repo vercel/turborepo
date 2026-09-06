@@ -99,10 +99,24 @@ application and the standalone `turborepo-lsp` binary use this shared API, so a
 without requiring the LSP to depend on `turborepo-lib`.
 
 The `turbo` application supplies its package-graph-aware change watcher and
-keeps CLI-specific rendering in `turborepo-lib`. The standalone LSP supplies a
-conservative daemon-owned watcher that emits full rediscovery for filesystem
-changes. This preserves correctness when the packaged LSP hosts the daemon,
-while the richer watcher avoids unnecessary rediscovery when `turbo` hosts it.
+keeps CLI-specific rendering in `turborepo-lib`. Each completed graph generation
+also publishes one immutable repository-discovery snapshot to the daemon. The
+snapshot contains toolchain-tagged scope identities, manifest paths, and
+normalized task names plus workspace-root observations, so the daemon protocol
+does not encode `package.json`, JavaScript package managers, or any other
+ecosystem-specific metadata. The daemon client decodes this wire representation
+back into repository-owned snapshot types. Consumers that only support one
+ecosystem filter by toolchain explicitly; the JavaScript package-discovery
+adapter is one such compatibility boundary.
+
+The LSP consumes the generic snapshot directly for package identity, task
+completion, and task validation rather than rebuilding a JavaScript-only graph.
+Manifest text is optional enrichment for reference locations; it is not the
+authority for scope identity or task membership. The standalone LSP daemon
+supplies a conservative watcher that emits full rediscovery and enables built-in
+Cargo and uv contributors when their root manifests are present. The richer
+`turbo` watcher continues to use command feature flags and avoids unnecessary
+rediscovery.
 
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
@@ -710,57 +724,62 @@ the shared repository graph.
   activation group for a role, unfiltered runs use the workspace scope;
   member-owned tools add `--all-packages`. Otherwise, member scopes are the
   entrypoints for that role. Filtered runs use member commands. A root pytest
-  declaration registers a preferred-only workspace `test`; direct member
-  declarations register candidate member `test` tasks. The root task wins an
-  unfiltered run, while a package filter can select only a directly declaring
-  member. Member pytest tasks have no shared serial group and can run in
-  parallel.
+  declaration registers a workspace `test`; direct member declarations register
+  member `test` tasks. An unfiltered run retains both root and member tasks when
+  both declare pytest, accepting possible duplicate collection rather than
+  silently skipping either scope. A package filter can select only a directly
+  declaring member. Member pytest tasks have no shared serial group and can run
+  in parallel.
 - **Command shapes** are `uv build --package=<name>`, or `uv run --active --frozen`
-  followed by owner selection (`--package <name>` for a member,
-  `--all-packages` for homogeneous member ownership, and no owner flag for a
-  root declaration), non-default group activation (`--no-default-groups
+  followed by owner selection (`--package <name>` for a member and
+  `--all-packages` for homogeneous member ownership or root pytest so src-layout
+  workspace members are installed), non-default group activation (`--no-default-groups
   --group <group>`), the tool and subcommand, pass-through arguments, and the
   member-directory targets. Ruff uses `check`/`format`; ty uses `check`.
   Fallbacks remain `uv format -- <dirs...>` and either
-  `uv check --frozen --package=<name>` or `uv check --frozen --all-packages`.
-  Detected-tool and
-  fallback `check` commands use the `uv` serial group. Detected lint, check, and
-  test commands default to cacheable when uv and Python identities resolve;
-  otherwise they fail closed to uncached. The fallback `uv check` stays uncached
-  because its bundled checker is not represented in `uv.lock`. Builds using
+  `uv check --frozen --package=<name>` or `uv check --frozen --all-packages`;
+  `uv check` runs uv's bundled ty type checker. Detected-tool and fallback check
+  commands use the `uv` serial group. Detected lint, check, test, and fallback
+  `uv check` commands default to cacheable when uv and Python identities resolve;
+  otherwise they fail closed to uncached. Builds using
   `uv_build` cache when their sole build requirement accepts the identified uv
   executable's bundled backend version. Other PEP 517 builds remain uncached,
   and format commands remain uncached because they mutate source. Detected-tool commands use `--frozen`;
   Turborepo itself never creates or updates `uv.lock`. Pass-through arguments are
   inserted before path targets. Active aggregates reject them and name the
   package-qualified child tasks that can receive them.
-  Pytest commands are `uv run --active --frozen pytest` for the workspace or `uv run
+  Pytest commands are `uv run --active --frozen --all-packages pytest` for the workspace or `uv run
   --active --frozen --package <name> pytest <member-dir>` for members, with non-default
   group activation inserted before pytest and pass-through arguments inserted
   before the member target.
 - **Hashing and affectedness** include member sources, relevant workspace
-  files, supported tool configuration, and uv/pip environment variables;
+  files, supported tool configuration, and semantic uv environment variables;
   `check`, `check:*`, and member `test` also include internal source closures.
   Quality workspace tasks include every member's sources; a bare workspace
   pytest task hashes the full repository because pytest controls collection.
+  The manual (Git-free) hasher normalizes leading `./` in local input and
+  exclusion patterns so native workspace inputs match package-relative paths.
   Quality caches, `.pytest_cache`, `.venv`, and `__pycache__` are excluded.
   `VIRTUAL_ENV` is hashed and native `uv run` tasks opt into it with `--active`;
   otherwise `UV_PROJECT_ENVIRONMENT` or the root `.venv` determines the effective
   environment directory. An in-repository environment is excluded from task inputs,
   and output globs that would archive it are rejected because virtual environments
-  are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`, active user/system uv
-  configuration, and any pass-through arguments make automatic inputs
-  untracked. Unless `cache` is explicitly configured, Turborepo disables caching
-  and emits the reason as a warning. Turborepo invokes
+  are machine-specific. Path-valued uv settings, `UV_NO_SYNC`, `UV_NO_PROJECT`,
+  user/system uv configuration with unknown or semantic fields, and any
+  pass-through arguments make automatic inputs untracked. Frozen lint, check,
+  and test tasks allow external configuration limited to resolution/download
+  policy and local materialization fields; builds conservatively reject any
+  external uv configuration. Unless `cache` is explicitly configured,
+  Turborepo disables caching and emits the reason as a warning. Turborepo invokes
   `uv workspace metadata --frozen --offline` and
   hashes each scope's external dependency closure from uv's JSON resolution
   graph; root-owned tools conservatively add the workspace closure. Package
   identities include version, source, and artifact hashes. Turborepo therefore
   does not interpret `uv.lock` for task hashing; pruning also uses metadata for
   reachability and only parses TOML to filter selected package tables. Every scope also
-  includes path-independent uv and Python identities
-  containing executable content hashes, Python implementation and version,
-  operating system, architecture, libc, variant, and host compatibility. If either
+  includes path-independent uv and Python identities containing uv and Python
+  versions, operating system, architecture, libc, variant, and host compatibility.
+  If either
   identity probe fails, native uv command tasks fail closed to uncached and emit one
   warning for the workspace with the concrete probe failure. A `uv.lock` change across git refs conservatively affects
   all uv packages. Build output inference covers the bare command's matching

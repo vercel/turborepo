@@ -731,8 +731,9 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
                     .workspaces
                     .into_par_iter()
                     .map(|workspace| {
-                        let descriptor = PackageJson::load(&workspace.package_json)?;
-                        Ok(Self::package_from_json(workspace.package_json, descriptor))
+                        let (package_json, _) = workspace.into_paths();
+                        let descriptor = PackageJson::load(&package_json)?;
+                        Ok(Self::package_from_json(package_json, descriptor))
                     })
                     .collect::<Result<Vec<_>, Error>>()
             })?;
@@ -878,10 +879,7 @@ mod tests {
             .unwrap();
         let toolchain = JavaScriptContributor::new(
             StubDiscovery(discovery::DiscoveryResponse {
-                workspaces: vec![discovery::WorkspaceData {
-                    package_json,
-                    turbo_json: None,
-                }],
+                workspaces: vec![discovery::WorkspaceData::new(package_json, None).unwrap()],
                 package_manager: PackageManager::Pnpm6,
             }),
             repo_root.clone(),

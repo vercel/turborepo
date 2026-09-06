@@ -10,9 +10,12 @@ use std::{
 
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
-use tokio::sync::{broadcast, oneshot, Mutex};
+use tokio::sync::{broadcast, oneshot, watch, Mutex};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
+use turborepo_daemon::{
+    PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait,
+    RepositoryDiscoveryError,
+};
 use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     RepositoryIgnore, WatchScope, WatchSource,
@@ -21,7 +24,7 @@ use turborepo_repository::{
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
-    package_graph::{PackageGraph, PackageName, WorkspacePackage},
+    package_graph::{PackageGraph, PackageName, RepositoryDiscoverySnapshot, WorkspacePackage},
     toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
@@ -37,6 +40,7 @@ pub struct PackageChangesWatcher {
     _exit_tx: oneshot::Sender<()>,
     _handle: tokio::task::JoinHandle<()>,
     package_change_events_rx: broadcast::Receiver<PackageChangeEvent>,
+    repository_discovery_rx: watch::Receiver<Option<Arc<RepositoryDiscoverySnapshot>>>,
 }
 
 /// The number of events that can be buffered in the channel.
@@ -75,10 +79,12 @@ impl PackageChangesWatcher {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
             broadcast::channel(CHANGE_EVENT_CHANNEL_CAPACITY);
+        let (repository_discovery_tx, repository_discovery_rx) = watch::channel(None);
         let subscriber = Subscriber::new(
             repo_root,
             file_events,
             package_change_events_tx,
+            repository_discovery_tx,
             hash_watcher,
             custom_turbo_json_path,
             single_package,
@@ -92,6 +98,7 @@ impl PackageChangesWatcher {
             _exit_tx: exit_tx,
             _handle,
             package_change_events_rx,
+            repository_discovery_rx,
         }
     }
 }
@@ -99,6 +106,27 @@ impl PackageChangesWatcher {
 impl PackageChangesWatcherTrait for PackageChangesWatcher {
     async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
         self.package_change_events_rx.resubscribe()
+    }
+
+    async fn repository_discovery(
+        &self,
+    ) -> Option<Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError>> {
+        self.repository_discovery_rx.borrow().clone().map(Ok)
+    }
+
+    async fn repository_discovery_blocking(
+        &self,
+    ) -> Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError> {
+        let mut receiver = self.repository_discovery_rx.clone();
+        loop {
+            if let Some(snapshot) = receiver.borrow_and_update().clone() {
+                return Ok(snapshot);
+            }
+            receiver
+                .changed()
+                .await
+                .map_err(|_| RepositoryDiscoveryError::Unavailable)?;
+        }
     }
 }
 
@@ -131,6 +159,7 @@ struct Subscriber {
     watch_spec: Arc<RwLock<WatchSpec>>,
     watch_spec_ready: Arc<AtomicBool>,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
+    repository_discovery_tx: watch::Sender<Option<Arc<RepositoryDiscoverySnapshot>>>,
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
@@ -352,6 +381,7 @@ impl Subscriber {
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
+        repository_discovery_tx: watch::Sender<Option<Arc<RepositoryDiscoverySnapshot>>>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
@@ -405,6 +435,7 @@ impl Subscriber {
             // without consulting live toolchains for bootstrap facts.
             watch_spec_ready: Arc::new(AtomicBool::new(false)),
             package_change_events_tx,
+            repository_discovery_tx,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
@@ -498,6 +529,10 @@ impl Subscriber {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = pkg_dep_graph.active_watch_spec();
         self.watch_spec_ready.store(true, Ordering::Release);
+
+        self.repository_discovery_tx.send_replace(Some(Arc::new(
+            pkg_dep_graph.repository_discovery_snapshot(),
+        )));
 
         Some(RepoState {
             root_turbo_json,
@@ -974,6 +1009,7 @@ mod test {
             repo_root.clone(),
             file_events,
             broadcast::channel(8).0,
+            watch::channel(None).0,
             Arc::new(HashWatcher::new(
                 repo_root.clone(),
                 discovery_rx,

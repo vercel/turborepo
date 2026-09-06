@@ -32,14 +32,16 @@ use tower_lsp::{
 };
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_daemon::{
-    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
-    Paths as DaemonPaths,
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
 };
 use turborepo_repository::{
-    discovery::{self, PackageDiscovery},
+    discovery,
     inference::RepoState,
-    native_tasks::observation_from_package_json,
-    package_graph::{self, PackageGraph, PackageName},
+    package_graph::{self, PackageName, RepositoryDiscoverySnapshot},
+};
+#[cfg(test)]
+use turborepo_repository::{
+    native_tasks::observation_from_package_json, package_graph::PackageGraph,
     package_json::PackageJson,
 };
 
@@ -56,10 +58,11 @@ struct LspPackage {
     /// not represent (notably an unnamed workspace).
     identity: Option<PackageName>,
     source_path: AbsoluteSystemPathBuf,
-    source: String,
-    package_json: PackageJson,
+    source: Option<String>,
+    tasks: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Debug)]
 struct PackageSource {
     text: String,
@@ -71,28 +74,18 @@ struct LspPackages {
     packages: Vec<LspPackage>,
 }
 
-impl LspPackages {
-    fn from_graph_or_unscoped(
-        graph: Result<PackageGraph, package_graph::Error>,
-        mut sources: HashMap<AbsoluteSystemPathBuf, PackageSource>,
-        root_path: &AbsoluteSystemPathBuf,
-    ) -> Self {
-        match graph {
-            Ok(graph) => Self::from_graph(&graph, sources),
-            Err(_) => {
-                let root = sources.remove(root_path).map(|source| LspPackage {
-                    identity: Some(PackageName::Root),
-                    source_path: root_path.clone(),
-                    source: source.text,
-                    package_json: source.package_json,
-                });
-                let mut packages = Self::unscoped(sources).packages;
-                packages.extend(root);
-                Self::new(packages)
-            }
-        }
-    }
+#[cfg(test)]
+fn task_names_from_package_json(identity: &PackageName, package_json: &PackageJson) -> Vec<String> {
+    observation_from_package_json(identity.as_str(), package_json)
+        .tasks
+        .into_iter()
+        .filter(|task| task.script().is_some())
+        .map(|task| task.name().to_string())
+        .collect()
+}
 
+impl LspPackages {
+    #[cfg(test)]
     fn from_graph(
         graph: &PackageGraph,
         mut sources: HashMap<AbsoluteSystemPathBuf, PackageSource>,
@@ -116,22 +109,23 @@ impl LspPackages {
                 continue;
             }
             packages.push(LspPackage {
+                tasks: task_names_from_package_json(&identity, &source.package_json),
                 identity: Some(identity),
                 source_path: definition_path,
-                source: source.text,
-                package_json: source.package_json,
+                source: Some(source.text),
             });
         }
 
         packages.extend(sources.into_iter().map(|(source_path, source)| LspPackage {
             identity: None,
             source_path,
-            source: source.text,
-            package_json: source.package_json,
+            tasks: task_names_from_package_json(&PackageName::Root, &source.package_json),
+            source: Some(source.text),
         }));
         Self::new(packages)
     }
 
+    #[cfg(test)]
     fn unscoped(sources: HashMap<AbsoluteSystemPathBuf, PackageSource>) -> Self {
         Self::new(
             sources
@@ -139,8 +133,8 @@ impl LspPackages {
                 .map(|(source_path, source)| LspPackage {
                     identity: None,
                     source_path,
-                    source: source.text,
-                    package_json: source.package_json,
+                    tasks: task_names_from_package_json(&PackageName::Root, &source.package_json),
+                    source: Some(source.text),
                 })
                 .collect(),
         )
@@ -155,20 +149,28 @@ impl LspPackages {
         Self { packages }
     }
 
-    /// Map an unsaved/in-memory package.json payload to the same native-task
-    /// observation vocabulary used by the repository catalog.
-    fn observed_task_names(package: &LspPackage) -> Vec<String> {
-        let scope = package
-            .identity
-            .as_ref()
-            .map(|identity| identity.as_str())
-            .unwrap_or("//");
-        observation_from_package_json(scope, &package.package_json)
-            .tasks
-            .into_iter()
-            .filter(|task| task.script().is_some())
-            .map(|task| task.name().to_string())
-            .collect()
+    fn from_repository_discovery(response: RepositoryDiscoverySnapshot) -> Self {
+        Self::new(
+            response
+                .scopes
+                .into_iter()
+                .filter_map(|scope| {
+                    let source_path = scope.manifest_path;
+                    let identity = scope.name;
+                    let source = std::fs::read_to_string(&source_path).ok();
+                    Some(LspPackage {
+                        identity: Some(identity),
+                        source_path,
+                        source,
+                        tasks: scope.tasks,
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    fn observed_task_names(package: &LspPackage) -> &[String] {
+        &package.tasks
     }
 
     fn task_index(&self) -> HashMap<String, Vec<Option<String>>> {
@@ -179,7 +181,7 @@ impl LspPackages {
                 .as_ref()
                 .map(|identity| identity.as_str().to_string());
             for script in Self::observed_task_names(package) {
-                let identities = tasks.entry(script).or_default();
+                let identities = tasks.entry(script.clone()).or_default();
                 if !identities.contains(&identity) {
                     identities.push(identity.clone());
                 }
@@ -192,11 +194,15 @@ impl LspPackages {
         let qualified = self.packages.iter().flat_map(|package| {
             package.identity.iter().flat_map(|identity| {
                 Self::observed_task_names(package)
-                    .into_iter()
+                    .iter()
                     .map(move |script| format!("{}#{script}", identity.as_str()))
             })
         });
-        let tasks = self.packages.iter().flat_map(Self::observed_task_names);
+        let tasks = self
+            .packages
+            .iter()
+            .flat_map(Self::observed_task_names)
+            .cloned();
 
         qualified.chain(tasks).unique().collect()
     }
@@ -220,10 +226,13 @@ impl LspPackages {
                     .any(|name| name == task)
             })
             .filter_map(|package| {
+                // Native task locations are not yet normalized into repository
+                // knowledge. JavaScript source remains optional enrichment.
+                let source = package.source.as_deref()?;
                 // TODO: use jsonc_ast instead of text search.
-                let start = package.source.find(&format!("\"{task}\""))?;
+                let start = source.find(&format!("\"{task}\""))?;
                 let end = start + task.len() + 2;
-                let rope = crop::Rope::from(package.source.as_str());
+                let rope = crop::Rope::from(source);
                 let start_line = rope.line_of_byte(start);
                 let end_line = rope.line_of_byte(end);
                 let range = Range {
@@ -260,6 +269,7 @@ impl LspPackageCache {
     }
 }
 
+#[cfg(test)]
 fn retain_unique_named(package_jsons: &mut HashMap<AbsoluteSystemPathBuf, PackageJson>) {
     let counts = package_jsons
         .values()
@@ -813,9 +823,7 @@ impl LanguageServer for Backend {
     }
 
     async fn did_save(&self, document: DidSaveTextDocumentParams) {
-        if document.text_document.uri.path().ends_with("/package.json") {
-            self.packages.invalidate();
-        }
+        self.packages.invalidate();
         self.client
             .log_message(
                 MessageType::INFO,
@@ -881,26 +889,11 @@ impl Backend {
         if let Some(packages) = self.packages.get() {
             return Ok(packages);
         }
-        let repo_root =
-            lock_or_recover(&self.repo_root)
-                .clone()
-                .ok_or(package_graph::Error::Discovery(
-                    discovery::Error::Unavailable,
-                ))?;
-        let root_manifest_path = repo_root.join_component("package.json");
-
-        // LSP has no Cargo package features today. Still construct the same
-        // repository view so a pure Cargo repository cannot gain a synthetic
-        // JavaScript manifest or root script scope.
-        if !root_manifest_path.exists() {
-            let graph = PackageGraph::builder_optional(&repo_root, None)
-                .build()
-                .await?;
-            let packages = Arc::new(LspPackages::from_graph(&graph, HashMap::new()));
-            self.packages.set(packages.clone());
-            return Ok(packages);
+        if lock_or_recover(&self.repo_root).is_none() {
+            return Err(package_graph::Error::Discovery(
+                discovery::Error::Unavailable,
+            ));
         }
-
         let daemon = {
             let mut daemon = self.daemon.clone();
             let daemon = daemon
@@ -915,54 +908,14 @@ impl Backend {
             daemon.clone()
         };
 
-        let response = DaemonPackageDiscovery::new(daemon, repo_root.clone())
-            .discover_packages_blocking()
-            .await?;
-
-        // Parse each manifest once. The parsed map seeds graph construction;
-        // the parallel source map is retained only for scripts and ranges.
-        let mut package_jsons = HashMap::with_capacity(response.workspaces.len());
-        let mut sources = HashMap::with_capacity(response.workspaces.len() + 1);
-        for workspace in response.workspaces {
-            let Ok(text) = std::fs::read_to_string(&workspace.package_json) else {
-                continue;
-            };
-            let Ok(package_json) =
-                PackageJson::load_from_str(&text, workspace.package_json.as_str())
-            else {
-                continue;
-            };
-            package_jsons.insert(workspace.package_json.clone(), package_json.clone());
-            sources.insert(workspace.package_json, PackageSource { text, package_json });
-        }
-        retain_unique_named(&mut package_jsons);
-
-        let root_text = std::fs::read_to_string(&root_manifest_path).ok();
-        let parsed_root = root_text
-            .as_deref()
-            .and_then(|text| PackageJson::load_from_str(text, root_manifest_path.as_str()).ok());
-        let root_package_json = parsed_root.clone().unwrap_or_default();
-        if let (Some(text), Some(package_json)) = (root_text, parsed_root) {
-            sources.insert(
-                root_manifest_path.clone(),
-                PackageSource { text, package_json },
-            );
-        }
-
-        let graph = PackageGraph::builder(&repo_root, root_package_json)
-            .with_package_manager(response.package_manager)
-            .with_package_jsons(Some(package_jsons))
-            .build()
-            .await;
-
-        // Discovery succeeded, so repository validation errors should not
-        // disable every LSP script feature. Sources that cannot be joined to
-        // authoritative knowledge remain deliberately unscoped.
-        let packages = Arc::new(LspPackages::from_graph_or_unscoped(
-            graph,
-            sources,
-            &root_manifest_path,
-        ));
+        let mut daemon = daemon;
+        let response = daemon
+            .discover_repository_blocking()
+            .await
+            .map_err(|error| {
+                package_graph::Error::Discovery(discovery::Error::Failed(Box::new(error)))
+            })?;
+        let packages = Arc::new(LspPackages::from_repository_discovery(response));
         self.packages.set(packages.clone());
         Ok(packages)
     }
@@ -1731,6 +1684,48 @@ mod tests {
             Some(&vec![Some("//".to_string()), Some("@repo/ui".to_string())])
         );
         assert_eq!(tasks.get("test"), Some(&vec![Some("@repo/ui".to_string())]));
+    }
+
+    #[test]
+    fn repository_discovery_indexes_tasks_from_every_toolchain() {
+        let repository = TestRepository::new();
+        let js_manifest = repository.root.join_component("package.json");
+        js_manifest
+            .create_with_contents(r#"{"scripts":{"lint":"eslint"}}"#)
+            .expect("JavaScript manifest");
+        let rust_manifest = repository.root.join_component("Cargo.toml");
+        rust_manifest
+            .create_with_contents("[package]\nname = \"api\"\nversion = \"0.1.0\"\n")
+            .expect("Rust manifest");
+        let packages = LspPackages::from_repository_discovery(
+            turborepo_repository::package_graph::RepositoryDiscoverySnapshot {
+                scopes: vec![
+                    turborepo_repository::package_graph::RepositoryDiscoveryScope {
+                        name: PackageName::Root,
+                        toolchain: turborepo_repository::toolchain::ToolchainId::JAVASCRIPT,
+                        manifest_path: js_manifest,
+                        tasks: vec!["lint".to_string()],
+                    },
+                    turborepo_repository::package_graph::RepositoryDiscoveryScope {
+                        name: PackageName::from("api"),
+                        toolchain: turborepo_repository::toolchain::ToolchainId::RUST,
+                        manifest_path: rust_manifest,
+                        tasks: vec!["build".to_string(), "test".to_string()],
+                    },
+                ],
+                workspace_roots: Vec::new(),
+            },
+        );
+
+        let labels = packages.completion_labels();
+        assert!(labels.contains(&"//#lint".to_string()));
+        assert!(labels.contains(&"api#build".to_string()));
+        assert!(labels.contains(&"api#test".to_string()));
+        assert_eq!(
+            packages.task_index().get("build"),
+            Some(&vec![Some("api".to_string())])
+        );
+        assert_eq!(packages.references("api#build").len(), 0);
     }
 
     #[tokio::test]

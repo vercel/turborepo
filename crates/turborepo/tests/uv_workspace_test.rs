@@ -336,7 +336,59 @@ fn test_uv_compatible_member_tools_use_all_packages_entrypoint() {
 }
 
 #[test]
-fn test_uv_root_pytest_is_workspace_only_and_member_filter_uses_direct_declaration() {
+fn test_uv_workspace_quality_hashes_member_sources_and_ignores_nested_caches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_native_tools(tempdir.path());
+    let source = tempdir
+        .path()
+        .join("packages/py-app/src/py_app/__init__.py");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::write(&source, "VALUE = 1\n").unwrap();
+
+    let task_hash = || {
+        let json = dry_run_tasks(tempdir.path(), &["lint:ruff", "--filter=acme"]);
+        let task = find_task(&json, "acme#lint:ruff");
+        let inputs = task["inputs"].as_object().unwrap();
+        for expected in [
+            "packages/py-app/pyproject.toml",
+            "packages/py-app/src/py_app/__init__.py",
+            "packages/py-lib/pyproject.toml",
+            "pyproject.toml",
+        ] {
+            assert!(
+                inputs.contains_key(expected),
+                "workspace Ruff inputs must contain {expected:?}: {inputs:?}"
+            );
+        }
+        task["hash"].as_str().unwrap().to_string()
+    };
+
+    let baseline = task_hash();
+    fs::write(&source, "VALUE = 2\n").unwrap();
+    let source_changed = task_hash();
+    assert_ne!(
+        baseline, source_changed,
+        "workspace Ruff tasks must hash member sources"
+    );
+
+    for cache in [".pytest_cache", ".ruff_cache"] {
+        let cache_file = tempdir
+            .path()
+            .join("packages/py-app/src/py_app")
+            .join(cache)
+            .join("nested/cache-file");
+        fs::create_dir_all(cache_file.parent().unwrap()).unwrap();
+        fs::write(cache_file, "cache contents").unwrap();
+        assert_eq!(
+            source_changed,
+            task_hash(),
+            "nested {cache} contents must not affect Python task hashes"
+        );
+    }
+}
+
+#[test]
+fn test_uv_root_and_member_pytest_both_run_and_member_filter_uses_direct_declaration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
     append_manifest(
@@ -351,10 +403,14 @@ fn test_uv_root_pytest_is_workspace_only_and_member_filter_uses_direct_declarati
     );
 
     let workspace = dry_run_tasks(tempdir.path(), &["test"]);
-    assert_eq!(task_ids(&workspace), ["acme#test"]);
+    assert_eq!(task_ids(&workspace), ["acme#test", "py-app#test"]);
     assert_eq!(
         find_task(&workspace, "acme#test")["command"],
-        "uv run --active --frozen pytest"
+        "uv run --active --frozen --all-packages pytest"
+    );
+    assert_eq!(
+        find_task(&workspace, "py-app#test")["command"],
+        "uv run --active --frozen --package py-app pytest packages/py-app"
     );
 
     let app = dry_run_tasks(tempdir.path(), &["test", "--filter=py-app"]);
