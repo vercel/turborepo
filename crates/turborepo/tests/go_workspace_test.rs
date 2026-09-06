@@ -612,7 +612,8 @@ fn test_affected_go_tasks_follow_internal_module_relationships() {
         tempdir.path(),
         &[
             "query",
-            "query { affectedTasks(tasks: [\"build\"]) { items { name package { name } } } }",
+            "query { affectedTasks(base: \"HEAD\", tasks: [\"build\"]) { items { name package { \
+             name } } } }",
         ],
     );
     assert_command_success(&output, "Go affected task query");
@@ -666,7 +667,8 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
         tempdir.path(),
         &[
             "query",
-            "query { affectedTasks(tasks: [\"build\"]) { items { name package { name } } } }",
+            "query { affectedTasks(base: \"HEAD\", tasks: [\"build\"]) { items { name package { \
+             name } } } }",
         ],
     );
     assert_command_success(&output, "independent Go affected task query");
