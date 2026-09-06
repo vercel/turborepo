@@ -235,19 +235,15 @@ fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
 fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Error> {
     const COMMAND: &str = "go list -find -json ./...";
 
-    let output = run_go(
-        module_dir,
-        &["list", "-find", "-json", "./..."],
-        COMMAND,
-    )?;
+    let output = run_go(module_dir, &["list", "-find", "-json", "./..."], COMMAND)?;
     // Runnable defaults are optional. If Go cannot classify every package
     // without error, omit them rather than making workspace discovery fail.
     if !output.status.success() {
         return Ok(None);
     }
 
-    let packages = serde_json::Deserializer::from_slice(&output.stdout)
-        .into_iter::<GoListPackage>();
+    let packages =
+        serde_json::Deserializer::from_slice(&output.stdout).into_iter::<GoListPackage>();
     let mut runnable = None;
     for package in packages {
         let package = package.map_err(|source| Error::CommandParse {
@@ -506,9 +502,7 @@ fn go_command_task(
 
 /// Build the conservative built-in task table for one Go module.
 pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::{
-        PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy,
-    };
+    use crate::native_tasks::{PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy};
 
     let build_entrypoint = if module.runnable_target.is_some() {
         TaskEntrypoint::Preferred
@@ -918,12 +912,7 @@ mod tests {
             crate::package_graph::PackageTaskContextKind::Package,
         );
 
-        let build = resolve_go_cmd(
-            &context,
-            "build",
-            Some(&["-race".to_string()]),
-            None,
-        );
+        let build = resolve_go_cmd(&context, "build", Some(&["-race".to_string()]), None);
         assert_eq!(
             build.args,
             ["build", "-race", "./..."].map(std::ffi::OsString::from)
@@ -949,7 +938,6 @@ mod tests {
             run.args,
             ["run", "./cmd/api", "--port", "3000"].map(std::ffi::OsString::from)
         );
-
     }
 
     #[test]
@@ -976,7 +964,11 @@ mod tests {
         let module = &workspace.modules[0];
         assert_eq!(module.runnable_target, None);
         let tasks = native_tasks_for_module(module);
-        assert!(!tasks.iter().any(|task| matches!(task.name(), "run" | "dev")));
+        assert!(
+            !tasks
+                .iter()
+                .any(|task| matches!(task.name(), "run" | "dev"))
+        );
         assert_eq!(
             tasks
                 .iter()
