@@ -46,6 +46,7 @@ When making changes to the codebase, check if the following docs need updates:
 - Linux Rust shards include `terminal-control` black-box TUI integration tests; known regressions remain explicitly ignored.
 - Rust test shards pin Node.js 18.20.2, so any `packageManager` version an integration fixture declares has to run on that Node.
 - The `@turbo/repository` native-package matrix tests Node.js 20, 22, and 24; N-API v3's CLI does not support Node.js 18.
+- The `@turbo/repository` musl release builds use a pinned Node.js 20 Alpine container and install their Rust and ARM cross toolchains explicitly.
 - Rust test shards and the `@turbo/repository` native-package matrix install the pinned uv version because Python workspace discovery invokes `uv workspace metadata`.
 - Rust integration tests read fixtures from `turborepo-tests/integration/fixtures/`, never from `examples/`. Examples are version-bumped on their own cadence and are not declared inputs of the Rust test task.
 - Example validation remains push-only because it requires Vercel credentials and project state.

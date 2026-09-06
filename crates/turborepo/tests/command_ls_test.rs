@@ -140,3 +140,39 @@ fn test_ls_multiple_package_details_json_reports_first_missing_package() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("Package `missing` not found"));
 }
+
+#[test]
+fn test_ls_multiple_package_details_pretty_preserves_order_and_duplicates() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "util", "my-app", "util"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first_util = stdout.find("util depends on:").unwrap();
+    let my_app = stdout.find("my-app depends on: util").unwrap();
+    let second_util = stdout.rfind("util depends on:").unwrap();
+    assert!(first_util < my_app && my_app < second_util);
+}
+
+#[test]
+fn test_ls_multiple_package_details_pretty_prints_valid_prefix_before_error() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "util", "missing", "my-app"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("util depends on:"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Package `missing` not found"));
+}
+
+#[test]
+fn test_ls_pretty_reports_missing_first_package() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "missing", "util"]);
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Package `missing` not found"));
+}
