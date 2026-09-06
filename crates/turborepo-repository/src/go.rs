@@ -128,6 +128,12 @@ pub enum Error {
     UnknownResolutionModule { module: String },
     #[error("failed to read Go workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
+    #[error("failed to resolve Go module path {path}: {source}")]
+    ModulePath {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
     #[error("go.work has no `go` directive")]
     MissingGoDirective,
     #[error(transparent)]
@@ -214,7 +220,7 @@ struct GoWorkReplace {
 #[derive(Debug, Deserialize)]
 struct GoModEditJson {
     #[serde(rename = "Module")]
-    module: GoModModule,
+    module: Option<GoModModule>,
     #[serde(rename = "Replace")]
     replace: Option<Vec<GoModReplace>>,
 }
@@ -505,15 +511,7 @@ fn join_relative_path(
     base: &AbsoluteSystemPath,
     relative: &str,
 ) -> Result<AbsoluteSystemPathBuf, Error> {
-    if Path::new(relative).is_absolute() {
-        return AbsoluteSystemPathBuf::try_from(Path::new(relative)).map_err(Error::from);
-    }
-    let components = relative
-        .trim_start_matches("./")
-        .split('/')
-        .filter(|part| !part.is_empty() && *part != ".")
-        .collect::<Vec<_>>();
-    Ok(base.join_components(&components))
+    Ok(AbsoluteSystemPathBuf::from_unknown(base, relative))
 }
 
 fn resolve_member_dir(
@@ -521,12 +519,49 @@ fn resolve_member_dir(
     disk_path: &str,
 ) -> Result<AbsoluteSystemPathBuf, Error> {
     let member = join_relative_path(repo_root, disk_path)?;
-    if !member.starts_with(repo_root) {
+    if !path_is_within_repository(repo_root, &member)? {
         return Err(Error::MemberOutsideRepository {
             path: member.to_string(),
         });
     }
     Ok(member)
+}
+
+fn path_is_within_repository(
+    repo_root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<bool, Error> {
+    if !repo_root.contains(path) {
+        return Ok(false);
+    }
+    if !path.exists() {
+        return Ok(true);
+    }
+    let real_root = repo_root
+        .to_realpath()
+        .map_err(|source| Error::ModulePath {
+            path: repo_root.to_string(),
+            source,
+        })?;
+    let real_path = path.to_realpath().map_err(|source| Error::ModulePath {
+        path: path.to_string(),
+        source,
+    })?;
+    Ok(real_root.contains(&real_path))
+}
+
+fn module_path<'a>(
+    module: &'a GoModEditJson,
+    manifest_path: &AbsoluteSystemPath,
+) -> Result<&'a str, Error> {
+    module
+        .module
+        .as_ref()
+        .map(|module| module.path.as_str())
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| Error::MissingModulePath {
+            path: manifest_path.to_string(),
+        })
 }
 
 fn module_path_without_version(dep: &str) -> &str {
@@ -548,13 +583,15 @@ fn validate_local_replacements(
         });
         if let Some(local_path) = local_path {
             let resolved = join_relative_path(module_dir, local_path)?;
-            if !resolved.starts_with(repo_root) {
+            if !path_is_within_repository(repo_root, &resolved)? {
                 return Err(Error::OutsideRepositoryLocalModule {
                     module_path: module_path.to_string(),
                     manifest_path: resolved.join_component(GO_MOD).to_string(),
                 });
             }
-            let resolved_module_path = go_mod_edit_json(repo_root, &resolved)?.module.path;
+            let module = go_mod_edit_json(repo_root, &resolved)?;
+            let resolved_module_path =
+                module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
             if !member_paths.contains(&resolved_module_path) {
                 return Err(Error::NonMemberLocalModule {
                     module_path: resolved_module_path,
@@ -648,9 +685,13 @@ fn external_resolutions(
                 continue;
             }
             for dependency in adjacency.get(node).into_iter().flatten() {
-                pending.push(*dependency);
                 let path = module_path_without_version(dependency);
-                if internal.contains(path) || matches!(path, "go" | "toolchain") {
+                if internal.contains(path) {
+                    pending.push(path);
+                    continue;
+                }
+                pending.push(*dependency);
+                if matches!(path, "go" | "toolchain") {
                     continue;
                 }
                 let identity = by_reference
@@ -688,12 +729,8 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     }
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
-        go_mod_edit_json(repo_root, repo_root)
-            .ok()
-            .and_then(|json| {
-                let path = json.module.path;
-                (!path.is_empty()).then_some(path)
-            })
+        let root_module = go_mod_edit_json(repo_root, repo_root)?;
+        Some(module_path(&root_module, &repo_root.join_component(GO_MOD))?.to_string())
     } else {
         None
     };
@@ -722,12 +759,11 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         let module_path = entry
             .module_path
             .filter(|path| !path.is_empty())
-            .unwrap_or_else(|| module_json.module.path.clone());
-        if module_path.is_empty() {
-            return Err(Error::MissingModulePath {
-                path: member_dir.join_component(GO_MOD).to_string(),
-            });
-        }
+            .unwrap_or(module_path(
+                &module_json,
+                &member_dir.join_component(GO_MOD),
+            )?)
+            .to_string();
         if module_path == GO_WORKSPACE_SCOPE {
             return Err(Error::WorkspaceNameCollision {
                 name: GO_WORKSPACE_SCOPE.to_string(),
@@ -786,13 +822,15 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         };
         let resolved = join_relative_path(repo_root, local_path)?;
         let replaced_module = replacement.old.path.as_deref().unwrap_or("<unknown>");
-        if !resolved.starts_with(repo_root) {
+        if !path_is_within_repository(repo_root, &resolved)? {
             return Err(Error::OutsideRepositoryLocalModule {
                 module_path: replaced_module.to_string(),
                 manifest_path: resolved.join_component(GO_MOD).to_string(),
             });
         }
-        let resolved_module_path = go_mod_edit_json(repo_root, &resolved)?.module.path;
+        let module = go_mod_edit_json(repo_root, &resolved)?;
+        let resolved_module_path =
+            module_path(&module, &resolved.join_component(GO_MOD))?.to_string();
         if !member_paths.contains(&resolved_module_path) {
             return Err(Error::NonMemberLocalModule {
                 module_path: resolved_module_path,
@@ -978,7 +1016,7 @@ fn go_tasks_for_package(
     tasks
 }
 
-fn source_globs(prefix: &str, directory: &str) -> [String; 3] {
+fn source_globs(prefix: &str, directory: &str) -> [String; 4] {
     let base = if prefix.is_empty() {
         directory.to_string()
     } else {
@@ -986,6 +1024,7 @@ fn source_globs(prefix: &str, directory: &str) -> [String; 3] {
     };
     [
         format!("{base}/**"),
+        format!("!{base}/.git/**"),
         format!("!{base}/.turbo/**"),
         format!("!{base}/{GO_DIST_DIR}/**"),
     ]
@@ -1609,6 +1648,60 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn rejects_member_symlink_outside_repository() {
+        use std::os::unix::fs::symlink;
+
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            outside.path().join(GO_MOD),
+            "module example.com/outside\n\ngo 1.22\n",
+        )
+        .unwrap();
+        symlink(outside.path(), tempdir.path().join("linked")).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ./linked\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("symlinked outside members fail");
+        assert!(
+            error.to_string().contains("outside the repository"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reports_unnamed_workspace_module() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let module = root.join_component("module");
+        module.create_dir_all().unwrap();
+        module
+            .join_component(GO_MOD)
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ./module\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("unnamed modules fail");
+        assert!(
+            matches!(error, Error::MissingModulePath { .. }),
+            "unexpected error: {error}"
+        );
+    }
+
     #[test]
     fn models_internal_relationships() {
         if !go_available() {
@@ -1817,6 +1910,62 @@ mod tests {
             .find(|resolution| resolution.package() == GO_WORKSPACE_SCOPE)
             .expect("aggregate resolution");
         assert_eq!(aggregate.identities().len(), 3);
+    }
+
+    #[test]
+    fn external_resolution_traverses_internal_workspace_dependencies() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
+            .expect("root path");
+        let workspace = DiscoveredWorkspace {
+            modules: vec![
+                GoModule {
+                    module_path: "example.com/app".to_string(),
+                    manifest_path: root.join_components(&["app", GO_MOD]),
+                    directory: AnchoredSystemPathBuf::from_raw("app").expect("relative path"),
+                    relationships: Vec::new(),
+                    runnable: None,
+                },
+                GoModule {
+                    module_path: "example.com/lib".to_string(),
+                    manifest_path: root.join_components(&["lib", GO_MOD]),
+                    directory: AnchoredSystemPathBuf::from_raw("lib").expect("relative path"),
+                    relationships: Vec::new(),
+                    runnable: None,
+                },
+            ],
+            work: GoWorkJson::default(),
+            graph: "example.com/app example.com/lib@v0.0.0\nexample.com/lib \
+                    example.net/shared@v1.0.0\n"
+                .to_string(),
+        };
+        let listed = vec![GoListModule {
+            path: "example.net/shared".to_string(),
+            version: "v1.0.0".to_string(),
+            sum: "h1:shared".to_string(),
+            go_mod_sum: "h1:shared-mod".to_string(),
+            main: false,
+            replace: None,
+        }];
+        let resolutions = external_resolutions(
+            &workspace.graph,
+            &workspace,
+            &listed,
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("resolution");
+        for package in ["example.com/app", "example.com/lib", GO_WORKSPACE_SCOPE] {
+            let resolution = resolutions
+                .iter()
+                .find(|resolution| resolution.package() == package)
+                .expect("package resolution");
+            assert!(
+                resolution
+                    .identities()
+                    .iter()
+                    .any(|identity| identity.key() == "example.net/shared"),
+                "{package} must include the transitive shared module"
+            );
+        }
     }
 
     #[test]
