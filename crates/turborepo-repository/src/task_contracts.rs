@@ -55,6 +55,7 @@ pub enum CommandMapTarget {
     JavaScript,
     Rust,
     Python,
+    Go,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +81,10 @@ impl CommandMapTarget {
     fn matches(self, key: &str) -> bool {
         matches!(
             (self, key),
-            (Self::JavaScript, "javascript") | (Self::Rust, "rust") | (Self::Python, "python")
+            (Self::JavaScript, "javascript")
+                | (Self::Rust, "rust")
+                | (Self::Python, "python")
+                | (Self::Go, "go")
         )
     }
 }
@@ -89,6 +93,7 @@ impl CommandMapTarget {
 enum DynamicTaskContract {
     Cargo(crate::cargo::CargoTaskContract),
     Python(crate::uv::UvTaskContract),
+    Go(crate::go::GoTaskContract),
 }
 
 /// Per-scope task-contract observation produced at repository construction.
@@ -192,6 +197,29 @@ impl ScopeTaskContract {
             )),
             dependency_source_inputs,
             dynamic: Some(DynamicTaskContract::Python(contract)),
+            static_defaults: BTreeMap::new(),
+            static_io: BTreeMap::new(),
+            static_entrypoints: BTreeMap::new(),
+        }
+    }
+
+    pub(crate) fn go(contract: crate::go::GoTaskContract) -> Self {
+        let dependency_source_inputs = contract.dependency_source_inputs();
+        Self {
+            derives_io: true,
+            defaults: TaskDefaults::default(),
+            environment: Some(TaskEnvironmentRequirement::new(
+                TaskEnvironmentDomain(Cow::Borrowed("go-task-io")),
+                crate::go::HASHED_ENV_VARS.to_vec(),
+            )),
+            toolchain: Some(ToolchainId::GO),
+            command_map_target: Some(CommandMapTarget::Go),
+            entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("go"))),
+            prune_package_mode: Some(PrunePackageMode::NativeDomain(
+                crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+            )),
+            dependency_source_inputs,
+            dynamic: Some(DynamicTaskContract::Go(contract)),
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
             static_entrypoints: BTreeMap::new(),
@@ -312,6 +340,14 @@ impl ScopeTaskContract {
                 context,
             ),
             DynamicTaskContract::Python(contract) => contract.derived_task_io(
+                package,
+                task,
+                path_to_root,
+                dependencies,
+                wants_automatic_inputs,
+                context,
+            ),
+            DynamicTaskContract::Go(contract) => contract.derived_task_io(
                 package,
                 task,
                 path_to_root,

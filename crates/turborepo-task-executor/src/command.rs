@@ -175,6 +175,8 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     /// Lazily resolved uv binary path for Python framing.
     uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved go binary path for Go framing.
+    go_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -194,6 +196,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             package_manager_binary: std::sync::OnceLock::new(),
             cargo_binary: std::sync::OnceLock::new(),
             uv_binary: std::sync::OnceLock::new(),
+            go_binary: std::sync::OnceLock::new(),
         }
     }
 
@@ -219,6 +222,13 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
 
     fn uv_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
         match self.uv_binary.get_or_init(|| which::which("uv")) {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn go_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        match self.go_binary.get_or_init(|| which::which("go")) {
             Ok(path) => Ok(Some(path.as_path())),
             Err(_) => Ok(None),
         }
@@ -275,6 +285,9 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                     }
                     Some(NativeCommandProgram::Tool(tool)) if tool == "uv" => {
                         (None, self.uv_binary()?)
+                    }
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "go" => {
+                        (None, self.go_binary()?)
                     }
                     Some(NativeCommandProgram::Tool(_)) | None => (None, None),
                 }

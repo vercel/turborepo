@@ -24,6 +24,8 @@ pub const CARGO_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("cargo
 
 pub const PYTHON_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("python"));
 
+pub const GO_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("go"));
+
 /// A toolchain's contribution to a pruned repository.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PrunePlan {
