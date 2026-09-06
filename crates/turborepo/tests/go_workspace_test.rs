@@ -233,6 +233,9 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
     let task = dry_run_task(&output, "go-workspace#test");
     assert_eq!(task["command"], "go test ./apps/api/... ./packages/lib/...");
     assert_eq!(task["directory"], "");
