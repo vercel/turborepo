@@ -76,6 +76,7 @@ mod tests {
             } else {
                 "/repo/apps/web/package.json".to_string()
             },
+            tasks: vec!["build".to_string()],
         };
         let rust = RepositoryScope {
             name: "api".to_string(),
@@ -85,6 +86,7 @@ mod tests {
             } else {
                 "/repo/crates/api/Cargo.toml".to_string()
             },
+            tasks: vec!["build".to_string()],
         };
 
         assert!(javascript_workspace_from_proto(javascript)

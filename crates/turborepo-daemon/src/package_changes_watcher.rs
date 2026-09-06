@@ -25,7 +25,7 @@ impl RediscoveringPackageChangesWatcher {
         let (package_changes_tx, package_changes_rx) = broadcast::channel(16);
         let (repository_discovery_tx, repository_discovery_rx) = watch::channel(None);
         let _handle = tokio::spawn(async move {
-            if let Some(snapshot) = javascript_discovery_snapshot(&args).await {
+            if let Some(snapshot) = repository_discovery_snapshot(&args).await {
                 repository_discovery_tx.send_replace(Some(Arc::new(snapshot)));
             }
 
@@ -37,7 +37,7 @@ impl RediscoveringPackageChangesWatcher {
             loop {
                 match events.recv().await {
                     Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {
-                        if let Some(snapshot) = javascript_discovery_snapshot(&args).await {
+                        if let Some(snapshot) = repository_discovery_snapshot(&args).await {
                             repository_discovery_tx.send_replace(Some(Arc::new(snapshot)));
                         }
                         let _ = package_changes_tx.send(PackageChangeEvent::Rediscover);
@@ -55,13 +55,32 @@ impl RediscoveringPackageChangesWatcher {
     }
 }
 
-async fn javascript_discovery_snapshot(
+async fn repository_discovery_snapshot(
     args: &PackageChangesWatcherArgs,
 ) -> Option<RepositoryDiscoverySnapshot> {
-    let root_package_json =
-        PackageJson::load(&args.repo_root.join_component("package.json")).ok()?;
-    PackageGraph::builder(&args.repo_root, root_package_json)
-        .with_allow_no_package_manager(args.allow_no_package_manager)
+    let package_json_path = args.repo_root.join_component("package.json");
+    let cargo_enabled = args
+        .repo_root
+        .join_component(turborepo_repository::cargo::CARGO_TOML)
+        .exists();
+    let python_enabled = args
+        .repo_root
+        .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+        .exists();
+    let root_package_json = PackageJson::load(&package_json_path).ok();
+    if root_package_json.is_none() && !cargo_enabled && !python_enabled {
+        return None;
+    }
+
+    let mut builder = PackageGraph::builder_optional(&args.repo_root, root_package_json)
+        .with_allow_no_package_manager(args.allow_no_package_manager);
+    if cargo_enabled {
+        builder = builder.with_cargo();
+    }
+    if python_enabled {
+        builder = builder.with_uv();
+    }
+    builder
         .build()
         .await
         .ok()

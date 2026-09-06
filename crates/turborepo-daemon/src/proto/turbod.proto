@@ -127,6 +127,7 @@ message RepositoryScope {
   string name = 1;
   string toolchain = 2;
   string manifest_path = 3;
+  repeated string tasks = 4;
 }
 
 message RepositoryWorkspaceRoot {
