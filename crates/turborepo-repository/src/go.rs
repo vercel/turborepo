@@ -923,7 +923,7 @@ mod tests {
             lint.args,
             ["vet", "-json", "./..."].map(std::ffi::OsString::from)
         );
-        assert!(!context.native_tasks().contains_key("vet"));
+        assert!(context.native_tasks().get("vet").is_none());
         assert!(
             !native_tasks_for_workspace(&["./apps/api/...".to_string()])
                 .iter()
