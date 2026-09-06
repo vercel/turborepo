@@ -1692,6 +1692,75 @@ mod tests {
     }
 
     #[test]
+    fn rejects_reserved_workspace_identity() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", GO_WORKSPACE_SCOPE, "")]);
+        let error = discover_workspace(&root).expect_err("reserved identity fails");
+        assert!(matches!(error, Error::WorkspaceNameCollision { .. }));
+    }
+
+    #[test]
+    fn rejects_root_module_as_workspace_member() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_MOD)
+            .create_with_contents("module example.com/root\n\ngo 1.22\n")
+            .unwrap();
+        root.join_component("root.go")
+            .create_with_contents("package root\n")
+            .unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse .\n")
+            .unwrap();
+        let error = discover_workspace(&root).expect_err("root workspace modules fail");
+        assert!(matches!(error, Error::RootDefinitionCollision { .. }));
+    }
+
+    #[test]
+    fn rejects_local_replacement_to_nonmember() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(
+            &root,
+            &[(
+                "apps/api",
+                "example.com/api",
+                "module example.com/api\n\ngo 1.22\n\nrequire example.com/local v0.0.0\n\nreplace \
+                 example.com/local => ../../packages/local\n",
+            )],
+        );
+        let local = root.join_components(&["packages", "local"]);
+        local.create_dir_all().unwrap();
+        local
+            .join_component(GO_MOD)
+            .create_with_contents("module example.com/local\n\ngo 1.22\n")
+            .unwrap();
+        local
+            .join_component("local.go")
+            .create_with_contents("package local\n")
+            .unwrap();
+        root.join_components(&["apps", "api", "api.go"])
+            .create_with_contents("package api\n\nimport _ \"example.com/local\"\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("nonmember replacement fails");
+        assert!(matches!(error, Error::NonMemberLocalModule { .. }));
+    }
+
+    #[test]
     fn models_internal_relationships() {
         if !go_available() {
             return;
@@ -1955,6 +2024,31 @@ mod tests {
                 "{package} must include the transitive shared module"
             );
         }
+    }
+
+    #[test]
+    fn external_resolution_rejects_unknown_graph_nodes() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
+            .expect("root path");
+        let workspace = DiscoveredWorkspace {
+            modules: vec![GoModule {
+                module_path: "example.com/app".to_string(),
+                manifest_path: root.join_components(&["app", GO_MOD]),
+                directory: AnchoredSystemPathBuf::from_raw("app").expect("relative path"),
+                relationships: Vec::new(),
+                runnable: None,
+            }],
+            work: GoWorkJson::default(),
+            graph: "example.com/app example.net/missing@v1.0.0\n".to_string(),
+        };
+        let error = external_resolutions(
+            &workspace.graph,
+            &workspace,
+            &[],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect_err("unknown module graph nodes fail");
+        assert!(matches!(error, Error::UnknownResolutionModule { .. }));
     }
 
     #[test]

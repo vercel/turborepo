@@ -945,6 +945,52 @@ fn test_query_exposes_go_external_resolution_dependents() {
 }
 
 #[test]
+fn test_go_run_summary_reports_native_command_and_external_hash() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/api", "--summarize"],
+    );
+    assert_command_success(&output, "summarized Go build");
+    let runs = tempdir.path().join(".turbo/runs");
+    let summary_path = fs::read_dir(runs)
+        .expect("run summary directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .expect("Go run summary");
+    let summary: serde_json::Value =
+        serde_json::from_slice(&fs::read(summary_path).expect("read Go run summary"))
+            .expect("parse Go run summary");
+    let task = summary["tasks"]
+        .as_array()
+        .and_then(|tasks| {
+            tasks
+                .iter()
+                .find(|task| task["taskId"] == "example.com/api#build")
+        })
+        .expect("Go build summary");
+    assert!(
+        task["command"]
+            .as_str()
+            .is_some_and(|command| command.contains("go build -o dist/api"))
+    );
+    assert!(
+        task["hashOfExternalDependencies"]
+            .as_str()
+            .is_some_and(|hash| !hash.is_empty())
+    );
+    assert_eq!(task["execution"]["exitCode"], 0);
+}
+
+#[test]
 fn test_go_prune_produces_valid_buildable_workspace() {
     if !go_available() {
         return;
