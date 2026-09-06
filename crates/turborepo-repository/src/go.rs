@@ -179,12 +179,12 @@ struct GoWorkJson {
     go: Option<String>,
     #[serde(rename = "Toolchain")]
     toolchain: Option<String>,
-    #[serde(default, rename = "Godebug")]
-    godebug: Vec<GoWorkGodebug>,
+    #[serde(rename = "Godebug")]
+    godebug: Option<Vec<GoWorkGodebug>>,
     #[serde(rename = "Use")]
     use_: Option<Vec<GoWorkUse>>,
-    #[serde(default, rename = "Replace")]
-    replace: Vec<GoWorkReplace>,
+    #[serde(rename = "Replace")]
+    replace: Option<Vec<GoWorkReplace>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -766,7 +766,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             &member_paths,
         )?;
     }
-    for replacement in &work.replace {
+    for replacement in work.replace.as_deref().unwrap_or_default() {
         let Some(local_path) = replacement.new.path.as_deref().filter(|path| {
             !path.contains('@') && (path.starts_with('.') || Path::new(path).is_absolute())
         }) else {
@@ -1183,7 +1183,7 @@ fn render_pruned_go_work(work: &GoWorkJson, kept_directories: &[String]) -> Resu
     {
         output.push_str(&format!("\ntoolchain {toolchain}\n"));
     }
-    for setting in &work.godebug {
+    for setting in work.godebug.as_deref().unwrap_or_default() {
         output.push_str(&format!("\ngodebug {}={}\n", setting.key, setting.value));
     }
     let mut directories = kept_directories
@@ -1198,7 +1198,7 @@ fn render_pruned_go_work(work: &GoWorkJson, kept_directories: &[String]) -> Resu
     }
     output.push_str(")\n");
     let retained: HashSet<&str> = directories.iter().map(String::as_str).collect();
-    for replacement in &work.replace {
+    for replacement in work.replace.as_deref().unwrap_or_default() {
         let Some(old) = render_module_ref(&replacement.old) else {
             continue;
         };
@@ -1686,10 +1686,10 @@ mod tests {
         let work = GoWorkJson {
             go: Some("1.24.0".to_string()),
             toolchain: Some("go1.24.2".to_string()),
-            godebug: vec![GoWorkGodebug {
+            godebug: Some(vec![GoWorkGodebug {
                 key: "gotypesalias".to_string(),
                 value: "1".to_string(),
-            }],
+            }]),
             ..Default::default()
         };
         let rendered =
