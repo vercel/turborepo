@@ -801,33 +801,53 @@ the shared repository graph.
 Behind `futureFlags.experimentalGoWorkspaces`, `turbo run` discovers Go modules
 from the repository-root `go.work` and adds them to the package graph. Go
 workspaces can stand alone or coexist with JavaScript, Cargo, and uv
-workspaces. `GoContributor` contributes pre-classified internal relationships
-through the shared repository graph.
+workspaces. `GoContributor` contributes pre-classified internal relationships,
+native tasks and contracts, external resolution, change observations, and a
+prune domain through the shared repository graph.
 
 - **Discovery** invokes `go work edit -json` for workspace membership and
   `go mod edit -json` for each member's module path. Module paths are package
-  identities and `go.mod` files are native definition paths.
+  identities and `go.mod` files are native definition paths. `go list -find
+  -json ./...` identifies modules with exactly one runnable main package. A
+  deterministic `go-workspace` aggregate depends on every module and hosts
+  workspace verification.
 - **Relationships** come from `go mod graph`: dependencies whose resolved
   module path is another workspace member become internal graph edges. Local
   `replace` directives outside the repository or to non-members are rejected.
-- **Hashing** adds the exact `go version`, target/architecture, build flags,
-  experiments, cgo configuration, and selected tools to every module's external
-  resolution identity. Effective values come from structured `go env` output,
-  including settings persisted by `go env -w`; checkout-root paths are
-  normalized. Credentials, network/proxy policy, telemetry, mutable cache
-  locations, and host/tool installation paths are excluded.
+- **Execution** registers `build`, `test`, `lint`, and `format` for each module.
+  A module with exactly one main package also receives `dev`; its build writes
+  one stable `dist/` binary. The workspace aggregate runs verification over
+  explicit member patterns. Library builds, dev, and
+  formatting default to uncached; command overrides and package exclusions use
+  the shared task configuration machinery.
+- **Resolution and hashing** include module and internal dependency sources,
+  workspace definitions, and per-module external closures from
+  `go list -m -json all`. Module versions, replacements, and checksums remain
+  scoped to the modules that reach them. The exact `go version`,
+  target/architecture, build flags, experiments, cgo configuration, and selected
+  tools form a path-normalized toolchain identity from structured `go env`
+  output, including settings persisted by `go env -w`. Credentials,
+  network/proxy policy, telemetry, mutable cache locations, checkout paths, and
+  host/tool installation paths are excluded. Go build and module caches are
+  never task outputs.
+- **Change knowledge** rediscoveries follow `go.work` and any `go.mod`;
+  `go.work.sum` and per-module `go.sum` paths are resolution inputs.
+  In-repository `GOCACHE` and `GOMODCACHE` directories are ignored as
+  byproducts.
 - **Prune** expands selected modules through the captured internal relationship
   graph and emits a deterministic `go.work` containing sorted retained module
   directories. The workspace `go` and `toolchain` directives are preserved.
   Relevant workspace replacements are normalized to repository-relative paths;
   local replacements outside the repository or to non-members fail discovery.
-  `go.work.sum` and each retained module's `go.sum` are copied verbatim because
-  Go validates their checksums, while removed modules and their sums are omitted.
+  `go.work.sum`, retained module trees, and each retained module's `go.sum` are
+  copied verbatim because Go validates their checksums, while removed modules
+  and their sums are omitted.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 
 End-to-end coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
-against pure-Go, mixed JavaScript/Go, and cache-invalidation fixtures. The tests
+against pure-Go, mixed JavaScript/Go, and cache-invalidation fixtures, including
+execution, cache restoration, hashing, query, and prune behavior. The tests
 clear ambient Go configuration and use only workspace-local modules or committed
 checksum inputs, so they do not require network access. Tests that execute Go
 print an explicit skip reason when `go` is unavailable. Compiler-version
