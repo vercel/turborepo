@@ -1,0 +1,8 @@
+{
+  "name": "js-pkg",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"require('fs').mkdirSync('dist',{recursive:true}); require('fs').writeFileSync('dist/out.txt','ok')\""
+  }
+}

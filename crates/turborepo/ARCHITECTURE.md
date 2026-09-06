@@ -796,6 +796,26 @@ the shared repository graph.
   `uv.toml` when present. Reachable local dependencies that are not workspace
   members fail closed.
 
+#### Experimental Go Support (`crates/turborepo-repository/src/go.rs`)
+
+Behind `futureFlags.experimentalGoWorkspaces`, `turbo run` discovers Go modules
+from the repository-root `go.work` and adds them to the package graph. Go
+workspaces can stand alone or coexist with JavaScript, Cargo, and uv
+workspaces. `GoContributor` contributes pre-classified internal relationships
+through the shared repository graph.
+
+- **Discovery** invokes `go work edit -json` for workspace membership and
+  `go mod edit -json` for each member's module path. Module paths are package
+  identities and `go.mod` files are native definition paths.
+- **Relationships** come from `go mod graph`: dependencies whose resolved
+  module path is another workspace member become internal graph edges. Local
+  `replace` directives outside the repository or to non-members are rejected.
+- **Pure Go repositories** may omit a root `package.json` when the flag is
+  enabled and `go.work` exists at the repository root.
+
+End-to-end graph coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
+against the `go_pure_workspace` and `go_monorepo` fixtures.
+
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
 execution, and prune output. Linux Rust CI installs a pinned uv version; local
