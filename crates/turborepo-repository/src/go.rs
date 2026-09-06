@@ -20,9 +20,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
     change_knowledge::ChangeObservation,
@@ -676,7 +674,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     }
 
     let work = go_work_json(repo_root)?;
-    let uses = work.use_.ok_or(Error::EmptyWorkspace)?;
+    let uses = work.use_.clone().ok_or(Error::EmptyWorkspace)?;
     if uses.is_empty() {
         return Err(Error::EmptyWorkspace);
     }
@@ -1623,7 +1621,10 @@ mod tests {
         let module = GoPackageKind::Module {
             runnable: Some(runnable),
         };
-        let patterns = vec!["./apps/api/...".to_string(), "./packages/lib/...".to_string()];
+        let patterns = vec![
+            "./apps/api/...".to_string(),
+            "./packages/lib/...".to_string(),
+        ];
         let tasks = go_tasks_for_package(&module, "linux", &patterns);
         let build = tasks
             .iter()
@@ -1642,7 +1643,10 @@ mod tests {
             command.arguments.pass_through_placement,
             PassThroughPlacement::BeforeSuffix
         );
-        assert_eq!(build.contract().entrypoint(), Some(TaskEntrypoint::Preferred));
+        assert_eq!(
+            build.contract().entrypoint(),
+            Some(TaskEntrypoint::Preferred)
+        );
         assert!(tasks.iter().any(|task| task.name() == "run"));
         assert!(tasks.iter().any(|task| task.name() == "dev"));
         assert!(matches!(
@@ -1667,11 +1671,7 @@ mod tests {
 
     #[test]
     fn library_modules_do_not_receive_unsafe_run_defaults() {
-        let tasks = go_tasks_for_package(
-            &GoPackageKind::Module { runnable: None },
-            "linux",
-            &[],
-        );
+        let tasks = go_tasks_for_package(&GoPackageKind::Module { runnable: None }, "linux", &[]);
         assert!(!tasks.iter().any(|task| task.name() == "run"));
         assert!(!tasks.iter().any(|task| task.name() == "dev"));
         let build = tasks
@@ -1692,11 +1692,9 @@ mod tests {
             }],
             ..Default::default()
         };
-        let rendered = render_pruned_go_work(
-            &work,
-            &["packages/lib".to_string(), "apps/api".to_string()],
-        )
-        .expect("go.work renders");
+        let rendered =
+            render_pruned_go_work(&work, &["packages/lib".to_string(), "apps/api".to_string()])
+                .expect("go.work renders");
         assert_eq!(
             rendered,
             "go 1.24.0\n\ntoolchain go1.24.2\n\ngodebug gotypesalias=1\n\nuse \
@@ -1726,8 +1724,7 @@ mod tests {
                 },
             ],
             work: GoWorkJson::default(),
-            graph: "example.com/a example.net/one@v1.0.0\nexample.com/b \
-                    example.net/two@v2.0.0\n"
+            graph: "example.com/a example.net/one@v1.0.0\nexample.com/b example.net/two@v2.0.0\n"
                 .to_string(),
         };
         let listed = vec![
@@ -1749,9 +1746,8 @@ mod tests {
             },
         ];
         let toolchain = ExternalPackageIdentity::new("go", "go1.24");
-        let resolutions =
-            external_resolutions(&workspace.graph, &workspace, &listed, &toolchain)
-                .expect("resolution");
+        let resolutions = external_resolutions(&workspace.graph, &workspace, &listed, &toolchain)
+            .expect("resolution");
         let a = resolutions
             .iter()
             .find(|resolution| resolution.package() == "example.com/a")
