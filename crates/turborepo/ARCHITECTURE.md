@@ -99,10 +99,20 @@ application and the standalone `turborepo-lsp` binary use this shared API, so a
 without requiring the LSP to depend on `turborepo-lib`.
 
 The `turbo` application supplies its package-graph-aware change watcher and
-keeps CLI-specific rendering in `turborepo-lib`. The standalone LSP supplies a
-conservative daemon-owned watcher that emits full rediscovery for filesystem
-changes. This preserves correctness when the packaged LSP hosts the daemon,
-while the richer watcher avoids unnecessary rediscovery when `turbo` hosts it.
+keeps CLI-specific rendering in `turborepo-lib`. Each completed graph generation
+also publishes one immutable repository-discovery snapshot to the daemon. The
+snapshot contains toolchain-tagged scope identities and manifest paths plus
+workspace-root observations, so the daemon protocol does not encode
+`package.json`, JavaScript package managers, or any other ecosystem-specific
+metadata. Consumers that only support one ecosystem filter by toolchain
+explicitly; the JavaScript package-discovery adapter is one such compatibility
+boundary.
+
+The standalone LSP supplies a conservative daemon-owned watcher that emits full
+rediscovery for filesystem changes and rebuilds a JavaScript-only graph snapshot.
+This preserves correctness when the packaged LSP hosts the daemon, while the
+richer watcher uses the feature-enabled multi-toolchain graph and avoids
+unnecessary rediscovery when `turbo` hosts it.
 
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
