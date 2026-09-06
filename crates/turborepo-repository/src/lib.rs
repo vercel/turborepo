@@ -16,6 +16,7 @@ pub mod change_knowledge;
 pub mod change_mapper;
 pub mod discovery;
 pub mod external_resolution;
+pub mod go;
 pub mod inference;
 mod knowledge;
 mod manifest_parser;

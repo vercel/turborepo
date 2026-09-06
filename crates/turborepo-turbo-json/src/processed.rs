@@ -555,7 +555,7 @@ impl ProcessedWith {
 /// The canonical toolchain ids accepted as `command` map keys, alongside
 /// their accepted aliases. Kept as literals: this crate sits below the
 /// toolchain registry, and these ids are stable public API.
-const KNOWN_TOOLCHAINS: [&str; 3] = ["javascript", "rust", "python"];
+const KNOWN_TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
 const TOOLCHAIN_ALIASES: [(&str, &str); 1] = [("typescript", "javascript")];
 
 /// A task `command` after alias resolution and validation: the argv the
@@ -627,6 +627,8 @@ impl ProcessedCommand {
                 r#"Rust crates are the "rust" toolchain."#.to_string()
             } else if raw_key == "uv" {
                 r#"Python packages are the "python" toolchain."#.to_string()
+            } else if raw_key == "golang" {
+                r#"Go modules are the "go" toolchain."#.to_string()
             } else {
                 format!(
                     "Known toolchains: {}.",
@@ -651,6 +653,7 @@ impl ProcessedCommand {
             "python" if !future_flags.experimental_python_workspaces => {
                 Some("experimentalPythonWorkspaces")
             }
+            "go" if !future_flags.experimental_go_workspaces => Some("experimentalGoWorkspaces"),
             _ => None,
         };
         if let Some(flag) = missing_flag {
@@ -908,11 +911,19 @@ mod tests {
 
     #[test]
     fn test_command_unknown_toolchain_hints() {
-        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go"])]), &command_flags())
+        let err = ProcessedCommand::from_raw(spanned_map(&[("ruby", &["ruby"])]), &command_flags())
             .unwrap_err();
         assert!(
             matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
                 if hint.contains("javascript") && hint.contains("rust")),
+            "got: {err}"
+        );
+
+        let err = ProcessedCommand::from_raw(spanned_map(&[("golang", &["go"])]), &command_flags())
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
+                if hint.contains(r#""go" toolchain"#)),
             "got: {err}"
         );
 
@@ -936,6 +947,20 @@ mod tests {
             ..Default::default()
         };
         let err = ProcessedCommand::from_raw(spanned_map(&[("rust", &["cargo", "test"])]), &flags)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::TaskCommandToolchainRequiresFlag { .. }
+        ));
+    }
+
+    #[test]
+    fn test_command_go_key_requires_go_flag() {
+        let flags = FutureFlags {
+            experimental_task_command: true,
+            ..Default::default()
+        };
+        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go", "test"])]), &flags)
             .unwrap_err();
         assert!(matches!(
             err,

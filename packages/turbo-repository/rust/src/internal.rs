@@ -375,6 +375,9 @@ impl Workspace {
             if turbo_json.future_flags.experimental_python_workspaces {
                 package_graph_builder = package_graph_builder.with_uv();
             }
+            if turbo_json.future_flags.experimental_go_workspaces {
+                package_graph_builder = package_graph_builder.with_go();
+            }
             Some(package_graph_builder.build().await?)
         };
 

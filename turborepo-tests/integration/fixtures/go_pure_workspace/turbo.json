@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalGoWorkspaces": true },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}

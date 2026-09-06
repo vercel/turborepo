@@ -338,6 +338,12 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self.with_contributor(crate::uv::UvContributor::new(repo_root))
     }
 
+    /// Enable Go repository contribution for this graph generation.
+    pub fn with_go(self) -> Self {
+        let repo_root = self.repo_root.to_owned();
+        self.with_contributor(crate::go::GoContributor::new(repo_root))
+    }
+
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
