@@ -62,7 +62,8 @@ pub enum Error {
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
         "Failed to add workspace \"{name}\" from \"{path}\", it already exists at \
-         \"{existing_path}\""
+         \"{existing_path}\". Rename one package or module so every Turborepo package identity is \
+         unique."
     )]
     DuplicateWorkspace {
         name: String,
