@@ -122,6 +122,18 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
     );
 }
 
+fn normalize_rendered_diagnostic(diagnostic: &str) -> String {
+    diagnostic
+        .lines()
+        .map(|line| {
+            line.trim_start()
+                .strip_prefix("| ")
+                .unwrap_or_else(|| line.trim_start())
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn assert_go_build_cache_result(
     dir: &Path,
     environment: &[(&str, &str)],
@@ -596,13 +608,14 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     let output = run_turbo(tempdir.path(), &["ls"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // Diagnostic renderers can wrap this sentence and insert a continuation
-    // gutter, so assert semantic fragments instead of one contiguous phrase.
+    // Diagnostic renderers can wrap this sentence at different words and add a
+    // continuation gutter depending on paths and platform terminal widths.
+    let normalized_stderr = normalize_rendered_diagnostic(&stderr);
     assert!(
-        stderr.contains("`go work edit -json` failed")
-            && stderr.contains("Repair the repository-root")
-            && stderr.contains("go.work with `go work edit`")
-            && stderr.contains("`go work use`"),
+        normalized_stderr.contains("`go work edit -json` failed")
+            && normalized_stderr.contains(
+                "Repair the repository-root go.work with `go work edit` and `go work use`."
+            ),
         "invalid workspace must have focused remediation: {stderr}"
     );
     assert!(!stderr.contains("package manager"), "{stderr}");
