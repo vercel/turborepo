@@ -810,6 +810,12 @@ through the shared repository graph.
 - **Relationships** come from `go mod graph`: dependencies whose resolved
   module path is another workspace member become internal graph edges. Local
   `replace` directives outside the repository or to non-members are rejected.
+- **Hashing** adds the exact `go version`, target/architecture, build flags,
+  experiments, cgo configuration, and selected tools to every module's external
+  resolution identity. Effective values come from structured `go env` output,
+  including settings persisted by `go env -w`; checkout-root paths are
+  normalized. Credentials, network/proxy policy, telemetry, mutable cache
+  locations, and host/tool installation paths are excluded.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 
