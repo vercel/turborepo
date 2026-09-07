@@ -1612,6 +1612,11 @@ mod tests {
         }
     }
 
+    fn resolution_root() -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
+            .expect("test repository root is absolute")
+    }
+
     fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
         GoListModule {
             path: path.to_string(),
@@ -1646,7 +1651,7 @@ mod tests {
 
     #[test]
     fn external_resolution_scopes_shared_and_disjoint_closures() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let root = resolution_root();
         let modules = vec![
             resolution_module(&root, "example.com/app"),
             resolution_module(&root, "example.com/lib"),
@@ -1752,7 +1757,7 @@ mod tests {
 
     #[test]
     fn external_resolution_rejects_unresolved_graph_modules() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let root = resolution_root();
         let modules = vec![resolution_module(&root, "example.com/app")];
         let error = external_resolutions(
             "example.com/app example.net/missing@v1.0.0\n",
