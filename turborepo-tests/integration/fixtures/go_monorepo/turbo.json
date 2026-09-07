@@ -1,6 +1,9 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "futureFlags": { "experimentalGoWorkspaces": true },
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
   "tasks": {
     "build": {
       "outputs": ["dist/**"],

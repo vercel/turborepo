@@ -140,12 +140,14 @@ impl ScopeTaskContract {
     /// Go module and workspace scopes with derived native task contracts.
     pub(crate) fn go(contract: crate::go::GoTaskContract) -> Self {
         let dependency_source_inputs = contract.dependency_source_inputs();
+        let mut environment_vars = crate::go::HASHED_ENV_VARS.to_vec();
+        environment_vars.extend(crate::go::PROJECTED_ONLY_ENV_VARS);
         Self {
             derives_io: true,
             defaults: TaskDefaults::default(),
             environment: Some(TaskEnvironmentRequirement::new(
                 TaskEnvironmentDomain(Cow::Borrowed("go-task-io")),
-                crate::go::HASHED_ENV_VARS.to_vec(),
+                environment_vars,
             )),
             toolchain: Some(ToolchainId::GO),
             command_map_target: Some(CommandMapTarget::Go),

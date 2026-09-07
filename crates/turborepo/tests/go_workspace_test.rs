@@ -7,6 +7,18 @@ use std::{fs, path::Path};
 
 use common::setup;
 
+const AMBIENT_GO_ENV: &[&str] = &[
+    "GO111MODULE",
+    "GOARCH",
+    "GOCACHE",
+    "GOENV",
+    "GOEXPERIMENT",
+    "GOFLAGS",
+    "GOOS",
+    "GOTOOLCHAIN",
+    "GOWORK",
+];
+
 fn go_available() -> bool {
     let available = which::which("go").is_ok();
     if !available {
@@ -30,8 +42,16 @@ fn setup_go_monorepo(dir: &Path) {
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let go_cache_dir = tempfile::tempdir().expect("failed to create Go cache tempdir");
     let mut command = common::turbo_command(dir);
-    command.env("TURBO_CONFIG_DIR_PATH", config_dir.path());
+    for name in AMBIENT_GO_ENV {
+        command.env_remove(name);
+    }
+    command
+        .env("GOCACHE", go_cache_dir.path())
+        .env("GOENV", "off")
+        .env("GOTOOLCHAIN", "local")
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
     command
         .args(args)
         .output()
@@ -423,4 +443,168 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
     assert!(!tasks.iter().any(|task| task == "vet"), "tasks: {tasks:?}");
     assert!(!tasks.iter().any(|task| task == "run"), "tasks: {tasks:?}");
     assert!(!tasks.iter().any(|task| task == "dev"), "tasks: {tasks:?}");
+}
+
+#[test]
+fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
+    if !go_available() {
+        return;
+    }
+
+    let unfiltered = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(unfiltered.path());
+    for task in ["build", "test", "lint"] {
+        let output = run_turbo(unfiltered.path(), &["run", task, "--log-order=grouped"]);
+        assert_command_success(&output, &format!("unfiltered Go {task}"));
+    }
+    assert!(
+        unfiltered
+            .path()
+            .join("apps/api/dist")
+            .join(if cfg!(windows) { "api.exe" } else { "api" })
+            .exists(),
+        "unfiltered native build must produce the runnable binary"
+    );
+
+    let filtered = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(filtered.path());
+    let build_args = [
+        "run",
+        "build",
+        "--filter=example.com/api",
+        "--log-order=grouped",
+    ];
+    let binary = filtered
+        .path()
+        .join("apps/api/dist")
+        .join(if cfg!(windows) { "api.exe" } else { "api" });
+
+    let output = run_turbo(filtered.path(), &build_args);
+    assert_command_success(&output, "cold filtered Go build");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("cache miss"),
+        "expected cache miss: {stdout}"
+    );
+    assert!(binary.exists(), "native build must produce {binary:?}");
+
+    let output = run_turbo(filtered.path(), &build_args);
+    assert_command_success(&output, "warm filtered Go build");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "second build must hit cache: {stdout}"
+    );
+
+    fs::remove_dir_all(binary.parent().expect("binary output directory")).unwrap();
+    let output = run_turbo(filtered.path(), &build_args);
+    assert_command_success(&output, "restored filtered Go build");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "restoration must come from cache: {stdout}"
+    );
+    assert!(binary.exists(), "cache hit must restore the binary");
+
+    let output = run_turbo(
+        filtered.path(),
+        &[
+            "run",
+            "dev",
+            "--filter=example.com/api",
+            "--",
+            "passed-to-go",
+        ],
+    );
+    assert_command_success(&output, "native Go dev with pass-through argument");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("passed-to-go"),
+        "go run must receive pass-through arguments: {output:?}"
+    );
+}
+
+#[test]
+fn test_go_format_override_exclusion_and_failure_propagation() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let library = tempdir.path().join("packages/lib/lib.go");
+    fs::write(&library, "package lib\nfunc   Greet( ){ }\n").unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "format", "--filter=example.com/lib"],
+    );
+    assert_command_success(&output, "filtered native Go format");
+    assert_eq!(
+        fs::read_to_string(&library).unwrap(),
+        "package lib\n\nfunc Greet() {}\n"
+    );
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "build": { "command": { "go": ["go", "version"] } }
+  }
+}"#,
+    )
+    .unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/api"],
+    );
+    assert_command_success(&output, "authored Go build override");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("go version go"),
+        "the authored command must execute: {output:?}"
+    );
+    assert!(
+        !tempdir.path().join("apps/api/dist").exists(),
+        "the native build must not shadow the authored command"
+    );
+
+    fs::write(
+        tempdir.path().join("apps/api/turbo.json"),
+        r#"{
+  "extends": ["//"],
+  "tasks": {
+    "build": { "extends": false }
+  }
+}"#,
+    )
+    .unwrap();
+    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    assert!(
+        !tasks.iter().any(|task| task == "build"),
+        "package task exclusion must remove the inherited command: {tasks:?}"
+    );
+
+    fs::write(
+        tempdir.path().join("packages/lib/lib_test.go"),
+        "package lib\n\nimport \"testing\"\n\nfunc TestFailure(t *testing.T) { \
+         t.Fatal(\"intentional failure\") }\n",
+    )
+    .unwrap();
+    let output = run_turbo(tempdir.path(), &["run", "test", "--filter=example.com/lib"]);
+    assert!(
+        !output.status.success(),
+        "a failing Go test must fail the Turbo task"
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("intentional failure"),
+        "Go failure output must propagate: {combined}"
+    );
 }
