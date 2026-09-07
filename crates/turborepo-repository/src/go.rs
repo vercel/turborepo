@@ -1238,6 +1238,46 @@ mod tests {
     }
 
     #[test]
+    fn windows_module_executable_contract_uses_exe_suffix() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some(".".to_string()),
+        };
+        let contract = GoTaskContract::module(&module, "windows", &[]);
+        let package = task_context(
+            &root,
+            &module.module_path,
+            "apps/api",
+            native_tasks_for_module(&module, "windows"),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+
+        let build = resolve_go_cmd(&package, "build", None, None);
+        assert_eq!(
+            build.args,
+            ["build", "-o", "dist/api.exe", "."].map(std::ffi::OsString::from)
+        );
+
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let io = contract
+            .derived_task_io(&package, "build", "../..", &[], true, &context)
+            .expect("Windows executable build derives IO");
+        assert_eq!(
+            io.outputs,
+            DerivedOutputs::Resolved(vec!["dist/api.exe".to_string()])
+        );
+    }
+
+    #[test]
     fn ambiguous_main_packages_do_not_register_dev_default() {
         if !go_available() {
             return;
