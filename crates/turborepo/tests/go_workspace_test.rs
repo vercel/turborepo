@@ -290,12 +290,14 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         &["run", "build", "--filter=example.com/api", "--dry-run=json"],
     );
     let build = dry_run_task(&output, "example.com/api#build");
-    assert_eq!(build["command"], "go build -o dist/api .");
+    let executable = if cfg!(windows) { "api.exe" } else { "api" };
+    let output_path = format!("dist/{executable}");
+    assert_eq!(build["command"], format!("go build -o {output_path} ."));
     assert_eq!(build["resolvedTaskDefinition"]["cache"], true);
     assert!(
         build["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == "dist/api"))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
     );
 
     let output = run_turbo(
