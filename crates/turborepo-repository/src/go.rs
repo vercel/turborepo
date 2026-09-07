@@ -1757,6 +1757,13 @@ mod tests {
             )]),
             replacements: vec![
                 GoPruneReplacement {
+                    old_path: "example.net/local".to_string(),
+                    old_version: None,
+                    new_path: "./packages/lib".to_string(),
+                    new_version: None,
+                    local_target: Some("example.com/lib".to_string()),
+                },
+                GoPruneReplacement {
                     old_path: "example.net/remote".to_string(),
                     old_version: Some("v1.0.0".to_string()),
                     new_path: "example.net/fork".to_string(),
@@ -1783,8 +1790,8 @@ mod tests {
             [(
                 GO_WORK.to_string(),
                 "go 1.22\n\ntoolchain go1.22.0\n\nuse \
-                 (\n\t./apps/api\n\t./packages/lib\n)\n\nreplace (\n\texample.net/remote v1.0.0 \
-                 => example.net/fork v1.0.1\n)\n"
+                 (\n\t./apps/api\n\t./packages/lib\n)\n\nreplace (\n\texample.net/local => \
+                 ./packages/lib\n\texample.net/remote v1.0.0 => example.net/fork v1.0.1\n)\n"
                     .to_string()
             )]
         );
