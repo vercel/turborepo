@@ -501,7 +501,6 @@ fn test_go_prune_produces_minimal_valid_workspace() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-
     for task in ["build", "test"] {
         let output = run_turbo(
             &full,
