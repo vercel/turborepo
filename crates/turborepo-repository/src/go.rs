@@ -40,7 +40,6 @@ pub const GO_WORK: &str = "go.work";
 /// The conventional file name for a Go module manifest.
 pub const GO_MOD: &str = "go.mod";
 
-const GO_SUM: &str = "go.sum";
 const GO_WORK_SUM: &str = "go.work.sum";
 const GO_DIST_DIR: &str = "dist";
 
@@ -532,7 +531,7 @@ fn go_command_task(
     .with_contract(NativeTaskContract::new(
         toolchain::TaskDefaults { cache },
         Some(entrypoint),
-        false,
+        true,
     ))
 }
 
