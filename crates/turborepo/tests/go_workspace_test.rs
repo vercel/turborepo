@@ -69,6 +69,22 @@ fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::p
         .expect("failed to execute turbo")
 }
 
+fn run_go(dir: &Path, args: &[&str]) -> std::process::Output {
+    let cache = tempfile::tempdir().expect("failed to create Go cache tempdir");
+    let mut command = std::process::Command::new("go");
+    for name in AMBIENT_GO_ENV {
+        command.env_remove(name);
+    }
+    command
+        .args(args)
+        .env("GOCACHE", cache.path())
+        .env("GOENV", "off")
+        .env("GOTOOLCHAIN", "local")
+        .current_dir(dir)
+        .output()
+        .expect("failed to execute go")
+}
+
 fn assert_command_success(output: &std::process::Output, context: &str) {
     assert!(
         output.status.success(),
@@ -279,6 +295,79 @@ fn test_go_workspace_query_reports_internal_dependencies() {
         .filter_map(|dependency| dependency["name"].as_str())
         .collect();
     assert_eq!(dependencies, ["example.com/lib"]);
+}
+
+#[test]
+fn test_go_prune_produces_minimal_valid_workspace() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let unused = tempdir.path().join("tools/unused");
+    fs::create_dir_all(&unused).unwrap();
+    fs::write(
+        unused.join("go.mod"),
+        "module example.com/unused\n\ngo 1.22\n",
+    )
+    .unwrap();
+    fs::write(unused.join("unused.go"), "package unused\n").unwrap();
+    fs::write(
+        tempdir.path().join("go.work"),
+        "go 1.22\n\nuse (\n\t./tools/unused\n\t./packages/lib\n\t./apps/api\n)\n",
+    )
+    .unwrap();
+    let checksum = "h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
+    let work_sum = format!("example.net/workspace v1.0.0/go.mod {checksum}\n");
+    fs::write(tempdir.path().join("go.work.sum"), &work_sum).unwrap();
+    fs::write(
+        tempdir.path().join("packages/lib/go.sum"),
+        format!("example.net/module v1.0.0/go.mod {checksum}\n"),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "example.com/api", "--docker"]);
+    assert_command_success(&output, "Go prune");
+    let out = tempdir.path().join("out");
+    let full = out.join("full");
+    let json = out.join("json");
+    let expected_work = "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n";
+    assert_eq!(
+        fs::read_to_string(full.join("go.work")).unwrap(),
+        expected_work
+    );
+    assert_eq!(
+        fs::read_to_string(json.join("go.work")).unwrap(),
+        expected_work
+    );
+    assert_eq!(
+        fs::read_to_string(full.join("go.work.sum")).unwrap(),
+        work_sum
+    );
+    assert_eq!(
+        fs::read_to_string(json.join("go.work.sum")).unwrap(),
+        work_sum
+    );
+    for root in [&full, &json] {
+        assert!(root.join("apps/api/go.mod").exists());
+        assert!(root.join("packages/lib/go.mod").exists());
+        assert!(root.join("packages/lib/go.sum").exists());
+        assert!(!root.join("tools/unused").exists());
+    }
+
+    for args in [
+        &["work", "edit", "-json"][..],
+        &["list", "-m", "all"][..],
+        &["test", "./apps/api/...", "./packages/lib/..."][..],
+    ] {
+        let output = run_go(&full, args);
+        assert!(
+            output.status.success(),
+            "go {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]

@@ -816,6 +816,13 @@ through the shared repository graph.
   including settings persisted by `go env -w`; checkout-root paths are
   normalized. Credentials, network/proxy policy, telemetry, mutable cache
   locations, and host/tool installation paths are excluded.
+- **Prune** expands selected modules through the captured internal relationship
+  graph and emits a deterministic `go.work` containing sorted retained module
+  directories. The workspace `go` and `toolchain` directives are preserved.
+  Relevant workspace replacements are normalized to repository-relative paths;
+  local replacements outside the repository or to non-members fail discovery.
+  `go.work.sum` and each retained module's `go.sum` are copied verbatim because
+  Go validates their checksums, while removed modules and their sums are omitted.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 

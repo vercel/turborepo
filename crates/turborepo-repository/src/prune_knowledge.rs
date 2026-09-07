@@ -22,6 +22,8 @@ impl std::fmt::Display for PruneDomainId {
 
 pub const CARGO_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("cargo"));
 
+pub const GO_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("go"));
+
 pub const PYTHON_PRUNE_DOMAIN: PruneDomainId = PruneDomainId(Cow::Borrowed("python"));
 
 /// A toolchain's contribution to a pruned repository.
