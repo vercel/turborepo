@@ -1148,7 +1148,7 @@ mod tests {
             native_task,
             None,
             None,
-            Some(Path::new("/bin/go")),
+            Some(Path::new("go")),
             pass_through_args,
             override_command,
         )
@@ -1171,7 +1171,9 @@ mod tests {
 
     #[test]
     fn module_task_table_renders_commands_and_argument_placement() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        assert!(root.as_std_path().is_absolute());
         let module = GoModule {
             module_path: "example.com/api".to_string(),
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
@@ -1196,6 +1198,7 @@ mod tests {
             build.args,
             ["build", "-race", "-o", "dist/api", "./cmd/api"].map(std::ffi::OsString::from)
         );
+        assert_eq!(build.program, std::ffi::OsString::from("go"));
         assert_eq!(build.cwd, root.join_components(&["apps", "api"]));
         let lint = resolve_go_cmd(&context, "lint", Some(&["-json".to_string()]), None);
         assert_eq!(
