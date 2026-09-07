@@ -13,16 +13,39 @@ use std::{
 use common::setup;
 
 const AMBIENT_GO_ENV: &[&str] = &[
+    "AR",
+    "CC",
+    "CGO_CFLAGS",
+    "CGO_CPPFLAGS",
+    "CGO_CXXFLAGS",
+    "CGO_ENABLED",
+    "CGO_FFLAGS",
+    "CGO_LDFLAGS",
+    "CXX",
+    "GCCGO",
     "GO111MODULE",
+    "GO386",
+    "GOAMD64",
     "GOARCH",
+    "GOARM",
+    "GOARM64",
     "GOCACHE",
+    "GOCACHEPROG",
+    "GODEBUG",
     "GOENV",
     "GOEXPERIMENT",
+    "GOFIPS140",
     "GOFLAGS",
+    "GOMIPS",
+    "GOMIPS64",
     "GOMODCACHE",
     "GOOS",
+    "GOPPC64",
+    "GORISCV64",
     "GOTOOLCHAIN",
+    "GOWASM",
     "GOWORK",
+    "PKG_CONFIG",
 ];
 
 fn go_available() -> bool {
@@ -44,6 +67,11 @@ fn setup_go_pure_workspace(dir: &Path) {
 
 fn setup_go_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "go_monorepo", "npm@10.5.0", false).unwrap();
+}
+
+fn setup_go_e2e_workspace(dir: &Path) {
+    setup::copy_fixture("go_e2e_workspace", dir).unwrap();
+    setup::setup_git(dir).unwrap();
 }
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
@@ -92,6 +120,67 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn assert_go_build_cache_result(
+    dir: &Path,
+    environment: &[(&str, &str)],
+    expected: &str,
+    context: &str,
+) {
+    let output = run_turbo_with_env(
+        dir,
+        &[
+            "run",
+            "build",
+            "--filter=example.com/api",
+            "--log-order=grouped",
+        ],
+        environment,
+    );
+    assert_command_success(&output, context);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains(expected),
+        "{context} must report {expected:?}\noutput:\n{combined}"
+    );
+}
+
+#[cfg(unix)]
+fn go_version_shim_path(dir: &Path) -> String {
+    use std::os::unix::fs::PermissionsExt;
+
+    let real_go = which::which("go").expect("go is available");
+    let shim_dir = dir.join("go-version-shim");
+    fs::create_dir_all(&shim_dir).unwrap();
+    let quoted_go = real_go.to_string_lossy().replace('\'', "'\"'\"'");
+    let shim = shim_dir.join("go");
+    fs::write(
+        &shim,
+        format!(concat!(
+            "#!/bin/sh\n",
+            "if [ \"$1\" = version ]; then\n",
+            "  echo 'go version go1.99.0 turbo/e2e'\n",
+            "  exit 0\n",
+            "fi\n",
+            "exec '{quoted_go}' \"$@\"\n",
+        )),
+    )
+    .unwrap();
+    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut paths = vec![shim_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    std::env::join_paths(paths)
+        .expect("PATH can include the Go version shim")
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[cfg(unix)]
@@ -272,6 +361,39 @@ fn test_mixed_go_workspace_lists_js_and_go_packages() {
 }
 
 #[test]
+fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_monorepo(tempdir.path());
+    let args = ["run", "build", "--log-order=grouped"];
+    let output = run_turbo(tempdir.path(), &args);
+    assert_command_success(&output, "mixed JavaScript and Go build");
+    assert!(
+        tempdir.path().join("packages/js-pkg/dist/out.txt").exists(),
+        "the JavaScript package must produce its declared output"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("apps/api/dist")
+            .join(if cfg!(windows) { "api.exe" } else { "api" })
+            .exists(),
+        "the Go module must produce its native executable"
+    );
+
+    let output = run_turbo(tempdir.path(), &args);
+    assert_command_success(&output, "warm mixed JavaScript and Go build");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "equivalent mixed tasks must hit cache:\n{stdout}"
+    );
+}
+
+#[test]
 fn test_go_workspace_query_reports_internal_dependencies() {
     if !go_available() {
         return;
@@ -368,6 +490,25 @@ fn test_go_prune_produces_minimal_valid_workspace() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+
+    for task in ["build", "test"] {
+        let output = run_turbo(
+            &full,
+            &[
+                "run",
+                task,
+                "--filter=example.com/api",
+                "--log-order=grouped",
+            ],
+        );
+        assert_command_success(&output, &format!("pruned native Go {task} task"));
+    }
+    assert!(
+        full.join("apps/api/dist")
+            .join(if cfg!(windows) { "api.exe" } else { "api" })
+            .exists(),
+        "the pruned native build must produce its executable"
+    );
 }
 
 #[test]
@@ -570,6 +711,150 @@ fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
         original,
         task_hash(tempdir.path(), "example.com/api", "build"),
         "module source changes must affect its task hash"
+    );
+}
+
+#[test]
+fn test_go_hash_is_stable_across_equivalent_checkout_roots() {
+    if !go_available() {
+        return;
+    }
+
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    setup_go_e2e_workspace(first.path());
+    setup_go_e2e_workspace(second.path());
+
+    assert_eq!(
+        task_hash(first.path(), "example.com/api", "build"),
+        task_hash(second.path(), "example.com/api", "build"),
+        "equivalent checkouts with local replacements must produce the same Go task hash"
+    );
+}
+
+#[test]
+fn test_go_cache_invalidates_every_north_star_input() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_e2e_workspace(tempdir.path());
+    let root = tempdir.path();
+
+    assert_go_build_cache_result(root, &[], "cache miss", "cold Go build");
+    assert_go_build_cache_result(root, &[], "FULL TURBO", "unchanged Go build");
+
+    fs::write(
+        root.join("tools/independent/independent.go"),
+        "package independent\n\nconst Value = \"still-independent\"\n",
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "FULL TURBO", "unrelated module source change");
+
+    fs::write(
+        root.join("apps/api/main.go"),
+        r#"package main
+
+import (
+	"fmt"
+
+	"example.com/lib"
+	"example.net/message"
+)
+
+func main() {
+	fmt.Println(lib.Value(), message.Value(), "source-changed")
+}
+"#,
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "cache miss", "module source change");
+
+    fs::write(
+        root.join("packages/lib/lib.go"),
+        "package lib\n\nfunc Value() string { return \"dependency-changed\" }\n",
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "cache miss", "internal dependency change");
+
+    fs::write(
+        root.join("third_party/message/message.go"),
+        "package message\n\nfunc Value() string { return \"replacement-changed\" }\n",
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "cache miss", "local replacement change");
+
+    fs::write(
+        root.join("apps/api/go.mod"),
+        r#"module example.com/api
+
+go 1.22
+
+require (
+	example.com/independent v0.0.0
+	example.com/lib v0.0.0
+	example.net/message v0.0.0
+)
+
+replace example.com/independent => ../../tools/independent
+
+replace example.com/lib => ../../packages/lib
+
+replace example.net/message => ../../third_party/message
+"#,
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "cache miss", "module graph change");
+
+    fs::write(
+        root.join("tools/independent/independent.go"),
+        "package independent\n\nconst Value = \"now-dependent\"\n",
+    )
+    .unwrap();
+    assert_go_build_cache_result(
+        root,
+        &[],
+        "cache miss",
+        "newly connected dependency source change",
+    );
+
+    fs::write(
+        root.join("apps/api/go.sum"),
+        "example.org/checksum-only v1.0.1/go.mod h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n",
+    )
+    .unwrap();
+    assert_go_build_cache_result(root, &[], "cache miss", "external checksum change");
+
+    #[cfg(unix)]
+    {
+        let path = go_version_shim_path(root);
+        assert_go_build_cache_result(
+            root,
+            &[("PATH", &path)],
+            "cache miss",
+            "Go compiler version change",
+        );
+    }
+
+    let go_arch = run_go(root, &["env", "GOARCH"]);
+    assert_command_success(&go_arch, "read host Go architecture");
+    let target_arch = if String::from_utf8_lossy(&go_arch.stdout).trim() == "386" {
+        "amd64"
+    } else {
+        "386"
+    };
+    assert_go_build_cache_result(
+        root,
+        &[("GOARCH", target_arch)],
+        "cache miss",
+        "Go target architecture change",
+    );
+    assert_go_build_cache_result(
+        root,
+        &[("GOFLAGS", "-tags=turbo_cache_invalidation")],
+        "cache miss",
+        "relevant Go build environment change",
     );
 }
 
