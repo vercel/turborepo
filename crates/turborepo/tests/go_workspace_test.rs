@@ -912,6 +912,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     let executable = if cfg!(windows) { "api.exe" } else { "api" };
     let output_path = format!("dist/{executable}");
     let build_command = format!("go build -o {output_path} .");
+    let task_directory = Path::new("apps").join("api").to_string_lossy().into_owned();
 
     let output = run_turbo(
         tempdir.path(),
@@ -967,7 +968,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     );
     let dry_run = dry_run_task(&output, "example.com/api#build");
     assert_eq!(dry_run["package"], "example.com/api");
-    assert_eq!(dry_run["directory"], "apps/api");
+    assert_eq!(dry_run["directory"], task_directory);
     assert_eq!(dry_run["command"], build_command);
     assert!(
         dry_run["resolvedTaskDefinition"]["inputs"]
@@ -1008,7 +1009,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
         })
         .expect("summarized Go build task");
     assert_eq!(summarized_build["package"], "example.com/api");
-    assert_eq!(summarized_build["directory"], "apps/api");
+    assert_eq!(summarized_build["directory"], task_directory);
     assert_eq!(summarized_build["command"], build_command);
     assert!(
         summarized_build["inputs"]
