@@ -1272,7 +1272,8 @@ mod tests {
 
     #[test]
     fn task_contracts_derive_module_executable_and_workspace_io() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         let executable = GoModule {
             module_path: "example.com/api".to_string(),
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
@@ -1380,11 +1381,18 @@ mod tests {
 
     #[test]
     fn cache_prefixes_remain_inside_the_repository() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let build_cache = root.join_components(&[".cache", "go-build"]).to_string();
+        let module_cache_tempdir = tempfile::tempdir().unwrap();
+        let module_cache = AbsoluteSystemPathBuf::try_from(module_cache_tempdir.path())
+            .unwrap()
+            .join_components(&["go", "pkg", "mod"])
+            .to_string();
         let environment = GoEnvironment {
             target_os: "linux".to_string(),
-            build_cache: "/repo/.cache/go-build".to_string(),
-            module_cache: "/home/user/go/pkg/mod".to_string(),
+            build_cache,
+            module_cache,
         };
         assert_eq!(
             go_cache_prefixes(&root, &environment),
