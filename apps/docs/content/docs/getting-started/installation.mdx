@@ -43,6 +43,21 @@ bunx create-turbo@latest
 
 </Tab>
 
+
+<Tab value="nub">
+```bash title="Terminal"
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+```bash title="Terminal"
+aubx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 The starter repository will have:
@@ -86,6 +101,21 @@ A global install of `turbo` brings flexibility and speed to your local workflows
   <Tab value="bun">
   ```bash title="Terminal"
   bun install turbo --global
+  ```
+
+  </Tab>
+
+
+<Tab value="nub">
+  ```bash title="Terminal"
+  nub add turbo --global
+  ```
+
+  </Tab>
+
+<Tab value="aube">
+  ```bash title="Terminal"
+  aube add turbo --global
   ```
 
   </Tab>
@@ -149,7 +179,22 @@ When collaborating with other developers in a repository, it's a good idea to pi
 
   </Tab>
 
-  </PackageManagerTabs>
+  
+<Tab value="nub">
+  ```bash title="Terminal"
+  nub add turbo --save-dev
+  ```
+
+  </Tab>
+
+<Tab value="aube">
+  ```bash title="Terminal"
+  aube add turbo --save-dev
+  ```
+
+  </Tab>
+
+</PackageManagerTabs>
 
 You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
 
