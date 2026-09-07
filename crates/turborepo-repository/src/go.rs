@@ -301,12 +301,30 @@ fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, 
 
 fn normalize_checkout_path(repo_root: &AbsoluteSystemPath, value: &str) -> String {
     let native_root = repo_root.as_str().trim_end_matches(['/', '\\']);
-    let normalized = value.replace(native_root, "$REPO");
-    let slash_root = native_root.replace('\\', "/");
-    if slash_root == native_root {
+
+    #[cfg(windows)]
+    {
+        // Go may report paths with either separator on Windows, and drive
+        // letters are case-insensitive. Normalize separators before replacing
+        // checkout roots while preserving the case of all non-root text.
+        let slash_root = native_root.replace('\\', "/");
+        let slash_value = value.replace('\\', "/");
+        let folded_root = slash_root.to_ascii_lowercase();
+        let folded_value = slash_value.to_ascii_lowercase();
+        let mut normalized = String::with_capacity(slash_value.len());
+        let mut copied = 0;
+        for (index, _) in folded_value.match_indices(&folded_root) {
+            normalized.push_str(&slash_value[copied..index]);
+            normalized.push_str("$REPO");
+            copied = index + slash_root.len();
+        }
+        normalized.push_str(&slash_value[copied..]);
         normalized
-    } else {
-        normalized.replace(&slash_root, "$REPO")
+    }
+
+    #[cfg(not(windows))]
+    {
+        value.replace(native_root, "$REPO")
     }
 }
 
@@ -1473,9 +1491,18 @@ mod tests {
             .collect()
     }
 
+    fn checkout_root(name: &str) -> AbsoluteSystemPathBuf {
+        let path = if cfg!(windows) {
+            format!(r"C:\checkout\{name}")
+        } else {
+            format!("/checkout/{name}")
+        };
+        AbsoluteSystemPathBuf::new(&path).expect("test checkout root is absolute")
+    }
+
     #[test]
     fn toolchain_fingerprint_covers_every_behavior_changing_go_environment_family() {
-        let root = AbsoluteSystemPathBuf::new("/checkout/repo").unwrap();
+        let root = checkout_root("repo");
         let values = complete_go_environment();
         let baseline =
             normalized_go_toolchain_version(&root, "go version go1.24.0 linux/amd64", &values)
@@ -1520,37 +1547,50 @@ mod tests {
 
     #[test]
     fn toolchain_fingerprint_normalizes_checkout_paths_and_ignores_local_state() {
-        let first_root = AbsoluteSystemPathBuf::new("/checkout/first").unwrap();
-        let second_root = AbsoluteSystemPathBuf::new("/checkout/second").unwrap();
+        let first_root = checkout_root("first");
+        let second_root = checkout_root("second");
+        let separator = std::path::MAIN_SEPARATOR;
+        let first_prefix = first_root.as_str();
         let mut first = complete_go_environment();
         first.extend([
             (
                 "CC".to_string(),
-                "/checkout/first/tools/compiler".to_string(),
+                format!(
+                    "{first_prefix}{separator}tools{separator}compiler{}",
+                    std::env::consts::EXE_SUFFIX
+                ),
             ),
             (
                 "GOFLAGS".to_string(),
-                "-tags=integration -overlay=/checkout/first/config/overlay.json".to_string(),
+                format!(
+                    "-tags=integration \
+                     -overlay={first_prefix}{separator}config{separator}overlay.json"
+                ),
             ),
-            ("GOWORK".to_string(), "/checkout/first/go.work".to_string()),
+            (
+                "GOWORK".to_string(),
+                format!("{first_prefix}{separator}go.work"),
+            ),
         ]);
         let mut second = first.clone();
         for value in second.values_mut() {
-            *value = value.replace("/checkout/first", "/checkout/second");
+            *value = value.replace(first_root.as_str(), second_root.as_str());
         }
+        let normalized_first =
+            normalized_go_toolchain_version(&first_root, "go version go1.24.0 linux/amd64", &first)
+                .unwrap();
         assert_eq!(
-            normalized_go_toolchain_version(
-                &first_root,
-                "go version go1.24.0 linux/amd64",
-                &first,
-            )
-            .unwrap(),
+            normalized_first,
             normalized_go_toolchain_version(
                 &second_root,
                 "go version go1.24.0 linux/amd64",
                 &second,
             )
             .unwrap(),
+        );
+        assert!(
+            normalized_first.contains(&format!("compiler{}", std::env::consts::EXE_SUFFIX)),
+            "normalization must preserve the selected executable suffix"
         );
         for variable in [
             "AR",
@@ -1631,6 +1671,29 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn toolchain_fingerprint_normalizes_windows_drive_case_and_path_separators() {
+        let root = AbsoluteSystemPathBuf::new(r"C:\checkout\repo").unwrap();
+        let mut values = complete_go_environment();
+        values.insert(
+            "CC".to_string(),
+            r"c:/checkout/repo/tools\compiler.exe".to_string(),
+        );
+        values.insert(
+            "GOFLAGS".to_string(),
+            r"-overlay=c:\checkout\repo/config\overlay.json".to_string(),
+        );
+
+        let normalized =
+            normalized_go_toolchain_version(&root, "go version go1.24.0 windows/amd64", &values)
+                .unwrap();
+        let identity: BTreeMap<String, String> = serde_json::from_str(&normalized).unwrap();
+
+        assert_eq!(identity["CC"], "$REPO/tools/compiler.exe");
+        assert_eq!(identity["GOFLAGS"], "-overlay=$REPO/config/overlay.json");
+    }
+
     fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
         let directory = path.rsplit('/').next().expect("module path component");
         GoModule {
@@ -1639,6 +1702,11 @@ mod tests {
             relationships: Vec::new(),
             runnable_target: None,
         }
+    }
+
+    fn resolution_root() -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
+            .expect("test repository root is absolute")
     }
 
     fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
@@ -1675,7 +1743,7 @@ mod tests {
 
     #[test]
     fn external_resolution_scopes_shared_and_disjoint_closures() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let root = resolution_root();
         let modules = vec![
             resolution_module(&root, "example.com/app"),
             resolution_module(&root, "example.com/lib"),
@@ -1781,7 +1849,7 @@ mod tests {
 
     #[test]
     fn external_resolution_rejects_unresolved_graph_modules() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let root = resolution_root();
         let modules = vec![resolution_module(&root, "example.com/app")];
         let error = external_resolutions(
             "example.com/app example.net/missing@v1.0.0\n",
