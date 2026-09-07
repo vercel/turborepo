@@ -2057,6 +2057,7 @@ mod tests {
             target_os: "linux".to_string(),
             build_cache,
             module_cache,
+            fingerprint_values: BTreeMap::new(),
         };
         assert_eq!(
             go_cache_prefixes(&root, &environment),
