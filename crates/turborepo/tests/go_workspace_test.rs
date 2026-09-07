@@ -122,6 +122,18 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
     );
 }
 
+fn normalize_rendered_diagnostic(diagnostic: &str) -> String {
+    diagnostic
+        .lines()
+        .map(|line| {
+            line.trim_start()
+                .strip_prefix("| ")
+                .unwrap_or_else(|| line.trim_start())
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn assert_go_build_cache_result(
     dir: &Path,
     environment: &[(&str, &str)],
@@ -572,8 +584,67 @@ fn test_enabled_go_workspace_reports_missing_go_executable() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("failed to run `go work edit -json`"),
-        "missing Go diagnostic must identify the command: {stderr}"
+        stderr.contains("Go is required for experimental Go workspaces")
+            && stderr.contains("Install Go 1.22 or newer")
+            && stderr.contains("PATH"),
+        "missing Go diagnostic must identify the requirement and remediation: {stderr}"
+    );
+    assert!(!stderr.contains("package manager"), "{stderr}");
+}
+
+#[test]
+fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("go.work"),
+        "go 1.22\n\nunsupported ./apps/api\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Diagnostic renderers can wrap this sentence at different words and add a
+    // continuation gutter depending on paths and platform terminal widths.
+    let normalized_stderr = normalize_rendered_diagnostic(&stderr);
+    assert!(
+        normalized_stderr.contains("`go work edit -json` failed")
+            && normalized_stderr.contains(
+                "Repair the repository-root go.work with `go work edit` and `go work use`."
+            ),
+        "invalid workspace must have focused remediation: {stderr}"
+    );
+    assert!(!stderr.contains("package manager"), "{stderr}");
+    assert!(!stderr.contains("failed to parse"), "{stderr}");
+}
+
+#[test]
+fn test_go_and_javascript_package_name_collision_is_actionable() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("apps/api/go.mod"),
+        "module js-pkg\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace example.com/lib => \
+         ../../packages/lib\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+    assert!(
+        stderr.contains("Failed to add workspace \"js-pkg\"")
+            && stderr.contains("apps/api/go.mod")
+            && stderr.contains("packages/js-pkg/package.json")
+            && stderr.contains("Rename one package or module"),
+        "cross-language identity collision must be actionable: {stderr}"
     );
 }
 
