@@ -402,10 +402,7 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     let lint = dry_run_task(&output, "example.com/lib#lint");
     assert_eq!(lint["command"], "go vet ./...");
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
-    );
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
     let build = dry_run_task(&output, "example.com/api#build");
     let executable = if cfg!(windows) { "api.exe" } else { "api" };
     let output_path = format!("dist/{executable}");
@@ -995,10 +992,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
             .is_some_and(|hash| !hash.is_empty())
     );
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--summarize"],
-    );
+    let output = run_turbo(tempdir.path(), &["run", "build", "--summarize"]);
     assert_command_success(&output, "summarized Go build");
     let summary_path = fs::read_dir(tempdir.path().join(".turbo/runs"))
         .expect("run summary directory")
@@ -1023,6 +1017,13 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert_eq!(summarized_build["package"], "example.com/api");
     assert_eq!(summarized_build["directory"], "apps/api");
     assert_eq!(summarized_build["command"], build_command);
+    assert!(
+        summarized_build["dependencies"]
+            .as_array()
+            .is_some_and(|dependencies| dependencies
+                .iter()
+                .any(|dependency| dependency == "example.com/lib#build"))
+    );
     assert!(
         summarized_build["inputs"]
             .as_object()
