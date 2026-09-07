@@ -355,7 +355,7 @@ fn fingerprinted_go_environment(
                 .get(*name)
                 .cloned()
                 .map(|value| ((*name).to_string(), value))
-                .ok_or(Error::MissingEnvironmentVariable { name: *name })
+                .ok_or(Error::MissingEnvironmentVariable { name })
         })
         .collect()
 }
