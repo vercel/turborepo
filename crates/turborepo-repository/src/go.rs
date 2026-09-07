@@ -36,6 +36,9 @@ pub const GO_WORK: &str = "go.work";
 /// The conventional file name for a Go module manifest.
 pub const GO_MOD: &str = "go.mod";
 
+/// Deterministic identity for the workspace-wide Go verification scope.
+pub const GO_WORKSPACE_NAME: &str = "go-workspace";
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to run `{command}`: {source}")]
@@ -106,6 +109,9 @@ pub struct GoModule {
     pub manifest_path: AbsoluteSystemPathBuf,
     /// Direct internal relationships to other workspace modules.
     pub relationships: Vec<Relationship>,
+    /// Package pattern for the sole `main` package used by the `dev` task, when
+    /// unambiguous.
+    pub runnable_target: Option<String>,
 }
 
 /// The result of Go workspace discovery.
@@ -158,6 +164,14 @@ struct GoModModuleRef {
     #[serde(rename = "Version")]
     #[allow(dead_code)]
     version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoListPackage {
+    #[serde(rename = "Dir")]
+    directory: String,
+    #[serde(rename = "Name")]
+    name: String,
 }
 
 fn run_go(
@@ -217,6 +231,44 @@ fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
         });
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Error> {
+    const COMMAND: &str = "go list -find -json ./...";
+
+    let output = run_go(module_dir, &["list", "-find", "-json", "./..."], COMMAND)?;
+    // The native dev default is optional. If Go cannot classify every package
+    // without error, omit it rather than making workspace discovery fail.
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let packages =
+        serde_json::Deserializer::from_slice(&output.stdout).into_iter::<GoListPackage>();
+    let mut runnable = None;
+    for package in packages {
+        let package = package.map_err(|source| Error::CommandParse {
+            command: COMMAND,
+            source,
+        })?;
+        if package.name != "main" {
+            continue;
+        }
+        let Ok(relative) = Path::new(&package.directory).strip_prefix(module_dir.as_std_path())
+        else {
+            return Ok(None);
+        };
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        let target = if relative.is_empty() {
+            ".".to_string()
+        } else {
+            format!("./{relative}")
+        };
+        if runnable.replace(target).is_some() {
+            return Ok(None);
+        }
+    }
+    Ok(runnable)
 }
 
 fn join_relative_path(
@@ -391,6 +443,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             module_path,
             manifest_path: member_dir.join_component(GO_MOD),
             relationships: Vec::new(),
+            runnable_target: runnable_target(&member_dir)?,
         });
     }
 
@@ -415,6 +468,137 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     Ok(DiscoveredWorkspace { modules })
 }
 
+fn go_command_task(
+    name: &'static str,
+    subcommand: &'static str,
+    targets: Vec<String>,
+    pass_through_placement: crate::native_tasks::PassThroughPlacement,
+    cache: Option<bool>,
+    entrypoint: crate::native_tasks::TaskEntrypoint,
+    cwd_policy: crate::native_tasks::WorkingDirectoryPolicy,
+) -> crate::native_tasks::NativeTask {
+    use crate::native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
+    };
+
+    NativeTask::command_task(
+        name,
+        format!("go {subcommand} {}", targets.join(" ")),
+        NativeCommandProgram::Tool("go".to_string()),
+        NativeCommandArguments {
+            prefix: vec![subcommand.to_string()],
+            pass_through_placement,
+            pass_through_separator: None,
+            suffix: targets,
+        },
+        None,
+        cwd_policy,
+    )
+    .with_contract(NativeTaskContract::new(
+        toolchain::TaskDefaults { cache },
+        Some(entrypoint),
+        false,
+    ))
+}
+
+/// Build the conservative built-in task table for one Go module.
+pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::{PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy};
+
+    let build_entrypoint = if module.runnable_target.is_some() {
+        TaskEntrypoint::Preferred
+    } else {
+        TaskEntrypoint::Candidate
+    };
+    let mut tasks = vec![
+        go_command_task(
+            "build",
+            "build",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            module.runnable_target.is_none().then_some(false),
+            build_entrypoint,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "test",
+            "test",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            None,
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "lint",
+            "vet",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            None,
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "format",
+            "fmt",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            Some(false),
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+    ];
+    if let Some(target) = &module.runnable_target {
+        tasks.push(go_command_task(
+            "dev",
+            "run",
+            vec![target.clone()],
+            PassThroughPlacement::AfterSuffix,
+            Some(false),
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ));
+    }
+    tasks
+}
+
+/// Build workspace-wide verification tasks over explicit module patterns.
+pub fn native_tasks_for_workspace(
+    module_patterns: &[String],
+) -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::{
+        NativeTask, NativeTaskContract, PassThroughPlacement, TaskEntrypoint,
+        WorkingDirectoryPolicy,
+    };
+
+    let mut module_patterns = module_patterns.to_vec();
+    module_patterns.sort();
+    module_patterns.dedup();
+    let mut tasks = [("test", "test"), ("lint", "vet"), ("format", "fmt")]
+        .into_iter()
+        .map(|(name, subcommand)| {
+            go_command_task(
+                name,
+                subcommand,
+                module_patterns.clone(),
+                PassThroughPlacement::BeforeSuffix,
+                (name == "format").then_some(false),
+                TaskEntrypoint::PreferredOnly,
+                WorkingDirectoryPolicy::RepositoryRoot,
+            )
+        })
+        .collect::<Vec<_>>();
+    tasks.push(NativeTask::contract_task(
+        "build",
+        NativeTaskContract::new(
+            toolchain::TaskDefaults::default(),
+            Some(TaskEntrypoint::Excluded),
+            false,
+        ),
+    ));
+    tasks
+}
+
 fn package_from_module(module: &GoModule) -> DiscoveredPackage {
     let descriptor = PackageJson {
         name: Some(turborepo_errors::Spanned::new(module.module_path.clone())),
@@ -426,6 +610,8 @@ fn package_from_module(module: &GoModule) -> DiscoveredPackage {
         module.manifest_path.clone(),
     )
     .with_native_relationships(module.relationships.clone())
+    .with_native_tasks(native_tasks_for_module(module))
+    .with_task_contract(crate::task_contracts::ScopeTaskContract::go())
 }
 
 /// The Go repository contributor. Registered during graph construction when
@@ -459,7 +645,46 @@ impl RepositoryContributor for GoContributor {
                 .into_iter()
                 .collect();
 
-            let packages = workspace.modules.iter().map(package_from_module).collect();
+            let mut module_patterns = workspace
+                .modules
+                .iter()
+                .filter_map(|module| {
+                    let directory = module.manifest_path.parent()?;
+                    let directory =
+                        turbopath::AnchoredSystemPathBuf::new(&self.repo_root, directory).ok()?;
+                    Some(format!("./{}/...", directory.to_unix()))
+                })
+                .collect::<Vec<_>>();
+            module_patterns.sort();
+
+            let mut module_names = workspace
+                .modules
+                .iter()
+                .map(|module| module.module_path.clone())
+                .collect::<Vec<_>>();
+            module_names.sort();
+            let workspace_relationships = module_names
+                .into_iter()
+                .map(|name| Relationship::internal(name, DependencyKind::Production))
+                .collect();
+
+            let mut packages = workspace
+                .modules
+                .iter()
+                .map(package_from_module)
+                .collect::<Vec<_>>();
+            if !packages.is_empty() {
+                packages.push(
+                    DiscoveredPackage::aggregate(
+                        GO_WORKSPACE_NAME.to_string(),
+                        PackageJson::default(),
+                        self.repo_root.join_component(GO_WORK),
+                    )
+                    .with_native_relationships(workspace_relationships)
+                    .with_native_tasks(native_tasks_for_workspace(&module_patterns))
+                    .with_task_contract(crate::task_contracts::ScopeTaskContract::go()),
+                );
+            }
 
             Ok(DiscoveredPackages::new(packages, workspace_roots))
         })
@@ -629,5 +854,140 @@ mod tests {
             HashSet::from(["example.com/api".to_string(), "example.com/lib".to_string()]);
         let relationships = relationships_from_mod_graph(graph, &module_paths).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
+    }
+
+    fn task_context<'a>(
+        root: &'a AbsoluteSystemPath,
+        name: &str,
+        directory: &'a str,
+        tasks: Vec<crate::native_tasks::NativeTask>,
+        kind: crate::package_graph::PackageTaskContextKind,
+    ) -> crate::package_graph::PackageTaskContext<'a> {
+        crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+            name.into(),
+            root,
+            turbopath::AnchoredSystemPath::new(directory).unwrap(),
+            kind,
+            Some(&ToolchainId::GO),
+            Some(tasks),
+            Some(crate::task_contracts::ScopeTaskContract::go()),
+        )
+    }
+
+    fn resolve_go_cmd(
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> crate::toolchain::TaskCommand {
+        let native_task = context.native_tasks().get(task).expect("native Go task");
+        crate::native_tasks::resolve_task_command(
+            context,
+            native_task,
+            None,
+            None,
+            Some(Path::new("go")),
+            pass_through_args,
+            override_command,
+        )
+        .unwrap()
+        .expect("Go command resolves")
+    }
+
+    #[test]
+    fn module_task_table_renders_commands_and_argument_placement() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        assert!(root.as_std_path().is_absolute());
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some("./cmd/api".to_string()),
+        };
+        let context = task_context(
+            &root,
+            &module.module_path,
+            "apps/api",
+            native_tasks_for_module(&module),
+            crate::package_graph::PackageTaskContextKind::Package,
+        );
+
+        let build = resolve_go_cmd(&context, "build", Some(&["-race".to_string()]), None);
+        assert_eq!(
+            build.args,
+            ["build", "-race", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(build.program, std::ffi::OsString::from("go"));
+        assert_eq!(build.cwd, root.join_components(&["apps", "api"]));
+        let lint = resolve_go_cmd(&context, "lint", Some(&["-json".to_string()]), None);
+        assert_eq!(
+            lint.args,
+            ["vet", "-json", "./..."].map(std::ffi::OsString::from)
+        );
+        assert!(context.native_tasks().get("vet").is_none());
+        assert!(
+            !native_tasks_for_workspace(&["./apps/api/...".to_string()])
+                .iter()
+                .any(|task| task.name() == "vet")
+        );
+        assert_eq!(
+            context
+                .native_tasks()
+                .get("build")
+                .unwrap()
+                .contract()
+                .entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Preferred)
+        );
+
+        let dev = resolve_go_cmd(
+            &context,
+            "dev",
+            Some(&["--port".to_string(), "3000".to_string()]),
+            None,
+        );
+        assert_eq!(
+            dev.args,
+            ["run", "./cmd/api", "--port", "3000"].map(std::ffi::OsString::from)
+        );
+        assert!(context.native_tasks().get("run").is_none());
+    }
+
+    #[test]
+    fn ambiguous_main_packages_do_not_register_dev_default() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("apps/api", "example.com/api", "")]);
+        for command in ["first", "second"] {
+            join_relative_path(&root, &format!("apps/api/cmd/{command}"))
+                .unwrap()
+                .create_dir_all()
+                .unwrap();
+            join_relative_path(&root, &format!("apps/api/cmd/{command}/main.go"))
+                .unwrap()
+                .create_with_contents("package main\nfunc main() {}\n")
+                .unwrap();
+        }
+
+        let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
+        let module = &workspace.modules[0];
+        assert_eq!(module.runnable_target, None);
+        let tasks = native_tasks_for_module(module);
+        assert!(!tasks.iter().any(|task| task.name() == "dev"));
+        assert!(!tasks.iter().any(|task| task.name() == "run"));
+        assert_eq!(
+            tasks
+                .iter()
+                .find(|task| task.name() == "build")
+                .unwrap()
+                .contract()
+                .entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
     }
 }

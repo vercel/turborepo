@@ -47,6 +47,17 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
     );
 }
 
+fn dry_run_task(output: &std::process::Output, task_id: &str) -> serde_json::Value {
+    assert_command_success(output, "Go task dry run");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == task_id))
+        .cloned()
+        .unwrap_or_else(|| panic!("{task_id} in task graph"))
+}
+
 fn package_names(dir: &Path) -> Vec<String> {
     let output = run_turbo(dir, &["ls", "--output=json"]);
     assert_command_success(&output, "turbo ls");
@@ -69,6 +80,20 @@ fn query_packages(dir: &Path) -> serde_json::Value {
     );
     assert_command_success(&output, "turbo query");
     serde_json::from_slice(&output.stdout).expect("query emits JSON")
+}
+
+fn package_task_names(dir: &Path, package: &str) -> Vec<String> {
+    let query =
+        format!("query {{ package(name: \"{package}\") {{ tasks {{ items {{ name }} }} }} }}");
+    let output = run_turbo(dir, &["query", &query]);
+    assert_command_success(&output, "Go task catalog query");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query emits JSON");
+    json["data"]["package"]["tasks"]["items"]
+        .as_array()
+        .expect("task items")
+        .iter()
+        .map(|task| task["name"].as_str().expect("task name").to_string())
+        .collect()
 }
 
 #[test]
@@ -201,4 +226,141 @@ fn test_pure_go_workspace_has_no_package_json() {
         !tempdir.path().join("package.json").exists(),
         "turbo must not create a package.json for a pure Go workspace"
     );
+}
+
+#[test]
+fn test_go_native_tasks_and_workspace_aggregate() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalGoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
+    let task = dry_run_task(&output, "go-workspace#test");
+    assert_eq!(task["command"], "go test ./apps/api/... ./packages/lib/...");
+    assert_eq!(task["directory"], "");
+
+    let output = run_turbo(tempdir.path(), &["run", "lint", "--dry-run=json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
+    let lint = dry_run_task(&output, "go-workspace#lint");
+    assert_eq!(lint["command"], "go vet ./apps/api/... ./packages/lib/...");
+    assert_eq!(lint["directory"], "");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+    );
+    let lint = dry_run_task(&output, "example.com/lib#lint");
+    assert_eq!(lint["command"], "go vet ./...");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/lib", "--dry-run=json"],
+    );
+    let build = dry_run_task(&output, "example.com/lib#build");
+    assert_eq!(build["command"], "go build ./...");
+    assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "dev",
+            "--filter=example.com/api",
+            "--dry-run=json",
+            "--",
+            "--port",
+            "3000",
+        ],
+    );
+    let dev = dry_run_task(&output, "example.com/api#dev");
+    assert_eq!(dev["command"], "go run .");
+
+    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    assert!(tasks.iter().any(|task| task == "dev"), "tasks: {tasks:?}");
+    assert!(tasks.iter().any(|task| task == "lint"), "tasks: {tasks:?}");
+    assert!(!tasks.iter().any(|task| task == "run"), "tasks: {tasks:?}");
+    assert!(!tasks.iter().any(|task| task == "vet"), "tasks: {tasks:?}");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "run", "--filter=example.com/api", "--dry-run=json"],
+    );
+    assert!(!output.status.success(), "removed run task must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Could not find task `run` in project"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn test_go_native_tasks_are_overrideable_and_excludable() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "lint": { "command": { "go": ["go", "version"] } },
+    "dev": { "command": { "go": ["go", "env", "GOVERSION"] } }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+    );
+    let lint = dry_run_task(&output, "example.com/lib#lint");
+    assert_eq!(lint["command"], "go version");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+    );
+    let dev = dry_run_task(&output, "example.com/api#dev");
+    assert_eq!(dev["command"], "go env GOVERSION");
+
+    fs::write(
+        tempdir.path().join("apps/api/turbo.json"),
+        r#"{
+  "extends": ["//"],
+  "tasks": {
+    "dev": { "extends": false }
+  }
+}"#,
+    )
+    .unwrap();
+    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    assert!(tasks.iter().any(|task| task == "lint"), "tasks: {tasks:?}");
+    assert!(!tasks.iter().any(|task| task == "vet"), "tasks: {tasks:?}");
+    assert!(!tasks.iter().any(|task| task == "run"), "tasks: {tasks:?}");
+    assert!(!tasks.iter().any(|task| task == "dev"), "tasks: {tasks:?}");
 }

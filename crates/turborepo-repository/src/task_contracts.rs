@@ -55,6 +55,7 @@ pub enum CommandMapTarget {
     JavaScript,
     Rust,
     Python,
+    Go,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +81,10 @@ impl CommandMapTarget {
     fn matches(self, key: &str) -> bool {
         matches!(
             (self, key),
-            (Self::JavaScript, "javascript") | (Self::Rust, "rust") | (Self::Python, "python")
+            (Self::JavaScript, "javascript")
+                | (Self::Rust, "rust")
+                | (Self::Python, "python")
+                | (Self::Go, "go")
         )
     }
 }
@@ -125,6 +129,24 @@ impl ScopeTaskContract {
             entrypoint_domain: None,
             prune_package_mode: Some(PrunePackageMode::JavaScript),
             dependency_source_inputs: DependencySourceInputs::Exclude,
+            dynamic: None,
+            static_defaults: BTreeMap::new(),
+            static_io: BTreeMap::new(),
+            static_entrypoints: BTreeMap::new(),
+        }
+    }
+
+    /// Go module and workspace scopes with static native task tables.
+    pub fn go() -> Self {
+        Self {
+            derives_io: false,
+            defaults: TaskDefaults::default(),
+            environment: None,
+            toolchain: Some(ToolchainId::GO),
+            command_map_target: Some(CommandMapTarget::Go),
+            entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("go"))),
+            prune_package_mode: None,
+            dependency_source_inputs: DependencySourceInputs::Unknown,
             dynamic: None,
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
