@@ -161,14 +161,17 @@ fn go_version_shim_path(dir: &Path) -> String {
     let shim = shim_dir.join("go");
     fs::write(
         &shim,
-        format!(concat!(
-            "#!/bin/sh\n",
-            "if [ \"$1\" = version ]; then\n",
-            "  echo 'go version go1.99.0 turbo/e2e'\n",
-            "  exit 0\n",
-            "fi\n",
-            "exec '{quoted_go}' \"$@\"\n",
-        )),
+        format!(
+            concat!(
+                "#!/bin/sh\n",
+                "if [ \"$1\" = version ]; then\n",
+                "  echo 'go version go1.99.0 turbo/e2e'\n",
+                "  exit 0\n",
+                "fi\n",
+                "exec '{}' \"$@\"\n",
+            ),
+            quoted_go
+        ),
     )
     .unwrap();
     fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
