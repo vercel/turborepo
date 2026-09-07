@@ -1547,12 +1547,9 @@ mod tests {
         for value in second.values_mut() {
             *value = value.replace(first_root.as_str(), second_root.as_str());
         }
-        let normalized_first = normalized_go_toolchain_version(
-            &first_root,
-            "go version go1.24.0 linux/amd64",
-            &first,
-        )
-        .unwrap();
+        let normalized_first =
+            normalized_go_toolchain_version(&first_root, "go version go1.24.0 linux/amd64", &first)
+                .unwrap();
         assert_eq!(
             normalized_first,
             normalized_go_toolchain_version(
@@ -1665,10 +1662,7 @@ mod tests {
         let identity: BTreeMap<String, String> = serde_json::from_str(&normalized).unwrap();
 
         assert_eq!(identity["CC"], "$REPO/tools/compiler.exe");
-        assert_eq!(
-            identity["GOFLAGS"],
-            "-overlay=$REPO/config/overlay.json"
-        );
+        assert_eq!(identity["GOFLAGS"], "-overlay=$REPO/config/overlay.json");
     }
 
     fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
