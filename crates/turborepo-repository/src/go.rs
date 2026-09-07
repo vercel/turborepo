@@ -689,6 +689,10 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "PKG_CONFIG",
 ];
 
+/// Machine-local Go variables required by task execution but excluded from
+/// task hashes.
+pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &["GOCACHE"];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum GoContractKind {
     Module { output_name: Option<String> },
@@ -1297,6 +1301,12 @@ mod tests {
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
         );
+        assert!(
+            package
+                .task_contract()
+                .environment_vars()
+                .contains(&"GOCACHE")
+        );
         let dependency = task_context(
             &root,
             &library.module_path,
@@ -1323,6 +1333,7 @@ mod tests {
             assert!(executable_io.input_globs.iter().any(|glob| glob == input));
         }
         assert!(executable_io.env.contains(&"GOOS".to_string()));
+        assert!(!executable_io.env.contains(&"GOCACHE".to_string()));
         assert!(!executable_io.env.contains(&"GOPROXY".to_string()));
         assert_eq!(
             executable_io.outputs,
