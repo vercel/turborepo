@@ -826,8 +826,14 @@ through the shared repository graph.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 
-End-to-end graph coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
-against the `go_pure_workspace` and `go_monorepo` fixtures.
+End-to-end coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
+against pure-Go, mixed JavaScript/Go, and cache-invalidation fixtures. The tests
+clear ambient Go configuration and use only workspace-local modules or committed
+checksum inputs, so they do not require network access. Tests that execute Go
+print an explicit skip reason when `go` is unavailable. Compiler-version
+invalidation uses a Unix-only executable shim; platform-independent fingerprint
+tests retain equivalent coverage on Windows, while the remaining execution,
+hashing, and prune cases run on every platform with Go available.
 
 End-to-end coverage in `crates/turborepo/tests/uv_workspace_test.rs` exercises
 pure uv and mixed npm/uv repositories, graph shape, filtering, affectedness,
