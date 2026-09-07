@@ -1554,3 +1554,175 @@ fn test_mixed_repository_query_keeps_external_resolution_domains_separate() {
     assert_eq!(js_dependents.len(), 1);
     assert_eq!(js_dependents[0]["name"], "js-pkg");
 }
+
+#[test]
+fn test_go_regression_profile_outputs_are_not_log_only_cache_hits() {
+    if !go_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let outputs = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(root.path());
+    let profile = outputs.path().join("coverage.out");
+    let flag = format!("-coverprofile={}", profile.display());
+    let cache_path = cache.path().to_str().unwrap();
+    // Cover both a module and the workspace aggregate, which derive their IO
+    // separately. The report deliberately lives outside default input globs.
+    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
+        let args = ["run", "test", filter, "--", &flag];
+        for _ in 0..2 {
+            let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
+            assert_command_success(&output, "test with coverage output");
+            assert!(
+                profile.exists(),
+                "every run must produce the uncaptured report"
+            );
+            fs::remove_file(&profile).unwrap();
+        }
+    }
+}
+
+#[test]
+fn test_go_regression_strict_execution_preserves_goenv_and_godebug() {
+    if !go_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let settings = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(root.path());
+    let goenv = settings.path().join("goenv");
+    fs::write(&goenv, "GOFLAGS=-tags=goenvregression\n").unwrap();
+    fs::write(
+        root.path().join("apps/api/env_test.go"),
+        r#"package main
+import ("os"; "testing")
+func TestEnvironment(t *testing.T) {
+    if os.Getenv("GODEBUG") != "panicnil=1" { t.Fatal("GODEBUG was dropped") }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("apps/api/missing_env_test.go"),
+        r#"//go:build !goenvregression
+
+package main
+import "testing"
+func TestMissingGoenv(t *testing.T) { t.Fatal("GOENV settings were dropped") }
+"#,
+    )
+    .unwrap();
+    let output = run_turbo_with_env(
+        root.path(),
+        &["run", "test", "--filter=example.com/api"],
+        &[
+            ("GOENV", goenv.to_str().unwrap()),
+            ("GODEBUG", "panicnil=1"),
+        ],
+    );
+    assert_command_success(&output, "strict Go execution with custom GOENV and GODEBUG");
+}
+
+#[test]
+fn test_go_regression_native_output_and_test_argument_placement() {
+    if !go_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let outputs = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(root.path());
+    let binary = outputs.path().join(if cfg!(windows) {
+        "custom.exe"
+    } else {
+        "custom"
+    });
+    let cache_path = cache.path().to_str().unwrap();
+    let output = run_turbo_with_env(
+        root.path(),
+        &[
+            "run",
+            "build",
+            "--filter=example.com/api",
+            "--",
+            "-o",
+            binary.to_str().unwrap(),
+        ],
+        &[("GOCACHE", cache_path)],
+    );
+    assert_command_success(&output, "Go build with custom output");
+    assert!(
+        binary.exists(),
+        "the built-in -o must not override user arguments"
+    );
+
+    let subpackage = root.path().join("apps/api/subpackage");
+    fs::create_dir_all(&subpackage).unwrap();
+    fs::write(
+        subpackage.join("args_test.go"),
+        r#"package subpackage
+import ("flag"; "testing")
+var custom = flag.String("custom", "", "custom test argument")
+func TestCustom(t *testing.T) {
+    if *custom != "expected" { t.Fatalf("argument not passed: %q", *custom) }
+}
+"#,
+    )
+    .unwrap();
+    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
+        let output = run_turbo_with_env(
+            root.path(),
+            &["run", "test", filter, "--", "-args", "-custom=expected"],
+            &[("GOCACHE", cache_path)],
+        );
+        assert_command_success(&output, "Go test with test-binary arguments");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("example.com/api/subpackage"),
+            "package patterns must precede -args so subpackages are tested"
+        );
+    }
+}
+
+#[test]
+fn test_go_regression_goflags_and_explicit_outputs_do_not_hide_untracked_inputs() {
+    if !go_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(root.path());
+    let settings = tempfile::tempdir().unwrap();
+    let goenv = settings.path().join("goenv");
+    fs::write(&goenv, "GOFLAGS=-buildmode=c-shared\n").unwrap();
+    let output = run_turbo_with_env(
+        root.path(),
+        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &[("GOENV", goenv.to_str().unwrap())],
+    );
+    let build = dry_run_task(&output, "example.com/api#build");
+    assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
+
+    fs::write(
+        root.path().join("apps/api/turbo.json"),
+        r#"{
+        "extends": ["//"], "tasks": { "build": { "outputs": ["dist/**"] } }
+    }"#,
+    )
+    .unwrap();
+    let output = run_turbo(
+        root.path(),
+        &[
+            "run",
+            "build",
+            "--filter=example.com/api",
+            "--dry-run=json",
+            "--",
+            "-overlay=elsewhere.json",
+        ],
+    );
+    let build = dry_run_task(&output, "example.com/api#build");
+    assert_eq!(
+        build["resolvedTaskDefinition"]["cache"], false,
+        "explicit outputs do not describe an overlay's untracked source inputs"
+    );
+}
