@@ -12,7 +12,7 @@
 //! `futureFlags.experimentalGoWorkspaces`.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     io,
     path::Path,
     process::Command,
@@ -70,6 +70,10 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
+    #[error("`go env` did not return requested variable {name}")]
+    MissingEnvironmentVariable { name: &'static str },
+    #[error("failed to serialize normalized Go toolchain identity: {0}")]
+    IdentitySerialize(serde_json::Error),
     #[error("root {path} is not a Go workspace (missing go.work)")]
     NotAWorkspace { path: String },
     #[error("go.work lists no workspace modules")]
@@ -205,14 +209,12 @@ struct GoListModule {
     replace: Option<Box<GoListModule>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 struct GoEnvironment {
-    #[serde(rename = "GOOS")]
     target_os: String,
-    #[serde(rename = "GOCACHE")]
     build_cache: String,
-    #[serde(rename = "GOMODCACHE")]
     module_cache: String,
+    fingerprint_values: BTreeMap<String, String>,
 }
 
 fn run_go(
@@ -296,7 +298,52 @@ fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, 
         })
 }
 
-fn go_toolchain_identity(repo_root: &AbsoluteSystemPath) -> Result<ExternalPackageIdentity, Error> {
+fn normalize_checkout_path(repo_root: &AbsoluteSystemPath, value: &str) -> String {
+    let native_root = repo_root.as_str().trim_end_matches(['/', '\\']);
+
+    #[cfg(windows)]
+    {
+        // Go may report paths with either separator on Windows, and drive
+        // letters are case-insensitive. Normalize separators before replacing
+        // checkout roots while preserving the case of all non-root text.
+        let slash_root = native_root.replace('\\', "/");
+        let slash_value = value.replace('\\', "/");
+        let folded_root = slash_root.to_ascii_lowercase();
+        let folded_value = slash_value.to_ascii_lowercase();
+        let mut normalized = String::with_capacity(slash_value.len());
+        let mut copied = 0;
+        for (index, _) in folded_value.match_indices(&folded_root) {
+            normalized.push_str(&slash_value[copied..index]);
+            normalized.push_str("$REPO");
+            copied = index + slash_root.len();
+        }
+        normalized.push_str(&slash_value[copied..]);
+        normalized
+    }
+
+    #[cfg(not(windows))]
+    {
+        value.replace(native_root, "$REPO")
+    }
+}
+
+fn normalized_go_toolchain_version(
+    repo_root: &AbsoluteSystemPath,
+    go_version: &str,
+    values: &BTreeMap<String, String>,
+) -> Result<String, Error> {
+    let mut identity = values
+        .iter()
+        .map(|(name, value)| (name.clone(), normalize_checkout_path(repo_root, value)))
+        .collect::<BTreeMap<_, _>>();
+    identity.insert("go version".to_string(), go_version.trim().to_string());
+    serde_json::to_string(&identity).map_err(Error::IdentitySerialize)
+}
+
+fn go_toolchain_identity(
+    repo_root: &AbsoluteSystemPath,
+    environment: &GoEnvironment,
+) -> Result<ExternalPackageIdentity, Error> {
     const COMMAND: &str = "go version";
     let output = run_go(repo_root, &["version"], COMMAND)?;
     if !output.status.success() {
@@ -307,27 +354,63 @@ fn go_toolchain_identity(repo_root: &AbsoluteSystemPath) -> Result<ExternalPacka
     }
     Ok(ExternalPackageIdentity::new(
         "go",
-        String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        normalized_go_toolchain_version(
+            repo_root,
+            &String::from_utf8_lossy(&output.stdout),
+            &environment.fingerprint_values,
+        )?,
     )
     .with_human_name("go"))
 }
 
+fn fingerprinted_go_environment(
+    values: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, Error> {
+    FINGERPRINTED_GO_ENV_VARS
+        .iter()
+        .map(|name| {
+            values
+                .get(*name)
+                .cloned()
+                .map(|value| ((*name).to_string(), value))
+                .ok_or(Error::MissingEnvironmentVariable { name })
+        })
+        .collect()
+}
+
 fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error> {
-    const COMMAND: &str = "go env -json GOOS GOCACHE GOMODCACHE";
-    let output = run_go(
-        repo_root,
-        &["env", "-json", "GOOS", "GOCACHE", "GOMODCACHE"],
-        COMMAND,
-    )?;
+    const COMMAND: &str = "go env -json <fingerprinted variables>";
+    let mut requested = FINGERPRINTED_GO_ENV_VARS.to_vec();
+    requested.extend(["GOCACHE", "GOMODCACHE"]);
+    requested.sort_unstable();
+    requested.dedup();
+    let args = ["env", "-json"]
+        .into_iter()
+        .chain(requested)
+        .collect::<Vec<_>>();
+    let output = run_go(repo_root, &args, COMMAND)?;
     if !output.status.success() {
         return Err(Error::CommandFailed {
             command: COMMAND,
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
         });
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
-        command: COMMAND,
-        source,
+    let values: BTreeMap<String, String> =
+        serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
+            command: COMMAND,
+            source,
+        })?;
+    let value = |name: &'static str| {
+        values
+            .get(name)
+            .cloned()
+            .ok_or(Error::MissingEnvironmentVariable { name })
+    };
+    Ok(GoEnvironment {
+        target_os: value("GOOS")?,
+        build_cache: value("GOCACHE")?,
+        module_cache: value("GOMODCACHE")?,
+        fingerprint_values: fingerprinted_go_environment(&values)?,
     })
 }
 
@@ -807,9 +890,52 @@ pub fn native_tasks_for_workspace(
     tasks
 }
 
-/// Go variables that alter compilation, package selection, tests, or target
-/// platform. Credentials, proxy settings, and machine-local cache paths are
-/// deliberately excluded.
+/// Effective `go env` values that alter compilation, package selection, tests,
+/// module/workspace selection, target platform, or tool selection.
+///
+/// Values are captured from structured `go env` output so settings persisted
+/// with `go env -w` participate even when they are absent from the process
+/// environment. Checkout-root paths are normalized before fingerprinting.
+const FINGERPRINTED_GO_ENV_VARS: &[&str] = &[
+    // Tool selection and cgo compilation.
+    "AR",
+    "CC",
+    "CGO_CFLAGS",
+    "CGO_CPPFLAGS",
+    "CGO_CXXFLAGS",
+    "CGO_ENABLED",
+    "CGO_FFLAGS",
+    "CGO_LDFLAGS",
+    "CXX",
+    "GCCGO",
+    "PKG_CONFIG",
+    // Module/workspace mode, command flags (including build tags), experiments,
+    // and runtime knobs that can alter tests.
+    "GO111MODULE",
+    "GOCACHEPROG",
+    "GODEBUG",
+    "GOEXPERIMENT",
+    "GOFIPS140",
+    "GOFLAGS",
+    "GOTOOLCHAIN",
+    "GOWORK",
+    // Target platform and architecture feature levels.
+    "GO386",
+    "GOAMD64",
+    "GOARCH",
+    "GOARM",
+    "GOARM64",
+    "GOMIPS",
+    "GOMIPS64",
+    "GOOS",
+    "GOPPC64",
+    "GORISCV64",
+    "GOWASM",
+];
+
+/// Process environment variables that alter Go compilation, package
+/// selection, tests, or target platform. This existing direct task-hash input
+/// remains alongside the effective `go env` fingerprint above.
 pub const HASHED_ENV_VARS: &[&str] = &[
     "GO111MODULE",
     "GO386",
@@ -817,18 +943,28 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "GOARCH",
     "GOARM",
     "GOARM64",
-    "GOCACHEPROG",
-    "GCCGO",
     "GOEXPERIMENT",
-    "GOFLAGS",
     "GOMIPS",
     "GOMIPS64",
     "GOOS",
     "GOTOOLCHAIN",
     "GOWASM",
     "CGO_ENABLED",
+];
+
+/// Machine-local Go variables required by task execution but excluded from
+/// verbatim task hashes. Path-bearing behavior is already represented by its
+/// checkout-normalized external identity; cache locations never participate.
+pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &[
+    "GOCACHE",
+    "GOMODCACHE",
+    "AR",
     "CC",
     "CXX",
+    "GCCGO",
+    "GOCACHEPROG",
+    "GOFLAGS",
+    "GOWORK",
     "CGO_CFLAGS",
     "CGO_CPPFLAGS",
     "CGO_CXXFLAGS",
@@ -836,10 +972,6 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "CGO_LDFLAGS",
     "PKG_CONFIG",
 ];
-
-/// Machine-local Go variables required by task execution but excluded from
-/// task hashes.
-pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &["GOCACHE"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum GoContractKind {
@@ -1059,7 +1191,7 @@ impl RepositoryContributor for GoContributor {
             let (listed, toolchain_identity) = turborepo_rayon_compat::block_in_place(|| {
                 Ok((
                     go_list_modules(&self.repo_root)?,
-                    go_toolchain_identity(&self.repo_root)?,
+                    go_toolchain_identity(&self.repo_root, &environment)?,
                 ))
             })
             .map_err(|error: Error| toolchain::Error::Failed(Box::new(error)))?;
@@ -1323,6 +1455,216 @@ mod tests {
         assert_eq!(relationships["example.com/api"].len(), 1);
     }
 
+    fn complete_go_environment() -> BTreeMap<String, String> {
+        FINGERPRINTED_GO_ENV_VARS
+            .iter()
+            .map(|name| ((*name).to_string(), String::new()))
+            .collect()
+    }
+
+    fn checkout_root(name: &str) -> AbsoluteSystemPathBuf {
+        let path = if cfg!(windows) {
+            format!(r"C:\checkout\{name}")
+        } else {
+            format!("/checkout/{name}")
+        };
+        AbsoluteSystemPathBuf::new(&path).expect("test checkout root is absolute")
+    }
+
+    #[test]
+    fn toolchain_fingerprint_covers_every_behavior_changing_go_environment_family() {
+        let root = checkout_root("repo");
+        let values = complete_go_environment();
+        let baseline =
+            normalized_go_toolchain_version(&root, "go version go1.24.0 linux/amd64", &values)
+                .unwrap();
+
+        for variable in FINGERPRINTED_GO_ENV_VARS {
+            let mut changed = values.clone();
+            changed.insert((*variable).to_string(), format!("changed-{variable}"));
+            assert_ne!(
+                normalized_go_toolchain_version(
+                    &root,
+                    "go version go1.24.0 linux/amd64",
+                    &changed,
+                )
+                .unwrap(),
+                baseline,
+                "{variable} must invalidate the Go resolution fingerprint"
+            );
+        }
+        assert_ne!(
+            normalized_go_toolchain_version(&root, "go version go1.25.0 linux/amd64", &values,)
+                .unwrap(),
+            baseline,
+            "the selected Go compiler version must invalidate the fingerprint"
+        );
+
+        for variable in [
+            "GOOS",
+            "GOARCH",
+            "GOTOOLCHAIN",
+            "GOFLAGS",
+            "GODEBUG",
+            "CC",
+            "CGO_CFLAGS",
+        ] {
+            assert!(
+                FINGERPRINTED_GO_ENV_VARS.contains(&variable),
+                "{variable} represents a required target, toolchain, build-tag/test, or cgo family"
+            );
+        }
+    }
+
+    #[test]
+    fn toolchain_fingerprint_normalizes_checkout_paths_and_ignores_local_state() {
+        let first_root = checkout_root("first");
+        let second_root = checkout_root("second");
+        let separator = std::path::MAIN_SEPARATOR;
+        let first_prefix = first_root.as_str();
+        let mut first = complete_go_environment();
+        first.extend([
+            (
+                "CC".to_string(),
+                format!(
+                    "{first_prefix}{separator}tools{separator}compiler{}",
+                    std::env::consts::EXE_SUFFIX
+                ),
+            ),
+            (
+                "GOFLAGS".to_string(),
+                format!(
+                    "-tags=integration \
+                     -overlay={first_prefix}{separator}config{separator}overlay.json"
+                ),
+            ),
+            (
+                "GOWORK".to_string(),
+                format!("{first_prefix}{separator}go.work"),
+            ),
+        ]);
+        let mut second = first.clone();
+        for value in second.values_mut() {
+            *value = value.replace(first_root.as_str(), second_root.as_str());
+        }
+        let normalized_first =
+            normalized_go_toolchain_version(&first_root, "go version go1.24.0 linux/amd64", &first)
+                .unwrap();
+        assert_eq!(
+            normalized_first,
+            normalized_go_toolchain_version(
+                &second_root,
+                "go version go1.24.0 linux/amd64",
+                &second,
+            )
+            .unwrap(),
+        );
+        assert!(
+            normalized_first.contains(&format!("compiler{}", std::env::consts::EXE_SUFFIX)),
+            "normalization must preserve the selected executable suffix"
+        );
+        for variable in [
+            "AR",
+            "CC",
+            "CXX",
+            "GCCGO",
+            "GOCACHEPROG",
+            "GOFLAGS",
+            "GOWORK",
+            "CGO_CFLAGS",
+            "CGO_CPPFLAGS",
+            "CGO_CXXFLAGS",
+            "CGO_FFLAGS",
+            "CGO_LDFLAGS",
+            "PKG_CONFIG",
+        ] {
+            assert!(FINGERPRINTED_GO_ENV_VARS.contains(&variable));
+            assert!(
+                !HASHED_ENV_VARS.contains(&variable),
+                "{variable} must not be hashed with its raw checkout path"
+            );
+            assert!(
+                PROJECTED_ONLY_ENV_VARS.contains(&variable),
+                "{variable} must remain available to Go task I/O"
+            );
+        }
+
+        // Each tuple names one excluded family and its documented members:
+        // mutable caches/temp paths; install/config/toolchain locations;
+        // credentials and network resolution policy; host-derived duplicates;
+        // telemetry and cosmetic output.
+        const EXCLUDED_FAMILIES: &[(&str, &[&str])] = &[
+            (
+                "mutable cache and temporary paths",
+                &["GOCACHE", "GOMODCACHE", "GOPATH", "GOTMPDIR"],
+            ),
+            (
+                "install, configuration, and toolchain locations",
+                &["GOBIN", "GOENV", "GOMOD", "GOROOT", "GOTOOLDIR"],
+            ),
+            (
+                "credentials and network resolution policy",
+                &[
+                    "GOAUTH",
+                    "GOINSECURE",
+                    "GONOPROXY",
+                    "GONOSUMDB",
+                    "GOPRIVATE",
+                    "GOPROXY",
+                    "GOSUMDB",
+                    "GOVCS",
+                ],
+            ),
+            (
+                "host-derived duplicate values",
+                &["GOEXE", "GOGCCFLAGS", "GOHOSTARCH", "GOHOSTOS", "GOVERSION"],
+            ),
+            (
+                "telemetry and cosmetic output",
+                &["GOTELEMETRY", "GOTRACEBACK"],
+            ),
+        ];
+        let selected = fingerprinted_go_environment(&first).unwrap();
+        for (family, variables) in EXCLUDED_FAMILIES {
+            for variable in *variables {
+                assert!(
+                    !FINGERPRINTED_GO_ENV_VARS.contains(variable),
+                    "{variable} from {family} must remain excluded"
+                );
+                let mut with_local_state = first.clone();
+                with_local_state.insert((*variable).to_string(), "machine-specific".to_string());
+                assert_eq!(
+                    fingerprinted_go_environment(&with_local_state).unwrap(),
+                    selected,
+                    "{variable} from {family} must not affect the identity"
+                );
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn toolchain_fingerprint_normalizes_windows_drive_case_and_path_separators() {
+        let root = AbsoluteSystemPathBuf::new(r"C:\checkout\repo").unwrap();
+        let mut values = complete_go_environment();
+        values.insert(
+            "CC".to_string(),
+            r"c:/checkout/repo/tools\compiler.exe".to_string(),
+        );
+        values.insert(
+            "GOFLAGS".to_string(),
+            r"-overlay=c:\checkout\repo/config\overlay.json".to_string(),
+        );
+
+        let normalized =
+            normalized_go_toolchain_version(&root, "go version go1.24.0 windows/amd64", &values)
+                .unwrap();
+        let identity: BTreeMap<String, String> = serde_json::from_str(&normalized).unwrap();
+
+        assert_eq!(identity["CC"], "$REPO/tools/compiler.exe");
+        assert_eq!(identity["GOFLAGS"], "-overlay=$REPO/config/overlay.json");
+    }
+
     fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
         let directory = path.rsplit('/').next().expect("module path component");
         GoModule {
@@ -1398,6 +1740,9 @@ mod tests {
         let other = resolution_keys(&resolutions, "example.com/other");
         let aggregate = resolution_keys(&resolutions, GO_WORKSPACE_NAME);
 
+        for closure in [&app, &lib, &other, &aggregate] {
+            assert!(closure.contains("go"));
+        }
         for closure in [&app, &lib] {
             assert!(closure.contains("example.net/shared"));
             assert!(!closure.contains("example.net/disjoint"));
@@ -1430,6 +1775,26 @@ mod tests {
             resolution_for(&resolutions, "example.com/other").identities(),
             resolution_for(&changed, "example.com/other").identities()
         );
+
+        let changed_toolchain = external_resolutions(
+            graph,
+            &modules,
+            &listed,
+            &ExternalPackageIdentity::new("go", "go1.25"),
+        )
+        .expect("changed toolchain resolution succeeds");
+        for package in [
+            "example.com/app",
+            "example.com/lib",
+            "example.com/other",
+            GO_WORKSPACE_NAME,
+        ] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed_toolchain, package).identities(),
+                "toolchain identity must participate in every Go resolution row"
+            );
+        }
     }
 
     #[test]
@@ -1813,6 +2178,7 @@ mod tests {
             target_os: "linux".to_string(),
             build_cache,
             module_cache,
+            fingerprint_values: BTreeMap::new(),
         };
         assert_eq!(
             go_cache_prefixes(&root, &environment),
