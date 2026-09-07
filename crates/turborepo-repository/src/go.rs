@@ -1704,9 +1704,9 @@ mod tests {
         }
     }
 
-    fn resolution_root() -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" })
-            .expect("test repository root is absolute")
+    fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .expect("temporary repository root is absolute")
     }
 
     fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
@@ -1743,7 +1743,8 @@ mod tests {
 
     #[test]
     fn external_resolution_scopes_shared_and_disjoint_closures() {
-        let root = resolution_root();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
         let modules = vec![
             resolution_module(&root, "example.com/app"),
             resolution_module(&root, "example.com/lib"),
@@ -1849,7 +1850,8 @@ mod tests {
 
     #[test]
     fn external_resolution_rejects_unresolved_graph_modules() {
-        let root = resolution_root();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
         let modules = vec![resolution_module(&root, "example.com/app")];
         let error = external_resolutions(
             "example.com/app example.net/missing@v1.0.0\n",
@@ -1864,6 +1866,26 @@ mod tests {
             Error::UnknownResolutionModule { module }
                 if module == "example.net/missing@v1.0.0"
         ));
+    }
+
+    #[test]
+    fn external_resolution_accepts_windows_line_endings() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let resolutions = external_resolutions(
+            "example.com/app example.net/dependency@v1.0.0\r\n",
+            &[resolution_module(&root, "example.com/app")],
+            &[listed_module(
+                "example.net/dependency",
+                "v1.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24 windows/amd64"),
+        )
+        .expect("CRLF resolution succeeds");
+
+        let app = resolution_keys(&resolutions, "example.com/app");
+        assert_eq!(app, HashSet::from(["go", "example.net/dependency"]));
     }
 
     fn task_context<'a>(
