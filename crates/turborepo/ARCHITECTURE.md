@@ -6,7 +6,7 @@ This document serves as a sketch of the architecture of the `turbo run` command
 
 A run consists of the following steps:
 
-1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces` / `futureFlags.experimentalPythonWorkspaces`, Cargo workspace crates and uv workspace members)
+1. Build a package graph based on the JavaScript package manager settings (and, behind `futureFlags.experimentalCargoWorkspaces`, `futureFlags.experimentalPythonWorkspaces`, or `futureFlags.experimentalGoWorkspaces`, Cargo workspace crates, uv workspace members, or Go workspace modules)
 2. Build a task graph based on package dependencies and configuration
 3. Determine global/task hashes
 4. Execute tasks in topological order
@@ -283,14 +283,20 @@ without synthesizing a JavaScript scope, and consumers reject contexts from
 another repository.
 
 Repository-facing commands use the same optional-root construction policy as
-`turbo run`: a missing root `package.json` is accepted only when Cargo support
-is enabled and a root `Cargo.toml` exists, while malformed manifests always
-fail. Devtools creates one package-graph generation per initial load or refresh
-and derives both its package and task protocol graphs from that generation; the
-server never performs independent package discovery. Each refresh also
-re-resolves configuration, default config-file selection, and future flags.
-Its watcher gives explicit custom config and repository-local config paths
-physical coverage even when normal ignored-directory filtering would omit them.
+`turbo run`: a missing root `package.json` is accepted when an enabled native
+workspace has its required root definition — a root `Cargo.toml` with
+`futureFlags.experimentalCargoWorkspaces`, a root `pyproject.toml` with
+`futureFlags.experimentalPythonWorkspaces`, or a root `go.work` with
+`futureFlags.experimentalGoWorkspaces`. A present but malformed `package.json`
+always fails. Without a root `package.json`, no JavaScript contributor or
+package manager participates; with one, JavaScript discovery retains its
+existing semantics and may coexist with enabled native contributors. Devtools
+creates one package-graph generation per initial load or refresh and derives
+both its package and task protocol graphs from that generation; the server
+never performs independent package discovery. Each refresh also re-resolves
+configuration, default config-file selection, and future flags. Its watcher
+gives explicit custom config and repository-local config paths physical
+coverage even when normal ignored-directory filtering would omit them.
 
 Turbo configuration lookup receives knowledge-backed package and aggregate
 scope directories directly. Engine repository-wide task-definition enumeration
@@ -398,14 +404,17 @@ facts, and it is disabled for package-scoped definitions or per-package derived
 I/O. This prevents scopes with the same turbo.json chain but different
 aggregates or contracts from sharing an invalid definition.
 
-JavaScript is the first production producer. Machinery that predates the
-abstraction (package-manager resolution for dependency splitting and the JS
+The built-in producers are `JavaScriptContributor`, `CargoContributor`,
+`UvContributor`, and `GoContributor`. Machinery that predates the abstraction
+(package-manager resolution for dependency splitting and the JavaScript
 lockfile closure phase) remains documented debt.
 
-Production callers enable Cargo through `PackageGraphBuilder::with_cargo`
-rather than constructing or retaining contributor objects. Run, watch, daemon,
-prune, query, hashing, and cache paths carry only the feature decision; each
-graph generation creates and drops its own Cargo contributor.
+Production callers enable native contributors through
+`PackageGraphBuilder::with_cargo`, `PackageGraphBuilder::with_uv`, and
+`PackageGraphBuilder::with_go` rather than constructing or retaining
+contributor objects. Run, watch, daemon, prune, query, hashing, and cache paths
+carry only the feature decisions; each graph generation creates and drops its
+own enabled contributors.
 
 Contract-derived I/O receives the same task-scoped arguments as execution plus
 a narrow, platform-aware startup-environment projection keyed by an explicit
@@ -801,33 +810,53 @@ the shared repository graph.
 Behind `futureFlags.experimentalGoWorkspaces`, `turbo run` discovers Go modules
 from the repository-root `go.work` and adds them to the package graph. Go
 workspaces can stand alone or coexist with JavaScript, Cargo, and uv
-workspaces. `GoContributor` contributes pre-classified internal relationships
-through the shared repository graph.
+workspaces. `GoContributor` contributes pre-classified internal relationships,
+native tasks and contracts, external resolution, change observations, and a
+prune domain through the shared repository graph.
 
 - **Discovery** invokes `go work edit -json` for workspace membership and
   `go mod edit -json` for each member's module path. Module paths are package
-  identities and `go.mod` files are native definition paths.
+  identities and `go.mod` files are native definition paths. `go list -find
+  -json ./...` identifies modules with exactly one runnable main package. A
+  deterministic `go-workspace` aggregate depends on every module and hosts
+  workspace verification.
 - **Relationships** come from `go mod graph`: dependencies whose resolved
   module path is another workspace member become internal graph edges. Local
   `replace` directives outside the repository or to non-members are rejected.
-- **Hashing** adds the exact `go version`, target/architecture, build flags,
-  experiments, cgo configuration, and selected tools to every module's external
-  resolution identity. Effective values come from structured `go env` output,
-  including settings persisted by `go env -w`; checkout-root paths are
-  normalized. Credentials, network/proxy policy, telemetry, mutable cache
-  locations, and host/tool installation paths are excluded.
+- **Execution** registers `build`, `test`, `lint`, and `format` for each module.
+  A module with exactly one main package also receives `dev`; its build writes
+  one stable `dist/` binary. The workspace aggregate runs verification over
+  explicit member patterns. Library builds, dev, and
+  formatting default to uncached; command overrides and package exclusions use
+  the shared task configuration machinery.
+- **Resolution and hashing** include module and internal dependency sources,
+  workspace definitions, and per-module external closures from
+  `go list -m -json all`. Module versions, replacements, and checksums remain
+  scoped to the modules that reach them. The exact `go version`,
+  target/architecture, build flags, experiments, cgo configuration, and selected
+  tools form a path-normalized toolchain identity from structured `go env`
+  output, including settings persisted by `go env -w`. Credentials,
+  network/proxy policy, telemetry, mutable cache locations, checkout paths, and
+  host/tool installation paths are excluded. Go build and module caches are
+  never task outputs.
+- **Change knowledge** rediscoveries follow `go.work` and any `go.mod`;
+  `go.work.sum` and per-module `go.sum` paths are resolution inputs.
+  In-repository `GOCACHE` and `GOMODCACHE` directories are ignored as
+  byproducts.
 - **Prune** expands selected modules through the captured internal relationship
   graph and emits a deterministic `go.work` containing sorted retained module
   directories. The workspace `go` and `toolchain` directives are preserved.
   Relevant workspace replacements are normalized to repository-relative paths;
   local replacements outside the repository or to non-members fail discovery.
-  `go.work.sum` and each retained module's `go.sum` are copied verbatim because
-  Go validates their checksums, while removed modules and their sums are omitted.
+  `go.work.sum`, retained module trees, and each retained module's `go.sum` are
+  copied verbatim because Go validates their checksums, while removed modules
+  and their sums are omitted.
 - **Pure Go repositories** may omit a root `package.json` when the flag is
   enabled and `go.work` exists at the repository root.
 
 End-to-end coverage lives in `crates/turborepo/tests/go_workspace_test.rs`
-against pure-Go, mixed JavaScript/Go, and cache-invalidation fixtures. The tests
+against pure-Go, mixed JavaScript/Go, and cache-invalidation fixtures, including
+execution, cache restoration, hashing, query, and prune behavior. The tests
 clear ambient Go configuration and use only workspace-local modules or committed
 checksum inputs, so they do not require network access. Tests that execute Go
 print an explicit skip reason when `go` is unavailable. Compiler-version
