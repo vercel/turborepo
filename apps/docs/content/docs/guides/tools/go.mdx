@@ -156,8 +156,10 @@ go test ./...
 
 ## Limitations and troubleshooting
 
-- The workspace must be rooted at the Turborepo root. Members and local replacements outside the repository, or local replacements to non-members, are rejected.
-- A root module that collides with a listed member, duplicate module paths, and the reserved `go-workspace` identity are rejected.
-- Vendoring is not interpreted as a separate resolution source. Use current module/workspace sums and standard workspace module mode.
+- Go 1.22 and newer are supported. The repository must have exactly one `go.work`, at the Turborepo root; nested or secondary workspaces are rejected.
+- Workspace modules must be subdirectories with unique, non-empty module paths. The repository root cannot be a workspace member, and module paths cannot collide with JavaScript packages or the reserved `go-workspace` identity.
+- Members and local replacements must stay inside the repository. A local replacement target must also be a `go.work` member so Turborepo can hash, watch, and prune it completely.
+- Vendored modules are not supported because their contents cannot be represented safely by the current resolution fingerprint. Remove `vendor` directories and use current `go.sum` and `go.work.sum` files.
+- Modules with zero or multiple `main` packages remain valid, but do not receive a built-in `dev` task.
 - Turborepo does not auto-detect `golangci-lint` and does not proxy Go's build cache.
-- If Go reports a stale graph or checksum error, run the appropriate `go mod tidy` and `go work sync` commands, review the changes, and commit the updated files.
+- If Go reports a stale graph or checksum error, run `go mod tidy` in each workspace member and then `go work sync`, review the changes, and commit the updated `go.sum` and `go.work.sum` files.

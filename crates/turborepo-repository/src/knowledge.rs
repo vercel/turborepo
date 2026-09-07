@@ -502,7 +502,10 @@ pub(crate) struct PackageScopeObservation {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
-    #[error("duplicate package or aggregate scope {name}")]
+    #[error(
+        "package identity {name:?} is declared by both {existing_path} and {path}. Rename one \
+         package or module so every Turborepo package identity is unique."
+    )]
     DuplicateScope {
         name: String,
         path: AnchoredSystemPathBuf,

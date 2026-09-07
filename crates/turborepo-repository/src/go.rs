@@ -55,22 +55,30 @@ pub const GO_WORKSPACE_NAME: &str = "go-workspace";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(
+        "Go is required for experimental Go workspaces, but `go` was not found while running \
+         `{command}`. Install Go 1.22 or newer and ensure `go` is on PATH."
+    )]
+    GoExecutableNotFound { command: &'static str },
     #[error("failed to run `{command}`: {source}")]
     CommandSpawn {
         command: &'static str,
         #[source]
         source: io::Error,
     },
-    #[error("`{command}` failed: {stderr}")]
+    #[error("`{command}` failed: {stderr}. {remediation}")]
     CommandFailed {
         command: &'static str,
         stderr: String,
+        remediation: &'static str,
     },
-    #[error("failed to parse `{command}` output: {source}")]
+    #[error(
+        "`{command}` returned invalid output. Verify that `go` is Go 1.22 or newer and is not \
+         replaced by a wrapper that changes JSON output."
+    )]
     CommandParse {
         command: &'static str,
-        #[source]
-        source: serde_json::Error,
+        _source: serde_json::Error,
     },
     #[error("`go env` did not return requested variable {name}")]
     MissingEnvironmentVariable { name: &'static str },
@@ -80,27 +88,54 @@ pub enum Error {
     WorkspaceSerialize(serde_json::Error),
     #[error("root {path} is not a Go workspace (missing go.work)")]
     NotAWorkspace { path: String },
-    #[error("go.work lists no workspace modules")]
+    #[error("go.work lists no workspace modules. Add at least one module with `go work use`.")]
     EmptyWorkspace,
-    #[error("go.work member at {path} is outside the repository")]
+    #[error(
+        "go.work member at {path} is outside the repository. Move the module into the repository \
+         or remove it from go.work."
+    )]
     MemberOutsideRepository { path: String },
-    #[error("go.work member at {path} has no go.mod")]
+    #[error(
+        "go.work member at {path} has no go.mod. Create the module with `go mod init` or remove \
+         it with `go work edit -dropuse`."
+    )]
     MissingGoMod { path: String },
-    #[error("go.mod at {path} has no module path")]
+    #[error(
+        "go.mod at {path} has no module path. Add one with `go mod edit -module=<module-path>`."
+    )]
     MissingModulePath { path: String },
-    #[error("duplicate Go module identity {module_path:?} (also declared at {other_manifest})")]
+    #[error(
+        "duplicate Go module identity {module_path:?} (also declared at {other_manifest}). Give \
+         every go.work member a unique `module` path."
+    )]
     DuplicateModuleIdentity {
         module_path: String,
         other_manifest: String,
     },
     #[error(
+        "Go module identity {name:?} is reserved for the workspace aggregate. Rename the module \
+         before enabling experimental Go workspaces."
+    )]
+    WorkspaceNameCollision { name: String },
+    #[error(
         "go.work member at {path} resolves to module {module_path:?}, which collides with the \
-         repository root module definition"
+         repository root module definition. Root modules cannot be go.work members; move the \
+         module into a subdirectory."
     )]
     RootDefinitionCollision { path: String, module_path: String },
     #[error(
+        "secondary Go workspace at {path} is unsupported. Keep a single go.work at the Turborepo \
+         root and remove or relocate the secondary workspace."
+    )]
+    SecondaryWorkspace { path: String },
+    #[error(
+        "vendored Go module at {path} is unsupported because vendor contents cannot be resolved \
+         safely for Turborepo caching. Remove the vendor directory and use go.sum/go.work.sum."
+    )]
+    VendoredModule { path: String },
+    #[error(
         "local Go module {module_path:?} at {manifest_path} is outside the repository and cannot \
-         be cached, watched, or pruned safely"
+         be cached, watched, or pruned safely. Move it into the repository and add it to go.work."
     )]
     OutsideRepositoryLocalModule {
         module_path: String,
@@ -108,18 +143,36 @@ pub enum Error {
     },
     #[error(
         "local Go module {module_path:?} at {manifest_path} is not a go.work member and cannot be \
-         hashed or pruned safely"
+         hashed or pruned safely. Add it with `go work use` or replace it with a versioned module."
     )]
     NonMemberLocalModule {
         module_path: String,
         manifest_path: String,
     },
-    #[error("malformed `go mod graph` line: {line}")]
+    #[error(
+        "`go mod graph` returned an unrecognized line: {line}. Run `go mod tidy` in each member, \
+         then `go work sync`, and commit the resulting sums."
+    )]
     MalformedModGraphLine { line: String },
-    #[error("malformed Go replacement: {reason}")]
+    #[error(
+        "malformed Go replacement: {reason}. Repair the replace directive and run `go work sync`."
+    )]
     MalformedReplacement { reason: String },
-    #[error("`go mod graph` references {module}, but `go list -m all` did not resolve it")]
+    #[error(
+        "`go mod graph` references {module}, but `go list -m all` did not resolve it. Run `go mod \
+         tidy` in each member, then `go work sync`, and commit go.sum/go.work.sum."
+    )]
     UnknownResolutionModule { module: String },
+    #[error("failed to scan for secondary Go workspaces: {0}")]
+    WorkspaceScan(#[source] globwalk::WalkError),
+    #[error("failed to configure the Go workspace scan: {0}")]
+    WorkspaceGlob(#[source] globwalk::GlobError),
+    #[error("failed to resolve Go module path {path}: {source}")]
+    ModulePath {
+        path: String,
+        #[source]
+        source: turbopath::PathError,
+    },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -169,7 +222,7 @@ struct GoWorkUse {
 #[derive(Debug, Deserialize)]
 struct GoModEditJson {
     #[serde(rename = "Module")]
-    module: GoModModule,
+    module: Option<GoModModule>,
     #[serde(rename = "Replace")]
     replace: Option<Vec<GoModReplace>>,
 }
@@ -237,7 +290,29 @@ fn run_go(
         .args(args)
         .current_dir(repo_root.as_std_path())
         .output()
-        .map_err(|source| Error::CommandSpawn { command, source })
+        .map_err(|source| {
+            if source.kind() == io::ErrorKind::NotFound {
+                Error::GoExecutableNotFound { command }
+            } else {
+                Error::CommandSpawn { command, source }
+            }
+        })
+}
+
+fn command_remediation(command: &str) -> &'static str {
+    match command {
+        "go work edit -json" => {
+            "Repair the repository-root go.work with `go work edit` and `go work use`."
+        }
+        "go mod edit -json" => {
+            "Repair the referenced go.mod and ensure it contains a `module` directive."
+        }
+        "go mod graph" | "go list -mod=readonly -m -json all" => {
+            "Run `go mod tidy` in each workspace member, then `go work sync`, and commit \
+             go.sum/go.work.sum."
+        }
+        _ => "Verify the Go installation and workspace configuration.",
+    }
 }
 
 fn go_work_json(repo_root: &AbsoluteSystemPath) -> Result<GoWorkJson, Error> {
@@ -246,11 +321,12 @@ fn go_work_json(repo_root: &AbsoluteSystemPath) -> Result<GoWorkJson, Error> {
         return Err(Error::CommandFailed {
             command: "go work edit -json",
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go work edit -json"),
         });
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
+    serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
         command: "go work edit -json",
-        source,
+        _source,
     })
 }
 
@@ -268,11 +344,12 @@ fn go_mod_edit_json(
         return Err(Error::CommandFailed {
             command: "go mod edit -json",
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go mod edit -json"),
         });
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
+    serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
         command: "go mod edit -json",
-        source,
+        _source,
     })
 }
 
@@ -282,6 +359,7 @@ fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
         return Err(Error::CommandFailed {
             command: "go mod graph",
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go mod graph"),
         });
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -298,14 +376,15 @@ fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, 
         return Err(Error::CommandFailed {
             command: COMMAND,
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
         });
     }
     serde_json::Deserializer::from_slice(&output.stdout)
         .into_iter::<GoListModule>()
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|source| Error::CommandParse {
+        .map_err(|_source| Error::CommandParse {
             command: COMMAND,
-            source,
+            _source,
         })
 }
 
@@ -361,6 +440,7 @@ fn go_toolchain_identity(
         return Err(Error::CommandFailed {
             command: COMMAND,
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
         });
     }
     Ok(ExternalPackageIdentity::new(
@@ -404,12 +484,13 @@ fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error
         return Err(Error::CommandFailed {
             command: COMMAND,
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
         });
     }
     let values: BTreeMap<String, String> =
-        serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
+        serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
             command: COMMAND,
-            source,
+            _source,
         })?;
     let value = |name: &'static str| {
         values
@@ -439,9 +520,9 @@ fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Er
         serde_json::Deserializer::from_slice(&output.stdout).into_iter::<GoListPackage>();
     let mut runnable = None;
     for package in packages {
-        let package = package.map_err(|source| Error::CommandParse {
+        let package = package.map_err(|_source| Error::CommandParse {
             command: COMMAND,
-            source,
+            _source,
         })?;
         if package.name != "main" {
             continue;
@@ -467,15 +548,76 @@ fn join_relative_path(
     base: &AbsoluteSystemPath,
     relative: &str,
 ) -> Result<AbsoluteSystemPathBuf, Error> {
-    if Path::new(relative).is_absolute() {
-        return AbsoluteSystemPathBuf::try_from(Path::new(relative)).map_err(Error::from);
+    Ok(AbsoluteSystemPathBuf::from_unknown(base, relative))
+}
+
+fn path_is_within_repository(
+    repo_root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<bool, Error> {
+    if !repo_root.contains(path) {
+        return Ok(false);
     }
-    let components = relative
-        .trim_start_matches("./")
-        .split('/')
-        .filter(|part| !part.is_empty() && *part != ".")
-        .collect::<Vec<_>>();
-    Ok(base.join_components(&components))
+    if !path.exists() {
+        return Ok(true);
+    }
+    let real_root = repo_root
+        .to_realpath()
+        .map_err(|source| Error::ModulePath {
+            path: repo_root.to_string(),
+            source,
+        })?;
+    let real_path = path.to_realpath().map_err(|source| Error::ModulePath {
+        path: path.to_string(),
+        source,
+    })?;
+    Ok(real_root.contains(&real_path))
+}
+
+fn required_module_path<'a>(
+    module: &'a GoModEditJson,
+    manifest_path: &AbsoluteSystemPath,
+) -> Result<&'a str, Error> {
+    module
+        .module
+        .as_ref()
+        .map(|module| module.path.as_str())
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| Error::MissingModulePath {
+            path: manifest_path.to_string(),
+        })
+}
+
+fn validate_single_workspace(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
+    let includes = ["**/go.work"]
+        .into_iter()
+        .map(str::parse)
+        .collect::<Result<Vec<globwalk::ValidatedGlob>, _>>()
+        .map_err(Error::WorkspaceGlob)?;
+    let excludes = [
+        "**/.git/**",
+        "**/.turbo/**",
+        "**/node_modules/**",
+        "**/vendor/**",
+    ]
+    .into_iter()
+    .map(str::parse)
+    .collect::<Result<Vec<globwalk::ValidatedGlob>, _>>()
+    .map_err(Error::WorkspaceGlob)?;
+    let root_workspace = repo_root.join_component(GO_WORK);
+    let mut secondary =
+        globwalk::globwalk(repo_root, &includes, &excludes, globwalk::WalkType::Files)
+            .map_err(Error::WorkspaceScan)?
+            .into_iter()
+            .filter(|path| path != &root_workspace)
+            .collect::<Vec<_>>();
+    secondary.sort();
+    if let Some(path) = secondary.into_iter().next() {
+        return Err(Error::SecondaryWorkspace {
+            path: path.to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn resolve_member_dir(
@@ -483,7 +625,7 @@ fn resolve_member_dir(
     disk_path: &str,
 ) -> Result<AbsoluteSystemPathBuf, Error> {
     let member = join_relative_path(repo_root, disk_path)?;
-    if !member.starts_with(repo_root) {
+    if !path_is_within_repository(repo_root, &member)? {
         return Err(Error::MemberOutsideRepository {
             path: member.to_string(),
         });
@@ -505,13 +647,20 @@ fn local_replacement_target(
         return Ok(None);
     }
     let resolved = join_relative_path(module_dir, module_path)?;
-    if !resolved.starts_with(repo_root) {
+    if !path_is_within_repository(repo_root, &resolved)? {
         return Err(Error::OutsideRepositoryLocalModule {
             module_path: module_path.to_string(),
             manifest_path: resolved.join_component(GO_MOD).to_string(),
         });
     }
-    let resolved_module_path = go_mod_edit_json(repo_root, &resolved)?.module.path;
+    if !resolved.join_component(GO_MOD).exists() {
+        return Err(Error::MissingGoMod {
+            path: resolved.to_string(),
+        });
+    }
+    let resolved_module = go_mod_edit_json(repo_root, &resolved)?;
+    let resolved_module_path =
+        required_module_path(&resolved_module, &resolved.join_component(GO_MOD))?.to_string();
     if !member_paths.contains(&resolved_module_path) {
         return Err(Error::NonMemberLocalModule {
             module_path: resolved_module_path,
@@ -797,6 +946,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         return Ok(DiscoveredWorkspace::default());
     }
 
+    validate_single_workspace(repo_root)?;
     let work = go_work_json(repo_root)?;
     let uses = work.use_.clone().ok_or(Error::EmptyWorkspace)?;
     if uses.is_empty() {
@@ -804,12 +954,8 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     }
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
-        go_mod_edit_json(repo_root, repo_root)
-            .ok()
-            .and_then(|json| {
-                let path = json.module.path;
-                (!path.is_empty()).then_some(path)
-            })
+        let root_module = go_mod_edit_json(repo_root, repo_root)?;
+        Some(required_module_path(&root_module, &repo_root.join_component(GO_MOD))?.to_string())
     } else {
         None
     };
@@ -834,15 +980,22 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
                 path: member_dir.to_string(),
             });
         }
+        if member_dir.join_component("vendor").exists() {
+            return Err(Error::VendoredModule {
+                path: member_dir.join_component("vendor").to_string(),
+            });
+        }
 
         let module_json = go_mod_edit_json(repo_root, &member_dir)?;
-        let module_path = entry
-            .module_path
-            .filter(|path| !path.is_empty())
-            .unwrap_or_else(|| module_json.module.path.clone());
-        if module_path.is_empty() {
-            return Err(Error::MissingModulePath {
-                path: member_dir.join_component(GO_MOD).to_string(),
+        let module_path = match entry.module_path.filter(|path| !path.is_empty()) {
+            Some(path) => path,
+            None => {
+                required_module_path(&module_json, &member_dir.join_component(GO_MOD))?.to_string()
+            }
+        };
+        if module_path == GO_WORKSPACE_NAME {
+            return Err(Error::WorkspaceNameCollision {
+                name: GO_WORKSPACE_NAME.to_string(),
             });
         }
         if let Some(root_path) = &root_module_path
@@ -1684,6 +1837,94 @@ mod tests {
             error.to_string().contains("outside the repository"),
             "unexpected error: {error}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_member_symlink_outside_repository() {
+        use std::os::unix::fs::symlink;
+
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            outside.path().join(GO_MOD),
+            "module example.com/outside\n\ngo 1.22\n",
+        )
+        .unwrap();
+        symlink(outside.path(), tempdir.path().join("linked")).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ./linked\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("symlinked outside members fail");
+        assert!(matches!(error, Error::MemberOutsideRepository { .. }));
+    }
+
+    #[test]
+    fn rejects_unnamed_reserved_root_and_vendored_modules() {
+        if !go_available() {
+            return;
+        }
+
+        for (name, setup, expected) in [
+            ("unnamed", "go 1.22\n", "has no module path"),
+            (
+                "reserved",
+                "module go-workspace\n\ngo 1.22\n",
+                "reserved for the workspace aggregate",
+            ),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            write_workspace(&root, &[("module", name, setup)]);
+            let error = discover_workspace(&root).expect_err("unsupported module identity fails");
+            assert!(
+                error.to_string().contains(expected),
+                "unexpected {name} diagnostic: {error}"
+            );
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+        root.join_components(&["module", "vendor"])
+            .create_dir_all()
+            .unwrap();
+        let error = discover_workspace(&root).expect_err("vendored modules fail");
+        assert!(matches!(error, Error::VendoredModule { .. }));
+        assert!(error.to_string().contains("go.sum/go.work.sum"));
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_MOD)
+            .create_with_contents("module example.com/root\n\ngo 1.22\n")
+            .unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse .\n")
+            .unwrap();
+        let error = discover_workspace(&root).expect_err("root workspace modules fail");
+        assert!(matches!(error, Error::RootDefinitionCollision { .. }));
+    }
+
+    #[test]
+    fn rejects_secondary_workspace() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+        root.join_components(&["module", GO_WORK])
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("secondary workspace fails");
+        assert!(matches!(error, Error::SecondaryWorkspace { .. }));
+        assert!(error.to_string().contains("single go.work"));
     }
 
     #[test]
