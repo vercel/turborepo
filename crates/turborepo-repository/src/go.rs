@@ -22,6 +22,10 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    external_resolution::{
+        ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
+        GO_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
+    },
     native_tasks::{
         NativeTaskContract, PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy,
     },
@@ -40,6 +44,7 @@ pub const GO_WORK: &str = "go.work";
 /// The conventional file name for a Go module manifest.
 pub const GO_MOD: &str = "go.mod";
 
+const GO_SUM: &str = "go.sum";
 const GO_WORK_SUM: &str = "go.work.sum";
 const GO_DIST_DIR: &str = "dist";
 
@@ -103,6 +108,8 @@ pub enum Error {
     },
     #[error("malformed `go mod graph` line: {line}")]
     MalformedModGraphLine { line: String },
+    #[error("`go mod graph` references {module}, but `go list -m all` did not resolve it")]
+    UnknownResolutionModule { module: String },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -125,6 +132,7 @@ pub struct GoModule {
 #[derive(Debug, Default)]
 pub struct DiscoveredWorkspace {
     pub modules: Vec<GoModule>,
+    graph: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +187,22 @@ struct GoListPackage {
     directory: String,
     #[serde(rename = "Name")]
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoListModule {
+    #[serde(rename = "Path")]
+    path: String,
+    #[serde(default, rename = "Version")]
+    version: String,
+    #[serde(default, rename = "Sum")]
+    sum: String,
+    #[serde(default, rename = "GoModSum")]
+    go_mod_sum: String,
+    #[serde(default, rename = "Main")]
+    main: bool,
+    #[serde(rename = "Replace")]
+    replace: Option<Box<GoListModule>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,6 +272,44 @@ fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
         });
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, Error> {
+    const COMMAND: &str = "go list -mod=readonly -m -json all";
+    let output = run_go(
+        repo_root,
+        &["list", "-mod=readonly", "-m", "-json", "all"],
+        COMMAND,
+    )?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    serde_json::Deserializer::from_slice(&output.stdout)
+        .into_iter::<GoListModule>()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| Error::CommandParse {
+            command: COMMAND,
+            source,
+        })
+}
+
+fn go_toolchain_identity(repo_root: &AbsoluteSystemPath) -> Result<ExternalPackageIdentity, Error> {
+    const COMMAND: &str = "go version";
+    let output = run_go(repo_root, &["version"], COMMAND)?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    Ok(ExternalPackageIdentity::new(
+        "go",
+        String::from_utf8_lossy(&output.stdout).trim().to_string(),
+    )
+    .with_human_name("go"))
 }
 
 fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error> {
@@ -400,6 +462,92 @@ fn relationships_from_mod_graph(
     Ok(relationships)
 }
 
+fn module_identity(module: &GoListModule) -> ExternalPackageIdentity {
+    fn describe(module: &GoListModule) -> String {
+        format!(
+            "path={};version={};sum={};go_mod_sum={}",
+            module.path, module.version, module.sum, module.go_mod_sum
+        )
+    }
+
+    let mut version = describe(module);
+    if let Some(replacement) = module.replace.as_deref() {
+        version.push_str(";replace=");
+        version.push_str(&describe(replacement));
+    }
+    ExternalPackageIdentity::new(module.path.clone(), version).with_human_name(module.path.clone())
+}
+
+fn external_resolutions(
+    graph: &str,
+    modules: &[GoModule],
+    listed: &[GoListModule],
+    toolchain: &ExternalPackageIdentity,
+) -> Result<Vec<PackageResolution>, Error> {
+    let internal: HashSet<&str> = modules
+        .iter()
+        .map(|module| module.module_path.as_str())
+        .collect();
+    let mut by_reference = HashMap::new();
+    for module in listed.iter().filter(|module| !module.main) {
+        let identity = module_identity(module);
+        by_reference.insert(module.path.clone(), identity.clone());
+        if !module.version.is_empty() {
+            by_reference.insert(format!("{}@{}", module.path, module.version), identity);
+        }
+    }
+
+    let mut adjacency: HashMap<&str, Vec<&str>> = HashMap::new();
+    for line in graph.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let (from, to) = line
+            .split_once(' ')
+            .ok_or_else(|| Error::MalformedModGraphLine {
+                line: line.to_string(),
+            })?;
+        adjacency.entry(from).or_default().push(to);
+    }
+
+    let mut resolutions = Vec::with_capacity(modules.len() + 1);
+    let mut aggregate = HashSet::new();
+    for module in modules {
+        let mut identities = HashSet::from([toolchain.clone()]);
+        let mut pending = vec![module.module_path.as_str()];
+        let mut seen = HashSet::new();
+        while let Some(node) = pending.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
+            for dependency in adjacency.get(node).into_iter().flatten() {
+                let path = module_path_without_version(dependency);
+                if internal.contains(path) {
+                    pending.push(path);
+                    continue;
+                }
+                pending.push(*dependency);
+                if matches!(path, "go" | "toolchain") {
+                    continue;
+                }
+                let identity = by_reference
+                    .get(*dependency)
+                    .or_else(|| by_reference.get(path))
+                    .ok_or_else(|| Error::UnknownResolutionModule {
+                        module: (*dependency).to_string(),
+                    })?
+                    .clone();
+                aggregate.insert(identity.clone());
+                identities.insert(identity);
+            }
+        }
+        resolutions.push(PackageResolution::new(
+            module.module_path.clone(),
+            identities,
+        ));
+    }
+    aggregate.insert(toolchain.clone());
+    resolutions.push(PackageResolution::new(GO_WORKSPACE_NAME, aggregate));
+    Ok(resolutions)
+}
+
 /// Discover all Go modules listed by the repository-root `go.work`.
 pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
     let work_path = repo_root.join_component(GO_WORK);
@@ -501,7 +649,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             .unwrap_or_default();
     }
 
-    Ok(DiscoveredWorkspace { modules })
+    Ok(DiscoveredWorkspace { modules, graph })
 }
 
 fn go_command_task(
@@ -904,6 +1052,18 @@ impl RepositoryContributor for GoContributor {
                 .into_iter()
                 .collect();
 
+            if workspace.modules.is_empty() {
+                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
+            }
+
+            let (listed, toolchain_identity) = turborepo_rayon_compat::block_in_place(|| {
+                Ok((
+                    go_list_modules(&self.repo_root)?,
+                    go_toolchain_identity(&self.repo_root)?,
+                ))
+            })
+            .map_err(|error: Error| toolchain::Error::Failed(Box::new(error)))?;
+
             let mut module_patterns = workspace
                 .modules
                 .iter()
@@ -932,25 +1092,68 @@ impl RepositoryContributor for GoContributor {
                 .iter()
                 .map(|module| package_from_module(module, &environment.target_os, &cache_prefixes))
                 .collect::<Vec<_>>();
-            if !packages.is_empty() {
-                packages.push(
-                    DiscoveredPackage::aggregate(
-                        GO_WORKSPACE_NAME.to_string(),
-                        PackageJson::default(),
-                        self.repo_root.join_component(GO_WORK),
-                    )
-                    .with_native_relationships(workspace_relationships)
-                    .with_native_tasks(native_tasks_for_workspace(&module_patterns))
-                    .with_task_contract(
-                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::workspace(
-                            &environment.target_os,
-                            &cache_prefixes,
-                        )),
-                    ),
-                );
-            }
+            packages.push(
+                DiscoveredPackage::aggregate(
+                    GO_WORKSPACE_NAME.to_string(),
+                    PackageJson::default(),
+                    self.repo_root.join_component(GO_WORK),
+                )
+                .with_native_relationships(workspace_relationships)
+                .with_native_tasks(native_tasks_for_workspace(&module_patterns))
+                .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+                    GoTaskContract::workspace(&environment.target_os, &cache_prefixes),
+                )),
+            );
 
-            Ok(DiscoveredPackages::new(packages, workspace_roots))
+            let resolutions = external_resolutions(
+                &workspace.graph,
+                &workspace.modules,
+                &listed,
+                &toolchain_identity,
+            )
+            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let members = resolutions
+                .iter()
+                .map(|resolution| resolution.package().to_string())
+                .collect::<Vec<_>>();
+            let anchored = |path| {
+                AnchoredSystemPathBuf::from_raw(path)
+                    .map_err(Error::from)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+            };
+            let mut definition_sources = vec![anchored(GO_WORK)?];
+            if self.repo_root.join_component(GO_WORK_SUM).exists() {
+                definition_sources.push(anchored(GO_WORK_SUM)?);
+            }
+            for module in &workspace.modules {
+                let manifest = AnchoredSystemPathBuf::new(&self.repo_root, &module.manifest_path)
+                    .map_err(Error::from)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+                let module_dir = manifest.parent().ok_or_else(|| {
+                    toolchain::Error::Failed(Box::new(Error::MissingGoMod {
+                        path: module.manifest_path.to_string(),
+                    }))
+                })?;
+                let sum = module_dir.join_component(GO_SUM);
+                definition_sources.push(manifest);
+                if self.repo_root.resolve(&sum).exists() {
+                    definition_sources.push(sum);
+                }
+            }
+            let resolution = ExternalResolutionDomain::new(
+                GO_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::GO,
+                AnchoredSystemPathBuf::default(),
+                members,
+                definition_sources,
+                ExternalResolutionData::Resolved {
+                    completeness: ResolutionCompleteness::Complete,
+                    packages: resolutions,
+                },
+            );
+
+            Ok(DiscoveredPackages::new(packages, workspace_roots)
+                .with_external_resolution(resolution))
         })
     }
 }
@@ -1118,6 +1321,177 @@ mod tests {
             HashSet::from(["example.com/api".to_string(), "example.com/lib".to_string()]);
         let relationships = relationships_from_mod_graph(graph, &module_paths).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
+    }
+
+    fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
+        let directory = path.rsplit('/').next().expect("module path component");
+        GoModule {
+            module_path: path.to_string(),
+            manifest_path: root.join_components(&[directory, GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+        }
+    }
+
+    fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .expect("temporary repository root is absolute")
+    }
+
+    fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
+        GoListModule {
+            path: path.to_string(),
+            version: version.to_string(),
+            sum: sum.to_string(),
+            go_mod_sum: format!("{sum}-mod"),
+            main: false,
+            replace: None,
+        }
+    }
+
+    fn resolution_keys<'a>(
+        resolutions: &'a [PackageResolution],
+        package: &str,
+    ) -> HashSet<&'a str> {
+        resolution_for(resolutions, package)
+            .identities()
+            .iter()
+            .map(ExternalPackageIdentity::key)
+            .collect()
+    }
+
+    fn resolution_for<'a>(
+        resolutions: &'a [PackageResolution],
+        package: &str,
+    ) -> &'a PackageResolution {
+        resolutions
+            .iter()
+            .find(|resolution| resolution.package() == package)
+            .expect("package resolution")
+    }
+
+    #[test]
+    fn external_resolution_scopes_shared_and_disjoint_closures() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/app"),
+            resolution_module(&root, "example.com/lib"),
+            resolution_module(&root, "example.com/other"),
+        ];
+        let graph = "example.com/app example.com/lib@v0.0.0\nexample.com/lib \
+                     example.net/shared@v1.0.0\nexample.com/other example.net/disjoint@v2.0.0\n";
+        let listed = vec![
+            listed_module("example.net/shared", "v1.0.0", "h1:shared"),
+            listed_module("example.net/disjoint", "v2.0.0", "h1:disjoint"),
+        ];
+
+        let resolutions = external_resolutions(
+            graph,
+            &modules,
+            &listed,
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("resolution succeeds");
+        let app = resolution_keys(&resolutions, "example.com/app");
+        let lib = resolution_keys(&resolutions, "example.com/lib");
+        let other = resolution_keys(&resolutions, "example.com/other");
+        let aggregate = resolution_keys(&resolutions, GO_WORKSPACE_NAME);
+
+        for closure in [&app, &lib] {
+            assert!(closure.contains("example.net/shared"));
+            assert!(!closure.contains("example.net/disjoint"));
+            assert!(!closure.contains("example.com/lib"));
+        }
+        assert!(other.contains("example.net/disjoint"));
+        assert!(!other.contains("example.net/shared"));
+        assert_eq!(
+            aggregate,
+            HashSet::from(["go", "example.net/shared", "example.net/disjoint"])
+        );
+
+        let changed = external_resolutions(
+            graph,
+            &modules,
+            &[
+                listed_module("example.net/shared", "v1.0.0", "h1:changed"),
+                listed_module("example.net/disjoint", "v2.0.0", "h1:disjoint"),
+            ],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("changed resolution succeeds");
+        for package in ["example.com/app", "example.com/lib", GO_WORKSPACE_NAME] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed, package).identities()
+            );
+        }
+        assert_eq!(
+            resolution_for(&resolutions, "example.com/other").identities(),
+            resolution_for(&changed, "example.com/other").identities()
+        );
+    }
+
+    #[test]
+    fn replacement_and_integrity_facts_change_external_identity() {
+        let module = listed_module("example.net/dependency", "v1.0.0", "h1:archive");
+        let original = module_identity(&module);
+        let replaced = module_identity(&GoListModule {
+            replace: Some(Box::new(GoListModule {
+                path: "example.net/fork".to_string(),
+                version: "v1.0.1".to_string(),
+                sum: "h1:fork-archive".to_string(),
+                go_mod_sum: "h1:fork-manifest".to_string(),
+                main: false,
+                replace: None,
+            })),
+            ..module
+        });
+
+        assert_ne!(original, replaced);
+        assert!(replaced.version().contains("replace=path=example.net/fork"));
+        assert!(replaced.version().contains("sum=h1:fork-archive"));
+        assert!(replaced.version().contains("go_mod_sum=h1:fork-manifest"));
+    }
+
+    #[test]
+    fn external_resolution_rejects_unresolved_graph_modules() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![resolution_module(&root, "example.com/app")];
+        let error = external_resolutions(
+            "example.com/app example.net/missing@v1.0.0\n",
+            &modules,
+            &[],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect_err("unknown module graph nodes fail");
+
+        assert!(matches!(
+            error,
+            Error::UnknownResolutionModule { module }
+                if module == "example.net/missing@v1.0.0"
+        ));
+    }
+
+    #[test]
+    fn external_resolution_accepts_windows_line_endings() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let resolutions = external_resolutions(
+            "example.com/app example.net/dependency@v1.0.0\r\n",
+            &[resolution_module(&root, "example.com/app")],
+            &[listed_module(
+                "example.net/dependency",
+                "v1.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24 windows/amd64"),
+        )
+        .expect("CRLF resolution succeeds");
+
+        let app = resolution_keys(&resolutions, "example.com/app");
+        assert_eq!(app, HashSet::from(["go", "example.net/dependency"]));
     }
 
     fn task_context<'a>(
