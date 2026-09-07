@@ -1130,8 +1130,8 @@ impl RepositoryContributor for GoContributor {
                         path: module.manifest_path.to_string(),
                     }))
                 })?;
-                definition_sources.push(manifest);
                 let sum = module_dir.join_component(GO_SUM);
+                definition_sources.push(manifest);
                 if self.repo_root.resolve(&sum).exists() {
                     definition_sources.push(sum);
                 }
@@ -1320,9 +1320,10 @@ mod tests {
     }
 
     fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
+        let directory = path.rsplit('/').next().expect("module path component");
         GoModule {
             module_path: path.to_string(),
-            manifest_path: root.join_components(&[path, GO_MOD]),
+            manifest_path: root.join_components(&[directory, GO_MOD]),
             relationships: Vec::new(),
             runnable_target: None,
         }
