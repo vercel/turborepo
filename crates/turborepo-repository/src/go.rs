@@ -1301,12 +1301,7 @@ mod tests {
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
         );
-        assert!(
-            package
-                .task_contract()
-                .environment_vars()
-                .contains(&"GOCACHE")
-        );
+        assert!(package.task_contract().env_vars().contains(&"GOCACHE"));
         let dependency = task_context(
             &root,
             &library.module_path,
