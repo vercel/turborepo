@@ -280,11 +280,17 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, sync::Arc};
 
     use turborepo_config::ExperimentalOtelProtocol;
+    use turborepo_task_id::TaskId;
+    use turborepo_types::EnvMode;
 
     use super::*;
+    use crate::task::{
+        SharedTaskSummary, TaskCacheSummary, TaskEnvConfiguration, TaskEnvVarSummary,
+        TaskExecutionSummary, TaskSummaryTaskDefinition,
+    };
 
     fn make_config(headers: BTreeMap<String, String>) -> turborepo_otel::Config {
         turborepo_otel::Config {
@@ -635,6 +641,60 @@ mod tests {
                 case.name
             );
         }
+    }
+
+    #[test]
+    fn go_task_summary_facts_reach_otel_payload() {
+        let task = TaskSummary {
+            task_id: TaskId::from_static("example.com/api", "build"),
+            task: "build".to_string(),
+            package: "example.com/api".to_string(),
+            shared: SharedTaskSummary {
+                hash: Some(Arc::from("task-hash")),
+                hash_reason: None,
+                inputs: BTreeMap::new(),
+                hash_of_external_dependencies: "go-resolution-hash".to_string(),
+                cache: TaskCacheSummary::cache_miss(),
+                command: "go build -o dist/api .".to_string(),
+                cli_arguments: Vec::new(),
+                outputs: Some(vec!["dist/api".to_string()]),
+                excluded_outputs: None,
+                log_file: None,
+                directory: Some("apps/api".to_string()),
+                dependencies: Vec::new(),
+                dependents: Vec::new(),
+                with: Vec::new(),
+                resolved_task_definition: TaskSummaryTaskDefinition::default(),
+                expanded_outputs: Vec::new(),
+                framework: String::new(),
+                env_mode: EnvMode::Strict,
+                environment_variables: TaskEnvVarSummary {
+                    specified: TaskEnvConfiguration {
+                        env: Vec::new(),
+                        pass_through_env: None,
+                    },
+                    configured: Vec::new(),
+                    inferred: Vec::new(),
+                    pass_through: None,
+                },
+                execution: Some(TaskExecutionSummary {
+                    start_time: 10,
+                    end_time: 20,
+                    error: None,
+                    exit_code: Some(0),
+                }),
+            },
+        };
+
+        let payload = build_task_payload(&task);
+        assert_eq!(payload.task_id, "example.com/api#build");
+        assert_eq!(payload.task, "build");
+        assert_eq!(payload.package, "example.com/api");
+        assert_eq!(payload.command, "go build -o dist/api .");
+        assert_eq!(payload.hash, "task-hash");
+        assert_eq!(payload.external_inputs_hash, "go-resolution-hash");
+        assert_eq!(payload.duration_ms, Some(10.0));
+        assert_eq!(payload.exit_code, Some(0));
     }
 
     #[test]
