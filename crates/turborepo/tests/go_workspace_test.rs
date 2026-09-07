@@ -314,8 +314,7 @@ fn test_go_prune_produces_minimal_valid_workspace() {
     fs::write(unused.join("unused.go"), "package unused\n").unwrap();
     fs::write(
         tempdir.path().join("go.work"),
-        "go 1.22\n\ntoolchain go1.22.1\n\nuse \
-         (\n\t./tools/unused\n\t./packages/lib\n\t./apps/api\n)\n",
+        "go 1.22\n\nuse (\n\t./tools/unused\n\t./packages/lib\n\t./apps/api\n)\n",
     )
     .unwrap();
     let checksum = "h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
@@ -332,8 +331,7 @@ fn test_go_prune_produces_minimal_valid_workspace() {
     let out = tempdir.path().join("out");
     let full = out.join("full");
     let json = out.join("json");
-    let expected_work =
-        "go 1.22\n\ntoolchain go1.22.1\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n";
+    let expected_work = "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n";
     assert_eq!(
         fs::read_to_string(full.join("go.work")).unwrap(),
         expected_work
