@@ -622,7 +622,7 @@ fn test_go_and_javascript_package_name_collision_is_actionable() {
 
     let output = run_turbo(tempdir.path(), &["ls"]);
     assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
     assert!(
         stderr.contains("Failed to add workspace \"js-pkg\"")
             && stderr.contains("apps/api/go.mod")

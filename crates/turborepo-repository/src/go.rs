@@ -1737,6 +1737,22 @@ mod tests {
         which::which("go").is_ok()
     }
 
+    #[test]
+    fn command_parse_diagnostic_hides_parser_details() {
+        let _source =
+            serde_json::from_str::<serde_json::Value>("{").expect_err("incomplete JSON must fail");
+        let diagnostic = Error::CommandParse {
+            command: "go work edit -json",
+            _source,
+        }
+        .to_string();
+
+        assert!(diagnostic.contains("returned invalid output"));
+        assert!(diagnostic.contains("Go 1.22 or newer"));
+        assert!(!diagnostic.contains("EOF"));
+        assert!(!diagnostic.contains("line 1 column"));
+    }
+
     fn write_workspace(root: &AbsoluteSystemPath, layout: &[(&str, &str, &str)]) {
         fs::create_dir_all(root.as_std_path()).unwrap();
         let mut work = String::from("go 1.22\n\nuse (\n");
