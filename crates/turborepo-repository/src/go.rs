@@ -22,6 +22,7 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
         GO_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
@@ -1128,6 +1129,29 @@ fn go_cache_prefixes(repo_root: &AbsoluteSystemPath, environment: &GoEnvironment
     prefixes
 }
 
+fn go_change_observation(
+    repo_root: &AbsoluteSystemPath,
+    modules: &[GoModule],
+    cache_prefixes: &[String],
+) -> Result<ChangeObservation, Error> {
+    let mut observation = ChangeObservation::new()
+        .with_rediscovery_file_name(GO_WORK)
+        .with_rediscovery_file_name(GO_MOD)
+        .with_resolution_path(GO_WORK_SUM);
+    for module in modules {
+        let manifest = AnchoredSystemPathBuf::new(repo_root, &module.manifest_path)?;
+        let directory = manifest.parent().ok_or_else(|| Error::MissingGoMod {
+            path: module.manifest_path.to_string(),
+        })?;
+        observation = observation
+            .with_resolution_path(directory.join_component(GO_SUM).to_unix().to_string());
+    }
+    for prefix in cache_prefixes {
+        observation = observation.with_ignore_prefix(prefix.clone());
+    }
+    Ok(observation)
+}
+
 fn package_from_module(
     module: &GoModule,
     target_os: &str,
@@ -1175,6 +1199,9 @@ impl RepositoryContributor for GoContributor {
                 turborepo_rayon_compat::block_in_place(|| go_environment(&self.repo_root))
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
             let cache_prefixes = go_cache_prefixes(&self.repo_root, &environment);
+            let change_observation =
+                go_change_observation(&self.repo_root, &workspace.modules, &cache_prefixes)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
             let workspace_roots = self
                 .repo_root
@@ -1185,7 +1212,8 @@ impl RepositoryContributor for GoContributor {
                 .collect();
 
             if workspace.modules.is_empty() {
-                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
+                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots)
+                    .with_change_observation(change_observation));
             }
 
             let (listed, toolchain_identity) = turborepo_rayon_compat::block_in_place(|| {
@@ -1285,7 +1313,8 @@ impl RepositoryContributor for GoContributor {
             );
 
             Ok(DiscoveredPackages::new(packages, workspace_roots)
-                .with_external_resolution(resolution))
+                .with_external_resolution(resolution)
+                .with_change_observation(change_observation))
         })
     }
 }
@@ -2183,6 +2212,31 @@ mod tests {
         assert_eq!(
             go_cache_prefixes(&root, &environment),
             vec![".cache/go-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn change_observation_covers_workspace_modules_sums_and_caches() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+        };
+
+        let observation =
+            go_change_observation(&root, &[module], &[".cache/go-build".to_string()]).unwrap();
+
+        assert_eq!(
+            observation,
+            ChangeObservation::new()
+                .with_rediscovery_file_name(GO_WORK)
+                .with_rediscovery_file_name(GO_MOD)
+                .with_resolution_path(GO_WORK_SUM)
+                .with_resolution_path("apps/api/go.sum")
+                .with_ignore_prefix(".cache/go-build")
         );
     }
 }
