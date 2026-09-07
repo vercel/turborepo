@@ -6,7 +6,6 @@ mod common;
 use std::{fs, path::Path};
 
 use common::setup;
-use turbopath::RelativeUnixPath;
 
 const AMBIENT_GO_ENV: &[&str] = &[
     "GO111MODULE",
@@ -311,17 +310,14 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         &["run", "build", "--filter=example.com/api", "--dry-run=json"],
     );
     let build = dry_run_task(&output, "example.com/api#build");
-    let expected_output = RelativeUnixPath::new("dist")
-        .unwrap()
-        .join_component(&format!("api{}", std::env::consts::EXE_SUFFIX));
-    assert_eq!(build["command"], format!("go build -o {expected_output} ."));
+    let executable = if cfg!(windows) { "api.exe" } else { "api" };
+    let output_path = format!("dist/{executable}");
+    assert_eq!(build["command"], format!("go build -o {output_path} ."));
     assert_eq!(build["resolvedTaskDefinition"]["cache"], true);
     assert!(
         build["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs
-                .iter()
-                .any(|output| output == expected_output.as_str()))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
     );
 
     let output = run_turbo(
