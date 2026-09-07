@@ -31,7 +31,8 @@ use crate::{
         NativeTaskContract, PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy,
     },
     package_json::PackageJson,
-    relationships::{DependencyKind, Relationship},
+    prune_knowledge::{PruneDomain, PrunePlan},
+    relationships::{DependencyKind, Relationship, RelationshipTarget},
     task_contracts::DependencySourceInputs,
     toolchain::{
         self, DerivedInputSafety, DerivedOutputs, DiscoverPackagesFuture, DiscoveredPackage,
@@ -75,6 +76,8 @@ pub enum Error {
     MissingEnvironmentVariable { name: &'static str },
     #[error("failed to serialize normalized Go toolchain identity: {0}")]
     IdentitySerialize(serde_json::Error),
+    #[error("failed to serialize a Go workspace token: {0}")]
+    WorkspaceSerialize(serde_json::Error),
     #[error("root {path} is not a Go workspace (missing go.work)")]
     NotAWorkspace { path: String },
     #[error("go.work lists no workspace modules")]
@@ -113,6 +116,8 @@ pub enum Error {
     },
     #[error("malformed `go mod graph` line: {line}")]
     MalformedModGraphLine { line: String },
+    #[error("malformed Go replacement: {reason}")]
+    MalformedReplacement { reason: String },
     #[error("`go mod graph` references {module}, but `go list -m all` did not resolve it")]
     UnknownResolutionModule { module: String },
     #[error(transparent)]
@@ -138,15 +143,22 @@ pub struct GoModule {
 pub struct DiscoveredWorkspace {
     pub modules: Vec<GoModule>,
     graph: String,
+    prune: Option<GoPruneKnowledge>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoWorkJson {
+    #[serde(default, rename = "Go")]
+    go: String,
+    #[serde(rename = "Toolchain")]
+    toolchain: Option<String>,
     #[serde(rename = "Use")]
     use_: Option<Vec<GoWorkUse>>,
+    #[serde(rename = "Replace")]
+    replace: Option<Vec<GoModReplace>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoWorkUse {
     #[serde(rename = "DiskPath")]
     disk_path: Option<String>,
@@ -168,21 +180,19 @@ struct GoModModule {
     path: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoModReplace {
     #[serde(rename = "Old")]
-    #[allow(dead_code)]
     old: GoModModuleRef,
     #[serde(rename = "New")]
     new: GoModModuleRef,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GoModModuleRef {
     #[serde(rename = "Path")]
     path: Option<String>,
     #[serde(rename = "Version")]
-    #[allow(dead_code)]
     version: Option<String>,
 }
 
@@ -485,42 +495,49 @@ fn module_path_without_version(dep: &str) -> &str {
     dep.split('@').next().unwrap_or(dep)
 }
 
-fn validate_local_replacements(
+fn local_replacement_target(
     repo_root: &AbsoluteSystemPath,
     module_dir: &AbsoluteSystemPath,
     module_path: &str,
-    replacements: Option<&[GoModReplace]>,
     member_paths: &HashSet<String>,
-) -> Result<(), Error> {
-    let replacements = replacements.unwrap_or_default();
-    for replacement in replacements {
-        let new = &replacement.new;
-        let local_path = new.path.as_deref().filter(|path| {
-            !path.contains('@') && (path.starts_with('.') || Path::new(path).is_absolute())
-        });
-        if let Some(local_path) = local_path {
-            let resolved = join_relative_path(module_dir, local_path)?;
-            if !resolved.starts_with(repo_root) {
-                return Err(Error::OutsideRepositoryLocalModule {
-                    module_path: module_path.to_string(),
-                    manifest_path: resolved.join_component(GO_MOD).to_string(),
-                });
-            }
-            let resolved_module_path = go_mod_edit_json(repo_root, &resolved)?.module.path;
-            if !member_paths.contains(&resolved_module_path) {
-                return Err(Error::NonMemberLocalModule {
-                    module_path: resolved_module_path,
-                    manifest_path: resolved.join_component(GO_MOD).to_string(),
-                });
-            }
-        }
+) -> Result<Option<(String, String)>, Error> {
+    if !module_path.starts_with('.') && !Path::new(module_path).is_absolute() {
+        return Ok(None);
     }
-    Ok(())
+    let resolved = join_relative_path(module_dir, module_path)?;
+    if !resolved.starts_with(repo_root) {
+        return Err(Error::OutsideRepositoryLocalModule {
+            module_path: module_path.to_string(),
+            manifest_path: resolved.join_component(GO_MOD).to_string(),
+        });
+    }
+    let resolved_module_path = go_mod_edit_json(repo_root, &resolved)?.module.path;
+    if !member_paths.contains(&resolved_module_path) {
+        return Err(Error::NonMemberLocalModule {
+            module_path: resolved_module_path,
+            manifest_path: resolved.join_component(GO_MOD).to_string(),
+        });
+    }
+    let directory = AnchoredSystemPathBuf::new(repo_root, &resolved)?
+        .to_unix()
+        .to_string();
+    Ok(Some((resolved_module_path, directory)))
+}
+
+fn replacement_path(reference: &GoModModuleRef) -> Result<&str, Error> {
+    reference
+        .path
+        .as_deref()
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| Error::MalformedReplacement {
+            reason: "replacement module path is missing".to_string(),
+        })
 }
 
 fn relationships_from_mod_graph(
     graph: &str,
     module_paths: &HashSet<String>,
+    replacement_targets: &HashMap<String, String>,
 ) -> Result<HashMap<String, Vec<Relationship>>, Error> {
     let mut relationships: HashMap<String, Vec<Relationship>> = HashMap::new();
     for line in graph.lines().map(str::trim).filter(|line| !line.is_empty()) {
@@ -533,17 +550,158 @@ fn relationships_from_mod_graph(
             continue;
         }
         let dependency = module_path_without_version(to);
-        if module_paths.contains(dependency) {
+        let internal = module_paths
+            .contains(dependency)
+            .then_some(dependency)
+            .or_else(|| replacement_targets.get(dependency).map(String::as_str));
+        if let Some(internal) = internal {
             relationships
                 .entry(from.to_string())
                 .or_default()
-                .push(Relationship::internal(
-                    dependency,
-                    DependencyKind::Production,
-                ));
+                .push(Relationship::internal(internal, DependencyKind::Production));
         }
     }
     Ok(relationships)
+}
+
+#[derive(Debug, Clone)]
+struct GoPruneReplacement {
+    old_path: String,
+    old_version: Option<String>,
+    new_path: String,
+    new_version: Option<String>,
+    local_target: Option<String>,
+}
+
+#[derive(Debug)]
+struct GoPruneKnowledge {
+    domain: crate::prune_knowledge::PruneDomainId,
+    go: String,
+    toolchain: Option<String>,
+    package_directories: HashMap<String, String>,
+    relationships: HashMap<String, Vec<String>>,
+    replacements: Vec<GoPruneReplacement>,
+}
+
+fn go_work_token(value: &str) -> Result<String, Error> {
+    if value
+        .chars()
+        .all(|character| !character.is_whitespace() && !matches!(character, '"' | '\\' | '`'))
+    {
+        Ok(value.to_string())
+    } else {
+        serde_json::to_string(value).map_err(Error::WorkspaceSerialize)
+    }
+}
+
+fn render_go_work(
+    go: &str,
+    toolchain: Option<&str>,
+    directories: &[String],
+    replacements: &[GoPruneReplacement],
+) -> Result<String, Error> {
+    let mut output = format!("go {}\n", go_work_token(go)?);
+    if let Some(toolchain) = toolchain.filter(|toolchain| !toolchain.is_empty()) {
+        output.push_str(&format!("\ntoolchain {}\n", go_work_token(toolchain)?));
+    }
+    output.push_str("\nuse (\n");
+    for directory in directories {
+        output.push_str(&format!(
+            "\t{}\n",
+            go_work_token(&format!("./{directory}"))?
+        ));
+    }
+    output.push_str(")\n");
+    if !replacements.is_empty() {
+        output.push_str("\nreplace (\n");
+        for replacement in replacements {
+            output.push('\t');
+            output.push_str(&go_work_token(&replacement.old_path)?);
+            if let Some(version) = &replacement.old_version {
+                output.push(' ');
+                output.push_str(&go_work_token(version)?);
+            }
+            output.push_str(" => ");
+            output.push_str(&go_work_token(&replacement.new_path)?);
+            if let Some(version) = &replacement.new_version {
+                output.push(' ');
+                output.push_str(&go_work_token(version)?);
+            }
+            output.push('\n');
+        }
+        output.push_str(")\n");
+    }
+    Ok(output)
+}
+
+impl PruneDomain for GoPruneKnowledge {
+    fn id(&self) -> &crate::prune_knowledge::PruneDomainId {
+        &self.domain
+    }
+
+    fn plan(
+        &self,
+        kept_packages: &[String],
+    ) -> Result<Option<PrunePlan>, crate::prune_knowledge::Error> {
+        if kept_packages.is_empty() {
+            return Ok(None);
+        }
+        let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
+        let requested: HashSet<&str> = kept_packages.iter().map(String::as_str).collect();
+        let mut retained: HashSet<String> = kept_packages.iter().cloned().collect();
+        let mut pending = kept_packages.to_vec();
+        while let Some(package) = pending.pop() {
+            for dependency in self.relationships.get(&package).into_iter().flatten() {
+                if retained.insert(dependency.clone()) {
+                    pending.push(dependency.clone());
+                }
+            }
+        }
+
+        let mut retained_names = retained.into_iter().collect::<Vec<_>>();
+        retained_names.sort();
+        let mut directories = retained_names
+            .iter()
+            .filter_map(|name| self.package_directories.get(name).cloned())
+            .collect::<Vec<_>>();
+        directories.sort();
+        directories.dedup();
+        let replacements = self
+            .replacements
+            .iter()
+            .filter(|replacement| {
+                replacement
+                    .local_target
+                    .as_ref()
+                    .is_none_or(|target| retained_names.binary_search(target).is_ok())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let go_work = render_go_work(
+            &self.go,
+            self.toolchain.as_deref(),
+            &directories,
+            &replacements,
+        )
+        .map_err(failed)?;
+        let extra_packages = retained_names
+            .iter()
+            .filter(|name| !requested.contains(name.as_str()))
+            .cloned()
+            .collect();
+        let mut copy_paths = vec![GO_WORK_SUM.to_string()];
+        copy_paths.extend(
+            directories
+                .iter()
+                .map(|directory| format!("{directory}/{GO_SUM}")),
+        );
+
+        Ok(Some(PrunePlan {
+            extra_packages,
+            root_files: vec![(GO_WORK.to_string(), go_work)],
+            copy_paths,
+        }))
+    }
 }
 
 fn module_identity(module: &GoListModule) -> ExternalPackageIdentity {
@@ -640,7 +798,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     }
 
     let work = go_work_json(repo_root)?;
-    let uses = work.use_.ok_or(Error::EmptyWorkspace)?;
+    let uses = work.use_.clone().ok_or(Error::EmptyWorkspace)?;
     if uses.is_empty() {
         return Err(Error::EmptyWorkspace);
     }
@@ -658,6 +816,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
 
     let mut modules = Vec::new();
     let mut identities: HashMap<String, String> = HashMap::new();
+    let mut package_directories = HashMap::new();
     let mut member_paths = HashSet::new();
     let mut pending_replacements = Vec::new();
 
@@ -704,6 +863,12 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             module_path.clone(),
             member_dir.join_component(GO_MOD).to_string(),
         );
+        package_directories.insert(
+            module_path.clone(),
+            AnchoredSystemPathBuf::new(repo_root, &member_dir)?
+                .to_unix()
+                .to_string(),
+        );
         member_paths.insert(module_path.clone());
         pending_replacements.push((member_dir.clone(), module_path.clone(), module_json.replace));
 
@@ -715,25 +880,111 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         });
     }
 
-    for (member_dir, module_path, replacements) in pending_replacements {
-        validate_local_replacements(
-            repo_root,
-            &member_dir,
-            &module_path,
-            replacements.as_deref(),
-            &member_paths,
-        )?;
+    let mut replacement_targets = HashMap::new();
+    for (member_dir, _, replacements) in pending_replacements {
+        for replacement in replacements.unwrap_or_default() {
+            let new_path = replacement_path(&replacement.new)?;
+            if replacement
+                .new
+                .version
+                .as_deref()
+                .unwrap_or_default()
+                .is_empty()
+                && let Some((target, _)) =
+                    local_replacement_target(repo_root, &member_dir, new_path, &member_paths)?
+            {
+                replacement_targets.insert(replacement_path(&replacement.old)?.to_string(), target);
+            }
+        }
     }
+    let mut prune_replacements = Vec::new();
+    for replacement in work.replace.unwrap_or_default() {
+        let old_path = replacement_path(&replacement.old)?.to_string();
+        let new_path = replacement_path(&replacement.new)?;
+        let local = if replacement
+            .new
+            .version
+            .as_deref()
+            .unwrap_or_default()
+            .is_empty()
+        {
+            local_replacement_target(repo_root, repo_root, new_path, &member_paths)?
+        } else {
+            None
+        };
+        let (new_path, local_target) = match local {
+            Some((target, directory)) => {
+                replacement_targets.insert(old_path.clone(), target.clone());
+                (format!("./{directory}"), Some(target))
+            }
+            None => (new_path.to_string(), None),
+        };
+        prune_replacements.push(GoPruneReplacement {
+            old_path,
+            old_version: replacement
+                .old
+                .version
+                .filter(|version| !version.is_empty()),
+            new_path,
+            new_version: replacement
+                .new
+                .version
+                .filter(|version| !version.is_empty()),
+            local_target,
+        });
+    }
+    prune_replacements.sort_by(|left, right| {
+        (
+            &left.old_path,
+            &left.old_version,
+            &left.new_path,
+            &left.new_version,
+        )
+            .cmp(&(
+                &right.old_path,
+                &right.old_version,
+                &right.new_path,
+                &right.new_version,
+            ))
+    });
 
     let graph = go_mod_graph(repo_root)?;
-    let mut relationship_map = relationships_from_mod_graph(&graph, &member_paths)?;
+    let mut relationship_map =
+        relationships_from_mod_graph(&graph, &member_paths, &replacement_targets)?;
     for module in &mut modules {
         module.relationships = relationship_map
             .remove(&module.module_path)
             .unwrap_or_default();
     }
 
-    Ok(DiscoveredWorkspace { modules, graph })
+    let relationships = modules
+        .iter()
+        .map(|module| {
+            let dependencies = module
+                .relationships
+                .iter()
+                .filter_map(|relationship| match relationship.target() {
+                    RelationshipTarget::Internal(target) => Some(target.clone()),
+                    RelationshipTarget::UnresolvedExternal { .. } => None,
+                })
+                .collect();
+            (module.module_path.clone(), dependencies)
+        })
+        .collect();
+    let prune = GoPruneKnowledge {
+        domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+        go: work.go,
+        toolchain: work.toolchain,
+        package_directories,
+        relationships,
+        replacements: prune_replacements,
+    };
+
+    Ok(DiscoveredWorkspace {
+        modules,
+        graph,
+        prune: Some(prune),
+    })
 }
 
 fn go_command_task(
@@ -1312,9 +1563,13 @@ impl RepositoryContributor for GoContributor {
                 },
             );
 
-            Ok(DiscoveredPackages::new(packages, workspace_roots)
+            let discovered = DiscoveredPackages::new(packages, workspace_roots)
                 .with_external_resolution(resolution)
-                .with_change_observation(change_observation))
+                .with_change_observation(change_observation);
+            Ok(match workspace.prune {
+                Some(prune) => discovered.with_prune_domain(std::sync::Arc::new(prune)),
+                None => discovered,
+            })
         })
     }
 }
@@ -1480,8 +1735,81 @@ mod tests {
         let graph = "example.com/api example.com/lib@v0.0.0\nexample.com/api go@1.22\n";
         let module_paths =
             HashSet::from(["example.com/api".to_string(), "example.com/lib".to_string()]);
-        let relationships = relationships_from_mod_graph(graph, &module_paths).unwrap();
+        let relationships =
+            relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
+    }
+
+    #[test]
+    fn prune_plan_expands_dependencies_and_renders_workspace_deterministically() {
+        let knowledge = GoPruneKnowledge {
+            domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+            go: "1.22".to_string(),
+            toolchain: Some("go1.22.0".to_string()),
+            package_directories: HashMap::from([
+                ("example.com/api".to_string(), "apps/api".to_string()),
+                ("example.com/lib".to_string(), "packages/lib".to_string()),
+                ("example.com/unused".to_string(), "tools/unused".to_string()),
+            ]),
+            relationships: HashMap::from([(
+                "example.com/api".to_string(),
+                vec!["example.com/lib".to_string()],
+            )]),
+            replacements: vec![
+                GoPruneReplacement {
+                    old_path: "example.net/remote".to_string(),
+                    old_version: Some("v1.0.0".to_string()),
+                    new_path: "example.net/fork".to_string(),
+                    new_version: Some("v1.0.1".to_string()),
+                    local_target: None,
+                },
+                GoPruneReplacement {
+                    old_path: "example.net/unused".to_string(),
+                    old_version: None,
+                    new_path: "./tools/unused".to_string(),
+                    new_version: None,
+                    local_target: Some("example.com/unused".to_string()),
+                },
+            ],
+        };
+
+        let plan = knowledge
+            .plan(&["example.com/api".to_string()])
+            .unwrap()
+            .expect("kept Go modules produce a plan");
+        assert_eq!(plan.extra_packages, ["example.com/lib"]);
+        assert_eq!(
+            plan.root_files,
+            [(
+                GO_WORK.to_string(),
+                "go 1.22\n\ntoolchain go1.22.0\n\nuse \
+                 (\n\t./apps/api\n\t./packages/lib\n)\n\nreplace (\n\texample.net/remote v1.0.0 \
+                 => example.net/fork v1.0.1\n)\n"
+                    .to_string()
+            )]
+        );
+        assert_eq!(
+            plan.copy_paths,
+            ["go.work.sum", "apps/api/go.sum", "packages/lib/go.sum"]
+        );
+    }
+
+    #[test]
+    fn rejects_outside_repository_go_work_replacement() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("apps/api", "example.com/api", "")]);
+        root.join_component(GO_WORK)
+            .create_with_contents(
+                "go 1.22\n\nuse ./apps/api\n\nreplace example.net/local => ../outside\n",
+            )
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("outside workspace replacement fails");
+        assert!(matches!(error, Error::OutsideRepositoryLocalModule { .. }));
     }
 
     fn complete_go_environment() -> BTreeMap<String, String> {

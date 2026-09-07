@@ -152,7 +152,9 @@ impl ScopeTaskContract {
             toolchain: Some(ToolchainId::GO),
             command_map_target: Some(CommandMapTarget::Go),
             entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("go"))),
-            prune_package_mode: None,
+            prune_package_mode: Some(PrunePackageMode::NativeDomain(
+                crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+            )),
             dependency_source_inputs,
             dynamic: Some(DynamicTaskContract::Go(contract)),
             static_defaults: BTreeMap::new(),
