@@ -1,0 +1,496 @@
+---
+title: Turborepo 2.11
+date: 2026/08/05
+description: "Native support for Rust and Python, more package managers, and production pruning"
+product: turborepo
+type: overview
+summary: Release notes for Turborepo 2.11 featuring experimental native support for Rust and Python, nub and aube support, devEngines.packageManager support, and production pruning.
+tag: "web development"
+---
+
+import { Authors } from "@/components/blog/authors";
+import { Accordion, Accordions } from "@/components/geistdocs/accordion";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Date } from "@/components/blog/date";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import MilestonesImageDark from "../../public/images/blog/turbo-2-11/milestones-dark.png";
+import MilestonesImageLight from "../../public/images/blog/turbo-2-11/milestones-light.png";
+
+# Turborepo 2.11
+
+<Date>Wednesday, August 5th, 2026</Date>
+
+<Authors authors={["anthonyshew"]} />
+
+Turborepo 2.11 expands what's possible in your Turborepo:
+
+- [**Rust and Python native support (Experimental)**](#native-support-for-rust-and-python-experimental): Add Cargo and uv workspaces to your Task Graph
+- [**`devEngines.packageManager` support**](#devenginespackagemanager-support): Declare your package manager with modern Node.js convention
+- [**nub and aube support**](#nub-and-aube-support): New JavaScript package managers
+- [**Production pruning**](#production-pruning): Exclude development-only workspace packages from `turbo prune` outputs
+
+In addition to these new features, this is the first release of Turborepo with zero known bugs.
+
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: "Turborepo reaches 20 million weekly downloads with zero open GitHub issues",
+    src: MilestonesImageLight,
+    props: {
+      width: 2000,
+      height: 1125,
+      className: "dark:hidden block rounded-xl",
+    },
+  }}
+  dark={{
+    alt: "Turborepo reaches 20 million weekly downloads with zero open GitHub issues",
+    src: MilestonesImageDark,
+    props: {
+      width: 2000,
+      height: 1125,
+      className: "hidden dark:block rounded-xl",
+    },
+  }}
+/>
+
+---
+
+Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+pnpm dlx @turbo/codemod migrate
+
+# Start a new repository
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+yarn dlx @turbo/codemod migrate
+
+# Start a new repository
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+npx @turbo/codemod migrate
+
+# Start a new repository
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+bunx @turbo/codemod migrate
+
+# Start a new repository
+bunx create-turbo@latest
+```
+
+</Tab>
+
+</PackageManagerTabs>
+
+---
+
+## Native support for Rust and Python (Experimental)
+
+Turborepo can now discover packages and dependency relationships from Cargo and uv workspaces, putting each language toolchain into the same [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). This brings Turborepo's [task scheduling](/docs/crafting-your-repository/configuring-tasks), [filtering](/docs/crafting-your-repository/running-tasks#using-filters), [affectedness calculations](/docs/crafting-your-repository/constructing-ci#running-only-affected-tasks), [Watch Mode](/docs/crafting-your-repository/developing-applications#watch-mode), and [pruning](/docs/reference/prune) to your Rust and Python projects. You get one CLI, `turbo`, to handle all the tasks in your monorepo.
+
+You can use any of these languages by themselves or bring JavaScript, Rust, and Python together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
+
+| Turborepo command                        | Task examples                                   |
+| ---------------------------------------- | ----------------------------------------------- |
+| `turbo run build`                        | `tsc build` + `cargo build` + `uv build`        |
+| `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest`   |
+| `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`           |
+| `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` |
+| `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` |
+| `turbo run build test check lint format` | All of the commands above run in parallel       |
+
+You can also create cross-toolchain dependencies in `turbo.json`. In the example below, tests for a Python API server wait for a Rust core package to be built:
+
+```json title="turbo.json"
+{
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalPythonWorkspaces": true
+  },
+  "tasks": {
+    "my-dango-api#test": {
+      "dependsOn": ["rust-api-core#build"]
+    }
+  }
+}
+```
+
+Once the Rust dependency is done building, the Django server will run its Python tests.
+
+Native Rust and Python support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
+
+### Rust with Cargo
+
+Enable Cargo workspace support with `experimentalCargoWorkspaces` in your root `turbo.json`:
+
+```json title="turbo.json"
+{
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true
+  }
+}
+```
+
+Turborepo infers common tasks and maps them to Cargo commands:
+
+| Turborepo command  | Cargo-native task |
+| ------------------ | ----------------- |
+| `turbo run build`  | `cargo build`     |
+| `turbo run test`   | `cargo test`      |
+| `turbo run check`  | `cargo check`     |
+| `turbo run lint`   | `cargo clippy`    |
+| `turbo run format` | `cargo fmt`       |
+
+Cargo remains responsible for installing dependencies, resolving dependencies, compiling crates, and scheduling the Cargo-internal build graph. The Cargo workspace continues to work the way you are used to under the hood.
+
+To learn more, [read the Rust guide](/docs/guides/tools/rust). We look forward to hearing your feedback on [the RFC for Rust support](https://github.com/vercel/turborepo/discussions/13415).
+
+### Python with uv
+
+Enable uv workspace support with `experimentalPythonWorkspaces` in your root `turbo.json`:
+
+```json title="turbo.json"
+{
+  "futureFlags": {
+    "experimentalPythonWorkspaces": true
+  }
+}
+```
+
+With zero configuration, Turborepo reads the tools in your `pyproject.toml` and runs them as native tasks:
+
+| Turborepo command  | uv-native task                |
+| ------------------ | ----------------------------- |
+| `turbo run build`  | `uv build --package=<name>`   |
+| `turbo run test`   | `uv run --frozen pytest`      |
+| `turbo run check`  | `uv run --frozen mypy`        |
+| `turbo run lint`   | `uv run --frozen ruff check`  |
+| `turbo run format` | `uv run --frozen ruff format` |
+
+Ruff, Black, mypy, ty, Pyright and pytest all require zero-configuration. To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
+
+## `devEngines.packageManager` support
+
+For JavaScript toolchains, the `devEngines.packageManager` field is the modern way to declare the package manager expected by your repository:
+
+```json title="package.json"
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.0.0"
+    }
+  }
+}
+```
+
+Starting with this release, Turborepo respects this field.
+
+In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository to `devEngines.packageManager`.
+
+[Read the package manager documentation](/docs/crafting-your-repository/structuring-a-repository#root-packagejson) to learn more.
+
+## nub and aube support
+
+Turborepo now recognizes [nub](https://nub.dev) and [aube](https://aube.jdx.dev) as JavaScript package managers.
+
+Both of these package managers focus on improving security and speed for your repo. They use your existing npm, pnpm, Yarn, or Bun lockfile, making for easy migration.
+
+Declare nub in your root `package.json`:
+
+<Tabs items={["nub", "aube"]}>
+<Tab value="nub">
+
+```json title="package.json"
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.8.3"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```json title="package.json"
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "aube",
+      "version": "2.2.9"
+    }
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+To try nub or aube, quickly create a monorepo with `create-turbo`:
+
+```sh title="Terminal"
+# nub
+nubx create-turbo -m nub
+
+# aube
+aubx create-turbo -m aube
+```
+
+## Production pruning
+
+When preparing a deployment from a monorepo, it can be tricky to right-size your Docker images. Turborepo's `prune` command is meant to solve this problem, trimming your monorepo down to only the code that is needed for the application to deploy and run successfully.
+
+Until today, Turborepo would include workspace packages referenced through both dependencies _and_ development dependencies while calculating the pruning dependency closure. While this is a safe default, removing development-only workspace packages from the production image can optimize further.
+
+In this release, we're giving you control to exclude workspace packages that are only reachable through `devDependencies` with the new `--production` flag for `turbo prune`:
+
+```bash title="Terminal"
+turbo prune web --production
+```
+
+This works across all natively supported languages, including the Experimental ones introduced in this release.
+
+[Visit the `turbo prune` documentation](/docs/reference/prune#--production) to learn more.
+
+## All changes
+
+<Accordions>
+
+  <Accordion title="Features (44)">
+
+    - feat: Add pytest task discovery ([#13720](https://github.com/vercel/turborepo/pull/13720))
+    - feat: Prune uv workspaces ([#13613](https://github.com/vercel/turborepo/pull/13613))
+    - feat: Watch uv workspace changes ([#13612](https://github.com/vercel/turborepo/pull/13612))
+    - feat: Hash uv lockfile closures ([#13611](https://github.com/vercel/turborepo/pull/13611))
+    - feat: Run native uv tasks ([#13610](https://github.com/vercel/turborepo/pull/13610))
+    - feat: Discover uv workspaces ([#13609](https://github.com/vercel/turborepo/pull/13609))
+    - feat: Add native Cargo format task ([#13606](https://github.com/vercel/turborepo/pull/13606))
+    - feat: Resolve GitHub Actions remote base refs behind future flag ([#10732](https://github.com/vercel/turborepo/pull/10732))
+    - feat: Support Android (Termux) ([#12735](https://github.com/vercel/turborepo/pull/12735))
+    - feat: Select runnable task entrypoints ([#13452](https://github.com/vercel/turborepo/pull/13452))
+    - feat: Add crate-scoped Cargo verification tasks ([#13398](https://github.com/vercel/turborepo/pull/13398))
+    - feat: Infer Cargo workspace tasks ([#13380](https://github.com/vercel/turborepo/pull/13380))
+    - feat: Support Cargo-only repos ([#13378](https://github.com/vercel/turborepo/pull/13378))
+    - feat: Report incremental cache reuse in the run summary ([#13327](https://github.com/vercel/turborepo/pull/13327))
+    - feat: Engage the Remote Cache and sccache compile cache for Rust CI ([#13292](https://github.com/vercel/turborepo/pull/13292))
+    - feat: Run the Rust workspace tests through nextest via command override ([#13316](https://github.com/vercel/turborepo/pull/13316))
+    - feat: Resolve and execute task command overrides ([#13315](https://github.com/vercel/turborepo/pull/13315))
+    - feat: Parse and validate the task command field ([#13313](https://github.com/vercel/turborepo/pull/13313))
+    - feat: Require a user-declared name for the Cargo workspace package ([#13312](https://github.com/vercel/turborepo/pull/13312))
+    - feat: Embed sccache so the Cargo compile cache needs no installation ([#13293](https://github.com/vercel/turborepo/pull/13293))
+    - feat: Serve the Remote Cache as an sccache backend for Cargo tasks ([#13288](https://github.com/vercel/turborepo/pull/13288))
+    - feat: Make turbo prune Cargo-aware ([#13281](https://github.com/vercel/turborepo/pull/13281))
+    - feat: Make turbo watch Cargo-aware ([#13280](https://github.com/vercel/turborepo/pull/13280))
+    - feat: Hash Cargo external dependencies per-crate ([#13267](https://github.com/vercel/turborepo/pull/13267))
+    - feat: Derive input and output globs for Cargo tasks ([#13263](https://github.com/vercel/turborepo/pull/13263))
+    - feat: Expose resolved experimentalCI task configuration in `turbo query` ([#13264](https://github.com/vercel/turborepo/pull/13264))
+    - feat: Execute Cargo crate tasks via cargo ([#13261](https://github.com/vercel/turborepo/pull/13261))
+    - feat: Discover Cargo crates as packages ([#13248](https://github.com/vercel/turborepo/pull/13248))
+    - feat: Introduce toolchain provider abstraction ([#13235](https://github.com/vercel/turborepo/pull/13235))
+    - feat: Add futureFlags.experimentalCargoWorkspaces flag (no-op) ([#13227](https://github.com/vercel/turborepo/pull/13227))
+    - feat: Automatically copy TUI selection to clipboard on mouse release ([#13208](https://github.com/vercel/turborepo/pull/13208))
+    - feat: Select tasks by clicking rows in the TUI task list ([#13206](https://github.com/vercel/turborepo/pull/13206))
+    - feat: Toggle between the TUI and streamed logs ([#13203](https://github.com/vercel/turborepo/pull/13203))
+    - feat: Accept Bun lockfile version 2 ([#13119](https://github.com/vercel/turborepo/pull/13119))
+    - feat: Add --production flag to turbo prune ([#13190](https://github.com/vercel/turborepo/pull/13190))
+    - feat: Add aube package manager support ([#13183](https://github.com/vercel/turborepo/pull/13183))
+    - feat: Add nub to create-turbo options ([#13173](https://github.com/vercel/turborepo/pull/13173))
+    - feat: Add nub package manager support to JavaScript packages ([#13169](https://github.com/vercel/turborepo/pull/13169))
+    - feat: Recognize nub as a package manager ([#13120](https://github.com/vercel/turborepo/pull/13120))
+    - feat: Update workspace package manager declarations ([#13154](https://github.com/vercel/turborepo/pull/13154))
+    - feat: Update add package manager codemod ([#13151](https://github.com/vercel/turborepo/pull/13151))
+    - feat: Support devEngines packageManager in workspaces ([#13150](https://github.com/vercel/turborepo/pull/13150))
+    - feat: Support `devEngines.packageManager` ([#12388](https://github.com/vercel/turborepo/pull/12388))
+    - feat: Migrate TUI virtual terminals from vt100 to Ghostty ([#13135](https://github.com/vercel/turborepo/pull/13135))
+
+  </Accordion>
+
+  <Accordion title="Performance (30)">
+
+    - perf: Walk literal-prefix tree globs without wax compilation ([#13522](https://github.com/vercel/turborepo/pull/13522))
+    - perf: Reuse Cargo metadata discovery snapshot ([#13600](https://github.com/vercel/turborepo/pull/13600))
+    - perf: Cache telemetry salt instead of re-reading config on every hash ([#13498](https://github.com/vercel/turborepo/pull/13498))
+    - perf: Evaluate simple include globs without wax compilation ([#13285](https://github.com/vercel/turborepo/pull/13285))
+    - perf: Skip dependency-closure assembly for toolchains that derive nothing ([#13277](https://github.com/vercel/turborepo/pull/13277))
+    - perf: Remove lock and dispatch overhead from task hash precomputation ([#13273](https://github.com/vercel/turborepo/pull/13273))
+    - perf: Defer the untracked-scan barrier to first file-hash use ([#13268](https://github.com/vercel/turborepo/pull/13268))
+    - perf: Parse large pnpm lockfile sections in parallel ([#13266](https://github.com/vercel/turborepo/pull/13266))
+    - perf: Pre-size engine task collections ([#13265](https://github.com/vercel/turborepo/pull/13265))
+    - perf: Probe microfrontends configs in parallel ([#13262](https://github.com/vercel/turborepo/pull/13262))
+    - perf: Compute transitive closures and external dependency hashes concurrently with run setup ([#13250](https://github.com/vercel/turborepo/pull/13250))
+    - perf: Memoize resolved task definitions during engine construction ([#13257](https://github.com/vercel/turborepo/pull/13257))
+    - perf: Stat workspace turbo.json files concurrently during discovery ([#13251](https://github.com/vercel/turborepo/pull/13251))
+    - perf: Reuse per-package external dependency hashes in run summaries ([#13249](https://github.com/vercel/turborepo/pull/13249))
+    - perf: Hash git blobs with hardware-accelerated SHA-1 ([#13245](https://github.com/vercel/turborepo/pull/13245))
+    - perf: Parse Berry lockfiles in a single pass ([#13242](https://github.com/vercel/turborepo/pull/13242))
+    - perf: Overhaul pnpm lockfile parsing and dependency closure computation ([#13228](https://github.com/vercel/turborepo/pull/13228))
+    - perf: Release tokio runtime at exit so background DNS lookups never stall the user ([#13231](https://github.com/vercel/turborepo/pull/13231))
+    - perf: Build tracked repo index concurrently with package graph ([#13232](https://github.com/vercel/turborepo/pull/13232))
+    - perf: Overlap external dependency hashing with package file hashing ([#13234](https://github.com/vercel/turborepo/pull/13234))
+    - perf: Stop materializing spans for the disabled daemon log layer ([#13244](https://github.com/vercel/turborepo/pull/13244))
+    - perf: Parse yarn v1 lockfiles in a single pass ([#13241](https://github.com/vercel/turborepo/pull/13241))
+    - perf: Use mimalloc as the global allocator ([#13237](https://github.com/vercel/turborepo/pull/13237))
+    - perf: Derive dirty hash from repo index ([#13213](https://github.com/vercel/turborepo/pull/13213))
+    - perf: Replace per-package graph traversals in scope filtering ([#13212](https://github.com/vercel/turborepo/pull/13212))
+    - perf: Cache env wildcard matches across tasks during hashing ([#13210](https://github.com/vercel/turborepo/pull/13210))
+    - perf: Cache root internal dependencies in package graph ([#13211](https://github.com/vercel/turborepo/pull/13211))
+    - perf: Avoid deep-cloning dependency maps in lockfile closure cache ([#13209](https://github.com/vercel/turborepo/pull/13209))
+    - perf(build): Enable thin LTO + codegen-units=1 for release builds ([#13160](https://github.com/vercel/turborepo/pull/13160))
+    - perf: Avoid normalizing git index path joins ([#12944](https://github.com/vercel/turborepo/pull/12944))
+
+  </Accordion>
+
+  <Accordion title="Fixes (86)">
+
+    - fix: Accept semver ranges in devEngines.packageManager.version ([#13623](https://github.com/vercel/turborepo/pull/13623))
+    - fix: Fall back to polling on macOS ([#13622](https://github.com/vercel/turborepo/pull/13622))
+    - fix: Make Windows Cap'n Proto cache relocatable ([#13621](https://github.com/vercel/turborepo/pull/13621))
+    - fix: Serialize macOS Homebrew setup ([#13549](https://github.com/vercel/turborepo/pull/13549))
+    - fix: Support fork PRs in review gate ([#13516](https://github.com/vercel/turborepo/pull/13516))
+    - fix: Use tokenless release review gate ([#13513](https://github.com/vercel/turborepo/pull/13513))
+    - fix: Resolve gitdir for linked worktrees in repo index ([#13503](https://github.com/vercel/turborepo/pull/13503))
+    - fix: Make releases resumable ([#13486](https://github.com/vercel/turborepo/pull/13486))
+    - fix: Scroll TUI task list with mouse wheel ([#13479](https://github.com/vercel/turborepo/pull/13479))
+    - fix: Support multiple macOS file watch roots ([#13484](https://github.com/vercel/turborepo/pull/13484))
+    - fix: Preserve pnpm aliased dependencies during prune ([#13477](https://github.com/vercel/turborepo/pull/13477))
+    - fix: Preserve pnpm root dependencies during prune ([#13476](https://github.com/vercel/turborepo/pull/13476))
+    - fix: Prevent mobile homepage overflow ([#13453](https://github.com/vercel/turborepo/pull/13453))
+    - fix: Upgrade @vercel/connect ([#13450](https://github.com/vercel/turborepo/pull/13450))
+    - fix: Verify version after attempting codemod upgrade ([#13446](https://github.com/vercel/turborepo/pull/13446))
+    - fix: Preserve project Yarn package extensions ([#13425](https://github.com/vercel/turborepo/pull/13425))
+    - fix: Match JIT inputs for affected tasks ([#13426](https://github.com/vercel/turborepo/pull/13426))
+    - fix: Refactor `turbo watch` ([#13423](https://github.com/vercel/turborepo/pull/13423))
+    - fix: Check dynamic imports in boundaries ([#13418](https://github.com/vercel/turborepo/pull/13418))
+    - fix: Preserve pnpm `node@runtime:` lockfile entries ([#13408](https://github.com/vercel/turborepo/pull/13408))
+    - fix: Fetch release commit parent ([#13400](https://github.com/vercel/turborepo/pull/13400))
+    - fix: Pin VS Code extension macOS runners ([#13391](https://github.com/vercel/turborepo/pull/13391))
+    - fix: Resolve weekly security audit vulnerabilities ([#13358](https://github.com/vercel/turborepo/pull/13358))
+    - fix: Retain shutdown signals for force exit ([#13382](https://github.com/vercel/turborepo/pull/13382))
+    - fix: Preserve colors in TUI output ([#13381](https://github.com/vercel/turborepo/pull/13381))
+    - fix: Preserve Yarn Babel extension during pruning ([#13373](https://github.com/vercel/turborepo/pull/13373))
+    - fix: Resolve Cargo target output layouts ([#13370](https://github.com/vercel/turborepo/pull/13370))
+    - fix: Prune Bun production workspace dev dependencies ([#13369](https://github.com/vercel/turborepo/pull/13369))
+    - fix: Resolve exact cargo profile outputs ([#13366](https://github.com/vercel/turborepo/pull/13366))
+    - fix: Surface create-turbo Git failures ([#13371](https://github.com/vercel/turborepo/pull/13371))
+    - fix: Disable unresolved Cargo artifact caching ([#13362](https://github.com/vercel/turborepo/pull/13362))
+    - fix: Preserve Yarn package extension ranges when pruning ([#13363](https://github.com/vercel/turborepo/pull/13363))
+    - fix: Synchronize Cargo prune Docker lockfile ([#13350](https://github.com/vercel/turborepo/pull/13350))
+    - fix: Hash Cargo build environment inputs ([#13348](https://github.com/vercel/turborepo/pull/13348))
+    - fix: Include patched Ghostty crate in Cargo workspace ([#13357](https://github.com/vercel/turborepo/pull/13357))
+    - fix: Isolate Command Overrides From Toolchain Cache I/O ([#13354](https://github.com/vercel/turborepo/pull/13354))
+    - fix: Preserve watch rerun semantics for task inputs ([#13351](https://github.com/vercel/turborepo/pull/13351))
+    - fix: Build Ghostty for baseline CPUs ([#13352](https://github.com/vercel/turborepo/pull/13352))
+    - fix: Resolve Cargo lock dependencies by source ([#13343](https://github.com/vercel/turborepo/pull/13343))
+    - fix: Allow outputs outside package roots ([#13342](https://github.com/vercel/turborepo/pull/13342))
+    - fix: Reject unsupported Cargo local packages ([#13340](https://github.com/vercel/turborepo/pull/13340))
+    - fix: Require current Cargo lockfiles for caching ([#13339](https://github.com/vercel/turborepo/pull/13339))
+    - fix: Continue TUI text selection beyond viewport ([#13338](https://github.com/vercel/turborepo/pull/13338))
+    - fix: Isolate Cargo cache by host platform ([#13337](https://github.com/vercel/turborepo/pull/13337))
+    - fix: Prevent Cargo run tasks from being cached ([#13335](https://github.com/vercel/turborepo/pull/13335))
+    - fix: Resolve EADDRINUSE in kitchen-sink api dev script ([#13328](https://github.com/vercel/turborepo/pull/13328))
+    - fix: Make npm prune rehoisting deterministic and complete ([#13323](https://github.com/vercel/turborepo/pull/13323))
+    - fix: Remove extraneous bun.lock entries during prune ([#13317](https://github.com/vercel/turborepo/pull/13317))
+    - fix: Show toolchain tasks in the TUI and never run in silence ([#13308](https://github.com/vercel/turborepo/pull/13308))
+    - fix: Keep pnpm patches with version range keys during prune ([#13307](https://github.com/vercel/turborepo/pull/13307))
+    - fix: Never let compile cache storage failures fail the build ([#13299](https://github.com/vercel/turborepo/pull/13299))
+    - fix: Stop ambient CARGO_INCREMENTAL from suppressing compile cache injection ([#13298](https://github.com/vercel/turborepo/pull/13298))
+    - fix: Make the sccache compile cache actually cache ([#13296](https://github.com/vercel/turborepo/pull/13296))
+    - fix: Pin a flag-aware turbo canary for the eve-agent deployment ([#13295](https://github.com/vercel/turborepo/pull/13295))
+    - fix: Disable the sccache proxy when remote cache use is off ([#13291](https://github.com/vercel/turborepo/pull/13291))
+    - fix: Reject output path traversal ([#13290](https://github.com/vercel/turborepo/pull/13290))
+    - fix: Stop flagging relative imports that resolve into node_modules in boundaries ([#13284](https://github.com/vercel/turborepo/pull/13284))
+    - fix: Raise the open-file soft limit at startup ([#13282](https://github.com/vercel/turborepo/pull/13282))
+    - fix: Collapse nested package-manager fallback conditional ([#13279](https://github.com/vercel/turborepo/pull/13279))
+    - fix: Fall back to lockfile detection in @turbo/repository when package manager is undeclared ([#13275](https://github.com/vercel/turborepo/pull/13275))
+    - fix: Avoid non-reentrant libc calls in concurrent shutdown process scans ([#13256](https://github.com/vercel/turborepo/pull/13256))
+    - fix: Stop root-directory packages from claiming every file in change mapping ([#13225](https://github.com/vercel/turborepo/pull/13225))
+    - fix: Apply input exclusion globs to the filesystem walk ([#13224](https://github.com/vercel/turborepo/pull/13224))
+    - fix: Keep ancestor-scoped bun dependencies resolvable after prune renames ([#13236](https://github.com/vercel/turborepo/pull/13236))
+    - fix: Correct gitignore precedence in untracked walk and memoize matcher chains ([#13221](https://github.com/vercel/turborepo/pull/13221))
+    - fix: Harden TUI terminal restore during shutdown ([#13220](https://github.com/vercel/turborepo/pull/13220))
+    - fix: Remove devtools feature flag ([#13219](https://github.com/vercel/turborepo/pull/13219))
+    - fix: Include untracked symlinks in repo-index dirty hash ([#13218](https://github.com/vercel/turborepo/pull/13218))
+    - fix: Resolve Bun scoped package deps that share a name with a dependency ([#13207](https://github.com/vercel/turborepo/pull/13207))
+    - fix(watch): recover from slow initial hash instead of timing out ([#13159](https://github.com/vercel/turborepo/pull/13159))
+    - fix: Improve error messaging when platform binary is missing ([#13199](https://github.com/vercel/turborepo/pull/13199))
+    - fix: Report malformed JSON parse errors instead of panicking ([#13198](https://github.com/vercel/turborepo/pull/13198))
+    - fix: Tweaks for nub support ([#13187](https://github.com/vercel/turborepo/pull/13187))
+    - fix: Handle task executor join errors as internal errors ([#13148](https://github.com/vercel/turborepo/pull/13148))
+    - fix: Add token exchange recovery guidance ([#13192](https://github.com/vercel/turborepo/pull/13192))
+    - fix: Skip node_modules in boundaries checks ([#13191](https://github.com/vercel/turborepo/pull/13191))
+    - fix: Normalize package manager version output ([#13185](https://github.com/vercel/turborepo/pull/13185))
+    - fix: Support nub native lockfiles ([#13179](https://github.com/vercel/turborepo/pull/13179))
+    - fix: Use singular workspace in package resolution error ([#13178](https://github.com/vercel/turborepo/pull/13178))
+    - fix: Normalize package manager versions ([#13177](https://github.com/vercel/turborepo/pull/13177))
+    - fix: Link ghostty-vt statically on Windows MSVC ([#13171](https://github.com/vercel/turborepo/pull/13171))
+    - fix: Avoid following nested symlinked cache outputs ([#13166](https://github.com/vercel/turborepo/pull/13166))
+    - fix: Preserve 3-level nested Bun lockfile entries during prune ([#13168](https://github.com/vercel/turborepo/pull/13168))
+    - fix: Install Zig for LSP builds ([#13158](https://github.com/vercel/turborepo/pull/13158))
+    - fix(env): Add XDG_DATA_* to pass-through ([#13145](https://github.com/vercel/turborepo/pull/13145))
+    - fix: Support Corepack packageManager integrity hashes ([#13123](https://github.com/vercel/turborepo/pull/13123))
+
+  </Accordion>
+
+  <Accordion title="Documentation (12)">
+
+    - docs: Explain affected package invalidation reasons ([#13594](https://github.com/vercel/turborepo/pull/13594))
+    - docs: Vercel Remote Cache authentication with OIDC policies ([#13140](https://github.com/vercel/turborepo/pull/13140))
+    - docs: Audit Cargo package knowledge ([#13572](https://github.com/vercel/turborepo/pull/13572))
+    - docs: Fix llms.txt links to page markdown routes ([#13497](https://github.com/vercel/turborepo/pull/13497))
+    - docs: Document service readiness probes ([#13472](https://github.com/vercel/turborepo/pull/13472))
+    - docs: Update Geistdocs to 1.13.0 ([#13412](https://github.com/vercel/turborepo/pull/13412))
+    - docs: Add Experimental Rust Guide ([#13375](https://github.com/vercel/turborepo/pull/13375))
+    - docs: Update Cargo workspace support ([#13349](https://github.com/vercel/turborepo/pull/13349))
+    - docs: Migrate docs site to @vercel/geistdocs package ([#13320](https://github.com/vercel/turborepo/pull/13320))
+    - docs: Add filtered installs to Vercel guide ([#13196](https://github.com/vercel/turborepo/pull/13196))
+    - docs: Prefer devEngines packageManager ([#13155](https://github.com/vercel/turborepo/pull/13155))
+    - docs: Add Turborepo 2.10 release post and update docs ([#13096](https://github.com/vercel/turborepo/pull/13096))
+
+  </Accordion>
+
+  <Accordion title="Examples (1)">
+
+    - examples: add with-mcp-servers ([#12997](https://github.com/vercel/turborepo/pull/12997))
+
+  </Accordion>
+
+</Accordions>
+
+## Acknowledgments and community
+
+Turborepo is the result of the combined work of all contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
+
+We also thank everyone who contributed to this release of Turborepo: @abhiaagarwal, @ashusnapx, @bangseongbeom, @charpeni, @colinhacks, @dnukumamras, @ghoullier, @gtbuchanan, @gwagjiug, @lachieh, @louis-bompart, @lukesandberg, @markandrus, @molebox, @Nishant-Chaudhary5338, @ognevny, @tajo, @tsushanth, and @XananasX7.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.dev/docs/community).
