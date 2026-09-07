@@ -10,6 +10,7 @@ use common::setup;
 const AMBIENT_GO_ENV: &[&str] = &[
     "GO111MODULE",
     "GOARCH",
+    "GOCACHE",
     "GOENV",
     "GOEXPERIMENT",
     "GOFLAGS",
@@ -41,11 +42,13 @@ fn setup_go_monorepo(dir: &Path) {
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let go_cache_dir = tempfile::tempdir().expect("failed to create Go cache tempdir");
     let mut command = common::turbo_command(dir);
     for name in AMBIENT_GO_ENV {
         command.env_remove(name);
     }
     command
+        .env("GOCACHE", go_cache_dir.path())
         .env("GOENV", "off")
         .env("GOTOOLCHAIN", "local")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
@@ -307,7 +310,14 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         &["run", "build", "--filter=example.com/api", "--dry-run=json"],
     );
     let build = dry_run_task(&output, "example.com/api#build");
-    assert_eq!(build["command"], "go build -o dist/api .");
+    assert_eq!(
+        build["command"],
+        if cfg!(windows) {
+            "go build -o dist/api.exe ."
+        } else {
+            "go build -o dist/api ."
+        }
+    );
     assert_eq!(build["resolvedTaskDefinition"]["cache"], true);
     assert!(
         build["resolvedTaskDefinition"]["outputs"]
