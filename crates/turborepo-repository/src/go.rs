@@ -837,6 +837,10 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "PKG_CONFIG",
 ];
 
+/// Machine-local Go variables required by task execution but excluded from
+/// task hashes.
+pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &["GOCACHE"];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum GoContractKind {
     Module { output_name: Option<String> },
@@ -1619,7 +1623,8 @@ mod tests {
 
     #[test]
     fn task_contracts_derive_module_executable_and_workspace_io() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         let executable = GoModule {
             module_path: "example.com/api".to_string(),
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
@@ -1642,6 +1647,12 @@ mod tests {
             native_tasks_for_module(&executable, "linux"),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
+        );
+        assert!(
+            package
+                .task_contract()
+                .environment_vars()
+                .contains(&"GOCACHE")
         );
         let dependency = task_context(
             &root,
@@ -1669,6 +1680,7 @@ mod tests {
             assert!(executable_io.input_globs.iter().any(|glob| glob == input));
         }
         assert!(executable_io.env.contains(&"GOOS".to_string()));
+        assert!(!executable_io.env.contains(&"GOCACHE".to_string()));
         assert!(!executable_io.env.contains(&"GOPROXY".to_string()));
         assert_eq!(
             executable_io.outputs,
@@ -1727,11 +1739,18 @@ mod tests {
 
     #[test]
     fn cache_prefixes_remain_inside_the_repository() {
-        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let build_cache = root.join_components(&[".cache", "go-build"]).to_string();
+        let module_cache_tempdir = tempfile::tempdir().unwrap();
+        let module_cache = AbsoluteSystemPathBuf::try_from(module_cache_tempdir.path())
+            .unwrap()
+            .join_components(&["go", "pkg", "mod"])
+            .to_string();
         let environment = GoEnvironment {
             target_os: "linux".to_string(),
-            build_cache: "/repo/.cache/go-build".to_string(),
-            module_cache: "/home/user/go/pkg/mod".to_string(),
+            build_cache,
+            module_cache,
         };
         assert_eq!(
             go_cache_prefixes(&root, &environment),
