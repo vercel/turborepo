@@ -150,6 +150,14 @@ fn assert_go_build_cache_result(
     );
 }
 
+fn alternate_go_arch(host_arch: &str) -> &'static str {
+    if host_arch == "arm64" {
+        "amd64"
+    } else {
+        "arm64"
+    }
+}
+
 #[cfg(unix)]
 fn go_version_shim_path(dir: &Path) -> String {
     use std::os::unix::fs::PermissionsExt;
@@ -736,6 +744,33 @@ fn test_go_hash_is_stable_across_equivalent_checkout_roots() {
 }
 
 #[test]
+fn test_go_cache_alternate_arch_is_supported_on_ci_platforms() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let supported = run_go(tempdir.path(), &["tool", "dist", "list"]);
+    assert_command_success(&supported, "list supported Go targets");
+    let supported = String::from_utf8_lossy(&supported.stdout);
+
+    for goos in ["darwin", "linux", "windows"] {
+        for host_arch in ["amd64", "arm64"] {
+            let target_arch = alternate_go_arch(host_arch);
+            assert_ne!(
+                target_arch, host_arch,
+                "cache invalidation target must differ from the host architecture"
+            );
+            let target = format!("{goos}/{target_arch}");
+            assert!(
+                supported.lines().any(|candidate| candidate == target),
+                "{target} must remain a supported Go cross-compilation target"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_go_cache_invalidates_every_north_star_input() {
     if !go_available() {
         return;
@@ -842,11 +877,7 @@ replace example.net/message => ../../third_party/message
 
     let go_arch = run_go(root, &["env", "GOARCH"]);
     assert_command_success(&go_arch, "read host Go architecture");
-    let target_arch = if String::from_utf8_lossy(&go_arch.stdout).trim() == "386" {
-        "amd64"
-    } else {
-        "386"
-    };
+    let target_arch = alternate_go_arch(String::from_utf8_lossy(&go_arch.stdout).trim());
     assert_go_build_cache_result(
         root,
         &[("GOARCH", target_arch)],
