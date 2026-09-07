@@ -1,10 +1,10 @@
 ---
 title: Turborepo 2.11
 date: 2026/08/05
-description: "Native support for Rust and Python, more package managers, and production pruning"
+description: "Native support for Rust, Python, and Go, more package managers, and production pruning"
 product: turborepo
 type: overview
-summary: Release notes for Turborepo 2.11 featuring experimental native support for Rust and Python, nub and aube support, devEngines.packageManager support, and production pruning.
+summary: Release notes for Turborepo 2.11 featuring experimental native support for Rust, Python, and Go, nub and aube support, devEngines.packageManager support, and production pruning.
 tag: "web development"
 ---
 
@@ -24,7 +24,7 @@ import MilestonesImageLight from "../../public/images/blog/turbo-2-11/milestones
 
 Turborepo 2.11 expands what's possible in your Turborepo:
 
-- [**Rust and Python native support (Experimental)**](#native-support-for-rust-and-python-experimental): Add Cargo and uv workspaces to your Task Graph
+- [**Rust, Python, and Go native support (Experimental)**](#native-support-for-rust-python-and-go-experimental): Add Cargo, uv, and `go.work` workspaces to your Task Graph
 - [**`devEngines.packageManager` support**](#devenginespackagemanager-support): Declare your package manager with modern Node.js convention
 - [**nub and aube support**](#nub-and-aube-support): New JavaScript package managers
 - [**Production pruning**](#production-pruning): Exclude development-only workspace packages from `turbo prune` outputs
@@ -107,24 +107,48 @@ bunx create-turbo@latest
 
 </Tab>
 
+<Tab value="nub">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+nubx @turbo/codemod migrate
+
+# Start a new repository
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+aubx @turbo/codemod migrate
+
+# Start a new repository
+aubx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ---
 
-## Native support for Rust and Python (Experimental)
+## Native support for Rust, Python, and Go (Experimental)
 
-Turborepo can now discover packages and dependency relationships from Cargo and uv workspaces, putting each language toolchain into the same [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). This brings Turborepo's [task scheduling](/docs/crafting-your-repository/configuring-tasks), [filtering](/docs/crafting-your-repository/running-tasks#using-filters), [affectedness calculations](/docs/crafting-your-repository/constructing-ci#running-only-affected-tasks), [Watch Mode](/docs/crafting-your-repository/developing-applications#watch-mode), and [pruning](/docs/reference/prune) to your Rust and Python projects. You get one CLI, `turbo`, to handle all the tasks in your monorepo.
+Turborepo can now discover packages and dependency relationships from Cargo, uv, and `go.work` workspaces, putting each language toolchain into the same [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). This brings Turborepo's [task scheduling](/docs/crafting-your-repository/configuring-tasks), [filtering](/docs/crafting-your-repository/running-tasks#using-filters), [affectedness calculations](/docs/crafting-your-repository/constructing-ci#running-only-affected-tasks), [Watch Mode](/docs/crafting-your-repository/developing-applications#watch-mode), and [pruning](/docs/reference/prune) to your Rust, Python, and Go projects. You get one CLI, `turbo`, to handle all the tasks in your monorepo.
 
-You can use any of these languages by themselves or bring JavaScript, Rust, and Python together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
+You can use any of these languages by themselves or bring JavaScript, Rust, Python, and Go together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
 
-| Turborepo command                        | Task examples                                   |
-| ---------------------------------------- | ----------------------------------------------- |
-| `turbo run build`                        | `tsc build` + `cargo build` + `uv build`        |
-| `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest`   |
-| `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`           |
-| `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` |
-| `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` |
-| `turbo run build test check lint format` | All of the commands above run in parallel       |
+| Turborepo command                        | Task examples                                                    |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `turbo run build`                        | `tsc build` + `cargo build` + `uv build` + `go build ./...`       |
+| `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest` + `go test ./...`  |
+| `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`                            |
+| `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` + `go vet ./...` |
+| `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` + `go fmt ./...` |
+| `turbo run build test check lint format` | All of the commands above run in parallel                          |
 
 You can also create cross-toolchain dependencies in `turbo.json`. In the example below, tests for a Python API server wait for a Rust core package to be built:
 
@@ -132,7 +156,8 @@ You can also create cross-toolchain dependencies in `turbo.json`. In the example
 {
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
-    "experimentalPythonWorkspaces": true
+    "experimentalPythonWorkspaces": true,
+    "experimentalGoWorkspaces": true
   },
   "tasks": {
     "my-dango-api#test": {
@@ -144,7 +169,7 @@ You can also create cross-toolchain dependencies in `turbo.json`. In the example
 
 Once the Rust dependency is done building, the Django server will run its Python tests.
 
-Native Rust and Python support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
+Native Rust, Python, and Go support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
 
 ### Rust with Cargo
 
@@ -195,6 +220,32 @@ With zero configuration, Turborepo reads the tools in your `pyproject.toml` and 
 | `turbo run format` | `uv run --frozen ruff format` |
 
 Ruff, Black, mypy, ty, Pyright and pytest all require zero-configuration. To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
+
+### Go with go.work
+
+Enable Go workspace support with `experimentalGoWorkspaces` in your root `turbo.json`:
+
+```json title="turbo.json"
+{
+  "futureFlags": {
+    "experimentalGoWorkspaces": true
+  }
+}
+```
+
+Turborepo discovers modules from your repository-root `go.work` and maps common tasks to standard Go commands:
+
+| Turborepo command  | Go-native task                |
+| ------------------ | ----------------------------- |
+| `turbo run build`  | `go build ./...`              |
+| `turbo run test`   | `go test ./...`               |
+| `turbo run lint`   | `go vet ./...`                |
+| `turbo run format` | `go fmt ./...`                |
+| `turbo run dev`    | `go run <import-path>`        |
+
+Go remains responsible for module resolution, compilation, and testing. Turborepo orchestrates which modules are in scope, how they relate in the Task Graph, and when their tasks should run, cache, or invalidate.
+
+To learn more, [read the Go guide](/docs/guides/tools/go).
 
 ## `devEngines.packageManager` support
 
@@ -287,9 +338,17 @@ This works across all natively supported languages, including the Experimental o
 
 <Accordions>
 
-  <Accordion title="Features (44)">
+  <Accordion title="Features (55)">
 
     - feat: Add pytest task discovery ([#13720](https://github.com/vercel/turborepo/pull/13720))
+    - feat: Add Go-aware prune planning ([#13961](https://github.com/vercel/turborepo/pull/13961))
+    - feat: Add Go change observations ([#13959](https://github.com/vercel/turborepo/pull/13959))
+    - feat: Fingerprint Go toolchain environment ([#13958](https://github.com/vercel/turborepo/pull/13958))
+    - feat: Add Go external resolution fingerprints ([#13957](https://github.com/vercel/turborepo/pull/13957))
+    - feat: Add Go task input and output contracts ([#13955](https://github.com/vercel/turborepo/pull/13955))
+    - feat: Add native Go task tables ([#13954](https://github.com/vercel/turborepo/pull/13954))
+    - feat: Add experimental Go workspace graph foundation ([#13953](https://github.com/vercel/turborepo/pull/13953))
+    - feat: Make daemon discovery toolchain generic ([#13952](https://github.com/vercel/turborepo/pull/13952))
     - feat: Prune uv workspaces ([#13613](https://github.com/vercel/turborepo/pull/13613))
     - feat: Watch uv workspace changes ([#13612](https://github.com/vercel/turborepo/pull/13612))
     - feat: Hash uv lockfile closures ([#13611](https://github.com/vercel/turborepo/pull/13611))
@@ -462,8 +521,9 @@ This works across all natively supported languages, including the Experimental o
 
   </Accordion>
 
-  <Accordion title="Documentation (12)">
+  <Accordion title="Documentation (13)">
 
+    - docs: Document experimental native Go workspaces ([#13963](https://github.com/vercel/turborepo/pull/13963))
     - docs: Explain affected package invalidation reasons ([#13594](https://github.com/vercel/turborepo/pull/13594))
     - docs: Vercel Remote Cache authentication with OIDC policies ([#13140](https://github.com/vercel/turborepo/pull/13140))
     - docs: Audit Cargo package knowledge ([#13572](https://github.com/vercel/turborepo/pull/13572))
