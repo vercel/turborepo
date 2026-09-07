@@ -330,6 +330,21 @@ fn test_disabled_go_workspace_points_to_feature_flag() {
 }
 
 #[test]
+fn test_enabled_go_workspace_reports_missing_go_executable() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+
+    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("failed to run `go work edit -json`"),
+        "missing Go diagnostic must identify the command: {stderr}"
+    );
+}
+
+#[test]
 fn test_pure_go_workspace_has_no_package_json() {
     if !go_available() {
         return;
