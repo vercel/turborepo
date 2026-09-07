@@ -596,9 +596,12 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     let output = run_turbo(tempdir.path(), &["ls"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
+    // Diagnostic renderers can wrap this sentence and insert a continuation
+    // gutter, so assert semantic fragments instead of one contiguous phrase.
     assert!(
         stderr.contains("`go work edit -json` failed")
-            && stderr.contains("repository-root go.work")
+            && stderr.contains("Repair the repository-root")
+            && stderr.contains("go.work with `go work edit`")
             && stderr.contains("`go work use`"),
         "invalid workspace must have focused remediation: {stderr}"
     );
