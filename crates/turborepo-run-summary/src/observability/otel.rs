@@ -646,7 +646,7 @@ mod tests {
     #[test]
     fn go_task_summary_facts_reach_otel_payload() {
         let task = TaskSummary {
-            task_id: TaskId::from_static("example.com/api", "build"),
+            task_id: TaskId::from_static("example.com/api".to_string(), "build".to_string()),
             task: "build".to_string(),
             package: "example.com/api".to_string(),
             shared: SharedTaskSummary {
