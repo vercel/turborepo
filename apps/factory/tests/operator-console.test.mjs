@@ -3,11 +3,14 @@ import test from "node:test";
 
 import {
   isOperatorSessionRequest,
+  operatorSessionRequestPrincipal,
   operatorSessionPrincipal,
   OPERATOR_SESSION_ACTION,
   OPERATOR_SESSION_PRINCIPAL,
+  OPERATOR_THINKING_EFFORT_HEADER,
   selectedOperatorHarness,
-  selectedOperatorModel
+  selectedOperatorModel,
+  selectedOperatorThinkingEffort
 } from "../agent/lib/operator-console.ts";
 import { isAppPrincipal } from "../agent/lib/repo.ts";
 
@@ -104,9 +107,14 @@ test("workspace sessions run as a user, never as the app principal", () => {
 });
 
 test("workspace principals carry their selected model", () => {
-  const principal = operatorSessionPrincipal("openai/gpt-5.6-sol", "codex");
+  const principal = operatorSessionPrincipal(
+    "openai/gpt-5.6-sol",
+    "codex",
+    "high"
+  );
   assert.equal(selectedOperatorModel(principal), "openai/gpt-5.6-sol");
   assert.equal(selectedOperatorHarness(principal), "codex");
+  assert.equal(selectedOperatorThinkingEffort(principal), "high");
   assert.equal(isAppPrincipal(principal), false);
 });
 
@@ -115,4 +123,20 @@ test("workspace principals ignore malformed model identifiers", () => {
   assert.equal(principal, OPERATOR_SESSION_PRINCIPAL);
   assert.equal(selectedOperatorModel(principal), undefined);
   assert.equal(selectedOperatorHarness(principal), undefined);
+  assert.equal(selectedOperatorThinkingEffort(principal), undefined);
+});
+
+test("workspace session requests carry valid thinking effort", () => {
+  const principal = operatorSessionRequestPrincipal(
+    sessionRequest({ [OPERATOR_THINKING_EFFORT_HEADER]: "medium" })
+  );
+  assert.equal(selectedOperatorThinkingEffort(principal), "medium");
+  assert.equal(
+    selectedOperatorThinkingEffort(
+      operatorSessionRequestPrincipal(
+        sessionRequest({ [OPERATOR_THINKING_EFFORT_HEADER]: "max" })
+      )
+    ),
+    undefined
+  );
 });

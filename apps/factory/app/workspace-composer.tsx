@@ -6,8 +6,11 @@ import { useState } from "react";
 import type { GatewayModel } from "../agent/lib/gateway-models";
 import {
   DEFAULT_WORKSPACE_HARNESS,
+  DEFAULT_WORKSPACE_THINKING_EFFORT,
   WORKSPACE_HARNESSES,
-  type WorkspaceHarness
+  WORKSPACE_THINKING_EFFORTS,
+  type WorkspaceHarness,
+  type WorkspaceThinkingEffort
 } from "../agent/lib/workspace";
 import { Button } from "../components/ui/button";
 import type { PublicWorkspace } from "./workspace-types";
@@ -28,6 +31,9 @@ export function WorkspaceComposer({
   const [harness, setHarness] = useState<WorkspaceHarness>(
     DEFAULT_WORKSPACE_HARNESS
   );
+  const [thinkingEffort, setThinkingEffort] = useState<WorkspaceThinkingEffort>(
+    DEFAULT_WORKSPACE_THINKING_EFFORT
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +53,8 @@ export function WorkspaceComposer({
           harness,
           ...(title.trim() ? { title: title.trim() } : {}),
           model,
-          prompt: message
+          prompt: message,
+          thinkingEffort
         })
       });
       if (!response.ok) {
@@ -124,6 +131,29 @@ export function WorkspaceComposer({
           {models.map((option) => (
             <option key={option.id} value={option.id}>
               {option.name} ({option.ownedBy})
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid gap-2">
+        <label
+          className="text-sm font-medium"
+          htmlFor="workspace-thinking-effort"
+        >
+          Thinking effort
+        </label>
+        <select
+          className="min-h-10 rounded-md border border-input bg-background px-3 text-sm capitalize focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+          disabled={submitting}
+          id="workspace-thinking-effort"
+          onChange={(event) =>
+            setThinkingEffort(event.target.value as WorkspaceThinkingEffort)
+          }
+          value={thinkingEffort}
+        >
+          {WORKSPACE_THINKING_EFFORTS.map((effort) => (
+            <option key={effort} value={effort}>
+              {effort}
             </option>
           ))}
         </select>

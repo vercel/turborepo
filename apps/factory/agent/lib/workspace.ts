@@ -1,6 +1,11 @@
 export const WORKSPACE_CREATE_ACTION = "create-workspace";
 export const WORKSPACE_TERMINAL_ACTION = "open-workspace-terminal";
 
+export const WORKSPACE_THINKING_EFFORTS = ["low", "medium", "high"] as const;
+export type WorkspaceThinkingEffort =
+  (typeof WORKSPACE_THINKING_EFFORTS)[number];
+export const DEFAULT_WORKSPACE_THINKING_EFFORT = "high" as const;
+
 export type WorkspaceStatus = "idle" | "running" | "error";
 
 export const DEFAULT_WORKSPACE_MODEL = "openai/gpt-5.6-sol";
@@ -39,6 +44,7 @@ export interface WorkspaceRecord {
   };
   readonly sessionId?: string;
   readonly status: WorkspaceStatus;
+  readonly thinkingEffort?: WorkspaceThinkingEffort;
   readonly title: string;
   readonly updatedAt: string;
   readonly version: 2;
@@ -65,6 +71,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
   readonly harness: WorkspaceHarness;
   readonly model: string;
   readonly prompt?: string;
+  readonly thinkingEffort: WorkspaceThinkingEffort;
   readonly title: string;
 } | null {
   if (!isObject(value)) return null;
@@ -73,6 +80,11 @@ export function parseCreateWorkspaceInput(value: unknown): {
     return null;
   if (value.model !== undefined && !isWorkspaceModel(value.model)) return null;
   if (value.harness !== undefined && !isWorkspaceHarness(value.harness))
+    return null;
+  if (
+    value.thinkingEffort !== undefined &&
+    !isWorkspaceThinkingEffort(value.thinkingEffort)
+  )
     return null;
   const prompt = value.prompt?.trim();
   const title = value.title?.trim() || prompt?.split("\n", 1)[0]?.slice(0, 120);
@@ -86,6 +98,7 @@ export function parseCreateWorkspaceInput(value: unknown): {
     harness: value.harness ?? DEFAULT_WORKSPACE_HARNESS,
     model: value.model ?? DEFAULT_WORKSPACE_MODEL,
     ...(prompt === undefined ? {} : { prompt }),
+    thinkingEffort: value.thinkingEffort ?? DEFAULT_WORKSPACE_THINKING_EFFORT,
     title
   };
 }
@@ -125,6 +138,8 @@ export function toWorkspaceView(
     sandbox: workspace.sandbox,
     sessionId: workspace.sessionId,
     status: workspace.status,
+    thinkingEffort:
+      workspace.thinkingEffort ?? DEFAULT_WORKSPACE_THINKING_EFFORT,
     title: workspace.title,
     updatedAt: workspace.updatedAt,
     version: workspace.version
@@ -158,6 +173,8 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
     value.agent === "eve" &&
     (value.harness === undefined || isWorkspaceHarness(value.harness)) &&
     (value.model === undefined || isWorkspaceModel(value.model)) &&
+    (value.thinkingEffort === undefined ||
+      isWorkspaceThinkingEffort(value.thinkingEffort)) &&
     optionalString(value.sessionId, 256) &&
     isObject(sandbox) &&
     sandbox.provider === "vercel" &&
@@ -177,6 +194,12 @@ export function isWorkspaceRecord(value: unknown): value is WorkspaceRecord {
 
 export function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
   return WORKSPACE_HARNESSES.some((harness) => harness.id === value);
+}
+
+export function isWorkspaceThinkingEffort(
+  value: unknown
+): value is WorkspaceThinkingEffort {
+  return WORKSPACE_THINKING_EFFORTS.some((effort) => effort === value);
 }
 
 export function isWorkspaceModel(value: unknown): value is string {

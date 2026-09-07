@@ -9,7 +9,13 @@
  * past a preflight either.
  */
 
-import type { WorkspaceHarness } from "./workspace";
+import type { WorkspaceHarness, WorkspaceThinkingEffort } from "./workspace";
+
+const WORKSPACE_THINKING_EFFORT_IDS = new Set<WorkspaceThinkingEffort>([
+  "low",
+  "medium",
+  "high"
+]);
 
 const WORKSPACE_HARNESS_IDS = new Set<WorkspaceHarness>([
   "fx",
@@ -20,6 +26,15 @@ const WORKSPACE_HARNESS_IDS = new Set<WorkspaceHarness>([
   "pi"
 ]);
 
+function isWorkspaceThinkingEffort(
+  value: unknown
+): value is WorkspaceThinkingEffort {
+  return (
+    typeof value === "string" &&
+    WORKSPACE_THINKING_EFFORT_IDS.has(value as WorkspaceThinkingEffort)
+  );
+}
+
 function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
   return (
     typeof value === "string" &&
@@ -29,6 +44,7 @@ function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
 
 export const OPERATOR_ACTION_HEADER = "x-operator-action";
 export const OPERATOR_SESSION_ACTION = "access-workspace-session";
+export const OPERATOR_THINKING_EFFORT_HEADER = "x-thinking-effort";
 
 interface OperatorConsoleRequest {
   readonly headers: { get: (name: string) => string | null };
@@ -56,7 +72,8 @@ export const OPERATOR_SESSION_PRINCIPAL = {
 
 export function operatorSessionPrincipal(
   model?: string,
-  harness?: WorkspaceHarness
+  harness?: WorkspaceHarness,
+  thinkingEffort?: WorkspaceThinkingEffort
 ) {
   const attributes: Record<string, string> = {};
   if (
@@ -67,6 +84,12 @@ export function operatorSessionPrincipal(
   }
   if (harness !== undefined && isWorkspaceHarness(harness)) {
     attributes.selectedHarness = harness;
+  }
+  if (
+    thinkingEffort !== undefined &&
+    isWorkspaceThinkingEffort(thinkingEffort)
+  ) {
+    attributes.selectedThinkingEffort = thinkingEffort;
   }
   return Object.keys(attributes).length === 0
     ? OPERATOR_SESSION_PRINCIPAL
@@ -84,11 +107,29 @@ export function selectedOperatorModel(
   return typeof model === "string" ? model : undefined;
 }
 
+export function selectedOperatorThinkingEffort(
+  auth: OperatorAuth | null | undefined
+): WorkspaceThinkingEffort | undefined {
+  const effort = auth?.attributes.selectedThinkingEffort;
+  return isWorkspaceThinkingEffort(effort) ? effort : undefined;
+}
+
 export function selectedOperatorHarness(
   auth: OperatorAuth | null | undefined
 ): WorkspaceHarness | undefined {
   const harness = auth?.attributes.selectedHarness;
   return isWorkspaceHarness(harness) ? harness : undefined;
+}
+
+export function operatorSessionRequestPrincipal(
+  request: OperatorConsoleRequest
+) {
+  const effort = request.headers.get(OPERATOR_THINKING_EFFORT_HEADER);
+  return operatorSessionPrincipal(
+    undefined,
+    undefined,
+    isWorkspaceThinkingEffort(effort) ? effort : undefined
+  );
 }
 
 export function isOperatorSessionPrincipal(
