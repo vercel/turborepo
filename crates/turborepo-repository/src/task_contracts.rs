@@ -93,6 +93,7 @@ impl CommandMapTarget {
 enum DynamicTaskContract {
     Cargo(crate::cargo::CargoTaskContract),
     Python(crate::uv::UvTaskContract),
+    Go(crate::go::GoTaskContract),
 }
 
 /// Per-scope task-contract observation produced at repository construction.
@@ -136,18 +137,22 @@ impl ScopeTaskContract {
         }
     }
 
-    /// Go module and workspace scopes with static native task tables.
-    pub fn go() -> Self {
+    /// Go module and workspace scopes with derived native task contracts.
+    pub(crate) fn go(contract: crate::go::GoTaskContract) -> Self {
+        let dependency_source_inputs = contract.dependency_source_inputs();
         Self {
-            derives_io: false,
+            derives_io: true,
             defaults: TaskDefaults::default(),
-            environment: None,
+            environment: Some(TaskEnvironmentRequirement::new(
+                TaskEnvironmentDomain(Cow::Borrowed("go-task-io")),
+                crate::go::HASHED_ENV_VARS.to_vec(),
+            )),
             toolchain: Some(ToolchainId::GO),
             command_map_target: Some(CommandMapTarget::Go),
             entrypoint_domain: Some(TaskEntrypointDomain(Cow::Borrowed("go"))),
             prune_package_mode: None,
-            dependency_source_inputs: DependencySourceInputs::Unknown,
-            dynamic: None,
+            dependency_source_inputs,
+            dynamic: Some(DynamicTaskContract::Go(contract)),
             static_defaults: BTreeMap::new(),
             static_io: BTreeMap::new(),
             static_entrypoints: BTreeMap::new(),
@@ -334,6 +339,14 @@ impl ScopeTaskContract {
                 context,
             ),
             DynamicTaskContract::Python(contract) => contract.derived_task_io(
+                package,
+                task,
+                path_to_root,
+                dependencies,
+                wants_automatic_inputs,
+                context,
+            ),
+            DynamicTaskContract::Go(contract) => contract.derived_task_io(
                 package,
                 task,
                 path_to_root,

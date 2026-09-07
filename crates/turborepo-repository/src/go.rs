@@ -19,14 +19,18 @@ use std::{
 };
 
 use serde::Deserialize;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    native_tasks::{
+        NativeTaskContract, PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy,
+    },
     package_json::PackageJson,
     relationships::{DependencyKind, Relationship},
+    task_contracts::DependencySourceInputs,
     toolchain::{
-        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
-        ToolchainId, WorkspaceRoot,
+        self, DerivedInputSafety, DerivedOutputs, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackages, RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 
@@ -35,6 +39,10 @@ pub const GO_WORK: &str = "go.work";
 
 /// The conventional file name for a Go module manifest.
 pub const GO_MOD: &str = "go.mod";
+
+const GO_SUM: &str = "go.sum";
+const GO_WORK_SUM: &str = "go.work.sum";
+const GO_DIST_DIR: &str = "dist";
 
 /// Deterministic identity for the workspace-wide Go verification scope.
 pub const GO_WORKSPACE_NAME: &str = "go-workspace";
@@ -174,6 +182,16 @@ struct GoListPackage {
     name: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct GoEnvironment {
+    #[serde(rename = "GOOS")]
+    target_os: String,
+    #[serde(rename = "GOCACHE")]
+    build_cache: String,
+    #[serde(rename = "GOMODCACHE")]
+    module_cache: String,
+}
+
 fn run_go(
     repo_root: &AbsoluteSystemPath,
     args: &[&str],
@@ -231,6 +249,25 @@ fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
         });
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error> {
+    const COMMAND: &str = "go env -json GOOS GOCACHE GOMODCACHE";
+    let output = run_go(
+        repo_root,
+        &["env", "-json", "GOOS", "GOCACHE", "GOMODCACHE"],
+        COMMAND,
+    )?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    serde_json::from_slice(&output.stdout).map_err(|source| Error::CommandParse {
+        command: COMMAND,
+        source,
+    })
 }
 
 fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Error> {
@@ -477,9 +514,7 @@ fn go_command_task(
     entrypoint: crate::native_tasks::TaskEntrypoint,
     cwd_policy: crate::native_tasks::WorkingDirectoryPolicy,
 ) -> crate::native_tasks::NativeTask {
-    use crate::native_tasks::{
-        NativeCommandArguments, NativeCommandProgram, NativeTask, NativeTaskContract,
-    };
+    use crate::native_tasks::{NativeCommandArguments, NativeCommandProgram, NativeTask};
 
     NativeTask::command_task(
         name,
@@ -501,22 +536,51 @@ fn go_command_task(
     ))
 }
 
-/// Build the conservative built-in task table for one Go module.
-pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::{PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy};
+fn runnable_output_name(module: &GoModule) -> Option<String> {
+    let target = module.runnable_target.as_deref()?;
+    if target == "." {
+        return module
+            .module_path
+            .rsplit('/')
+            .find(|component| !component.is_empty())
+            .map(str::to_string);
+    }
+    target
+        .trim_end_matches('/')
+        .rsplit('/')
+        .find(|component| !component.is_empty() && *component != ".")
+        .map(str::to_string)
+}
 
+/// Build the conservative built-in task table for one Go module.
+pub fn native_tasks_for_module(
+    module: &GoModule,
+    target_os: &str,
+) -> Vec<crate::native_tasks::NativeTask> {
     let build_entrypoint = if module.runnable_target.is_some() {
         TaskEntrypoint::Preferred
     } else {
         TaskEntrypoint::Candidate
     };
+    let output_name = runnable_output_name(module);
+    let build_targets = match (&module.runnable_target, &output_name) {
+        (Some(target), Some(output_name)) => {
+            let extension = if target_os == "windows" { ".exe" } else { "" };
+            vec![
+                "-o".to_string(),
+                format!("{GO_DIST_DIR}/{output_name}{extension}"),
+                target.clone(),
+            ]
+        }
+        _ => vec!["./...".to_string()],
+    };
     let mut tasks = vec![
         go_command_task(
             "build",
             "build",
-            vec!["./...".to_string()],
+            build_targets,
             PassThroughPlacement::BeforeSuffix,
-            module.runnable_target.is_none().then_some(false),
+            output_name.is_none().then_some(false),
             build_entrypoint,
             WorkingDirectoryPolicy::PackageDirectory,
         ),
@@ -566,10 +630,7 @@ pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::Na
 pub fn native_tasks_for_workspace(
     module_patterns: &[String],
 ) -> Vec<crate::native_tasks::NativeTask> {
-    use crate::native_tasks::{
-        NativeTask, NativeTaskContract, PassThroughPlacement, TaskEntrypoint,
-        WorkingDirectoryPolicy,
-    };
+    use crate::native_tasks::NativeTask;
 
     let mut module_patterns = module_patterns.to_vec();
     module_patterns.sort();
@@ -599,7 +660,196 @@ pub fn native_tasks_for_workspace(
     tasks
 }
 
-fn package_from_module(module: &GoModule) -> DiscoveredPackage {
+/// Go variables that alter compilation, package selection, tests, or target
+/// platform. Credentials, proxy settings, and machine-local cache paths are
+/// deliberately excluded.
+pub const HASHED_ENV_VARS: &[&str] = &[
+    "GO111MODULE",
+    "GO386",
+    "GOAMD64",
+    "GOARCH",
+    "GOARM",
+    "GOARM64",
+    "GOCACHEPROG",
+    "GCCGO",
+    "GOEXPERIMENT",
+    "GOFLAGS",
+    "GOMIPS",
+    "GOMIPS64",
+    "GOOS",
+    "GOTOOLCHAIN",
+    "GOWASM",
+    "CGO_ENABLED",
+    "CC",
+    "CXX",
+    "CGO_CFLAGS",
+    "CGO_CPPFLAGS",
+    "CGO_CXXFLAGS",
+    "CGO_FFLAGS",
+    "CGO_LDFLAGS",
+    "PKG_CONFIG",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum GoContractKind {
+    Module { output_name: Option<String> },
+    Workspace,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoTaskContract {
+    kind: GoContractKind,
+    target_os: String,
+    cache_prefixes: Vec<String>,
+}
+
+impl GoTaskContract {
+    fn module(module: &GoModule, target_os: &str, cache_prefixes: &[String]) -> Self {
+        Self {
+            kind: GoContractKind::Module {
+                output_name: runnable_output_name(module),
+            },
+            target_os: target_os.to_string(),
+            cache_prefixes: cache_prefixes.to_vec(),
+        }
+    }
+
+    fn workspace(target_os: &str, cache_prefixes: &[String]) -> Self {
+        Self {
+            kind: GoContractKind::Workspace,
+            target_os: target_os.to_string(),
+            cache_prefixes: cache_prefixes.to_vec(),
+        }
+    }
+
+    pub(crate) fn dependency_source_inputs(&self) -> DependencySourceInputs {
+        match &self.kind {
+            GoContractKind::Module { .. } => DependencySourceInputs::Include,
+            GoContractKind::Workspace => DependencySourceInputs::Exclude,
+        }
+    }
+
+    pub(crate) fn derived_task_io(
+        &self,
+        _package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
+        wants_automatic_inputs: bool,
+        context: &toolchain::TaskIOContext<'_>,
+    ) -> Option<toolchain::DerivedTaskIO> {
+        if !matches!(task, "build" | "test" | "lint" | "format" | "dev") {
+            return None;
+        }
+
+        let root_input = |path: &str| {
+            if path_to_root.is_empty() {
+                path.to_string()
+            } else {
+                format!("{path_to_root}/{path}")
+            }
+        };
+        let mut io = toolchain::DerivedTaskIO {
+            input_globs: [GO_WORK, GO_WORK_SUM].map(root_input).to_vec(),
+            env: HASHED_ENV_VARS
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            forbidden_output_prefixes: vec![root_input(".git"), root_input(".turbo")],
+            ..Default::default()
+        };
+        for prefix in &self.cache_prefixes {
+            let prefix = root_input(prefix);
+            io.input_globs.push(format!("!{prefix}/**"));
+            io.forbidden_output_prefixes.push(prefix);
+        }
+
+        if wants_automatic_inputs {
+            match &self.kind {
+                GoContractKind::Module { .. } => {
+                    io.package_default_inputs = Some(true);
+                    io.input_globs.push(format!("!{GO_DIST_DIR}/**"));
+                }
+                GoContractKind::Workspace => io.package_default_inputs = Some(false),
+            }
+            for dependency in dependencies {
+                match dependency.task_contract().dependency_source_inputs() {
+                    DependencySourceInputs::Include => {
+                        let directory = root_input(dependency.directory().to_unix().as_str());
+                        io.input_globs.extend([
+                            format!("{directory}/**"),
+                            format!("!{directory}/.git/**"),
+                            format!("!{directory}/.turbo/**"),
+                            format!("!{directory}/{GO_DIST_DIR}/**"),
+                        ]);
+                    }
+                    DependencySourceInputs::Exclude => {}
+                    DependencySourceInputs::Unknown => {
+                        io.input_safety = DerivedInputSafety::Untracked;
+                        io.cache_reason =
+                            Some("a Go dependency has unclassified source inputs".to_string());
+                    }
+                }
+            }
+            io.input_globs.sort();
+            io.input_globs.dedup();
+        }
+
+        if task == "build" {
+            io.outputs = match &self.kind {
+                GoContractKind::Module {
+                    output_name: Some(output_name),
+                } if context.task_args.is_none_or(<[_]>::is_empty) => {
+                    let extension = if self.target_os == "windows" {
+                        ".exe"
+                    } else {
+                        ""
+                    };
+                    DerivedOutputs::Resolved(vec![format!(
+                        "{GO_DIST_DIR}/{output_name}{extension}"
+                    )])
+                }
+                GoContractKind::Module {
+                    output_name: Some(_),
+                } => {
+                    io.cache_reason =
+                        Some("Go build arguments can change the derived binary output".to_string());
+                    DerivedOutputs::Unavailable
+                }
+                GoContractKind::Module { output_name: None } => {
+                    io.cache_reason = Some(
+                        "Go library builds have no stable outputs for Turborepo to restore"
+                            .to_string(),
+                    );
+                    DerivedOutputs::Unavailable
+                }
+                GoContractKind::Workspace => DerivedOutputs::Resolved(Vec::new()),
+            };
+        }
+        Some(io)
+    }
+}
+
+fn go_cache_prefixes(repo_root: &AbsoluteSystemPath, environment: &GoEnvironment) -> Vec<String> {
+    let mut prefixes = Vec::new();
+    for path in [&environment.build_cache, &environment.module_cache] {
+        let path = AbsoluteSystemPathBuf::from_unknown(repo_root, path);
+        if let Ok(prefix) = AnchoredSystemPathBuf::new(repo_root, &path)
+            && prefix.components().next().is_some()
+        {
+            prefixes.push(prefix.to_unix().to_string());
+        }
+    }
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+fn package_from_module(
+    module: &GoModule,
+    target_os: &str,
+    cache_prefixes: &[String],
+) -> DiscoveredPackage {
     let descriptor = PackageJson {
         name: Some(turborepo_errors::Spanned::new(module.module_path.clone())),
         ..Default::default()
@@ -610,8 +860,10 @@ fn package_from_module(module: &GoModule) -> DiscoveredPackage {
         module.manifest_path.clone(),
     )
     .with_native_relationships(module.relationships.clone())
-    .with_native_tasks(native_tasks_for_module(module))
-    .with_task_contract(crate::task_contracts::ScopeTaskContract::go())
+    .with_native_tasks(native_tasks_for_module(module, target_os))
+    .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+        GoTaskContract::module(module, target_os, cache_prefixes),
+    ))
 }
 
 /// The Go repository contributor. Registered during graph construction when
@@ -636,6 +888,10 @@ impl RepositoryContributor for GoContributor {
             let workspace =
                 turborepo_rayon_compat::block_in_place(|| discover_workspace(&self.repo_root))
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let environment =
+                turborepo_rayon_compat::block_in_place(|| go_environment(&self.repo_root))
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let cache_prefixes = go_cache_prefixes(&self.repo_root, &environment);
 
             let workspace_roots = self
                 .repo_root
@@ -671,7 +927,7 @@ impl RepositoryContributor for GoContributor {
             let mut packages = workspace
                 .modules
                 .iter()
-                .map(package_from_module)
+                .map(|module| package_from_module(module, &environment.target_os, &cache_prefixes))
                 .collect::<Vec<_>>();
             if !packages.is_empty() {
                 packages.push(
@@ -682,7 +938,12 @@ impl RepositoryContributor for GoContributor {
                     )
                     .with_native_relationships(workspace_relationships)
                     .with_native_tasks(native_tasks_for_workspace(&module_patterns))
-                    .with_task_contract(crate::task_contracts::ScopeTaskContract::go()),
+                    .with_task_contract(
+                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::workspace(
+                            &environment.target_os,
+                            &cache_prefixes,
+                        )),
+                    ),
                 );
             }
 
@@ -862,6 +1123,7 @@ mod tests {
         directory: &'a str,
         tasks: Vec<crate::native_tasks::NativeTask>,
         kind: crate::package_graph::PackageTaskContextKind,
+        contract: crate::task_contracts::ScopeTaskContract,
     ) -> crate::package_graph::PackageTaskContext<'a> {
         crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
             name.into(),
@@ -870,7 +1132,7 @@ mod tests {
             kind,
             Some(&ToolchainId::GO),
             Some(tasks),
-            Some(crate::task_contracts::ScopeTaskContract::go()),
+            Some(contract),
         )
     }
 
@@ -894,6 +1156,19 @@ mod tests {
         .expect("Go command resolves")
     }
 
+    fn task_cache(
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> Option<bool> {
+        context
+            .native_tasks()
+            .get(task)
+            .expect("native Go task")
+            .contract()
+            .defaults()
+            .cache
+    }
+
     #[test]
     fn module_task_table_renders_commands_and_argument_placement() {
         let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
@@ -907,14 +1182,19 @@ mod tests {
             &root,
             &module.module_path,
             "apps/api",
-            native_tasks_for_module(&module),
+            native_tasks_for_module(&module, "linux"),
             crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                &module,
+                "linux",
+                &[],
+            )),
         );
 
         let build = resolve_go_cmd(&context, "build", Some(&["-race".to_string()]), None);
         assert_eq!(
             build.args,
-            ["build", "-race", "./..."].map(std::ffi::OsString::from)
+            ["build", "-race", "-o", "dist/api", "./cmd/api"].map(std::ffi::OsString::from)
         );
         assert_eq!(build.cwd, root.join_components(&["apps", "api"]));
         let lint = resolve_go_cmd(&context, "lint", Some(&["-json".to_string()]), None);
@@ -974,7 +1254,7 @@ mod tests {
         let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
         let module = &workspace.modules[0];
         assert_eq!(module.runnable_target, None);
-        let tasks = native_tasks_for_module(module);
+        let tasks = native_tasks_for_module(module, "linux");
         assert!(!tasks.iter().any(|task| task.name() == "dev"));
         assert!(!tasks.iter().any(|task| task.name() == "run"));
         assert_eq!(
@@ -985,6 +1265,128 @@ mod tests {
                 .contract()
                 .entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+    }
+
+    #[test]
+    fn task_contracts_derive_module_executable_and_workspace_io() {
+        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let executable = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some(".".to_string()),
+        };
+        let library = GoModule {
+            module_path: "example.com/lib".to_string(),
+            manifest_path: root.join_components(&["packages", "lib", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+        };
+        let cache_prefixes = vec![".cache/go-build".to_string(), ".cache/go-mod".to_string()];
+        let executable_contract = GoTaskContract::module(&executable, "linux", &cache_prefixes);
+        let library_contract = GoTaskContract::module(&library, "linux", &cache_prefixes);
+        let package = task_context(
+            &root,
+            &executable.module_path,
+            "apps/api",
+            native_tasks_for_module(&executable, "linux"),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
+        );
+        let dependency = task_context(
+            &root,
+            &library.module_path,
+            "packages/lib",
+            native_tasks_for_module(&library, "linux"),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+
+        let executable_io = executable_contract
+            .derived_task_io(&package, "build", "../..", &[dependency], true, &context)
+            .expect("executable build derives IO");
+        assert_eq!(executable_io.package_default_inputs, Some(true));
+        for input in [
+            "../../go.work",
+            "../../packages/lib/**",
+            "!../../.cache/go-build/**",
+        ] {
+            assert!(executable_io.input_globs.iter().any(|glob| glob == input));
+        }
+        assert!(executable_io.env.contains(&"GOOS".to_string()));
+        assert!(!executable_io.env.contains(&"GOPROXY".to_string()));
+        assert_eq!(
+            executable_io.outputs,
+            DerivedOutputs::Resolved(vec!["dist/api".to_string()])
+        );
+        assert!(
+            executable_io
+                .forbidden_output_prefixes
+                .contains(&"../../.cache/go-build".to_string())
+        );
+        assert_eq!(task_cache(&package, "build"), None);
+
+        let library_context = task_context(
+            &root,
+            &library.module_path,
+            "packages/lib",
+            native_tasks_for_module(&library, "linux"),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
+        );
+        let library_io = library_contract
+            .derived_task_io(&library_context, "build", "../..", &[], true, &context)
+            .expect("library build derives IO");
+        assert_eq!(library_io.outputs, DerivedOutputs::Unavailable);
+        assert_eq!(task_cache(&library_context, "build"), Some(false));
+
+        let workspace_contract = GoTaskContract::workspace("linux", &cache_prefixes);
+        let workspace = task_context(
+            &root,
+            GO_WORKSPACE_NAME,
+            "",
+            native_tasks_for_workspace(&[
+                "./apps/api/...".to_string(),
+                "./packages/lib/...".to_string(),
+            ]),
+            crate::package_graph::PackageTaskContextKind::Aggregate,
+            crate::task_contracts::ScopeTaskContract::go(workspace_contract.clone()),
+        );
+        let aggregate_io = workspace_contract
+            .derived_task_io(
+                &workspace,
+                "lint",
+                "",
+                &[package, library_context],
+                true,
+                &context,
+            )
+            .expect("workspace lint derives IO");
+        assert_eq!(aggregate_io.package_default_inputs, Some(false));
+        for input in ["apps/api/**", "packages/lib/**"] {
+            assert!(aggregate_io.input_globs.iter().any(|glob| glob == input));
+        }
+        assert_eq!(aggregate_io.outputs, DerivedOutputs::Resolved(Vec::new()));
+        assert_eq!(task_cache(&workspace, "lint"), None);
+    }
+
+    #[test]
+    fn cache_prefixes_remain_inside_the_repository() {
+        let root = AbsoluteSystemPathBuf::new("/repo").unwrap();
+        let environment = GoEnvironment {
+            target_os: "linux".to_string(),
+            build_cache: "/repo/.cache/go-build".to_string(),
+            module_cache: "/home/user/go/pkg/mod".to_string(),
+        };
+        assert_eq!(
+            go_cache_prefixes(&root, &environment),
+            vec![".cache/go-build".to_string()]
         );
     }
 }
