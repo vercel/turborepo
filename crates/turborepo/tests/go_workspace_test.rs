@@ -576,6 +576,9 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
         &["commit", "-m", "add independent module", "--quiet"],
     );
 
+    let api_hash = task_hash(tempdir.path(), "example.com/api", "build");
+    let lib_hash = task_hash(tempdir.path(), "example.com/lib", "build");
+    let independent_hash = task_hash(tempdir.path(), "example.com/independent", "build");
     fs::write(
         independent.join("main.go"),
         "package independent\n\nconst Changed = true\n",
@@ -598,14 +601,21 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
     assert!(tasks.iter().any(|task| {
         task["name"] == "build" && task["package"]["name"] == "example.com/independent"
     }));
-    for package in ["example.com/api", "example.com/lib"] {
-        assert!(
-            !tasks
-                .iter()
-                .any(|task| task["name"] == "build" && task["package"]["name"] == package),
-            "{package} must remain unaffected: {tasks:?}"
-        );
-    }
+    assert_ne!(
+        independent_hash,
+        task_hash(tempdir.path(), "example.com/independent", "build"),
+        "the changed module must be invalidated"
+    );
+    assert_eq!(
+        api_hash,
+        task_hash(tempdir.path(), "example.com/api", "build"),
+        "an unrelated module must not invalidate the API"
+    );
+    assert_eq!(
+        lib_hash,
+        task_hash(tempdir.path(), "example.com/lib", "build"),
+        "an unrelated module must not invalidate the library"
+    );
 }
 
 #[cfg(unix)]
