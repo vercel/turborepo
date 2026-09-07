@@ -58,6 +58,22 @@ fn dry_run_task(output: &std::process::Output, task_id: &str) -> serde_json::Val
         .unwrap_or_else(|| panic!("{task_id} in task graph"))
 }
 
+fn task_hash(dir: &Path, package: &str, task: &str) -> String {
+    let output = run_turbo(
+        dir,
+        &[
+            "run",
+            task,
+            &format!("--filter={package}"),
+            "--dry-run=json",
+        ],
+    );
+    dry_run_task(&output, &format!("{package}#{task}"))["hash"]
+        .as_str()
+        .expect("task has a hash")
+        .to_string()
+}
+
 fn package_names(dir: &Path) -> Vec<String> {
     let output = run_turbo(dir, &["ls", "--output=json"]);
     assert_command_success(&output, "turbo ls");
@@ -271,6 +287,21 @@ fn test_go_native_tasks_and_workspace_aggregate() {
 
     let output = run_turbo(
         tempdir.path(),
+        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+    );
+    let build = dry_run_task(&output, "example.com/api#build");
+    let executable = if cfg!(windows) { "api.exe" } else { "api" };
+    let output_path = format!("dist/{executable}");
+    assert_eq!(build["command"], format!("go build -o {output_path} ."));
+    assert_eq!(build["resolvedTaskDefinition"]["cache"], true);
+    assert!(
+        build["resolvedTaskDefinition"]["outputs"]
+            .as_array()
+            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
         &["run", "build", "--filter=example.com/lib", "--dry-run=json"],
     );
     let build = dry_run_task(&output, "example.com/lib#build");
@@ -307,6 +338,35 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     assert!(
         stderr.contains("Could not find task `run` in project"),
         "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let original = task_hash(tempdir.path(), "example.com/api", "build");
+
+    fs::write(tempdir.path().join("unrelated.txt"), "unrelated\n").unwrap();
+    assert_eq!(
+        original,
+        task_hash(tempdir.path(), "example.com/api", "build"),
+        "repository-root siblings outside the module must not affect its hash"
+    );
+
+    fs::write(
+        tempdir.path().join("apps/api/main.go"),
+        "package main\n\nimport \"example.com/lib\"\n\nfunc main() { lib.Greet(); \
+         println(\"changed\") }\n",
+    )
+    .unwrap();
+    assert_ne!(
+        original,
+        task_hash(tempdir.path(), "example.com/api", "build"),
+        "module source changes must affect its task hash"
     );
 }
 
