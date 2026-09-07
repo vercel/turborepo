@@ -598,7 +598,8 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("`go work edit -json` failed")
-            && stderr.contains("Repair the repository-root go.work"),
+            && stderr.contains("repository-root go.work")
+            && stderr.contains("`go work use`"),
         "invalid workspace must have focused remediation: {stderr}"
     );
     assert!(!stderr.contains("package manager"), "{stderr}");
@@ -623,7 +624,9 @@ fn test_go_and_javascript_package_name_collision_is_actionable() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("package identity \"js-pkg\" is declared by both")
+        stderr.contains("Failed to add workspace \"js-pkg\"")
+            && stderr.contains("apps/api/go.mod")
+            && stderr.contains("packages/js-pkg/package.json")
             && stderr.contains("Rename one package or module"),
         "cross-language identity collision must be actionable: {stderr}"
     );
