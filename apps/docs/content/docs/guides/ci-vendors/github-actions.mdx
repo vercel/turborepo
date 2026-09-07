@@ -214,6 +214,89 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
   </Tab>
 
+
+<Tab value="nub">
+    ```yaml title=".github/workflows/ci.yml"
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 2
+
+          - uses: actions/setup-node@v4
+
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+
+          - name: Install dependencies
+            run: nub install
+
+          - name: Build
+            run: nub run build
+
+          - name: Test
+            run: nub run test
+    ```
+
+  </Tab>
+
+<Tab value="aube">
+    ```yaml title=".github/workflows/ci.yml"
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 2
+
+          - uses: actions/setup-node@v4
+
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+
+          - name: Install dependencies
+            run: aube install
+
+          - name: Build
+            run: aube run build
+
+          - name: Test
+            run: aube run test
+    ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 ## Remote Caching with Vercel Remote Cache

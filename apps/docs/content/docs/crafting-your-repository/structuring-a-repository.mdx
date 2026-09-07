@@ -53,6 +53,21 @@ bunx create-turbo@latest
 
 </Tab>
 
+
+<Tab value="nub">
+```bash title="Terminal"
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+```bash title="Terminal"
+aubx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 You can then review the repository for the characteristics described in this guide.
@@ -150,6 +165,49 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   </Files>
 </Tab>
 
+
+<Tab value="nub">
+  <Files>
+    <File name="package.json" green />
+    <File name="nub.lock" green />
+    <File name="turbo.json" />
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs" className="text-foreground" defaultOpen>
+        <File name="package.json" green />
+      </Folder>
+      <Folder name="web">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+    <Folder name="packages">
+      <Folder name="ui">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+  </Files>
+</Tab>
+
+<Tab value="aube">
+  <Files>
+    <File name="package.json" green />
+    <File name="aube-lock.yaml" green />
+    <File name="turbo.json" />
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs" className="text-foreground" defaultOpen>
+        <File name="package.json" green />
+      </Folder>
+      <Folder name="web">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+    <Folder name="packages">
+      <Folder name="ui">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+  </Files>
+</Tab>
+
 </PackageManagerTabs>
 
 ### Minimum requirements
@@ -218,6 +276,31 @@ First, your package manager needs to describe the locations of your packages. We
   ```
 
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
+  </Tab>
+
+
+<Tab value="nub">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://nub.dev" text="nub documentation" />
+  </Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+  <LinkToDocumentation href="https://aube.jdx.dev" text="aube workspace documentation" />
   </Tab>
 
 </PackageManagerTabs>
@@ -345,6 +428,42 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```json title="./package.json"
+{
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.8.3"
+    }
+  },
+  "workspaces": ["apps/*", "packages/*"]
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Root `turbo.json`

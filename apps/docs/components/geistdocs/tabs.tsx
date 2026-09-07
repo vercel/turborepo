@@ -23,7 +23,7 @@ export function Tabs({
   );
 }
 
-const packageManagers = ["pnpm", "yarn", "npm", "bun"];
+const packageManagers = ["pnpm", "yarn", "npm", "bun", "nub", "aube"];
 
 const checkPackageManagerIndex = (index: number, provided: string) => {
   if (provided !== packageManagers[index]) {

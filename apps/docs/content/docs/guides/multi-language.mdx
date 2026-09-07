@@ -10,6 +10,7 @@ prerequisites:
 related:
   - /docs/guides/tools/rust
   - /docs/guides/tools/python
+  - /docs/guides/tools/go
   - /docs/guides/migrating-from-nx
 ---
 
@@ -70,6 +71,31 @@ packages:
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="Bun workspace documentation" />
 
   </Tab>
+
+<Tab value="nub">
+
+```json title="./package.json"
+{
+  "workspaces": ["apps/*", "packages/*", "services/*"]
+}
+```
+
+  <LinkToDocumentation href="https://nub.dev" text="nub documentation" />
+
+  </Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+  <LinkToDocumentation href="https://aube.jdx.dev" text="aube workspace documentation" />
+
+  </Tab>
+
 </PackageManagerTabs>
 
 ## Create a package boundary
@@ -214,6 +240,31 @@ Add `@repo/go-api` using the local-workspace syntax for your package manager:
 ```
 
   </Tab>
+
+<Tab value="nub">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+
+<Tab value="aube">
+
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/go-api": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 The Yarn and npm ranges match `@repo/go-api`'s local `1.0.0` version, so both Yarn Classic and modern Yarn, as well as npm, link the workspace package. pnpm and Bun use the workspace protocol.

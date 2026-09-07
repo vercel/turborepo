@@ -207,6 +207,26 @@ packages:
 
 </Tab>
 
+
+<Tab value="nub">
+
+```json title="package.json"
+{
+  "workspaces": ["apps/*"]
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Step 3: Add a package.json to the application
@@ -302,6 +322,37 @@ The root package.json needs to have a package manager declaration. We recommend 
 
 </Tab>
 
+
+<Tab value="nub">
+
+```json title="./package.json"
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.8.3"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```json title="./package.json"
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "aube",
+      "version": "2.2.9"
+    }
+  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Step 6: Run you package manager's install command
@@ -338,6 +389,23 @@ npm install
 
 ```bash title="Terminal"
 bun install
+```
+
+</Tab>
+
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nub install
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aube install
 ```
 
 </Tab>
@@ -384,6 +452,23 @@ bun install turbo --dev
 
 </Tab>
 
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nub add turbo --save-dev
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aube add turbo --save-dev
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 You can also optionally install `turbo` globally for added convenience when working with Turborepo.
@@ -418,6 +503,23 @@ npm install turbo --global
 
 ```bash title="Terminal"
 bun install turbo --global
+```
+
+</Tab>
+
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nub add turbo --global
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aube add turbo --global
 ```
 
 </Tab>
@@ -477,6 +579,23 @@ npx turbo run build
 
 ```bash title="Terminal"
 bunx turbo run build
+```
+
+</Tab>
+
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx turbo run build
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx turbo run build
 ```
 
 </Tab>
