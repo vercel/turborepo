@@ -18,7 +18,11 @@ import {
   FACTORY_HARNESS_WORKDIR
 } from "./harness-agent-config";
 import { parseHarnessResumeState } from "./harness-agent-state";
-import { DEFAULT_WORKSPACE_HARNESS, type WorkspaceHarness } from "./workspace";
+import {
+  DEFAULT_WORKSPACE_HARNESS,
+  type WorkspaceHarness,
+  type WorkspaceThinkingEffort
+} from "./workspace";
 
 const CODING_AGENT_INSTRUCTIONS = `You are the coding agent for the Turborepo Factory. Work directly in the current Turborepo checkout. Follow repository instructions, make the smallest correct changes, and run relevant validation. Never commit, push, or create a pull request; the parent Factory agent owns those operations and credentials.`;
 
@@ -29,6 +33,7 @@ export interface RunFactoryHarnessAgentInput {
   readonly prompt: string;
   readonly sandbox: RuntimeSandboxSession;
   readonly sessionId: string;
+  readonly thinkingEffort?: WorkspaceThinkingEffort;
 }
 
 /**
@@ -42,7 +47,8 @@ export async function runFactoryHarnessAgent({
   model,
   prompt,
   sandbox,
-  sessionId
+  sessionId,
+  thinkingEffort
 }: RunFactoryHarnessAgentInput): Promise<{
   readonly harness: WorkspaceHarness;
   readonly sessionId: string;
@@ -59,7 +65,7 @@ export async function runFactoryHarnessAgent({
     sessionId
   });
   const agent = new HarnessAgent({
-    harness: createFactoryHarness(harness, model),
+    harness: createFactoryHarness(harness, model, thinkingEffort),
     instructions: CODING_AGENT_INSTRUCTIONS,
     permissionMode: "allow-all",
     sandboxConfig: { workDir: FACTORY_HARNESS_WORKDIR }
@@ -86,7 +92,8 @@ export async function runFactoryHarnessAgent({
 
 export function createFactoryHarness(
   harness: WorkspaceHarness,
-  model?: string
+  model?: string,
+  thinkingEffort?: WorkspaceThinkingEffort
 ): HarnessAgentAdapter {
   switch (harness) {
     case "claude-code": {
@@ -94,6 +101,7 @@ export function createFactoryHarness(
       return createClaudeCode({
         auth: "ai-gateway",
         ...(selectedModel === undefined ? {} : { model: selectedModel }),
+        ...(thinkingEffort === undefined ? {} : { effort: thinkingEffort }),
         port: FACTORY_HARNESS_PORT
       });
     }
@@ -102,6 +110,9 @@ export function createFactoryHarness(
       return createCodex({
         auth: "ai-gateway",
         ...(selectedModel === undefined ? {} : { model: selectedModel }),
+        ...(thinkingEffort === undefined
+          ? {}
+          : { reasoningEffort: thinkingEffort }),
         port: FACTORY_HARNESS_PORT,
         webSearch: true
       });
@@ -117,13 +128,19 @@ export function createFactoryHarness(
         ...(selected === undefined
           ? {}
           : { model: selected.model, provider: selected.provider }),
+        ...(thinkingEffort === undefined
+          ? {}
+          : { reasoningVariant: thinkingEffort }),
         port: FACTORY_HARNESS_PORT
       });
     }
     case "pi": {
       return createPi({
         auth: "ai-gateway",
-        ...(model === undefined ? {} : { model })
+        ...(model === undefined ? {} : { model }),
+        ...(thinkingEffort === undefined
+          ? {}
+          : { thinkingLevel: thinkingEffort })
       });
     }
     case "fx": {

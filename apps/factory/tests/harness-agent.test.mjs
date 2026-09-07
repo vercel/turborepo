@@ -47,3 +47,18 @@ test("HarnessAgent resume state rejects malformed persisted values", () => {
   assert.equal(parseHarnessResumeState("null"), undefined);
   assert.equal(parseHarnessResumeState('"state"'), undefined);
 });
+
+test("HarnessAgent forwards switchable thinking effort to supported runtimes", () => {
+  const source = readFileSync(
+    new URL("../agent/lib/harness-agent.ts", import.meta.url),
+    "utf8"
+  );
+  for (const option of [
+    "effort: thinkingEffort",
+    "reasoningEffort: thinkingEffort",
+    "reasoningVariant: thinkingEffort",
+    "thinkingLevel: thinkingEffort"
+  ]) {
+    assert.match(source, new RegExp(option));
+  }
+});

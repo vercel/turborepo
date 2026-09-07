@@ -3,12 +3,14 @@ import { eveChannel } from "eve/channels/eve";
 
 import {
   isOperatorSessionRequest,
-  OPERATOR_SESSION_PRINCIPAL
+  operatorSessionRequestPrincipal
 } from "../lib/operator-console.js";
 
 function operatorSession(): AuthFn<Request> {
   return (request) =>
-    isOperatorSessionRequest(request) ? OPERATOR_SESSION_PRINCIPAL : null;
+    isOperatorSessionRequest(request)
+      ? operatorSessionRequestPrincipal(request)
+      : null;
 }
 
 export default eveChannel({
