@@ -50,11 +50,7 @@ fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     run_turbo_with_env(dir, args, &[])
 }
 
-fn run_turbo_with_env(
-    dir: &Path,
-    args: &[&str],
-    env: &[(&str, &str)],
-) -> std::process::Output {
+fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let go_cache_dir = tempfile::tempdir().expect("failed to create Go cache tempdir");
     let mut command = common::turbo_command(dir);
@@ -531,9 +527,7 @@ fn test_affected_go_tasks_follow_internal_module_relationships() {
     assert_command_success(&output, "Go --affected dry run");
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("affected dry-run JSON");
-    let tasks = json["tasks"]
-        .as_array()
-        .expect("affected tasks");
+    let tasks = json["tasks"].as_array().expect("affected tasks");
     for package in ["example.com/lib", "example.com/api"] {
         let task_id = format!("{package}#build");
         assert!(
@@ -648,7 +642,12 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
     .unwrap();
     common::git(
         tempdir.path(),
-        &["add", "go.work", "apps/worker/go.mod", "apps/worker/main.go"],
+        &[
+            "add",
+            "go.work",
+            "apps/worker/go.mod",
+            "apps/worker/main.go",
+        ],
     );
     common::git(
         tempdir.path(),

@@ -1125,8 +1125,8 @@ fn go_change_observation(
         let directory = manifest.parent().ok_or_else(|| Error::MissingGoMod {
             path: module.manifest_path.to_string(),
         })?;
-        observation =
-            observation.with_resolution_path(directory.join_component(GO_SUM).to_unix().to_string());
+        observation = observation
+            .with_resolution_path(directory.join_component(GO_SUM).to_unix().to_string());
     }
     for prefix in cache_prefixes {
         observation = observation.with_ignore_prefix(prefix.clone());
