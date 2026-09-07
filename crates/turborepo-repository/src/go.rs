@@ -934,24 +934,6 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "CGO_ENABLED",
 ];
 
-/// Path-bearing values whose normalized effective values are represented by
-/// the Go external-resolution identity rather than hashed verbatim.
-const PATH_NORMALIZED_GO_ENV_VARS: &[&str] = &[
-    "AR",
-    "CC",
-    "CXX",
-    "GCCGO",
-    "GOCACHEPROG",
-    "GOFLAGS",
-    "GOWORK",
-    "CGO_CFLAGS",
-    "CGO_CPPFLAGS",
-    "CGO_CXXFLAGS",
-    "CGO_FFLAGS",
-    "CGO_LDFLAGS",
-    "PKG_CONFIG",
-];
-
 /// Machine-local Go variables required by task execution but excluded from
 /// verbatim task hashes. Path-bearing behavior is already represented by its
 /// checkout-normalized external identity; cache locations never participate.
@@ -1541,14 +1523,28 @@ mod tests {
             )
             .unwrap(),
         );
-        for variable in PATH_NORMALIZED_GO_ENV_VARS {
-            assert!(FINGERPRINTED_GO_ENV_VARS.contains(variable));
+        for variable in [
+            "AR",
+            "CC",
+            "CXX",
+            "GCCGO",
+            "GOCACHEPROG",
+            "GOFLAGS",
+            "GOWORK",
+            "CGO_CFLAGS",
+            "CGO_CPPFLAGS",
+            "CGO_CXXFLAGS",
+            "CGO_FFLAGS",
+            "CGO_LDFLAGS",
+            "PKG_CONFIG",
+        ] {
+            assert!(FINGERPRINTED_GO_ENV_VARS.contains(&variable));
             assert!(
-                !HASHED_ENV_VARS.contains(variable),
+                !HASHED_ENV_VARS.contains(&variable),
                 "{variable} must not be hashed with its raw checkout path"
             );
             assert!(
-                PROJECTED_ONLY_ENV_VARS.contains(variable),
+                PROJECTED_ONLY_ENV_VARS.contains(&variable),
                 "{variable} must remain available to Go task I/O"
             );
         }
