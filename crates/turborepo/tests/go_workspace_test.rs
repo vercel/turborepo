@@ -4,6 +4,11 @@
 mod common;
 
 use std::{fs, path::Path};
+#[cfg(unix)]
+use std::{
+    process::{Child, Stdio},
+    time::Duration,
+};
 
 use common::setup;
 
@@ -14,6 +19,7 @@ const AMBIENT_GO_ENV: &[&str] = &[
     "GOENV",
     "GOEXPERIMENT",
     "GOFLAGS",
+    "GOMODCACHE",
     "GOOS",
     "GOTOOLCHAIN",
     "GOWORK",
@@ -41,6 +47,14 @@ fn setup_go_monorepo(dir: &Path) {
 }
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
+    run_turbo_with_env(dir, args, &[])
+}
+
+fn run_turbo_with_env(
+    dir: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let go_cache_dir = tempfile::tempdir().expect("failed to create Go cache tempdir");
     let mut command = common::turbo_command(dir);
@@ -52,6 +66,7 @@ fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
         .env("GOENV", "off")
         .env("GOTOOLCHAIN", "local")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
+    command.envs(env.iter().copied());
     command
         .args(args)
         .output()
@@ -65,6 +80,77 @@ fn assert_command_success(output: &std::process::Output, context: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[cfg(unix)]
+fn wait_for_path(path: &Path, timeout: Duration) -> bool {
+    let started = std::time::Instant::now();
+    while started.elapsed() < timeout {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    path.exists()
+}
+
+#[cfg(unix)]
+struct GoWatchGuard(Option<Child>);
+
+#[cfg(unix)]
+impl GoWatchGuard {
+    fn spawn(dir: &Path) -> Self {
+        use std::os::unix::process::CommandExt;
+
+        let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("turbo"));
+        command.process_group(0);
+        for name in AMBIENT_GO_ENV {
+            command.env_remove(name);
+        }
+        for name in common::ambient_turbo_env_keys() {
+            command.env_remove(name);
+        }
+        command
+            .args(["watch", "build"])
+            .env("GOCACHE", dir.join(".cache/go-build"))
+            .env("GOMODCACHE", dir.join(".cache/go-mod"))
+            .env("GOENV", "off")
+            .env("GOTOOLCHAIN", "local")
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            .env("DO_NOT_TRACK", "1")
+            .current_dir(dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        Self(Some(command.spawn().expect("failed to spawn turbo watch")))
+    }
+}
+
+#[cfg(unix)]
+impl Drop for GoWatchGuard {
+    fn drop(&mut self) {
+        use nix::{
+            sys::signal::{self, Signal},
+            unistd::Pid,
+        };
+
+        let Some(mut child) = self.0.take() else {
+            return;
+        };
+        let group = Pid::from_raw(-(child.id() as i32));
+        let _ = signal::kill(group, Signal::SIGTERM);
+        let started = std::time::Instant::now();
+        while started.elapsed() < Duration::from_secs(10) {
+            match child.try_wait() {
+                Ok(Some(_)) | Err(_) => return,
+                Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        let _ = signal::kill(group, Signal::SIGKILL);
+        let _ = child.wait();
+    }
 }
 
 fn dry_run_task(output: &std::process::Output, task_id: &str) -> serde_json::Value {
@@ -387,6 +473,192 @@ fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
         original,
         task_hash(tempdir.path(), "example.com/api", "build"),
         "module source changes must affect its task hash"
+    );
+}
+
+#[test]
+fn test_go_resolution_sums_invalidate_dependent_task_hashes() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let package = "example.com/api";
+    let original = task_hash(tempdir.path(), package, "build");
+    let empty_sum = "h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
+
+    fs::write(
+        tempdir.path().join("packages/lib/go.sum"),
+        format!("example.net/unused v1.0.0/go.mod {empty_sum}\n"),
+    )
+    .unwrap();
+    let module_sum = task_hash(tempdir.path(), package, "build");
+    assert_ne!(
+        original, module_sum,
+        "a dependency module's go.sum must invalidate dependents"
+    );
+
+    fs::write(
+        tempdir.path().join("go.work.sum"),
+        format!("example.net/workspace v1.0.0/go.mod {empty_sum}\n"),
+    )
+    .unwrap();
+    assert_ne!(
+        module_sum,
+        task_hash(tempdir.path(), package, "build"),
+        "go.work.sum must invalidate Go task hashes"
+    );
+}
+
+#[test]
+fn test_affected_go_tasks_follow_internal_module_relationships() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("packages/lib/lib.go"),
+        "package lib\n\nfunc Greet() { println(\"affected\") }\n",
+    )
+    .unwrap();
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--affected", "--dry=json"],
+        &[("TURBO_SCM_BASE", "HEAD")],
+    );
+    assert_command_success(&output, "Go --affected dry run");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("affected dry-run JSON");
+    let tasks = json["tasks"]
+        .as_array()
+        .expect("affected tasks");
+    for package in ["example.com/lib", "example.com/api"] {
+        let task_id = format!("{package}#build");
+        assert!(
+            tasks.iter().any(|task| task["taskId"] == task_id),
+            "{task_id} must be affected: {tasks:?}"
+        );
+    }
+}
+
+#[test]
+fn test_affected_go_tasks_do_not_cross_independent_modules() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let independent = tempdir.path().join("tools/independent");
+    fs::create_dir_all(&independent).unwrap();
+    fs::write(
+        independent.join("go.mod"),
+        "module example.com/independent\n\ngo 1.22\n",
+    )
+    .unwrap();
+    fs::write(independent.join("main.go"), "package independent\n").unwrap();
+    fs::write(
+        tempdir.path().join("go.work"),
+        "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n\t./tools/independent\n)\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true,
+    "affectedUsingTaskInputs": true
+  },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    common::git(tempdir.path(), &["add", "."]);
+    common::git(
+        tempdir.path(),
+        &["commit", "-m", "add independent module", "--quiet"],
+    );
+
+    fs::write(
+        independent.join("main.go"),
+        "package independent\n\nconst Changed = true\n",
+    )
+    .unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(base: \"HEAD\", tasks: [\"build\"]) { items { name package { \
+             name } } } }",
+        ],
+    );
+    assert_command_success(&output, "independent Go affected task query");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("affected query JSON");
+    let tasks = json["data"]["affectedTasks"]["items"]
+        .as_array()
+        .expect("affected tasks");
+    assert!(tasks.iter().any(|task| {
+        task["name"] == "build" && task["package"]["name"] == "example.com/independent"
+    }));
+    for package in ["example.com/api", "example.com/lib"] {
+        assert!(
+            !tasks
+                .iter()
+                .any(|task| task["name"] == "build" && task["package"]["name"] == package),
+            "{package} must remain unaffected: {tasks:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let _watch = GoWatchGuard::spawn(tempdir.path());
+    let api_binary = tempdir.path().join("apps/api/dist/api");
+    assert!(
+        wait_for_path(&api_binary, Duration::from_secs(30)),
+        "initial Go watch build did not produce {api_binary:?}"
+    );
+
+    let worker = tempdir.path().join("apps/worker");
+    fs::create_dir_all(&worker).unwrap();
+    fs::write(
+        worker.join("go.mod"),
+        "module example.com/worker\n\ngo 1.22\n",
+    )
+    .unwrap();
+    fs::write(
+        worker.join("main.go"),
+        "package main\n\nfunc main() { println(\"worker\") }\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("go.work"),
+        "go 1.22\n\nuse (\n\t./apps/api\n\t./apps/worker\n\t./packages/lib\n)\n",
+    )
+    .unwrap();
+    common::git(
+        tempdir.path(),
+        &["add", "go.work", "apps/worker/go.mod", "apps/worker/main.go"],
+    );
+    common::git(
+        tempdir.path(),
+        &["commit", "-m", "add worker module", "--quiet"],
+    );
+
+    let worker_binary = worker.join("dist/worker");
+    assert!(
+        wait_for_path(&worker_binary, Duration::from_secs(30)),
+        "turbo watch did not rediscover and build {worker_binary:?}"
     );
 }
 
