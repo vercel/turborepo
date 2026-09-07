@@ -108,7 +108,7 @@ Multiple filters combine as a union (packages matching ANY filter run).
 | `pkg...`    | Package AND all its dependencies       |
 | `...pkg`    | Package AND all its dependents         |
 | `...pkg...` | Dependencies, package, AND dependents  |
-| `^pkg...`   | Only dependencies (exclude pkg itself) |
+| `pkg^...`   | Only dependencies (exclude pkg itself) |
 | `...^pkg`   | Only dependents (exclude pkg itself)   |
 
 ### Negation
