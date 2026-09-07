@@ -149,11 +149,3 @@ Validate a pruned output with ordinary Go commands:
 cd out/apps/api
 go test ./...
 ```
-
-## Limitations and troubleshooting
-
-- The workspace must be rooted at the Turborepo root. Members and local replacements outside the repository, or local replacements to non-members, are rejected.
-- A root module that collides with a listed member, duplicate module paths, and the reserved `go-workspace` identity are rejected.
-- Vendoring is not interpreted as a separate resolution source. Use current module/workspace sums and standard workspace module mode.
-- Turborepo does not auto-detect `golangci-lint` and does not proxy Go's build cache.
-- If Go reports a stale graph or checksum error, run the appropriate `go mod tidy` and `go work sync` commands, review the changes, and commit the updated files.
