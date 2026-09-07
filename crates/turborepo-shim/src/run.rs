@@ -303,11 +303,17 @@ where
     let package_manager = repo_state.package_manager.as_ref();
 
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        let config = runtime
-            .config_provider
-            .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
+        // Config resolution reads global config, auth, local config, and
+        // turbo.json; its result is only consumed by the update notifier.
+        // Skip it entirely for invocations that never notify (`--version`,
+        // `--help`, pure-output flags).
+        if shim_args.should_check_for_update() {
+            let config = runtime
+                .config_provider
+                .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
 
-        try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
+            try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
+        }
 
         if turbo_state.local_is_self() {
             unsafe {
@@ -331,10 +337,14 @@ where
         )
     } else {
         let version = runtime.version_provider.get_version();
-        let config = runtime
-            .config_provider
-            .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
-        try_check_for_updates(&shim_args, version, &config, package_manager);
+        // See above: only resolve configuration when the update notifier
+        // will actually consume it.
+        if shim_args.should_check_for_update() {
+            let config = runtime
+                .config_provider
+                .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
+            try_check_for_updates(&shim_args, version, &config, package_manager);
+        }
 
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.

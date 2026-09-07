@@ -266,6 +266,15 @@ pub fn run(
     color_config: ColorConfig,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, Error> {
+    // Parse arguments before initializing any thread pools. Parsing is fully
+    // synchronous, and `--version`, `--help`, and parse errors exit the
+    // process from inside `Args::new`, so doing it first keeps those
+    // invocations from paying for the rayon pool and tokio runtime at all.
+    let cli_args = {
+        let _span = tracing::info_span!("cli_arg_parsing").entered();
+        Args::new(env::args_os().collect())
+    };
+
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
     init_rayon_pool();
@@ -275,7 +284,13 @@ pub fn run(
         .build()
         .map_err(Error::Runtime)?;
 
-    let result = runtime.block_on(run_main(repo_state, logger, color_config, query_server));
+    let result = runtime.block_on(run_main(
+        cli_args,
+        repo_state,
+        logger,
+        color_config,
+        query_server,
+    ));
 
     // `Runtime::drop` joins blocking-pool threads with no deadline. Detached
     // best-effort work — most notably a telemetry flush whose DNS lookup
@@ -293,6 +308,7 @@ pub fn run(
 
 #[tracing::instrument(skip_all)]
 async fn run_main(
+    mut cli_args: Args,
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
@@ -301,10 +317,6 @@ async fn run_main(
     let _cli_run_span = tracing::info_span!("cli_run").entered();
     let http_client = SharedHttpClient::new();
 
-    let mut cli_args = {
-        let _span = tracing::info_span!("cli_arg_parsing").entered();
-        Args::new(env::args_os().collect())
-    };
     let version = get_version();
 
     // Initialize telemetry immediately so events are captured from startup.

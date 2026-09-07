@@ -80,11 +80,13 @@ impl ResolvedConfigurationOptions for AuthFile {
                             error,
                         })?;
 
-                if contents.as_deref().is_none_or(str::is_empty) {
+                let Some(contents) = contents.filter(|s| !s.is_empty()) else {
                     return Ok(None);
-                }
+                };
 
-                match turborepo_auth::Token::from_file(path) {
+                // Parse from the contents we already read instead of letting
+                // `Token::from_file` read the same file a second time.
+                match turborepo_auth::Token::from_file_contents(&contents, path) {
                     Ok(token) if !token.into_inner().expose().is_empty() => Ok(Some(token)),
                     Ok(_)
                     | Err(turborepo_auth::Error::TokenNotFound)

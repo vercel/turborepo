@@ -66,6 +66,12 @@ impl LocalTurboState {
         // well.
         let turbo_path = root_path.as_path().join("node_modules").join("turbo");
 
+        // As in `try_probe_binary`, gate the canonicalize's per-component
+        // walk behind a single existence check for the common miss.
+        if !turbo_path.try_exists().unwrap_or(false) {
+            return None;
+        }
+
         match fs_canonicalize(&turbo_path) {
             Ok(canonical_path) => match canonical_path.parent() {
                 Some(parent) => AbsoluteSystemPathBuf::try_from(parent).ok(),
@@ -156,6 +162,13 @@ impl LocalTurboState {
         bin_components.extend_from_slice(&["bin", binary_name]);
 
         let bin_path = root.join_components(&bin_components);
+        // Most probes miss. Gate the canonicalize — which walks and resolves
+        // every path component in the kernel — behind a single existence
+        // check so a miss costs one stat instead of a per-component walk.
+        if !bin_path.try_exists().unwrap_or(false) {
+            debug!("No local turbo binary found at: {}", bin_path);
+            return None;
+        }
         let bin_path = match fs_canonicalize(&bin_path) {
             Ok(p) => p,
             Err(_) => {
@@ -243,14 +256,18 @@ impl LocalTurboState {
         // directory name. Read the unplugged base path once to avoid
         // re-parsing .yarnrc.yml.
         let unplugged_base_path = Self::get_unplugged_base_path(root_path);
-        for package_path in package_paths {
-            // Berry unplugged dirs use `{name}-npm-{version}-{hash}`.
-            // For scoped `@turbo/linux-64` this becomes `@turbo-linux-64-npm-...`.
-            let unplugged_prefix = package_path.join("-");
-            if let Some(root) = Self::find_in_unplugged(&unplugged_base_path, &unplugged_prefix)
-                && let Some(state) = Self::try_probe_binary(&root, package_path, binary_name)
-            {
-                return Some(state);
+        // Both prefix scans read the same directory; when it doesn't exist
+        // (the common case) skip both with a single existence check.
+        if unplugged_base_path.try_exists().unwrap_or(false) {
+            for package_path in package_paths {
+                // Berry unplugged dirs use `{name}-npm-{version}-{hash}`.
+                // For scoped `@turbo/linux-64` this becomes `@turbo-linux-64-npm-...`.
+                let unplugged_prefix = package_path.join("-");
+                if let Some(root) = Self::find_in_unplugged(&unplugged_base_path, &unplugged_prefix)
+                    && let Some(state) = Self::try_probe_binary(&root, package_path, binary_name)
+                {
+                    return Some(state);
+                }
             }
         }
 

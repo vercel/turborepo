@@ -116,26 +116,31 @@ impl Token {
     /// * `Error::InvalidTokenFileFormat` - If the file does not contain a
     ///   properly formatted JSON object with a `token` field.
     pub fn from_file(path: &AbsoluteSystemPath) -> Result<Self, Error> {
+        match path.read_existing_to_string()? {
+            Some(content) => Self::from_file_contents(&content, path),
+            None => Err(Error::TokenNotFound),
+        }
+    }
+
+    /// Parses a token from already-read file contents, saving callers that
+    /// have them a second read. `path` is only used for error reporting.
+    /// See [`Token::from_file`] for the expected format and errors.
+    pub fn from_file_contents(content: &str, path: &AbsoluteSystemPath) -> Result<Self, Error> {
         #[derive(Deserialize)]
         struct TokenWrapper {
             token: Option<String>,
         }
 
-        match path.read_existing_to_string()? {
-            Some(content) => {
-                let wrapper = serde_json::from_str::<TokenWrapper>(&content).map_err(|err| {
-                    Error::InvalidTokenFileFormat {
-                        path: path.to_string(),
-                        source: err,
-                    }
-                })?;
-                if let Some(token) = wrapper.token {
-                    Ok(Self::Existing(SecretString::new(token)))
-                } else {
-                    Err(Error::TokenNotFound)
-                }
+        let wrapper = serde_json::from_str::<TokenWrapper>(content).map_err(|err| {
+            Error::InvalidTokenFileFormat {
+                path: path.to_string(),
+                source: err,
             }
-            None => Err(Error::TokenNotFound),
+        })?;
+        if let Some(token) = wrapper.token {
+            Ok(Self::Existing(SecretString::new(token)))
+        } else {
+            Err(Error::TokenNotFound)
         }
     }
 
