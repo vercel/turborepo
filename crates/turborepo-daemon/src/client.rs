@@ -23,6 +23,7 @@ use super::{
 };
 use crate::proto::{self, PackageChangeEvent};
 
+#[allow(clippy::result_large_err)]
 fn repository_discovery_from_proto(
     response: DiscoverPackagesResponse,
 ) -> Result<RepositoryDiscoverySnapshot, DaemonError> {

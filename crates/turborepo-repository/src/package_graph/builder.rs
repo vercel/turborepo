@@ -62,7 +62,8 @@ pub enum Error {
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
         "Failed to add workspace \"{name}\" from \"{path}\", it already exists at \
-         \"{existing_path}\""
+         \"{existing_path}\". Rename one package or module so every Turborepo package identity is \
+         unique."
     )]
     DuplicateWorkspace {
         name: String,
@@ -336,6 +337,12 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     pub fn with_uv(self) -> Self {
         let repo_root = self.repo_root.to_owned();
         self.with_contributor(crate::uv::UvContributor::new(repo_root))
+    }
+
+    /// Enable Go repository contribution for this graph generation.
+    pub fn with_go(self) -> Self {
+        let repo_root = self.repo_root.to_owned();
+        self.with_contributor(crate::go::GoContributor::new(repo_root))
     }
 
     /// Set the package discovery strategy to use. Note that whatever strategy

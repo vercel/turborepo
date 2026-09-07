@@ -128,6 +128,14 @@ pub struct FutureFlags {
     /// feature is experimental.
     #[serde(default)]
     pub experimental_python_workspaces: bool,
+    /// Treat the modules listed in a `go.work` file as Turborepo packages.
+    ///
+    /// When enabled, Go modules are discovered from the repository-root
+    /// `go.work` via the Go toolchain and participate in the package graph:
+    /// they resolve in `--filter` expressions, propagate `--affected`, and
+    /// appear in `turbo query`. This feature is experimental.
+    #[serde(default)]
+    pub experimental_go_workspaces: bool,
     /// Serve the Remote Cache as an sccache storage backend for Cargo crate
     /// tasks. When enabled (together with `experimentalCargoWorkspaces` and
     /// a linked Remote Cache), `turbo` starts a local proxy and routes
@@ -169,7 +177,7 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -179,7 +187,7 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -189,7 +197,8 @@ impl TS for FutureFlags {
          boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalPythonWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
+         experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -199,7 +208,8 @@ impl TS for FutureFlags {
          boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalPythonWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
+         experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
