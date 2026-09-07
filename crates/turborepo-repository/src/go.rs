@@ -1344,14 +1344,21 @@ mod tests {
         resolutions: &'a [PackageResolution],
         package: &str,
     ) -> HashSet<&'a str> {
-        resolutions
-            .iter()
-            .find(|resolution| resolution.package() == package)
-            .expect("package resolution")
+        resolution_for(resolutions, package)
             .identities()
             .iter()
             .map(ExternalPackageIdentity::key)
             .collect()
+    }
+
+    fn resolution_for<'a>(
+        resolutions: &'a [PackageResolution],
+        package: &str,
+    ) -> &'a PackageResolution {
+        resolutions
+            .iter()
+            .find(|resolution| resolution.package() == package)
+            .expect("package resolution")
     }
 
     #[test]
@@ -1391,6 +1398,27 @@ mod tests {
         assert_eq!(
             aggregate,
             HashSet::from(["go", "example.net/shared", "example.net/disjoint"])
+        );
+
+        let changed = external_resolutions(
+            graph,
+            &modules,
+            &[
+                listed_module("example.net/shared", "v1.0.0", "h1:changed"),
+                listed_module("example.net/disjoint", "v2.0.0", "h1:disjoint"),
+            ],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("changed resolution succeeds");
+        for package in ["example.com/app", "example.com/lib", GO_WORKSPACE_NAME] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed, package).identities()
+            );
+        }
+        assert_eq!(
+            resolution_for(&resolutions, "example.com/other").identities(),
+            resolution_for(&changed, "example.com/other").identities()
         );
     }
 
