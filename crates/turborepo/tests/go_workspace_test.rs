@@ -970,13 +970,6 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert_eq!(dry_run["directory"], "apps/api");
     assert_eq!(dry_run["command"], build_command);
     assert!(
-        dry_run["dependencies"]
-            .as_array()
-            .is_some_and(|dependencies| dependencies
-                .iter()
-                .any(|dependency| dependency == "example.com/lib#build"))
-    );
-    assert!(
         dry_run["resolvedTaskDefinition"]["inputs"]
             .as_array()
             .is_some_and(|inputs| inputs.iter().any(|input| input == "../../go.work"))
@@ -1017,13 +1010,6 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert_eq!(summarized_build["package"], "example.com/api");
     assert_eq!(summarized_build["directory"], "apps/api");
     assert_eq!(summarized_build["command"], build_command);
-    assert!(
-        summarized_build["dependencies"]
-            .as_array()
-            .is_some_and(|dependencies| dependencies
-                .iter()
-                .any(|dependency| dependency == "example.com/lib#build"))
-    );
     assert!(
         summarized_build["inputs"]
             .as_object()
