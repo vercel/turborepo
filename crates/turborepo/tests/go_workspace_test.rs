@@ -402,10 +402,7 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     let lint = dry_run_task(&output, "example.com/lib#lint");
     assert_eq!(lint["command"], "go vet ./...");
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
-    );
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
     let build = dry_run_task(&output, "example.com/api#build");
     let executable = if cfg!(windows) { "api.exe" } else { "api" };
     let output_path = format!("dist/{executable}");
@@ -903,4 +900,179 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
         combined.contains("intentional failure"),
         "Go failure output must propagate: {combined}"
     );
+}
+
+#[test]
+fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    let executable = if cfg!(windows) { "api.exe" } else { "api" };
+    let output_path = format!("dist/{executable}");
+    let build_command = format!("go build -o {output_path} .");
+    let task_directory = Path::new("apps").join("api").to_string_lossy().into_owned();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { api: package(name: \"example.com/api\") { name path directDependencies { \
+             items { name } } tasks { items { name command directDependencies { items { fullName \
+             } } } } } aggregate: package(name: \"go-workspace\") { name path tasks { items { \
+             name command } } } }",
+        ],
+    );
+    assert_command_success(&output, "Go package and task query");
+    let query: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("query emits JSON");
+    let api = &query["data"]["api"];
+    assert_eq!(api["name"], "example.com/api");
+    assert_eq!(api["path"], "apps/api");
+    assert!(
+        api["directDependencies"]["items"]
+            .as_array()
+            .is_some_and(|dependencies| dependencies
+                .iter()
+                .any(|dependency| dependency["name"] == "example.com/lib"))
+    );
+    let queried_build = api["tasks"]["items"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["name"] == "build"))
+        .expect("queried Go build task");
+    assert_eq!(queried_build["command"], build_command);
+    assert!(
+        queried_build["directDependencies"]["items"]
+            .as_array()
+            .is_some_and(|dependencies| dependencies
+                .iter()
+                .any(|dependency| dependency["fullName"] == "example.com/lib#build"))
+    );
+
+    let aggregate = &query["data"]["aggregate"];
+    assert_eq!(aggregate["name"], "go-workspace");
+    assert_eq!(aggregate["path"], "");
+    assert!(
+        aggregate["tasks"]["items"]
+            .as_array()
+            .is_some_and(|tasks| tasks.iter().any(|task| {
+                task["name"] == "test"
+                    && task["command"] == "go test ./apps/api/... ./packages/lib/..."
+            }))
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+    );
+    let dry_run = dry_run_task(&output, "example.com/api#build");
+    assert_eq!(dry_run["package"], "example.com/api");
+    assert_eq!(dry_run["directory"], task_directory);
+    assert_eq!(dry_run["command"], build_command);
+    assert!(
+        dry_run["resolvedTaskDefinition"]["inputs"]
+            .as_array()
+            .is_some_and(|inputs| inputs.iter().any(|input| input == "../../go.work"))
+    );
+    assert!(
+        dry_run["resolvedTaskDefinition"]["outputs"]
+            .as_array()
+            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+    );
+    assert!(
+        dry_run["hashOfExternalDependencies"]
+            .as_str()
+            .is_some_and(|hash| !hash.is_empty())
+    );
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--summarize"]);
+    assert_command_success(&output, "summarized Go build");
+    let summary_path = fs::read_dir(tempdir.path().join(".turbo/runs"))
+        .expect("run summary directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .expect("Go run summary");
+    let summary: serde_json::Value =
+        serde_json::from_slice(&fs::read(summary_path).expect("read Go run summary"))
+            .expect("parse Go run summary");
+    let summarized_build = summary["tasks"]
+        .as_array()
+        .and_then(|tasks| {
+            tasks
+                .iter()
+                .find(|task| task["taskId"] == "example.com/api#build")
+        })
+        .expect("summarized Go build task");
+    assert_eq!(summarized_build["package"], "example.com/api");
+    assert_eq!(summarized_build["directory"], task_directory);
+    assert_eq!(summarized_build["command"], build_command);
+    assert!(
+        summarized_build["inputs"]
+            .as_object()
+            .is_some_and(|inputs| inputs.contains_key("main.go") && inputs.contains_key("go.mod"))
+    );
+    assert!(
+        summarized_build["outputs"]
+            .as_array()
+            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+    );
+    assert!(
+        summarized_build["hashOfExternalDependencies"]
+            .as_str()
+            .is_some_and(|hash| !hash.is_empty())
+    );
+}
+
+#[test]
+fn test_mixed_repository_query_keeps_external_resolution_domains_separate() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_monorepo(tempdir.path());
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { externalDependencies { items { name internalDependents { items { name } } } \
+             } }",
+        ],
+    );
+    assert_command_success(&output, "mixed external dependency query");
+    let query: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("query emits JSON");
+    let packages = query["data"]["externalDependencies"]["items"]
+        .as_array()
+        .expect("external dependencies");
+    let dependents = |external_name: &str| {
+        packages
+            .iter()
+            .find(|package| package["name"] == external_name)
+            .and_then(|package| package["internalDependents"]["items"].as_array())
+            .unwrap_or_else(|| panic!("{external_name} and its dependents"))
+    };
+
+    let go_dependents = dependents("go");
+    for package in ["example.com/api", "example.com/lib", "go-workspace"] {
+        assert!(
+            go_dependents
+                .iter()
+                .any(|dependent| dependent["name"] == package),
+            "{package} must stay in the Go resolution domain: {go_dependents:?}"
+        );
+    }
+    assert!(
+        !go_dependents
+            .iter()
+            .any(|dependent| dependent["name"] == "js-pkg")
+    );
+
+    let js_dependents = dependents("picocolors@1.1.1");
+    assert_eq!(js_dependents.len(), 1);
+    assert_eq!(js_dependents[0]["name"], "js-pkg");
 }

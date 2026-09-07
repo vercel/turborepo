@@ -2,6 +2,9 @@
   "name": "js-pkg",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "picocolors": "1.1.1"
+  },
   "scripts": {
     "build": "node -e \"require('fs').mkdirSync('dist',{recursive:true}); require('fs').writeFileSync('dist/out.txt','ok')\""
   }
