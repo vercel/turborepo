@@ -40,7 +40,8 @@ pub use graph_visualizer::{
 pub use loader::TurboJsonLoader;
 use petgraph::{
     Graph,
-    visit::{DfsEvent, Reversed, depth_first_search},
+    graph::NodeIndex,
+    visit::{DfsEvent, NodeIndexable, Reversed, depth_first_search},
 };
 pub use task_definition::TaskDefinitionFromProcessed;
 use thiserror::Error;
@@ -93,6 +94,53 @@ pub enum TaskNode {
 impl From<TaskId<'static>> for TaskNode {
     fn from(value: TaskId<'static>) -> Self {
         Self::Task(value)
+    }
+}
+
+/// Dense membership for graph node indices.
+///
+/// A graph can have sparse node indices after removals, so this is sized with
+/// `Graph::node_bound()` rather than its live node count.
+#[derive(Debug)]
+struct NodeMembership {
+    members: Vec<bool>,
+    len: usize,
+}
+
+impl NodeMembership {
+    fn for_graph(graph: &Graph<TaskNode, ()>) -> Self {
+        Self {
+            members: vec![false; graph.node_bound()],
+            len: 0,
+        }
+    }
+
+    fn insert(&mut self, node: NodeIndex) -> bool {
+        let Some(member) = self.members.get_mut(node.index()) else {
+            return false;
+        };
+        if *member {
+            return false;
+        }
+
+        *member = true;
+        self.len += 1;
+        true
+    }
+
+    fn contains(&self, node: NodeIndex) -> bool {
+        self.members.get(node.index()).copied().unwrap_or(false)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn iter(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.members
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &member)| member.then(|| NodeIndex::new(index)))
     }
 }
 
@@ -350,7 +398,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .collect();
 
         self.reachable_closure(entrypoint_indices)
-            .into_iter()
+            .iter()
             .filter_map(|node| match self.task_graph.node_weight(node)? {
                 TaskNode::Task(id) => Some(id.clone()),
                 TaskNode::Root => None,
@@ -373,7 +421,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .collect();
 
         self.watch_reachable_closure(entrypoint_indices)
-            .into_iter()
+            .iter()
             .filter_map(|node| match self.task_graph.node_weight(node)? {
                 TaskNode::Task(id)
                     if !self
@@ -450,15 +498,17 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
 
     /// Removes the given tasks and their incident dependency edges.
     pub fn remove_tasks(self, excluded_tasks: &HashSet<TaskId>) -> Self {
-        let retained: HashSet<_> = self
-            .task_graph
-            .node_indices()
-            .filter(|&index| match self.task_graph.node_weight(index) {
-                Some(TaskNode::Task(task)) => !excluded_tasks.contains(task),
+        let mut retained = NodeMembership::for_graph(&self.task_graph);
+        for index in self.task_graph.node_indices() {
+            let retain = match self.task_graph.node_weight(index) {
                 Some(TaskNode::Root) => true,
+                Some(TaskNode::Task(task)) => !excluded_tasks.contains(task),
                 None => false,
-            })
-            .collect();
+            };
+            if retain {
+                retained.insert(index);
+            }
+        }
         self.prune_to_reachable(&retained, false)
     }
 
@@ -478,7 +528,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         let original_task_count = self.task_graph.node_count().saturating_sub(1);
 
         // Forward DFS only: find the filtered tasks + transitive dependencies.
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(&self.task_graph, entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -501,11 +551,14 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// them. Unlike `retain_filtered_tasks`, this does not add transitive
     /// dependencies.
     pub fn retain_task_subset(self, retained_tasks: &HashSet<TaskId>) -> Self {
-        let mut retained: HashSet<_> = retained_tasks
+        let mut retained = NodeMembership::for_graph(&self.task_graph);
+        retained_tasks
             .iter()
             .filter_map(|task| self.task_lookup.get(task))
             .copied()
-            .collect();
+            .for_each(|index| {
+                retained.insert(index);
+            });
         retained.insert(self.root_index);
         self.prune_to_reachable(&retained, false)
     }
@@ -513,12 +566,9 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Computes the full reachable set from seed nodes: reverse DFS for
     /// transitive dependents, then forward DFS for transitive dependencies.
     /// Root is always included so `prune_to_reachable` can recover it.
-    fn reachable_closure(
-        &self,
-        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
-    ) -> HashSet<petgraph::graph::NodeIndex> {
+    fn reachable_closure(&self, entrypoint_indices: Vec<NodeIndex>) -> NodeMembership {
         // Reverse DFS: find transitive dependents (downstream consumers).
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -529,11 +579,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         // Forward DFS: find transitive dependencies (upstream tasks needed as
         // cache hits). Root is excluded as a seed since it has no outgoing
         // edges in the forward direction.
-        let forward_seeds: Vec<_> = reachable
-            .iter()
-            .copied()
-            .filter(|&n| n != self.root_index)
-            .collect();
+        let forward_seeds: Vec<_> = reachable.iter().filter(|&n| n != self.root_index).collect();
         depth_first_search(&self.task_graph, forward_seeds, |event| {
             if let DfsEvent::Discover(n, _) = event {
                 reachable.insert(n);
@@ -546,12 +592,9 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Computes the watch-mode reachable set from changed package task nodes:
     /// reverse DFS for transitive dependents, then forward traversal for only
     /// cacheable transitive dependencies.
-    fn watch_reachable_closure(
-        &self,
-        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
-    ) -> HashSet<petgraph::graph::NodeIndex> {
+    fn watch_reachable_closure(&self, entrypoint_indices: Vec<NodeIndex>) -> NodeMembership {
         // Reverse DFS: find transitive dependents (downstream consumers).
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -559,11 +602,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             }
         });
 
-        let mut stack: Vec<_> = reachable
-            .iter()
-            .copied()
-            .filter(|&n| n != self.root_index)
-            .collect();
+        let mut stack: Vec<_> = reachable.iter().filter(|&n| n != self.root_index).collect();
 
         while let Some(node) = stack.pop() {
             for dependency in self
@@ -583,7 +622,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         reachable
     }
 
-    fn is_cacheable_task_node(&self, node: petgraph::graph::NodeIndex) -> bool {
+    fn is_cacheable_task_node(&self, node: NodeIndex) -> bool {
         let Some(TaskNode::Task(task)) = self.task_graph.node_weight(node) else {
             return false;
         };
@@ -602,12 +641,12 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// by watch mode).
     fn prune_to_reachable(
         mut self,
-        reachable: &HashSet<petgraph::graph::NodeIndex>,
+        reachable: &NodeMembership,
         exclude_non_interruptible_persistent: bool,
     ) -> Self {
         let pruned_graph = self.task_graph.filter_map(
             |node_idx, node| {
-                if !reachable.contains(&node_idx) {
+                if !reachable.contains(node_idx) {
                     return None;
                 }
                 if exclude_non_interruptible_persistent
@@ -1032,6 +1071,71 @@ mod affected_tasks_tests {
         engine: &Engine<Built, T>,
     ) -> HashSet<TaskId<'static>> {
         engine.task_ids().cloned().collect()
+    }
+
+    #[test]
+    fn node_membership_handles_sparse_nodes() {
+        let mut graph = Graph::<TaskNode, ()>::default();
+        let first = graph.add_node(TaskNode::Root);
+        let last = (0..6)
+            .map(|_| graph.add_node(TaskNode::Task(TaskId::new("pkg", "task"))))
+            .last()
+            .expect("range is non-empty");
+
+        let mut membership = NodeMembership::for_graph(&graph);
+        assert!(membership.insert(last));
+
+        assert!(!membership.contains(first));
+        assert!(membership.contains(last));
+        assert!(!membership.insert(NodeIndex::new(graph.node_bound())));
+        assert!(!membership.contains(NodeIndex::new(graph.node_bound())));
+        assert_eq!(membership.iter().collect::<Vec<_>>(), vec![last]);
+    }
+
+    #[test]
+    #[ignore = "Release benchmark for TURBO-5979"]
+    fn node_membership_insertion_and_contains_benchmark() {
+        use std::{hint::black_box, time::Instant};
+
+        const NODE_COUNTS: &[usize] = &[100, 1_000, 10_000, 100_000];
+        const ITERATIONS: usize = 100;
+
+        for &node_count in NODE_COUNTS {
+            let mut graph = Graph::<TaskNode, ()>::with_capacity(node_count, 0);
+            let nodes: Vec<_> = (0..node_count)
+                .map(|_| graph.add_node(TaskNode::Root))
+                .collect();
+
+            let baseline_start = Instant::now();
+            for _ in 0..ITERATIONS {
+                let mut members = HashSet::with_capacity(node_count);
+                for &node in &nodes {
+                    black_box(members.insert(black_box(node)));
+                }
+                for &node in &nodes {
+                    black_box(members.contains(black_box(&node)));
+                }
+            }
+            let baseline_elapsed = baseline_start.elapsed();
+
+            let membership_start = Instant::now();
+            for _ in 0..ITERATIONS {
+                let mut members = NodeMembership::for_graph(&graph);
+                for &node in &nodes {
+                    black_box(members.insert(black_box(node)));
+                }
+                for &node in &nodes {
+                    black_box(members.contains(black_box(node)));
+                }
+            }
+            let membership_elapsed = membership_start.elapsed();
+
+            let speedup = baseline_elapsed.as_secs_f64() / membership_elapsed.as_secs_f64();
+            println!(
+                "{node_count:>7} nodes: HashSet {baseline_elapsed:?}, NodeMembership \
+                 {membership_elapsed:?}, {speedup:.2}x speedup"
+            );
+        }
     }
 
     #[test]
