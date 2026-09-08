@@ -25,10 +25,7 @@ use turbopath::{
 };
 use turborepo_cache::CacheHitMetadata;
 use turborepo_engine::TaskNode;
-use turborepo_env::{
-    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
-    WildcardMapCache,
-};
+use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, WildcardMapCache};
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
@@ -374,9 +371,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             expanded_hashes,
         } = package_inputs_hashes;
 
-        let builtin_pass_through_env = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
-            .ok()
-            .map(|compiled| env_at_execution_start.from_compiled_wildcards(&compiled))
+        let builtin_pass_through_env = env_at_execution_start
+            .builtin_pass_through_env()
             .unwrap_or_default();
 
         Self {
