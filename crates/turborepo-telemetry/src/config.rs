@@ -195,18 +195,7 @@ impl TelemetryConfig {
     }
 
     pub fn is_enabled(&self) -> bool {
-        let do_not_track = env::var(DO_NOT_TRACK_ENV_VAR).unwrap_or("0".to_string());
-        let turbo_telemetry_disabled = env::var(DISABLED_ENV_VAR).unwrap_or("0".to_string());
-
-        if do_not_track == "1"
-            || do_not_track == "true"
-            || turbo_telemetry_disabled == "1"
-            || turbo_telemetry_disabled == "true"
-        {
-            return false;
-        }
-
-        self.config.telemetry_enabled
+        !is_disabled_by_env() && self.config.telemetry_enabled
     }
 
     pub fn is_telemetry_warning_enabled() -> bool {
@@ -271,6 +260,12 @@ fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
         .create_with_contents(serialized)
         .map_err(|e| ConfigError::Message(e.to_string()))?;
     Ok(())
+}
+
+pub(crate) fn is_disabled_by_env() -> bool {
+    [DO_NOT_TRACK_ENV_VAR, DISABLED_ENV_VAR]
+        .iter()
+        .any(|name| matches!(env::var(name).as_deref(), Ok("1" | "true")))
 }
 
 pub fn is_debug() -> bool {
