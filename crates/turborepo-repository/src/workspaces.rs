@@ -1,4 +1,8 @@
-use std::{fmt, str::FromStr as _};
+use std::{
+    fmt,
+    str::FromStr as _,
+    sync::{Arc, Mutex},
+};
 
 use globwalk::{ValidatedGlob, fix_glob_pattern};
 use itertools::Itertools as _;
@@ -33,6 +37,12 @@ pub struct WorkspaceGlobs {
     pub raw_exclusions: Vec<String>,
     validated_exclusions: Vec<ValidatedGlob>,
 }
+
+// Inference and discovery often compile the same pattern lists independently.
+// Retain at most one successful result, keyed by exact constructor inputs, not
+// repository paths or mtimes. Configuration is still read on every call and no
+// discovered paths, symlink resolutions, or containment decisions are cached.
+static LAST_WORKSPACE_GLOBS: Mutex<Option<Arc<WorkspaceGlobs>>> = Mutex::new(None);
 
 impl Error {
     pub fn invalid_glob(fixed: String, err: wax::BuildError) -> Self {
@@ -81,11 +91,44 @@ fn any_with_contextual_error(
 
 impl WorkspaceGlobs {
     pub fn new<S: Into<String>>(inclusions: Vec<S>, exclusions: Vec<S>) -> Result<Self, Error> {
-        // take ownership of the inputs
-        let raw_inclusions: Vec<String> = inclusions
-            .into_iter()
-            .map(|s| s.into())
-            .collect::<Vec<String>>();
+        Self::compile_cached(
+            inclusions.into_iter().map(Into::into).collect(),
+            exclusions.into_iter().map(Into::into).collect(),
+            &LAST_WORKSPACE_GLOBS,
+        )
+    }
+
+    fn compile_cached(
+        raw_inclusions: Vec<String>,
+        raw_exclusions: Vec<String>,
+        cache: &Mutex<Option<Arc<Self>>>,
+    ) -> Result<Self, Error> {
+        let hit = cache.lock().ok().and_then(|entry| {
+            entry
+                .as_ref()
+                .filter(|globs| {
+                    globs.raw_inclusions == raw_inclusions && globs.raw_exclusions == raw_exclusions
+                })
+                .cloned()
+        });
+        if let Some(globs) = hit {
+            // Clone outside the lock. Owned pattern vectors isolate the cache
+            // from caller mutations; regex programs themselves are shared by wax.
+            return Ok(globs.as_ref().clone());
+        }
+
+        // Compile outside the lock: unrelated repositories must not block one
+        // another on regex construction. Concurrent misses may compile twice.
+        let globs = Self::compile(raw_inclusions, raw_exclusions)?;
+        let stored = Arc::new(globs.clone());
+        let evicted = cache.lock().ok().map(|mut entry| entry.replace(stored));
+        // Release the mutex before destroying an evicted matcher. Poisoning
+        // simply disables the optimization rather than failing discovery.
+        drop(evicted);
+        Ok(globs)
+    }
+
+    fn compile(raw_inclusions: Vec<String>, raw_exclusions: Vec<String>) -> Result<Self, Error> {
         let package_json_inclusions = raw_inclusions
             .iter()
             .map(|s| {
@@ -98,10 +141,6 @@ impl WorkspaceGlobs {
                 ValidatedGlob::from_str(&s)
             })
             .collect::<Result<Vec<ValidatedGlob>, _>>()?;
-        let raw_exclusions: Vec<String> = exclusions
-            .into_iter()
-            .map(|s| s.into())
-            .collect::<Vec<String>>();
         let inclusion_globs = raw_inclusions
             .iter()
             .map(glob_with_contextual_error)
@@ -212,6 +251,150 @@ impl WorkspaceGlobs {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn matcher_cache_preserves_exact_inputs_and_isolates_returned_clones() {
+        let cache = Mutex::new(None);
+        let inclusions = vec!["packages/*".to_string(), "apps/*".to_string()];
+        let exclusions = vec!["packages/private".to_string()];
+        let expected = WorkspaceGlobs::compile(inclusions.clone(), exclusions.clone()).unwrap();
+        for _ in 0..2 {
+            let mut cached =
+                WorkspaceGlobs::compile_cached(inclusions.clone(), exclusions.clone(), &cache)
+                    .unwrap();
+            assert_eq!(cached, expected);
+            for path in [
+                "packages/web",
+                "packages/private",
+                "apps/site",
+                "other/site",
+            ] {
+                assert_eq!(
+                    cached.directory_inclusions.is_match(path),
+                    expected.directory_inclusions.is_match(path)
+                );
+                assert_eq!(
+                    cached.directory_exclusions.is_match(path),
+                    expected.directory_exclusions.is_match(path)
+                );
+            }
+            cached.raw_inclusions.clear();
+            cached.raw_exclusions.push("apps/*".into());
+        }
+        let stored = cache.lock().unwrap().as_ref().unwrap().clone();
+        WorkspaceGlobs::compile_cached(inclusions.clone(), exclusions.clone(), &cache).unwrap();
+        assert!(Arc::ptr_eq(
+            &stored,
+            cache.lock().unwrap().as_ref().unwrap()
+        ));
+
+        // Exclusions and ordered raw spellings are part of the key, even if
+        // two different inclusion lists happen to match the same directories.
+        let changed = WorkspaceGlobs::compile_cached(inclusions, vec![], &cache).unwrap();
+        assert!(!changed.directory_exclusions.is_match("packages/private"));
+        let reordered = vec!["apps/*".into(), "packages/*".into(), "packages/*".into()];
+        let changed = WorkspaceGlobs::compile_cached(reordered.clone(), vec![], &cache).unwrap();
+        assert_eq!(changed.raw_inclusions, reordered);
+        assert_eq!(cache.lock().unwrap().as_deref().unwrap(), &changed);
+    }
+
+    #[test]
+    fn matcher_cache_does_not_store_errors() {
+        let cache = Mutex::new(None);
+        let valid =
+            WorkspaceGlobs::compile_cached(vec!["packages/*".into()], vec![], &cache).unwrap();
+        for pattern in ["[", "{a,"] {
+            let raw = vec![pattern.to_string()];
+            let cold = WorkspaceGlobs::compile(raw.clone(), vec![]).unwrap_err();
+            let warm = WorkspaceGlobs::compile_cached(raw, vec![], &cache).unwrap_err();
+            assert_eq!(cold.to_string(), warm.to_string());
+            assert_eq!(cache.lock().unwrap().as_deref().unwrap(), &valid);
+        }
+    }
+
+    #[test]
+    fn matcher_cache_poisoning_falls_back_to_compilation() {
+        let cache = Mutex::new(None);
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = cache.lock().unwrap();
+            panic!("poison test cache");
+        });
+        let globs =
+            WorkspaceGlobs::compile_cached(vec!["packages/*".into()], vec![], &cache).unwrap();
+        assert!(globs.directory_inclusions.is_match("packages/app"));
+    }
+
+    #[test]
+    fn matcher_cache_handles_concurrent_different_keys() {
+        let cache = Mutex::new(None);
+        std::thread::scope(|scope| {
+            for worker in 0..4 {
+                let cache = &cache;
+                scope.spawn(move || {
+                    let pattern = format!("packages-{worker}/*");
+                    let candidate = format!("packages-{worker}/app");
+                    for _ in 0..8 {
+                        let globs =
+                            WorkspaceGlobs::compile_cached(vec![pattern.clone()], vec![], cache)
+                                .unwrap();
+                        assert_eq!(globs.raw_inclusions, vec![pattern.clone()]);
+                        assert!(globs.directory_inclusions.is_match(candidate.as_str()));
+                        assert!(!globs.directory_inclusions.is_match("other/app"));
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn matcher_reuse_does_not_cache_workspace_configuration() {
+        use crate::package_manager::PackageManager;
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let manifest = root.join_component("package.json");
+        manifest
+            .create_with_contents(r#"{"workspaces":["packages/*"]}"#)
+            .unwrap();
+        let first = PackageManager::Npm.get_workspace_globs(&root).unwrap();
+        assert_eq!(first.raw_inclusions, vec!["packages/*"]);
+        manifest
+            .create_with_contents(r#"{"workspaces":["apps/*"]}"#)
+            .unwrap();
+        let second = PackageManager::Npm.get_workspace_globs(&root).unwrap();
+        assert_eq!(second.raw_inclusions, vec!["apps/*"]);
+        manifest.create_with_contents("{").unwrap();
+        assert!(PackageManager::Npm.get_workspace_globs(&root).is_err());
+        manifest.remove_file().unwrap();
+        assert!(PackageManager::Npm.get_workspace_globs(&root).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn matcher_reuse_still_rechecks_symlink_containment() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let packages = root.join_component("packages");
+        packages.create_dir_all().unwrap();
+        let inside = root.join_component("inside");
+        inside.create_dir_all().unwrap();
+        inside
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        let alias = packages.join_component("app");
+        std::os::unix::fs::symlink(inside.as_std_path(), alias.as_std_path()).unwrap();
+        let globs = WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap();
+        assert_eq!(globs.get_package_jsons(&root).unwrap().count(), 1);
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("package.json"), "{}").unwrap();
+        alias.remove_file().unwrap();
+        std::os::unix::fs::symlink(outside.path(), alias.as_std_path()).unwrap();
+        let reused = WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap();
+        assert!(matches!(
+            reused.get_package_jsons(&root),
+            Err(Error::WorkspacePackageOutsideRepo(_))
+        ));
+    }
 
     #[test]
     fn test_workspace_globs_trailing_slash() {
