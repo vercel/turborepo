@@ -15,6 +15,8 @@
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
+# GitHub's manual-run branch selector cannot be restricted, so entry jobs are
+# gated to refs/heads/main. All release jobs depend on stage succeeding.
 #
 # RECOVERY: If a release fails and cleanup doesn't work, use the
 # 'clear-staging-branch' input to manually clear the stale staging branch.
@@ -109,7 +111,7 @@ jobs:
   check-skip:
     name: "Check Skip Conditions"
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'schedule' }}
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
@@ -134,7 +136,7 @@ jobs:
 
   stage:
     needs: [check-skip]
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
+    if: ${{ always() && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -145,12 +147,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
-      - name: Ensure release runs from default branch
-        if: ${{ github.ref_name != github.event.repository.default_branch }}
-        run: |
-          echo "::error::Release workflow must run from the default branch."
-          exit 1
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -360,6 +356,8 @@ jobs:
 
   build-rust:
     name: "Build Rust"
+    # Keep Apple credentials only in this environment, restricted to branch main.
+    environment: "Apple code signing (main-only)"
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     strategy:
