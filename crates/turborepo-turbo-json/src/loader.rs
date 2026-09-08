@@ -140,6 +140,14 @@ impl TurboJsonReader {
         TurboJson::read(&self.repo_root, path, is_root, self.future_flags)
     }
 
+    fn read_with_root_check(
+        &self,
+        path: &AbsoluteSystemPath,
+        is_root: impl FnOnce() -> bool,
+    ) -> Result<Option<TurboJson>, Error> {
+        TurboJson::read_with_root_check(&self.repo_root, path, is_root, self.future_flags)
+    }
+
     /// Get the repo root path
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
         &self.repo_root
@@ -171,18 +179,31 @@ pub fn load_from_path(
     turbo_json_path: TurboJsonPath,
     is_root: bool,
 ) -> Result<TurboJson, Error> {
+    load_from_path_with_root_check(reader, turbo_json_path, || is_root)
+}
+
+fn load_from_path_with_root_check(
+    reader: &TurboJsonReader,
+    turbo_json_path: TurboJsonPath,
+    is_root: impl Fn() -> bool,
+) -> Result<TurboJson, Error> {
+    // Both candidates must use the same schema, with at most one root check.
+    let root_check = OnceLock::new();
+    let is_root = || *root_check.get_or_init(&is_root);
     let result = match turbo_json_path {
         TurboJsonPath::Dir(turbo_json_dir_path) => {
             let turbo_json_path = turbo_json_dir_path.join_component(CONFIG_FILE);
             let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
 
             // Load both turbo.json and turbo.jsonc
-            let turbo_json = reader.read(&turbo_json_path, is_root);
-            let turbo_jsonc = reader.read(&turbo_jsonc_path, is_root);
+            let turbo_json = reader.read_with_root_check(&turbo_json_path, is_root);
+            let turbo_jsonc = reader.read_with_root_check(&turbo_jsonc_path, is_root);
 
             select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
         }
-        TurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path, is_root),
+        TurboJsonPath::File(turbo_json_path) => {
+            reader.read_with_root_check(turbo_json_path, is_root)
+        }
     };
 
     // Handle errors or success
@@ -487,19 +508,22 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
                 // should treat it as root to use the correct schema.
                 // We use to_realpath() to resolve symlinks so that a symlinked
                 // package pointing to the repo root is also detected correctly.
-                let is_package_at_root = !matches!(package, PackageName::Root)
-                    && turbo_json_path
-                        .to_realpath()
-                        .ok()
-                        .as_ref()
-                        .zip(
-                            physical_repo_root
-                                .get_or_init(|| reader.repo_root().to_realpath().ok())
-                                .as_ref(),
-                        )
-                        .map(|(pkg_real, root_real)| pkg_real == root_real)
-                        .unwrap_or(false);
-                let is_root = package == &PackageName::Root || is_package_at_root;
+                // Defer both realpath calls until a config has been read. Missing
+                // configs need neither package nor root canonicalization.
+                let is_root = || {
+                    package == &PackageName::Root
+                        || turbo_json_path
+                            .to_realpath()
+                            .ok()
+                            .as_ref()
+                            .zip(
+                                physical_repo_root
+                                    .get_or_init(|| reader.repo_root().to_realpath().ok())
+                                    .as_ref(),
+                            )
+                            .map(|(pkg_real, root_real)| pkg_real == root_real)
+                            .unwrap_or(false)
+                };
                 let turbo_json = load_turbo_json_from_file(
                     reader,
                     if package == &PackageName::Root {
@@ -603,30 +627,13 @@ fn workspace_package_scripts<'a>(
 fn load_turbo_json_from_file(
     reader: &TurboJsonReader,
     turbo_json_path: LoadTurboJsonPath,
-    is_root: bool,
+    is_root: impl Fn() -> bool,
 ) -> Result<TurboJson, LoaderError> {
-    let result = match turbo_json_path {
-        LoadTurboJsonPath::Dir(turbo_json_dir_path) => {
-            let turbo_json_path = turbo_json_dir_path.join_component(CONFIG_FILE);
-            let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
-
-            // Load both turbo.json and turbo.jsonc
-            let turbo_json = reader.read(&turbo_json_path, is_root);
-            let turbo_jsonc = reader.read(&turbo_jsonc_path, is_root);
-
-            select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
-        }
-        LoadTurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path, is_root),
+    let path = match turbo_json_path {
+        LoadTurboJsonPath::Dir(path) => TurboJsonPath::Dir(path),
+        LoadTurboJsonPath::File(path) => TurboJsonPath::File(path),
     };
-
-    // Handle errors or success
-    match result {
-        // There was an error, and we don't have any chance of recovering
-        Err(e) => Err(LoaderError::TurboJson(e)),
-        Ok(None) => Err(LoaderError::TurboJson(Error::NoTurboJSON)),
-        // We're not synthesizing anything and there was no error, we're done
-        Ok(Some(turbo)) => Ok(turbo),
-    }
+    load_from_path_with_root_check(reader, path, is_root).map_err(LoaderError::TurboJson)
 }
 
 fn load_from_root_scripts(
@@ -1167,6 +1174,69 @@ mod tests {
         assert!(loader.load(&PackageName::Root).is_ok());
     }
 
+    #[test_case(None, None, 0 ; "both missing")]
+    #[test_case(Some("{}"), None, 1 ; "json only")]
+    #[test_case(None, Some("{}"), 1 ; "jsonc only")]
+    #[test_case(Some("{}"), Some("{}"), 1 ; "both valid")]
+    #[test_case(Some("invalid json"), None, 1 ; "json parse error")]
+    #[test_case(None, Some("invalid jsonc"), 1 ; "jsonc parse error")]
+    #[test_case(Some("invalid json"), Some("invalid jsonc"), 1 ; "both invalid")]
+    #[test_case(Some("invalid json"), Some("{}"), 1 ; "valid jsonc wins")]
+    #[test_case(Some("{}"), Some("invalid jsonc"), 1 ; "valid json wins")]
+    fn test_deferred_root_check_selection(
+        json: Option<&str>,
+        jsonc: Option<&str>,
+        expected_checks: usize,
+    ) {
+        use std::cell::Cell;
+
+        let tmp_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        for (name, contents) in [(CONFIG_FILE, json), (CONFIG_FILE_JSONC, jsonc)] {
+            if let Some(contents) = contents {
+                fs::write(repo_root.join_component(name), contents).unwrap();
+            }
+        }
+        let checks = Cell::new(0);
+        let result = load_from_path_with_root_check(&reader, TurboJsonPath::Dir(repo_root), || {
+            checks.set(checks.get() + 1);
+            true
+        });
+        assert_eq!(checks.get(), expected_checks);
+        // Compare against independently read/parsed candidates to retain the
+        // exact selection and diagnostic behavior, including invalid siblings.
+        let expected = select_turbo_json(
+            repo_root,
+            reader.read(&repo_root.join_component(CONFIG_FILE), true),
+            reader.read(&repo_root.join_component(CONFIG_FILE_JSONC), true),
+        )
+        .and_then(|config| config.ok_or(Error::NoTurboJSON));
+        assert_eq!(format!("{result:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
+    fn test_read_failure_skips_root_check() {
+        let tmp_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let path = repo_root.join_component(CONFIG_FILE);
+        assert!(
+            reader
+                .read_with_root_check(&path, || panic!("missing file must not classify root"))
+                .unwrap()
+                .is_none()
+        );
+        path.create_dir_all().unwrap();
+        let result =
+            reader.read_with_root_check(&path, || panic!("failed read must not classify root"));
+        assert!(result.is_err());
+        assert_eq!(
+            format!("{result:?}"),
+            format!("{:?}", reader.read(&path, true))
+        );
+    }
+
     #[test]
     fn test_load_from_file_with_both_files_error_message() {
         let tmp_dir = tempdir().unwrap();
@@ -1181,7 +1251,7 @@ mod tests {
         turbo_jsonc_path.create_with_contents("{}").unwrap();
 
         // Test load_turbo_json_from_file with turbo.json path
-        let result = load_turbo_json_from_file(&reader, LoadTurboJsonPath::Dir(repo_root), true);
+        let result = load_turbo_json_from_file(&reader, LoadTurboJsonPath::Dir(repo_root), || true);
 
         // The function should return an error when both files exist
         assert!(result.is_err());
@@ -1513,6 +1583,13 @@ mod tests {
         loader.preload_all();
         assert!(matches!(loader.cache.get(&package), Ok(Some(None))));
         assert!(loader.load(&package).unwrap_err().is_no_turbo_json());
+        let Strategy::Workspace {
+            physical_repo_root, ..
+        } = &loader.strategy
+        else {
+            unreachable!();
+        };
+        assert!(physical_repo_root.get().is_none());
 
         // A cached absence must not read a newly created file, while a fresh
         // loader (as constructed by watch rebuilds) must see it.
