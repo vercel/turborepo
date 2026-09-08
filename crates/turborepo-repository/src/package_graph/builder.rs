@@ -393,7 +393,16 @@ where
             })
             .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
         self.package_manager.clone_from(&known_pm);
-        let lockfile_future = if self.load_lockfile && !is_single_package && self.lockfile.is_none()
+        // Per-workspace pnpm lockfiles reuse the graph's discovery result, so
+        // defer them until that result is available. Other lockfiles retain the
+        // eager concurrent read below.
+        let defer_lockfile_read = known_pm
+            .as_ref()
+            .is_some_and(|pm| pm.uses_pnpm_per_workspace_lockfiles(self.repo_root));
+        let lockfile_future = if self.load_lockfile
+            && !is_single_package
+            && self.lockfile.is_none()
+            && !defer_lockfile_read
         {
             if let (Some(pm), Some(root_package_json)) =
                 (known_pm.clone(), self.root_package_json.clone())
@@ -442,6 +451,10 @@ struct BuildState<'a, S, T> {
     load_lockfile: bool,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
+    /// JavaScript workspace manifests from the exact discovery result used to
+    /// build this graph. Per-workspace pnpm lockfile loading reuses these
+    /// paths.
+    workspace_package_jsons: Vec<AbsoluteSystemPathBuf>,
     state: std::marker::PhantomData<S>,
     /// The JavaScript contributor, kept typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
@@ -738,6 +751,7 @@ where
             load_lockfile,
             package_manager: None,
             package_jsons,
+            workspace_package_jsons: Vec::new(),
             root_package_json,
             state: std::marker::PhantomData,
             javascript,
@@ -841,6 +855,13 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         for (id, output) in contributor_outputs {
             let (packages, roots, external_resolutions, changes, prune_domains) =
                 output.into_parts();
+            if id == ToolchainId::JAVASCRIPT {
+                self.workspace_package_jsons.extend(
+                    packages
+                        .iter()
+                        .map(|package| package.manifest_path().to_owned()),
+                );
+            }
             self.native_external_resolutions
                 .extend(external_resolutions);
             self.native_change_observations.extend(changes);
@@ -907,6 +928,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             load_lockfile,
             package_manager,
+            workspace_package_jsons,
             javascript,
             extra_contributors,
             ..
@@ -926,6 +948,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             load_lockfile,
             package_manager,
+            workspace_package_jsons,
             javascript,
             extra_contributors,
             package_jsons: None,
@@ -1176,7 +1199,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                     .root_package_json
                     .as_ref()
                     .expect("JavaScript package manager requires a root package.json");
-                let lockfile = package_manager.read_lockfile(self.repo_root, root_package_json)?;
+                let lockfile = package_manager.read_lockfile_with_workspace_package_jsons(
+                    self.repo_root,
+                    root_package_json,
+                    Some(&self.workspace_package_jsons),
+                )?;
                 Ok(lockfile)
             }
         }
@@ -1268,6 +1295,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             load_lockfile,
             package_manager,
             package_jsons: None,
+            workspace_package_jsons: Vec::new(),
             state: std::marker::PhantomData,
             javascript,
             extra_contributors,

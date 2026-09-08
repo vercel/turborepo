@@ -1116,6 +1116,19 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
+        self.read_lockfile_with_workspace_package_jsons(root_path, root_package_json, None)
+    }
+
+    /// Reads the lockfile using already-discovered workspace manifests when
+    /// they are available. The paths must have the same membership
+    /// semantics as this package manager's workspace discovery.
+    #[tracing::instrument(skip(self, root_package_json, workspace_package_jsons))]
+    pub(crate) fn read_lockfile_with_workspace_package_jsons(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        root_package_json: &PackageJson,
+        workspace_package_jsons: Option<&[AbsoluteSystemPathBuf]>,
+    ) -> Result<Box<dyn Lockfile>, Error> {
         if let PackageManager::Nub { lockfile } = self {
             if lockfile.is_pnpm_family()
                 && let Some(native_lockfile) = nub::native_lockfile_path(root_path)
@@ -1138,9 +1151,11 @@ impl PackageManager {
         if matches!(
             self,
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-        ) && let Some(lockfile) =
-            self.try_read_pnpm_per_workspace_lockfiles(root_path, root_package_json)?
-        {
+        ) && let Some(lockfile) = self.try_read_pnpm_per_workspace_lockfiles(
+            root_path,
+            root_package_json,
+            workspace_package_jsons,
+        )? {
             return Ok(lockfile);
         }
 
@@ -1234,21 +1249,29 @@ impl PackageManager {
         }
     }
 
+    pub(crate) fn uses_pnpm_per_workspace_lockfiles(&self, root_path: &AbsoluteSystemPath) -> bool {
+        matches!(
+            self,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        ) && npmrc::NpmRc::from_file(root_path)
+            .inspect_err(|e| tracing::debug!("unable to read npmrc: {e}"))
+            .unwrap_or_default()
+            .shared_workspace_lockfile
+            == Some(false)
+    }
+
     /// When pnpm is configured with `shared-workspace-lockfile=false`, each
-    /// workspace gets its own `pnpm-lock.yaml`. This method reads and
-    /// merges them into a single lockfile. Returns `None` if shared
-    /// lockfile mode is active (the default).
+    /// workspace gets its own `pnpm-lock.yaml`. This method reads and merges
+    /// them into a single lockfile. `workspace_package_jsons`, when supplied,
+    /// must come from the same workspace discovery as graph construction.
+    /// Returns `None` if shared lockfile mode is active (the default).
     fn try_read_pnpm_per_workspace_lockfiles(
         &self,
         root_path: &AbsoluteSystemPath,
         _root_package_json: &PackageJson,
+        workspace_package_jsons: Option<&[AbsoluteSystemPathBuf]>,
     ) -> Result<Option<Box<dyn Lockfile>>, Error> {
-        let npmrc = npmrc::NpmRc::from_file(root_path)
-            .inspect_err(|e| tracing::debug!("unable to read npmrc: {e}"))
-            .unwrap_or_default();
-
-        // shared-workspace-lockfile defaults to true
-        if npmrc.shared_workspace_lockfile != Some(false) {
+        if !self.uses_pnpm_per_workspace_lockfiles(root_path) {
             return Ok(None);
         }
 
@@ -1264,31 +1287,43 @@ impl PackageManager {
 
         let mut lockfile = turborepo_lockfiles::PnpmLockfile::from_bytes(&root_contents)?;
 
-        // Discover workspace directories by finding all package.json files
-        let globs = self.get_workspace_globs(root_path)?;
-        let workspace_package_jsons: Vec<_> = globs.get_package_jsons(root_path)?.collect();
+        // Callers without a discovery result (for example, the shim) retain
+        // the standalone behavior. Graph construction supplies its already
+        // discovered paths, avoiding a second workspace walk.
+        let discovered_workspace_package_jsons;
+        let workspace_package_jsons = match workspace_package_jsons {
+            Some(paths) => paths,
+            None => {
+                let globs = self.get_workspace_globs(root_path)?;
+                discovered_workspace_package_jsons =
+                    globs.get_package_jsons(root_path)?.collect::<Vec<_>>();
+                &discovered_workspace_package_jsons
+            }
+        };
 
         let mut workspace_lockfile_data: Vec<(String, Vec<u8>)> = Vec::new();
-        for pkg_json_path in &workspace_package_jsons {
+        for pkg_json_path in workspace_package_jsons {
             let ws_dir = pkg_json_path.parent().expect("package.json has parent dir");
             let ws_lockfile_path = ws_dir.join_component(lockfile_name);
-            if ws_lockfile_path.exists() {
-                let relative_path = root_path
-                    .anchor(ws_dir)
-                    .expect("workspace is under repo root");
-                let unix_path = relative_path.to_unix();
-                let bytes = ws_lockfile_path.read().map_err(|e| {
+            let bytes = match ws_lockfile_path.read() {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
                     tracing::warn!(
                         "Failed to read per-workspace lockfile at {}: {}",
                         ws_lockfile_path,
-                        e
+                        error
                     );
-                    Error::Io(std::io::Error::other(format!(
+                    return Err(Error::Io(std::io::Error::other(format!(
                         "Failed to read {ws_lockfile_path}"
-                    )))
-                })?;
-                workspace_lockfile_data.push((unix_path.to_string(), bytes));
-            }
+                    ))));
+                }
+            };
+            let relative_path = root_path
+                .anchor(ws_dir)
+                .expect("workspace is under repo root");
+            let unix_path = relative_path.to_unix();
+            workspace_lockfile_data.push((unix_path.to_string(), bytes));
         }
 
         let refs: Vec<(&str, &[u8])> = workspace_lockfile_data
@@ -1582,6 +1617,66 @@ mod tests {
                 package_manager.name()
             );
         }
+    }
+
+    #[test]
+    fn per_workspace_pnpm_lockfiles_use_supplied_discovery_paths() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        repo_root
+            .join_component(npmrc::NPMRC_FILENAME)
+            .create_with_contents("shared-workspace-lockfile=false")?;
+        repo_root
+            .join_component(pnpm::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\nimporters:\n  .: {}\n")?;
+
+        // This path is deliberately absent from pnpm-workspace.yaml: success
+        // proves the supplied discovery result, rather than a fresh glob walk,
+        // determines which workspace lockfiles are read.
+        let workspace_manifest = repo_root.join_components(&["unlisted", "package.json"]);
+        workspace_manifest.ensure_dir()?;
+        workspace_manifest.create_with_contents(r#"{"name":"unlisted"}"#)?;
+        workspace_manifest
+            .parent()
+            .expect("package manifest has parent")
+            .join_component(pnpm::LOCKFILE)
+            .create_with_contents(
+                r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+snapshots:
+  is-number@6.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#,
+            )?;
+        let missing_lockfile_manifest = repo_root.join_components(&["missing", "package.json"]);
+        missing_lockfile_manifest.ensure_dir()?;
+        missing_lockfile_manifest.create_with_contents(r#"{"name":"missing"}"#)?;
+
+        let lockfile = PackageManager::Pnpm9.read_lockfile_with_workspace_package_jsons(
+            &repo_root,
+            &PackageJson::default(),
+            Some(&[workspace_manifest, missing_lockfile_manifest]),
+        )?;
+        assert_eq!(
+            lockfile
+                .resolve_package("unlisted", "is-odd", "^3.0.1")?
+                .expect("supplied workspace lockfile was merged")
+                .version,
+            "3.0.1"
+        );
+
+        Ok(())
     }
 
     #[test]

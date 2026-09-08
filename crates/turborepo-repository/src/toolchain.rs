@@ -311,6 +311,10 @@ impl DiscoveredPackage {
         self
     }
 
+    pub(crate) fn manifest_path(&self) -> &AbsoluteSystemPath {
+        &self.manifest_path
+    }
+
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
