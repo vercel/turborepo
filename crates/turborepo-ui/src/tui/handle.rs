@@ -24,10 +24,15 @@ impl TuiSender {
     /// AppSender is meant to be held by the actual task runner
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
+        Self::with_framerate(FRAMERATE)
+    }
+
+    fn with_framerate(framerate: std::time::Duration) -> (Self, AppReceiver) {
         let (primary_tx, primary_rx) = mpsc::unbounded_channel();
         let tick_sender = primary_tx.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(FRAMERATE);
+            let mut interval = tokio::time::interval(framerate);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 if tick_sender.send(Event::Tick).is_err() {
@@ -138,6 +143,40 @@ impl TuiSender {
         self.primary.send(Event::PaneSizeQuery(callback_tx)).ok()?;
         // Wait for callback to be sent
         callback_rx.await.ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    async fn ticks_per_second(framerate: Duration) -> usize {
+        let (_sender, mut receiver) = TuiSender::with_framerate(framerate);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut ticks = 0;
+        while matches!(receiver.primary.try_recv(), Ok(Event::Tick)) {
+            ticks += 1;
+        }
+        ticks
+    }
+
+    #[tokio::test]
+    #[ignore = "benchmark; run with cargo test -p turborepo-ui --features tui \
+                tick_cadence_is_bounded_to_60hz -- --ignored --nocapture"]
+    async fn tick_cadence_is_bounded_to_60hz() {
+        let old_ticks = ticks_per_second(Duration::from_millis(3)).await;
+        let ticks = ticks_per_second(FRAMERATE).await;
+        println!(
+            "3 ms cadence: {old_ticks} ticks/s; 16 ms cadence: {ticks} ticks/s; {:.1}x fewer",
+            old_ticks as f64 / ticks as f64
+        );
+        assert!(
+            old_ticks >= 300,
+            "3 ms cadence unexpectedly emitted {old_ticks} ticks"
+        );
+        assert!(ticks <= 64, "16 ms cadence emitted {ticks} ticks");
     }
 }
 

@@ -22,7 +22,8 @@ use turborepo_log::LogSink;
 
 use crate::tui::popup::{popup, popup_area};
 
-pub const FRAMERATE: Duration = Duration::from_millis(3);
+/// Maximum TUI render cadence. State changes still render on demand.
+pub const FRAMERATE: Duration = Duration::from_millis(16);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 const SELECTION_AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long the pane footer shows "Copied to clipboard" after a copy.
