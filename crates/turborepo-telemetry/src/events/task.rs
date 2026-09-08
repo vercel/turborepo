@@ -39,18 +39,11 @@ impl Identifiable for PackageTaskEventBuilder {
 
 impl EventBuilder for PackageTaskEventBuilder {
     fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.parent_id = Some(parent_event.get_id().clone());
         self
     }
 
     fn track(&self, event: Event) {
-        if crate::is_disabled() {
-            return;
-        }
-
         if self.is_ci && !event.send_in_ci {
             return;
         }
@@ -71,10 +64,6 @@ impl EventBuilder for PackageTaskEventBuilder {
     }
 
     fn child(&self) -> Self {
-        if crate::is_disabled() {
-            return Self::new("", "");
-        }
-
         // `package` and `task` are already obfuscated where required by
         // `new`; reuse them instead of re-deriving (re-hashing them would
         // also mislabel the child with double-hashed values).
@@ -90,16 +79,6 @@ impl EventBuilder for PackageTaskEventBuilder {
 
 impl PackageTaskEventBuilder {
     pub fn new(package: &str, task: &str) -> Self {
-        if crate::is_disabled() {
-            return Self {
-                id: String::new(),
-                package: String::new(),
-                task: String::new(),
-                parent_id: None,
-                is_ci: false,
-            };
-        }
-
         // don't obfuscate the package in development mode
         let package = if cfg!(debug_assertions) {
             package.to_string()
@@ -125,9 +104,6 @@ impl PackageTaskEventBuilder {
 
     // event methods
     pub fn track_framework(&self, framework: String) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "framework".to_string(),
             value: framework,
@@ -138,9 +114,6 @@ impl PackageTaskEventBuilder {
     }
 
     pub fn track_env_mode(&self, mode: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "env_mode".to_string(),
             value: mode.to_string(),
@@ -151,9 +124,6 @@ impl PackageTaskEventBuilder {
     }
 
     pub fn track_file_hash_method(&self, method: FileHashMethod) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "file_hash_method".to_string(),
             value: match method {
@@ -168,9 +138,6 @@ impl PackageTaskEventBuilder {
 
     // errors
     pub fn track_error(&self, error: TrackedErrors) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "error".to_string(),
             value: error.to_string(),

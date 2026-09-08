@@ -224,17 +224,7 @@ impl TurboJson {
         is_root: bool,
         future_flags: FutureFlags,
     ) -> Result<Option<TurboJson>, Error> {
-        Self::read_with_root_check(repo_root, path, || is_root, future_flags)
-    }
-
-    pub(crate) fn read_with_root_check(
-        repo_root: &AbsoluteSystemPath,
-        path: &AbsoluteSystemPath,
-        is_root: impl FnOnce() -> bool,
-        future_flags: FutureFlags,
-    ) -> Result<Option<TurboJson>, Error> {
-        let Some(raw_turbo_json) = RawTurboJson::read_with_root_check(repo_root, path, is_root)?
-        else {
+        let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path, is_root)? else {
             return Ok(None);
         };
 
