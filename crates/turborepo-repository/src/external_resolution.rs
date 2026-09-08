@@ -363,7 +363,7 @@ pub enum ExternalResolutionData {
 impl ExternalResolutionData {
     /// Finds a package resolution using the ordering established when a
     /// generation is built.
-    pub fn package_resolution(&self, package: &str) -> Option<&PackageResolution> {
+    pub(crate) fn package_resolution(&self, package: &str) -> Option<&PackageResolution> {
         let Self::Resolved { packages, .. } = self else {
             return None;
         };
@@ -855,6 +855,8 @@ pub(crate) fn compare_resolution_data(
 
 #[cfg(test)]
 mod tests {
+    use std::{hint::black_box, time::Instant};
+
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -985,6 +987,50 @@ mod tests {
                 .package_resolution("alpha"),
             None
         );
+    }
+
+    #[test]
+    #[ignore = "benchmark; run with cargo test --release -p turborepo-repository \
+                resolved_package_lookup_benchmark -- --ignored --nocapture"]
+    fn resolved_package_lookup_benchmark() {
+        for package_count in [100, 1_000, 5_000, 20_000] {
+            let data = resolved(
+                (0..package_count)
+                    .map(|index| PackageResolution::new(format!("package-{index:05}"), Vec::new()))
+                    .collect(),
+            );
+            let ExternalResolutionData::Resolved { packages, .. } = &data else {
+                unreachable!("resolved helper always returns resolved data");
+            };
+            let queries = (0..1_000)
+                .map(|index| format!("package-{:05}", index * package_count / 1_000))
+                .collect::<Vec<_>>();
+
+            let linear_started = Instant::now();
+            for package in &queries {
+                assert!(
+                    black_box(
+                        packages
+                            .iter()
+                            .find(|candidate| candidate.package() == package)
+                    )
+                    .is_some()
+                );
+            }
+            let linear_elapsed = linear_started.elapsed();
+
+            let binary_started = Instant::now();
+            for package in &queries {
+                assert!(black_box(data.package_resolution(package)).is_some());
+            }
+            let binary_elapsed = binary_started.elapsed();
+
+            println!(
+                "{package_count:>6} packages: linear {linear_elapsed:?}, binary \
+                 {binary_elapsed:?}, {:.1}x faster",
+                linear_elapsed.as_secs_f64() / binary_elapsed.as_secs_f64(),
+            );
+        }
     }
 
     #[test]
