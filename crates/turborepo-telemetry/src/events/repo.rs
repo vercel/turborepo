@@ -26,18 +26,11 @@ impl Identifiable for RepoEventBuilder {
 
 impl EventBuilder for RepoEventBuilder {
     fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.parent_id = Some(parent_event.get_id().clone());
         self
     }
 
     fn track(&self, event: Event) {
-        if crate::is_disabled() {
-            return;
-        }
-
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
@@ -60,15 +53,6 @@ impl EventBuilder for RepoEventBuilder {
 // events
 impl RepoEventBuilder {
     pub fn new(repo_identifier: &str) -> Self {
-        if crate::is_disabled() {
-            return Self {
-                id: String::new(),
-                repo: String::new(),
-                parent_id: None,
-                is_ci: false,
-            };
-        }
-
         Self {
             id: Uuid::new_v4().to_string(),
             repo: TelemetryConfig::one_way_hash(repo_identifier),
@@ -78,9 +62,6 @@ impl RepoEventBuilder {
     }
 
     pub fn track_package_manager(&self, name: String) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "package_manager".to_string(),
             value: name.to_string(),
@@ -91,9 +72,6 @@ impl RepoEventBuilder {
     }
 
     pub fn track_type(&self, repo_type: RepoType) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "repo_type".to_string(),
             value: match repo_type {
@@ -107,9 +85,6 @@ impl RepoEventBuilder {
     }
 
     pub fn track_size(&self, size: usize) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "workspace_count".to_string(),
             value: size.to_string(),

@@ -24,18 +24,11 @@ impl Identifiable for CommandEventBuilder {
 
 impl EventBuilder for CommandEventBuilder {
     fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.parent_id = Some(parent_event.get_id().clone());
         self
     }
 
     fn track(&self, event: Event) {
-        if crate::is_disabled() {
-            return;
-        }
-
         if self.is_ci && !event.send_in_ci {
             return;
         }
@@ -70,15 +63,6 @@ pub enum LoginMethod {
 
 impl CommandEventBuilder {
     pub fn new(command: &str) -> Self {
-        if crate::is_disabled() {
-            return Self {
-                id: String::new(),
-                command: String::new(),
-                parent_id: None,
-                is_ci: false,
-            };
-        }
-
         Self {
             id: Uuid::new_v4().to_string(),
             command: command.to_string(),
@@ -88,9 +72,6 @@ impl CommandEventBuilder {
     }
 
     pub fn track_call(&self) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "command".to_string(),
             value: "called".to_string(),
@@ -102,9 +83,6 @@ impl CommandEventBuilder {
 
     // args
     pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: format!("arg:{arg}"),
             value: if is_set { "set" } else { "default" }.to_string(),
@@ -115,9 +93,6 @@ impl CommandEventBuilder {
     }
 
     pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: format!("arg:{arg}"),
             value: val.to_string(),
@@ -129,9 +104,6 @@ impl CommandEventBuilder {
 
     // ui
     pub fn track_ui_mode(&self, val: impl Display) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "ui".to_string(),
             value: val.to_string(),
@@ -143,9 +115,6 @@ impl CommandEventBuilder {
 
     // telemetry
     pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "action".to_string(),
             value: if enabled { "enabled" } else { "disabled" }.to_string(),
@@ -157,9 +126,6 @@ impl CommandEventBuilder {
 
     // gen
     pub fn track_generator_option(&self, option: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "option".to_string(),
             value: option.to_string(),
@@ -170,9 +136,6 @@ impl CommandEventBuilder {
     }
 
     pub fn track_generator_tag(&self, tag: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "tag".to_string(),
             value: tag.to_string(),
@@ -184,9 +147,6 @@ impl CommandEventBuilder {
 
     // login
     pub fn track_login_method(&self, method: LoginMethod) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "method".to_string(),
             value: match method {
@@ -202,9 +162,6 @@ impl CommandEventBuilder {
 
     // Successful/Failed logins
     pub fn track_login_success(&self, succeeded: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "success".to_string(),
             value: succeeded.to_string(),

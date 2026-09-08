@@ -36,18 +36,11 @@ impl Identifiable for GenericEventBuilder {
 
 impl EventBuilder for GenericEventBuilder {
     fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.parent_id = Some(parent_event.get_id().clone());
         self
     }
 
     fn track(&self, event: Event) {
-        if crate::is_disabled() {
-            return;
-        }
-
         if self.is_ci && !event.send_in_ci {
             return;
         }
@@ -72,14 +65,6 @@ impl EventBuilder for GenericEventBuilder {
 
 impl Default for GenericEventBuilder {
     fn default() -> Self {
-        if crate::is_disabled() {
-            return Self {
-                id: String::new(),
-                parent_id: None,
-                is_ci: false,
-            };
-        }
-
         Self {
             id: Uuid::new_v4().to_string(),
             parent_id: None,
@@ -95,9 +80,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_start(&self) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "execution".to_string(),
             value: "started".to_string(),
@@ -108,9 +90,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_end(&self) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "execution".to_string(),
             value: "ended".to_string(),
@@ -121,9 +100,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_platform(&self, platform: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "platform".to_string(),
             value: platform.to_string(),
@@ -134,9 +110,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_cpus(&self, cpus: usize) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "cpu_count".to_string(),
             value: cpus.to_string(),
@@ -147,9 +120,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_version(&self, version: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "turbo_version".to_string(),
             value: version.to_string(),
@@ -161,9 +131,6 @@ impl GenericEventBuilder {
 
     // args
     pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: format!("arg:{arg}"),
             value: if is_set { "set" } else { "default" }.to_string(),
@@ -174,9 +141,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: format!("arg:{arg}"),
             value: val.to_string(),
@@ -188,9 +152,6 @@ impl GenericEventBuilder {
 
     // run data
     pub fn track_is_linked(&self, is_linked: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "is_linked".to_string(),
             value: if is_linked { "true" } else { "false" }.to_string(),
@@ -201,9 +162,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_remote_cache(&self, cache_url: &str) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "remote_cache_url".to_string(),
             value: cache_url.to_string(),
@@ -218,9 +176,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_ci(&self, ci: Option<&'static str>) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         if let Some(ci) = ci {
             self.track(Event {
                 key: "ci".to_string(),
@@ -234,9 +189,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_ai_agent(&self, agent: Option<&'static str>) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         if let Some(agent) = agent {
             self.track(Event {
                 key: "ai_agent".to_string(),
@@ -249,9 +201,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_run_type(&self, is_dry: bool) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "run_type".to_string(),
             value: if is_dry { "dry" } else { "full" }.to_string(),
@@ -262,9 +211,6 @@ impl GenericEventBuilder {
     }
 
     pub fn track_daemon_init(&self, status: DaemonInitStatus) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "daemon_status".to_string(),
             value: match status {
@@ -281,9 +227,6 @@ impl GenericEventBuilder {
 
     // errors
     pub fn track_error(&self, error: TrackedErrors) -> &Self {
-        if crate::is_disabled() {
-            return self;
-        }
         self.track(Event {
             key: "error".to_string(),
             value: error.to_string(),

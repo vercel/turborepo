@@ -844,16 +844,6 @@ pub struct Any<'t> {
 }
 
 impl<'t> Any<'t> {
-    /// Clones borrowed token text into an owning combinator without recompiling
-    /// its regex. Useful when combining dynamically constructed expressions.
-    pub fn into_owned(self) -> Any<'static> {
-        let Any { tree, program } = self;
-        Any {
-            tree: tree.into_owned(),
-            program,
-        }
-    }
-
     fn compile(token: &Token<'t, ()>) -> Result<Regex, CompileError> {
         encode::compile([token])
     }
@@ -1096,23 +1086,6 @@ mod tests {
         );
         assert_eq!(crate::escape("左{}右"), "左\\{\\}右");
         assert_eq!(crate::escape("*中*"), "\\*中\\*");
-    }
-
-    #[test]
-    fn owned_any_outlives_source_expressions() {
-        let owned = {
-            let expressions = [String::from("packages/*"), String::from("工具/**")];
-            crate::any(expressions.iter().map(String::as_str))
-                .unwrap()
-                .into_owned()
-        };
-        assert!(owned.is_match("packages/web"));
-        assert!(owned.is_match("工具/猫/file"));
-        assert!(!owned.is_match("apps/web"));
-        // The owned token tree must remain usable by another combinator.
-        let nested = crate::any([owned]).unwrap();
-        assert!(nested.is_match("工具/猫/file"));
-        assert!(!nested.is_match("apps/web"));
     }
 
     #[test]
