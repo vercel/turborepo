@@ -18,6 +18,13 @@ impl<T> Debouncer<T> {
         }
     }
 
+    /// Returns the deadline at which [`Self::query`] will yield the pending
+    /// value, if any.
+    #[must_use]
+    pub fn deadline(&self) -> Option<Instant> {
+        self.start.map(|start| start + self.duration)
+    }
+
     /// Returns a value if debouncer duration has elapsed.
     #[must_use]
     pub fn query(&mut self) -> Option<T> {

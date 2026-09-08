@@ -2,7 +2,6 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::{
     Error, Event, TaskResult,
-    app::FRAMERATE,
     event::{CacheResult, OutputLogs, PaneSize},
 };
 use crate::sender::{TaskSender, UISender};
@@ -24,30 +23,8 @@ impl TuiSender {
     /// AppSender is meant to be held by the actual task runner
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
-        Self::with_framerate(FRAMERATE)
-    }
-
-    fn with_framerate(framerate: std::time::Duration) -> (Self, AppReceiver) {
-        let (primary_tx, primary_rx) = mpsc::unbounded_channel();
-        let tick_sender = primary_tx.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(framerate);
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                interval.tick().await;
-                if tick_sender.send(Event::Tick).is_err() {
-                    break;
-                }
-            }
-        });
-        (
-            Self {
-                primary: primary_tx,
-            },
-            AppReceiver {
-                primary: primary_rx,
-            },
-        )
+        let (primary, receiver) = mpsc::unbounded_channel();
+        (Self { primary }, AppReceiver { primary: receiver })
     }
 }
 
