@@ -360,6 +360,20 @@ pub enum ExternalResolutionData {
     Unavailable(ResolutionUnavailableReason),
 }
 
+impl ExternalResolutionData {
+    /// Finds a package resolution using the ordering established when a
+    /// generation is built.
+    pub fn package_resolution(&self, package: &str) -> Option<&PackageResolution> {
+        let Self::Resolved { packages, .. } = self else {
+            return None;
+        };
+        packages
+            .binary_search_by(|candidate| candidate.package().cmp(package))
+            .ok()
+            .map(|index| &packages[index])
+    }
+}
+
 /// Resolution knowledge available to package-scoped consumers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackageResolutionState {
@@ -940,6 +954,37 @@ mod tests {
         assert_eq!(declaration.package_name(), "package");
         assert_eq!(declaration.specifier(), "1.0.0");
         assert_eq!(declaration.kind(), DependencyKind::Production);
+    }
+
+    #[test]
+    fn resolved_package_lookup_uses_sorted_package_names() {
+        let data = resolved(vec![
+            PackageResolution::new("alpha", Vec::new()),
+            PackageResolution::new("middle", Vec::new()),
+            PackageResolution::new("zebra", Vec::new()),
+        ]);
+
+        assert_eq!(
+            data.package_resolution("alpha")
+                .map(PackageResolution::package),
+            Some("alpha")
+        );
+        assert_eq!(
+            data.package_resolution("middle")
+                .map(PackageResolution::package),
+            Some("middle")
+        );
+        assert_eq!(
+            data.package_resolution("zebra")
+                .map(PackageResolution::package),
+            Some("zebra")
+        );
+        assert_eq!(data.package_resolution("missing"), None);
+        assert_eq!(
+            ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new("missing", ""))
+                .package_resolution("alpha"),
+            None
+        );
     }
 
     #[test]
