@@ -140,7 +140,8 @@ impl NodeMembership {
         self.members
             .iter()
             .enumerate()
-            .filter_map(|(index, &member)| member.then(|| NodeIndex::new(index)))
+            .filter(|&(_, &member)| member)
+            .map(|(index, _)| NodeIndex::new(index))
     }
 }
 
@@ -1090,52 +1091,6 @@ mod affected_tasks_tests {
         assert!(!membership.insert(NodeIndex::new(graph.node_bound())));
         assert!(!membership.contains(NodeIndex::new(graph.node_bound())));
         assert_eq!(membership.iter().collect::<Vec<_>>(), vec![last]);
-    }
-
-    #[test]
-    #[ignore = "Release benchmark for TURBO-5979"]
-    fn node_membership_insertion_and_contains_benchmark() {
-        use std::{hint::black_box, time::Instant};
-
-        const NODE_COUNTS: &[usize] = &[100, 1_000, 10_000, 100_000];
-        const ITERATIONS: usize = 100;
-
-        for &node_count in NODE_COUNTS {
-            let mut graph = Graph::<TaskNode, ()>::with_capacity(node_count, 0);
-            let nodes: Vec<_> = (0..node_count)
-                .map(|_| graph.add_node(TaskNode::Root))
-                .collect();
-
-            let baseline_start = Instant::now();
-            for _ in 0..ITERATIONS {
-                let mut members = HashSet::with_capacity(node_count);
-                for &node in &nodes {
-                    black_box(members.insert(black_box(node)));
-                }
-                for &node in &nodes {
-                    black_box(members.contains(black_box(&node)));
-                }
-            }
-            let baseline_elapsed = baseline_start.elapsed();
-
-            let membership_start = Instant::now();
-            for _ in 0..ITERATIONS {
-                let mut members = NodeMembership::for_graph(&graph);
-                for &node in &nodes {
-                    black_box(members.insert(black_box(node)));
-                }
-                for &node in &nodes {
-                    black_box(members.contains(black_box(node)));
-                }
-            }
-            let membership_elapsed = membership_start.elapsed();
-
-            let speedup = baseline_elapsed.as_secs_f64() / membership_elapsed.as_secs_f64();
-            println!(
-                "{node_count:>7} nodes: HashSet {baseline_elapsed:?}, NodeMembership \
-                 {membership_elapsed:?}, {speedup:.2}x speedup"
-            );
-        }
     }
 
     #[test]
