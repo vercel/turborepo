@@ -288,6 +288,10 @@ impl RepositoryKnowledge {
         observations: &[PackageScopeObservation],
         workspace_root_observations: &[WorkspaceRootObservation],
     ) -> Result<Self, Error> {
+        // Physical identity is a snapshot for this build. Reuse the root and
+        // each manifest's resolution for containment and duplicate detection
+        // instead of walking the same filesystem paths for both checks.
+        let physical_repository_root = canonical_physical_path(repository_root.as_std_path());
         let root_definition_path = AnchoredSystemPathBuf::from_raw("package.json")?;
         let root_javascript_scope =
             root_javascript_name.map(|user_facing_name| RootJavaScriptScope {
@@ -304,8 +308,11 @@ impl RepositoryKnowledge {
         let mut definitions = HashMap::<String, AnchoredSystemPathBuf>::new();
         let mut definition_owners =
             HashMap::<std::path::PathBuf, (String, ToolchainId, ScopeKind)>::new();
-        let workspace_roots =
-            validate_workspace_roots(repository_root, workspace_root_observations)?;
+        let workspace_roots = validate_workspace_roots(
+            repository_root,
+            physical_repository_root.as_deref(),
+            workspace_root_observations,
+        )?;
 
         for observation in observations {
             if !workspace_roots
@@ -319,7 +326,14 @@ impl RepositoryKnowledge {
         }
 
         for observation in observations {
-            if !path_is_contained(repository_root, &observation.definition_path) {
+            let physical_definition_path =
+                canonical_physical_path(observation.definition_path.as_std_path());
+            if !path_is_contained(
+                repository_root,
+                &observation.definition_path,
+                physical_repository_root.as_deref(),
+                physical_definition_path.as_deref(),
+            ) {
                 return Err(Error::DefinitionOutsideRepository {
                     path: observation.definition_path.clone(),
                     repository_root: repository_root.to_owned(),
@@ -332,9 +346,8 @@ impl RepositoryKnowledge {
                 repository_root,
                 &observation.definition_path,
             );
-            let physical_definition_path =
-                canonical_physical_path(observation.definition_path.as_std_path())
-                    .unwrap_or_else(|| observation.definition_path.as_std_path().to_owned());
+            let physical_definition_path = physical_definition_path
+                .unwrap_or_else(|| observation.definition_path.as_std_path().to_owned());
             if identity == "//" {
                 return Err(Error::ReservedRootIdentity {
                     path: definition_path,
@@ -404,6 +417,7 @@ impl RepositoryKnowledge {
 
 fn validate_workspace_roots(
     repository_root: &AbsoluteSystemPath,
+    physical_repository_root: Option<&std::path::Path>,
     observations: &[WorkspaceRootObservation],
 ) -> Result<Vec<WorkspaceRootKnowledge>, Error> {
     let mut accepted =
@@ -411,7 +425,17 @@ fn validate_workspace_roots(
     let mut roots = Vec::with_capacity(observations.len());
 
     for observation in observations {
-        if !path_is_contained(repository_root, observation.path()) {
+        let physical_path = if observation.path() == repository_root {
+            physical_repository_root.map(std::path::Path::to_owned)
+        } else {
+            canonical_physical_path(observation.path().as_std_path())
+        };
+        if !path_is_contained(
+            repository_root,
+            observation.path(),
+            physical_repository_root,
+            physical_path.as_deref(),
+        ) {
             return Err(Error::WorkspaceRootOutsideRepository {
                 kind: observation.kind().to_string(),
                 path: observation.path().to_owned(),
@@ -423,8 +447,8 @@ fn validate_workspace_roots(
         if anchored_path.as_str() == "." {
             anchored_path = AnchoredSystemPathBuf::default();
         }
-        let physical_path = canonical_physical_path(observation.path().as_std_path())
-            .unwrap_or_else(|| observation.path().as_std_path().to_owned());
+        let physical_path =
+            physical_path.unwrap_or_else(|| observation.path().as_std_path().to_owned());
         if let Some((accepted_kind, accepted_physical_path, accepted_path)) =
             accepted.get(&observation.producer)
         {
@@ -460,15 +484,14 @@ fn validate_workspace_roots(
 fn path_is_contained(
     repository_root: &AbsoluteSystemPath,
     definition_path: &AbsoluteSystemPath,
+    physical_repository_root: Option<&std::path::Path>,
+    physical_definition_path: Option<&std::path::Path>,
 ) -> bool {
     if !repository_root.contains(definition_path) {
         return false;
     }
 
-    match (
-        canonical_physical_path(repository_root.as_std_path()),
-        canonical_physical_path(definition_path.as_std_path()),
-    ) {
+    match (physical_repository_root, physical_definition_path) {
         (Some(repository_root), Some(definition_path)) => {
             definition_path.starts_with(repository_root)
         }
@@ -477,6 +500,12 @@ fn path_is_contained(
 }
 
 fn canonical_physical_path(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    // Discovery normally supplies existing manifests. Canonicalization already
+    // checks existence, so don't issue a separate metadata lookup first.
+    if let Ok(canonical) = dunce::canonicalize(path) {
+        return Some(canonical);
+    }
+
     let mut existing = path.to_owned();
     let mut missing = Vec::new();
     while !existing.exists() {
@@ -772,6 +801,86 @@ mod tests {
         );
 
         assert!(matches!(result, Err(Error::DuplicateDefinitionPath { .. })));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn physical_identity_checks_follow_symlinks_on_each_build() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let inside = root.join_component("inside");
+        inside.create_dir_all().unwrap();
+        inside
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("package.json"), "{}").unwrap();
+        let alias = root.join_component("alias");
+        std::os::unix::fs::symlink(inside.as_std_path(), alias.as_std_path()).unwrap();
+        let roots = [WorkspaceRootObservation::new(
+            WorkspaceRoot::new("npm", root.clone()),
+            ToolchainId::JAVASCRIPT,
+        )];
+        let observations = [PackageScopeObservation {
+            identity: Some("app".to_string()),
+            name_source: None,
+            definition_path: alias.join_component("package.json"),
+            toolchain: ToolchainId::JAVASCRIPT,
+            scope_kind: ScopeKind::Package,
+        }];
+        assert!(RepositoryKnowledge::build(&root, None, &observations, &roots).is_ok());
+
+        std::fs::remove_file(alias.as_std_path()).unwrap();
+        std::os::unix::fs::symlink(outside.path(), alias.as_std_path()).unwrap();
+        assert!(matches!(
+            RepositoryKnowledge::build(&root, None, &observations, &roots),
+            Err(Error::DefinitionOutsideRepository { .. })
+        ));
+        // Missing files still resolve their existing symlinked parent for containment.
+        std::fs::remove_file(outside.path().join("package.json")).unwrap();
+        assert!(matches!(
+            RepositoryKnowledge::build(&root, None, &observations, &roots),
+            Err(Error::DefinitionOutsideRepository { .. })
+        ));
+        let outside_roots = [WorkspaceRootObservation::new(
+            WorkspaceRoot::new("npm", alias),
+            ToolchainId::JAVASCRIPT,
+        )];
+        assert!(matches!(
+            RepositoryKnowledge::build(&root, None, &[], &outside_roots),
+            Err(Error::WorkspaceRootOutsideRepository { .. })
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn physical_identity_detects_non_root_manifest_aliases() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let manifest = root.join_component("package.json");
+        manifest.create_with_contents("{}").unwrap();
+        let alias = root.join_component("alias.json");
+        std::os::unix::fs::symlink(manifest.as_std_path(), alias.as_std_path()).unwrap();
+        let observations = [manifest, alias]
+            .into_iter()
+            .enumerate()
+            .map(|(i, path)| PackageScopeObservation {
+                identity: Some(format!("app{i}")),
+                name_source: None,
+                definition_path: path,
+                toolchain: ToolchainId::JAVASCRIPT,
+                scope_kind: ScopeKind::Package,
+            })
+            .collect::<Vec<_>>();
+        let roots = [WorkspaceRootObservation::new(
+            WorkspaceRoot::new("npm", root.clone()),
+            ToolchainId::JAVASCRIPT,
+        )];
+        assert!(matches!(
+            RepositoryKnowledge::build(&root, None, &observations, &roots),
+            Err(Error::DuplicateDefinitionPath { .. })
+        ));
     }
 
     #[test]
