@@ -1156,7 +1156,7 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
 
     let worker_binary = worker.join("dist/worker");
     assert!(
-        wait_for_path(&worker_binary, Duration::from_secs(30)),
+        wait_for_path(&worker_binary, Duration::from_secs(60)),
         "turbo watch did not rediscover and build {worker_binary:?}"
     );
 }

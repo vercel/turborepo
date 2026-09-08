@@ -1206,13 +1206,21 @@ mod tests {
         assert_eq!(checks.get(), expected_checks);
         // Compare against independently read/parsed candidates to retain the
         // exact selection and diagnostic behavior, including invalid siblings.
+        // Parse errors capture backtraces, so compare their stable diagnostics
+        // rather than the call-site-dependent backtrace frames.
         let expected = select_turbo_json(
             repo_root,
             reader.read(&repo_root.join_component(CONFIG_FILE), true),
             reader.read(&repo_root.join_component(CONFIG_FILE_JSONC), true),
         )
         .and_then(|config| config.ok_or(Error::NoTurboJSON));
-        assert_eq!(format!("{result:?}"), format!("{expected:?}"));
+        let comparable = |result: Result<TurboJson, Error>| {
+            result.map_err(|error| match error {
+                Error::Parse(error) => format!("{:?}", error.diagnostics),
+                error => format!("{error:?}"),
+            })
+        };
+        assert_eq!(comparable(result), comparable(expected));
     }
 
     #[test]
