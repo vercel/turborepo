@@ -132,6 +132,22 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
         }
     };
 
+    // Most patterns already use standalone, non-consecutive globstars. None
+    // of the rewrites below can match those patterns (or patterns without a
+    // globstar), so avoid initializing their Unicode regexes on the common
+    // startup path. Ambiguous forms still use the original rewrites.
+    let mut previous_globstar = false;
+    let needs_rewrite = p0.split('/').any(|component| {
+        let globstar = component == "**";
+        let needs_rewrite =
+            (globstar && previous_globstar) || (!globstar && component.contains("**"));
+        previous_globstar = globstar;
+        needs_rewrite
+    });
+    if !needs_rewrite {
+        return p0;
+    }
+
     // Chain regex replacements, taking advantage of Cow<str>:
     // - If no match, replace() returns Cow::Borrowed pointing to the input
     // - If match, replace() returns Cow::Owned with the replacement
@@ -1319,6 +1335,62 @@ mod test {
     fn test_fix_glob_pattern(input: &str, expected: &str) {
         let output = fix_glob_pattern(input);
         assert_eq!(output.as_ref(), expected);
+    }
+
+    #[test]
+    fn glob_normalization_fast_path_matches_original_rewrites() {
+        let collapse = regex::Regex::new(r"\*\*(?:/\*\*)+").unwrap();
+        let suffix = regex::Regex::new(r"\*\*(?P<suffix>[^*/]+)").unwrap();
+        let prefix = regex::Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap();
+        let check = |input: &str| {
+            #[cfg(not(windows))]
+            let normalized = std::borrow::Cow::Borrowed(input);
+            #[cfg(windows)]
+            let normalized = {
+                use path_slash::PathExt;
+                let converted = std::path::Path::new(input).to_slash().unwrap();
+                if (input.ends_with('/') || input.ends_with('\\')) && !converted.ends_with('/') {
+                    std::borrow::Cow::Owned(format!("{converted}/"))
+                } else {
+                    converted
+                }
+            };
+            let first = collapse.replace(&normalized, "**");
+            let second = suffix.replace(&first, "**/*$suffix");
+            let expected = prefix.replace(&second, "$prefix*/**");
+            assert_eq!(fix_glob_pattern(input), expected, "{input:?}");
+        };
+        for input in [
+            "",
+            "packages/*",
+            "**/node_modules/**",
+            "**//**",
+            "***x",
+            "x***",
+            "**/**/**",
+            "***/*/**",
+            "é**猫",
+            "**\n**",
+            r"packages\**\src\*",
+            "**{a,b}/[xy]/**",
+            "a**/b**/**c",
+            "packages/**/",
+        ] {
+            check(input);
+        }
+        // Exhaustive short inputs include overlapping globstars and Unicode
+        // boundaries, where a too-permissive fast path could skip a rewrite.
+        let alphabet = ["*", "/", "a", "猫"];
+        for len in 0..=7u32 {
+            for mut code in 0..4usize.pow(len) {
+                let mut input = String::new();
+                for _ in 0..len {
+                    input.push_str(alphabet[code % 4]);
+                    code /= 4;
+                }
+                check(&input);
+            }
+        }
     }
 
     #[test]
