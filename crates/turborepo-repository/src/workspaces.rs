@@ -79,6 +79,24 @@ fn any_with_contextual_error(
     })
 }
 
+fn compile_directory_globs(raw: &[String]) -> Result<Any<'static>, Error> {
+    let fixed: Vec<_> = raw
+        .iter()
+        .map(|pattern| fix_glob_pattern(pattern))
+        .collect();
+    match wax::any(fixed.iter().map(|pattern| pattern.as_ref())) {
+        Ok(combined) => Ok(combined.into_owned()),
+        Err(_) => {
+            // Preserve per-expression validation and error context on failure.
+            let globs = raw
+                .iter()
+                .map(glob_with_contextual_error)
+                .collect::<Result<Vec<_>, _>>()?;
+            any_with_contextual_error(globs, raw.to_vec())
+        }
+    }
+}
+
 impl WorkspaceGlobs {
     pub fn new<S: Into<String>>(inclusions: Vec<S>, exclusions: Vec<S>) -> Result<Self, Error> {
         // take ownership of the inputs
@@ -102,27 +120,18 @@ impl WorkspaceGlobs {
             .into_iter()
             .map(|s| s.into())
             .collect::<Vec<String>>();
-        let inclusion_globs = raw_inclusions
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusion_globs = raw_exclusions
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, _>>()?;
+        // `wax::any` accepts expressions directly: compiling each Glob first
+        // builds regexes which the combinator immediately discards. Only compile
+        // the combined matcher on the successful path.
+        let directory_inclusions = compile_directory_globs(&raw_inclusions)?;
+        let directory_exclusions = compile_directory_globs(&raw_exclusions)?;
         let validated_exclusions = raw_exclusions
             .iter()
             .map(|e| ValidatedGlob::from_str(e))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            directory_inclusions: any_with_contextual_error(
-                inclusion_globs,
-                raw_inclusions.clone(),
-            )?,
-            directory_exclusions: any_with_contextual_error(
-                exclusion_globs,
-                raw_exclusions.clone(),
-            )?,
+            directory_inclusions,
+            directory_exclusions,
             package_json_inclusions,
             validated_exclusions,
             raw_exclusions,
@@ -212,6 +221,71 @@ impl WorkspaceGlobs {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn combined_directory_globs_match_precompiled_globs() {
+        for patterns in [
+            vec![],
+            vec!["packages/*"],
+            vec!["apps/*", "packages/**", "tools/{cli,web}"],
+            vec!["**/node_modules/**", "**/.git", "**/.yarn"],
+            vec!["пакеты/?", "apps/[a-z]*", "**foo"],
+            vec![".", "packages/", "literal\\*"],
+        ] {
+            let raw: Vec<String> = patterns.iter().map(|s| s.to_string()).collect();
+            let old = any_with_contextual_error(
+                raw.iter()
+                    .map(glob_with_contextual_error)
+                    .collect::<Result<_, _>>()
+                    .unwrap(),
+                raw.clone(),
+            )
+            .unwrap();
+            let new = compile_directory_globs(&raw).unwrap();
+            for path in [
+                "",
+                ".",
+                "packages",
+                "packages/",
+                "packages/web",
+                "packages/a/b",
+                "apps/cli",
+                "tools/web",
+                "пакеты/猫",
+                "x/node_modules/pkg",
+                "node_modules/",
+                ".git",
+                "foo",
+                "afoo",
+                "literal*",
+                "apps/a\nb",
+            ] {
+                assert_eq!(
+                    new.is_match(path),
+                    old.is_match(path),
+                    "{patterns:?}: {path:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn combined_directory_globs_preserve_errors() {
+        for pattern in ["[", "{a,", "packages/**/**", "<a:0,0>"] {
+            let raw = vec!["packages/*".to_string(), pattern.to_string()];
+            let old = raw
+                .iter()
+                .map(glob_with_contextual_error)
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|globs| any_with_contextual_error(globs, raw.clone()));
+            let new = compile_directory_globs(&raw);
+            assert_eq!(
+                new.as_ref().err().map(ToString::to_string),
+                old.as_ref().err().map(ToString::to_string),
+                "{pattern}"
+            );
+        }
+    }
 
     #[test]
     fn test_workspace_globs_trailing_slash() {
