@@ -1032,6 +1032,28 @@ impl PackageManager {
     }
 
     pub fn parse_package_manager_string(manager: &Spanned<String>) -> Result<(&str, &str), Error> {
+        // Most invocations have a plain numeric version here. Avoid compiling
+        // the Unicode regex (including its large digit tables) on the startup
+        // path. This accepts only a subset of the legacy pattern; everything
+        // else still goes through it, preserving validation and diagnostics.
+        if let Some((name, version)) = manager.split_once('@')
+            && matches!(name, "aube" | "bun" | "npm" | "nub" | "pnpm" | "yarn")
+        {
+            let mut components = version.split('.');
+            let numeric = |part: Option<&str>| {
+                part.is_some_and(|part| {
+                    !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+                })
+            };
+            if numeric(components.next())
+                && numeric(components.next())
+                && numeric(components.next())
+                && components.next().is_none()
+            {
+                return Ok((name, version));
+            }
+        }
+
         let package_manager_pattern = regex!(
             r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
         );
@@ -1739,6 +1761,53 @@ mod tests {
 
             assert_eq!(received_manager, case.expected_manager);
             assert_eq!(received_version, case.expected_version);
+        }
+    }
+
+    #[test]
+    fn package_manager_fast_path_preserves_legacy_parser() {
+        let legacy = regex::Regex::new(
+            r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z",
+        )
+        .unwrap();
+        for name in ["npm", "pnpm", "yarn", "bun", "nub", "aube", "pip", " npm"] {
+            for version in [
+                "1.2.3",
+                "0.0.0",
+                "10.20.30",
+                "1.2.3-alpha.1+sha512.abc",
+                "01.02.03",
+                "99999999999999999999999.2.3",
+                "١.٢.٣",
+                "1.2.3-01",
+                "1.2.3-.",
+                "1.2.3+..",
+                "1.2.3-",
+                "1.2.3+",
+                "1.2",
+                "latest",
+                "v1.2.3",
+                "1.2.3\n",
+                "1.2.3suffix",
+                "https://example.com/a@b",
+                "http://例.example/x",
+                "https://",
+                "https://example.com/\u{a0}",
+                "https://example.com/\n",
+            ] {
+                let input = Spanned::new(format!("{name}@{version}"));
+                let expected = legacy.captures(&input).map(|captures| {
+                    (
+                        captures.name("manager").unwrap().as_str(),
+                        captures.name("version").unwrap().as_str(),
+                    )
+                });
+                assert_eq!(
+                    PackageManager::parse_package_manager_string(&input).ok(),
+                    expected,
+                    "{input:?}"
+                );
+            }
         }
     }
 
