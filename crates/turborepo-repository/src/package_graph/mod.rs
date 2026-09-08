@@ -1197,13 +1197,9 @@ impl PackageGraph {
                         .and_then(|generation| generation.domain(domain_id))
                         .map_or(PackageResolutionState::Missing, |domain| {
                             match domain.data() {
-                                ExternalResolutionData::Resolved {
-                                    completeness,
-                                    packages,
-                                    ..
-                                } => packages
-                                    .iter()
-                                    .find(|package| package.package() == context.package().as_str())
+                                ExternalResolutionData::Resolved { completeness, .. } => domain
+                                    .data()
+                                    .package_resolution(context.package().as_str())
                                     .and_then(|package| package.fingerprint())
                                     .map_or(PackageResolutionState::Missing, |fingerprint| {
                                         PackageResolutionState::Resolved {
