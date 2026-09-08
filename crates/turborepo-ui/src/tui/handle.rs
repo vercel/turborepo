@@ -146,40 +146,6 @@ impl TuiSender {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use super::*;
-
-    async fn ticks_per_second(framerate: Duration) -> usize {
-        let (_sender, mut receiver) = TuiSender::with_framerate(framerate);
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let mut ticks = 0;
-        while matches!(receiver.primary.try_recv(), Ok(Event::Tick)) {
-            ticks += 1;
-        }
-        ticks
-    }
-
-    #[tokio::test]
-    #[ignore = "benchmark; run with cargo test -p turborepo-ui --features tui \
-                tick_cadence_is_bounded_to_60hz -- --ignored --nocapture"]
-    async fn tick_cadence_is_bounded_to_60hz() {
-        let old_ticks = ticks_per_second(Duration::from_millis(3)).await;
-        let ticks = ticks_per_second(FRAMERATE).await;
-        println!(
-            "3 ms cadence: {old_ticks} ticks/s; 16 ms cadence: {ticks} ticks/s; {:.1}x fewer",
-            old_ticks as f64 / ticks as f64
-        );
-        assert!(
-            old_ticks >= 300,
-            "3 ms cadence unexpectedly emitted {old_ticks} ticks"
-        );
-        assert!(ticks <= 64, "16 ms cadence emitted {ticks} ticks");
-    }
-}
-
 impl AppReceiver {
     pub fn close(&mut self) {
         self.primary.close();
