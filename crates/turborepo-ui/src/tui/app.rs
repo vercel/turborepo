@@ -22,7 +22,8 @@ use turborepo_log::LogSink;
 
 use crate::tui::popup::{popup, popup_area};
 
-pub const FRAMERATE: Duration = Duration::from_millis(3);
+/// Maximum TUI render cadence. State changes still render on demand.
+pub const FRAMERATE: Duration = Duration::from_millis(16);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 const SELECTION_AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long the pane footer shows "Copied to clipboard" after a copy.
@@ -1343,82 +1344,102 @@ async fn run_app_inner(
     let mut callback = None;
     let mut needs_rerender = true;
 
-    while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
-        // Check if we need to start the terminal (on first cache miss). The
-        // first activation always enters the TUI (the default mode).
-        if *display == DisplayState::Inactive && should_start_terminal(&event) {
-            if !*raw_mode_enabled {
-                enable_input(color_config, terminal_sink)?;
-                *raw_mode_enabled = true;
+    while let Some(polled) = poll(
+        app.input_options()?,
+        &mut receiver,
+        &mut crossterm_rx,
+        next_deadline(
+            app,
+            &resize_debouncer,
+            *display,
+            needs_rerender,
+            last_render,
+        ),
+    )
+    .await
+    {
+        let now = Instant::now();
+        if matches!(polled, PollResult::Deadline) {
+            if app.tick_selection_autoscroll(now)? {
+                needs_rerender = true;
             }
-            enter_alt_screen(terminal)?;
-            *display = DisplayState::Tui;
-            // Render initial state to paint the screen
-            if let Some(terminal) = terminal.as_mut() {
-                terminal.draw(|f| view(app, f))?;
+            if app.clear_expired_clipboard_notice() {
+                needs_rerender = true;
             }
-            last_render = Instant::now();
         }
 
-        // Toggling between TUI and streamed logs has terminal/sink side effects
-        // that must happen here (not in `update`, which only mutates `App`).
-        if let Event::ToggleStream { scope } = &event {
-            handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
-            last_render = Instant::now();
-            continue;
-        }
+        if let PollResult::Event(event) = polled {
+            // Check if we need to start the terminal (on first cache miss). The
+            // first activation always enters the TUI (the default mode).
+            if *display == DisplayState::Inactive && should_start_terminal(&event) {
+                if !*raw_mode_enabled {
+                    enable_input(color_config, terminal_sink)?;
+                    *raw_mode_enabled = true;
+                }
+                enter_alt_screen(terminal)?;
+                *display = DisplayState::Tui;
+                // Render initial state to paint the screen
+                if let Some(terminal) = terminal.as_mut() {
+                    terminal.draw(|f| view(app, f))?;
+                }
+                last_render = Instant::now();
+            }
 
-        // If we only receive ticks, then there's been no state change so no update
-        // needed
-        if !matches!(event, Event::Tick) {
+            // Toggling between TUI and streamed logs has terminal/sink side effects
+            // that must happen here (not in `update`, which only mutates `App`).
+            if let Event::ToggleStream { scope } = &event {
+                handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
+                last_render = Instant::now();
+                continue;
+            }
+
             needs_rerender = true;
+            let mut event = Some(event);
+            let mut resize_event = None;
+            if matches!(event, Some(Event::Resize { .. }))
+                && let Some(event) = event.take()
+            {
+                resize_event = resize_debouncer.update(event);
+            }
+            if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
+                // If we got a resize event, make sure to update ratatui backend even
+                // while streaming, so the view is correct when we return to the TUI.
+                if let Some(term) = terminal.as_mut() {
+                    term.autoresize()?;
+                }
+                update(app, resize, interrupt)?;
+            }
+            if let Some(event) = event {
+                callback = update(app, event, interrupt)?;
+                if callback.is_some() {
+                    drain_after_stop(terminal, *display, app, &mut receiver, &mut last_render)
+                        .await?;
+                    break;
+                }
+                if app.done {
+                    break;
+                }
+            }
         }
 
-        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
-            needs_rerender = true;
-        }
-
-        // The "Copied to clipboard" notice expires on its own, so ticks must
-        // trigger a rerender when it does.
-        if app.clear_expired_clipboard_notice() {
-            needs_rerender = true;
-        }
-
-        let mut event = Some(event);
-        let mut resize_event = None;
-        if matches!(event, Some(Event::Resize { .. }))
-            && let Some(event) = event.take()
-        {
-            resize_event = resize_debouncer.update(event);
-        }
-        if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
-            // If we got a resize event, make sure to update ratatui backend even
-            // while streaming, so the view is correct when we return to the TUI.
+        if let Some(resize) = resize_debouncer.query() {
             if let Some(term) = terminal.as_mut() {
                 term.autoresize()?;
             }
             update(app, resize, interrupt)?;
+            needs_rerender = true;
         }
-        if let Some(event) = event {
-            callback = update(app, event, interrupt)?;
-            if callback.is_some() {
-                drain_after_stop(terminal, *display, app, &mut receiver, &mut last_render).await?;
-                break;
-            }
-            if app.done {
-                break;
-            }
-            // Only render the TUI when it owns the screen. While streaming, the
-            // `TerminalSink` produces output directly and we must not draw.
-            if *display == DisplayState::Tui
-                && let Some(term) = terminal.as_mut()
-                && FRAMERATE <= last_render.elapsed()
-                && needs_rerender
-            {
-                term.draw(|f| view(app, f))?;
-                last_render = Instant::now();
-                needs_rerender = false;
-            }
+
+        // Only render the TUI when it owns the screen. While streaming, the
+        // `TerminalSink` produces output directly and we must not draw.
+        if *display == DisplayState::Tui
+            && let Some(term) = terminal.as_mut()
+            && FRAMERATE <= last_render.elapsed()
+            && needs_rerender
+        {
+            term.draw(|f| view(app, f))?;
+            last_render = Instant::now();
+            needs_rerender = false;
         }
     }
 
@@ -1499,12 +1520,7 @@ async fn drain_after_stop(
     let drawing = display == DisplayState::Tui;
 
     while let Some(event) = receiver.recv().await {
-        if !matches!(event, Event::Tick) {
-            needs_rerender = true;
-        }
-        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
-            needs_rerender = true;
-        }
+        needs_rerender = true;
         update(app, event, None)?;
 
         if drawing
@@ -1530,35 +1546,54 @@ async fn drain_after_stop(
     Ok(())
 }
 
-/// Blocking poll for events, will only return None if app handle has been
-/// dropped
+enum PollResult {
+    Event(Event),
+    Deadline,
+}
+
+fn next_deadline(
+    app: &App<Box<dyn io::Write + Send>>,
+    resize_debouncer: &Debouncer<Event>,
+    display: DisplayState,
+    needs_rerender: bool,
+    last_render: Instant,
+) -> Option<Instant> {
+    [
+        app.selection_autoscroll
+            .as_ref()
+            .map(|scroll| scroll.next_scroll_at),
+        app.clipboard_notice_expiry,
+        resize_debouncer.deadline().map(Instant::from_std),
+        (display == DisplayState::Tui && needs_rerender).then_some(last_render + FRAMERATE),
+    ]
+    .into_iter()
+    .flatten()
+    .min()
+}
+
+/// Wait for an application event, terminal input, or the next locally-owned
+/// deadline. Returns `None` only once the application event channel is closed.
 async fn poll(
     input_options: InputOptions<'_>,
     receiver: &mut AppReceiver,
     crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
-) -> Option<Event> {
-    let input_closed = crossterm_rx.is_closed();
+    deadline: Option<Instant>,
+) -> Option<PollResult> {
+    loop {
+        let sleep_until = tokio::time::sleep_until(
+            deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400)),
+        );
+        tokio::pin!(sleep_until);
 
-    if input_closed {
-        receiver.recv().await
-    } else {
-        // tokio::select is messing with variable read detection
-        #[allow(unused_assignments)]
-        let mut event = None;
-        loop {
-            tokio::select! {
-                e = crossterm_rx.recv() => {
-                    event = e.and_then(|e| input_options.handle_crossterm_event(e));
+        tokio::select! {
+            () = &mut sleep_until, if deadline.is_some() => return Some(PollResult::Deadline),
+            event = receiver.recv() => return event.map(PollResult::Event),
+            event = crossterm_rx.recv(), if !crossterm_rx.is_closed() => {
+                if let Some(event) = event.and_then(|event| input_options.handle_crossterm_event(event)) {
+                    return Some(PollResult::Event(event));
                 }
-                e = receiver.recv() => {
-                    event = e;
-                }
-            }
-            if event.is_some() {
-                break;
             }
         }
-        event
     }
 }
 
@@ -1796,9 +1831,6 @@ fn update(
         Event::Stop(callback) => {
             debug!("shutting down due to message");
             return Ok(Some(callback));
-        }
-        Event::Tick => {
-            // app.table.tick();
         }
         Event::EndTask { task, result } => {
             app.finish_task(&task, result)?;
@@ -3214,12 +3246,6 @@ mod test {
             !super::should_start_terminal(&end_event),
             "terminal should NOT start on EndTask event"
         );
-
-        let tick_event = Event::Tick;
-        assert!(
-            !super::should_start_terminal(&tick_event),
-            "terminal should NOT start on Tick event"
-        );
     }
 
     #[test]
@@ -3693,7 +3719,8 @@ mod test {
     }
 
     #[test]
-    fn selection_autoscroll_continues_on_ticks_and_stops_away_from_boundary() -> Result<(), Error> {
+    fn selection_autoscroll_continues_on_deadlines_and_stops_away_from_boundary()
+    -> Result<(), Error> {
         use crossterm::event::{MouseButton, MouseEventKind};
 
         let repo_root_tmp = tempdir()?;
