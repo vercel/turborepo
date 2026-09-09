@@ -1,7 +1,8 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
-    io::Write,
+    io::{Read, Seek, SeekFrom, Write},
+    pin::Pin,
     sync::{Arc, Mutex},
 };
 
@@ -22,6 +23,77 @@ use crate::{
 };
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
+
+/// Artifacts smaller than this are kept in memory during transfers. Larger
+/// ones roll over to an anonymous temporary file (unlinked on creation where
+/// the platform supports it) so retained payload memory stays bounded no
+/// matter how large the compressed artifact is.
+const ARTIFACT_MEMORY_THRESHOLD: usize = 8 * 1024 * 1024;
+
+/// The compressed artifact body for an upload, shared across attempts so a
+/// retry after a token refresh resends byte-identical content without
+/// rebuilding the archive.
+enum ArtifactBody {
+    /// Small artifact held in memory; retries are a cheap `Bytes` refcount
+    /// bump.
+    InMemory(bytes::Bytes),
+    /// Large artifact spooled to an anonymous temporary file; retries read it
+    /// back from the start through a fresh handle in bounded chunks.
+    OnDisk(std::fs::File),
+}
+
+type UploadStream = Pin<
+    Box<
+        dyn futures::Stream<Item = Result<bytes::Bytes, turborepo_api_client::Error>> + Send + Sync,
+    >,
+>;
+
+impl ArtifactBody {
+    fn len(&self) -> usize {
+        match self {
+            ArtifactBody::InMemory(bytes) => bytes.len(),
+            ArtifactBody::OnDisk(file) => {
+                file.metadata().map(|meta| meta.len() as usize).unwrap_or(0)
+            }
+        }
+    }
+
+    fn generate_tag(
+        &self,
+        signer: &ArtifactSignatureAuthenticator,
+        hash: &str,
+    ) -> Result<String, SignatureError> {
+        match self {
+            ArtifactBody::InMemory(bytes) => signer.generate_tag(hash.as_bytes(), bytes),
+            ArtifactBody::OnDisk(file) => {
+                signer.generate_tag_reader(hash.as_bytes(), file, self.len() as u64)
+            }
+        }
+    }
+
+    fn stream(&self) -> turborepo_api_client::Result<UploadStream> {
+        match self {
+            ArtifactBody::InMemory(bytes) => Ok(Box::pin(chunked_byte_stream(
+                bytes.clone(),
+                HTTPCache::UPLOAD_CHUNK_BYTES,
+            ))),
+            ArtifactBody::OnDisk(file) => {
+                // `try_clone` hands us an independent handle; seek it to the
+                // start because signing (and any previous attempt) moved the
+                // shared offset.
+                let mut handle = file.try_clone()?;
+                handle.seek(SeekFrom::Start(0))?;
+                let reader = tokio_util::io::ReaderStream::with_capacity(
+                    tokio::fs::File::from_std(handle),
+                    HTTPCache::UPLOAD_CHUNK_BYTES,
+                );
+                Ok(Box::pin(futures::StreamExt::map(reader, |chunk| {
+                    chunk.map_err(turborepo_api_client::Error::from)
+                })))
+            }
+        }
+    }
+}
 
 fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
     if api_auth.token.expose() == token.expose() {
@@ -188,19 +260,37 @@ impl HTTPCache {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
-        let mut artifact_body = Vec::new();
-        self.write(&mut artifact_body, anchor, files).await?;
-        let body_len = artifact_body.len();
+        // Spool the compressed artifact: small artifacts stay in memory while
+        // large ones roll to an anonymous temporary file, so retained memory
+        // is bounded regardless of artifact size.
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        {
+            let mut buffered = std::io::BufWriter::new(&mut spool);
+            self.write(&mut buffered, anchor, files).await?;
+            // BufWriter's Drop ignores flush errors; flush explicitly so a
+            // failed final write cannot be uploaded as a truncated artifact.
+            buffered.flush()?;
+        }
+        spool.seek(SeekFrom::Start(0))?;
+
+        let body = if spool.is_rolled() {
+            let mut file = spool.into_file()?;
+            // Rewind so signing reads the artifact from the start.
+            file.seek(SeekFrom::Start(0))?;
+            ArtifactBody::OnDisk(file)
+        } else {
+            let mut bytes = Vec::new();
+            spool.read_to_end(&mut bytes)?;
+            ArtifactBody::InMemory(bytes::Bytes::from(bytes))
+        };
+        let body = Arc::new(body);
+        let body_len = body.len();
 
         let tag = self
             .signer_verifier
             .as_ref()
-            .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
+            .map(|signer| body.generate_tag(signer, hash))
             .transpose()?;
-
-        // Convert to Bytes once so retries are a cheap Arc bump instead of
-        // a full deep-copy of the artifact.
-        let artifact_bytes = bytes::Bytes::from(artifact_body);
 
         let resolved_scm = self.scm_state.get_resolved().await;
         let sha = resolved_scm.and_then(|s| s.sha.clone());
@@ -216,13 +306,15 @@ impl HTTPCache {
         self.execute_with_token_refresh(hash, |api_auth| {
             let client = &self.client;
             let tag_ref = tag_clone.as_deref();
-            let artifact_bytes_ref = artifact_bytes.clone(); // Arc bump, not a deep copy
+            let body_ref = body.clone();
             let uploads_ref = uploads_clone.clone();
             let sha_ref = sha_clone.clone();
             let dirty_hash_ref = dirty_hash_clone.clone();
 
             async move {
-                let stream = chunked_byte_stream(artifact_bytes_ref, Self::UPLOAD_CHUNK_BYTES);
+                // Each attempt gets a fresh bounded stream over the same
+                // spooled bytes, so retries send identical content.
+                let stream = body_ref.stream()?;
 
                 let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(body_len));
 
@@ -371,40 +463,76 @@ impl HTTPCache {
         let sha = Self::get_header_string(&response, "x-artifact-sha");
         let dirty_hash = Self::get_header_string(&response, "x-artifact-dirty-hash");
 
-        let body = if let Some(signer_verifier) = &self.signer_verifier {
-            let expected_tag = response
+        let expected_tag = if self.signer_verifier.is_some() {
+            let tag = response
                 .headers()
                 .get("x-artifact-tag")
                 .ok_or(CacheError::ArtifactTagMissing(Backtrace::capture()))?;
 
-            let expected_tag = expected_tag
-                .to_str()
-                .map_err(|_| CacheError::InvalidTag(Backtrace::capture()))?
-                .to_string();
+            Some(
+                tag.to_str()
+                    .map_err(|_| CacheError::InvalidTag(Backtrace::capture()))?
+                    .to_string(),
+            )
+        } else {
+            None
+        };
 
-            let body = response.bytes().await.map_err(|e| {
-                CacheError::ApiClientError(
-                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
-                    Backtrace::capture(),
-                )
-            })?;
-            let is_valid = signer_verifier.validate(hash.as_bytes(), &body, &expected_tag)?;
+        // Stream the response into a spool instead of collecting the whole
+        // body in memory. Small artifacts stay in memory; large ones roll to
+        // an anonymous temporary file that is cleaned up on drop. When the
+        // Content-Length is known (the common case) the signature is computed
+        // incrementally as chunks arrive.
+        let mut streaming_tag = match (&self.signer_verifier, response.content_length()) {
+            (Some(signer), Some(len)) => Some(signer.start_streaming_tag(hash.as_bytes(), len)?),
+            _ => None,
+        };
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        let mut body_len: u64 = 0;
+        {
+            use tokio_stream::StreamExt;
+            let mut body_stream = response.bytes_stream();
+            while let Some(chunk) = body_stream.next().await {
+                let chunk = chunk.map_err(|e| {
+                    CacheError::ApiClientError(
+                        Box::new(turborepo_api_client::Error::ReqwestError(e)),
+                        Backtrace::capture(),
+                    )
+                })?;
+                if let Some(tag) = &mut streaming_tag {
+                    tag.update(&chunk);
+                }
+                spool.write_all(&chunk)?;
+                body_len += chunk.len() as u64;
+            }
+        }
+
+        // Verify the signature before any extraction; a rejected artifact is
+        // dropped with the spool and nothing is restored.
+        if let (Some(signer_verifier), Some(expected_tag)) = (&self.signer_verifier, &expected_tag)
+        {
+            let is_valid = match streaming_tag {
+                Some(tag) => tag.verify(expected_tag)?,
+                // The body length was not known up front, so verify from the
+                // spooled bytes now that the total is known.
+                None => {
+                    spool.seek(SeekFrom::Start(0))?;
+                    signer_verifier.validate_reader(
+                        hash.as_bytes(),
+                        &mut spool,
+                        body_len,
+                        expected_tag,
+                    )?
+                }
+            };
 
             if !is_valid {
                 return Err(CacheError::InvalidTag(Backtrace::capture()));
             }
+        }
 
-            body
-        } else {
-            response.bytes().await.map_err(|e| {
-                CacheError::ApiClientError(
-                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
-                    Backtrace::capture(),
-                )
-            })?
-        };
-
-        let files = Self::restore_tar(&self.repo_root, &body)?;
+        spool.seek(SeekFrom::Start(0))?;
+        let files = Self::restore_tar(&self.repo_root, spool)?;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
@@ -425,7 +553,7 @@ impl HTTPCache {
     #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
-        body: &[u8],
+        body: impl Read,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         let (files, _manifest) = cache_reader.restore(root, None)?;
@@ -474,7 +602,7 @@ mod test {
     use futures::future::try_join_all;
     use insta::assert_snapshot;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_analytics::start_analytics;
     use turborepo_api_client::{APIClient, analytics};
     use turborepo_types::SecretString;
@@ -583,6 +711,94 @@ mod test {
 
         analytics_handle.close_with_timeout().await;
 
+        Ok(())
+    }
+
+    /// An artifact larger than the in-memory threshold must round-trip through
+    /// the disk-spooled upload and download paths byte-for-byte.
+    #[tokio::test]
+    async fn test_http_cache_large_artifact_spools_to_disk() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+
+        // 16 MiB of incompressible pseudo-random data, so the compressed
+        // artifact exceeds ARTIFACT_MEMORY_THRESHOLD and rolls to disk.
+        let mut contents = Vec::with_capacity(16 * 1024 * 1024);
+        let mut state: u64 = 0x9E3779B97F4A7C15;
+        while contents.len() < 16 * 1024 * 1024 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            contents.extend_from_slice(&state.to_le_bytes());
+        }
+
+        let put_root = tempdir()?;
+        let put_root_path = AbsoluteSystemPathBuf::try_from(put_root.path())?;
+        let file_path = AnchoredSystemPathBuf::from_raw("big.bin")?;
+        std::fs::write(put_root_path.resolve(&file_path), &contents)?;
+
+        let hash = "large-artifact-hash";
+        let duration = 42;
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+
+        let make_cache = |root: &AbsoluteSystemPathBuf| {
+            HTTPCache::new(
+                APIClient::new(
+                    format!("http://localhost:{port}"),
+                    Some(Duration::from_secs(200)),
+                    None,
+                    "2.0.0",
+                    true,
+                )
+                .unwrap(),
+                &opts,
+                root.to_owned(),
+                api_auth.clone(),
+                None,
+                LazyScmState::resolved(None),
+            )
+            .unwrap()
+        };
+
+        let put_cache = make_cache(&put_root_path);
+        put_cache
+            .put(
+                &put_root_path,
+                hash,
+                std::slice::from_ref(&file_path),
+                duration,
+            )
+            .await?;
+
+        // Restore into a different root so the bytes must actually travel.
+        let fetch_root = tempdir()?;
+        let fetch_root_path = AbsoluteSystemPathBuf::try_from(fetch_root.path())?;
+        let fetch_cache = make_cache(&fetch_root_path);
+
+        let (metadata, received_files) = fetch_cache.fetch(hash).await?.unwrap();
+        assert_eq!(metadata.time_saved, duration);
+        assert_eq!(received_files.len(), 1);
+        let restored = std::fs::read(fetch_root_path.resolve(&received_files[0]))?;
+        assert_eq!(restored, contents);
+
+        handle.abort();
         Ok(())
     }
 
