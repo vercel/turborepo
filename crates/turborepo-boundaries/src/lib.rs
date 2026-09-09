@@ -307,6 +307,12 @@ fn is_valid_package_name(package_name: &str) -> bool {
 /// Maximum number of warnings to show
 const MAX_WARNINGS: usize = 16;
 
+// Report completed work in batches so worker threads do not synchronize with
+// the progress bar after every package. This retains frequent visible feedback
+// while making progress reporting proportional to batches rather than package
+// count.
+const PROGRESS_UPDATE_BATCH_SIZE: usize = 16;
+
 #[derive(Default)]
 pub struct BoundariesResult {
     pub files_checked: usize,
@@ -576,19 +582,27 @@ impl BoundariesChecker {
             let _span = info_span!("check_all_packages", count = packages_to_check.len()).entered();
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
-                    .par_iter()
-                    .map(|(package_name, package_name_source, package_directory)| {
-                        let pkg_result = Self::check_package(
-                            ctx,
-                            package_name,
-                            *package_name_source,
-                            package_directory,
-                            &rules_map,
-                            &global_implicit_dependencies,
-                        );
-                        progress.inc(1);
-                        pkg_result
+                    .par_chunks(PROGRESS_UPDATE_BATCH_SIZE)
+                    .map(|packages| {
+                        let results = packages
+                            .iter()
+                            .map(|(package_name, package_name_source, package_directory)| {
+                                Self::check_package(
+                                    ctx,
+                                    package_name,
+                                    *package_name_source,
+                                    package_directory,
+                                    &rules_map,
+                                    &global_implicit_dependencies,
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        progress.inc(packages.len() as u64);
+                        results
                     })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .flatten()
                     .collect()
             })
         };
@@ -1166,6 +1180,46 @@ mod tests {
             "local imports should not produce diagnostics, got: {:?}",
             result.diagnostics.len()
         );
+    }
+
+    #[test]
+    fn check_boundaries_reports_every_package_across_progress_batches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let packages: Vec<_> = (0..=PROGRESS_UPDATE_BATCH_SIZE)
+            .map(|index| PackageName::Other(format!("pkg-{index}")))
+            .collect();
+
+        for package in &packages {
+            let package_directory = repo_root.join_components(&["packages", package.as_str()]);
+            package_directory.create_dir_all().unwrap();
+            package_directory
+                .join_component("package.json")
+                .create_with_contents(format!(r#"{{"name":"{package}"}}"#))
+                .unwrap();
+            package_directory
+                .join_component("index.ts")
+                .create_with_contents("export {};\n")
+                .unwrap();
+        }
+
+        let graph = MockGraph::new(packages.clone());
+        let filtered = packages.into_iter().collect();
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, PROGRESS_UPDATE_BATCH_SIZE + 1);
+        assert_eq!(result.files_checked, PROGRESS_UPDATE_BATCH_SIZE + 1);
+        assert!(result.diagnostics.is_empty());
     }
 
     #[test]
