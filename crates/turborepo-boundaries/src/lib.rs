@@ -425,16 +425,25 @@ impl BoundariesChecker {
         //   // @ts-ignore
         //   import { foo } from "bar";
         //
+        // Comments are collected in source order, so a binary search finds
+        // where the comments preceding the import end without evaluating the
+        // span predicate for every comment in the file on every import.
+        let leading = comments.partition_point(|c| c.span.end <= import_span.start);
+
         // To detect blank lines we check the gap between each comment and the
         // *next* item in the chain (initially the import, then the previous
-        // comment we visited). A blank line means >1 newline in that gap.
-        let leading = comments.iter().filter(|c| c.span.end <= import_span.start);
-
+        // comment we visited). A blank line means more than one newline in
+        // that gap, so counting stops as soon as two are found.
         let mut next_start = import_span.start;
 
-        for comment in leading.rev() {
+        for comment in comments[..leading].iter().rev() {
             let between = &source_text[comment.span.end as usize..next_start as usize];
-            if between.chars().filter(|&c| c == '\n').count() > 1 {
+            if between
+                .char_indices()
+                .filter(|&(_, c)| c == '\n')
+                .nth(1)
+                .is_some()
+            {
                 break;
             }
 
@@ -834,6 +843,70 @@ mod tests {
                 .iter()
                 .all(|import| import.import_type == ImportType::Value)
         );
+    }
+
+    fn ignored_comment_parts(
+        source: &str,
+    ) -> (Vec<turbo_trace::ImportResult>, Vec<Comment>, String) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component("index.ts");
+        let (imports, comments) = parse_with_comments(&path, source).unwrap();
+        (imports, comments, source.to_string())
+    }
+
+    #[test]
+    fn stacked_comments_before_an_import_are_walked_backwards() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @ts-ignore\n// @boundaries-ignore implicit dependency\nimport { foo } from \
+             \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason.as_deref(), Some(" implicit dependency"));
+    }
+
+    #[test]
+    fn blank_line_between_comment_and_import_stops_the_walk() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @boundaries-ignore separated by a blank line\n\nimport { foo } from \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason, None);
+    }
+
+    #[test]
+    fn comments_after_the_import_are_not_considered() {
+        // An import at the top of a file with many trailing comments must
+        // only inspect the comments that precede it.
+        let trailing: String = (0..50)
+            .map(|i| format!("// trailing comment {i}\n"))
+            .collect();
+        let source = format!(
+            "// @boundaries-ignore nearest comment\nimport {{ foo }} from \"bar\";\n{trailing}"
+        );
+        let (imports, comments, source) = ignored_comment_parts(&source);
+        assert_eq!(imports.len(), 1);
+        assert_eq!(comments.len(), 51);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason.as_deref(), Some(" nearest comment"));
+    }
+
+    #[test]
+    fn blank_line_between_stacked_comments_stops_the_walk() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @boundaries-ignore too far away\n// stacked comment\n\nimport { foo } from \
+             \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason, None);
     }
 
     #[test]
