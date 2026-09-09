@@ -236,15 +236,33 @@ impl Lockfile for NpmLockfile {
         if let Some(root) = self.packages.get("") {
             pruned_packages.insert("".into(), root.clone());
         }
+        // Index the entries that link to a retained workspace by their
+        // `resolved` path in one pass so each workspace below needs a single
+        // lookup instead of another scan of every lockfile entry. Scanning
+        // per workspace made link discovery O(retained workspaces × lockfile
+        // entries) in the worst case, and a workspace without a link
+        // exhausted the entire map. `or_insert` keeps the first entry
+        // encountered in iteration order, preserving the first-match-and-break
+        // behavior of the previous scan when multiple entries share a
+        // `resolved` target.
+        let ws_set: std::collections::HashSet<&str> =
+            workspace_packages.iter().map(|s| s.as_str()).collect();
+        let mut workspace_links: HashMap<&str, (&String, &NpmPackage)> =
+            HashMap::with_capacity(ws_set.len());
+        for (key, entry) in &self.packages {
+            if let Some(resolved) = entry.resolved.as_deref()
+                && ws_set.contains(resolved)
+            {
+                workspace_links.entry(resolved).or_insert((key, entry));
+            }
+        }
+
         for workspace in workspace_packages {
             let pkg = self.get_package(workspace)?;
             pruned_packages.insert(workspace.to_string(), pkg.clone());
 
-            for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace.as_str()) {
-                    pruned_packages.insert(key.clone(), entry.clone());
-                    break;
-                }
+            if let Some(&(key, entry)) = workspace_links.get(workspace.as_str()) {
+                pruned_packages.insert(key.clone(), entry.clone());
             }
         }
 
@@ -255,8 +273,6 @@ impl Lockfile for NpmLockfile {
         // closure didn't include it. Promote the nested version to the hoisted
         // position so npm ci sees a consistent tree.
         // See https://github.com/vercel/turborepo/issues/10985
-        let ws_set: std::collections::HashSet<&str> =
-            workspace_packages.iter().map(|s| s.as_str()).collect();
         let requested: std::collections::HashSet<&str> =
             packages.iter().map(|s| s.as_str()).collect();
         Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested, &self.packages);
@@ -1367,6 +1383,200 @@ mod test {
                 ),
             }
         }
+    }
+
+    // Workspace links (`resolved` pointing at a retained workspace path) must
+    // be included alongside the workspace entry itself so `npm ci` can
+    // reinstall the workspace through its link slot. Links to workspaces that
+    // are not retained must be dropped.
+    #[test]
+    fn test_subgraph_includes_workspace_link_entries() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*", "packages/*"]
+                },
+                "node_modules/left-pad": {
+                    "version": "1.3.0",
+                    "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+                },
+                "node_modules/app": {
+                    "resolved": "apps/app",
+                    "link": true
+                },
+                "node_modules/ui": {
+                    "resolved": "packages/ui",
+                    "link": true
+                },
+                "node_modules/pruned-lib": {
+                    "resolved": "packages/pruned-lib",
+                    "link": true
+                },
+                "apps/app": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "ui": "*",
+                        "left-pad": "^1.0.0"
+                    }
+                },
+                "packages/ui": {
+                    "version": "1.0.0"
+                },
+                "packages/pruned-lib": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app".to_string(), "packages/ui".to_string()];
+        let packages = vec!["node_modules/left-pad".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        for (key, resolved) in [
+            ("node_modules/app", "apps/app"),
+            ("node_modules/ui", "packages/ui"),
+        ] {
+            let entry = reparsed
+                .packages
+                .get(key)
+                .unwrap_or_else(|| panic!("workspace link {key:?} was dropped"));
+            assert!(entry.link, "link entry {key:?} lost its link flag");
+            assert_eq!(
+                entry.resolved.as_deref(),
+                Some(resolved),
+                "link entry {key:?} has the wrong resolved path"
+            );
+        }
+
+        // The requested registry package and the workspace entries themselves
+        // must survive.
+        assert!(reparsed.packages.contains_key("node_modules/left-pad"));
+        assert!(reparsed.packages.contains_key("apps/app"));
+        assert!(reparsed.packages.contains_key("packages/ui"));
+
+        // The link (and entry) of a workspace that was pruned must not.
+        assert!(
+            !reparsed.packages.contains_key("node_modules/pruned-lib"),
+            "link to a pruned workspace was retained"
+        );
+        assert!(
+            !reparsed.packages.contains_key("packages/pruned-lib"),
+            "pruned workspace entry was retained"
+        );
+    }
+
+    // A retained workspace with no matching link entry anywhere in the
+    // lockfile must prune without error and without pulling in unrelated
+    // entries. (This is the path that previously exhausted the whole packages
+    // map once per workspace.)
+    #[test]
+    fn test_subgraph_workspace_without_link_entry() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*"]
+                },
+                "node_modules/left-pad": {
+                    "version": "1.3.0",
+                    "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+                },
+                "apps/ghost": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "left-pad": "^1.0.0"
+                    }
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/ghost".to_string()];
+        let packages = vec!["node_modules/left-pad".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        assert!(
+            reparsed.packages.contains_key("apps/ghost"),
+            "the workspace without a link was dropped"
+        );
+        assert!(
+            reparsed.packages.contains_key("node_modules/left-pad"),
+            "the requested registry package was dropped"
+        );
+        assert_eq!(
+            reparsed.packages.len(),
+            3, // "" root, apps/ghost, node_modules/left-pad
+            "entries without a matching workspace link must not be retained"
+        );
+    }
+
+    // When multiple entries link to the same workspace path, exactly one is
+    // retained — the first in iteration order, matching the previous
+    // per-workspace scan's first-match-and-break behavior. HashMap iteration
+    // order varies across processes, so the winner is not asserted; only that
+    // a single duplicate is kept.
+    #[test]
+    fn test_subgraph_duplicate_resolved_targets_keep_single_link() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["packages/*"]
+                },
+                "node_modules/dup": {
+                    "resolved": "packages/dup",
+                    "link": true
+                },
+                "node_modules/@scope/dup": {
+                    "resolved": "packages/dup",
+                    "link": true
+                },
+                "packages/dup": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/dup".to_string()];
+        let packages = vec![];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        let duplicates = ["node_modules/dup", "node_modules/@scope/dup"];
+        let retained: Vec<&str> = duplicates
+            .iter()
+            .copied()
+            .filter(|key| reparsed.packages.contains_key(*key))
+            .collect();
+        assert_eq!(
+            retained.len(),
+            1,
+            "expected exactly one duplicate-resolved link, retained {retained:?}"
+        );
+        assert!(
+            reparsed.packages.contains_key("packages/dup"),
+            "the workspace entry itself was dropped"
+        );
     }
 
     #[test]
