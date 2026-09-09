@@ -7,7 +7,9 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
+};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
@@ -31,7 +33,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::{FilterMode, UIMode};
+use turborepo_types::{FilterMode, TaskDefinitionHashInfo, TaskInputs, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
@@ -355,6 +357,115 @@ impl RunBuilder {
         Ok(index_root.anchor(repo_root)?.to_unix())
     }
 
+    /// Whether this run might scope its untracked-file discovery to the
+    /// selected packages' directories.
+    ///
+    /// Decided from options alone, before any graph or engine work, so runs
+    /// that can never scope keep today's eager whole-repo scan without
+    /// waiting on a decision. Scoping requires a narrow explicit package
+    /// selection: include `--filter` patterns without `--affected`, no
+    /// package inference, no watch-mode changed files, not single-package
+    /// mode, no task-level filtering (which builds the engine across every
+    /// package before pruning), and not `--add-all-tasks`. Exclude-only
+    /// filters select (nearly) every package and cannot scope either.
+    fn untracked_scoping_candidate(&self) -> bool {
+        !self.opts.run_opts.single_package
+            && self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .any(|pattern| !pattern.starts_with('!'))
+            && self.opts.scope_opts.affected_range.is_none()
+            && self.opts.scope_opts.pkg_inference_root.is_none()
+            && self
+                .changed_files_for_watch
+                .as_ref()
+                .is_none_or(|files| files.is_empty())
+            && !self.add_all_tasks
+            && !self.opts.future_flags.filter_using_tasks
+    }
+
+    /// Directory prefixes, relative to the git root, that cover every file
+    /// input this run will hash; `None` when the run is not provably
+    /// package-scoped and untracked discovery must walk the whole repo.
+    ///
+    /// The run hashes files through the repo index for each participating
+    /// task's package directory (tasks without `inputs`, and
+    /// `$TURBO_DEFAULT$`, hash everything under the package) and for the
+    /// root package's internal dependencies, which fold into the global
+    /// hash that every task hash includes.
+    ///
+    /// Scoping is refused whenever a hashed input can reach outside those
+    /// directories: root tasks hash relative to the repo root,
+    /// `globalDependencies` reach the whole repo, and `$TURBO_ROOT$` or
+    /// `..`-relative input globs (the engine stores `$TURBO_ROOT$`
+    /// references in rewritten `../` form) escape their package.
+    fn untracked_scan_prefixes(
+        repo_root: &AbsoluteSystemPath,
+        git_root: Option<&AbsoluteSystemPath>,
+        engine: &Engine,
+        pkg_dep_graph: &PackageGraph,
+        root_turbo_json: &TurboJson,
+        filter_mode: &FilterMode,
+    ) -> Option<Vec<RelativeUnixPathBuf>> {
+        // Only an explicit include selection is narrow. Unfiltered and
+        // exclude-only runs select (nearly) every package and would gain
+        // nothing from scoping.
+        if filter_mode != &FilterMode::ExplicitSelection {
+            return None;
+        }
+        if !root_turbo_json.global_deps_for_hash().is_empty() {
+            return None;
+        }
+        // A manual SCM has no git root to anchor prefixes against (and its
+        // untracked population is a no-op); keep the whole-repo decision.
+        let git_root = git_root?;
+
+        let mut package_dirs: Vec<&AnchoredSystemPath> = Vec::new();
+        let mut seen_packages: HashSet<PackageName> = HashSet::new();
+        for task_id in engine.task_ids() {
+            let package = PackageName::from(task_id.package());
+            // Root tasks hash files relative to the repo root, which is not
+            // a package subtree.
+            if package == PackageName::Root {
+                return None;
+            }
+            if !seen_packages.insert(package.clone()) {
+                continue;
+            }
+            let definition = engine.task_definitions().get(task_id)?;
+            if !task_inputs_are_package_local(definition.inputs()) {
+                return None;
+            }
+            let context = pkg_dep_graph.package_task_context(&package)?;
+            package_dirs.push(context.directory());
+        }
+        // The root package's internal dependencies are hashed into the
+        // global hash for every monorepo run; cover their directories even
+        // when none of their tasks participate.
+        package_dirs.extend(pkg_dep_graph.root_internal_package_dependencies_paths());
+
+        let mut prefixes = Vec::with_capacity(package_dirs.len());
+        for dir in package_dirs {
+            let prefix = git_root.anchor(&repo_root.resolve(dir)).ok()?.to_unix();
+            // An empty prefix is the git root itself, not a package subtree.
+            if prefix.as_str().is_empty() {
+                return None;
+            }
+            prefixes.push(prefix);
+        }
+        prefixes.sort_unstable();
+        prefixes.dedup();
+        // `UntrackedScope` reads an empty prefix list as a full walk; an
+        // empty selection has nothing to hash, but keep the whole-repo scan
+        // so degenerate runs match non-scoped behavior exactly.
+        if prefixes.is_empty() {
+            return None;
+        }
+        Some(prefixes)
+    }
+
     /// Resolve the set of packages that should participate in this run.
     ///
     /// Starts with the result of scope resolution (which handles `--filter`
@@ -584,6 +695,24 @@ impl RunBuilder {
         // the set, and `UntrackedScope` deduplicates nested prefixes.
         // Scanning the repo-root prefix directly is equivalent and needs
         // nothing from the graph.
+        //
+        // Narrow filtered runs can do better: when every file input the run
+        // will hash is provably package-local, the walk only needs the
+        // selected packages' subtrees. That is only provable after the
+        // engine is built, so candidate runs hold the untracked population
+        // until the main flow sends its scope decision (below). Runs that
+        // cannot scope based on their options alone never wait, keeping
+        // today's eager whole-repo scan.
+        let untracked_scoping_candidate = self.untracked_scoping_candidate();
+        if !untracked_scoping_candidate {
+            tracing::debug!("untracked-file scan scope: whole repo (not a scoping candidate)");
+        }
+        let (untracked_scan_scope_tx, untracked_scan_scope_rx) = if untracked_scoping_candidate {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
         let (scm_tx, scm_rx) = tokio::sync::oneshot::channel();
         let repo_index_task = {
             let repo_root = self.repo_root.clone();
@@ -611,25 +740,37 @@ impl RunBuilder {
                     scm.build_tracked_repo_index_eager()
                 };
                 let _ = scm_tx.send(scm.clone());
-                tracked_index.map(|mut index| {
-                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                let mut index = tracked_index?;
+                // Candidate runs wait here for the scope decision:
+                // `Some(prefixes)` walks only those subtrees (relative to
+                // the git root), while `None` is today's whole-repo scan.
+                // A dropped sender means the run failed before deciding;
+                // the whole-repo fallback matches non-scoped runs.
+                let scoped_prefixes = match untracked_scan_scope_rx {
+                    Some(rx) => rx.blocking_recv().ok().flatten(),
+                    None => None,
+                };
+                let prefixes = scoped_prefixes.unwrap_or_else(|| {
                     let index_root = scm.git_root().unwrap_or(&repo_root);
                     match Self::repo_prefix_for_repo_index(&repo_root, index_root) {
-                        Ok(repo_prefix) => {
-                            if let Err(e) =
-                                scm.populate_repo_index_untracked(&mut index, &[repo_prefix])
-                            {
-                                tracing::debug!("failed to populate untracked files: {e}");
-                            }
-                        }
+                        Ok(repo_prefix) => vec![repo_prefix],
                         Err(e) => {
                             tracing::debug!(
                                 "failed to compute repo prefix for untracked files: {e}"
                             );
+                            // Leave untracked entries unpopulated, as before.
+                            Vec::new()
                         }
                     }
-                    index
-                })
+                });
+                // The span covers the walk itself; how long the run had to
+                // wait for the population is visible in the
+                // `repo_index_untracked_await` barrier span.
+                let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                if let Err(e) = scm.populate_repo_index_untracked(&mut index, &prefixes) {
+                    tracing::debug!("failed to populate untracked files: {e}");
+                }
+                Some(index)
             })
         };
         // A pure native workspace (experimentalCargoWorkspaces,
@@ -1178,6 +1319,34 @@ impl RunBuilder {
             );
         }
 
+        // The engine is final: every task the run will hash is known. Send
+        // the untracked scan its scope. Provably package-local runs walk
+        // only the participating packages' directories (plus the root
+        // package's internal dependencies); everything else keeps today's
+        // whole-repo scan.
+        if let Some(scope_tx) = untracked_scan_scope_tx {
+            let scoped_prefixes = Self::untracked_scan_prefixes(
+                &self.repo_root,
+                scm.git_root(),
+                &engine,
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &filter_mode,
+            );
+            match &scoped_prefixes {
+                Some(prefixes) => tracing::debug!(
+                    prefixes = prefixes.len(),
+                    "untracked-file scan scope: package directory prefixes"
+                ),
+                None => {
+                    tracing::debug!("untracked-file scan scope: whole repo (not provably scoped)")
+                }
+            }
+            // A send failure means the scan task is already gone; there is
+            // nothing left to decide.
+            let _ = scope_tx.send(scoped_prefixes);
+        }
+
         // Validate after all filtering so the persistent task count reflects
         // the actual tasks that will execute, not the full pre-filter engine.
         if !self.opts.run_opts.parallel && self.should_validate_engine {
@@ -1697,6 +1866,30 @@ fn repo_configs_have_no_with_declarations(
     true
 }
 
+/// Whether every file this task hashes stays inside its package directory.
+///
+/// `$TURBO_ROOT$` references are rewritten to `..`-relative globs before
+/// reaching the engine, so any `..` path segment (or a surviving
+/// `$TURBO_ROOT$` token) marks an input that escapes the package. Exclusion
+/// globs only remove files, and dependency-output globs hash freshly
+/// produced outputs without the repo index, so neither is checked. JIT
+/// globs are hashed through the repo index at visitation time and must obey
+/// the same rule as eager globs.
+fn task_inputs_are_package_local(inputs: &TaskInputs) -> bool {
+    inputs
+        .globs
+        .iter()
+        .chain(inputs.jit_globs.iter())
+        .filter(|glob| !glob.starts_with('!'))
+        .all(|glob| !glob_escapes_package(glob))
+}
+
+/// Whether an input glob, interpreted relative to the task's package
+/// directory, can match files outside that directory.
+fn glob_escapes_package(glob: &str) -> bool {
+    glob.contains("$TURBO_ROOT$") || glob.split('/').any(|segment| segment == "..")
+}
+
 /// Whether experimental Cargo package support is enabled, via
 /// `futureFlags.experimentalCargoWorkspaces` in the root turbo.json. The
 /// future flag is the only switch: it is repo-level configuration, so every
@@ -1884,6 +2077,77 @@ mod package_prefix_tests {
             RunBuilder::repo_prefix_for_repo_index(&repo_root, &repo_root).unwrap(),
             RelativeUnixPathBuf::new("").unwrap()
         );
+    }
+}
+
+#[cfg(test)]
+mod untracked_scoping_tests {
+    use super::*;
+
+    fn inputs(globs: &[&str]) -> TaskInputs {
+        TaskInputs {
+            globs: globs.iter().map(|g| g.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn default_and_package_relative_inputs_are_package_local() {
+        // A task with no `inputs` hashes everything under the package.
+        assert!(task_inputs_are_package_local(&TaskInputs::default()));
+        assert!(task_inputs_are_package_local(&inputs(&[
+            "src/**",
+            "README.md"
+        ])));
+        // Exclusions only remove files.
+        assert!(task_inputs_are_package_local(&inputs(&[
+            "src/**", "!dist/**"
+        ])));
+        assert!(task_inputs_are_package_local(&inputs(&["!../../dist/**"])));
+        // Literal names containing dots are not parent references.
+        assert!(task_inputs_are_package_local(&inputs(&[
+            "a..b.txt",
+            "v1.0.0.txt"
+        ])));
+    }
+
+    #[test]
+    fn escaping_inputs_are_not_package_local() {
+        // `$TURBO_ROOT$` is rewritten to `..`-relative paths in the engine.
+        assert!(!task_inputs_are_package_local(&inputs(&[
+            "../../config.json"
+        ])));
+        // Defensive: a surviving `$TURBO_ROOT$` token also escapes.
+        assert!(!task_inputs_are_package_local(&inputs(&[
+            "$TURBO_ROOT$/config.json"
+        ])));
+        assert!(!task_inputs_are_package_local(&inputs(&[".."])));
+        assert!(!task_inputs_are_package_local(&inputs(&[
+            "src/../../shared/**"
+        ])));
+        assert!(!task_inputs_are_package_local(&inputs(&["src/.."])));
+    }
+
+    #[test]
+    fn jit_globs_obey_the_same_rule() {
+        let mut jit = inputs(&[]);
+        jit.jit_globs = vec!["../generated/**".to_string()];
+        assert!(!task_inputs_are_package_local(&jit));
+
+        let mut jit_ok = inputs(&[]);
+        jit_ok.jit_globs = vec!["src/generated/**".to_string()];
+        assert!(task_inputs_are_package_local(&jit_ok));
+    }
+
+    #[test]
+    fn glob_escape_segments() {
+        assert!(glob_escapes_package("../x"));
+        assert!(glob_escapes_package("a/../x"));
+        assert!(glob_escapes_package("a/.."));
+        assert!(glob_escapes_package(".."));
+        assert!(!glob_escapes_package("a..b"));
+        assert!(!glob_escapes_package("src/**"));
+        assert!(!glob_escapes_package(""));
     }
 }
 
