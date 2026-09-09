@@ -15,7 +15,7 @@ use turborepo_lockfiles::{Lockfile, Package};
 
 use super::{
     PackageName,
-    dep_splitter::{DependencySplitter, WorkspacePathIndex},
+    dep_splitter::{DependencySplitter, WorkspaceNameIndex, WorkspacePathIndex},
 };
 use crate::{
     package_json::{DependencyKind, PackageJson},
@@ -89,6 +89,9 @@ pub fn external_packages(
     ));
     let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
     let catalogs = package_manager.read_catalogs(repo_root);
+    // Built once so alias dependency lookups borrow workspace entries instead
+    // of allocating an owned `PackageName` per dependency query.
+    let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
 
     let external_dependencies: HashMap<String, BTreeMap<String, String>> = manifests
         .iter()
@@ -100,6 +103,7 @@ pub fn external_packages(
                 &workspaces,
                 link_workspace_packages,
                 &path_index,
+                &name_index,
                 catalogs.as_ref(),
             );
             // First declaration of a name wins, before the internal/external

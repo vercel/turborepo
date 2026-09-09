@@ -13,7 +13,7 @@ use turborepo_lockfiles::Lockfile;
 
 use super::{
     ExternalResolutionKnowledge, PackageGraph, PackageName, PackageNode,
-    dep_splitter::{DependencySplitter, WorkspacePathIndex},
+    dep_splitter::{DependencySplitter, WorkspaceNameIndex, WorkspacePathIndex},
     javascript,
 };
 use crate::{
@@ -1097,6 +1097,9 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             .as_deref()
             .ok_or(Error::MissingRepositoryKnowledge)?;
         let path_index = WorkspacePathIndex::from_knowledge(knowledge);
+        // Built once so alias dependency lookups borrow workspace entries
+        // instead of allocating an owned `PackageName` per dependency query.
+        let name_index = WorkspaceNameIndex::from_workspaces(&self.assembler.package_jsons);
         // Compute once — for pnpm/Berry this reads a config file from disk.
         // Without hoisting, classifying each JavaScript descriptor would
         // redundantly read the same file. Cargo supplies classified internal
@@ -1148,6 +1151,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                                 link_workspace_packages,
                                 entry.dependencies_with_kind(),
                                 &path_index,
+                                &name_index,
                                 catalogs.as_ref(),
                             )
                         }
@@ -1503,6 +1507,7 @@ impl Relationships {
         link_workspace_packages: bool,
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
+        name_index: &WorkspaceNameIndex<'_>,
         catalogs: Option<&PnpmCatalogs>,
     ) -> Vec<Relationship> {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -1517,6 +1522,7 @@ impl Relationships {
             workspaces,
             link_workspace_packages,
             path_index,
+            name_index,
             catalogs,
         );
         for (name, version, kind) in dependencies {
