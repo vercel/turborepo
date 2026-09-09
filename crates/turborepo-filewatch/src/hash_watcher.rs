@@ -812,9 +812,33 @@ impl Subscriber {
         hash_update_tx: &mpsc::Sender<HashUpdate>,
         immediate: bool,
     ) -> (Version, Arc<Debouncer>) {
-        let version = Version(self.next_version.fetch_add(1, Ordering::SeqCst));
+        let (versions, debouncer) =
+            self.queue_package_hashes_batch(vec![spec.clone()], hash_update_tx, immediate);
+        // The batch always returns one version per queued spec.
+        let Some(version) = versions.into_iter().next() else {
+            unreachable!("one version per queued spec");
+        };
+        (version, debouncer)
+    }
+
+    /// Queues one debounced hashing task for several input specs of the same
+    /// package. A freshly built repo index is shared across all of them: one
+    /// read of git state instead of a `git ls-tree` + `git status` subprocess
+    /// pair per spec, and clean files reuse committed blob hashes instead of
+    /// being re-hashed per spec. If the index build fails, each spec falls
+    /// back to per-package hashing exactly as before.
+    fn queue_package_hashes_batch(
+        &self,
+        specs: Vec<HashSpec>,
+        hash_update_tx: &mpsc::Sender<HashUpdate>,
+        immediate: bool,
+    ) -> (Vec<Version>, Arc<Debouncer>) {
+        let versions: Vec<Version> = specs
+            .iter()
+            .map(|_| Version(self.next_version.fetch_add(1, Ordering::SeqCst)))
+            .collect();
+        let task_versions = versions.clone();
         let tx = hash_update_tx.clone();
-        let spec = spec.clone();
         let repo_root = self.repo_root.clone();
         let scm = self.scm.clone();
         let debouncer = if immediate {
@@ -832,29 +856,38 @@ impl Subscriber {
             let scm_instance = scm_permit.clone();
             // Package hashing involves blocking IO calls, so run on a blocking thread.
             let blocking_handle = tokio::task::spawn_blocking(move || {
-                let telemetry = None;
-                let inputs = spec.inputs.as_inputs();
-                let result = scm_instance.get_package_file_hashes(
-                    &repo_root,
-                    &spec.package_path,
-                    &inputs,
-                    spec.inputs.include_default_files(),
-                    telemetry,
-                    None,
-                );
-                trace!("hashing complete for {:?}", spec);
-                let _ = tx.blocking_send(HashUpdate {
-                    spec,
-                    version,
-                    result,
-                });
+                let batch_packages: Vec<_> = specs.iter().map(|s| s.package_path.clone()).collect();
+                let index = scm_instance.build_repo_index_for_packages(&repo_root, &batch_packages);
+                for (spec, version) in specs.into_iter().zip(task_versions) {
+                    let telemetry = None;
+                    let inputs = spec.inputs.as_inputs();
+                    let result = scm_instance.get_package_file_hashes(
+                        &repo_root,
+                        &spec.package_path,
+                        &inputs,
+                        spec.inputs.include_default_files(),
+                        telemetry,
+                        index.as_ref(),
+                    );
+                    trace!("hashing complete for {:?}", spec);
+                    if tx
+                        .blocking_send(HashUpdate {
+                            spec,
+                            version,
+                            result,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
             });
             // We wait for the git task to finish so `scm_permit` only gets dropped once the
             // resource is no longer being used.
             // We should not shut down if a SCM task panics
             blocking_handle.await.ok();
         });
-        (version, debouncer)
+        (versions, debouncer)
     }
 
     fn handle_file_event(
@@ -893,22 +926,18 @@ impl Subscriber {
         // Any rehashing we do was triggered by a file event, so don't do it
         // immediately. Wait for the debouncer to time out instead.
         let immediate = false;
+        // New specs are batched per package so that one file event matching
+        // several overlapping input specs shares one git-state read.
+        let mut new_specs_by_package: HashMap<_, Vec<HashSpec>> = HashMap::new();
         for spec in changed_specs {
             match hashes.get_mut(&spec) {
                 // Technically this shouldn't happen, the package_paths are sourced from keys in
                 // hashes.
                 None => {
-                    let (version, debouncer) =
-                        self.queue_package_hash(&spec, hash_update_tx, immediate);
-                    hashes.insert(
-                        spec,
-                        HashState::Pending {
-                            version,
-                            debouncer,
-                            txs: vec![],
-                            rerun_after_current: false,
-                        },
-                    );
+                    new_specs_by_package
+                        .entry(spec.package_path.clone())
+                        .or_default()
+                        .push(spec);
                 }
                 Some(entry) => {
                     if let HashState::Pending {
@@ -935,6 +964,22 @@ impl Subscriber {
                         };
                     }
                 }
+            }
+        }
+
+        for (_package_path, specs) in new_specs_by_package {
+            let (versions, debouncer) =
+                self.queue_package_hashes_batch(specs.clone(), hash_update_tx, immediate);
+            for (spec, version) in specs.into_iter().zip(versions) {
+                hashes.insert(
+                    spec,
+                    HashState::Pending {
+                        version,
+                        debouncer: debouncer.clone(),
+                        txs: vec![],
+                        rerun_after_current: false,
+                    },
+                );
             }
         }
     }
