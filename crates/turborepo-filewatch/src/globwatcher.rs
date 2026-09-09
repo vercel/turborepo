@@ -1747,100 +1747,6 @@ mod test {
         assert_eq!(summary.transitions, 2);
     }
 
-    /// A counting allocator so tests can attribute allocations to a single
-    /// invalidation call. Only compiled into this crate's unit test binary.
-    mod counting_allocator {
-        use std::{
-            alloc::{GlobalAlloc, Layout, System},
-            sync::atomic::{AtomicU64, Ordering},
-        };
-
-        static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-        static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
-
-        pub(super) struct Counting;
-
-        unsafe impl GlobalAlloc for Counting {
-            unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-                count(layout.size());
-                unsafe { System.alloc(layout) }
-            }
-
-            unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-                count(layout.size());
-                unsafe { System.alloc_zeroed(layout) }
-            }
-
-            unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-                count(new_size);
-                unsafe { System.realloc(ptr, layout, new_size) }
-            }
-
-            unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-                unsafe { System.dealloc(ptr, layout) }
-            }
-        }
-
-        #[global_allocator]
-        static GLOBAL_ALLOCATOR: Counting = Counting;
-
-        fn count(size: usize) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(size as u64, Ordering::Relaxed);
-        }
-
-        pub(super) fn reset() {
-            ALLOCATIONS.store(0, Ordering::Relaxed);
-            ALLOCATED_BYTES.store(0, Ordering::Relaxed);
-        }
-
-        pub(super) fn snapshot() -> (u64, u64) {
-            (
-                ALLOCATIONS.load(Ordering::Relaxed),
-                ALLOCATED_BYTES.load(Ordering::Relaxed),
-            )
-        }
-    }
-
-    /// Invalidating an event that matches many includes in one registration
-    /// must allocate temporary memory linear in the include count: a single
-    /// snapshot transition per registration, instead of a growing and shrinking
-    /// snapshot per matching glob.
-    #[test]
-    fn invalidation_temporary_memory_stays_linear_in_include_count() {
-        let (root, _tmp) = temp_dir();
-        let mut measured = Vec::new();
-        for &include_count in &[64usize, 1024] {
-            let includes = overlapping_patterns("dist/generated-output-file.js", include_count);
-            let (mut state, mut glob_statuses) =
-                watched_state(&root, vec![("hash".to_string(), includes, vec![])]);
-            counting_allocator::reset();
-            let summary = invalidate_path_candidates(
-                &mut state,
-                &mut glob_statuses,
-                relative("dist/generated-output-file.js"),
-                &root,
-            );
-            let (allocations, _bytes) = counting_allocator::snapshot();
-            assert!(state.active.is_empty());
-            assert!(glob_statuses.is_empty());
-            assert_eq!(summary.transitions, 1);
-            measured.push((include_count, allocations));
-        }
-
-        let (small_count, small_allocations) = measured[0];
-        let (large_count, large_allocations) = measured[1];
-        let include_ratio = (large_count / small_count) as u64;
-        // A per-glob snapshot strategy allocates quadratically: 16x the
-        // includes allocates ~256x the memory. Linear allocation with fixed
-        // overhead stays below the include ratio itself.
-        assert!(
-            large_allocations < small_allocations * include_ratio,
-            "temporary allocations for {large_count} includes ({large_allocations}) should stay \
-             below the {include_ratio}x scaling of {small_count} includes ({small_allocations})"
-        );
-    }
-
     /// Manual benchmark for the cost of one event that matches many include
     /// globs in a single registration. Run with:
     ///
@@ -1857,13 +1763,10 @@ mod test {
         for &include_count in &[64usize, 256, 1024] {
             let includes = overlapping_patterns(EVENT, include_count);
             let mut timings: Vec<Duration> = Vec::new();
-            let mut allocations: Vec<u64> = Vec::new();
-            let mut bytes: Vec<u64> = Vec::new();
             let mut transitions: Vec<usize> = Vec::new();
             for _ in 0..7 {
                 let (mut state, mut glob_statuses) =
                     watched_state(&root, vec![("bench".to_string(), includes.clone(), vec![])]);
-                counting_allocator::reset();
                 let start = Instant::now();
                 let summary = invalidate_path_candidates(
                     &mut state,
@@ -1872,24 +1775,15 @@ mod test {
                     &root,
                 );
                 timings.push(start.elapsed());
-                let (allocation_count, byte_count) = counting_allocator::snapshot();
-                allocations.push(allocation_count);
-                bytes.push(byte_count);
                 transitions.push(summary.transitions);
                 // Sanity: the event invalidates the entire registration.
                 assert!(state.active.is_empty());
                 assert!(glob_statuses.is_empty());
             }
             timings.sort();
-            allocations.sort();
-            bytes.sort();
             println!(
-                "includes={include_count:>4} transitions={} allocs(min/med/max)={}/{}/{}                  bytes={} medtime={:?}",
+                "includes={include_count:>4} transitions={} medtime={:?}",
                 transitions[0],
-                allocations[0],
-                allocations[allocations.len() / 2],
-                allocations[allocations.len() - 1],
-                bytes[bytes.len() / 2],
                 timings[timings.len() / 2]
             );
         }

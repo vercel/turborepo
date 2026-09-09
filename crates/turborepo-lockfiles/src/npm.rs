@@ -1,7 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
 use semver::Version;
-use serde::{Deserialize, Serialize, ser::SerializeMap};
+use serde::{
+    Deserialize, Serialize,
+    de::{Deserializer, IgnoredAny, MapAccess, Visitor},
+    ser::SerializeMap,
+};
 use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
@@ -17,14 +21,59 @@ pub struct NpmLockfile {
     lockfile_version: i32,
     #[serde(default)]
     packages: HashMap<String, NpmPackage>,
-    // We parse this so it doesn't end up in 'other' and we don't need to worry
-    // about accidentally serializing it.
-    #[serde(skip_serializing, default)]
-    dependencies: Map<String, Value>,
+    // npm v2 lockfiles carry a top-level legacy `dependencies` tree that
+    // duplicates `packages`. Resolution only ever uses `packages`, so instead
+    // of materializing a potentially very large redundant tree, we record only
+    // whether it has entries: `load` rejects lockfiles that have a legacy tree
+    // but no `packages`, since those cannot be resolved.
+    // Parsing it as a known field also keeps it out of 'other' so we don't
+    // need to worry about accidentally serializing it.
+    #[serde(
+        default,
+        rename = "dependencies",
+        deserialize_with = "deserialize_legacy_dependencies"
+    )]
+    has_legacy_dependencies: bool,
     // We want to reserialize any additional fields, but we don't use them
     // we keep them as raw values to avoid describing the correct schema.
     #[serde(flatten)]
     other: Map<String, Value>,
+}
+
+/// Deserializes npm's top-level legacy `dependencies` table, recording only
+/// whether it has entries. Keys and values are consumed with [`IgnoredAny`] so
+/// the (potentially very large) legacy tree is never materialized; its
+/// emptiness is all [`NpmLockfile::load`] needs in order to reject lockfiles
+/// that only have a legacy tree.
+///
+/// This must not become `#[serde(skip_deserializing)]`: skipping the field
+/// entirely would silently accept those lockfiles instead of rejecting them.
+fn deserialize_legacy_dependencies<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct LegacyDependenciesVisitor;
+
+    impl<'de> Visitor<'de> for LegacyDependenciesVisitor {
+        type Value = bool;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            // Matches serde's message for map fields so rejections of
+            // malformed lockfiles are unchanged.
+            formatter.write_str("a map")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut has_entries = false;
+            while map.next_key::<IgnoredAny>()?.is_some() {
+                map.next_value::<IgnoredAny>()?;
+                has_entries = true;
+            }
+            Ok(has_entries)
+        }
+    }
+
+    deserializer.deserialize_map(LegacyDependenciesVisitor)
 }
 
 impl Serialize for NpmLockfile {
@@ -215,7 +264,8 @@ impl Lockfile for NpmLockfile {
         Ok(Box::new(Self {
             lockfile_version: self.lockfile_version,
             packages: pruned_packages,
-            dependencies: Map::default(),
+            // The pruned lockfile never carries a legacy dependency tree.
+            has_legacy_dependencies: false,
             other: self.other.clone(),
         }))
     }
@@ -307,7 +357,7 @@ impl NpmLockfile {
         // to resolve dependencies.
         // See https://github.com/npm/cli/blob/9609e9eed87c735f0319ac0af265f4d406cbf800/workspaces/arborist/lib/shrinkwrap.js#L674
         if lockfile.lockfile_version <= 1
-            || (lockfile.packages.is_empty() && !lockfile.dependencies.is_empty())
+            || (lockfile.packages.is_empty() && lockfile.has_legacy_dependencies)
         {
             Err(Error::UnsupportedNpmVersion)
         } else {
@@ -1354,5 +1404,193 @@ mod test {
                 malicious_version
             );
         }
+    }
+
+    // npm v2 lockfiles duplicate the resolved tree in a top-level legacy
+    // `dependencies` table. We never materialize that table; these tests pin
+    // every behavior that depends on it: rejecting lockfiles that only have a
+    // legacy tree, accepting well-formed v2 lockfiles regardless of the
+    // table's contents, rejecting malformed tables, and never reserializing
+    // the table.
+    #[test]
+    fn test_load_rejects_lockfile_with_only_legacy_dependencies() {
+        let json = r#"{
+            "lockfileVersion": 2,
+            "dependencies": {
+                "foo": {
+                    "version": "1.0.0",
+                    "requires": { "bar": "^1.0.0" }
+                }
+            }
+        }"#;
+
+        let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+        assert!(matches!(err, Error::UnsupportedNpmVersion));
+    }
+
+    #[test]
+    fn test_load_rejects_v1_lockfiles() {
+        // v1 lockfiles are rejected regardless of their contents.
+        for json in [
+            r#"{"lockfileVersion": 1, "dependencies": {"foo": {"version": "1.0.0"}}}"#,
+            r#"{"lockfileVersion": 0, "packages": {"node_modules/foo": {"version": "1.0.0"}}}"#,
+        ] {
+            let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+            assert!(matches!(err, Error::UnsupportedNpmVersion));
+        }
+    }
+
+    #[test]
+    fn test_load_accepts_missing_or_empty_legacy_dependencies() {
+        // An empty or missing legacy table is not "legacy-only": with no
+        // packages to resolve there is nothing unsupported about the lockfile.
+        for json in [
+            r#"{"lockfileVersion": 2}"#,
+            r#"{"lockfileVersion": 2, "packages": {}}"#,
+            r#"{"lockfileVersion": 2, "dependencies": {}}"#,
+            r#"{"lockfileVersion": 2, "packages": {}, "dependencies": {}}"#,
+        ] {
+            NpmLockfile::load(json.as_bytes())
+                .unwrap_or_else(|err| panic!("should load {json}: {err}"));
+        }
+    }
+
+    #[test]
+    fn test_load_rejects_malformed_legacy_dependencies() {
+        // The legacy table must still be validated as a map, exactly as it
+        // was when it was deserialized into a map.
+        for json in [
+            r#"{"lockfileVersion": 2, "dependencies": 5}"#,
+            r#"{"lockfileVersion": 2, "dependencies": []}"#,
+            r#"{"lockfileVersion": 2, "dependencies": null}"#,
+            r#"{"lockfileVersion": 2, "dependencies": "foo"}"#,
+        ] {
+            let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+            assert!(
+                matches!(err, Error::JsonError(_)),
+                "expected a JSON error for {json}, got {err:?}"
+            );
+            assert!(
+                err.to_string().contains("expected a map"),
+                "unexpected error message for {json}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_accepts_arbitrary_legacy_dependency_values() {
+        // Legacy tree entries are never interpreted, so any value the old
+        // `serde_json::Value` deserialization accepted must still be accepted.
+        let json = r#"{
+            "lockfileVersion": 2,
+            "packages": {
+                "": { "name": "monorepo" },
+                "node_modules/foo": { "version": "1.0.0" }
+            },
+            "dependencies": {
+                "foo": {
+                    "version": "1.0.0",
+                    "resolved": "https://registry.npmjs.org/foo/-/foo-1.0.0.tgz",
+                    "requires": { "bar": "^2.0.0" },
+                    "dependencies": { "bar": { "version": "2.0.0" } }
+                },
+                "duplicate": { "version": "1.0.0" },
+                "duplicate": { "version": "2.0.0" },
+                "number": 5,
+                "boolean": true,
+                "null": null,
+                "list": [1, "two", { "three": 3 }]
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        assert!(lockfile.packages.contains_key("node_modules/foo"));
+    }
+
+    #[test]
+    fn test_encode_omits_legacy_dependencies_but_keeps_unknown_fields() {
+        let json = r#"{
+            "lockfileVersion": 2,
+            "requires": true,
+            "packages": { "node_modules/foo": { "version": "1.0.0" } },
+            "dependencies": { "foo": { "version": "1.0.0" } }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        let encoded: serde_json::Value =
+            serde_json::from_slice(&lockfile.encode().unwrap()).unwrap();
+        assert!(encoded.get("dependencies").is_none());
+        assert_eq!(encoded.get("requires"), Some(&serde_json::json!(true)));
+        assert_eq!(encoded.get("lockfileVersion"), Some(&serde_json::json!(2)));
+    }
+
+    #[test]
+    fn test_legacy_dependencies_do_not_change_pruned_output() {
+        // The legacy tree is redundant with `packages`, so a v2 lockfile and
+        // the same lockfile without the legacy table must produce identical
+        // pruned lockfiles.
+        let packages = r#""packages": {
+            "": { "name": "monorepo", "workspaces": ["packages/*"] },
+            "node_modules/pkg": { "resolved": "packages/pkg", "link": true },
+            "packages/pkg": { "version": "1.0.0", "dependencies": { "foo": "^1.0.0" } },
+            "node_modules/foo": { "version": "1.0.0" }
+        }"#;
+        let with_legacy = format!(
+            r#"{{"lockfileVersion": 2, {packages}, "dependencies": {{
+                "foo": {{ "version": "1.0.0", "requires": {{}} }},
+                "pkg": {{ "version": "1.0.0" }}
+            }}}}"#
+        );
+        let without_legacy = format!(r#"{{"lockfileVersion": 2, {packages}}}"#);
+
+        let with_legacy = NpmLockfile::load(with_legacy.as_bytes()).unwrap();
+        let without_legacy = NpmLockfile::load(without_legacy.as_bytes()).unwrap();
+
+        let pruned = |lockfile: &NpmLockfile| {
+            lockfile
+                .subgraph(
+                    &["packages/pkg".to_string()],
+                    &["node_modules/foo".to_string()],
+                )
+                .unwrap()
+                .encode()
+                .unwrap()
+        };
+        assert_eq!(pruned(&with_legacy), pruned(&without_legacy));
+    }
+
+    #[test]
+    fn test_load_handles_large_legacy_dependency_tree() {
+        // npm v2 duplicates the whole resolved tree into the legacy table, so
+        // it can be very large. Its contents must not affect loading,
+        // resolution, or pruning.
+        let mut json = String::from(
+            r#"{"lockfileVersion": 2, "packages": {
+                "": { "name": "monorepo", "workspaces": ["packages/*"] },
+                "node_modules/pkg": { "resolved": "packages/pkg", "link": true },
+                "packages/pkg": { "version": "1.0.0", "dependencies": { "foo": "^1.0.0" } },
+                "node_modules/foo": { "version": "1.0.0" }
+            }, "dependencies": {"#,
+        );
+        for i in 0..10_000 {
+            json.push_str(&format!(
+                "\"legacy-{i}\": {{\"version\": \"1.0.{i}\", \"requires\": {{\"bar\": \
+                 \"^{i}.0.0\"}}, \"dependencies\": {{\"bar\": {{\"version\": \"2.0.0\"}}}}}},"
+            ));
+        }
+        json.push_str("\"foo\": {\"version\": \"1.0.0\"}}}");
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        assert!(lockfile.packages.contains_key("node_modules/foo"));
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg".to_string()],
+                &["node_modules/foo".to_string()],
+            )
+            .unwrap();
+        let encoded: serde_json::Value = serde_json::from_slice(&pruned.encode().unwrap()).unwrap();
+        assert!(encoded.get("dependencies").is_none());
+        assert!(encoded["packages"].get("node_modules/foo").is_some());
     }
 }

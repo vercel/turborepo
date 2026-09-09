@@ -1297,3 +1297,146 @@ fn test_prune_standard_golden_inventory() {
         inventory_tree(&tempdir.path().join("out"))
     );
 }
+
+// --- file: dependencies ---
+
+/// Prepare the shared file-dependency fixture for a prune run: the shared
+/// vendored package gains a symlink, a read-only file, and a `.gitignore` with
+/// an ignored sibling.
+///
+/// The read-only file is the observable for "copied once per destination":
+/// re-copying the same source over an existing read-only destination file
+/// fails with `EACCES`, so a prune that duplicates shared `file:` dependency
+/// copies cannot succeed.
+///
+/// The ignore files are written here, after `setup_integration_test` has
+/// committed the fixture, so they don't affect how the fixture itself is
+/// checked into the repository.
+fn setup_shared_file_dependency(dir: &Path) {
+    let vendored_lib = dir.join("vendored/sdk/lib");
+    fs::write(vendored_lib.join(".gitignore"), "ignored.txt\n").unwrap();
+    fs::write(
+        vendored_lib.join("ignored.txt"),
+        "this file is gitignored and must not be copied\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            vendored_lib.join("readonly.txt"),
+            fs::Permissions::from_mode(0o444),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("index.js", vendored_lib.join("link.js")).unwrap();
+    }
+}
+
+fn assert_shared_file_dependency_copied(root: &Path, vendored_dir: &Path) {
+    // Shared dependency contents are identical to the source in every
+    // destination, including the read-only file.
+    for file in [
+        "package.json",
+        "lib/index.js",
+        "lib/data.txt",
+        "lib/readonly.txt",
+    ] {
+        let expected = fs::read_to_string(root.join("vendored/sdk").join(file)).unwrap();
+        let copied = fs::read_to_string(vendored_dir.join("vendored/sdk").join(file))
+            .unwrap_or_else(|error| {
+                panic!("missing {file} in {}: {error}", vendored_dir.display())
+            });
+        assert_eq!(copied, expected, "{file} should match the source");
+    }
+
+    // Ignore rules inside the vendored package are still respected.
+    assert!(
+        !vendored_dir.join("vendored/sdk/lib/ignored.txt").exists(),
+        "gitignored vendored file should not be copied into {}",
+        vendored_dir.display()
+    );
+    // The vendored .gitignore itself travels with the package.
+    assert!(vendored_dir.join("vendored/sdk/lib/.gitignore").exists());
+
+    // Symlinks inside the vendored package are copied as symlinks.
+    #[cfg(unix)]
+    {
+        let link = vendored_dir.join("vendored/sdk/lib/link.js");
+        assert!(
+            link.symlink_metadata().unwrap().file_type().is_symlink(),
+            "vendored symlink should be copied as a symlink"
+        );
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("index.js"));
+    }
+
+    // A `file:` dependency referenced by only one workspace is not
+    // over-deduplicated away.
+    assert!(
+        vendored_dir.join("vendored/other/asset.txt").exists(),
+        "single-workspace file: dependency should be copied into {}",
+        vendored_dir.display()
+    );
+}
+
+#[test]
+fn test_prune_docker_copies_shared_file_dependency_once_per_destination() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    // Retains web and docs, which both depend on `file:../../vendored/sdk`.
+    // Before shared sources were deduplicated, the second copy of the
+    // read-only vendored file into the same destination failed with
+    // `EACCES` on Unix.
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added docs"));
+
+    let out = tempdir.path().join("out");
+    for destination in ["full", "json"] {
+        assert_shared_file_dependency_copied(tempdir.path(), &out.join(destination));
+    }
+    // Both retained workspaces are present in both destinations.
+    for destination in ["full", "json"] {
+        for app in ["web", "docs"] {
+            assert!(out.join(destination).join("apps").join(app).exists());
+        }
+    }
+}
+
+#[test]
+fn test_prune_copies_shared_file_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    assert_shared_file_dependency_copied(tempdir.path(), &tempdir.path().join("out"));
+    assert!(tempdir.path().join("out/apps/web").exists());
+    assert!(tempdir.path().join("out/apps/docs").exists());
+}
