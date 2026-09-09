@@ -594,7 +594,7 @@ enum SimplePattern {
 fn plain_segment(segment: &str) -> bool {
     !segment.is_empty()
         && segment.bytes().all(|b| {
-            b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'@' | b'+' | b' ')
+            b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'~' | b'@' | b'+' | b' ')
         })
 }
 
@@ -1271,6 +1271,12 @@ mod classify_test {
                 assert_eq!(prefix, PathBuf::from("C:/repo/src"));
             }
             _ => panic!("escaped Windows drive should classify as recursive all"),
+        }
+        match classify("C\\:/Users/RUNNER~1/repo/src/**") {
+            SimplePattern::RecursiveAll(prefix) => {
+                assert_eq!(prefix, PathBuf::from("C:/Users/RUNNER~1/repo/src"));
+            }
+            _ => panic!("Windows 8.3 path components should classify as recursive all"),
         }
         match classify("//server/share/repo/src/**") {
             SimplePattern::RecursiveAll(prefix) => {
