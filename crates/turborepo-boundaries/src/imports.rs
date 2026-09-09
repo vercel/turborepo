@@ -550,7 +550,7 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
-        std::fs::write(file_path.as_std_path(), &file_content.as_bytes()).unwrap();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -579,7 +579,7 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
-        std::fs::write(file_path.as_std_path(), &file_content.as_bytes()).unwrap();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -1064,7 +1064,7 @@ mod test {
         std::fs::write(&target_path, "export const x = 1;").expect("write target file");
 
         let file_content: Arc<str> = format!(r#"import {{ x }} from "{import}";"#).into();
-        std::fs::write(root.join("index.ts"), &file_content.as_bytes()).expect("write source file");
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).expect("write source file");
 
         let package_root = AbsoluteSystemPath::new(root.to_str().expect("root path is utf-8"))
             .expect("root path is absolute");
