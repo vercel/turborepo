@@ -387,9 +387,11 @@ mod tests {
             .put(&repo_root_path, hash, std::slice::from_ref(&file), 42)
             .await?;
 
-        let local_bytes = std::fs::read(
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
-        )?;
+        let local_bytes = std::fs::read(repo_root_path.join_components(&[
+            ".turbo",
+            "cache",
+            &format!("{hash}.tar.zst"),
+        ]))?;
         let uploaded = remote_bytes(port, hash).await;
 
         assert!(!uploaded.is_empty());
@@ -424,9 +426,11 @@ mod tests {
 
         // Remove the local archive and the outputs so the fetch must be a
         // remote hit that restores and re-installs.
-        std::fs::remove_file(
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
-        )?;
+        std::fs::remove_file(repo_root_path.join_components(&[
+            ".turbo",
+            "cache",
+            &format!("{hash}.tar.zst"),
+        ]))?;
         std::fs::remove_file(repo_root_path.resolve(&file))?;
 
         let (metadata, files) = cache
@@ -440,9 +444,11 @@ mod tests {
             b"fetch install contents"
         );
 
-        let local_bytes = std::fs::read(
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
-        )?;
+        let local_bytes = std::fs::read(repo_root_path.join_components(&[
+            ".turbo",
+            "cache",
+            &format!("{hash}.tar.zst"),
+        ]))?;
         assert_eq!(
             local_bytes, uploaded,
             "locally installed archive must be the downloaded bytes, not a re-encode"
