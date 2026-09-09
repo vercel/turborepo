@@ -15,7 +15,7 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
 };
 
 use itertools::Itertools;
@@ -72,6 +72,9 @@ struct PackageSource {
 #[derive(Debug, Default)]
 struct LspPackages {
     packages: Vec<LspPackage>,
+    /// Derived once per package snapshot. Every relevant document change
+    /// reuses it instead of rebuilding the index from scratch.
+    task_index: OnceLock<HashMap<String, Vec<Option<String>>>>,
 }
 
 #[cfg(test)]
@@ -146,7 +149,10 @@ impl LspPackages {
                 .cmp(&package_sort_key(right))
                 .then_with(|| left.source_path.cmp(&right.source_path))
         });
-        Self { packages }
+        Self {
+            packages,
+            task_index: OnceLock::new(),
+        }
     }
 
     fn from_repository_discovery(response: RepositoryDiscoverySnapshot) -> Self {
@@ -173,21 +179,26 @@ impl LspPackages {
         &package.tasks
     }
 
-    fn task_index(&self) -> HashMap<String, Vec<Option<String>>> {
-        let mut tasks = HashMap::<String, Vec<Option<String>>>::new();
-        for package in &self.packages {
-            let identity = package
-                .identity
-                .as_ref()
-                .map(|identity| identity.as_str().to_string());
-            for script in Self::observed_task_names(package) {
-                let identities = tasks.entry(script.clone()).or_default();
-                if !identities.contains(&identity) {
-                    identities.push(identity.clone());
+    fn task_index(&self) -> &HashMap<String, Vec<Option<String>>> {
+        self.task_index.get_or_init(|| {
+            let mut tasks = HashMap::<String, Vec<Option<String>>>::new();
+            // Identity membership must be O(1): with P packages sharing S
+            // scripts, rescanning the accumulated identities for every
+            // observation costs S * P * (P - 1) / 2 comparisons.
+            let mut seen = HashSet::<(&str, Option<&str>)>::new();
+            for package in &self.packages {
+                let identity = package.identity.as_ref().map(PackageName::as_str);
+                for script in Self::observed_task_names(package) {
+                    if seen.insert((script.as_str(), identity)) {
+                        tasks
+                            .entry(script.clone())
+                            .or_default()
+                            .push(identity.map(str::to_string));
+                    }
                 }
             }
-        }
-        tasks
+            tasks
+        })
     }
 
     fn completion_labels(&self) -> Vec<String> {
@@ -934,10 +945,10 @@ impl Backend {
         let contents = rope.chunks().join("");
 
         let packages = self.package_discovery().await;
-        let tasks = packages.map(|packages| packages.task_index());
+        let tasks = packages.as_ref().map(|packages| packages.task_index());
 
         // we still want to emit diagnostics if we can't infer tasks
-        let tasks_and_packages = tasks.as_ref().map(|tasks| {
+        let tasks_and_packages = tasks.map(|tasks| {
             (
                 tasks,
                 tasks
@@ -1572,6 +1583,43 @@ mod tests {
         assert_eq!(packages.references("build").len(), 1);
         assert!(packages.references("#build").is_empty());
         assert_eq!(packages.task_index().get("build"), Some(&vec![None]));
+    }
+
+    #[test]
+    fn task_index_deduplicates_identities_and_is_built_once() {
+        let sources = HashMap::from([
+            (
+                AbsoluteSystemPathBuf::new("/repo/a/package.json").unwrap(),
+                PackageSource {
+                    text: r#"{"scripts":{"build":"a","test":"a"}}"#.to_string(),
+                    package_json: parse_package_json(
+                        r#"{"scripts":{"build":"a","test":"a"}}"#,
+                        &AbsoluteSystemPathBuf::new("/repo/a/package.json").unwrap(),
+                    ),
+                },
+            ),
+            (
+                AbsoluteSystemPathBuf::new("/repo/b/package.json").unwrap(),
+                PackageSource {
+                    text: r#"{"scripts":{"build":"b","test":"b"}}"#.to_string(),
+                    package_json: parse_package_json(
+                        r#"{"scripts":{"build":"b","test":"b"}}"#,
+                        &AbsoluteSystemPathBuf::new("/repo/b/package.json").unwrap(),
+                    ),
+                },
+            ),
+        ]);
+        let packages = LspPackages::unscoped(sources);
+
+        // Both unscoped packages share `build` and `test`, but each script
+        // records the unscoped identity only once.
+        let index = packages.task_index();
+        assert_eq!(index.get("build"), Some(&vec![None]));
+        assert_eq!(index.get("test"), Some(&vec![None]));
+
+        // The index is derived once per package snapshot and reused for
+        // every later document change instead of being rebuilt.
+        assert!(std::ptr::eq(index, packages.task_index()));
     }
 
     #[tokio::test]
