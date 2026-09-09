@@ -24,8 +24,8 @@ pub struct CacheMultiplexer {
     // being read-only
     should_print_skipping_remote_put: AtomicBool,
     cache_config: CacheConfig,
-    fs: Option<FSCache>,
-    http: Option<HTTPCache>,
+    fs: Option<Arc<FSCache>>,
+    http: Option<Arc<HTTPCache>>,
     scm_state: LazyScmState,
 }
 
@@ -65,6 +65,7 @@ impl CacheMultiplexer {
                     analytics_recorder.clone(),
                     scm_state.clone(),
                 )
+                .map(Arc::new)
             })
             .transpose()?;
 
@@ -86,14 +87,14 @@ impl CacheMultiplexer {
 
         let http_cache = if use_http_cache {
             match (api_client, api_auth) {
-                (Some(api_client), Some(api_auth)) => Some(HTTPCache::new(
+                (Some(api_client), Some(api_auth)) => Some(Arc::new(HTTPCache::new(
                     api_client,
                     opts,
                     repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
                     scm_state.clone(),
-                )?),
+                )?)),
                 _ => None,
             }
         } else {
@@ -112,7 +113,7 @@ impl CacheMultiplexer {
 
     // This is technically a TOCTOU bug, but at worst it'll cause
     // a few extra cache requests.
-    fn get_http_cache(&self) -> Option<&HTTPCache> {
+    fn get_http_cache(&self) -> Option<&Arc<HTTPCache>> {
         if self.should_use_http_cache.load(Ordering::Relaxed) {
             self.http.as_ref()
         } else {
@@ -144,9 +145,28 @@ impl CacheMultiplexer {
             && let Some(fs) = &self.fs
             && let Some(http) = self.get_http_cache()
         {
-            let body = crate::artifact_body::ArtifactBody::from_files(anchor, files)?;
+            // Archive construction reads and compresses every output file;
+            // keep that synchronous work off the Tokio runtime workers.
+            let body = Arc::new({
+                let anchor = anchor.to_owned();
+                let files = files.to_vec();
+                tokio::task::spawn_blocking(move || {
+                    crate::artifact_body::ArtifactBody::from_files(&anchor, &files)
+                })
+                .await??
+            });
 
-            fs.put_archive(anchor, key, files, &body, duration)?;
+            {
+                let fs = fs.clone();
+                let anchor = anchor.to_owned();
+                let key = key.to_owned();
+                let files = files.to_vec();
+                let body = body.clone();
+                tokio::task::spawn_blocking(move || {
+                    fs.put_archive(&anchor, &key, &files, &body, duration)
+                })
+                .await??;
+            }
             let http_result = http.put_body(key, body, duration).await;
 
             return match http_result {
@@ -163,11 +183,16 @@ impl CacheMultiplexer {
             };
         }
 
-        if self.cache_config.local.write {
-            self.fs
-                .as_ref()
-                .map(|fs| fs.put(anchor, key, files, duration))
-                .transpose()?;
+        if self.cache_config.local.write
+            && let Some(fs) = &self.fs
+        {
+            // Synchronous archive I/O + compression belongs on the blocking
+            // pool; the AsyncCache semaphore bounds concurrency.
+            let fs = fs.clone();
+            let anchor = anchor.to_owned();
+            let key = key.to_owned();
+            let files = files.to_vec();
+            tokio::task::spawn_blocking(move || fs.put(&anchor, &key, &files, duration)).await??;
         }
 
         let http_result = match self.get_http_cache() {
@@ -219,9 +244,18 @@ impl CacheMultiplexer {
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         if self.cache_config.local.read
             && let Some(fs) = &self.fs
-            && let response @ Ok(Some(_)) = fs.fetch(anchor, key)
         {
-            return response;
+            // Local restore (decompression + extraction) is synchronous; keep
+            // it off the runtime workers.
+            let fs = fs.clone();
+            let anchor = anchor.to_owned();
+            let key = key.to_owned();
+            let response = tokio::task::spawn_blocking(move || fs.fetch(&anchor, &key)).await?;
+            if let response @ Ok(Some(_)) = response {
+                return response;
+            }
+            // Ok(None) or Err: fall through to the remote cache, matching
+            // previous behavior.
         }
 
         if self.cache_config.remote.read
@@ -240,7 +274,16 @@ impl CacheMultiplexer {
                     // lower-priority caches is an optimization. The archive
                     // passed signature verification before any restore ran, so
                     // a rejected download never becomes a local hit.
-                    let _ = fs.put_archive(anchor, key, &files, &body, hit_metadata.time_saved);
+                    let _ = {
+                        let fs = fs.clone();
+                        let anchor = anchor.to_owned();
+                        let key = key.to_owned();
+                        let files = files.clone();
+                        tokio::task::spawn_blocking(move || {
+                            fs.put_archive(&anchor, &key, &files, &body, hit_metadata.time_saved)
+                        })
+                        .await
+                    };
                     return Ok(Some((hit_metadata, files)));
                 }
             } else if let Ok(Some((hit_metadata, files))) = http.fetch(key).await {
