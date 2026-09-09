@@ -38,11 +38,35 @@ impl<'a> WorkspacePathIndex<'a> {
     }
 }
 
+/// Reverse index from package name to its entry in the workspaces map, built
+/// once and shared across all `DependencySplitter` instances so alias
+/// dependency lookups borrow the entry instead of allocating an owned
+/// `PackageName` for every query.
+///
+/// The root sentinel is excluded: its `//` key is an internal encoding detail,
+/// not a name that a dependency specifier can target.
+pub struct WorkspaceNameIndex<'a>(HashMap<&'a str, (&'a PackageName, &'a PackageJson)>);
+
+impl<'a> WorkspaceNameIndex<'a> {
+    pub(crate) fn from_workspaces(workspaces: &'a HashMap<PackageName, PackageJson>) -> Self {
+        Self(
+            workspaces
+                .iter()
+                .filter_map(|(name, package_json)| match name {
+                    PackageName::Other(_) => Some((name.as_str(), (name, package_json))),
+                    PackageName::Root => None,
+                })
+                .collect(),
+        )
+    }
+}
+
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'a AbsoluteSystemPath,
     workspaces: &'a HashMap<PackageName, PackageJson>,
     path_index: &'a WorkspacePathIndex<'a>,
+    name_index: &'a WorkspaceNameIndex<'a>,
     link_workspace_packages: bool,
     catalogs: Option<&'a PnpmCatalogs>,
 }
@@ -54,6 +78,7 @@ impl<'a> DependencySplitter<'a> {
         workspaces: &'a HashMap<PackageName, PackageJson>,
         link_workspace_packages: bool,
         path_index: &'a WorkspacePathIndex<'a>,
+        name_index: &'a WorkspaceNameIndex<'a>,
         catalogs: Option<&'a PnpmCatalogs>,
     ) -> Self {
         Self {
@@ -61,12 +86,13 @@ impl<'a> DependencySplitter<'a> {
             workspace_dir,
             workspaces,
             path_index,
+            name_index,
             link_workspace_packages,
             catalogs,
         }
     }
 
-    pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
+    pub fn is_internal(&self, name: &str, version: &str) -> Option<&'a PackageName> {
         // Resolve catalog: specifiers to their actual version strings
         let resolved;
         let version = if version.starts_with("catalog:") {
@@ -106,12 +132,10 @@ impl<'a> DependencySplitter<'a> {
     fn find_package(
         &self,
         specifier: WorkspacePackageSpecifier,
-    ) -> Option<(PackageName, &PackageJson)> {
+    ) -> Option<(&'a PackageName, &'a PackageJson)> {
         match specifier {
             WorkspacePackageSpecifier::Alias(name) => {
-                // TODO implement borrowing for workspaces to allow for zero copy queries
-                let package_name = PackageName::Other(name.to_string());
-                let info = self.workspaces.get(&package_name)?;
+                let (package_name, info) = *self.name_index.0.get(name)?;
                 Some((package_name, info))
             }
             WorkspacePackageSpecifier::Path(path) => {
@@ -121,21 +145,23 @@ impl<'a> DependencySplitter<'a> {
                 // Pnpm also doesn't support this so we defer to them to provide the error
                 // message.
                 let package_path = AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
-                let (name, info) = self.workspace(&package_path).or_else(|| {
+                self.workspace(&package_path).or_else(|| {
                     // Yarn4 allows for workspace root relative paths
                     let package_path = self.repo_root.join_unix_path(path);
                     let package_path =
                         AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
                     self.workspace(&package_path)
-                })?;
-                Some((name.clone(), info))
+                })
             }
         }
     }
 
-    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageJson)> {
+    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&'a PackageName, &'a PackageJson)> {
         let name = self.path_index.0.get(path)?;
-        let info = self.workspaces.get(name)?;
+        // `get_key_value` borrows the workspace's own key, so the returned
+        // name lives as long as the workspaces map instead of the local
+        // lookup key cloned from the path index.
+        let (name, info) = self.workspaces.get_key_value(name)?;
         Some((name, info))
     }
 }
@@ -439,18 +465,21 @@ mod test {
         };
 
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages,
             catalogs: None,
         };
 
+        let expected = expected.map(PackageName::from);
         assert_eq!(
             splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
-            expected.map(PackageName::from)
+            expected.as_ref()
         );
     }
 
@@ -522,17 +551,19 @@ mod test {
         };
         let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: false,
             catalogs: Some(&catalogs),
         };
         assert_eq!(
             splitter.is_internal("pkg-b", "catalog:"),
-            Some(PackageName::Other("pkg-b".to_string()))
+            Some(&PackageName::Other("pkg-b".to_string()))
         );
     }
 
@@ -558,17 +589,19 @@ mod test {
         };
         let catalogs = make_catalogs(&[], &[("internal", &[("pkg-b", "workspace:*")])]);
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: false,
             catalogs: Some(&catalogs),
         };
         assert_eq!(
             splitter.is_internal("pkg-b", "catalog:internal"),
-            Some(PackageName::Other("pkg-b".to_string()))
+            Some(&PackageName::Other("pkg-b".to_string()))
         );
     }
 
@@ -595,17 +628,19 @@ mod test {
         // catalog resolves to a semver range that matches the workspace package version
         let catalogs = make_catalogs(&[("pkg-b", "^1.0.0")], &[]);
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: true,
             catalogs: Some(&catalogs),
         };
         assert_eq!(
             splitter.is_internal("pkg-b", "catalog:"),
-            Some(PackageName::Other("pkg-b".to_string()))
+            Some(&PackageName::Other("pkg-b".to_string()))
         );
     }
 
@@ -622,11 +657,13 @@ mod test {
         // "react" is not a workspace package
         let catalogs = make_catalogs(&[("react", "^18.2.0")], &[]);
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: false,
             catalogs: Some(&catalogs),
         };
@@ -654,12 +691,14 @@ mod test {
             map
         };
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         // No catalogs - catalog: specifier can't be resolved, treated as external
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: false,
             catalogs: None,
         };
@@ -689,17 +728,19 @@ mod test {
         // "catalog:default" should resolve to the default catalog
         let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
         let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
             path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages: false,
             catalogs: Some(&catalogs),
         };
         assert_eq!(
             splitter.is_internal("pkg-b", "catalog:default"),
-            Some(PackageName::Other("pkg-b".to_string()))
+            Some(&PackageName::Other("pkg-b".to_string()))
         );
     }
 }
