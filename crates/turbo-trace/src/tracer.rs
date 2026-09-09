@@ -33,6 +33,7 @@ pub struct Tracer {
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
     import_type: ImportTraceType,
+    include_ast: bool,
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -203,6 +204,7 @@ impl Tracer {
             cwd,
             import_type: ImportTraceType::All,
             errors: Vec::new(),
+            include_ast: true,
         }
     }
 
@@ -211,25 +213,38 @@ impl Tracer {
         self.import_type = import_type;
     }
 
+    /// Controls whether every traced file's AST is serialized to JSON.
+    ///
+    /// Defaults to true. Callers that only need dependency *paths* should set
+    /// this to false: serializing the parsed program and decoding it into
+    /// `serde_json::Value` is by far the most expensive part of tracing a
+    /// file, and path-only consumers discard the result.
+    #[allow(dead_code)]
+    pub fn set_include_ast(&mut self, include_ast: bool) {
+        self.include_ast = include_ast;
+    }
+
     #[tracing::instrument(skip(errors))]
     pub async fn get_imports_from_file(
         errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
         import_type: ImportTraceType,
+        include_ast: bool,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
             errors.push(TraceError::FileNotFound(file_path.to_owned()));
             return None;
         };
 
-        let (imports, ast_json) = match parse_file(file_path, &file_content, import_type, true) {
-            Ok(result) => result,
-            Err(msg) => {
-                errors.push(TraceError::ParseError(file_path.to_owned(), msg));
-                return None;
-            }
-        };
+        let (imports, ast_json) =
+            match parse_file(file_path, &file_content, import_type, include_ast) {
+                Ok(result) => result,
+                Err(msg) => {
+                    errors.push(TraceError::ParseError(file_path.to_owned(), msg));
+                    return None;
+                }
+            };
 
         let mut files = Vec::new();
         for ImportResult {
@@ -332,9 +347,14 @@ impl Tracer {
             return;
         }
 
-        let Some((imports, seen_file)) =
-            Self::get_imports_from_file(&mut self.errors, resolver, &file_path, self.import_type)
-                .await
+        let Some((imports, seen_file)) = Self::get_imports_from_file(
+            &mut self.errors,
+            resolver,
+            &file_path,
+            self.import_type,
+            self.include_ast,
+        )
+        .await
         else {
             return;
         };
@@ -526,6 +546,7 @@ impl Tracer {
                     resolver,
                     &file,
                     shared_self.import_type,
+                    shared_self.include_ast,
                 )
                 .await
                 else {
