@@ -52,6 +52,7 @@ fn test_ast() -> Result<(), anyhow::Error> {
         "npm@10.5.0",
         "query",
         "get `main.ts` with ast" => ["query { file(path: \"main.ts\") { path ast } }"],
+        "get `main.ts` with dependencies including ast" => ["query { file(path: \"main.ts\") { path dependencies { files { items { path ast } } } } }"],
     );
 
     Ok(())

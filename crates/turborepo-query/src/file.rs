@@ -166,6 +166,7 @@ impl File {
 
     async fn dependencies(
         &self,
+        ctx: &async_graphql::Context<'_>,
         depth: Option<usize>,
         ts_config: Option<String>,
         import_type: Option<ImportType>,
@@ -175,6 +176,17 @@ impl File {
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
+        );
+
+        // Only serialize every traced file's AST when the query actually
+        // selects it; path-only selections skip the most expensive part of
+        // tracing entirely.
+        tracer.set_include_ast(
+            ctx.look_ahead()
+                .field("files")
+                .field("items")
+                .field("ast")
+                .exists(),
         );
 
         if let Some(import_type) = import_type {
@@ -191,6 +203,7 @@ impl File {
 
     async fn dependents(
         &self,
+        ctx: &async_graphql::Context<'_>,
         ts_config: Option<String>,
         import_type: Option<ImportType>,
     ) -> Result<TraceResult, Error> {
@@ -198,6 +211,16 @@ impl File {
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
+        );
+
+        // Reverse tracing parses every candidate file; only pay for AST
+        // serialization when the selection asks for it.
+        tracer.set_include_ast(
+            ctx.look_ahead()
+                .field("files")
+                .field("items")
+                .field("ast")
+                .exists(),
         );
 
         if let Some(import_type) = import_type {
