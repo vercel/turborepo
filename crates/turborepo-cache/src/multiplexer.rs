@@ -137,6 +137,32 @@ impl CacheMultiplexer {
         // info. This is a no-op when the state is already resolved.
         self.scm_state.get_resolved().await;
 
+        // When both destinations are written, build and compress the archive
+        // exactly once, then install it locally and upload the same bytes.
+        if self.cache_config.local.write
+            && self.cache_config.remote.write
+            && let Some(fs) = &self.fs
+            && let Some(http) = self.get_http_cache()
+        {
+            let body = crate::artifact_body::ArtifactBody::from_files(anchor, files)?;
+
+            fs.put_archive(anchor, key, files, &body, duration)?;
+            let http_result = http.put_body(key, body, duration).await;
+
+            return match http_result {
+                Err(CacheError::ApiClientError(
+                    box turborepo_api_client::Error::CacheDisabled { .. },
+                    ..,
+                )) => {
+                    warn!("failed to put to http cache: cache disabled");
+                    self.should_use_http_cache.store(false, Ordering::Relaxed);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+                Ok(()) => Ok(()),
+            };
+        }
+
         if self.cache_config.local.write {
             self.fs
                 .as_ref()
@@ -200,19 +226,26 @@ impl CacheMultiplexer {
 
         if self.cache_config.remote.read
             && let Some(http) = self.get_http_cache()
-            && let Ok(Some((hit_metadata, files))) = http.fetch(key).await
         {
-            // Store this into fs cache. We can ignore errors here because we know
-            // we have previously successfully stored in HTTP cache, and so the overall
-            // result is a success at fetching. Storing in lower-priority caches is an
-            // optimization.
+            // When the remote hit is also written to the local cache, install
+            // the verified archive bytes directly instead of restoring and
+            // then re-reading/re-compressing every output file.
             if self.cache_config.local.write
                 && let Some(fs) = &self.fs
             {
-                let _ = fs.put(anchor, key, &files, hit_metadata.time_saved);
+                if let Ok(Some((hit_metadata, files, body))) = http.fetch_with_archive(key).await {
+                    // We can ignore errors here because we know we have
+                    // previously successfully fetched from the HTTP cache, and
+                    // so the overall result is a success. Storing in
+                    // lower-priority caches is an optimization. The archive
+                    // passed signature verification before any restore ran, so
+                    // a rejected download never becomes a local hit.
+                    let _ = fs.put_archive(anchor, key, &files, &body, hit_metadata.time_saved);
+                    return Ok(Some((hit_metadata, files)));
+                }
+            } else if let Ok(Some((hit_metadata, files))) = http.fetch(key).await {
+                return Ok(Some((hit_metadata, files)));
             }
-
-            return Ok(Some((hit_metadata, files)));
         }
 
         Ok(None)
@@ -245,5 +278,177 @@ impl CacheMultiplexer {
         }
 
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use anyhow::Result;
+    use tempfile::tempdir;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_types::SecretString;
+    use turborepo_vercel_api_mock::start_test_server;
+
+    use super::*;
+    use crate::{CacheActions, CacheSource, RemoteCacheOpts};
+
+    fn both_write_opts() -> CacheOpts {
+        CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
+            workers: 0,
+            remote_cache_opts: Some(RemoteCacheOpts {
+                unused_team_id: Some("my-team".to_string()),
+                signature: false,
+                enforce_signature_key_length: false,
+            }),
+            cache_max_age: None,
+            cache_max_size: None,
+        }
+    }
+
+    fn test_multiplexer(
+        opts: &CacheOpts,
+        repo_root: &AbsoluteSystemPathBuf,
+        port: u16,
+    ) -> CacheMultiplexer {
+        CacheMultiplexer::new(
+            opts,
+            repo_root,
+            Some(
+                APIClient::new(
+                    format!("http://localhost:{port}"),
+                    Some(Duration::from_secs(200)),
+                    None,
+                    "2.0.0",
+                    true,
+                )
+                .unwrap(),
+            ),
+            Some(APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: SecretString::new("my-token".to_string()),
+                team_slug: None,
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap()
+    }
+
+    async fn start_mock() -> (u16, tokio::task::JoinHandle<Result<()>>) {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .expect("test server start timed out")
+            .expect("test server failed to start");
+        (port, handle)
+    }
+
+    async fn remote_bytes(port: u16, hash: &str) -> Vec<u8> {
+        reqwest::get(format!("http://localhost:{port}/v8/artifacts/{hash}"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap()
+            .to_vec()
+    }
+
+    /// With local and remote writes both enabled, one canonical archive must
+    /// be built: the bytes installed locally are exactly the bytes uploaded.
+    #[tokio::test]
+    async fn test_put_builds_one_archive_for_local_and_remote() -> Result<()> {
+        let (port, handle) = start_mock().await;
+
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("out/output.txt")?;
+        std::fs::create_dir_all(repo_root_path.resolve(&file).parent().unwrap())?;
+        std::fs::write(repo_root_path.resolve(&file), "shared archive contents")?;
+
+        let hash = "shared-put-hash";
+        let cache = test_multiplexer(&both_write_opts(), &repo_root_path, port);
+        cache
+            .put(&repo_root_path, hash, std::slice::from_ref(&file), 42)
+            .await?;
+
+        let local_bytes = std::fs::read(
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
+        )?;
+        let uploaded = remote_bytes(port, hash).await;
+
+        assert!(!uploaded.is_empty());
+        assert_eq!(
+            local_bytes, uploaded,
+            "local and remote destinations must contain the same archive bytes"
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    /// A remote hit with local writes enabled installs the verified remote
+    /// archive bytes locally instead of re-encoding restored files.
+    #[tokio::test]
+    async fn test_fetch_installs_remote_archive_bytes() -> Result<()> {
+        let (port, handle) = start_mock().await;
+
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("out/output.txt")?;
+        std::fs::create_dir_all(repo_root_path.resolve(&file).parent().unwrap())?;
+        std::fs::write(repo_root_path.resolve(&file), "fetch install contents")?;
+
+        let hash = "shared-fetch-hash";
+        let cache = test_multiplexer(&both_write_opts(), &repo_root_path, port);
+        cache
+            .put(&repo_root_path, hash, std::slice::from_ref(&file), 42)
+            .await?;
+
+        let uploaded = remote_bytes(port, hash).await;
+
+        // Remove the local archive and the outputs so the fetch must be a
+        // remote hit that restores and re-installs.
+        std::fs::remove_file(
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
+        )?;
+        std::fs::remove_file(repo_root_path.resolve(&file))?;
+
+        let (metadata, files) = cache
+            .fetch(&repo_root_path, hash)
+            .await?
+            .expect("remote hit expected");
+        assert_eq!(metadata.source, CacheSource::Remote);
+        assert_eq!(files, vec![file.clone()]);
+        assert_eq!(
+            std::fs::read(repo_root_path.resolve(&file))?,
+            b"fetch install contents"
+        );
+
+        let local_bytes = std::fs::read(
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]),
+        )?;
+        assert_eq!(
+            local_bytes, uploaded,
+            "locally installed archive must be the downloaded bytes, not a re-encode"
+        );
+
+        handle.abort();
+        Ok(())
     }
 }

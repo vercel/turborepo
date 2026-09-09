@@ -12,6 +12,9 @@
 
 /// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;
+/// A compressed artifact body shared between local and remote cache consumers
+/// so archives are built exactly once.
+pub(crate) mod artifact_body;
 /// The core cache creation and restoration logic.
 pub mod cache_archive;
 pub mod config;

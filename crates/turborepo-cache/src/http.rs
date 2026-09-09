@@ -2,7 +2,6 @@ use std::{
     backtrace::Backtrace,
     collections::HashMap,
     io::{Read, Seek, SeekFrom, Write},
-    pin::Pin,
     sync::{Arc, Mutex},
 };
 
@@ -17,83 +16,13 @@ use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
-    cache_archive::{CacheReader, CacheWriter},
+    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, ArtifactBody},
+    cache_archive::CacheReader,
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
-
-/// Artifacts smaller than this are kept in memory during transfers. Larger
-/// ones roll over to an anonymous temporary file (unlinked on creation where
-/// the platform supports it) so retained payload memory stays bounded no
-/// matter how large the compressed artifact is.
-const ARTIFACT_MEMORY_THRESHOLD: usize = 8 * 1024 * 1024;
-
-/// The compressed artifact body for an upload, shared across attempts so a
-/// retry after a token refresh resends byte-identical content without
-/// rebuilding the archive.
-enum ArtifactBody {
-    /// Small artifact held in memory; retries are a cheap `Bytes` refcount
-    /// bump.
-    InMemory(bytes::Bytes),
-    /// Large artifact spooled to an anonymous temporary file; retries read it
-    /// back from the start through a fresh handle in bounded chunks.
-    OnDisk(std::fs::File),
-}
-
-type UploadStream = Pin<
-    Box<
-        dyn futures::Stream<Item = Result<bytes::Bytes, turborepo_api_client::Error>> + Send + Sync,
-    >,
->;
-
-impl ArtifactBody {
-    fn len(&self) -> usize {
-        match self {
-            ArtifactBody::InMemory(bytes) => bytes.len(),
-            ArtifactBody::OnDisk(file) => {
-                file.metadata().map(|meta| meta.len() as usize).unwrap_or(0)
-            }
-        }
-    }
-
-    fn generate_tag(
-        &self,
-        signer: &ArtifactSignatureAuthenticator,
-        hash: &str,
-    ) -> Result<String, SignatureError> {
-        match self {
-            ArtifactBody::InMemory(bytes) => signer.generate_tag(hash.as_bytes(), bytes),
-            ArtifactBody::OnDisk(file) => {
-                signer.generate_tag_reader(hash.as_bytes(), file, self.len() as u64)
-            }
-        }
-    }
-
-    fn stream(&self) -> turborepo_api_client::Result<UploadStream> {
-        match self {
-            ArtifactBody::InMemory(bytes) => Ok(Box::pin(chunked_byte_stream(
-                bytes.clone(),
-                HTTPCache::UPLOAD_CHUNK_BYTES,
-            ))),
-            ArtifactBody::OnDisk(file) => {
-                // `try_clone` hands us an independent handle; seek it to the
-                // start because signing (and any previous attempt) moved the
-                // shared offset.
-                let mut handle = file.try_clone()?;
-                handle.seek(SeekFrom::Start(0))?;
-                let reader = tokio_util::io::ReaderStream::with_capacity(
-                    tokio::fs::File::from_std(handle),
-                    HTTPCache::UPLOAD_CHUNK_BYTES,
-                );
-                Ok(Box::pin(futures::StreamExt::map(reader, |chunk| {
-                    chunk.map_err(turborepo_api_client::Error::from)
-                })))
-            }
-        }
-    }
-}
 
 fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
     if api_auth.token.expose() == token.expose() {
@@ -247,11 +176,6 @@ impl HTTPCache {
         }
     }
 
-    /// 256 KB upload chunk size. Larger chunks reduce per-chunk overhead
-    /// (mutex locks in UploadProgress, hyper body framing) which improves
-    /// throughput for large artifacts compared to the previous 8 KB default.
-    const UPLOAD_CHUNK_BYTES: usize = 256 * 1024;
-
     #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
@@ -263,26 +187,20 @@ impl HTTPCache {
         // Spool the compressed artifact: small artifacts stay in memory while
         // large ones roll to an anonymous temporary file, so retained memory
         // is bounded regardless of artifact size.
-        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
-        {
-            let mut buffered = std::io::BufWriter::new(&mut spool);
-            self.write(&mut buffered, anchor, files).await?;
-            // BufWriter's Drop ignores flush errors; flush explicitly so a
-            // failed final write cannot be uploaded as a truncated artifact.
-            buffered.flush()?;
-        }
-        spool.seek(SeekFrom::Start(0))?;
+        let body = ArtifactBody::from_files(anchor, files)?;
+        self.put_body(hash, body, duration).await
+    }
 
-        let body = if spool.is_rolled() {
-            let mut file = spool.into_file()?;
-            // Rewind so signing reads the artifact from the start.
-            file.seek(SeekFrom::Start(0))?;
-            ArtifactBody::OnDisk(file)
-        } else {
-            let mut bytes = Vec::new();
-            spool.read_to_end(&mut bytes)?;
-            ArtifactBody::InMemory(bytes::Bytes::from(bytes))
-        };
+    /// Uploads an already-built archive. Shared with the local cache so a
+    /// combined local+remote write builds and compresses the artifact exactly
+    /// once.
+    #[tracing::instrument(skip_all)]
+    pub(crate) async fn put_body(
+        &self,
+        hash: &str,
+        body: ArtifactBody,
+        duration: u64,
+    ) -> Result<(), CacheError> {
         let body = Arc::new(body);
         let body_len = body.len();
 
@@ -344,21 +262,6 @@ impl HTTPCache {
         .await?;
 
         tracing::debug!("uploaded {}", hash);
-        Ok(())
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn write(
-        &self,
-        writer: impl Write,
-        anchor: &AbsoluteSystemPath,
-        files: &[AnchoredSystemPathBuf],
-    ) -> Result<(), CacheError> {
-        let mut cache_archive = CacheWriter::from_writer(writer, true)?;
-        for file in files {
-            cache_archive.add_file(anchor, file)?;
-        }
-
         Ok(())
     }
 
@@ -438,6 +341,23 @@ impl HTTPCache {
         &self,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        Ok(self
+            .fetch_with_archive(hash)
+            .await?
+            .map(|(metadata, files, _body)| (metadata, files)))
+    }
+
+    /// Fetches and restores the artifact, also returning the verified archive
+    /// bytes so a lower-priority local cache can install the exact same bytes
+    /// without re-encoding them. The signature check completes before both
+    /// the restore and the handoff, so a rejected artifact is never restored
+    /// or installed locally.
+    #[tracing::instrument(skip_all)]
+    pub(crate) async fn fetch_with_archive(
+        &self,
+        hash: &str,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, ArtifactBody)>, CacheError>
+    {
         let response = self
             .execute_with_token_refresh(hash, |api_auth| {
                 let client = &self.client;
@@ -532,7 +452,8 @@ impl HTTPCache {
         }
 
         spool.seek(SeekFrom::Start(0))?;
-        let files = Self::restore_tar(&self.repo_root, spool)?;
+        let body = ArtifactBody::from_spool(spool)?;
+        let files = Self::restore_tar(&self.repo_root, body.reader()?)?;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
@@ -543,6 +464,7 @@ impl HTTPCache {
                 dirty_hash,
             },
             files,
+            body,
         )))
     }
 
@@ -574,24 +496,6 @@ impl HTTPCache {
             e => e.into(),
         }
     }
-}
-
-/// Yields zero-copy `Bytes` slices of `chunk_size` from an already-in-memory
-/// buffer. Each `.slice()` call is O(1) -- it bumps the `Bytes` refcount
-/// rather than copying data.
-fn chunked_byte_stream(
-    buf: bytes::Bytes,
-    chunk_size: usize,
-) -> impl futures::Stream<Item = Result<bytes::Bytes, turborepo_api_client::Error>> {
-    let len = buf.len();
-    futures::stream::unfold((buf, 0usize), move |(buf, offset)| async move {
-        if offset >= len {
-            return None;
-        }
-        let end = (offset + chunk_size).min(len);
-        let chunk = buf.slice(offset..end);
-        Some((Ok(chunk), (buf, end)))
-    })
 }
 
 #[cfg(test)]
