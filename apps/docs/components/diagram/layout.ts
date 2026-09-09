@@ -23,43 +23,48 @@ function estimateNodeWidth(label: string): number {
   return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, textWidth));
 }
 
-function calculateDepths(
+export function calculateDepths(
   nodeIds: Set<string>,
   edges: Edge[]
 ): Map<string, number> {
   const depths = new Map<string, number>();
-  const incomingMap = new Map<string, string[]>();
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, Edge[]>();
 
   for (const edge of edges) {
-    const existing = incomingMap.get(edge.target);
-    if (existing) {
-      existing.push(edge.source);
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+    const targets = outgoing.get(edge.source);
+    if (targets) {
+      targets.push(edge);
     } else {
-      incomingMap.set(edge.target, [edge.source]);
+      outgoing.set(edge.source, [edge]);
     }
   }
 
   const roots: string[] = [];
   for (const id of nodeIds) {
-    if (!incomingMap.has(id) || incomingMap.get(id)!.length === 0) {
+    if (!incoming.has(id)) {
       roots.push(id);
       depths.set(id, 0);
     }
   }
 
-  // BFS to assign depths
-  const queue = [...roots];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  // BFS to assign depths. A node is re-enqueued whenever a longer path to it
+  // is discovered, so `depths` converges to the longest path from any root.
+  // The cursor consumes the queue in place instead of shifting, and each node
+  // only visits its own outgoing edges, so layout is O(V + E) overall.
+  const queue = roots;
+  let cursor = 0;
+  while (cursor < queue.length) {
+    const current = queue[cursor];
+    cursor += 1;
     const currentDepth = depths.get(current) ?? 0;
 
-    for (const edge of edges) {
-      if (edge.source === current) {
-        const existing = depths.get(edge.target);
-        if (existing === undefined || existing < currentDepth + 1) {
-          depths.set(edge.target, currentDepth + 1);
-          queue.push(edge.target);
-        }
+    for (const { target } of outgoing.get(current) ?? []) {
+      const existing = depths.get(target);
+      if (existing === undefined || existing < currentDepth + 1) {
+        depths.set(target, currentDepth + 1);
+        queue.push(target);
       }
     }
   }

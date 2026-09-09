@@ -30,6 +30,7 @@ import { shikiTheme } from "@/lib/shiki-theme";
 import { TurboNode, type TurboNodeData } from "./turbo-node";
 import { TurboEdge } from "./turbo-edge";
 import { FunctionIcon } from "./function-icon";
+import { calculateDepths } from "@/components/diagram/layout";
 
 // Types matching Rust server
 interface PackageNode {
@@ -107,57 +108,6 @@ function calculateNodeWidth(data: TurboNodeData): number {
 }
 
 // Calculate dependency depth for each node
-function calculateDepths(
-  nodeIds: Set<string>,
-  edges: Array<Edge>
-): Map<string, number> {
-  const depths = new Map<string, number>();
-  const incomingEdges = new Map<string, Array<string>>();
-
-  for (const edge of edges) {
-    const existing = incomingEdges.get(edge.target);
-    if (existing) {
-      existing.push(edge.source);
-    } else {
-      incomingEdges.set(edge.target, [edge.source]);
-    }
-  }
-
-  const roots: Array<string> = [];
-  for (const id of nodeIds) {
-    const incoming = incomingEdges.get(id);
-    if (!incoming || incoming.length === 0) {
-      roots.push(id);
-      depths.set(id, 0);
-    }
-  }
-
-  const queue = [...roots];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) continue;
-    const currentDepth = depths.get(current) ?? 0;
-
-    for (const edge of edges) {
-      if (edge.source === current) {
-        const targetDepth = depths.get(edge.target);
-        if (targetDepth === undefined || targetDepth < currentDepth + 1) {
-          depths.set(edge.target, currentDepth + 1);
-          queue.push(edge.target);
-        }
-      }
-    }
-  }
-
-  for (const id of nodeIds) {
-    if (!depths.has(id)) {
-      depths.set(id, 0);
-    }
-  }
-
-  return depths;
-}
-
 function calculateRowWidth(
   nodesInRow: Array<{ node: Node<TurboNodeData>; width: number }>,
   horizontalSpacing: number
