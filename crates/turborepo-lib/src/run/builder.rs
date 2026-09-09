@@ -483,6 +483,79 @@ impl RunBuilder {
         Ok((filtered_pkgs, filter_mode, unqualified_entrypoint_packages))
     }
 
+    /// Whether a `filterUsingTasks` run can resolve its task scope from the
+    /// package-level filter instead of constructing a repository-wide task
+    /// engine and pruning it after the fact.
+    ///
+    /// With `--only`, the engine is exactly `{package x requested task}` plus
+    /// `with` siblings, so a selector that only names packages selects the
+    /// same tasks whether the engine is built for every workspace or only for
+    /// the packages the filter resolves to. Every condition below is required
+    /// for that equivalence to hold; anything else keeps the general
+    /// full-graph path.
+    fn task_filter_can_use_package_scope(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+    ) -> bool {
+        // `--only` prunes the engine to {package x requested task}, which is
+        // what makes the package-scoped construction equivalent.
+        if !self.opts.run_opts.only {
+            return false;
+        }
+        // Affected selectors, watch reruns, all-tasks graphs, and package
+        // inference all require the repository-wide engine.
+        if self.opts.scope_opts.affected_range.is_some()
+            || self.changed_files_for_watch.is_some()
+            || self.add_all_tasks
+            || self.opts.scope_opts.pkg_inference_root.is_some()
+        {
+            return false;
+        }
+        // Strict entrypoint selection consults command participation across
+        // the whole engine, which the scoped engine cannot answer.
+        if self.opts.future_flags.strict_task_entrypoint_selection {
+            return false;
+        }
+        // Only plain package-name selectors (optionally excluded) resolve
+        // identically at the package and task level. Directory selectors, git
+        // ranges, and dependency/dependent expansion have task-level
+        // semantics.
+        if !self.opts.scope_opts.filter_patterns.iter().all(|pattern| {
+            pattern
+                .parse::<turborepo_scope::TargetSelector>()
+                .map(|selector| selector_selects_only_package_names(&selector))
+                .unwrap_or(false)
+        }) {
+            return false;
+        }
+        // Mixing `pkg#task` arguments with unqualified task arguments lets the
+        // scoped engine pick up tasks the task-level filter would prune.
+        let task_names: Vec<TaskName> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|task| TaskName::from(task.as_str()))
+            .collect();
+        let qualified = task_names
+            .iter()
+            .filter(|task| task.package().is_some())
+            .count();
+        if qualified != 0 && qualified != task_names.len() {
+            return false;
+        }
+        // Native task contracts change entrypoint eligibility per package.
+        if pkg_dep_graph
+            .package_task_contexts()
+            .any(|context| context.task_contract().task_entrypoint_domain().is_some())
+        {
+            return false;
+        }
+        // `with` siblings can pull tasks of other packages into the engine.
+        repo_configs_have_no_with_declarations(pkg_dep_graph, turbo_json_loader)
+    }
+
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
         self,
@@ -837,9 +910,16 @@ impl RunBuilder {
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
-        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+        let task_level_filter_requested = self.opts.future_flags.filter_using_tasks
             && (!self.opts.scope_opts.filter_patterns.is_empty()
                 || self.opts.scope_opts.affected_range.is_some());
+        // Narrow `--only` runs whose selectors only name packages resolve the
+        // same task scope from the package-level filter, so the engine can be
+        // constructed for the filtered packages instead of every package in
+        // the repository and pruned afterwards.
+        let use_package_scoped_task_filter = task_level_filter_requested
+            && self.task_filter_can_use_package_scope(&pkg_dep_graph, &turbo_json_loader);
+        let use_task_level_filter = task_level_filter_requested && !use_package_scoped_task_filter;
 
         let use_task_level_affected = !use_task_level_filter
             && self.opts.scope_opts.affected_range.is_some()
@@ -886,6 +966,11 @@ impl RunBuilder {
                     .filter(|name| name != &PackageName::Root),
             )
             .collect();
+        // The package-scoped filter path keeps the `--only` allowed-task set
+        // aligned with the repository-wide engine so `^task` dependencies in
+        // dependency packages remain reachable from the scoped entrypoints.
+        let package_scoped_allowed_workspaces: Option<Vec<PackageName>> =
+            use_package_scoped_task_filter.then(|| task_namespace_packages.clone());
         let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
             &pkg_dep_graph,
             unqualified_entrypoint_packages.iter(),
@@ -950,6 +1035,7 @@ impl RunBuilder {
             &entrypoint_exclusions,
             &turbo_json_loader,
             &env_at_execution_start,
+            package_scoped_allowed_workspaces.as_deref(),
         )?;
 
         let task_access = {
@@ -981,6 +1067,7 @@ impl RunBuilder {
                 &entrypoint_exclusions,
                 &turbo_json_loader,
                 &env_at_execution_start,
+                package_scoped_allowed_workspaces.as_deref(),
             )?;
         }
 
@@ -1464,6 +1551,7 @@ impl RunBuilder {
     }
 
     #[tracing::instrument(skip_all)]
+    #[allow(clippy::too_many_arguments)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
@@ -1472,6 +1560,7 @@ impl RunBuilder {
         entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
         environment: &EnvironmentVariableMap,
+        allowed_workspaces: Option<&[PackageName]>,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -1506,6 +1595,10 @@ impl RunBuilder {
             task_io_environment,
         )
         .with_tasks(tasks);
+
+        if let Some(allowed_workspaces) = allowed_workspaces {
+            builder = builder.with_allowed_workspaces(allowed_workspaces.iter().cloned());
+        }
 
         if self.add_all_tasks {
             builder = builder.add_all_tasks();
@@ -1559,6 +1652,49 @@ impl RunBuilder {
 
         Ok(engine)
     }
+}
+
+/// Whether a selector's semantics are purely package-level: it names
+/// packages (by name pattern, possibly for exclusion) and does not use
+/// directory selectors, git ranges, or dependency/dependent expansion.
+fn selector_selects_only_package_names(selector: &turborepo_scope::TargetSelector) -> bool {
+    !selector.name_pattern.is_empty()
+        && selector.parent_dir.is_none()
+        && selector.git_range.is_none()
+        && !selector.include_dependencies
+        && !selector.include_dependents
+        && !selector.exclude_self
+        && !selector.match_dependencies
+        && !selector.follow_prod_deps_only
+}
+
+/// Whether every turbo.json in the repository loads successfully and declares
+/// no `with` siblings. Configs are preloaded by this point, so this is an
+/// in-memory scan, and it only runs for otherwise eligible runs.
+fn repo_configs_have_no_with_declarations(
+    pkg_dep_graph: &PackageGraph,
+    turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+) -> bool {
+    let packages = std::iter::once(PackageName::Root).chain(
+        pkg_dep_graph
+            .package_scope_directories()
+            .map(|(name, _)| name),
+    );
+    for package in packages {
+        match turbo_json_loader.load(&package) {
+            // Workspaces without a turbo.json fall back to the root chain.
+            Err(err) if err.is_no_turbo_json() => continue,
+            // A config that fails to load surfaces as an error while building
+            // the repository-wide engine; keep that behavior.
+            Err(_) => return false,
+            Ok(turbo_json) => {
+                if turbo_json.tasks.values().any(|def| def.with.is_some()) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }
 
 /// Whether experimental Cargo package support is enabled, via
@@ -1843,5 +1979,39 @@ mod origins_match_tests {
     #[test]
     fn empty_url_returns_false() {
         assert!(!origins_match("", "https://vercel.com/api"));
+    }
+
+    #[test]
+    fn package_name_selectors_are_package_only() {
+        use std::str::FromStr;
+        for pattern in ["my-app", "@scope/pkg", "my-*", "!docs", "!@scope/*"] {
+            let selector = turborepo_scope::TargetSelector::from_str(pattern).unwrap();
+            assert!(
+                selector_selects_only_package_names(&selector),
+                "{pattern} should be usable by the package-scoped filter path"
+            );
+        }
+    }
+
+    #[test]
+    fn task_level_selectors_are_not_package_only() {
+        use std::str::FromStr;
+        for pattern in [
+            "my-app...",
+            "my-app^...",
+            "...my-app",
+            "...^my-app",
+            "my-app...[main]",
+            "[main]",
+            "{apps/my-app}",
+            "my-app{apps/my-app}",
+            "",
+        ] {
+            let selector = turborepo_scope::TargetSelector::from_str(pattern).unwrap();
+            assert!(
+                !selector_selects_only_package_names(&selector),
+                "{pattern} must stay on the general filter path"
+            );
+        }
     }
 }
