@@ -16,6 +16,22 @@ use crate::CacheError;
 /// Combined with PID, this guarantees uniqueness across concurrent tasks.
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(unix)]
+struct ArchiveAnchor {
+    directory: fs::File,
+    real_path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(unix)]
+impl ArchiveAnchor {
+    fn open(anchor: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+        Ok(Self {
+            directory: fs::File::open(anchor.as_std_path())?,
+            real_path: anchor.to_realpath()?,
+        })
+    }
+}
+
 enum ArchiveSource {
     Regular {
         file: fs::File,
@@ -61,6 +77,10 @@ pub struct CacheWriter<'a> {
     temp_path: Option<AbsoluteSystemPathBuf>,
     /// The final destination path for the archive.
     final_path: Option<AbsoluteSystemPathBuf>,
+    // Retains a verified anchor for this archive so every output does not need
+    // to reopen and canonicalize the same root directory.
+    #[cfg(unix)]
+    anchor: Option<ArchiveAnchor>,
 }
 
 impl Drop for CacheWriter<'_> {
@@ -131,12 +151,16 @@ impl<'a> CacheWriter<'a> {
                 builder: tar::Builder::new(Box::new(zw)),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
             })
         } else {
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(writer)),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
             })
         }
     }
@@ -168,13 +192,31 @@ impl<'a> CacheWriter<'a> {
                 builder: tar::Builder::new(Box::new(zw)),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
             })
         } else {
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(file_buffer)),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
             })
+        }
+    }
+
+    #[cfg(unix)]
+    fn archive_anchor(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Result<&ArchiveAnchor, CacheError> {
+        if self.anchor.is_none() {
+            self.anchor = Some(ArchiveAnchor::open(anchor)?);
+        }
+        match self.anchor.as_ref() {
+            Some(anchor) => Ok(anchor),
+            None => unreachable!("archive anchor must be initialized"),
         }
     }
 
@@ -184,6 +226,9 @@ impl<'a> CacheWriter<'a> {
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
     ) -> Result<(), CacheError> {
+        #[cfg(unix)]
+        let source = archive_source(self.archive_anchor(anchor)?, file_path)?;
+        #[cfg(not(unix))]
         let source = archive_source(anchor, file_path)?;
         let mut file_path = file_path.to_unix();
 
@@ -298,7 +343,7 @@ fn archive_source(
 
 #[cfg(unix)]
 fn archive_source(
-    anchor: &AbsoluteSystemPath,
+    anchor: &ArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
     use std::os::unix::io::AsRawFd;
@@ -328,14 +373,13 @@ fn archive_source(
 
 #[cfg(unix)]
 fn open_parent_dir(
-    anchor: &AbsoluteSystemPath,
+    anchor: &ArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<(fs::File, String), CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let mut dir = fs::File::open(anchor.as_std_path())?;
-    let real_anchor = anchor.to_realpath()?;
-    let mut dir_path = real_anchor.clone();
+    let mut dir = anchor.directory.try_clone()?;
+    let mut dir_path = anchor.real_path.clone();
     let mut components = file_path.components().peekable();
 
     while let Some(component) = components.next() {
@@ -345,7 +389,7 @@ fn open_parent_dir(
         }
 
         let (next_dir, next_dir_path) = open_dir_at_allowing_internal_symlink(
-            &real_anchor,
+            &anchor.real_path,
             &dir_path,
             dir.as_raw_fd(),
             component,
