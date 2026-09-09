@@ -110,6 +110,35 @@ impl PackageWatcher {
         })
     }
 
+    #[cfg(test)]
+    fn new_with_discovery_hook(
+        root: AbsoluteSystemPathBuf,
+        source: impl Into<WatchSource>,
+        cookie_writer: CookieWriter,
+        allow_no_package_manager: bool,
+        hook: DiscoveryHook,
+    ) -> Result<Self, package_manager::Error> {
+        let source = source.into();
+        let (exit_tx, exit_rx) = oneshot::channel();
+        let repository_ignore = source
+            .repository_ignore()
+            .unwrap_or_else(|| crate::RepositoryIgnore::new(root.as_std_path()));
+        let mut subscriber = Subscriber::new(
+            root,
+            cookie_writer,
+            allow_no_package_manager,
+            repository_ignore,
+        )?;
+        subscriber.discovery_hook = Some(hook);
+        let package_discovery_lazy = subscriber.package_discovery();
+        let handle = tokio::spawn(subscriber.watch(exit_rx, source));
+        Ok(Self {
+            _exit_tx: exit_tx,
+            _handle: handle,
+            package_discovery_lazy,
+        })
+    }
+
     pub fn watch_discovery(&self) -> watch::Receiver<Option<DiscoveryData>> {
         self.package_discovery_lazy.watch()
     }
@@ -145,6 +174,18 @@ impl PackageWatcher {
 
 /// The underlying task that listens to file system events and updates the
 /// internal package state.
+/// Test seam for coalescing behavior: replaces real package discovery so a
+/// test can gate and count in-flight discoveries.
+#[cfg(test)]
+type DiscoveryHook = std::sync::Arc<
+    dyn Fn(
+            AbsoluteSystemPathBuf,
+            bool,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = PackageState> + Send>>
+        + Send
+        + Sync,
+>;
+
 struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     // This is the list of paths that will trigger rediscovering everything.
@@ -157,6 +198,8 @@ struct Subscriber {
     cookie_tx: CookieRegister,
     next_version: AtomicUsize,
     allow_no_package_manager: bool,
+    #[cfg(test)]
+    discovery_hook: Option<DiscoveryHook>,
 }
 
 /// PackageWatcher state. We either don't have a valid package manager,
@@ -178,6 +221,11 @@ enum State {
     Pending {
         debouncer: Arc<Debouncer>,
         version: Version,
+        /// Set when invalidations arrived after the in-flight discovery's
+        /// debounce finished. The running discovery's result is then stale
+        /// and must not be published; exactly one coalesced follow-up runs
+        /// instead of one overlapping discovery per invalidation.
+        rerun_after_current: bool,
     },
     Ready(Box<PackageState>),
 }
@@ -302,6 +350,8 @@ impl Subscriber {
             cookie_tx,
             next_version: AtomicUsize::new(0),
             allow_no_package_manager,
+            #[cfg(test)]
+            discovery_hook: None,
         })
     }
 
@@ -323,8 +373,16 @@ impl Subscriber {
         let debouncer_copy = debouncer.clone();
         let repo_root = self.repo_root.clone();
         let allow_no_package_manager = self.allow_no_package_manager;
+        #[cfg(test)]
+        let hook = self.discovery_hook.clone();
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
+            #[cfg(test)]
+            let state = match hook {
+                Some(hook) => hook(repo_root, allow_no_package_manager).await,
+                None => discover_packages(repo_root, allow_no_package_manager).await,
+            };
+            #[cfg(not(test))]
             let state = discover_packages(repo_root, allow_no_package_manager).await;
             let _ = package_state_tx
                 .send(DiscoveryResult { version, state })
@@ -346,13 +404,17 @@ impl Subscriber {
 
         // state represents the current state of this process, and is expected to be
         // updated in place by the various handler functions.
-        let mut state = State::Pending { debouncer, version };
+        let mut state = State::Pending {
+            debouncer,
+            version,
+            rerun_after_current: false,
+        };
 
         tracing::debug!("package watcher ready {:?}", state);
         loop {
             select! {
                 Some(discovery_result) = package_state_rx.recv() => {
-                    self.handle_discovery_result(discovery_result, &mut state);
+                    self.handle_discovery_result(discovery_result, &mut state, &package_state_tx);
                 },
                 file_event = recv.recv() => {
                     match file_event {
@@ -374,8 +436,18 @@ impl Subscriber {
         }
     }
 
-    fn handle_discovery_result(&self, package_result: DiscoveryResult, state: &mut State) {
-        if let State::Pending { version, .. } = state {
+    fn handle_discovery_result(
+        &self,
+        package_result: DiscoveryResult,
+        state: &mut State,
+        package_state_tx: &mpsc::Sender<DiscoveryResult>,
+    ) {
+        if let State::Pending {
+            version,
+            rerun_after_current,
+            ..
+        } = state
+        {
             // If this response matches an outstanding rediscovery request, write out the
             // corresponding state to downstream consumers and update our state
             // accordingly.
@@ -384,6 +456,20 @@ impl Subscriber {
             // we may have a higher version number, at which point we would
             // ignore this update, as we know it is stale.
             if package_result.version == *version {
+                if *rerun_after_current {
+                    // Invalidations arrived while this discovery was running,
+                    // so its result is already stale. Discard it and run
+                    // exactly one coalesced follow-up rather than one
+                    // overlapping discovery per invalidation.
+                    let (new_version, new_debouncer) =
+                        self.queue_rediscovery(false, package_state_tx.clone());
+                    *state = State::Pending {
+                        version: new_version,
+                        debouncer: new_debouncer,
+                        rerun_after_current: false,
+                    };
+                    return;
+                }
                 self.update_workspace_globs(&package_result.state);
                 self.write_state(&package_result.state);
                 *state = State::Ready(Box::new(package_result.state));
@@ -469,17 +555,31 @@ impl Subscriber {
         state: &mut State,
         package_state_tx: &mpsc::Sender<DiscoveryResult>,
     ) {
-        if let State::Pending { debouncer, .. } = state
-            && debouncer.bump()
+        if let State::Pending {
+            debouncer,
+            rerun_after_current,
+            ..
+        } = state
         {
-            // We successfully bumped the debouncer, which was already pending,
-            // so a new discovery will happen shortly.
+            if debouncer.bump() {
+                // We successfully bumped the debouncer, which was already pending,
+                // so a new discovery will happen shortly.
+                return;
+            }
+            // The debounce already fired, so a discovery is running right now.
+            // Coalesce all further invalidations into one follow-up run
+            // instead of launching overlapping full discoveries whose results
+            // would be discarded anyway.
+            *rerun_after_current = true;
             return;
         }
-        // We either failed to bump the debouncer, or we don't have a rediscovery
-        // queued, but we need one.
+        // No rediscovery is queued, but we need one.
         let (version, debouncer) = self.queue_rediscovery(false, package_state_tx.clone());
-        *state = State::Pending { debouncer, version }
+        *state = State::Pending {
+            debouncer,
+            version,
+            rerun_after_current: false,
+        }
     }
 
     // Checks whether any event path identifies a workspace or a file directly in
@@ -671,6 +771,131 @@ mod test {
         cookies::CookieWriter,
         package_watcher::{PackageWatcher, workspace_path_for_event},
     };
+
+    /// Invalidations arriving while a discovery is already running must not
+    /// launch overlapping discoveries: one in-flight scan plus exactly one
+    /// coalesced follow-up per burst, then fresh state is published.
+    #[tokio::test]
+    async fn rediscovery_coalesces_during_in_flight_scan() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"root","packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_in_flight = Arc::new(AtomicUsize::new(0));
+        let gate = Arc::new(tokio::sync::Notify::new());
+
+        let hook = {
+            let calls = calls.clone();
+            let in_flight = in_flight.clone();
+            let max_in_flight = max_in_flight.clone();
+            let gate = gate.clone();
+            Arc::new(move |_, _| {
+                let calls = calls.clone();
+                let in_flight = in_flight.clone();
+                let max_in_flight = max_in_flight.clone();
+                let gate = gate.clone();
+                Box::pin(async move {
+                    let call = calls.fetch_add(1, Ordering::SeqCst);
+                    let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_in_flight.fetch_max(now, Ordering::SeqCst);
+                    // Only the first discovery is gated, so the coalesced
+                    // follow-up is free to complete.
+                    if call == 0 {
+                        gate.notified().await;
+                    }
+                    in_flight.fetch_sub(1, Ordering::SeqCst);
+                    super::PackageState::NoPackageManager("fake discovery".to_string())
+                })
+                    as std::pin::Pin<
+                        Box<dyn std::future::Future<Output = super::PackageState> + Send>,
+                    >
+            })
+        };
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+
+        let package_watcher = PackageWatcher::new_with_discovery_hook(
+            repo_root.clone(),
+            recv,
+            cookie_writer,
+            false,
+            hook,
+        )
+        .unwrap();
+
+        // Wait for the initial discovery to be in flight (its debounce has
+        // already fired by the time the fake is entered).
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while calls.load(Ordering::SeqCst) < 1 || in_flight.load(Ordering::SeqCst) < 1 {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "discovery never started"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        // Deliver a burst of root package.json invalidations while the scan
+        // is running.
+        for i in 0..20 {
+            repo_root
+                .join_component("package.json")
+                .create_with_contents(format!(
+                    r#"{{"name":"root","packageManager":"npm@10.0.0","version":"0.0.{i}"}}"#
+                ))
+                .unwrap();
+        }
+        // Give the watcher a moment to process the burst.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        gate.notify_waiters();
+
+        // Fresh state must eventually be published (as an InvalidState error,
+        // since the fake reports no package manager).
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            match package_watcher.discover_packages().await {
+                Some(_) => break,
+                None => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "fresh state was never published"
+                    );
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        }
+
+        // The burst must not produce a pile-up: one in-flight discovery plus
+        // exactly one coalesced follow-up.
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "expected initial scan + one coalesced follow-up"
+        );
+        assert_eq!(
+            max_in_flight.load(Ordering::SeqCst),
+            1,
+            "discoveries overlapped"
+        );
+    }
 
     #[test]
     fn workspace_event_paths_resolve_without_filename_knowledge() {
