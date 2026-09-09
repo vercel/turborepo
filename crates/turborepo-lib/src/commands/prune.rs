@@ -983,6 +983,17 @@ impl<'a> Prune<'a> {
                 .map(|name| PackageName::Other(name.clone())),
         );
 
+        // Several retained workspaces can declare the same `file:` dependency
+        // (e.g. two apps both using `file:../../vendor/sdk`). Every reference
+        // that survives the checks below resolves to the same anchored source
+        // path, so copying per reference would walk and copy the identical
+        // directory into the same destinations once per reference. Track the
+        // sources already copied so each distinct dependency is copied once
+        // per destination. Only exact normalized paths are deduplicated:
+        // overlapping ancestor/descendant paths and symlink aliases are not
+        // collapsed.
+        let mut copied_sources: HashSet<AnchoredSystemPathBuf> = HashSet::new();
+
         for workspace in all_workspaces {
             let context = self.package_context(&workspace)?;
             let workspace_abs_dir = self.root.resolve(context.directory());
@@ -1014,6 +1025,16 @@ impl<'a> Prune<'a> {
                     trace!("file: dependency {path_str} from {workspace} doesn't exist, skipping");
                     continue;
                 }
+
+                if copied_sources.contains(&anchored) {
+                    trace!(
+                        "file: dependency {path_str} from {workspace} -> {} was already copied, \
+                         skipping duplicate",
+                        anchored
+                    );
+                    continue;
+                }
+                copied_sources.insert(anchored.clone());
 
                 trace!(
                     "Copying file: dependency {path_str} from {workspace} -> {}",
