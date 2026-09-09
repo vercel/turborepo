@@ -101,6 +101,8 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("blocking cache archive task failed to complete: {0}")]
+    BlockingTask(#[from] tokio::task::JoinError),
     #[error("Invalid restore manifest: {0}")]
     InvalidManifest(String),
     #[error("Unable to determine config cache base")]

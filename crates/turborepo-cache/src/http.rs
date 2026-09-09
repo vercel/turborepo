@@ -186,9 +186,14 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         // Spool the compressed artifact: small artifacts stay in memory while
         // large ones roll to an anonymous temporary file, so retained memory
-        // is bounded regardless of artifact size.
-        let body = ArtifactBody::from_files(anchor, files)?;
-        self.put_body(hash, body, duration).await
+        // is bounded regardless of artifact size. Building it reads and
+        // compresses every output file, so it runs on the blocking pool
+        // rather than occupying a Tokio runtime worker.
+        let anchor = anchor.to_owned();
+        let files = files.to_vec();
+        let body = tokio::task::spawn_blocking(move || ArtifactBody::from_files(&anchor, &files))
+            .await??;
+        self.put_body(hash, Arc::new(body), duration).await
     }
 
     /// Uploads an already-built archive. Shared with the local cache so a
@@ -198,10 +203,9 @@ impl HTTPCache {
     pub(crate) async fn put_body(
         &self,
         hash: &str,
-        body: ArtifactBody,
+        body: Arc<ArtifactBody>,
         duration: u64,
     ) -> Result<(), CacheError> {
-        let body = Arc::new(body);
         let body_len = body.len();
 
         let tag = self
@@ -453,7 +457,13 @@ impl HTTPCache {
 
         spool.seek(SeekFrom::Start(0))?;
         let body = ArtifactBody::from_spool(spool)?;
-        let files = Self::restore_tar(&self.repo_root, body.reader()?)?;
+        // Decompression and extraction are synchronous CPU and filesystem
+        // work; run them on the blocking pool so a large restore does not
+        // occupy a runtime worker.
+        let repo_root = self.repo_root.clone();
+        let reader = body.reader()?;
+        let files =
+            tokio::task::spawn_blocking(move || Self::restore_tar(&repo_root, reader)).await??;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
