@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use miette::NamedSource;
 use tracing::info_span;
@@ -80,9 +83,13 @@ where
     {
         let (span, text) = package_name_source
             .map(|name| name.span_and_text("package.json"))
-            .unwrap_or_else(|| (None, NamedSource::new("package.json", String::new())));
+            .map(|(span, text)| (span, crate::into_shared_source(text)))
+            .unwrap_or_else(|| (None, NamedSource::new("package.json", Arc::from(""))));
         let deny_list_spanned = deny_list.to(());
-        let (deny_list_span, deny_list_text) = deny_list_spanned.span_and_text("turbo.json");
+        let (deny_list_span, deny_list_text) = {
+            let (span, text) = deny_list_spanned.span_and_text("turbo.json");
+            (span, crate::into_shared_source(text))
+        };
 
         return Ok(Some(BoundariesDiagnostic::DeniedTag {
             source_package_name: package_name.clone(),
@@ -107,9 +114,15 @@ where
         if let Some(deny_list) = deny_list
             && deny_list.contains(tag.as_inner())
         {
-            let (span, text) = tag.span_and_text("turbo.json");
+            let (span, text) = {
+                let (span, text) = tag.span_and_text("turbo.json");
+                (span, crate::into_shared_source(text))
+            };
             let deny_list_spanned = deny_list.to(());
-            let (deny_list_span, deny_list_text) = deny_list_spanned.span_and_text("turbo.json");
+            let (deny_list_span, deny_list_text) = {
+                let (span, text) = deny_list_spanned.span_and_text("turbo.json");
+                (span, crate::into_shared_source(text))
+            };
 
             return Ok(Some(BoundariesDiagnostic::DeniedTag {
                 source_package_name: package_name.clone(),
@@ -126,7 +139,10 @@ where
     }
 
     if !has_tag_in_allowlist {
-        let (span, text) = tags_span.span_and_text("turbo.json");
+        let (span, text) = {
+            let (span, text) = tags_span.span_and_text("turbo.json");
+            (span, crate::into_shared_source(text))
+        };
         let help = span.is_none().then(|| {
             format!("`{relation_package_name}` doesn't any tags defined in its `turbo.json` file")
         });
@@ -134,7 +150,10 @@ where
         let allow_list_spanned = allow_list
             .map(|allow_list| allow_list.to(()))
             .unwrap_or_default();
-        let (allow_list_span, allow_list_text) = allow_list_spanned.span_and_text("turbo.json");
+        let (allow_list_span, allow_list_text) = {
+            let (span, text) = allow_list_spanned.span_and_text("turbo.json");
+            (span, crate::into_shared_source(text))
+        };
 
         return Ok(Some(BoundariesDiagnostic::NoTagInAllowlist {
             source_package_name: package_name.clone(),
@@ -223,10 +242,14 @@ fn check_if_package_name_is_tag(
     package_name_source: Option<&Spanned<()>>,
 ) -> Option<BoundariesDiagnostic> {
     let rule = tags_rules.get(pkg.as_package_name().as_str())?;
-    let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
+    let (tag_span, tag_text) = {
+        let (span, text) = rule.span.span_and_text("turbo.json");
+        (span, crate::into_shared_source(text))
+    };
     let (package_span, package_text) = package_name_source
         .map(|name| name.span_and_text("package.json"))
-        .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
+        .map(|(span, text)| (span, crate::into_shared_source(text)))
+        .unwrap_or_else(|| (None, NamedSource::new("package.json", Arc::from(""))));
     Some(BoundariesDiagnostic::TagSharesPackageName {
         tag: pkg.as_package_name().to_string(),
         package: pkg.as_package_name().to_string(),
@@ -362,7 +385,10 @@ where
 
     if let Some(boundaries) = package_boundaries {
         if let Some(tags) = &boundaries.tags {
-            let (span, text) = tags.span_and_text("turbo.json");
+            let (span, text) = {
+                let (span, text) = tags.span_and_text("turbo.json");
+                (span, crate::into_shared_source(text))
+            };
             diagnostics.push(BoundariesDiagnostic::PackageBoundariesHasTags { span, text });
         }
         let dependencies = boundaries

@@ -10,6 +10,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
+    sync::Arc,
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
@@ -128,6 +129,16 @@ pub struct BoundariesContext<'a, G: PackageGraphProvider, T: TurboJsonProvider> 
     pub filtered_pkgs: &'a HashSet<PackageName>,
 }
 
+/// Converts an owned `String`-backed source (produced by
+/// `Spanned::span_and_text` for configuration files) into the shared
+/// `Arc<str>`-backed representation used by all diagnostics, so retaining N
+/// diagnostics never retains N copies of the text.
+pub(crate) fn into_shared_source(source: NamedSource<String>) -> NamedSource<Arc<str>> {
+    let name = source.name().to_string();
+    let text: Arc<str> = source.inner().as_str().into();
+    NamedSource::new(name, text)
+}
+
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum SecondaryDiagnostic {
     #[error("package `{package} is defined here")]
@@ -136,21 +147,21 @@ pub enum SecondaryDiagnostic {
         #[label]
         package_span: Option<SourceSpan>,
         #[source_code]
-        package_text: NamedSource<String>,
+        package_text: NamedSource<Arc<str>>,
     },
     #[error("consider adding one of the following tags listed here")]
     Allowlist {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("denylist defined here")]
     Denylist {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
 }
 
@@ -161,7 +172,7 @@ pub enum BoundariesDiagnostic {
         #[label("tags defined here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
     TagSharesPackageName {
@@ -170,7 +181,7 @@ pub enum BoundariesDiagnostic {
         #[label("tag defined here")]
         tag_span: Option<SourceSpan>,
         #[source_code]
-        tag_text: NamedSource<String>,
+        tag_text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -190,7 +201,7 @@ pub enum BoundariesDiagnostic {
         #[help]
         help: Option<String>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -205,7 +216,7 @@ pub enum BoundariesDiagnostic {
         #[label("tag found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -220,7 +231,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
@@ -229,7 +240,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("import `{import}` leaves the package")]
     #[diagnostic(help(
@@ -243,7 +254,7 @@ pub enum BoundariesDiagnostic {
         #[label("file imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("failed to parse file {0}: {1}")]
     ParseError(AbsoluteSystemPathBuf, String),
@@ -784,9 +795,14 @@ impl BoundariesChecker {
         dependency_locations: DependencyLocations<'_>,
         resolver: &Resolver,
     ) -> Result<(Vec<BoundariesDiagnostic>, Vec<String>), Error> {
-        let file_content = file_path
+        // Read the file once and share it across every diagnostic it
+        // produces. Each emitted error keeps an Arc clone instead of a fresh
+        // copy of the whole source, so retained memory scales with the file
+        // size rather than file size times error count.
+        let file_content: Arc<str> = file_path
             .read_to_string()
-            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?
+            .into();
 
         let (imports, comments) = match parse_with_comments(file_path, &file_content) {
             Some(result) => result,
