@@ -667,6 +667,33 @@ impl RunBuilder {
         repo_configs_have_no_with_declarations(pkg_dep_graph, turbo_json_loader)
     }
 
+    /// Packages whose turbo.json a scoped engine may consult: the filtered
+    /// packages plus the transitive package dependencies their topological
+    /// `^task` edges follow. Anything else loads lazily if engine traversal
+    /// ever reaches it, so this is only a pre-warm set, not a correctness
+    /// boundary.
+    fn scoped_preload_packages<'a>(
+        pkg_dep_graph: &PackageGraph,
+        filtered_pkgs: impl Iterator<Item = &'a PackageName>,
+    ) -> Vec<PackageName> {
+        let ordering = pkg_dep_graph.ordering_relationships();
+        let mut seen: HashSet<PackageName> = filtered_pkgs.cloned().collect();
+        let mut queue: Vec<PackageName> = seen.iter().cloned().collect();
+        while let Some(package) = queue.pop() {
+            // Unknown packages surface through engine construction, which
+            // resolves the same relationships.
+            let Ok(dependencies) = ordering.direct_dependencies(&package) else {
+                continue;
+            };
+            for dependency in dependencies {
+                if seen.insert(dependency.clone()) {
+                    queue.push(dependency.clone());
+                }
+            }
+        }
+        seen.into_iter().collect()
+    }
+
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
         self,
@@ -1044,23 +1071,12 @@ impl RunBuilder {
             let _span = tracing::info_span!("env_infer").entered();
             EnvironmentVariableMap::infer()
         };
-        crate::rayon_compat::block_in_place(|| {
-            let _span = tracing::info_span!("turbo_json_preload").entered();
-            turbo_json_loader.preload_all();
-        });
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
-        let task_level_filter_requested = self.opts.future_flags.filter_using_tasks
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
             && (!self.opts.scope_opts.filter_patterns.is_empty()
                 || self.opts.scope_opts.affected_range.is_some());
-        // Narrow `--only` runs whose selectors only name packages resolve the
-        // same task scope from the package-level filter, so the engine can be
-        // constructed for the filtered packages instead of every package in
-        // the repository and pruned afterwards.
-        let use_package_scoped_task_filter = task_level_filter_requested
-            && self.task_filter_can_use_package_scope(&pkg_dep_graph, &turbo_json_loader);
-        let use_task_level_filter = task_level_filter_requested && !use_package_scoped_task_filter;
 
         let use_task_level_affected = !use_task_level_filter
             && self.opts.scope_opts.affected_range.is_some()
@@ -1107,11 +1123,6 @@ impl RunBuilder {
                     .filter(|name| name != &PackageName::Root),
             )
             .collect();
-        // The package-scoped filter path keeps the `--only` allowed-task set
-        // aligned with the repository-wide engine so `^task` dependencies in
-        // dependency packages remain reachable from the scoped entrypoints.
-        let package_scoped_allowed_workspaces: Option<Vec<PackageName>> =
-            use_package_scoped_task_filter.then(|| task_namespace_packages.clone());
         let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
             &pkg_dep_graph,
             unqualified_entrypoint_packages.iter(),
@@ -1154,6 +1165,21 @@ impl RunBuilder {
             scoped_entrypoint_exclusions
         };
 
+        // Config preloading overlaps engine construction. Repository-wide
+        // engines consult every package's config, but scoped engines only
+        // consult the filtered packages and the dependency closure their
+        // `^task` edges follow, so narrow runs skip preloading unrelated
+        // packages and let the engine load anything else lazily.
+        crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            if needs_all_packages {
+                turbo_json_loader.preload_all();
+            } else {
+                let packages = Self::scoped_preload_packages(&pkg_dep_graph, filtered_pkgs.keys());
+                turbo_json_loader.preload_packages(packages);
+            }
+        });
+
         // When task-level filtering or add_all_tasks is active, the engine must
         // contain tasks for ALL packages so that tasks in packages not flagged
         // by package-level scope resolution can still be matched. The
@@ -1176,7 +1202,6 @@ impl RunBuilder {
             &entrypoint_exclusions,
             &turbo_json_loader,
             &env_at_execution_start,
-            package_scoped_allowed_workspaces.as_deref(),
         )?;
 
         let task_access = {
@@ -1208,7 +1233,6 @@ impl RunBuilder {
                 &entrypoint_exclusions,
                 &turbo_json_loader,
                 &env_at_execution_start,
-                package_scoped_allowed_workspaces.as_deref(),
             )?;
         }
 
@@ -1720,7 +1744,6 @@ impl RunBuilder {
     }
 
     #[tracing::instrument(skip_all)]
-    #[allow(clippy::too_many_arguments)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
@@ -1729,7 +1752,6 @@ impl RunBuilder {
         entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
         environment: &EnvironmentVariableMap,
-        allowed_workspaces: Option<&[PackageName]>,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -1764,10 +1786,6 @@ impl RunBuilder {
             task_io_environment,
         )
         .with_tasks(tasks);
-
-        if let Some(allowed_workspaces) = allowed_workspaces {
-            builder = builder.with_allowed_workspaces(allowed_workspaces.iter().cloned());
-        }
 
         if self.add_all_tasks {
             builder = builder.add_all_tasks();
@@ -2153,7 +2171,106 @@ mod untracked_scoping_tests {
 
 #[cfg(test)]
 mod origins_match_tests {
+    use turborepo_repository::{
+        discovery::PackageDiscovery, package_graph::PackageGraph, package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+
     use super::*;
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            Ok(turborepo_repository::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
+    }
+
+    fn package_graph_with_dependencies(
+        root: &AbsoluteSystemPath,
+        dependencies: &[(&str, &str)],
+    ) -> PackageGraph {
+        let package_names: std::collections::BTreeSet<&str> =
+            dependencies.iter().flat_map(|(a, b)| [*a, *b]).collect();
+        let mut package_jsons = std::collections::HashMap::new();
+        for package in package_names {
+            let deps: Vec<(String, String)> = dependencies
+                .iter()
+                .filter(|(a, _)| *a == package)
+                .map(|(_, b)| (b.to_string(), "*".to_string()))
+                .collect();
+            package_jsons.insert(
+                root.join_components(&["packages", package, "package.json"]),
+                PackageJson {
+                    name: Some(turborepo_errors::Spanned::new(package.to_string())),
+                    dependencies: (!deps.is_empty()).then(|| {
+                        deps.into_iter()
+                            .collect::<std::collections::BTreeMap<_, _>>()
+                    }),
+                    ..Default::default()
+                },
+            );
+        }
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(
+            PackageGraph::builder(root, Default::default())
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(package_jsons))
+                .build(),
+        )
+        .unwrap()
+    }
+
+    fn names(packages: Vec<PackageName>) -> Vec<String> {
+        let mut names: Vec<String> = packages.into_iter().map(|name| name.to_string()).collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn scoped_preload_packages_follows_topological_dependency_closure() {
+        let temp_folder = tempfile::TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp_folder.path()).unwrap();
+        // a -> b -> c and d -> b
+        let graph = package_graph_with_dependencies(&root, &[("a", "b"), ("b", "c"), ("d", "b")]);
+
+        let closure = |seeds: &[&str]| {
+            let owned: Vec<PackageName> =
+                seeds.iter().map(|name| PackageName::from(*name)).collect();
+            names(super::RunBuilder::scoped_preload_packages(
+                &graph,
+                owned.iter(),
+            ))
+        };
+
+        assert_eq!(closure(&["a"]), ["a", "b", "c"]);
+        assert_eq!(closure(&["d"]), ["b", "c", "d"]);
+        // A dependency-free package preloads only itself.
+        assert_eq!(closure(&["c"]), ["c"]);
+        // Multiple seeds are unioned and deduplicated.
+        assert_eq!(closure(&["a", "d"]), ["a", "b", "c", "d"]);
+    }
 
     #[test]
     fn same_host_different_paths() {
@@ -2243,39 +2360,5 @@ mod origins_match_tests {
     #[test]
     fn empty_url_returns_false() {
         assert!(!origins_match("", "https://vercel.com/api"));
-    }
-
-    #[test]
-    fn package_name_selectors_are_package_only() {
-        use std::str::FromStr;
-        for pattern in ["my-app", "@scope/pkg", "my-*", "!docs", "!@scope/*"] {
-            let selector = turborepo_scope::TargetSelector::from_str(pattern).unwrap();
-            assert!(
-                selector_selects_only_package_names(&selector),
-                "{pattern} should be usable by the package-scoped filter path"
-            );
-        }
-    }
-
-    #[test]
-    fn task_level_selectors_are_not_package_only() {
-        use std::str::FromStr;
-        for pattern in [
-            "my-app...",
-            "my-app^...",
-            "...my-app",
-            "...^my-app",
-            "my-app...[main]",
-            "[main]",
-            "{apps/my-app}",
-            "my-app{apps/my-app}",
-            "",
-        ] {
-            let selector = turborepo_scope::TargetSelector::from_str(pattern).unwrap();
-            assert!(
-                !selector_selects_only_package_names(&selector),
-                "{pattern} must stay on the general filter path"
-            );
-        }
     }
 }
