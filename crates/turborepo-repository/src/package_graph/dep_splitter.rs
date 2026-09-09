@@ -743,4 +743,40 @@ mod test {
             Some(&PackageName::Other("pkg-b".to_string()))
         );
     }
+
+    #[test]
+    fn alias_lookup_never_resolves_the_root_sentinel() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Root,
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: true,
+            catalogs: None,
+        };
+        // `//` is the internal root sentinel, not a name that a dependency
+        // specifier can target, so it must never resolve to the root package.
+        assert_eq!(splitter.is_internal("//", "workspace:*"), None);
+    }
 }
