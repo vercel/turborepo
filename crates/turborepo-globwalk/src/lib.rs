@@ -3003,10 +3003,7 @@ mod combine_test {
 
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    use super::{
-        Settings, ValidatedGlob, WalkType, compile_complex_globs, compile_globs, globwalk,
-        tree_walk_split,
-    };
+    use super::{ValidatedGlob, WalkType, compile_complex_globs, globwalk, tree_walk_split};
 
     #[test]
     fn test_tree_walk_split() {
