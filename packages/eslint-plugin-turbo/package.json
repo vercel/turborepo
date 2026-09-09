@@ -24,6 +24,9 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
+  },
   "dependencies": {
     "dotenv": "16.0.3"
   },

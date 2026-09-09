@@ -15,14 +15,9 @@
       "command": ["pnpm", "exec", "jest"]
     },
     "build": {
-      "dependsOn": ["build:bundle"],
-      "outputs": ["dist/**"],
-      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.build.json"]
-    },
-    "build:bundle": {
-      "cache": false,
       "dependsOn": ["^build", "build:embed"],
-      "command": ["pnpm", "exec", "tsdown"]
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "run", "build"]
     }
   }
 }

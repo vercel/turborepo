@@ -22,6 +22,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
+  },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "commander": "10.0.0",
