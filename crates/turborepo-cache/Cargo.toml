@@ -16,7 +16,6 @@ filetime = "0.2"
 futures = { workspace = true }
 insta = { workspace = true }
 port_scanner = { workspace = true }
-tempfile = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
@@ -36,11 +35,12 @@ os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
 petgraph = { workspace = true }
 pin-project = "1.1.5"
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tar = "0.4.45"
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"

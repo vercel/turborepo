@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io::Read};
 
 use base64::{Engine, prelude::BASE64_STANDARD};
 use hmac::{Hmac, Mac};
@@ -33,6 +33,8 @@ pub enum SignatureError {
     Base64EncodingError(#[from] base64::DecodeError),
     #[error(transparent)]
     Hmac(#[from] hmac::digest::InvalidLength),
+    #[error("I/O error while reading artifact body for signing: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -77,18 +79,74 @@ impl ArtifactSignatureAuthenticator {
             .into_raw_vec())
     }
 
-    fn get_tag_generator(
+    /// Writes every field that precedes the artifact body. The body is the
+    /// final length-prefixed field, so knowing `body_len` up front lets
+    /// callers stream the body in bounded chunks instead of holding the whole
+    /// artifact in memory.
+    fn start_tag_generator(
         &self,
         hash: &[u8],
-        artifact_body: &[u8],
+        body_len: u64,
     ) -> Result<HmacSha256, SignatureError> {
         let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
         update_message_field(&mut mac, SIGNATURE_MESSAGE_PREFIX);
         update_message_field(&mut mac, hash);
         update_message_field(&mut mac, &self.team_id);
-        update_message_field(&mut mac, artifact_body);
+        mac.update(&body_len.to_le_bytes());
 
         Ok(mac)
+    }
+
+    fn get_tag_generator(
+        &self,
+        hash: &[u8],
+        artifact_body: &[u8],
+    ) -> Result<HmacSha256, SignatureError> {
+        let mut mac = self.start_tag_generator(hash, artifact_body.len() as u64)?;
+        mac.update(artifact_body);
+
+        Ok(mac)
+    }
+
+    /// Starts an incremental tag computation for a body that will be fed in
+    /// chunks, e.g. while a download streams to disk.
+    pub fn start_streaming_tag(
+        &self,
+        hash: &[u8],
+        body_len: u64,
+    ) -> Result<StreamingTag, SignatureError> {
+        Ok(StreamingTag {
+            mac: self.start_tag_generator(hash, body_len)?,
+        })
+    }
+
+    /// Computes the tag for a body that is read in bounded chunks rather than
+    /// held in memory all at once.
+    #[tracing::instrument(skip_all)]
+    pub fn generate_tag_reader(
+        &self,
+        hash: &[u8],
+        mut artifact_body: impl Read,
+        body_len: u64,
+    ) -> Result<String, SignatureError> {
+        let tag = self.start_streaming_tag(hash, body_len)?;
+        let tag = tag.update_from_reader(&mut artifact_body)?;
+        Ok(tag.finalize_tag())
+    }
+
+    /// Validates a body that is read in bounded chunks rather than held in
+    /// memory all at once.
+    #[tracing::instrument(skip_all)]
+    pub fn validate_reader(
+        &self,
+        hash: &[u8],
+        mut artifact_body: impl Read,
+        body_len: u64,
+        expected_tag: &str,
+    ) -> Result<bool, SignatureError> {
+        let tag = self.start_streaming_tag(hash, body_len)?;
+        let tag = tag.update_from_reader(&mut artifact_body)?;
+        tag.verify(expected_tag)
     }
 
     #[tracing::instrument(skip_all)]
@@ -130,6 +188,42 @@ impl ArtifactSignatureAuthenticator {
 fn update_message_field(mac: &mut HmacSha256, field: &[u8]) {
     mac.update(&(field.len() as u64).to_le_bytes());
     mac.update(field);
+}
+
+/// An in-progress tag computation over an artifact body that arrives in
+/// bounded chunks. Produced by
+/// [`ArtifactSignatureAuthenticator::start_streaming_tag`], which has already
+/// absorbed the fixed message fields and the body's length prefix.
+pub struct StreamingTag {
+    mac: HmacSha256,
+}
+
+impl StreamingTag {
+    pub fn update(&mut self, chunk: &[u8]) {
+        self.mac.update(chunk);
+    }
+
+    pub fn update_from_reader(mut self, mut reader: impl Read) -> Result<Self, SignatureError> {
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let n = reader.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            self.mac.update(&buffer[..n]);
+        }
+        Ok(self)
+    }
+
+    pub fn finalize_tag(self) -> String {
+        let output = self.mac.finalize();
+        BASE64_STANDARD.encode(output.into_bytes())
+    }
+
+    pub fn verify(self, expected_tag: &str) -> Result<bool, SignatureError> {
+        let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
+        Ok(self.mac.verify_slice(&expected_bytes).is_ok())
+    }
 }
 
 #[cfg(test)]
@@ -258,6 +352,71 @@ mod tests {
         for test_case in get_test_cases() {
             test_signature(test_case)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_streaming_tag_matches_in_memory_tag() -> Result<()> {
+        let signature = ArtifactSignatureAuthenticator {
+            team_id: b"team-stream".to_vec(),
+            secret_key_override: Some(b"streaming-secret-key-that-is-long-enough".to_vec()),
+        };
+
+        // A body larger than the reader's internal chunk size, with bytes
+        // that do not repeat so chunk boundaries cannot mask ordering bugs.
+        let mut body = Vec::with_capacity(300_000);
+        let mut state: u64 = 0x853c49e6748fea9b;
+        for _ in 0..300_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            body.push((state >> 32) as u8);
+        }
+
+        let expected = signature.generate_tag(b"stream-hash", &body)?;
+        let streamed =
+            signature.generate_tag_reader(b"stream-hash", &body[..], body.len() as u64)?;
+        assert_eq!(expected, streamed);
+
+        assert!(signature.validate_reader(
+            b"stream-hash",
+            &body[..],
+            body.len() as u64,
+            &expected
+        )?);
+
+        // An incremental tag fed with irregular chunk sizes must agree too.
+        let mut tag = signature.start_streaming_tag(b"stream-hash", body.len() as u64)?;
+        for chunk in body.chunks(7_777) {
+            tag.update(chunk);
+        }
+        assert!(tag.verify(&expected)?);
+
+        // Tampering with a single byte must fail validation.
+        let mut tampered = body.clone();
+        tampered[150_000] ^= 0xFF;
+        assert!(!signature.validate_reader(
+            b"stream-hash",
+            &tampered[..],
+            tampered.len() as u64,
+            &expected
+        )?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_streaming_tag_empty_body_matches_in_memory() -> Result<()> {
+        let signature = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"key".to_vec()),
+        };
+        let expected = signature.generate_tag(b"hash", b"")?;
+        assert_eq!(
+            signature.generate_tag_reader(b"hash", &b""[..], 0)?,
+            expected
+        );
+        assert!(signature.validate_reader(b"hash", &b""[..], 0, &expected)?);
         Ok(())
     }
 
