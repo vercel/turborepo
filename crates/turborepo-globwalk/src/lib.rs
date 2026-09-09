@@ -848,6 +848,12 @@ fn compile_globs<S: AsRef<str>>(
 
     let include_patterns = compile_complex_globs(complex_paths)?;
 
+    // Repeated `<prefix>/**` patterns each walk the same tree only for the
+    // result set to deduplicate the files afterwards, so duplicate prefixes
+    // are pure repeated I/O. Keep the first occurrence of each prefix.
+    let mut seen_recursive_all: HashSet<PathBuf> = HashSet::new();
+    recursive_all.retain(|prefix| seen_recursive_all.insert(prefix.clone()));
+
     Ok(CompiledGlobs {
         base_path: base_path_new,
         include_patterns,
@@ -1315,7 +1321,7 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        escape_glob_literals, fix_glob_pattern, globwalk, needs_path_cleaning,
+        compile_globs, escape_glob_literals, fix_glob_pattern, globwalk, needs_path_cleaning,
     };
 
     #[cfg(unix)]
@@ -2506,6 +2512,55 @@ mod test {
     }
 
     #[test]
+    fn recursive_all_prefixes_are_deduplicated() {
+        let tmp = setup_files(&["src/file.txt", "src/nested/file.txt"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        let compiled = compile_globs(
+            &root,
+            &["src/**", "src/**", "other/**", "src/**"],
+            &[],
+            Settings::default(),
+        )
+        .unwrap();
+
+        // Each distinct prefix is walked once, no matter how often it is
+        // declared.
+        assert_eq!(
+            compiled.recursive_all,
+            vec![
+                root.as_std_path().join("src"),
+                root.as_std_path().join("other"),
+            ]
+        );
+    }
+
+    #[test]
+    fn duplicate_recursive_all_patterns_match_a_single_walk() {
+        let tmp = setup_files(&["src/file.txt", "src/nested/file.txt"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let single = [ValidatedGlob::from_str("src/**").unwrap()];
+        let repeated = [
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+        ];
+
+        let single_paths: HashSet<String> = globwalk(&root, &single, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+        let repeated_paths: HashSet<String> = globwalk(&root, &repeated, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+
+        assert_eq!(single_paths, repeated_paths);
+    }
+
+    #[test]
     #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
     // behavior
     fn test_weird_filenames() {
@@ -2948,7 +3003,10 @@ mod combine_test {
 
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    use super::{ValidatedGlob, WalkType, compile_complex_globs, globwalk, tree_walk_split};
+    use super::{
+        Settings, ValidatedGlob, WalkType, compile_complex_globs, compile_globs, globwalk,
+        tree_walk_split,
+    };
 
     #[test]
     fn test_tree_walk_split() {
