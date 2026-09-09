@@ -54,7 +54,13 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Run `cargo build`
+2. Run `cargo build -p turbo`
+
+The focused `cargo build -p turbo` builds just the `turbo` CLI and its
+dependencies, skipping the workspace's other top-level targets (such as the
+LSP, schema generator, and N-API addon) that you don't need for CLI
+development. Use a plain `cargo build` when you want to build and verify every
+workspace member.
 
 ### TLS Implementation
 
