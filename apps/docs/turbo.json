@@ -60,7 +60,7 @@
       "command": ["pnpm", "exec", "fumadocs-mdx"]
     },
     "lint": {
-      "command": ["pnpm", "exec", "fumadocs-mdx"]
+      "dependsOn": ["check-types:mdx"]
     },
     "check-openapi": {
       "command": [
