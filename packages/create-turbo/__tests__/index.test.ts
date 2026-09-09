@@ -133,6 +133,9 @@ describe("create-turbo", () => {
         "- Run a command twice to hit cache"
       );
 
+      // Package-manager detection is shared between the create flow and the
+      // package-manager prompt, so the version checks run exactly once.
+      expect(mockAvailablePackageManagers).toHaveBeenCalledTimes(1);
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
@@ -230,6 +233,9 @@ describe("create-turbo", () => {
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
       );
+      // Package-manager detection is shared between the create flow and the
+      // package-manager prompt, so the version checks run exactly once.
+      expect(mockAvailablePackageManagers).toHaveBeenCalledTimes(1);
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
