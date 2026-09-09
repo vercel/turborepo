@@ -10,6 +10,9 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 
+/// A compressed artifact body shared between local and remote cache consumers
+/// so archives are built exactly once.
+pub(crate) mod artifact_body;
 /// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;
 /// The core cache creation and restoration logic.
