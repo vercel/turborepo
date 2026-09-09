@@ -13,7 +13,8 @@ import {
   rmSync,
   existsSync,
   readFileSync,
-  writeFileSync
+  writeFileSync,
+  readdirSync
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -937,6 +938,246 @@ describe("examples", () => {
         } else {
           delete process.env.GITHUB_TOKEN;
         }
+      }
+    });
+  });
+
+  describe("downloadAndExtractRepo", () => {
+    let testDir: string;
+    let sourceDir: string;
+    let downloadTempDirs: Array<string>;
+
+    beforeEach(() => {
+      const baseDir = join(
+        tmpdir(),
+        `turbo-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      );
+      testDir = join(baseDir, "extract");
+      sourceDir = join(baseDir, "source");
+      mkdirSync(testDir, { recursive: true });
+      mkdirSync(sourceDir, { recursive: true });
+      downloadTempDirs = listDownloadTempDirs();
+    });
+
+    afterEach(() => {
+      const baseDir = join(testDir, "..");
+      rmSync(baseDir, { recursive: true, force: true });
+    });
+
+    /**
+     * Lists leftover `turbo-download-` temporary directories so tests can
+     * assert that failed downloads clean up after themselves.
+     */
+    function listDownloadTempDirs(): Array<string> {
+      return readdirSync(tmpdir()).filter((name) =>
+        name.startsWith("turbo-download-")
+      );
+    }
+
+    /**
+     * Helper to create a mock tarball response body rooted at "tarroot",
+     * mirroring the codeload.github.com archive layout.
+     */
+    async function createMockTarballBody(
+      files: Array<{
+        path: string;
+        content?: string;
+        type?: "file" | "directory";
+      }>
+    ): Promise<ReadableStream<Uint8Array>> {
+      const tarSourceDir = join(sourceDir, "tarroot");
+      mkdirSync(tarSourceDir, { recursive: true });
+
+      for (const file of files) {
+        const fullPath = join(tarSourceDir, file.path);
+        if (file.type === "directory") {
+          mkdirSync(fullPath, { recursive: true });
+        } else {
+          mkdirSync(join(fullPath, ".."), { recursive: true });
+          writeFileSync(fullPath, file.content ?? "");
+        }
+      }
+
+      const passThrough = new PassThrough();
+
+      tar
+        .create(
+          {
+            gzip: true,
+            cwd: sourceDir
+          },
+          ["tarroot"]
+        )
+        .pipe(passThrough);
+
+      return Readable.toWeb(
+        Readable.from(passThrough)
+      ) as ReadableStream<Uint8Array>;
+    }
+
+    it("streams the archive to disk and extracts the selected directory", async () => {
+      const mockBody = await createMockTarballBody([
+        { path: "examples/basic", type: "directory" },
+        { path: "examples/basic/package.json", content: "{}" },
+        { path: "examples/basic/README.md", content: "# Example" },
+        { path: "assets", type: "directory" },
+        { path: "assets/large.bin", content: "unselected payload" }
+      ]);
+
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, body: mockBody } as Response)
+      ) as typeof fetch;
+
+      await downloadAndExtractRepo(testDir, {
+        username: "test-user",
+        name: "test-repo",
+        branch: "main",
+        filePath: "examples/basic"
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://codeload.github.com/test-user/test-repo/tar.gz/main",
+        expect.any(Object)
+      );
+      expect(readFileSync(join(testDir, "package.json"), "utf-8")).toBe("{}");
+      expect(readFileSync(join(testDir, "README.md"), "utf-8")).toBe(
+        "# Example"
+      );
+      // Files outside the selected directory are not extracted.
+      expect(existsSync(join(testDir, "large.bin"))).toBe(false);
+    });
+
+    it("extracts the whole repository when no file path is selected", async () => {
+      const mockBody = await createMockTarballBody([
+        { path: "file.txt", content: "Hello World" },
+        { path: "subdir", type: "directory" },
+        { path: "subdir/nested.txt", content: "Nested content" }
+      ]);
+
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, body: mockBody } as Response)
+      ) as typeof fetch;
+
+      await downloadAndExtractRepo(testDir, {
+        username: "test-user",
+        name: "test-repo",
+        branch: "main",
+        filePath: ""
+      });
+
+      expect(readFileSync(join(testDir, "file.txt"), "utf-8")).toBe(
+        "Hello World"
+      );
+      expect(readFileSync(join(testDir, "subdir", "nested.txt"), "utf-8")).toBe(
+        "Nested content"
+      );
+    });
+
+    it("throws on a non-ok response without creating a temporary directory", async () => {
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: false, status: 404, body: null } as Response)
+      ) as typeof fetch;
+
+      await expect(
+        downloadAndExtractRepo(testDir, {
+          username: "test-user",
+          name: "test-repo",
+          branch: "main",
+          filePath: ""
+        })
+      ).rejects.toThrow("Failed to download: 404");
+
+      expect(listDownloadTempDirs()).toEqual(downloadTempDirs);
+    });
+
+    it("cleans up the temporary archive when the body transfer fails", async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          // First bytes of a gzip stream before the connection dies.
+          controller.enqueue(new Uint8Array([31, 139]));
+          controller.error(new Error("Connection reset mid-download"));
+        }
+      });
+
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, body } as Response)
+      ) as typeof fetch;
+
+      await expect(
+        downloadAndExtractRepo(testDir, {
+          username: "test-user",
+          name: "test-repo",
+          branch: "main",
+          filePath: ""
+        })
+      ).rejects.toThrow("Connection reset mid-download");
+
+      expect(listDownloadTempDirs()).toEqual(downloadTempDirs);
+    });
+
+    it("cleans up the temporary archive when extraction fails", async () => {
+      // A complete body whose payload is not a gzip archive, so extraction
+      // fails after the download itself has succeeded.
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3, 4]));
+          controller.close();
+        }
+      });
+
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, body } as Response)
+      ) as typeof fetch;
+
+      await expect(
+        downloadAndExtractRepo(testDir, {
+          username: "test-user",
+          name: "test-repo",
+          branch: "main",
+          filePath: ""
+        })
+      ).rejects.toThrow("TAR_BAD_ARCHIVE: Unrecognized archive format");
+
+      expect(listDownloadTempDirs()).toEqual(downloadTempDirs);
+    });
+
+    it("aborts a stalled body transfer when the download timeout elapses", async () => {
+      jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
+      try {
+        let downloadSignal: AbortSignal | undefined;
+        global.fetch = jest.fn(
+          (_input: RequestInfo | URL, init?: RequestInit) => {
+            downloadSignal = init?.signal ?? undefined;
+            const body = new ReadableStream<Uint8Array>({
+              start(controller) {
+                // Deliver a first chunk, then stall without ending the body.
+                controller.enqueue(new Uint8Array([31]));
+                downloadSignal?.addEventListener("abort", () => {
+                  controller.error(new Error("This operation was aborted"));
+                });
+              }
+            });
+            return Promise.resolve({ ok: true, body } as Response);
+          }
+        ) as typeof fetch;
+
+        const promise = downloadAndExtractRepo(testDir, {
+          username: "test-user",
+          name: "test-repo",
+          branch: "main",
+          filePath: ""
+        });
+
+        expect(downloadSignal?.aborted).toBe(false);
+
+        // The timeout must stay armed while the body is stalled.
+        await jest.advanceTimersByTimeAsync(120_000);
+
+        expect(downloadSignal?.aborted).toBe(true);
+        await expect(promise).rejects.toThrow("This operation was aborted");
+        expect(listDownloadTempDirs()).toEqual(downloadTempDirs);
+      } finally {
+        jest.useRealTimers();
       }
     });
   });
