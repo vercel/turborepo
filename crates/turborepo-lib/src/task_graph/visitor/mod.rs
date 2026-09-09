@@ -355,25 +355,6 @@ impl<'a> Visitor<'a> {
         })
     }
 
-    fn dependency_hashes_available(
-        &self,
-        engine: &Engine,
-        task_id: &TaskId<'static>,
-    ) -> Result<bool, Error> {
-        let dependency_set = engine
-            .dependencies(task_id)
-            .ok_or(Error::MissingDefinition)?;
-        let task_hash_tracker = self.task_hasher.task_hash_tracker();
-
-        Ok(dependency_set.iter().all(|dependency| {
-            let TaskNode::Task(dependency_task_id) = dependency else {
-                return true;
-            };
-
-            task_hash_tracker.hash(dependency_task_id).is_some()
-        }))
-    }
-
     fn dependency_output_hashes(
         &self,
         engine: &Engine,
@@ -484,35 +465,56 @@ impl<'a> Visitor<'a> {
     ) -> Result<(), Error> {
         use rayon::prelude::*;
 
-        loop {
-            let ready_to_hash = precomputed
-                .iter()
-                .filter_map(|(task_id, precomputed_task)| {
-                    if !matches!(precomputed_task, PrecomputedTask::Deferred) {
-                        return None;
-                    }
+        // Build incremental readiness once: an unresolved-dependency count
+        // per deferred task and reverse edges from each unhashed dependency
+        // to the deferred tasks waiting on it. Hashing a task then touches
+        // only its dependents instead of rescanning every candidate each
+        // round.
+        let task_hash_tracker = self.task_hasher.task_hash_tracker();
+        let mut pending_deps: HashMap<TaskId<'static>, usize> = HashMap::new();
+        let mut waiting_on: HashMap<TaskId<'static>, Vec<TaskId<'static>>> = HashMap::new();
+        let mut ready: Vec<TaskId<'static>> = Vec::new();
 
-                    let Some(task_definition) = engine.task_definition(task_id) else {
-                        return Some(Err(Error::MissingDefinition));
-                    };
-                    if task_definition.inputs.has_deferred_inputs() {
-                        return None;
-                    }
-
-                    match self.dependency_hashes_available(engine, task_id) {
-                        Ok(true) => Some(Ok(task_id.clone())),
-                        Ok(false) => None,
-                        Err(err) => Some(Err(err)),
-                    }
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            if ready_to_hash.is_empty() {
-                return Ok(());
+        for (task_id, precomputed_task) in precomputed.iter() {
+            if !matches!(precomputed_task, PrecomputedTask::Deferred) {
+                continue;
             }
 
+            let Some(task_definition) = engine.task_definition(task_id) else {
+                return Err(Error::MissingDefinition);
+            };
+            if task_definition.inputs.has_deferred_inputs() {
+                continue;
+            }
+
+            let mut pending = 0;
+            for dependency in engine
+                .dependencies(task_id)
+                .ok_or(Error::MissingDefinition)?
+                .iter()
+            {
+                let TaskNode::Task(dependency_task_id) = dependency else {
+                    continue;
+                };
+                if task_hash_tracker.hash(dependency_task_id).is_none() {
+                    pending += 1;
+                    waiting_on
+                        .entry(dependency_task_id.clone())
+                        .or_default()
+                        .push(task_id.clone());
+                }
+            }
+
+            if pending == 0 {
+                ready.push(task_id.clone());
+            } else {
+                pending_deps.insert(task_id.clone(), pending);
+            }
+        }
+
+        while !ready.is_empty() {
             type HashResult = Result<(TaskId<'static>, PrecomputedTask), Error>;
-            let hash_results: Vec<HashResult> = ready_to_hash
+            let hash_results: Vec<HashResult> = ready
                 .par_iter()
                 .map(|task_id| {
                     self.precompute_ready_task_hash(engine, telemetry, task_id)
@@ -520,11 +522,30 @@ impl<'a> Visitor<'a> {
                 })
                 .collect();
 
+            let mut next_ready = Vec::new();
             for result in hash_results {
                 let (task_id, precomputed_task) = result?;
-                precomputed.insert(task_id, precomputed_task);
+                precomputed.insert(task_id.clone(), precomputed_task);
+
+                // Unblock the deferred tasks that were waiting only on this
+                // hash (among others they still wait for).
+                if let Some(waiters) = waiting_on.remove(&task_id) {
+                    for waiter in waiters {
+                        let Some(pending) = pending_deps.get_mut(&waiter) else {
+                            continue;
+                        };
+                        *pending -= 1;
+                        if *pending == 0 {
+                            pending_deps.remove(&waiter);
+                            next_ready.push(waiter);
+                        }
+                    }
+                }
             }
+            ready = next_ready;
         }
+
+        Ok(())
     }
 
     fn precompute_task_hashes(
