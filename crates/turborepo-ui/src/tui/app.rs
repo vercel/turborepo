@@ -794,21 +794,20 @@ impl<W> App<W> {
             if filter.is_some_and(|selected| selected != task_name) {
                 continue;
             }
-            let Some(task) = self.tasks.get(&task_name) else {
+            let Some(task) = self.tasks.get_mut(&task_name) else {
                 continue;
             };
-            let output = task.raw_output();
-            let already =
-                replay_offset(self.replayed_offsets.get(&task_name).copied(), output.len());
+            let total = task.output_len();
+            let already = replay_offset(self.replayed_offsets.get(&task_name).copied(), total);
 
-            let pending = &output[already..];
-            self.replayed_offsets
-                .insert(task_name.clone(), output.len());
-
-            if pending.is_empty() {
+            if already >= total {
+                self.replayed_offsets.insert(task_name.clone(), total);
                 continue;
             }
-            sink.task_output(&task_name, turborepo_log::OutputChannel::Stdout, pending);
+            let pending = task.read_output_from(already);
+            self.replayed_offsets.insert(task_name.clone(), total);
+
+            sink.task_output(&task_name, turborepo_log::OutputChannel::Stdout, &pending);
         }
     }
 
