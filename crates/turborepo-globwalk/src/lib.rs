@@ -567,6 +567,14 @@ struct CompiledGlobs {
     ex_filter: FilterAny,
 }
 
+/// Repeated `<prefix>/**` patterns each walk the same tree only for the
+/// result set to deduplicate the files afterwards, so duplicate prefixes are
+/// pure repeated I/O. Keep the first occurrence of each prefix.
+fn deduplicate_recursive_all_prefixes(prefixes: &mut Vec<PathBuf>) {
+    let mut seen = HashSet::new();
+    prefixes.retain(|prefix| seen.insert(prefix.clone()));
+}
+
 /// A preprocessed include pattern classified from its raw string, without
 /// wax compilation. Compiling a wax glob costs 1-2ms of regex
 /// construction, and workspace discovery hands us ~20 patterns during the
@@ -847,6 +855,8 @@ fn compile_globs<S: AsRef<str>>(
     }
 
     let include_patterns = compile_complex_globs(complex_paths)?;
+
+    deduplicate_recursive_all_prefixes(&mut recursive_all);
 
     Ok(CompiledGlobs {
         base_path: base_path_new,
@@ -1306,7 +1316,7 @@ mod classify_test {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, str::FromStr};
+    use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
     use itertools::Itertools;
     use tempfile::TempDir;
@@ -1315,7 +1325,8 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        escape_glob_literals, fix_glob_pattern, globwalk, needs_path_cleaning,
+        deduplicate_recursive_all_prefixes, escape_glob_literals, fix_glob_pattern, globwalk,
+        needs_path_cleaning,
     };
 
     #[cfg(unix)]
@@ -2503,6 +2514,47 @@ mod test {
             .collect();
 
         assert_eq!(paths, HashSet::from(["src/file.txt".to_owned()]));
+    }
+
+    #[test]
+    fn recursive_all_prefixes_are_deduplicated() {
+        let mut prefixes = vec![
+            PathBuf::from("src"),
+            PathBuf::from("src"),
+            PathBuf::from("other"),
+            PathBuf::from("src"),
+        ];
+
+        deduplicate_recursive_all_prefixes(&mut prefixes);
+
+        // Each distinct prefix is walked once, no matter how often it is
+        // declared.
+        assert_eq!(prefixes, vec![PathBuf::from("src"), PathBuf::from("other")]);
+    }
+
+    #[test]
+    fn duplicate_recursive_all_patterns_match_a_single_walk() {
+        let tmp = setup_files(&["src/file.txt", "src/nested/file.txt"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let single = [ValidatedGlob::from_str("src/**").unwrap()];
+        let repeated = [
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+        ];
+
+        let single_paths: HashSet<String> = globwalk(&root, &single, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+        let repeated_paths: HashSet<String> = globwalk(&root, &repeated, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+
+        assert_eq!(single_paths, repeated_paths);
     }
 
     #[test]
