@@ -1268,6 +1268,8 @@ pub trait TaskDefinitionHashInfo {
     /// in the task hash: changing what a task runs must invalidate its
     /// cached results.
     fn command(&self) -> Option<&TaskCommandOverride>;
+    /// Returns the resolved experimental CI configuration, if any.
+    fn experimental_ci(&self) -> Option<&ExperimentalCIConfig>;
     /// Returns the pass-through environment variables
     fn pass_through_env(&self) -> Option<&[String]>;
     /// Returns the task inputs configuration
@@ -1285,6 +1287,10 @@ impl TaskDefinitionHashInfo for TaskDefinition {
 
     fn command(&self) -> Option<&TaskCommandOverride> {
         self.command.as_ref()
+    }
+
+    fn experimental_ci(&self) -> Option<&ExperimentalCIConfig> {
+        self.experimental_ci.as_ref()
     }
 
     fn pass_through_env(&self) -> Option<&[String]> {
