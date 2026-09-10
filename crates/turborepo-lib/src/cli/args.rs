@@ -657,7 +657,10 @@ impl Args {
             .take_while(|arg| *arg != "--")
             .any(|arg| matches!(arg.to_str(), Some("-h" | "--help")));
         if help_requested {
-            let help_args: Vec<_> = os_args.into_iter().skip(1).collect();
+            let (_, words) = Self::remove_single_package(os_args);
+            let mut words: Vec<_> = words.collect();
+            Self::normalize_leading_run_flags(&mut words);
+            let help_args: Vec<_> = words.into_iter().skip(1).collect();
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
                 print_help(&exit.text);
                 exit_with_heap_profile(exit.code);
@@ -783,6 +786,7 @@ impl Args {
             words.pop();
             words.insert(1, OsString::from("__turbo_config_options"));
         }
+        Self::normalize_leading_run_flags(&mut words);
         Self::reject_duplicate_scalar_flags(&words)?;
         for word in &words {
             if matches!(
@@ -853,6 +857,45 @@ impl Args {
         }
 
         Ok(args)
+    }
+
+    /// usage-rs selects the default command on a positional, not on a flag.
+    /// Restore `turbo -F web build` without making run flags global or
+    /// accepting them before explicit subcommands. Let the parser consume
+    /// flag values and short bundles rather than guessing which word is the
+    /// task name.
+    fn normalize_leading_run_flags(words: &mut Vec<OsString>) {
+        let root = Self::command();
+        let Some(run) = root.default_subcommand else {
+            return;
+        };
+        let flags: Vec<_> = root.flags.iter().chain(run.flags).copied().collect();
+        let probe = usage::Command {
+            flags: &flags,
+            args: run.args,
+            default_subcommand: None,
+            ..*root
+        };
+        let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
+        let mut parser = usage::Parser::new(&probe, &argv);
+        let mut leading_run_flag = false;
+        while let Some(event) = parser.next_event() {
+            match event {
+                Ok(usage::Event::Flag { flag, .. }) => {
+                    leading_run_flag |= run
+                        .flags
+                        .iter()
+                        .any(|run_flag| std::ptr::eq(*run_flag, flag));
+                }
+                Ok(usage::Event::Arg { .. }) => break,
+                // A named command (including an alias) must retain its own
+                // flag scope. Leave malformed argv to the normal parser too.
+                _ => return,
+            }
+        }
+        if leading_run_flag && !parser.double_dash_seen() {
+            words.insert(1, OsString::from("run"));
+        }
     }
 
     fn reject_duplicate_scalar_flags(words: &[OsString]) -> Result<(), String> {
