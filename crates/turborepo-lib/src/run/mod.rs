@@ -541,6 +541,13 @@ impl Run {
         &self.pkg_dep_graph
     }
 
+    /// The package graph as a shared handle so watch-mode partial reruns can
+    /// reuse it when no graph-defining file (manifests, lockfile, workspace
+    /// configuration) changed between runs.
+    pub(crate) fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
+        self.pkg_dep_graph.clone()
+    }
+
     pub fn engine(&self) -> &Engine {
         &self.engine
     }
