@@ -130,23 +130,22 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install bash capnp
 
-      - parallel:
-          - name: Setup Rust
-            uses: ./.github/actions/setup-rust
-            with:
-              targets: ${{ matrix.settings.target }}
-              github-token: ${{ github.token }}
-            if: ${{ !matrix.settings.install }}
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.settings.target }}
+          github-token: ${{ github.token }}
+        if: ${{ !matrix.settings.install }}
 
-          - name: Setup Node
-            uses: ./.github/actions/setup-node
-            if: ${{ !matrix.settings.install }}
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        if: ${{ !matrix.settings.install }}
 
-          - name: Setup capnproto
-            if: runner.os != 'macOS'
-            uses: ./.github/actions/setup-capnproto
-            with:
-              use-cache: ${{ !matrix.settings.install }}
+      - name: Setup capnproto
+        if: runner.os != 'macOS'
+        uses: ./.github/actions/setup-capnproto
+        with:
+          use-cache: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
@@ -184,16 +183,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - parallel:
-          - name: Setup Node
-            uses: ./.github/actions/setup-node
-            with:
-              package-install: false
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
 
-          - name: Download Artifacts
-            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-            with:
-              path: ${{ runner.temp }}/native-packages
+      - name: Download Artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: ${{ runner.temp }}/native-packages
 
       - name: Configure npm
         run: |
