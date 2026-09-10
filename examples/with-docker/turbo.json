@@ -1,16 +1,20 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  "globalEnv": ["PORT"],
   "tasks": {
     "build": {
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**", "public/dist/**"],
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        "public/dist/**"
+      ],
       "env": ["NEXT_PUBLIC_API_HOST"]
     },
-    "test": {
-      "outputs": ["coverage/**"],
-      "dependsOn": []
-    },
+    "test": {},
     "lint": {
       "dependsOn": ["^build"]
     },
