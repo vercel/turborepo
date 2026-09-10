@@ -25,6 +25,7 @@ import MilestonesImageLight from "../../public/images/blog/turbo-2-11/milestones
 Turborepo 2.11 expands what's possible in your Turborepo:
 
 - [**Rust, Python, and Go native support (Experimental)**](#native-support-for-rust-python-and-go-experimental): Add Cargo, uv, and `go.work` workspaces to your Task Graph
+- [**Faster Time to First Task**](#up-to-4x-faster-startup): Up to 4x faster startup than Turborepo 2.9
 - [**`devEngines.packageManager` support**](#devenginespackagemanager-support): Declare your package manager with modern Node.js convention
 - [**nub and aube support**](#nub-and-aube-support): New JavaScript package managers
 - [**Production pruning**](#production-pruning): Exclude development-only workspace packages from `turbo prune` outputs
@@ -143,12 +144,12 @@ You can use any of these languages by themselves or bring JavaScript, Rust, Pyth
 
 | Turborepo command                        | Task examples                                                    |
 | ---------------------------------------- | ---------------------------------------------------------------- |
-| `turbo run build`                        | `tsc build` + `cargo build` + `uv build` + `go build ./...`       |
+| `turbo run build`                        | `tsc build` + `cargo build` + `uv build` + `go build ./...`      |
 | `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest` + `go test ./...`  |
 | `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`                            |
 | `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` + `go vet ./...` |
 | `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` + `go fmt ./...` |
-| `turbo run build test check lint format` | All of the commands above run in parallel                          |
+| `turbo run build test check lint format` | All of the commands above run in parallel                        |
 
 You can also create cross-toolchain dependencies in `turbo.json`. In the example below, tests for a Python API server wait for a Rust core package to be built:
 
@@ -156,8 +157,7 @@ You can also create cross-toolchain dependencies in `turbo.json`. In the example
 {
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
-    "experimentalPythonWorkspaces": true,
-    "experimentalGoWorkspaces": true
+    "experimentalPythonWorkspaces": true
   },
   "tasks": {
     "my-dango-api#test": {
@@ -169,83 +169,328 @@ You can also create cross-toolchain dependencies in `turbo.json`. In the example
 
 Once the Rust dependency is done building, the Django server will run its Python tests.
 
-Native Rust, Python, and Go support is [Experimental](/docs/support-policy#experimental) and subject to change. Please provide your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
+Native Rust, Python, and Go support is [Experimental](/docs/support-policy#experimental) and subject to change. To learn more, visit the [Rust](/docs/guides/tools/rust), [Python](/docs/guides/tools/python), and [Go](/docs/guides/tools/go) guides.
 
-### Rust with Cargo
+We look forward to your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
 
-Enable Cargo workspace support with `experimentalCargoWorkspaces` in your root `turbo.json`:
+## Up to 4x faster startup
 
-```json title="turbo.json"
-{
-  "futureFlags": {
-    "experimentalCargoWorkspaces": true
-  }
-}
-```
+In [Turborepo 2.9](/blog/2-9#time-to-first-task-improved-up-to-96), we improved Time to First Task - the time between when you invoke `turbo run` and when your first task starts running - by up to 96%.
 
-Turborepo infers common tasks and maps them to Cargo commands:
+In 2.11, we've continued improving performance. Turborepo 2.11 is up to 4x faster than 2.9.
 
-| Turborepo command  | Cargo-native task |
-| ------------------ | ----------------- |
-| `turbo run build`  | `cargo build`     |
-| `turbo run test`   | `cargo test`      |
-| `turbo run check`  | `cargo check`     |
-| `turbo run lint`   | `cargo clippy`    |
-| `turbo run format` | `cargo fmt`       |
+<div
+  className="not-prose my-8 rounded-lg border border-[var(--ds-gray-400)] overflow-hidden"
+  role="figure"
+  aria-label="Time to First Task comparison across Turborepo versions"
+>
+  <div className="py-0 pr-3 pl-4 rounded-t-md border-b border-[var(--ds-gray-400)] h-10 flex items-center bg-[var(--ds-background-200)]">
+    <span className="text-sm font-medium text-[var(--ds-gray-1000)]">
+      Time to First Task
+    </span>
+  </div>
+  <div className="p-4 flex flex-col gap-4 bg-[var(--ds-background-100)]">
+    <div>
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-sm text-[var(--ds-gray-1000)]">
+          Vercel's backend monorepo (1037 packages)
+        </span>
+        <span
+          className="text-xs font-semibold"
+          style={{ color: "var(--ds-blue-700)" }}
+        >
+          45% faster
+        </span>
+      </div>
+      <div
+        className="flex flex-col gap-1.5"
+        role="group"
+        aria-label="Vercel's backend monorepo (1037 packages)"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.11
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={5}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.11: 394 milliseconds"
+          >
+            <div
+              className="w-[5%] rounded h-full"
+              style={{ backgroundColor: "var(--ds-blue-700)" }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                394ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            394ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.9
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={9}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.9: 716 milliseconds"
+          >
+            <div
+              className="w-[9%] bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                716ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            716ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            {"<2.9"}
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={100}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Before 2.9: 8.1 seconds"
+          >
+            <div
+              className="w-full bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                8.1s
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            8.1s
+          </span>
+        </div>
+      </div>
+    </div>
+    <div className="border-t border-[var(--ds-gray-400)] pt-4">
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-sm text-[var(--ds-gray-1000)]">
+          Vercel's frontend monorepo (132 packages)
+        </span>
+        <span
+          className="text-xs font-semibold"
+          style={{ color: "var(--ds-blue-700)" }}
+        >
+          43% faster
+        </span>
+      </div>
+      <div
+        className="flex flex-col gap-1.5"
+        role="group"
+        aria-label="Vercel's frontend monorepo (132 packages)"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.11
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={11}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.11: 206 milliseconds"
+          >
+            <div
+              className="w-[11%] rounded h-full"
+              style={{ backgroundColor: "var(--ds-blue-700)" }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                206ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            206ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.9
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={19}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.9: 361 milliseconds"
+          >
+            <div
+              className="w-[19%] bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                361ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            361ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            {"<2.9"}
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={100}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Before 2.9: 1.875 seconds"
+          >
+            <div
+              className="w-full bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                1.9s
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            1.9s
+          </span>
+        </div>
+      </div>
+    </div>
+    <div className="border-t border-[var(--ds-gray-400)] pt-4">
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-sm text-[var(--ds-gray-1000)]">
+          `create-turbo` (6 packages)
+        </span>
+        <span
+          className="text-xs font-semibold"
+          style={{ color: "var(--ds-blue-700)" }}
+        >
+          74% faster
+        </span>
+      </div>
+      <div
+        className="flex flex-col gap-1.5"
+        role="group"
+        aria-label="create-turbo (6 packages)"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.11
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={5}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.11: 34 milliseconds"
+          >
+            <div
+              className="w-[5%] rounded h-full"
+              style={{ backgroundColor: "var(--ds-blue-700)" }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                34ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            34ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            2.9
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={20}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="2.9: 132 milliseconds"
+          >
+            <div
+              className="w-[20%] bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                132ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            132ms
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ds-gray-900)] w-12 shrink-0">
+            {"<2.9"}
+          </span>
+          <div
+            className="flex-1 bg-[var(--ds-gray-200)] rounded h-5 relative"
+            role="progressbar"
+            aria-valuenow={100}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Before 2.9: 676 milliseconds"
+          >
+            <div
+              className="w-full bg-[var(--ds-gray-600)] rounded h-full"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center px-2">
+              <span className="text-xs font-medium text-white sm:inline hidden">
+                676ms
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-[var(--ds-gray-1000)] w-16 shrink-0 text-right sm:hidden">
+            676ms
+          </span>
+        </div>
+      </div>
+    </div>
+    <span className="block text-xs text-[var(--ds-gray-900)] mt-3">
+      Benchmarked on Apple M4 Max, 36 GB RAM, macOS 15.7.1
+    </span>
+  </div>
+</div>
 
-Cargo remains responsible for installing dependencies, resolving dependencies, compiling crates, and scheduling the Cargo-internal build graph. The Cargo workspace continues to work the way you are used to under the hood.
-
-To learn more, [read the Rust guide](/docs/guides/tools/rust). We look forward to hearing your feedback on [the RFC for Rust support](https://github.com/vercel/turborepo/discussions/13415).
-
-### Python with uv
-
-Enable uv workspace support with `experimentalPythonWorkspaces` in your root `turbo.json`:
-
-```json title="turbo.json"
-{
-  "futureFlags": {
-    "experimentalPythonWorkspaces": true
-  }
-}
-```
-
-With zero configuration, Turborepo reads the tools in your `pyproject.toml` and runs them as native tasks:
-
-| Turborepo command  | uv-native task                |
-| ------------------ | ----------------------------- |
-| `turbo run build`  | `uv build --package=<name>`   |
-| `turbo run test`   | `uv run --frozen pytest`      |
-| `turbo run check`  | `uv run --frozen mypy`        |
-| `turbo run lint`   | `uv run --frozen ruff check`  |
-| `turbo run format` | `uv run --frozen ruff format` |
-
-Ruff, Black, mypy, ty, Pyright and pytest all require zero-configuration. To learn more, [read the Python guide](/docs/guides/tools/python) and let us know of your feedback on the [Python support RFC](https://github.com/vercel/turborepo/discussions/13625).
-
-### Go with go.work
-
-Enable Go workspace support with `experimentalGoWorkspaces` in your root `turbo.json`:
-
-```json title="turbo.json"
-{
-  "futureFlags": {
-    "experimentalGoWorkspaces": true
-  }
-}
-```
-
-Turborepo discovers modules from your repository-root `go.work` and maps common tasks to standard Go commands:
-
-| Turborepo command  | Go-native task                |
-| ------------------ | ----------------------------- |
-| `turbo run build`  | `go build ./...`              |
-| `turbo run test`   | `go test ./...`               |
-| `turbo run lint`   | `go vet ./...`                |
-| `turbo run format` | `go fmt ./...`                |
-| `turbo run dev`    | `go run <import-path>`        |
-
-Go remains responsible for module resolution, compilation, and testing. Turborepo orchestrates which modules are in scope, how they relate in the Task Graph, and when their tasks should run, cache, or invalidate.
-
-To learn more, [read the Go guide](/docs/guides/tools/go).
+Stacked on top of the 2.9 gains, the largest repository we benchmarked now reaches its first task over 20x faster than it did before 2.9. As with 2.9, the improvement you see will depend on the size and complexity of your repository.
 
 ## `devEngines.packageManager` support
 
@@ -330,9 +575,7 @@ In this release, we're giving you control to exclude workspace packages that are
 turbo prune web --production
 ```
 
-This works across all natively supported languages, including the Experimental ones introduced in this release.
-
-[Visit the `turbo prune` documentation](/docs/reference/prune#--production) to learn more.
+This works across all natively supported languages, including the Experimental ones introduced in this release. [Visit the `turbo prune` documentation](/docs/reference/prune#--production) to learn more.
 
 ## All changes
 
