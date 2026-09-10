@@ -2097,6 +2097,7 @@ mod task_io_context_tests {
             env_mode: EnvMode::Strict,
             command_override: &[],
             command_opt_out: false,
+            experimental_ci: None,
         }
         .calculate_task_hash()
         .unwrap()
