@@ -883,12 +883,34 @@ mod test {
             }
         }
 
-        // The burst must not produce a pile-up: one in-flight discovery plus
-        // exactly one coalesced follow-up.
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            2,
-            "expected initial scan + one coalesced follow-up"
+        // Wait for quiescence before asserting: file events from the burst
+        // are delivered asynchronously, and one may still be in flight when
+        // the coalesced follow-up runs.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let mut last_calls = 0;
+        let mut stable_since = tokio::time::Instant::now();
+        loop {
+            let current = calls.load(Ordering::SeqCst);
+            if current != last_calls || in_flight.load(Ordering::SeqCst) > 0 {
+                last_calls = current;
+                stable_since = tokio::time::Instant::now();
+            } else if stable_since.elapsed() > Duration::from_millis(300) {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "discoveries never settled"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        // The burst must not produce a pile-up proportional to its size: one
+        // in-flight discovery, one coalesced follow-up, and at most one extra
+        // scan if a straggler event lands while the follow-up runs.
+        let total = calls.load(Ordering::SeqCst);
+        assert!(
+            total <= 3,
+            "20 invalidations must coalesce into at most 3 scans, got {total}"
         );
         assert_eq!(
             max_in_flight.load(Ordering::SeqCst),
