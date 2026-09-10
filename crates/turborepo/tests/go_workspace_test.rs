@@ -207,27 +207,27 @@ fn go_version_shim_path(dir: &Path) -> String {
 }
 
 #[cfg(unix)]
-fn wait_for_path(path: &Path, timeout: Duration) -> bool {
-    let started = std::time::Instant::now();
-    while started.elapsed() < timeout {
-        if path.exists() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    path.exists()
+fn publish_go_work(path: &Path, contents: &[u8]) {
+    use std::io::Write;
+
+    // Stage on the same filesystem so persist replaces the manifest atomically.
+    let mut staged = tempfile::NamedTempFile::new_in(path.parent().unwrap()).unwrap();
+    staged.write_all(contents).unwrap();
+    staged.persist(path).unwrap();
 }
 
 #[cfg(unix)]
-struct GoWatchGuard(Option<Child>);
+struct GoWatchGuard {
+    child: Child,
+    // Keep diagnostics/config outside the watched repository: logging must not
+    // itself generate file events or become a task input.
+    diagnostics: tempfile::TempDir,
+}
 
 #[cfg(unix)]
 impl GoWatchGuard {
     fn spawn(dir: &Path) -> Self {
-        use std::os::unix::process::CommandExt;
-
         let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("turbo"));
-        command.process_group(0);
         for name in AMBIENT_GO_ENV {
             command.env_remove(name);
         }
@@ -244,11 +244,84 @@ impl GoWatchGuard {
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             .env("DO_NOT_TRACK", "1")
-            .current_dir(dir)
+            .env_remove("CI")
+            .env_remove("GITHUB_ACTIONS")
+            .current_dir(dir);
+        Self::spawn_command(command)
+    }
+
+    fn spawn_command(mut command: std::process::Command) -> Self {
+        use std::os::unix::process::CommandExt;
+
+        let diagnostics = tempfile::tempdir().expect("create watch diagnostics directory");
+        let stdout = fs::File::create(diagnostics.path().join("stdout.log")).unwrap();
+        let stderr = fs::File::create(diagnostics.path().join("stderr.log")).unwrap();
+        // Files avoid pipe backpressure and reader threads that can outlive the
+        // child. The guard keeps both the logs and isolated config alive.
+        let child = command
+            .process_group(0)
+            .env("TURBO_CONFIG_DIR_PATH", diagnostics.path().join("config"))
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        Self(Some(command.spawn().expect("failed to spawn turbo watch")))
+            .stdout(stdout)
+            .stderr(stderr)
+            .spawn()
+            .expect("failed to spawn watch command");
+        Self { child, diagnostics }
+    }
+
+    fn output(&self) -> String {
+        use std::io::{Read, Seek, SeekFrom};
+
+        let read = |name| -> std::io::Result<String> {
+            // Keep a noisy child from overwhelming the test failure report.
+            const MAX_BYTES: u64 = 64 * 1024;
+            let mut file = fs::File::open(self.diagnostics.path().join(name))?;
+            let skipped = file.metadata()?.len().saturating_sub(MAX_BYTES);
+            file.seek(SeekFrom::Start(skipped))?;
+            let mut bytes = Vec::new();
+            file.take(MAX_BYTES).read_to_end(&mut bytes)?;
+            let text = String::from_utf8_lossy(&bytes);
+            Ok(if skipped > 0 {
+                format!("[omitted {skipped} bytes]\n{text}")
+            } else {
+                text.into_owned()
+            })
+        };
+        let log =
+            |name| read(name).unwrap_or_else(|error| format!("failed to read {name}: {error}"));
+        format!(
+            "stdout:\n{}\nstderr:\n{}",
+            log("stdout.log"),
+            log("stderr.log")
+        )
+    }
+
+    fn wait_for_path(&mut self, path: &Path, timeout: Duration) -> Result<(), String> {
+        let started = std::time::Instant::now();
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => {
+                    return Err(format!(
+                        "watch exited with {status} while waiting for {path:?}\n{}",
+                        self.output()
+                    ));
+                }
+                Err(error) => {
+                    return Err(format!("polling watch failed: {error}\n{}", self.output()));
+                }
+                Ok(None) => {}
+            }
+            if path.exists() {
+                return Ok(());
+            }
+            if started.elapsed() >= timeout {
+                return Err(format!(
+                    "timed out after {timeout:?} waiting for {path:?}\n{}",
+                    self.output()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
     }
 }
 
@@ -260,9 +333,13 @@ impl Drop for GoWatchGuard {
             unistd::Pid,
         };
 
-        let Some(mut child) = self.0.take() else {
-            return;
-        };
+        let child = &mut self.child;
+        // Avoid signaling a recycled process-group ID if a prior wait already
+        // observed and reaped the child.
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) => {}
+        }
         let group = Pid::from_raw(-(child.id() as i32));
         let _ = signal::kill(group, Signal::SIGTERM);
         let started = std::time::Instant::now();
@@ -274,6 +351,117 @@ impl Drop for GoWatchGuard {
         }
         let _ = signal::kill(group, Signal::SIGKILL);
         let _ = child.wait();
+    }
+}
+
+#[cfg(unix)]
+mod go_watch_harness_tests {
+    use super::*;
+
+    #[test]
+    fn atomic_publication_never_exposes_partial_go_work() {
+        use std::sync::{Barrier, mpsc};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("go.work");
+        let old = format!(
+            "go 1.22\nuse ./apps/api\n{}",
+            "// old workspace\n".repeat(16384)
+        );
+        let new = format!(
+            "go 1.22\nuse ./apps/worker\n{}",
+            "// new workspace\n".repeat(16384)
+        );
+        fs::write(&path, &old).unwrap();
+        let ready = Barrier::new(2);
+        std::thread::scope(|scope| {
+            // Dropping the sender also stops the reader if publication panics.
+            let (done, completed) = mpsc::channel::<()>();
+            let (first_read, observed_first_read) = mpsc::channel::<()>();
+            let reader = scope.spawn({
+                let (path, old, new, ready) = (&path, &old, &new, &ready);
+                move || {
+                    ready.wait();
+                    let mut first = true;
+                    loop {
+                        let observed = fs::read(path).unwrap();
+                        assert!(
+                            observed == old.as_bytes() || observed == new.as_bytes(),
+                            "reader observed a partial go.work ({} bytes)",
+                            observed.len()
+                        );
+                        if first {
+                            first_read.send(()).unwrap();
+                            first = false;
+                        }
+                        if !matches!(completed.try_recv(), Err(mpsc::TryRecvError::Empty)) {
+                            break;
+                        }
+                    }
+                }
+            });
+            ready.wait();
+            observed_first_read.recv().unwrap();
+            for _ in 0..100 {
+                publish_go_work(&path, new.as_bytes());
+                publish_go_work(&path, old.as_bytes());
+            }
+            drop(done);
+            reader.join().unwrap();
+        });
+    }
+
+    #[test]
+    fn wait_reports_exit_even_if_output_file_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("output");
+        fs::write(&path, "not proof of a live watcher").unwrap();
+        let mut command = std::process::Command::new("sh");
+        command.args([
+            "-c",
+            "printf 'watch stdout'; printf 'watch stderr' >&2; exit 7",
+        ]);
+        let mut watch = GoWatchGuard::spawn_command(command);
+        // Synchronize on exit rather than racing the child's final instructions.
+        watch.child.wait().unwrap();
+        let error = watch
+            .wait_for_path(&path, Duration::from_secs(30))
+            .unwrap_err();
+        assert!(error.contains("exit status: 7"), "{error}");
+        assert!(error.contains("watch stdout"), "{error}");
+        assert!(error.contains("watch stderr"), "{error}");
+        assert!(error.contains(path.to_str().unwrap()), "{error}");
+    }
+
+    #[test]
+    fn noisy_child_does_not_block_and_timeout_includes_log_tails() {
+        let dir = tempfile::tempdir().unwrap();
+        let ready = dir.path().join("ready");
+        let mut command = std::process::Command::new("sh");
+        command
+            .args([
+                "-c",
+                concat!(
+                    "i=0; while [ $i -lt 8192 ]; do ",
+                    "printf 'verbose watch output\\n'; printf 'verbose watch error\\n' >&2; ",
+                    "i=$((i+1)); done; ",
+                    "printf '\\377stdout tail\\n'; printf 'stderr tail\\n' >&2; ",
+                    "touch \"$1\"; exec sleep 60"
+                ),
+                "watch-test",
+            ])
+            .arg(&ready);
+        let mut watch = GoWatchGuard::spawn_command(command);
+        watch
+            .wait_for_path(&ready, Duration::from_secs(30))
+            .unwrap();
+        let missing = dir.path().join("missing");
+        let error = watch.wait_for_path(&missing, Duration::ZERO).unwrap_err();
+        assert!(error.contains("timed out"), "{error}");
+        assert!(error.contains("stdout tail"), "{error}");
+        assert!(error.contains("stderr tail"), "{error}");
+        assert!(error.contains("[omitted "), "{error}");
+        assert!(error.len() < 132 * 1024, "diagnostics must be bounded");
     }
 }
 
@@ -1116,12 +1304,11 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
     }
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
-    let _watch = GoWatchGuard::spawn(tempdir.path());
+    let mut watch = GoWatchGuard::spawn(tempdir.path());
     let api_binary = tempdir.path().join("apps/api/dist/api");
-    assert!(
-        wait_for_path(&api_binary, Duration::from_secs(30)),
-        "initial Go watch build did not produce {api_binary:?}"
-    );
+    watch
+        .wait_for_path(&api_binary, Duration::from_secs(30))
+        .unwrap_or_else(|error| panic!("initial Go watch build failed: {error}"));
 
     let worker = tempdir.path().join("apps/worker");
     fs::create_dir_all(&worker).unwrap();
@@ -1135,11 +1322,13 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
         "package main\n\nfunc main() { println(\"worker\") }\n",
     )
     .unwrap();
-    fs::write(
-        tempdir.path().join("go.work"),
-        "go 1.22\n\nuse (\n\t./apps/api\n\t./apps/worker\n\t./packages/lib\n)\n",
-    )
-    .unwrap();
+    // This test exercises rediscovery of a valid workspace, not recovery from
+    // a partially written manifest. fs::write truncates go.work before writing;
+    // the watcher can observe an empty workspace and exit before the write ends.
+    publish_go_work(
+        &tempdir.path().join("go.work"),
+        b"go 1.22\n\nuse (\n\t./apps/api\n\t./apps/worker\n\t./packages/lib\n)\n",
+    );
     common::git(
         tempdir.path(),
         &[
@@ -1155,10 +1344,9 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
     );
 
     let worker_binary = worker.join("dist/worker");
-    assert!(
-        wait_for_path(&worker_binary, Duration::from_secs(60)),
-        "turbo watch did not rediscover and build {worker_binary:?}"
-    );
+    watch
+        .wait_for_path(&worker_binary, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("Go watch workspace rediscovery failed: {error}"));
 }
 
 #[test]
