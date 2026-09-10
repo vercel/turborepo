@@ -188,11 +188,11 @@ async fn query_packages(
     let items = value
         .pointer("/data/packages/items")
         .and_then(|v| v.as_array())
-        .cloned()
+        .map(Vec::as_slice)
         .unwrap_or_default();
 
     let mut packages: Vec<PackageDetailDisplay> = items
-        .into_iter()
+        .iter()
         .filter_map(|item| {
             let name = item.get("name")?.as_str()?.to_string();
             let path = item.get("path")?.as_str()?.to_string();
