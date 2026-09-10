@@ -44,9 +44,15 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 import {
   OPERATOR_ACTION_HEADER,
-  OPERATOR_SESSION_ACTION
+  OPERATOR_SESSION_ACTION,
+  OPERATOR_THINKING_EFFORT_HEADER
 } from "../agent/lib/operator-console";
 import { sandboxSshCommand } from "../agent/lib/sandbox-ssh";
+import {
+  DEFAULT_WORKSPACE_THINKING_EFFORT,
+  WORKSPACE_THINKING_EFFORTS,
+  type WorkspaceThinkingEffort
+} from "../agent/lib/workspace";
 import { CopyCommand } from "../components/copy-command";
 import { Button } from "../components/ui/button";
 import { WorkspaceDiff } from "./workspace-diff";
@@ -57,6 +63,13 @@ import {
 } from "./workspace-types";
 
 const CONSOLE_HEADERS = { [OPERATOR_ACTION_HEADER]: OPERATOR_SESSION_ACTION };
+
+function consoleHeaders(thinkingEffort: WorkspaceThinkingEffort) {
+  return {
+    ...CONSOLE_HEADERS,
+    [OPERATOR_THINKING_EFFORT_HEADER]: thinkingEffort
+  };
+}
 const streamdownPlugins: PluginConfig = {
   cjk,
   code: code as unknown as NonNullable<PluginConfig["code"]>,
@@ -78,6 +91,12 @@ interface LoadedWorkspace {
   readonly events: readonly MessageStreamEvent[];
   readonly workspace: PublicWorkspace;
 }
+
+type QueuedMessage = {
+  readonly afterMessageCount: number;
+  readonly id: string;
+  readonly text: string;
+};
 
 type InputResponse = {
   readonly optionId?: string;
@@ -170,6 +189,11 @@ function WorkspaceChat({
   readonly workspace: PublicWorkspace;
 }) {
   const [draft, setDraft] = useState("");
+  const [thinkingEffort, setThinkingEffort] = useState<WorkspaceThinkingEffort>(
+    workspace.thinkingEffort ?? DEFAULT_WORKSPACE_THINKING_EFFORT
+  );
+  const thinkingEffortRef = useRef(thinkingEffort);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const [externalEvents, setExternalEvents] = useState(initialEvents);
   const reconnectStream = useRef<() => void>(() => {});
   const streamIndex = useRef(initialEvents.length);
@@ -180,7 +204,7 @@ function WorkspaceChat({
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [view, setView] = useState<"chat" | "diff">("chat");
   const agent = useEveAgent({
-    headers: CONSOLE_HEADERS,
+    headers: () => consoleHeaders(thinkingEffortRef.current),
     initialEvents,
     initialSession: {
       sessionId: workspace.sessionId!,
@@ -281,18 +305,58 @@ function WorkspaceChat({
     }
   }, [data.messages, optimisticMessage]);
 
+  useEffect(() => {
+    setQueuedMessages((current) =>
+      current.filter(
+        (message) =>
+          !hasUserMessageAfter(
+            data.messages,
+            message.text,
+            message.afterMessageCount
+          )
+      )
+    );
+  }, [data.messages]);
+
   const submit = useCallback(async () => {
     const message = draft.trim();
-    if (!message || busy) return;
+    if (!message) return;
     setDraft("");
+
+    if (busy) {
+      const queued: QueuedMessage = {
+        afterMessageCount: data.messages.length,
+        id: crypto.randomUUID(),
+        text: message
+      };
+      setQueuedMessages((current) => [...current, queued]);
+      try {
+        await new Client({
+          headers: consoleHeaders(thinkingEffortRef.current),
+          host: ""
+        }).sessions
+          .attach(workspace.sessionId!)
+          .send(message, {
+            streamReconnectPolicy: { reconnect: false },
+            turnPolicy: "queue"
+          });
+      } catch {
+        setQueuedMessages((current) =>
+          current.filter((candidate) => candidate.id !== queued.id)
+        );
+        setDraft(message);
+      }
+      return;
+    }
+
     setOptimisticMessage(message);
     try {
-      await agent.send(message);
+      await agent.send(message, { turnPolicy: "queue" });
     } catch {
       setOptimisticMessage(null);
       setDraft(message);
     }
-  }, [agent, busy, draft]);
+  }, [agent, busy, data.messages.length, draft, workspace.sessionId]);
 
   const answer = useCallback(
     async (response: InputResponse) => {
@@ -436,13 +500,20 @@ function WorkspaceChat({
 
           <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
             {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
+            {queuedMessages.length > 0 ? (
+              <QueuedMessages messages={queuedMessages} />
+            ) : null}
             <ChatComposer
               busy={busy}
-              disabled={busy}
               onChange={setDraft}
               onStop={stop}
               onSubmit={submit}
+              onThinkingEffortChange={(effort) => {
+                thinkingEffortRef.current = effort;
+                setThinkingEffort(effort);
+              }}
               stopping={stopping}
+              thinkingEffort={thinkingEffort}
               value={draft}
             />
           </div>
@@ -514,21 +585,47 @@ function ScrollToBottomButton() {
   );
 }
 
+function QueuedMessages({
+  messages
+}: {
+  readonly messages: readonly QueuedMessage[];
+}) {
+  return (
+    <div
+      aria-label="Queued messages"
+      className="mx-auto mb-2 max-w-3xl rounded-md border border-border/70 bg-muted/30 px-3 py-2"
+    >
+      <p className="text-[11px] font-medium text-muted-foreground">
+        Queued ({messages.length})
+      </p>
+      <ol className="mt-1 space-y-1 text-xs">
+        {messages.map((message) => (
+          <li className="truncate" key={message.id}>
+            {message.text}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function ChatComposer({
   busy,
-  disabled,
   onChange,
   onStop,
   onSubmit,
+  onThinkingEffortChange,
   stopping,
+  thinkingEffort,
   value
 }: {
   readonly busy: boolean;
-  readonly disabled: boolean;
   readonly onChange: (value: string) => void;
   readonly onStop: () => void;
   readonly onSubmit: () => void;
+  readonly onThinkingEffortChange: (effort: WorkspaceThinkingEffort) => void;
   readonly stopping: boolean;
+  readonly thinkingEffort: WorkspaceThinkingEffort;
   readonly value: string;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -564,7 +661,6 @@ function ChatComposer({
       </label>
       <textarea
         className="max-h-40 min-h-14 w-full resize-none bg-transparent px-4 pt-3 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
-        disabled={disabled}
         id="workspace-message"
         onChange={(event) => {
           onChange(event.target.value);
@@ -578,33 +674,56 @@ function ChatComposer({
         value={value}
       />
       <div className="flex min-h-10 items-center justify-between px-3 pb-2">
-        <span className="text-[11px] text-muted-foreground/70">
-          Enter to send · Shift+Enter for a new line
-        </span>
-        {busy ? (
-          <button
-            aria-label={stopping ? "Stopping response" : "Stop response"}
-            className="grid size-7 place-items-center rounded-md bg-foreground/15 text-foreground/60 transition-colors hover:bg-foreground/25 disabled:opacity-50"
-            disabled={stopping}
-            onClick={onStop}
-            type="button"
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="workspace-thinking-effort">
+            Thinking effort
+          </label>
+          <select
+            className="rounded-md bg-transparent px-1 py-1 text-[11px] capitalize text-muted-foreground outline-none hover:text-foreground"
+            id="workspace-thinking-effort"
+            onChange={(event) =>
+              onThinkingEffortChange(
+                event.target.value as WorkspaceThinkingEffort
+              )
+            }
+            value={thinkingEffort}
           >
-            {stopping ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <SquareIcon className="size-3 fill-current" />
-            )}
-          </button>
-        ) : (
+            {WORKSPACE_THINKING_EFFORTS.map((effort) => (
+              <option key={effort} value={effort}>
+                {effort} effort
+              </option>
+            ))}
+          </select>
+          <span className="text-[11px] text-muted-foreground/70">
+            {busy ? "Enter to queue" : "Enter to send"} · Shift+Enter for a new
+            line
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {busy ? (
+            <button
+              aria-label={stopping ? "Stopping response" : "Stop response"}
+              className="grid size-7 place-items-center rounded-md bg-foreground/15 text-foreground/60 transition-colors hover:bg-foreground/25 disabled:opacity-50"
+              disabled={stopping}
+              onClick={onStop}
+              type="button"
+            >
+              {stopping ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <SquareIcon className="size-3 fill-current" />
+              )}
+            </button>
+          ) : null}
           <button
-            aria-label="Send message"
+            aria-label={busy ? "Queue message" : "Send message"}
             className="grid size-7 place-items-center rounded-md bg-foreground text-background transition-colors hover:bg-foreground/90 disabled:opacity-30"
-            disabled={disabled || !value.trim()}
+            disabled={!value.trim()}
             type="submit"
           >
             <ArrowUpIcon className="size-4" />
           </button>
-        )}
+        </div>
       </div>
     </form>
   );
@@ -935,17 +1054,31 @@ function appendOptimisticMessage(
   ];
 }
 
+function hasUserMessageAfter(
+  messages: readonly EveMessage[],
+  text: string,
+  afterMessageCount: number
+) {
+  return messages
+    .slice(afterMessageCount)
+    .some(
+      (message) =>
+        message.role === "user" && messageText(message).trim() === text.trim()
+    );
+}
+
+function messageText(message: EveMessage) {
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
 function hasLatestUserMessage(messages: readonly EveMessage[], text: string) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== "user") continue;
-    return (
-      message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n")
-        .trim() === text.trim()
-    );
+    return messageText(message).trim() === text.trim();
   }
   return false;
 }

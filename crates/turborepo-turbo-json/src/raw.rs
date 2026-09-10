@@ -1103,6 +1103,15 @@ impl RawTurboJson {
         path: &AbsoluteSystemPath,
         is_root: bool,
     ) -> Result<Option<RawTurboJson>, Error> {
+        Self::read_with_root_check(repo_root, path, || is_root)
+    }
+
+    /// Resolve the schema only after successfully reading the file contents.
+    pub(crate) fn read_with_root_check(
+        repo_root: &AbsoluteSystemPath,
+        path: &AbsoluteSystemPath,
+        is_root: impl FnOnce() -> bool,
+    ) -> Result<Option<RawTurboJson>, Error> {
         let Some(contents) = path.read_existing_to_string()? else {
             return Ok(None);
         };
@@ -1114,7 +1123,7 @@ impl RawTurboJson {
             |relative| relative.to_string(),
         );
 
-        Ok(Some(if is_root {
+        Ok(Some(if is_root() {
             RawRootTurboJson::parse(&contents, &root_relative_path)?.try_into()?
         } else {
             RawTurboJson::from(RawPackageTurboJson::parse(&contents, &root_relative_path)?)

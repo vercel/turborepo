@@ -1,6 +1,6 @@
 {
   "name": "@turbo/gen",
-  "version": "2.10.13-canary.1",
+  "version": "2.10.13-canary.3",
   "description": "Extend a Turborepo",
   "homepage": "https://turborepo.dev",
   "bugs": {
@@ -19,6 +19,9 @@
   "types": "dist/types.d.ts",
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",

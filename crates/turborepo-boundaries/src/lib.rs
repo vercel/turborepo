@@ -10,6 +10,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
+    sync::Arc,
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
@@ -128,6 +129,16 @@ pub struct BoundariesContext<'a, G: PackageGraphProvider, T: TurboJsonProvider> 
     pub filtered_pkgs: &'a HashSet<PackageName>,
 }
 
+/// Converts an owned `String`-backed source (produced by
+/// `Spanned::span_and_text` for configuration files) into the shared
+/// `Arc<str>`-backed representation used by all diagnostics, so retaining N
+/// diagnostics never retains N copies of the text.
+pub(crate) fn into_shared_source(source: NamedSource<String>) -> NamedSource<Arc<str>> {
+    let name = source.name().to_string();
+    let text: Arc<str> = source.inner().as_str().into();
+    NamedSource::new(name, text)
+}
+
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum SecondaryDiagnostic {
     #[error("package `{package} is defined here")]
@@ -136,21 +147,21 @@ pub enum SecondaryDiagnostic {
         #[label]
         package_span: Option<SourceSpan>,
         #[source_code]
-        package_text: NamedSource<String>,
+        package_text: NamedSource<Arc<str>>,
     },
     #[error("consider adding one of the following tags listed here")]
     Allowlist {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("denylist defined here")]
     Denylist {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
 }
 
@@ -161,7 +172,7 @@ pub enum BoundariesDiagnostic {
         #[label("tags defined here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
     TagSharesPackageName {
@@ -170,7 +181,7 @@ pub enum BoundariesDiagnostic {
         #[label("tag defined here")]
         tag_span: Option<SourceSpan>,
         #[source_code]
-        tag_text: NamedSource<String>,
+        tag_text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -190,7 +201,7 @@ pub enum BoundariesDiagnostic {
         #[help]
         help: Option<String>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -205,7 +216,7 @@ pub enum BoundariesDiagnostic {
         #[label("tag found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
         #[related]
         secondary: [SecondaryDiagnostic; 1],
     },
@@ -220,7 +231,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
@@ -229,7 +240,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("import `{import}` leaves the package")]
     #[diagnostic(help(
@@ -243,7 +254,7 @@ pub enum BoundariesDiagnostic {
         #[label("file imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource<String>,
+        text: NamedSource<Arc<str>>,
     },
     #[error("failed to parse file {0}: {1}")]
     ParseError(AbsoluteSystemPathBuf, String),
@@ -306,6 +317,12 @@ fn is_valid_package_name(package_name: &str) -> bool {
 
 /// Maximum number of warnings to show
 const MAX_WARNINGS: usize = 16;
+
+// Report completed work in batches so worker threads do not synchronize with
+// the progress bar after every package. This retains frequent visible feedback
+// while making progress reporting proportional to batches rather than package
+// count.
+const PROGRESS_UPDATE_BATCH_SIZE: usize = 16;
 
 #[derive(Default)]
 pub struct BoundariesResult {
@@ -425,16 +442,25 @@ impl BoundariesChecker {
         //   // @ts-ignore
         //   import { foo } from "bar";
         //
+        // Comments are collected in source order, so a binary search finds
+        // where the comments preceding the import end without evaluating the
+        // span predicate for every comment in the file on every import.
+        let leading = comments.partition_point(|c| c.span.end <= import_span.start);
+
         // To detect blank lines we check the gap between each comment and the
         // *next* item in the chain (initially the import, then the previous
-        // comment we visited). A blank line means >1 newline in that gap.
-        let leading = comments.iter().filter(|c| c.span.end <= import_span.start);
-
+        // comment we visited). A blank line means more than one newline in
+        // that gap, so counting stops as soon as two are found.
         let mut next_start = import_span.start;
 
-        for comment in leading.rev() {
+        for comment in comments[..leading].iter().rev() {
             let between = &source_text[comment.span.end as usize..next_start as usize];
-            if between.chars().filter(|&c| c == '\n').count() > 1 {
+            if between
+                .char_indices()
+                .filter(|&(_, c)| c == '\n')
+                .nth(1)
+                .is_some()
+            {
                 break;
             }
 
@@ -567,19 +593,27 @@ impl BoundariesChecker {
             let _span = info_span!("check_all_packages", count = packages_to_check.len()).entered();
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
-                    .par_iter()
-                    .map(|(package_name, package_name_source, package_directory)| {
-                        let pkg_result = Self::check_package(
-                            ctx,
-                            package_name,
-                            *package_name_source,
-                            package_directory,
-                            &rules_map,
-                            &global_implicit_dependencies,
-                        );
-                        progress.inc(1);
-                        pkg_result
+                    .par_chunks(PROGRESS_UPDATE_BATCH_SIZE)
+                    .map(|packages| {
+                        let results = packages
+                            .iter()
+                            .map(|(package_name, package_name_source, package_directory)| {
+                                Self::check_package(
+                                    ctx,
+                                    package_name,
+                                    *package_name_source,
+                                    package_directory,
+                                    &rules_map,
+                                    &global_implicit_dependencies,
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        progress.inc(packages.len() as u64);
+                        results
                     })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .flatten()
                     .collect()
             })
         };
@@ -761,9 +795,14 @@ impl BoundariesChecker {
         dependency_locations: DependencyLocations<'_>,
         resolver: &Resolver,
     ) -> Result<(Vec<BoundariesDiagnostic>, Vec<String>), Error> {
-        let file_content = file_path
+        // Read the file once and share it across every diagnostic it
+        // produces. Each emitted error keeps an Arc clone instead of a fresh
+        // copy of the whole source, so retained memory scales with the file
+        // size rather than file size times error count.
+        let file_content: Arc<str> = file_path
             .read_to_string()
-            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?
+            .into();
 
         let (imports, comments) = match parse_with_comments(file_path, &file_content) {
             Some(result) => result,
@@ -834,6 +873,70 @@ mod tests {
                 .iter()
                 .all(|import| import.import_type == ImportType::Value)
         );
+    }
+
+    fn ignored_comment_parts(
+        source: &str,
+    ) -> (Vec<turbo_trace::ImportResult>, Vec<Comment>, String) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component("index.ts");
+        let (imports, comments) = parse_with_comments(&path, source).unwrap();
+        (imports, comments, source.to_string())
+    }
+
+    #[test]
+    fn stacked_comments_before_an_import_are_walked_backwards() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @ts-ignore\n// @boundaries-ignore implicit dependency\nimport { foo } from \
+             \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason.as_deref(), Some(" implicit dependency"));
+    }
+
+    #[test]
+    fn blank_line_between_comment_and_import_stops_the_walk() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @boundaries-ignore separated by a blank line\n\nimport { foo } from \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason, None);
+    }
+
+    #[test]
+    fn comments_after_the_import_are_not_considered() {
+        // An import at the top of a file with many trailing comments must
+        // only inspect the comments that precede it.
+        let trailing: String = (0..50)
+            .map(|i| format!("// trailing comment {i}\n"))
+            .collect();
+        let source = format!(
+            "// @boundaries-ignore nearest comment\nimport {{ foo }} from \"bar\";\n{trailing}"
+        );
+        let (imports, comments, source) = ignored_comment_parts(&source);
+        assert_eq!(imports.len(), 1);
+        assert_eq!(comments.len(), 51);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason.as_deref(), Some(" nearest comment"));
+    }
+
+    #[test]
+    fn blank_line_between_stacked_comments_stops_the_walk() {
+        let (imports, comments, source) = ignored_comment_parts(
+            "// @boundaries-ignore too far away\n// stacked comment\n\nimport { foo } from \
+             \"bar\";\n",
+        );
+        assert_eq!(imports.len(), 1);
+        let reason =
+            BoundariesChecker::get_ignored_comment(&comments, &source, imports[0].statement_span);
+        assert_eq!(reason, None);
     }
 
     #[test]
@@ -1093,6 +1196,46 @@ mod tests {
             "local imports should not produce diagnostics, got: {:?}",
             result.diagnostics.len()
         );
+    }
+
+    #[test]
+    fn check_boundaries_reports_every_package_across_progress_batches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let packages: Vec<_> = (0..=PROGRESS_UPDATE_BATCH_SIZE)
+            .map(|index| PackageName::Other(format!("pkg-{index}")))
+            .collect();
+
+        for package in &packages {
+            let package_directory = repo_root.join_components(&["packages", package.as_str()]);
+            package_directory.create_dir_all().unwrap();
+            package_directory
+                .join_component("package.json")
+                .create_with_contents(format!(r#"{{"name":"{package}"}}"#))
+                .unwrap();
+            package_directory
+                .join_component("index.ts")
+                .create_with_contents("export {};\n")
+                .unwrap();
+        }
+
+        let graph = MockGraph::new(packages.clone());
+        let filtered = packages.into_iter().collect();
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, PROGRESS_UPDATE_BATCH_SIZE + 1);
+        assert_eq!(result.files_checked, PROGRESS_UPDATE_BATCH_SIZE + 1);
+        assert!(result.diagnostics.is_empty());
     }
 
     #[test]

@@ -1,7 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
 use semver::Version;
-use serde::{Deserialize, Serialize, ser::SerializeMap};
+use serde::{
+    Deserialize, Serialize,
+    de::{Deserializer, IgnoredAny, MapAccess, Visitor},
+    ser::SerializeMap,
+};
 use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
@@ -17,14 +21,59 @@ pub struct NpmLockfile {
     lockfile_version: i32,
     #[serde(default)]
     packages: HashMap<String, NpmPackage>,
-    // We parse this so it doesn't end up in 'other' and we don't need to worry
-    // about accidentally serializing it.
-    #[serde(skip_serializing, default)]
-    dependencies: Map<String, Value>,
+    // npm v2 lockfiles carry a top-level legacy `dependencies` tree that
+    // duplicates `packages`. Resolution only ever uses `packages`, so instead
+    // of materializing a potentially very large redundant tree, we record only
+    // whether it has entries: `load` rejects lockfiles that have a legacy tree
+    // but no `packages`, since those cannot be resolved.
+    // Parsing it as a known field also keeps it out of 'other' so we don't
+    // need to worry about accidentally serializing it.
+    #[serde(
+        default,
+        rename = "dependencies",
+        deserialize_with = "deserialize_legacy_dependencies"
+    )]
+    has_legacy_dependencies: bool,
     // We want to reserialize any additional fields, but we don't use them
     // we keep them as raw values to avoid describing the correct schema.
     #[serde(flatten)]
     other: Map<String, Value>,
+}
+
+/// Deserializes npm's top-level legacy `dependencies` table, recording only
+/// whether it has entries. Keys and values are consumed with [`IgnoredAny`] so
+/// the (potentially very large) legacy tree is never materialized; its
+/// emptiness is all [`NpmLockfile::load`] needs in order to reject lockfiles
+/// that only have a legacy tree.
+///
+/// This must not become `#[serde(skip_deserializing)]`: skipping the field
+/// entirely would silently accept those lockfiles instead of rejecting them.
+fn deserialize_legacy_dependencies<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct LegacyDependenciesVisitor;
+
+    impl<'de> Visitor<'de> for LegacyDependenciesVisitor {
+        type Value = bool;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            // Matches serde's message for map fields so rejections of
+            // malformed lockfiles are unchanged.
+            formatter.write_str("a map")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut has_entries = false;
+            while map.next_key::<IgnoredAny>()?.is_some() {
+                map.next_value::<IgnoredAny>()?;
+                has_entries = true;
+            }
+            Ok(has_entries)
+        }
+    }
+
+    deserializer.deserialize_map(LegacyDependenciesVisitor)
 }
 
 impl Serialize for NpmLockfile {
@@ -187,15 +236,33 @@ impl Lockfile for NpmLockfile {
         if let Some(root) = self.packages.get("") {
             pruned_packages.insert("".into(), root.clone());
         }
+        // Index the entries that link to a retained workspace by their
+        // `resolved` path in one pass so each workspace below needs a single
+        // lookup instead of another scan of every lockfile entry. Scanning
+        // per workspace made link discovery O(retained workspaces × lockfile
+        // entries) in the worst case, and a workspace without a link
+        // exhausted the entire map. `or_insert` keeps the first entry
+        // encountered in iteration order, preserving the first-match-and-break
+        // behavior of the previous scan when multiple entries share a
+        // `resolved` target.
+        let ws_set: std::collections::HashSet<&str> =
+            workspace_packages.iter().map(|s| s.as_str()).collect();
+        let mut workspace_links: HashMap<&str, (&String, &NpmPackage)> =
+            HashMap::with_capacity(ws_set.len());
+        for (key, entry) in &self.packages {
+            if let Some(resolved) = entry.resolved.as_deref()
+                && ws_set.contains(resolved)
+            {
+                workspace_links.entry(resolved).or_insert((key, entry));
+            }
+        }
+
         for workspace in workspace_packages {
             let pkg = self.get_package(workspace)?;
             pruned_packages.insert(workspace.to_string(), pkg.clone());
 
-            for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace.as_str()) {
-                    pruned_packages.insert(key.clone(), entry.clone());
-                    break;
-                }
+            if let Some(&(key, entry)) = workspace_links.get(workspace.as_str()) {
+                pruned_packages.insert(key.clone(), entry.clone());
             }
         }
 
@@ -206,8 +273,6 @@ impl Lockfile for NpmLockfile {
         // closure didn't include it. Promote the nested version to the hoisted
         // position so npm ci sees a consistent tree.
         // See https://github.com/vercel/turborepo/issues/10985
-        let ws_set: std::collections::HashSet<&str> =
-            workspace_packages.iter().map(|s| s.as_str()).collect();
         let requested: std::collections::HashSet<&str> =
             packages.iter().map(|s| s.as_str()).collect();
         Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested, &self.packages);
@@ -215,7 +280,8 @@ impl Lockfile for NpmLockfile {
         Ok(Box::new(Self {
             lockfile_version: self.lockfile_version,
             packages: pruned_packages,
-            dependencies: Map::default(),
+            // The pruned lockfile never carries a legacy dependency tree.
+            has_legacy_dependencies: false,
             other: self.other.clone(),
         }))
     }
@@ -307,7 +373,7 @@ impl NpmLockfile {
         // to resolve dependencies.
         // See https://github.com/npm/cli/blob/9609e9eed87c735f0319ac0af265f4d406cbf800/workspaces/arborist/lib/shrinkwrap.js#L674
         if lockfile.lockfile_version <= 1
-            || (lockfile.packages.is_empty() && !lockfile.dependencies.is_empty())
+            || (lockfile.packages.is_empty() && lockfile.has_legacy_dependencies)
         {
             Err(Error::UnsupportedNpmVersion)
         } else {
@@ -1319,6 +1385,200 @@ mod test {
         }
     }
 
+    // Workspace links (`resolved` pointing at a retained workspace path) must
+    // be included alongside the workspace entry itself so `npm ci` can
+    // reinstall the workspace through its link slot. Links to workspaces that
+    // are not retained must be dropped.
+    #[test]
+    fn test_subgraph_includes_workspace_link_entries() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*", "packages/*"]
+                },
+                "node_modules/left-pad": {
+                    "version": "1.3.0",
+                    "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+                },
+                "node_modules/app": {
+                    "resolved": "apps/app",
+                    "link": true
+                },
+                "node_modules/ui": {
+                    "resolved": "packages/ui",
+                    "link": true
+                },
+                "node_modules/pruned-lib": {
+                    "resolved": "packages/pruned-lib",
+                    "link": true
+                },
+                "apps/app": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "ui": "*",
+                        "left-pad": "^1.0.0"
+                    }
+                },
+                "packages/ui": {
+                    "version": "1.0.0"
+                },
+                "packages/pruned-lib": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app".to_string(), "packages/ui".to_string()];
+        let packages = vec!["node_modules/left-pad".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        for (key, resolved) in [
+            ("node_modules/app", "apps/app"),
+            ("node_modules/ui", "packages/ui"),
+        ] {
+            let entry = reparsed
+                .packages
+                .get(key)
+                .unwrap_or_else(|| panic!("workspace link {key:?} was dropped"));
+            assert!(entry.link, "link entry {key:?} lost its link flag");
+            assert_eq!(
+                entry.resolved.as_deref(),
+                Some(resolved),
+                "link entry {key:?} has the wrong resolved path"
+            );
+        }
+
+        // The requested registry package and the workspace entries themselves
+        // must survive.
+        assert!(reparsed.packages.contains_key("node_modules/left-pad"));
+        assert!(reparsed.packages.contains_key("apps/app"));
+        assert!(reparsed.packages.contains_key("packages/ui"));
+
+        // The link (and entry) of a workspace that was pruned must not.
+        assert!(
+            !reparsed.packages.contains_key("node_modules/pruned-lib"),
+            "link to a pruned workspace was retained"
+        );
+        assert!(
+            !reparsed.packages.contains_key("packages/pruned-lib"),
+            "pruned workspace entry was retained"
+        );
+    }
+
+    // A retained workspace with no matching link entry anywhere in the
+    // lockfile must prune without error and without pulling in unrelated
+    // entries. (This is the path that previously exhausted the whole packages
+    // map once per workspace.)
+    #[test]
+    fn test_subgraph_workspace_without_link_entry() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*"]
+                },
+                "node_modules/left-pad": {
+                    "version": "1.3.0",
+                    "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+                },
+                "apps/ghost": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "left-pad": "^1.0.0"
+                    }
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/ghost".to_string()];
+        let packages = vec!["node_modules/left-pad".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        assert!(
+            reparsed.packages.contains_key("apps/ghost"),
+            "the workspace without a link was dropped"
+        );
+        assert!(
+            reparsed.packages.contains_key("node_modules/left-pad"),
+            "the requested registry package was dropped"
+        );
+        assert_eq!(
+            reparsed.packages.len(),
+            3, // "" root, apps/ghost, node_modules/left-pad
+            "entries without a matching workspace link must not be retained"
+        );
+    }
+
+    // When multiple entries link to the same workspace path, exactly one is
+    // retained — the first in iteration order, matching the previous
+    // per-workspace scan's first-match-and-break behavior. HashMap iteration
+    // order varies across processes, so the winner is not asserted; only that
+    // a single duplicate is kept.
+    #[test]
+    fn test_subgraph_duplicate_resolved_targets_keep_single_link() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["packages/*"]
+                },
+                "node_modules/dup": {
+                    "resolved": "packages/dup",
+                    "link": true
+                },
+                "node_modules/@scope/dup": {
+                    "resolved": "packages/dup",
+                    "link": true
+                },
+                "packages/dup": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/dup".to_string()];
+        let packages = vec![];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        let duplicates = ["node_modules/dup", "node_modules/@scope/dup"];
+        let retained: Vec<&str> = duplicates
+            .iter()
+            .copied()
+            .filter(|key| reparsed.packages.contains_key(*key))
+            .collect();
+        assert_eq!(
+            retained.len(),
+            1,
+            "expected exactly one duplicate-resolved link, retained {retained:?}"
+        );
+        assert!(
+            reparsed.packages.contains_key("packages/dup"),
+            "the workspace entry itself was dropped"
+        );
+    }
+
     #[test]
     fn test_turbo_version_rejects_non_semver() {
         // Malicious version strings that could be used for RCE via npx should be
@@ -1354,5 +1614,193 @@ mod test {
                 malicious_version
             );
         }
+    }
+
+    // npm v2 lockfiles duplicate the resolved tree in a top-level legacy
+    // `dependencies` table. We never materialize that table; these tests pin
+    // every behavior that depends on it: rejecting lockfiles that only have a
+    // legacy tree, accepting well-formed v2 lockfiles regardless of the
+    // table's contents, rejecting malformed tables, and never reserializing
+    // the table.
+    #[test]
+    fn test_load_rejects_lockfile_with_only_legacy_dependencies() {
+        let json = r#"{
+            "lockfileVersion": 2,
+            "dependencies": {
+                "foo": {
+                    "version": "1.0.0",
+                    "requires": { "bar": "^1.0.0" }
+                }
+            }
+        }"#;
+
+        let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+        assert!(matches!(err, Error::UnsupportedNpmVersion));
+    }
+
+    #[test]
+    fn test_load_rejects_v1_lockfiles() {
+        // v1 lockfiles are rejected regardless of their contents.
+        for json in [
+            r#"{"lockfileVersion": 1, "dependencies": {"foo": {"version": "1.0.0"}}}"#,
+            r#"{"lockfileVersion": 0, "packages": {"node_modules/foo": {"version": "1.0.0"}}}"#,
+        ] {
+            let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+            assert!(matches!(err, Error::UnsupportedNpmVersion));
+        }
+    }
+
+    #[test]
+    fn test_load_accepts_missing_or_empty_legacy_dependencies() {
+        // An empty or missing legacy table is not "legacy-only": with no
+        // packages to resolve there is nothing unsupported about the lockfile.
+        for json in [
+            r#"{"lockfileVersion": 2}"#,
+            r#"{"lockfileVersion": 2, "packages": {}}"#,
+            r#"{"lockfileVersion": 2, "dependencies": {}}"#,
+            r#"{"lockfileVersion": 2, "packages": {}, "dependencies": {}}"#,
+        ] {
+            NpmLockfile::load(json.as_bytes())
+                .unwrap_or_else(|err| panic!("should load {json}: {err}"));
+        }
+    }
+
+    #[test]
+    fn test_load_rejects_malformed_legacy_dependencies() {
+        // The legacy table must still be validated as a map, exactly as it
+        // was when it was deserialized into a map.
+        for json in [
+            r#"{"lockfileVersion": 2, "dependencies": 5}"#,
+            r#"{"lockfileVersion": 2, "dependencies": []}"#,
+            r#"{"lockfileVersion": 2, "dependencies": null}"#,
+            r#"{"lockfileVersion": 2, "dependencies": "foo"}"#,
+        ] {
+            let err = NpmLockfile::load(json.as_bytes()).unwrap_err();
+            assert!(
+                matches!(err, Error::JsonError(_)),
+                "expected a JSON error for {json}, got {err:?}"
+            );
+            assert!(
+                err.to_string().contains("expected a map"),
+                "unexpected error message for {json}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_accepts_arbitrary_legacy_dependency_values() {
+        // Legacy tree entries are never interpreted, so any value the old
+        // `serde_json::Value` deserialization accepted must still be accepted.
+        let json = r#"{
+            "lockfileVersion": 2,
+            "packages": {
+                "": { "name": "monorepo" },
+                "node_modules/foo": { "version": "1.0.0" }
+            },
+            "dependencies": {
+                "foo": {
+                    "version": "1.0.0",
+                    "resolved": "https://registry.npmjs.org/foo/-/foo-1.0.0.tgz",
+                    "requires": { "bar": "^2.0.0" },
+                    "dependencies": { "bar": { "version": "2.0.0" } }
+                },
+                "duplicate": { "version": "1.0.0" },
+                "duplicate": { "version": "2.0.0" },
+                "number": 5,
+                "boolean": true,
+                "null": null,
+                "list": [1, "two", { "three": 3 }]
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        assert!(lockfile.packages.contains_key("node_modules/foo"));
+    }
+
+    #[test]
+    fn test_encode_omits_legacy_dependencies_but_keeps_unknown_fields() {
+        let json = r#"{
+            "lockfileVersion": 2,
+            "requires": true,
+            "packages": { "node_modules/foo": { "version": "1.0.0" } },
+            "dependencies": { "foo": { "version": "1.0.0" } }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        let encoded: serde_json::Value =
+            serde_json::from_slice(&lockfile.encode().unwrap()).unwrap();
+        assert!(encoded.get("dependencies").is_none());
+        assert_eq!(encoded.get("requires"), Some(&serde_json::json!(true)));
+        assert_eq!(encoded.get("lockfileVersion"), Some(&serde_json::json!(2)));
+    }
+
+    #[test]
+    fn test_legacy_dependencies_do_not_change_pruned_output() {
+        // The legacy tree is redundant with `packages`, so a v2 lockfile and
+        // the same lockfile without the legacy table must produce identical
+        // pruned lockfiles.
+        let packages = r#""packages": {
+            "": { "name": "monorepo", "workspaces": ["packages/*"] },
+            "node_modules/pkg": { "resolved": "packages/pkg", "link": true },
+            "packages/pkg": { "version": "1.0.0", "dependencies": { "foo": "^1.0.0" } },
+            "node_modules/foo": { "version": "1.0.0" }
+        }"#;
+        let with_legacy = format!(
+            r#"{{"lockfileVersion": 2, {packages}, "dependencies": {{
+                "foo": {{ "version": "1.0.0", "requires": {{}} }},
+                "pkg": {{ "version": "1.0.0" }}
+            }}}}"#
+        );
+        let without_legacy = format!(r#"{{"lockfileVersion": 2, {packages}}}"#);
+
+        let with_legacy = NpmLockfile::load(with_legacy.as_bytes()).unwrap();
+        let without_legacy = NpmLockfile::load(without_legacy.as_bytes()).unwrap();
+
+        let pruned = |lockfile: &NpmLockfile| {
+            lockfile
+                .subgraph(
+                    &["packages/pkg".to_string()],
+                    &["node_modules/foo".to_string()],
+                )
+                .unwrap()
+                .encode()
+                .unwrap()
+        };
+        assert_eq!(pruned(&with_legacy), pruned(&without_legacy));
+    }
+
+    #[test]
+    fn test_load_handles_large_legacy_dependency_tree() {
+        // npm v2 duplicates the whole resolved tree into the legacy table, so
+        // it can be very large. Its contents must not affect loading,
+        // resolution, or pruning.
+        let mut json = String::from(
+            r#"{"lockfileVersion": 2, "packages": {
+                "": { "name": "monorepo", "workspaces": ["packages/*"] },
+                "node_modules/pkg": { "resolved": "packages/pkg", "link": true },
+                "packages/pkg": { "version": "1.0.0", "dependencies": { "foo": "^1.0.0" } },
+                "node_modules/foo": { "version": "1.0.0" }
+            }, "dependencies": {"#,
+        );
+        for i in 0..10_000 {
+            json.push_str(&format!(
+                "\"legacy-{i}\": {{\"version\": \"1.0.{i}\", \"requires\": {{\"bar\": \
+                 \"^{i}.0.0\"}}, \"dependencies\": {{\"bar\": {{\"version\": \"2.0.0\"}}}}}},"
+            ));
+        }
+        json.push_str("\"foo\": {\"version\": \"1.0.0\"}}}");
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+        assert!(lockfile.packages.contains_key("node_modules/foo"));
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg".to_string()],
+                &["node_modules/foo".to_string()],
+            )
+            .unwrap();
+        let encoded: serde_json::Value = serde_json::from_slice(&pruned.encode().unwrap()).unwrap();
+        assert!(encoded.get("dependencies").is_none());
+        assert!(encoded["packages"].get("node_modules/foo").is_some());
     }
 }

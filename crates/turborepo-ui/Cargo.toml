@@ -24,6 +24,7 @@ tui = [
   "dep:futures",
   "dep:nix",
   "dep:ratatui",
+  "dep:tempfile",
   "dep:turborepo-ghostty",
   "dep:which",
   "dep:clipboard-win",
@@ -43,6 +44,7 @@ nix = { workspace = true, features = ["signal"], optional = true }
 ratatui = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

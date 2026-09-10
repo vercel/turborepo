@@ -132,6 +132,22 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
         }
     };
 
+    // Most patterns already use standalone, non-consecutive globstars. None
+    // of the rewrites below can match those patterns (or patterns without a
+    // globstar), so avoid initializing their Unicode regexes on the common
+    // startup path. Ambiguous forms still use the original rewrites.
+    let mut previous_globstar = false;
+    let needs_rewrite = p0.split('/').any(|component| {
+        let globstar = component == "**";
+        let needs_rewrite =
+            (globstar && previous_globstar) || (!globstar && component.contains("**"));
+        previous_globstar = globstar;
+        needs_rewrite
+    });
+    if !needs_rewrite {
+        return p0;
+    }
+
     // Chain regex replacements, taking advantage of Cow<str>:
     // - If no match, replace() returns Cow::Borrowed pointing to the input
     // - If match, replace() returns Cow::Owned with the replacement
@@ -551,6 +567,14 @@ struct CompiledGlobs {
     ex_filter: FilterAny,
 }
 
+/// Repeated `<prefix>/**` patterns each walk the same tree only for the
+/// result set to deduplicate the files afterwards, so duplicate prefixes are
+/// pure repeated I/O. Keep the first occurrence of each prefix.
+fn deduplicate_recursive_all_prefixes(prefixes: &mut Vec<PathBuf>) {
+    let mut seen = HashSet::new();
+    prefixes.retain(|prefix| seen.insert(prefix.clone()));
+}
+
 /// A preprocessed include pattern classified from its raw string, without
 /// wax compilation. Compiling a wax glob costs 1-2ms of regex
 /// construction, and workspace discovery hands us ~20 patterns during the
@@ -831,6 +855,8 @@ fn compile_globs<S: AsRef<str>>(
     }
 
     let include_patterns = compile_complex_globs(complex_paths)?;
+
+    deduplicate_recursive_all_prefixes(&mut recursive_all);
 
     Ok(CompiledGlobs {
         base_path: base_path_new,
@@ -1290,7 +1316,7 @@ mod classify_test {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, str::FromStr};
+    use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
     use itertools::Itertools;
     use tempfile::TempDir;
@@ -1299,7 +1325,8 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        escape_glob_literals, fix_glob_pattern, globwalk, needs_path_cleaning,
+        deduplicate_recursive_all_prefixes, escape_glob_literals, fix_glob_pattern, globwalk,
+        needs_path_cleaning,
     };
 
     #[cfg(unix)]
@@ -1319,6 +1346,62 @@ mod test {
     fn test_fix_glob_pattern(input: &str, expected: &str) {
         let output = fix_glob_pattern(input);
         assert_eq!(output.as_ref(), expected);
+    }
+
+    #[test]
+    fn glob_normalization_fast_path_matches_original_rewrites() {
+        let collapse = regex::Regex::new(r"\*\*(?:/\*\*)+").unwrap();
+        let suffix = regex::Regex::new(r"\*\*(?P<suffix>[^*/]+)").unwrap();
+        let prefix = regex::Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap();
+        let check = |input: &str| {
+            #[cfg(not(windows))]
+            let normalized = std::borrow::Cow::Borrowed(input);
+            #[cfg(windows)]
+            let normalized = {
+                use path_slash::PathExt;
+                let converted = std::path::Path::new(input).to_slash().unwrap();
+                if (input.ends_with('/') || input.ends_with('\\')) && !converted.ends_with('/') {
+                    std::borrow::Cow::Owned(format!("{converted}/"))
+                } else {
+                    converted
+                }
+            };
+            let first = collapse.replace(&normalized, "**");
+            let second = suffix.replace(&first, "**/*$suffix");
+            let expected = prefix.replace(&second, "$prefix*/**");
+            assert_eq!(fix_glob_pattern(input), expected, "{input:?}");
+        };
+        for input in [
+            "",
+            "packages/*",
+            "**/node_modules/**",
+            "**//**",
+            "***x",
+            "x***",
+            "**/**/**",
+            "***/*/**",
+            "é**猫",
+            "**\n**",
+            r"packages\**\src\*",
+            "**{a,b}/[xy]/**",
+            "a**/b**/**c",
+            "packages/**/",
+        ] {
+            check(input);
+        }
+        // Exhaustive short inputs include overlapping globstars and Unicode
+        // boundaries, where a too-permissive fast path could skip a rewrite.
+        let alphabet = ["*", "/", "a", "猫"];
+        for len in 0..=7u32 {
+            for mut code in 0..4usize.pow(len) {
+                let mut input = String::new();
+                for _ in 0..len {
+                    input.push_str(alphabet[code % 4]);
+                    code /= 4;
+                }
+                check(&input);
+            }
+        }
     }
 
     #[test]
@@ -2431,6 +2514,47 @@ mod test {
             .collect();
 
         assert_eq!(paths, HashSet::from(["src/file.txt".to_owned()]));
+    }
+
+    #[test]
+    fn recursive_all_prefixes_are_deduplicated() {
+        let mut prefixes = vec![
+            PathBuf::from("src"),
+            PathBuf::from("src"),
+            PathBuf::from("other"),
+            PathBuf::from("src"),
+        ];
+
+        deduplicate_recursive_all_prefixes(&mut prefixes);
+
+        // Each distinct prefix is walked once, no matter how often it is
+        // declared.
+        assert_eq!(prefixes, vec![PathBuf::from("src"), PathBuf::from("other")]);
+    }
+
+    #[test]
+    fn duplicate_recursive_all_patterns_match_a_single_walk() {
+        let tmp = setup_files(&["src/file.txt", "src/nested/file.txt"]);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let single = [ValidatedGlob::from_str("src/**").unwrap()];
+        let repeated = [
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+            ValidatedGlob::from_str("src/**").unwrap(),
+        ];
+
+        let single_paths: HashSet<String> = globwalk(&root, &single, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+        let repeated_paths: HashSet<String> = globwalk(&root, &repeated, &[], WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+
+        assert_eq!(single_paths, repeated_paths);
     }
 
     #[test]

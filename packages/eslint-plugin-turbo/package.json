@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "2.10.13-canary.1",
+  "version": "2.10.13-canary.3",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "eslint",
@@ -24,6 +24,9 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
+  },
   "dependencies": {
     "dotenv": "16.0.3"
   },

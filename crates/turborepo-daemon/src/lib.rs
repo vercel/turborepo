@@ -51,15 +51,38 @@ pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::package_graph::{PackageName, RepositoryDiscoverySnapshot};
 
-/// Trait for watching package changes. Implemented by consumers who need
-/// to integrate with turbo.json configuration.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum RepositoryDiscoveryError {
+    #[error("repository discovery unavailable")]
+    Unavailable,
+    #[error("repository discovery failed: {0}")]
+    InvalidState(String),
+}
+
+/// Trait for watching package changes and publishing the repository discovery
+/// generation used to classify them.
 pub trait PackageChangesWatcher: Send + Sync {
-    /// Get a receiver for package change events
+    /// Get a receiver for package change events.
     fn package_changes(
         &self,
     ) -> impl std::future::Future<Output = broadcast::Receiver<PackageChangeEvent>> + Send;
+
+    /// Return the latest completed repository discovery generation without
+    /// waiting for initialization.
+    fn repository_discovery(
+        &self,
+    ) -> impl std::future::Future<
+        Output = Option<Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError>>,
+    > + Send;
+
+    /// Wait for the first repository discovery generation.
+    fn repository_discovery_blocking(
+        &self,
+    ) -> impl std::future::Future<
+        Output = Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError>,
+    > + Send;
 }
 
 /// Arguments passed to a PackageChangesWatcher factory
@@ -217,46 +240,7 @@ pub mod proto {
     /// - Bump the minor version if adding new features, such that clients can
     ///   mandate at least some set of features on the target server.
     /// - Bump the patch version if making backwards compatible bug fixes.
-    pub const VERSION: &str = "2.0.0";
-
-    impl From<PackageManager> for turborepo_repository::package_manager::PackageManager {
-        fn from(pm: PackageManager) -> Self {
-            match pm {
-                PackageManager::Npm => Self::Npm,
-                PackageManager::Yarn => Self::Yarn,
-                PackageManager::Berry => Self::Berry,
-                PackageManager::Pnpm => Self::Pnpm,
-                PackageManager::Pnpm6 => Self::Pnpm6,
-                PackageManager::Pnpm9 => Self::Pnpm9,
-                PackageManager::Bun => Self::Bun,
-                // The wire format does not carry nub's underlying lockfile
-                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
-                // after deserializing to re-resolve from disk.
-                PackageManager::Nub => Self::Nub {
-                    lockfile: Box::new(Self::Npm),
-                },
-                PackageManager::Aube => Self::Aube {
-                    lockfile: Box::new(Self::Npm),
-                },
-            }
-        }
-    }
-
-    impl From<turborepo_repository::package_manager::PackageManager> for PackageManager {
-        fn from(pm: turborepo_repository::package_manager::PackageManager) -> Self {
-            match pm {
-                turborepo_repository::package_manager::PackageManager::Npm => Self::Npm,
-                turborepo_repository::package_manager::PackageManager::Yarn => Self::Yarn,
-                turborepo_repository::package_manager::PackageManager::Berry => Self::Berry,
-                turborepo_repository::package_manager::PackageManager::Pnpm => Self::Pnpm,
-                turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
-                turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
-                turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
-                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
-                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
-            }
-        }
-    }
+    pub const VERSION: &str = "3.1.0";
 }
 
 #[cfg(test)]

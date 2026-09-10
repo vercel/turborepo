@@ -41,6 +41,35 @@ fn test_version_flag_matches_version_txt() {
 }
 
 #[test]
+fn test_parser_exits_before_starting_worker_pools() {
+    let tempdir = tempfile::tempdir().unwrap();
+    // Tokio rejects zero workers when constructing a runtime. Parser-only
+    // invocations must still succeed (or report their own argument error).
+    for (args, code, expected) in [
+        (vec!["--version"], 0, version_txt()),
+        (vec!["--help"], 0, "Usage: turbo".to_string()),
+        (vec!["run", "--help"], 0, "Usage:".to_string()),
+        (vec!["--bad-flag"], 1, "--bad-flag".to_string()),
+    ] {
+        let output = common::run_turbo_with_env(
+            tempdir.path(),
+            &args,
+            &[
+                ("TOKIO_WORKER_THREADS", "0"),
+                ("TURBO_LOG_VERBOSITY", "info"),
+            ],
+        );
+        let combined = common::combined_output(&output);
+        assert_eq!(output.status.code(), Some(code), "{args:?}: {combined}");
+        assert!(combined.contains(&expected), "{args:?}: {combined}");
+        assert!(
+            !combined.contains("initializing rayon global pool"),
+            "parser-only invocation initialized rayon: {combined}"
+        );
+    }
+}
+
+#[test]
 fn test_short_v_flag_errors() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &["-v"]);

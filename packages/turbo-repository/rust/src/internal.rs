@@ -21,6 +21,11 @@ use crate::{
 
 enum DirectLockfileRead {
     Loaded(Box<dyn Lockfile>),
+    /// The parsed lockfile was moved into the package graph, which owns and
+    /// serves it. Reports success for error-kind purposes; the direct
+    /// listing path is never reached in this state because lockfilePackages()
+    /// prefers the graph's resolution whenever a graph exists.
+    TransferredToGraph,
     Missing(String),
     Unreadable {
         kind: LockfileErrorKind,
@@ -75,9 +80,23 @@ impl DirectLockfile {
         }
     }
 
+    /// Moves a successfully parsed lockfile out for transfer to the package
+    /// graph. Returns None (and changes nothing) when the lockfile failed to
+    /// load, so typed failure metadata stays intact.
+    pub(crate) fn take_loaded(&mut self) -> Option<Box<dyn Lockfile>> {
+        if matches!(self.lockfile, DirectLockfileRead::Loaded(_)) {
+            match std::mem::replace(&mut self.lockfile, DirectLockfileRead::TransferredToGraph) {
+                DirectLockfileRead::Loaded(lockfile) => Some(lockfile),
+                _ => unreachable!("checked Loaded above"),
+            }
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn error_kind(&self) -> Option<LockfileErrorKind> {
         match &self.lockfile {
-            DirectLockfileRead::Loaded(_) => None,
+            DirectLockfileRead::Loaded(_) | DirectLockfileRead::TransferredToGraph => None,
             DirectLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
             DirectLockfileRead::Unreadable { kind, .. } => Some(*kind),
         }
@@ -85,7 +104,7 @@ impl DirectLockfile {
 
     pub(crate) fn error_message(&self) -> Option<String> {
         match &self.lockfile {
-            DirectLockfileRead::Loaded(_) => None,
+            DirectLockfileRead::Loaded(_) | DirectLockfileRead::TransferredToGraph => None,
             DirectLockfileRead::Missing(message)
             | DirectLockfileRead::Unreadable { message, .. } => Some(message.clone()),
         }
@@ -135,6 +154,19 @@ impl DirectLockfile {
         };
         let lockfile = match &self.lockfile {
             DirectLockfileRead::Loaded(lockfile) => lockfile.as_ref(),
+            DirectLockfileRead::TransferredToGraph => {
+                // Unreachable: lockfilePackages() serves from the graph
+                // whenever it exists, and this state only exists when the
+                // graph holds the lockfile.
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::LockfileUnreadable,
+                        message: "lockfile is owned by the package graph".to_string(),
+                    }],
+                    metadata(None),
+                );
+            }
             DirectLockfileRead::Missing(message) => {
                 return LockfilePackages::new(
                     Vec::new(),
@@ -361,7 +393,7 @@ impl Workspace {
         };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
-        let lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
+        let mut lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
         let package_graph = if skip_package_graph {
             None
         } else {
@@ -369,11 +401,29 @@ impl Workspace {
                 PackageGraphBuilder::new(workspace_root, root_package_json)
                     .with_single_package_mode(!is_multi_package)
                     .with_package_manager(package_manager.clone());
+            // Hand the already-parsed lockfile to the graph so it is not read
+            // and parsed a second time. Single-package graphs skip lockfile
+            // resolution entirely, so direct ownership is kept there. The
+            // nub-family managers resolve to a different lockfile manager
+            // inside the builder, so the transfer is only valid when that
+            // resolution is an identity.
+            if is_multi_package
+                && package_manager
+                    .clone()
+                    .with_resolved_nub_lockfile(workspace_root)
+                    == *package_manager
+                && let Some(loaded) = lockfile.take_loaded()
+            {
+                package_graph_builder = package_graph_builder.with_lockfile(Some(loaded));
+            }
             if turbo_json.future_flags.experimental_cargo_workspaces {
                 package_graph_builder = package_graph_builder.with_cargo();
             }
             if turbo_json.future_flags.experimental_python_workspaces {
                 package_graph_builder = package_graph_builder.with_uv();
+            }
+            if turbo_json.future_flags.experimental_go_workspaces {
+                package_graph_builder = package_graph_builder.with_go();
             }
             Some(package_graph_builder.build().await?)
         };
@@ -552,5 +602,111 @@ mod tests {
             graph.package_toolchain(&"custom-package".into()),
             Some(&ToolchainId::new("custom"))
         );
+    }
+
+    /// A multi-package workspace with a pnpm lockfile on disk.
+    fn pnpm_workspace_fixture() -> tempfile::TempDir {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"root","private":true,"packageManager":"pnpm@9.12.2"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("pnpm-workspace.yaml"),
+            "packages:\n  - 'packages/*'\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("packages/a")).unwrap();
+        std::fs::write(
+            root.join("packages/a/package.json"),
+            r#"{"name":"a","version":"1.0.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\nsettings:\n  autoInstallPeers: true\n  \
+             excludeLinksFromLockfile: false\nimporters:\n  .: {}\n  packages/a: {}\n",
+        )
+        .unwrap();
+        temp
+    }
+
+    #[tokio::test]
+    async fn find_transfers_parsed_lockfile_to_graph() {
+        let temp = pnpm_workspace_fixture();
+        let workspace =
+            Workspace::find_internal(Some(temp.path().to_string_lossy().into_owned()), false)
+                .await
+                .unwrap();
+
+        // The graph owns the parsed lockfile...
+        let graph = workspace.graph.as_ref().expect("graph built");
+        assert!(graph.lockfile().is_some());
+        // ...and the direct read was transferred, not duplicated.
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::TransferredToGraph
+        ));
+        // Failure reporting still reads as success.
+        assert!(workspace.lockfile.error_kind().is_none());
+        assert!(workspace.lockfile.error_message().is_none());
+
+        // Lockfile listing keeps working, served from the graph.
+        let packages = workspace.lockfile_packages().await;
+        assert!(
+            packages.errors.is_empty(),
+            "unexpected errors: {}",
+            packages.errors.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn find_with_skip_package_graph_keeps_direct_lockfile() {
+        let temp = pnpm_workspace_fixture();
+        let workspace =
+            Workspace::find_internal(Some(temp.path().to_string_lossy().into_owned()), true)
+                .await
+                .unwrap();
+
+        assert!(workspace.graph.is_none());
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::Loaded(_)
+        ));
+
+        let packages = workspace.lockfile_packages().await;
+        assert!(packages.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_single_package_keeps_direct_lockfile() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"single","version":"1.0.0","packageManager":"npm@10.5.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"single","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+
+        assert!(!workspace.is_multi_package);
+        // Single-package graphs skip lockfile resolution, so the direct read
+        // must stay owned by the workspace.
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::Loaded(_)
+        ));
+        let packages = workspace.lockfile_packages().await;
+        assert!(packages.errors.is_empty());
     }
 }

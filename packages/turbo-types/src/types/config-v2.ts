@@ -366,6 +366,18 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
 }
 
 export interface GlobalConfig {

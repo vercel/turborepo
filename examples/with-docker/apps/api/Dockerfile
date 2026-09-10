@@ -1,4 +1,4 @@
-ARG NODE_VERSION=24.13.1
+ARG NODE_VERSION=24.21.0
 FROM node:${NODE_VERSION}-slim AS base
 
 # The web Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
@@ -18,7 +18,7 @@ WORKDIR /app
 
 # First install dependencies (as they change less often)
 COPY --from=prepare /app/out/json/ .
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
 # Build the project and its dependencies
 COPY --from=prepare /app/out/full/ .

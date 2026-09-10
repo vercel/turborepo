@@ -51,6 +51,12 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     entrypoint_exclusions: HashSet<TaskId<'static>>,
+    /// When `--only` restricts execution, allowed tasks are computed from
+    /// this workspace set instead of `workspaces`. Callers that construct a
+    /// package-scoped engine (entrypoints from a subset of packages) use it
+    /// so topological `^task` dependencies in dependency packages stay
+    /// runnable, matching the repository-wide engine's allowed set.
+    allowed_workspaces: Option<Vec<PackageName>>,
     tasks_only: bool,
     add_all_tasks: bool,
     should_validate_engine: bool,
@@ -84,6 +90,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             tasks: Vec::new(),
             root_enabled_tasks: HashSet::new(),
             entrypoint_exclusions: HashSet::new(),
+            allowed_workspaces: None,
             tasks_only: false,
             add_all_tasks: false,
             should_validate_engine: true,
@@ -144,6 +151,18 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         self
     }
 
+    /// Sets the workspace set used to compute the `--only` allowed tasks,
+    /// independently of the entrypoint workspaces. Pass the repository's
+    /// full task-namespace set when constructing a package-scoped engine so
+    /// `^task` dependencies in dependency packages remain reachable.
+    pub fn with_allowed_workspaces<I: IntoIterator<Item = PackageName>>(
+        mut self,
+        workspaces: I,
+    ) -> Self {
+        self.allowed_workspaces = Some(workspaces.into_iter().collect());
+        self
+    }
+
     pub fn with_tasks<I: IntoIterator<Item = Spanned<TaskName<'static>>>>(
         mut self,
         tasks: I,
@@ -174,8 +193,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     // by CLI
     fn allowed_tasks(&self) -> Option<HashSet<TaskId<'static>>> {
         if self.tasks_only {
+            let workspaces = self.allowed_workspaces.as_ref().unwrap_or(&self.workspaces);
             Some(
-                self.workspaces
+                workspaces
                     .iter()
                     .cartesian_product(self.tasks.iter())
                     .filter_map(|(package, task_name)| {

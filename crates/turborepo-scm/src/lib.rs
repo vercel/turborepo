@@ -18,7 +18,10 @@ use std::{
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
+};
 
 pub(crate) mod crlf;
 pub mod git;
@@ -413,6 +416,48 @@ impl SCM {
     pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
         match self {
             SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
+    /// Builds a repo index scoped to the given packages for one logical
+    /// transaction (e.g. one watch-mode debounce window): tracked state plus
+    /// untracked-file discovery limited to those package prefixes. Untracked
+    /// entries are required so that newly added files still change the
+    /// package hash. Returns `None` for manual SCM mode or on failure;
+    /// callers should fall back to per-package git subprocesses.
+    pub fn build_repo_index_for_packages(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package_paths: &[AnchoredSystemPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => {
+                let mut index = match RepoGitIndex::new_tracked(git) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        debug!("failed to build repo index: {e}. Hashing per-package.");
+                        return None;
+                    }
+                };
+                let prefixes: Vec<RelativeUnixPathBuf> = package_paths
+                    .iter()
+                    .filter_map(|package_path| {
+                        git.root
+                            .anchor(repo_root.resolve(package_path))
+                            .ok()
+                            .map(|anchored| anchored.to_unix())
+                    })
+                    .collect();
+                if let Err(e) = index.populate_untracked_for_prefixes(git, &prefixes) {
+                    debug!(
+                        "failed to populate untracked files in repo index: {e}. Hashing \
+                         per-package."
+                    );
+                    return None;
+                }
+                Some(index)
+            }
             SCM::Manual => None,
         }
     }

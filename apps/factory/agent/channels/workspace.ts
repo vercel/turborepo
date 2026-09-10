@@ -73,6 +73,7 @@ export default defineChannel<
         model: input.model,
         sandbox: { provider: "vercel", status: "running" },
         status: "running",
+        thinkingEffort: input.thinkingEffort,
         title: input.title,
         updatedAt: now,
         version: 2
@@ -81,7 +82,11 @@ export default defineChannel<
 
       try {
         const session = await from(id).send(input.prompt, {
-          auth: operatorSessionPrincipal(input.model, input.harness),
+          auth: operatorSessionPrincipal(
+            input.model,
+            input.harness,
+            input.thinkingEffort
+          ),
           mode: WORKSPACE_RUN_MODE,
           state: { workspaceId: id },
           title: input.title

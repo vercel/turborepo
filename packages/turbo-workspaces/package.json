@@ -1,6 +1,6 @@
 {
   "name": "@turbo/workspaces",
-  "version": "2.10.13-canary.1",
+  "version": "2.10.13-canary.3",
   "description": "Tools for working with package managers",
   "homepage": "https://turborepo.dev",
   "bugs": {
@@ -21,6 +21,9 @@
   "types": "dist/index.d.ts",
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",

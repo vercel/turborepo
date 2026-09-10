@@ -20,6 +20,7 @@ export interface PublicWorkspace {
   readonly id: string;
   readonly title: string;
   readonly status: string;
+  readonly thinkingEffort?: "low" | "medium" | "high";
   readonly agent: "eve";
   readonly sandbox: WorkspaceSandbox;
   readonly sessionId?: string;

@@ -15,6 +15,8 @@
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
+# GitHub's manual-run branch selector cannot be restricted, so entry jobs are
+# gated to refs/heads/main. All release jobs depend on stage succeeding.
 #
 # RECOVERY: If a release fails and cleanup doesn't work, use the
 # 'clear-staging-branch' input to manually clear the stale staging branch.
@@ -109,7 +111,7 @@ jobs:
   check-skip:
     name: "Check Skip Conditions"
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'schedule' }}
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
@@ -134,7 +136,7 @@ jobs:
 
   stage:
     needs: [check-skip]
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
+    if: ${{ always() && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -145,12 +147,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
-      - name: Ensure release runs from default branch
-        if: ${{ github.ref_name != github.event.repository.default_branch }}
-        run: |
-          echo "::error::Release workflow must run from the default branch."
-          exit 1
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -167,43 +163,42 @@ jobs:
             exit 1
           fi
 
-      - parallel:
-          - name: Setup Node
-            uses: ./.github/actions/setup-node
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
 
-          - name: Get base SHA
-            id: base-sha
-            run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Get base SHA
+        id: base-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-          - name: Get previous tag
-            id: previous-tag
-            env:
-              INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
-            run: |
-              # For minor/major releases, compare against the previous minor/major
-              # release (vX.Y.0) so notes include all patches since then.
-              # For patch releases, compare against the latest stable tag.
-              # For canary releases, compare against the latest canary tag.
-              if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
-                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                  | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
-              elif [[ "$INCREMENT" == "patch" ]]; then
-                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                  | grep -v canary | sort -V | tail -n 1)
-              else
-                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
-                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                  | sort -V | tail -n 1)
-                if [ -z "$PREV_TAG" ]; then
-                  PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-                    | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                    | grep -v canary | sort -V | tail -n 1)
-                fi
-              fi
-              echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
-              echo "Previous tag: $PREV_TAG"
+      - name: Get previous tag
+        id: previous-tag
+        env:
+          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
+        run: |
+          # For minor/major releases, compare against the previous minor/major
+          # release (vX.Y.0) so notes include all patches since then.
+          # For patch releases, compare against the latest stable tag.
+          # For canary releases, compare against the latest canary tag.
+          if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
+          elif [[ "$INCREMENT" == "patch" ]]; then
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | grep -v canary | sort -V | tail -n 1)
+          else
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | sort -V | tail -n 1)
+            if [ -z "$PREV_TAG" ]; then
+              PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                | grep -v canary | sort -V | tail -n 1)
+            fi
+          fi
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV_TAG"
 
       - name: Build release tool
         run: pnpm --filter @turbo/releaser build
@@ -339,16 +334,15 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - parallel:
-          - name: Setup Node
-            uses: ./.github/actions/setup-node
-            with:
-              extra-flags: "--no-frozen-lockfile"
-            env:
-              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--no-frozen-lockfile"
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-          - name: Install Bun
-            uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -360,6 +354,8 @@ jobs:
 
   build-rust:
     name: "Build Rust"
+    # Keep Apple credentials only in this environment, restricted to branch main.
+    environment: "Apple code signing (main-only)"
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     strategy:
@@ -395,28 +391,27 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install bash capnp
 
-      - parallel:
-          - name: Setup Protoc
-            uses: ./.github/actions/setup-protoc
-            with:
-              version: "26.x"
-              github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Protoc
+        uses: ./.github/actions/setup-protoc
+        with:
+          version: "26.x"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-          - name: Setup capnproto
-            if: runner.os != 'macOS'
-            uses: ./.github/actions/setup-capnproto
+      - name: Setup capnproto
+        if: runner.os != 'macOS'
+        uses: ./.github/actions/setup-capnproto
 
-          - name: Rust Setup
-            uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1
-            with:
-              target: ${{ matrix.settings.target }}
-              # needed to not make it override the defaults
-              rustflags: ""
-              # we want more specific settings
-              cache: false
+      - name: Rust Setup
+        uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1
+        with:
+          target: ${{ matrix.settings.target }}
+          # needed to not make it override the defaults
+          rustflags: ""
+          # we want more specific settings
+          cache: false
 
-          - name: Setup Zig
-            uses: ./.github/actions/setup-zig
+      - name: Setup Zig
+        uses: ./.github/actions/setup-zig
 
       - name: Build Setup
         if: ${{ matrix.settings.setup }}
@@ -429,48 +424,47 @@ jobs:
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
         run: cargo install apple-codesign --version 0.29.0 --locked
 
-      - parallel:
-          - name: Write Apple signing certificate
-            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
-            shell: bash
-            env:
-              APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
-              APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
-            run: |
-              set -euo pipefail
-              umask 077
-              if [[ -z "$APPLE_CERT_DATA" ]]; then
-                echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
-                exit 1
-              fi
-              printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
-              chmod 600 "$APPLE_CERT_PATH"
-              if [[ ! -s "$APPLE_CERT_PATH" ]]; then
-                echo "::error::Decoded Apple certificate is empty"
-                exit 1
-              fi
-              echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
+      - name: Write Apple signing certificate
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+          APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$APPLE_CERT_DATA" ]]; then
+            echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
+            exit 1
+          fi
+          printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
+          chmod 600 "$APPLE_CERT_PATH"
+          if [[ ! -s "$APPLE_CERT_PATH" ]]; then
+            echo "::error::Decoded Apple certificate is empty"
+            exit 1
+          fi
+          echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
 
-          - name: Write Apple notarization API key
-            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
-            shell: bash
-            env:
-              APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-              APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
-            run: |
-              set -euo pipefail
-              umask 077
-              if [[ -z "$APPLE_API_KEY" ]]; then
-                echo "::error::APPLE_API_KEY secret is empty or unavailable"
-                exit 1
-              fi
-              printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
-              chmod 600 "$APPLE_API_KEY_PATH"
-              if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
-                echo "::error::Decoded Apple API key is empty"
-                exit 1
-              fi
-              echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
+      - name: Write Apple notarization API key
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$APPLE_API_KEY" ]]; then
+            echo "::error::APPLE_API_KEY secret is empty or unavailable"
+            exit 1
+          fi
+          printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
+          chmod 600 "$APPLE_API_KEY_PATH"
+          if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
+            echo "::error::Decoded Apple API key is empty"
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
 
       - name: Sign macOS binary
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
@@ -547,32 +541,30 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - parallel:
-          - name: Setup Node
-            uses: ./.github/actions/setup-node
-            with:
-              extra-flags: "--no-frozen-lockfile"
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--no-frozen-lockfile"
 
-          - name: Download Rust artifacts
-            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-            with:
-              path: rust-artifacts
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: rust-artifacts
 
-      - parallel:
-          - name: Install Global Turbo
-            uses: ./.github/actions/install-global-turbo
-            with:
-              turbo-version: ${{ inputs.ci-tag-override || '' }}
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
 
-          - name: Move Rust artifacts into place
-            run: |
-              mkdir release-artifacts
-              mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
-              mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
-              cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
-              mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
-              mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
-              mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
+      - name: Move Rust artifacts into place
+        run: |
+          mkdir release-artifacts
+          mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
+          mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
@@ -707,18 +699,17 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - parallel:
-          - name: Get version and compute subdomain
-            id: version
-            run: |
-              VERSION=$(head -n 1 version.txt)
-              # Transform version to valid subdomain (replace dots with dashes, prepend v)
-              SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
-              echo "version=${VERSION}" >> $GITHUB_OUTPUT
-              echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
+      - name: Get version and compute subdomain
+        id: version
+        run: |
+          VERSION=$(head -n 1 version.txt)
+          # Transform version to valid subdomain (replace dots with dashes, prepend v)
+          SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
 
-          - name: Install Vercel CLI
-            run: npm install -g vercel@53.1.0
+      - name: Install Vercel CLI
+        run: npm install -g vercel@53.1.0
 
       - name: Find Vercel deployment for SHA
         id: find-deployment

@@ -158,6 +158,16 @@ impl UnifiedTurboJsonLoader {
             Self::WithMfe(loader) => loader.preload_all(),
         }
     }
+
+    /// Pre-warm the cache by loading the given packages' turbo.json files in
+    /// parallel. Errors are silently ignored — subsequent `load()` calls will
+    /// report them.
+    pub fn preload_packages(&self, packages: impl IntoIterator<Item = PackageName>) {
+        match self {
+            Self::Standard(loader) => loader.preload_packages(packages),
+            Self::WithMfe(loader) => loader.preload_packages(packages),
+        }
+    }
 }
 
 // Implement the TurboJsonLoader trait from turborepo-engine for

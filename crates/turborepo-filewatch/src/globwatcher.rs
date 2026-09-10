@@ -984,16 +984,18 @@ impl GlobTracker {
     }
 
     fn handle_path_change(&mut self, path: &RelativeUnixPath) {
-        let (removed_path, added_paths) = {
+        let summary = {
             let mut state = self
                 .state
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let (_, removed_path, added_paths) =
-                invalidate_path_candidates(&mut state, &mut self.glob_statuses, path, &self.root);
-            (removed_path, added_paths)
+            invalidate_path_candidates(&mut state, &mut self.glob_statuses, path, &self.root)
         };
-        if removed_path {
+        debug!(
+            "file change at {} inspected {} candidate globs across {} registration transitions",
+            path, summary.inspected, summary.transitions
+        );
+        if summary.removed_path {
             replace_physical_interest(
                 &self.state,
                 &self.physical_interest,
@@ -1001,9 +1003,26 @@ impl GlobTracker {
                 self.cookie_watcher.root(),
             );
         } else {
-            self.physical_interest.extend(added_paths);
+            self.physical_interest.extend(summary.added_paths);
         }
     }
+}
+
+/// The observable effects of invalidating the candidate globs for one event.
+#[derive(Debug)]
+struct InvalidationSummary {
+    /// The number of candidate globs that were inspected for a match, whether
+    /// or not they matched the event path.
+    inspected: usize,
+    /// The number of registration snapshot transitions applied. Each
+    /// transition removes invalidated includes from an active registration
+    /// and refreshes its routing entries and physical prefixes.
+    transitions: usize,
+    /// Whether a watched physical path may have been removed and the physical
+    /// watch interest needs to be recomputed.
+    removed_path: bool,
+    /// Physical paths that became newly interesting.
+    added_paths: Vec<PathBuf>,
 }
 
 fn invalidate_path_candidates(
@@ -1011,7 +1030,7 @@ fn invalidate_path_candidates(
     glob_statuses: &mut HashMap<String, (Glob<'static>, HashSet<Hash>)>,
     path: &RelativeUnixPath,
     root: &AbsoluteSystemPathBuf,
-) -> (usize, bool, Vec<PathBuf>) {
+) -> InvalidationSummary {
     let candidate_globs = state
         .routing_index
         .candidates(path)
@@ -1023,7 +1042,11 @@ fn invalidate_path_candidates(
         })
         .collect::<HashSet<_>>();
     let mut inspected = 0;
-    let mut changes = Vec::new();
+    // Invalidated includes are grouped by hash so that each active registration
+    // applies a single snapshot transition. Cloning the registration's GlobSet
+    // (and replaying routing and physical-prefix updates) once per matching
+    // glob made one event quadratic in the number of overlapping includes.
+    let mut invalidations: HashMap<Hash, Vec<String>> = HashMap::new();
 
     for glob_str in &candidate_globs {
         let remove_status = {
@@ -1036,7 +1059,7 @@ fn invalidate_path_candidates(
             }
 
             hashes_for_glob.retain(|hash| {
-                let Some(active) = state.active.get_mut(hash) else {
+                let Some(active) = state.active.get(hash) else {
                     // This shouldn't ever happen, but if we aren't tracking this hash at
                     // all, we don't need to keep it in the set of hashes that are relevant
                     // for this glob.
@@ -1053,10 +1076,10 @@ fn invalidate_path_candidates(
                 }
 
                 debug!("file change at {} invalidated glob {}", path, glob_str);
-                let previous = active.glob_set.clone();
-                active.glob_set.include.remove(glob_str);
-                let next = (!active.glob_set.include.is_empty()).then(|| active.glob_set.clone());
-                changes.push((hash.clone(), previous, next));
+                invalidations
+                    .entry(hash.clone())
+                    .or_default()
+                    .push(glob_str.clone());
 
                 false
             });
@@ -1068,6 +1091,28 @@ fn invalidate_path_candidates(
         }
     }
 
+    let mut changes = Vec::new();
+    for (hash, glob_strs) in invalidations {
+        let Some(active) = state.active.get_mut(&hash) else {
+            // Unreachable: the matching loop only records hashes that have an
+            // active registration. If bookkeeping ever drifts, there is
+            // nothing left to transition.
+            debug_assert!(
+                false,
+                "An invalidation is referencing a hash that we are not tracking. This is most \
+                 likely an internal bookkeeping error in globwatcher.rs"
+            );
+            continue;
+        };
+        let previous = active.glob_set.clone();
+        for glob_str in glob_strs {
+            active.glob_set.include.remove(&glob_str);
+        }
+        let next = (!active.glob_set.include.is_empty()).then(|| active.glob_set.clone());
+        changes.push((hash, previous, next));
+    }
+
+    let transitions = changes.len();
     let mut removed_path = false;
     let mut added_paths = Vec::new();
     for (hash, previous, next) in changes {
@@ -1083,7 +1128,12 @@ fn invalidate_path_candidates(
         }
     }
 
-    (inspected, removed_path, added_paths)
+    InvalidationSummary {
+        inspected,
+        transitions,
+        removed_path,
+        added_paths,
+    }
 }
 
 #[cfg(test)]
@@ -1095,12 +1145,12 @@ mod test {
             Arc,
             atomic::{AtomicBool, Ordering},
         },
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     use notify::{Event, EventKind, event::CreateKind};
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
-    use wax::{Glob, any};
+    use wax::{Glob, Program, any};
 
     use crate::{
         FileSystemWatcher, WatchSource,
@@ -1279,23 +1329,23 @@ mod test {
 
         let (root, _tmp) = temp_dir();
         let mut state = state_from_globs(hash_globs);
-        let (inspected, _, _) = invalidate_path_candidates(
+        let summary = invalidate_path_candidates(
             &mut state,
             &mut glob_statuses,
             relative("docs/unrelated.md"),
             &root,
         );
-        assert_eq!(inspected, 0);
+        assert_eq!(summary.inspected, 0);
         assert_eq!(state.active.len(), 1_000);
         assert_eq!(glob_statuses.len(), 1_000);
 
-        let (inspected, _, _) = invalidate_path_candidates(
+        let summary = invalidate_path_candidates(
             &mut state,
             &mut glob_statuses,
             relative("apps/app-517/dist/output.js"),
             &root,
         );
-        assert_eq!(inspected, 1);
+        assert_eq!(summary.inspected, 1);
         assert!(!state.active.contains_key("hash-517"));
         assert!(!glob_statuses.contains_key("apps/app-517/dist/**"));
         assert_eq!(state.active.len(), 999);
@@ -1334,7 +1384,7 @@ mod test {
                 relative("packages/shared/dist/cache/item"),
                 &root,
             )
-            .0,
+            .inspected,
             1
         );
         assert!(state.active.contains_key(&excluded_hash));
@@ -1351,11 +1401,392 @@ mod test {
                 relative("packages/shared/dist/output"),
                 &root,
             )
-            .0,
+            .inspected,
             1
         );
         assert!(state.active.is_empty());
         assert!(glob_statuses.is_empty());
+    }
+
+    /// The file name that the overlapping include globs all match.
+    const OVERLAPPING_EVENT: &str = "dist/output.js";
+
+    /// Generates `count` distinct include globs that all match `event` by
+    /// wildcarding one, two, or three characters of its file name, mirroring
+    /// overlapping output globs such as `dist/o?tput.js`.
+    fn overlapping_patterns(event: &str, count: usize) -> Vec<String> {
+        let (prefix, name) = event
+            .rsplit_once('/')
+            .expect("event must name a single file");
+        let positions: Vec<usize> = (0..name.len()).collect();
+        let mut patterns = Vec::with_capacity(count);
+        'sizes: for size in 1..=3 {
+            for combination in combinations(&positions, size) {
+                if patterns.len() == count {
+                    break 'sizes;
+                }
+                let mut characters: Vec<char> = name.chars().collect();
+                for &position in &combination {
+                    characters[position] = '?';
+                }
+                patterns.push(format!(
+                    "{prefix}/{}",
+                    characters.into_iter().collect::<String>()
+                ));
+            }
+        }
+        assert_eq!(
+            patterns.len(),
+            count,
+            "not enough distinct overlapping globs for {event}"
+        );
+        assert_eq!(
+            patterns.iter().cloned().collect::<HashSet<_>>().len(),
+            count
+        );
+        for pattern in &patterns {
+            assert!(Glob::from_str(pattern).unwrap().is_match(relative(event)));
+        }
+        patterns
+    }
+
+    fn combinations(items: &[usize], size: usize) -> Vec<Vec<usize>> {
+        if size == 0 {
+            return vec![Vec::new()];
+        }
+        let mut result = Vec::new();
+        for (index, &first) in items.iter().enumerate() {
+            for mut rest in combinations(&items[index + 1..], size - 1) {
+                rest.insert(0, first);
+                result.push(rest);
+            }
+        }
+        result
+    }
+
+    /// Builds a `GlobState` with one active registration per entry, along with
+    /// the unchanged-glob bookkeeping that the tracker maintains.
+    fn watched_state(
+        root: &AbsoluteSystemPathBuf,
+        registrations: Vec<(String, Vec<String>, Vec<String>)>,
+    ) -> (GlobState, HashMap<String, (Glob<'static>, HashSet<String>)>) {
+        let mut state = GlobState::default();
+        let mut glob_statuses = HashMap::new();
+        for (index, (hash, includes, excludes)) in registrations.into_iter().enumerate() {
+            let id = index as u64;
+            let glob_set = GlobSet::from_raw(includes.clone(), excludes).unwrap();
+            state.routing_index.insert(glob_set.clone());
+            add_physical_prefixes(&mut state, root, &glob_set);
+            state.active_ids.insert(id, hash.clone());
+            state
+                .active
+                .insert(hash.clone(), ActiveRegistration { id, glob_set });
+            for raw_glob in includes {
+                let (_, hashes) = glob_statuses.entry(raw_glob.clone()).or_insert_with(|| {
+                    (
+                        Glob::from_str(&raw_glob).unwrap().to_owned(),
+                        HashSet::new(),
+                    )
+                });
+                hashes.insert(hash.clone());
+            }
+        }
+        (state, glob_statuses)
+    }
+
+    #[test]
+    fn overlapping_includes_invalidate_with_single_coalesced_transition() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 8);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) =
+            watched_state(&root, vec![("hash".to_string(), includes, vec![])]);
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 8);
+        assert!(state.active.is_empty());
+        assert!(state.active_ids.is_empty());
+        assert!(glob_statuses.is_empty());
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.physical_prefixes.is_empty());
+        assert!(summary.removed_path);
+        // One event must apply one snapshot transition per registration, not
+        // one per matching include glob.
+        assert_eq!(summary.transitions, 1);
+        assert!(summary.added_paths.is_empty());
+    }
+
+    #[test]
+    fn partial_overlap_retains_remaining_includes_with_single_transition() {
+        let matching = overlapping_patterns(OVERLAPPING_EVENT, 3);
+        let unrelated: Vec<String> = (0..5)
+            .map(|index| format!("dist/unrel?ted-{index}.js"))
+            .collect();
+        let mut includes = matching;
+        includes.extend(unrelated.iter().cloned());
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) =
+            watched_state(&root, vec![("hash".to_string(), includes, vec![])]);
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 8);
+        assert!(summary.removed_path);
+        assert_eq!(
+            state.active["hash"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            unrelated.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert_eq!(
+            glob_statuses.keys().cloned().collect::<HashSet<_>>(),
+            unrelated.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.routing_index.matches(relative("dist/unrelated-0.js")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [5]
+        );
+        // The surviving registration is re-registered in a single transition,
+        // so each physical prefix is reported as added at most once.
+        assert_eq!(summary.transitions, 1);
+        assert_eq!(summary.added_paths, vec![root.as_std_path().join("dist")]);
+    }
+
+    #[test]
+    fn shared_glob_sets_transition_once_per_hash() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 4);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                ("hash-a".to_string(), includes.clone(), vec![]),
+                ("hash-b".to_string(), includes, vec![]),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 4);
+        assert!(summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        assert!(state.active.is_empty());
+        assert!(state.active_ids.is_empty());
+        assert!(glob_statuses.is_empty());
+        assert!(state.routing_index.glob_sets.iter().all(Option::is_none));
+        assert!(state.physical_prefixes.is_empty());
+        assert_eq!(summary.transitions, 2);
+    }
+
+    #[test]
+    fn per_registration_exclusions_survive_coalesced_removals() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 4);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                (
+                    "excluded".to_string(),
+                    includes.clone(),
+                    vec!["dist/o*.js".to_string()],
+                ),
+                ("invalidated".to_string(), includes.clone(), vec![]),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 4);
+        assert!(!summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        // The excluded registration keeps every include and its
+        // unchanged-glob bookkeeping.
+        assert_eq!(
+            state.active["excluded"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            includes.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert!(!state.active.contains_key("invalidated"));
+        for glob_str in &includes {
+            assert_eq!(
+                glob_statuses[glob_str].1,
+                HashSet::from(["excluded".to_string()])
+            );
+        }
+        // The surviving set's exclusion still matches the event path.
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [4]
+        );
+        assert_eq!(summary.transitions, 1);
+    }
+
+    #[test]
+    fn multi_hash_invalidation_preserves_per_registration_outcomes() {
+        let shared_match = "dist/o?tput.js".to_string();
+        let second_match = "dist/ou?put.js".to_string();
+        let unrelated = "dist/unrel?ted.js".to_string();
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                (
+                    "partial".to_string(),
+                    vec![
+                        shared_match.clone(),
+                        second_match.clone(),
+                        unrelated.clone(),
+                    ],
+                    vec![],
+                ),
+                (
+                    "full".to_string(),
+                    vec![shared_match.clone(), second_match.clone()],
+                    vec![],
+                ),
+                (
+                    "excluded".to_string(),
+                    vec![shared_match.clone()],
+                    vec!["dist/o*.js".to_string()],
+                ),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 3);
+        assert!(!summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        // "partial" keeps only its unrelated include, "full" is removed
+        // entirely, and "excluded" is untouched.
+        assert_eq!(
+            state.active["partial"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            HashSet::from([unrelated.clone()])
+        );
+        assert!(!state.active.contains_key("full"));
+        assert_eq!(
+            state.active["excluded"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            HashSet::from([shared_match.clone()])
+        );
+        assert_eq!(state.active_ids.len(), 2);
+        // The shared glob is still unchanged only for the excluded hash, and
+        // the second glob has no remaining hashes.
+        assert_eq!(
+            glob_statuses[&shared_match].1,
+            HashSet::from(["excluded".to_string()])
+        );
+        assert!(!glob_statuses.contains_key(&second_match));
+        assert_eq!(
+            glob_statuses[&unrelated].1,
+            HashSet::from(["partial".to_string()])
+        );
+        // The excluded hash keeps watching the event path's glob, and routing
+        // matches account for its exclusion.
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.routing_index.matches(relative("dist/unrelated.js")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [2]
+        );
+        assert_eq!(summary.transitions, 2);
+    }
+
+    /// Manual benchmark for the cost of one event that matches many include
+    /// globs in a single registration. Run with:
+    ///
+    /// ```text
+    /// cargo test -p turborepo-filewatch --lib globwatcher_invalidation_bench \
+    ///     --release --ignored --nocapture --test-threads=1
+    /// ```
+    #[test]
+    #[ignore = "manual performance harness"]
+    fn globwatcher_invalidation_bench() {
+        const EVENT: &str = "dist/generated-output-file.js";
+        let (root, _tmp) = temp_dir();
+
+        for &include_count in &[64usize, 256, 1024] {
+            let includes = overlapping_patterns(EVENT, include_count);
+            let mut timings: Vec<Duration> = Vec::new();
+            let mut transitions: Vec<usize> = Vec::new();
+            for _ in 0..7 {
+                let (mut state, mut glob_statuses) =
+                    watched_state(&root, vec![("bench".to_string(), includes.clone(), vec![])]);
+                let start = Instant::now();
+                let summary = invalidate_path_candidates(
+                    &mut state,
+                    &mut glob_statuses,
+                    relative(EVENT),
+                    &root,
+                );
+                timings.push(start.elapsed());
+                transitions.push(summary.transitions);
+                // Sanity: the event invalidates the entire registration.
+                assert!(state.active.is_empty());
+                assert!(glob_statuses.is_empty());
+            }
+            timings.sort();
+            println!(
+                "includes={include_count:>4} transitions={} medtime={:?}",
+                transitions[0],
+                timings[timings.len() / 2]
+            );
+        }
     }
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {

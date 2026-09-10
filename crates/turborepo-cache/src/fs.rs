@@ -18,6 +18,10 @@ pub struct FSCache {
     scm_state: LazyScmState,
 }
 
+/// Uniquifies temporary archive names for concurrent installs of distinct
+/// hashes within this process.
+static ARCHIVE_TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
@@ -202,6 +206,70 @@ impl FSCache {
         }))
     }
 
+    /// Records a restore manifest for `files`, which must exist under
+    /// `anchor` (they either already do during a put, or have just been
+    /// restored there during a fetch).
+    fn build_manifest(
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> crate::cache_archive::RestoreManifest {
+        let mut manifest = crate::cache_archive::RestoreManifest::new();
+        for file in files {
+            let source_path = anchor.resolve(file);
+            let unix_path = file.to_unix();
+            if let Ok(m) = source_path.symlink_metadata() {
+                if m.is_file() {
+                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
+                } else if m.is_dir() {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
+            }
+        }
+        manifest
+    }
+
+    /// Writes the `-manifest.json` and `-meta.json` sidecars for an installed
+    /// archive.
+    fn write_sidecars(
+        &self,
+        hash: &str,
+        manifest: &crate::cache_archive::RestoreManifest,
+        duration: u64,
+    ) -> Result<(), CacheError> {
+        // Write manifest alongside the archive so the first fetch() can
+        // skip decompression when outputs are still on disk.
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+        let _ = manifest.write_atomic(&manifest_path);
+
+        // Write metadata file atomically using write-to-temp-then-rename pattern
+        let metadata_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-meta.json"));
+
+        let resolved = self.scm_state.get();
+        let meta = CacheMetadata {
+            hash: hash.to_string(),
+            duration,
+            sha: resolved.and_then(|s| s.sha.clone()),
+            dirty_hash: resolved.and_then(|s| s.dirty_hash.clone()),
+        };
+
+        let meta_json = serde_json::to_string(&meta)
+            .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
+
+        // Write to temporary file then atomically rename
+        let temp_metadata_path = self
+            .cache_directory
+            .join_component(&format!(".{hash}-meta.json.{}.tmp", std::process::id()));
+
+        temp_metadata_path.create_with_contents(&meta_json)?;
+        temp_metadata_path.rename(&metadata_path)?;
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn put(
         &self,
@@ -234,36 +302,50 @@ impl FSCache {
         // Finish the archive (performs atomic rename from temp to final path)
         cache_item.finish()?;
 
-        // Write manifest alongside the archive so the first fetch() can
-        // skip decompression when outputs are still on disk.
-        let manifest_path = self
+        self.write_sidecars(hash, &manifest, duration)?;
+
+        Ok(())
+    }
+
+    /// Atomically installs an already-built compressed archive, avoiding a
+    /// second read/compress pass when the same artifact has another
+    /// destination (a remote write or a verified remote download).
+    ///
+    /// `files` must already exist under `anchor` so the restore manifest can
+    /// be recorded from their current metadata.
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn put_archive(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        files: &[AnchoredSystemPathBuf],
+        archive: &crate::artifact_body::ArtifactBody,
+        duration: u64,
+    ) -> Result<(), CacheError> {
+        let cache_path = self
             .cache_directory
-            .join_component(&format!("{hash}-manifest.json"));
-        let _ = manifest.write_atomic(&manifest_path);
+            .join_component(&format!("{hash}.tar.zst"));
 
-        // Write metadata file atomically using write-to-temp-then-rename pattern
-        let metadata_path = self
-            .cache_directory
-            .join_component(&format!("{hash}-meta.json"));
+        // Write to a temporary sibling and atomically rename, matching the
+        // publication semantics of CacheWriter::create.
+        let temp_path = self.cache_directory.join_component(&format!(
+            ".{hash}.tar.zst.{}.{}.tmp",
+            std::process::id(),
+            ARCHIVE_TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        {
+            let file = temp_path.create()?;
+            // Match the 1 MiB flush granularity of CacheWriter::create so the
+            // copy does not turn into per-8-KiB write syscalls.
+            let mut buffered = std::io::BufWriter::with_capacity(2usize.pow(20), file);
+            archive.copy_to(&mut buffered)?;
+            // Flush explicitly; BufWriter's Drop would ignore the error.
+            std::io::Write::flush(&mut buffered)?;
+        }
+        temp_path.rename(&cache_path)?;
 
-        let resolved = self.scm_state.get();
-        let meta = CacheMetadata {
-            hash: hash.to_string(),
-            duration,
-            sha: resolved.and_then(|s| s.sha.clone()),
-            dirty_hash: resolved.and_then(|s| s.dirty_hash.clone()),
-        };
-
-        let meta_json = serde_json::to_string(&meta)
-            .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
-
-        // Write to temporary file then atomically rename
-        let temp_metadata_path = self
-            .cache_directory
-            .join_component(&format!(".{hash}-meta.json.{}.tmp", std::process::id()));
-
-        temp_metadata_path.create_with_contents(&meta_json)?;
-        temp_metadata_path.rename(&metadata_path)?;
+        let manifest = Self::build_manifest(anchor, files);
+        self.write_sidecars(hash, &manifest, duration)?;
 
         Ok(())
     }

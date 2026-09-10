@@ -44,54 +44,63 @@ where
 /// not in any package will automatically invalidate all
 /// packages. This is fine for builds, but less fine
 /// for situations like watch mode.
-pub struct DefaultPackageChangeMapper<'a> {
-    pkg_dep_graph: &'a PackageGraph,
+pub struct DefaultPackageChangeMapper {
+    /// Deepest-package index: package directory → owning package name. Built
+    /// once per mapper so mapping F files over P packages is no longer
+    /// O(F × P) package visits; a lookup walks the file's ancestors instead.
+    /// When packages share a directory, the smallest name wins, matching the
+    /// previous scan's tie-breaking.
+    package_dirs: std::collections::HashMap<AnchoredSystemPathBuf, PackageName>,
 }
 
-impl<'a> DefaultPackageChangeMapper<'a> {
-    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
-        Self { pkg_dep_graph }
-    }
-    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
-        file.components()
-            .zip(package_path.components())
-            .all(|(a, b)| a == b)
+impl DefaultPackageChangeMapper {
+    pub fn new(pkg_dep_graph: &PackageGraph) -> Self {
+        let mut package_dirs = std::collections::HashMap::new();
+        for context in pkg_dep_graph.package_task_contexts() {
+            if context.kind() != PackageTaskContextKind::Package {
+                continue;
+            }
+            let package_path = context.directory();
+            // A package whose directory is the repo root would vacuously
+            // match every file. Only the Root package may claim root-level
+            // files, via the fallback.
+            if package_path.components().next().is_none() {
+                continue;
+            }
+            let name = context.package().clone();
+            package_dirs
+                .entry(package_path.to_owned())
+                .and_modify(|existing: &mut PackageName| {
+                    if name < *existing {
+                        *existing = name.clone();
+                    }
+                })
+                .or_insert(name);
+        }
+
+        Self { package_dirs }
     }
 }
 
-impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
+impl PackageChangeMapper for DefaultPackageChangeMapper {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
-        let package = self
-            .pkg_dep_graph
-            .package_task_contexts()
-            .filter_map(|context| {
-                let package_path = context.directory();
-                (context.kind() == PackageTaskContextKind::Package
-                    // A package whose directory is the repo root would
-                    // vacuously match every file. Only the Root package may
-                    // claim root-level files, via the fallback.
-                    && package_path.components().next().is_some()
-                    && Self::is_file_in_package(file, package_path))
-                .then_some((context.package().clone(), package_path))
-            })
-            .max_by(|(left_name, left_path), (right_name, right_path)| {
-                left_path
-                    .components()
-                    .count()
-                    .cmp(&right_path.components().count())
-                    .then_with(|| right_name.cmp(left_name))
-            });
-
-        if let Some((name, package_path)) = package {
-            return PackageMapping::Package((
-                WorkspacePackage {
-                    name,
-                    path: package_path.to_owned(),
-                },
-                PackageInclusionReason::FileChanged {
-                    file: file.to_owned(),
-                },
-            ));
+        // Walk the file path and its ancestors deepest-first; the first
+        // indexed directory is the deepest package containing the file.
+        // Including the path itself preserves matching when the changed path
+        // *is* a package directory. Packages sharing a directory were
+        // disambiguated at index build time.
+        for ancestor in file.ancestors() {
+            if let Some(name) = self.package_dirs.get(ancestor) {
+                return PackageMapping::Package((
+                    WorkspacePackage {
+                        name: name.clone(),
+                        path: ancestor.to_owned(),
+                    },
+                    PackageInclusionReason::FileChanged {
+                        file: file.to_owned(),
+                    },
+                ));
+            }
         }
 
         PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
@@ -100,19 +109,19 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     }
 }
 
-pub struct DefaultPackageChangeMapperWithLockfile<'a> {
-    base: DefaultPackageChangeMapper<'a>,
+pub struct DefaultPackageChangeMapperWithLockfile {
+    base: DefaultPackageChangeMapper,
 }
 
-impl<'a> DefaultPackageChangeMapperWithLockfile<'a> {
-    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
+impl DefaultPackageChangeMapperWithLockfile {
+    pub fn new(pkg_dep_graph: &PackageGraph) -> Self {
         Self {
             base: DefaultPackageChangeMapper::new(pkg_dep_graph),
         }
     }
 }
 
-impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile<'_> {
+impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
         // If we have a lockfile change, we consider this as a root package change,
         // since there's a chance that the root package uses a workspace package
@@ -152,7 +161,7 @@ pub enum Error {
 /// changes all packages. Since we have a list of global deps,
 /// we can check against that and avoid invalidating in unnecessary cases.
 pub struct GlobalDepsPackageChangeMapper<'a> {
-    base: DefaultPackageChangeMapperWithLockfile<'a>,
+    base: DefaultPackageChangeMapperWithLockfile,
     global_deps_matcher: wax::Any<'a>,
 }
 
@@ -263,14 +272,8 @@ mod tests {
                     // Parent first reproduces the observation order that used
                     // to make it incorrectly claim the child's files.
                     workspaces: vec![
-                        discovery::WorkspaceData {
-                            package_json: self.parent_manifest.clone(),
-                            turbo_json: None,
-                        },
-                        discovery::WorkspaceData {
-                            package_json: self.child_manifest.clone(),
-                            turbo_json: None,
-                        },
+                        discovery::WorkspaceData::new(self.parent_manifest.clone(), None)?,
+                        discovery::WorkspaceData::new(self.child_manifest.clone(), None)?,
                     ],
                 })
             }
@@ -337,18 +340,15 @@ mod tests {
                 Ok(discovery::DiscoveryResponse {
                     package_manager: PackageManager::Npm,
                     workspaces: vec![
-                        discovery::WorkspaceData {
-                            package_json: self.root.join_component("package.json"),
-                            turbo_json: None,
-                        },
-                        discovery::WorkspaceData {
-                            package_json: self.root.join_components(&[
-                                "packages",
-                                "lib-a",
-                                "package.json",
-                            ]),
-                            turbo_json: None,
-                        },
+                        discovery::WorkspaceData::new(
+                            self.root.join_component("package.json"),
+                            None,
+                        )?,
+                        discovery::WorkspaceData::new(
+                            self.root
+                                .join_components(&["packages", "lib-a", "package.json"]),
+                            None,
+                        )?,
                     ],
                 })
             }
@@ -400,6 +400,125 @@ mod tests {
             packages.keys().all(|p| p.name.as_ref() != "rooted-pkg"),
             "root-level files must not map to a root-directory package, got {packages:?}"
         );
+
+        Ok(())
+    }
+
+    /// Two packages sharing one directory must resolve deterministically to
+    /// the smallest package name, matching the previous linear scan's
+    /// tie-breaking.
+    #[tokio::test]
+    async fn equal_directory_packages_use_name_tiebreak() -> Result<(), anyhow::Error> {
+        use std::sync::Arc;
+
+        use crate::toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
+        };
+
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let shared_manifest = root.join_components(&["packages", "shared", "package.json"]);
+        shared_manifest.ensure_dir()?;
+        shared_manifest.create_with_contents(r#"{"name":"zzz"}"#)?;
+
+        struct SharedDirContributor {
+            root: AbsoluteSystemPathBuf,
+        }
+        impl RepositoryContributor for SharedDirContributor {
+            fn id(&self) -> ToolchainId {
+                ToolchainId::new("custom")
+            }
+            fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+                Box::pin(async move {
+                    Ok(DiscoveredPackages::new(
+                        vec![
+                            // Same directory, declared larger-name-first to
+                            // prove the tie-break is name-based, not order-based.
+                            DiscoveredPackage::package(
+                                Some("zzz".to_string()),
+                                PackageJson::default(),
+                                self.root
+                                    .join_components(&["packages", "shared", "package.json"]),
+                            ),
+                            DiscoveredPackage::package(
+                                Some("aaa".to_string()),
+                                PackageJson::default(),
+                                self.root
+                                    .join_components(&["packages", "shared", "Cargo.toml"]),
+                            ),
+                        ],
+                        vec![WorkspaceRoot::new("custom", self.root.clone())],
+                    ))
+                })
+            }
+        }
+
+        let graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(SharedDirContributor {
+                root: root.to_owned(),
+            }))
+            .build()
+            .await?;
+
+        let file = AnchoredSystemPathBuf::from_raw(
+            ["packages", "shared", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+        let PackageMapping::Package((package, _)) =
+            DefaultPackageChangeMapper::new(&graph).detect_package(&file)
+        else {
+            panic!("expected a package mapping");
+        };
+        assert_eq!(package.name.as_ref(), "aaa");
+
+        Ok(())
+    }
+
+    /// A changed path that *is* a package directory must still map to that
+    /// package (directory-level change events rely on this).
+    #[tokio::test]
+    async fn package_directory_path_maps_to_package() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let manifest = root.join_components(&["packages", "lib-a", "package.json"]);
+        manifest.ensure_dir()?;
+        manifest.create_with_contents(r#"{"name":"lib-a"}"#)?;
+
+        let graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery({
+                struct D(AbsoluteSystemPathBuf);
+                impl PackageDiscovery for D {
+                    async fn discover_packages(
+                        &self,
+                    ) -> Result<discovery::DiscoveryResponse, discovery::Error>
+                    {
+                        Ok(discovery::DiscoveryResponse {
+                            package_manager: PackageManager::Npm,
+                            workspaces: vec![discovery::WorkspaceData::new(self.0.clone(), None)?],
+                        })
+                    }
+                    async fn discover_packages_blocking(
+                        &self,
+                    ) -> Result<discovery::DiscoveryResponse, discovery::Error>
+                    {
+                        self.discover_packages().await
+                    }
+                }
+                D(manifest)
+            })
+            .build()
+            .await?;
+
+        let dir_path = AnchoredSystemPathBuf::from_raw(
+            ["packages", "lib-a"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+        let PackageMapping::Package((package, _)) =
+            DefaultPackageChangeMapper::new(&graph).detect_package(&dir_path)
+        else {
+            panic!("expected a package mapping for the package directory itself");
+        };
+        assert_eq!(package.name.as_ref(), "lib-a");
 
         Ok(())
     }

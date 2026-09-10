@@ -31,7 +31,6 @@ pub enum Event {
     // Stop initiated by the TUI itself
     InternalStop,
     Interrupt,
-    Tick,
     Up,
     Down,
     ScrollUp,

@@ -1,27 +1,27 @@
 {
-  "name": "docs",
-  "version": "0.1.0",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --port 3001",
-    "build": "next build",
-    "start": "next start",
-    "lint": "biome check --write",
-    "check-types": "next typegen && tsc --noEmit"
-  },
-  "dependencies": {
-    "@repo/ui": "workspace:*",
-    "next": "16.3.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
-  },
-  "devDependencies": {
-    "@repo/biome-config": "workspace:^",
-    "@repo/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
-    "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2",
-    "typescript": "5.9.2"
-  }
+	"name": "docs",
+	"version": "0.1.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "next dev --port 3001",
+		"build": "next build",
+		"start": "next start",
+		"lint": "biome check",
+		"check-types": "next typegen && tsc --noEmit"
+	},
+	"dependencies": {
+		"@repo/ui": "workspace:*",
+		"next": "16.3.4",
+		"react": "19.2.8",
+		"react-dom": "19.2.8"
+	},
+	"devDependencies": {
+		"@repo/biome-config": "workspace:^",
+		"@repo/typescript-config": "workspace:*",
+		"@types/node": "26.5.0",
+		"@types/react": "19.2.18",
+		"@types/react-dom": "19.2.7",
+		"typescript": "7.0.2"
+	}
 }

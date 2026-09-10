@@ -5,7 +5,8 @@ import { runFactoryHarnessAgent } from "../lib/harness-agent.js";
 import {
   isOperatorSessionPrincipal,
   selectedOperatorHarness,
-  selectedOperatorModel
+  selectedOperatorModel,
+  selectedOperatorThinkingEffort
 } from "../lib/operator-console.js";
 import { DEFAULT_WORKSPACE_HARNESS } from "../lib/workspace.js";
 
@@ -26,16 +27,24 @@ export default defineTool({
     if (!isOperatorSessionPrincipal(ctx.session.auth.current)) {
       throw new Error("HarnessAgent is available only in operator workspaces.");
     }
+    const currentAuth = ctx.session.auth.current;
+    const initiatorAuth = ctx.session.auth.initiator;
     const harness =
-      selectedOperatorHarness(ctx.session.auth.current) ??
+      selectedOperatorHarness(currentAuth) ??
+      selectedOperatorHarness(initiatorAuth) ??
       DEFAULT_WORKSPACE_HARNESS;
     return runFactoryHarnessAgent({
       abortSignal: ctx.abortSignal,
       harness,
-      model: selectedOperatorModel(ctx.session.auth.current),
+      model:
+        selectedOperatorModel(currentAuth) ??
+        selectedOperatorModel(initiatorAuth),
       prompt,
       sandbox: await ctx.getSandbox(),
-      sessionId: `factory-${harness}-${ctx.session.id}`
+      sessionId: `factory-${harness}-${ctx.session.id}`,
+      thinkingEffort:
+        selectedOperatorThinkingEffort(currentAuth) ??
+        selectedOperatorThinkingEffort(initiatorAuth)
     });
   }
 });

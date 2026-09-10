@@ -3,7 +3,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, resolve, relative, join, isAbsolute } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -442,33 +442,53 @@ export async function downloadAndExtractRepo(
 ) {
   const url = `https://codeload.github.com/${username}/${name}/tar.gz/${branch}`;
 
-  const response = await fetchWithTimeout(url, {}, DOWNLOAD_TIMEOUT);
-  if (!response.ok || !response.body) {
-    throw new Error(`Failed to download: ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
+  // The timeout has to stay armed until the entire response body has been
+  // written to disk. Clearing it once the headers arrive (like
+  // fetchWithTimeout does) would leave the body transfer unbounded.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, DOWNLOAD_TIMEOUT);
 
-  const tempDir = await mkdtemp(join(tmpdir(), "turbo-download-"));
-  const tempFile = join(tempDir, "archive.tar.gz");
-
-  // Extract from file (sync but fast)
-  let rootPath: string | null = null;
   try {
-    await writeFile(tempFile, Uint8Array.from(buffer), { flag: "wx" });
-    await extract({
-      file: tempFile,
-      cwd: root,
-      strip: filePath ? filePath.split("/").length + 1 : 1,
-      filter: (p: string) => {
-        if (rootPath === null) {
-          const pathSegments = p.split("/");
-          rootPath = pathSegments.length ? pathSegments[0] : null;
-        }
-        return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
-      }
+    const response = await fetch(url, {
+      ...buildFetchInit(url),
+      signal: controller.signal
     });
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to download: ${response.status}`);
+    }
+
+    const tempDir = await mkdtemp(join(tmpdir(), "turbo-download-"));
+    const tempFile = join(tempDir, "archive.tar.gz");
+
+    try {
+      // Stream the archive to disk with backpressure instead of buffering
+      // the full response body in memory and copying it again on write.
+      await pipeline(
+        Readable.fromWeb(response.body as ReadableStream),
+        createWriteStream(tempFile, { flags: "wx" })
+      );
+
+      // Extract from file (sync but fast)
+      let rootPath: string | null = null;
+      await extract({
+        file: tempFile,
+        cwd: root,
+        strip: filePath ? filePath.split("/").length + 1 : 1,
+        filter: (p: string) => {
+          if (rootPath === null) {
+            const pathSegments = p.split("/");
+            rootPath = pathSegments.length ? pathSegments[0] : null;
+          }
+          return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
+        }
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    clearTimeout(timeoutId);
   }
 }
 
