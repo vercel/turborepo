@@ -65,6 +65,65 @@ fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<
     assert_eq!(run_args.summarize(), expected);
 }
 
+#[test_case::test_case(&["-F", "api-proxy", "test:integration"] ; "short filter")]
+#[test_case::test_case(&["-Fapi-proxy", "test:integration"] ; "attached short filter")]
+#[test_case::test_case(&["-F=api-proxy", "test:integration"] ; "equals short filter")]
+#[test_case::test_case(&["--filter", "api-proxy", "test:integration"] ; "long filter")]
+#[test_case::test_case(&["--filter=api-proxy", "test:integration"] ; "equals long filter")]
+#[test_case::test_case(&["-F", "api-proxy", "test:integration", "--env-mode", "loose", "--output-logs=errors-only", "--log-order=stream"] ; "api integration regression")]
+#[test_case::test_case(&["--cwd", "run", "-F", "api-proxy", "build"] ; "global flag before filter")]
+#[test_case::test_case(&["-F", "run", "--cwd", "watch", "build"] ; "command names as flag values")]
+#[test_case::test_case(&["-vFapi-proxy", "build"] ; "bundled global and run flags")]
+#[test_case::test_case(&["-F", "web", "-F", "api", "build", "test"] ; "repeated filters and tasks")]
+#[test_case::test_case(&["--affected", "build"] ; "execution switch")]
+#[test_case::test_case(&["--concurrency", "2", "build"] ; "execution value")]
+#[test_case::test_case(&["--force=true", "build"] ; "run boolean")]
+#[test_case::test_case(&["--dry=json", "build"] ; "run alias")]
+#[test_case::test_case(&["--graph", "run", "build"] ; "optional value")]
+#[test_case::test_case(&["--affected", "build", "run"] ; "command name after task")]
+#[test_case::test_case(&["-F", "web", "build", "--", "-F", "untouched", "--help"] ; "pass through")]
+#[test_case::test_case(&["--single-package", "-F", "web", "build"] ; "legacy single package")]
+#[test_case::test_case(&["--affected"] ; "flags only")]
+fn leading_run_flags_match_explicit_run(words: &[&str]) {
+    let explicit = parse_args(["turbo", "run"].into_iter().chain(words.iter().copied())).unwrap();
+    let implicit = parse_args(["turbo"].into_iter().chain(words.iter().copied())).unwrap();
+    assert_eq!(implicit, explicit);
+}
+
+#[test_case::test_case(&["-F", "web", "run", "build"] ; "explicit run")]
+#[test_case::test_case(&["-F", "web", "watch", "build"] ; "explicit watch")]
+#[test_case::test_case(&["--filter=web", "boundaries"] ; "explicit boundaries")]
+#[test_case::test_case(&["--affected", "g"] ; "explicit alias")]
+#[test_case::test_case(&["-F"] ; "missing value")]
+#[test_case::test_case(&["-Z", "build"] ; "unknown short flag")]
+#[test_case::test_case(&["--unknown", "build"] ; "unknown long flag")]
+#[test_case::test_case(&["--env-mode=invalid", "build"] ; "invalid value")]
+#[test_case::test_case(&["--concurrency=1", "--concurrency=2", "build"] ; "duplicate scalar")]
+fn leading_run_flags_preserve_errors(words: &[&str]) {
+    assert!(parse_args(["turbo"].into_iter().chain(words.iter().copied())).is_err());
+}
+
+#[test_case::test_case(&["build"], None ; "absent")]
+#[test_case::test_case(&["build", "--force"], Some(true) ; "bare flag after task")]
+#[test_case::test_case(&["--force=true", "build"], Some(true) ; "attached true before task")]
+#[test_case::test_case(&["--force=false", "build"], Some(false) ; "attached false before task")]
+#[test_case::test_case(&["--force", "true", "build"], Some(true) ; "detached true before task")]
+#[test_case::test_case(&["--force", "false", "build"], Some(false) ; "detached false before task")]
+fn force_preserves_optional_boolean_semantics(words: &[&str], expected: Option<bool>) {
+    for prefix in [&["turbo"][..], &["turbo", "run"][..]] {
+        let args = parse_args(prefix.iter().chain(words).copied()).unwrap();
+        let Command::Run {
+            run_args,
+            execution_args,
+        } = args.command.unwrap()
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(run_args.force.flatten(), expected);
+        assert_eq!(execution_args.tasks, ["build"]);
+    }
+}
+
 #[test]
 fn config_accepts_run_configuration_flags_before_command() {
     let args = parse_args([
