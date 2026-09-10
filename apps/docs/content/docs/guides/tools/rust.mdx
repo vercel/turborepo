@@ -152,7 +152,7 @@ The built-in `format` task also includes `rustfmt.toml`, `.rustfmt.toml`, and `R
 
 Project-specific hashing inputs must be accounted for manually. This includes:
 
-- Environment variables must read by build scripts still need to be declared in the task's [`env`](/docs/reference/configuration#env) configuration
+- Environment variables read by build scripts still need to be declared in the task's [`env`](/docs/reference/configuration#env) configuration
 - File inputs that are not included by default. Use [`inputs`](/docs/reference/configuration#inputs) to define your own file inputs and [`$TURBO_DEFAULT$`](/docs/reference/configuration#turbo_default) to preserve zero-configuration file inputs
 
 ### Output caching
