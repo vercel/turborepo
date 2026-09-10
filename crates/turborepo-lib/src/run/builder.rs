@@ -121,6 +121,13 @@ pub struct RunBuilder {
     // cache provenance. Skip the repository-wide work that only serves those consumers.
     skip_repo_index_and_scm_state: bool,
     skip_external_dependencies: bool,
+    // In watch mode, partial reruns may reuse the package graph built by the
+    // previous full run instead of rediscovering the workspace, re-reading
+    // every manifest, and re-parsing the lockfile. Only sound when the caller
+    // has proven that no graph-defining file (workspace manifests, lockfile,
+    // workspace configuration) changed since the graph was built; the watch
+    // client checks the changed-file set before sharing it.
+    shared_pkg_graph: Option<Arc<PackageGraph>>,
 }
 
 impl RunBuilder {
@@ -163,6 +170,7 @@ impl RunBuilder {
             changed_files_for_watch: None,
             skip_repo_index_and_scm_state: false,
             skip_external_dependencies: false,
+            shared_pkg_graph: None,
         })
     }
 
@@ -196,6 +204,16 @@ impl RunBuilder {
 
     pub fn with_changed_files(mut self, files: HashSet<turbopath::AnchoredSystemPathBuf>) -> Self {
         self.changed_files_for_watch = Some(files);
+        self
+    }
+
+    /// Reuse a package graph from an earlier run instead of building a fresh
+    /// one from disk. Only sound when workspace manifests, the lockfile, and
+    /// workspace configuration are unchanged; used by watch-mode partial
+    /// reruns where the watcher proves that from the changed-file set.
+    /// Ignored for `--parallel`, which mutates the graph after construction.
+    pub fn with_shared_package_graph(mut self, graph: Arc<PackageGraph>) -> Self {
+        self.shared_pkg_graph = Some(graph);
         self
     }
 
@@ -842,39 +860,55 @@ impl RunBuilder {
             self.http_client.activate();
         }
 
-        let mut pkg_dep_graph = {
-            let builder =
-                PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
-                    .with_single_package_mode(self.opts.run_opts.single_package)
-                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
-            let builder = if self.skip_external_dependencies {
-                builder.without_external_dependencies()
-            } else {
-                builder
-            };
-            let builder = graph_features.configure(builder);
+        // --parallel removes inter-package dependencies from the graph after
+        // construction, so a graph shared with other runs cannot be reused
+        // for it.
+        let shared_pkg_graph = if self.opts.run_opts.parallel {
+            None
+        } else {
+            self.shared_pkg_graph.clone()
+        };
+        let mut pkg_dep_graph = match shared_pkg_graph {
+            Some(graph) => {
+                tracing::debug!("reusing package graph from previous run");
+                graph
+            }
+            None => {
+                let builder =
+                    PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+                        .with_single_package_mode(self.opts.run_opts.single_package)
+                        .with_allow_no_package_manager(
+                            self.opts.repo_opts.allow_no_package_manager,
+                        );
+                let builder = if self.skip_external_dependencies {
+                    builder.without_external_dependencies()
+                } else {
+                    builder
+                };
+                let builder = graph_features.configure(builder);
 
-            let graph = builder
-                .build()
-                .instrument(tracing::info_span!("pkg_dep_graph_build"))
-                .await;
+                let graph = builder
+                    .build()
+                    .instrument(tracing::info_span!("pkg_dep_graph_build"))
+                    .await;
 
-            match graph {
-                Ok(graph) => graph,
-                // if we can't find the package.json, it is a bug, and we should report it.
-                // likely cause is that package discovery watching is not up to date.
-                // note: there _is_ a false positive from a race condition that can occur
-                //       from toctou if the package.json is deleted, but we'd like to know
-                Err(turborepo_repository::package_graph::Error::PackageJson(
-                    package_json::Error::Io(io),
-                )) if io.kind() == ErrorKind::NotFound => {
-                    run_telemetry.track_error(TrackedErrors::InvalidPackageDiscovery);
-                    return Err(turborepo_repository::package_graph::Error::PackageJson(
+                match graph {
+                    Ok(graph) => Arc::new(graph),
+                    // if we can't find the package.json, it is a bug, and we should report it.
+                    // likely cause is that package discovery watching is not up to date.
+                    // note: there _is_ a false positive from a race condition that can occur
+                    //       from toctou if the package.json is deleted, but we'd like to know
+                    Err(turborepo_repository::package_graph::Error::PackageJson(
                         package_json::Error::Io(io),
-                    )
-                    .into());
+                    )) if io.kind() == ErrorKind::NotFound => {
+                        run_telemetry.track_error(TrackedErrors::InvalidPackageDiscovery);
+                        return Err(turborepo_repository::package_graph::Error::PackageJson(
+                            package_json::Error::Io(io),
+                        )
+                        .into());
+                    }
+                    Err(e) => return Err(e.into()),
                 }
-                Err(e) => return Err(e.into()),
             }
         };
 
@@ -1220,7 +1254,13 @@ impl RunBuilder {
         // requiring a fresh engine build. Affected filtering runs once afterward
         // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
-            pkg_dep_graph.remove_package_dependencies();
+            // A --parallel run never reuses a shared package graph (the
+            // sharing path above opts out for parallel), so this Arc is
+            // uniquely owned here.
+            let Some(graph) = Arc::get_mut(&mut pkg_dep_graph) else {
+                unreachable!("--parallel runs never reuse a shared package graph");
+            };
+            graph.remove_package_dependencies();
             let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
                 Box::new(all_pkgs.iter())
             } else {
@@ -1480,7 +1520,7 @@ impl RunBuilder {
                 api_client,
                 env_at_execution_start,
                 filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-                pkg_dep_graph: Arc::new(pkg_dep_graph),
+                pkg_dep_graph,
                 turbo_json_loader,
                 root_turbo_json,
                 scm,

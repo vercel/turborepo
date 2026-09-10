@@ -20,7 +20,7 @@ use turborepo_filewatch::{
     cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
     package_watcher::PackageWatcher, FileSystemWatcher,
 };
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
@@ -138,6 +138,10 @@ impl OutputWatcher for InProcessOutputWatcher {
 
 pub struct WatchClient {
     run: Arc<Run>,
+    /// The package graph from the most recent full run, reused by partial
+    /// (`ChangedPackages::Some`) reruns whose changed files provably cannot
+    /// alter it. See `package_graph_invalidated`.
+    shared_pkg_graph: Option<Arc<PackageGraph>>,
     watched_packages: HashSet<PackageName>,
     active_runs: Vec<RunHandle>,
     // Stoppers from completed runs whose ProcessManagers may still track
@@ -157,6 +161,36 @@ pub struct WatchClient {
     ui_handle: Option<JoinHandle<()>>,
     experimental_write_cache: bool,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+}
+
+/// True when a changed file may have altered the package graph: a workspace
+/// manifest (`package.json`/`package.jsonc`), the package manager's lockfile,
+/// pnpm's workspace-definition file, or any toolchain watch-spec definition
+/// file. Watch-mode partial reruns reuse the cached package graph only when
+/// this is false. Everything else that defines the graph (workspace glob
+/// changes, root `turbo.json`) already triggers full rediscovery upstream of
+/// this check, and task configuration is reloaded per run, so package-level
+/// `turbo.json` changes stay correct on a shared graph.
+fn package_graph_invalidated(
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    lockfile_name: Option<&str>,
+    watch_spec: &turborepo_repository::toolchain::WatchSpec,
+) -> bool {
+    changed_files.iter().any(|path| {
+        let unix_path = path.to_unix();
+        let file_name = path.as_path().file_name().and_then(|name| name.to_str());
+        matches!(file_name, Some("package.json") | Some("package.jsonc"))
+            || Some(unix_path.as_str()) == lockfile_name
+            || file_name == Some("pnpm-workspace.yaml")
+            || watch_spec
+                .definition_paths
+                .iter()
+                .any(|definition| unix_path.as_str() == definition)
+            || watch_spec
+                .definition_file_names
+                .iter()
+                .any(|name| file_name == Some(name.as_str()))
+    })
 }
 
 struct RunHandle {
@@ -357,6 +391,7 @@ impl WatchClient {
         }
 
         let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
+        let shared_pkg_graph = Some(run.pkg_dep_graph_handle());
         let run = Arc::new(run);
 
         let watched_packages = run.get_relevant_packages();
@@ -391,6 +426,7 @@ impl WatchClient {
         Ok(Self {
             base,
             run,
+            shared_pkg_graph,
             watched_packages,
             _watching: watching,
             output_watcher,
@@ -776,6 +812,19 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
+                // Reuse the package graph from the previous full run when the
+                // changed files provably cannot alter it (no manifests,
+                // lockfile, or workspace-definition files). Task configuration
+                // is still reloaded per run, so package-level turbo.json
+                // changes take effect even on a shared graph.
+                let reusable_graph = self.shared_pkg_graph.clone().filter(|graph| {
+                    !package_graph_invalidated(
+                        &changed_files,
+                        graph.package_manager().map(|pm| pm.lockfile_name()),
+                        &graph.active_watch_spec(),
+                    )
+                });
+
                 let mut run_builder = RunBuilder::new(new_base, None)?
                     .with_output_watcher(self.output_watcher.clone())
                     .with_entrypoint_packages(packages)
@@ -783,7 +832,17 @@ impl WatchClient {
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
                 }
+                let needs_fresh_graph = reusable_graph.is_none();
+                if let Some(graph) = reusable_graph {
+                    run_builder = run_builder.with_shared_package_graph(graph);
+                }
                 let (run, _analytics) = run_builder.build(&signal_handler, telemetry).await?;
+
+                // A rerun that rebuilt the graph refreshes the shared copy so
+                // later partial reruns can reuse it again.
+                if needs_fresh_graph {
+                    self.shared_pkg_graph = Some(run.pkg_dep_graph_handle());
+                }
 
                 let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
                 if task_names.is_empty() {
@@ -828,6 +887,7 @@ impl WatchClient {
                 let (run, _analytics) = run_builder
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
+                self.shared_pkg_graph = Some(run.pkg_dep_graph_handle());
                 self.run = run.into();
 
                 self.watched_packages = self.run.get_relevant_packages();
@@ -859,9 +919,9 @@ mod test {
 
     use turbopath::AnchoredSystemPathBuf;
     use turborepo_daemon::PackageChangeEvent;
-    use turborepo_repository::package_graph::PackageName;
+    use turborepo_repository::{package_graph::PackageName, toolchain::WatchSpec};
 
-    use super::{ChangedPackages, WatchClient};
+    use super::{package_graph_invalidated, ChangedPackages, WatchClient};
 
     fn make_package_changed(name: &str) -> PackageChangeEvent {
         PackageChangeEvent::Package {
@@ -891,6 +951,94 @@ mod test {
         let cp = ChangedPackages::default();
         assert!(cp.is_empty());
         assert!(matches!(cp, ChangedPackages::Some { ref packages, .. } if packages.is_empty()));
+    }
+
+    fn files(paths: &[&str]) -> HashSet<AnchoredSystemPathBuf> {
+        paths
+            .iter()
+            .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn graph_reused_for_source_file_changes() {
+        let changed = files(&["packages/foo/src/index.ts", "packages/foo/README.md"]);
+        assert!(!package_graph_invalidated(
+            &changed,
+            Some("pnpm-lock.yaml"),
+            &WatchSpec::default()
+        ));
+    }
+
+    #[test]
+    fn graph_invalidated_by_manifest_changes() {
+        for path in [
+            "package.json",
+            "packages/foo/package.json",
+            "packages/foo/package.jsonc",
+        ] {
+            let changed = files(&[path, "packages/foo/src/index.ts"]);
+            assert!(
+                package_graph_invalidated(&changed, Some("pnpm-lock.yaml"), &WatchSpec::default()),
+                "{path} must invalidate the cached package graph"
+            );
+        }
+    }
+
+    #[test]
+    fn graph_invalidated_by_lockfile_and_workspace_definition() {
+        assert!(package_graph_invalidated(
+            &files(&["pnpm-lock.yaml"]),
+            Some("pnpm-lock.yaml"),
+            &WatchSpec::default()
+        ));
+        // A different package manager's lockfile name must not match.
+        assert!(!package_graph_invalidated(
+            &files(&["pnpm-lock.yaml"]),
+            Some("yarn.lock"),
+            &WatchSpec::default()
+        ));
+        assert!(package_graph_invalidated(
+            &files(&["pnpm-workspace.yaml"]),
+            Some("pnpm-lock.yaml"),
+            &WatchSpec::default()
+        ));
+    }
+
+    #[test]
+    fn graph_invalidated_by_toolchain_definition_files() {
+        let watch_spec = WatchSpec {
+            definition_file_names: vec!["Cargo.toml".to_string()],
+            definition_paths: vec!["Cargo.lock".to_string()],
+            ..Default::default()
+        };
+        assert!(package_graph_invalidated(
+            &files(&["crates/foo/Cargo.toml"]),
+            None,
+            &watch_spec
+        ));
+        assert!(package_graph_invalidated(
+            &files(&["Cargo.lock"]),
+            None,
+            &watch_spec
+        ));
+        assert!(!package_graph_invalidated(
+            &files(&["crates/foo/src/lib.rs"]),
+            None,
+            &watch_spec
+        ));
+    }
+
+    #[test]
+    fn graph_reused_when_turbo_json_changes() {
+        // Task configuration is reloaded on every run even with a shared
+        // package graph, so turbo.json changes do not invalidate the graph.
+        let changed = files(&["packages/foo/turbo.json"]);
+        assert!(!package_graph_invalidated(
+            &changed,
+            Some("pnpm-lock.yaml"),
+            &WatchSpec::default()
+        ));
     }
 
     #[test]
