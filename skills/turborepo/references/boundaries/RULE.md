@@ -8,6 +8,7 @@ Boundaries enforce package isolation by detecting:
 
 1. Imports of files outside the package's directory
 2. Imports of packages not declared in `package.json` dependencies
+3. Circular dependencies between packages in the workspace graph
 
 ## Usage
 
@@ -16,6 +17,19 @@ turbo boundaries
 ```
 
 Run this to check for workspace violations across your monorepo.
+
+## Circular package dependencies
+
+Boundaries reports packages that cyclically depend on each other through their
+`package.json` dependency declarations. The diagnostic includes the dependency
+path and repeats the first package at the end to show where the cycle closes:
+
+```text
+Circular package dependency detected: @repo/pkg-a -> @repo/pkg-b -> @repo/pkg-c -> @repo/pkg-a
+```
+
+Remove one of the dependencies in the reported path to make the package graph
+acyclic.
 
 ## Tags
 
