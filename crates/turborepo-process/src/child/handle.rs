@@ -25,7 +25,7 @@ pub(super) struct ChildHandle {
     #[cfg(unix)]
     pty_controller_fd: Option<libc::c_int>,
     #[cfg(unix)]
-    graceful_descendant_pids: Vec<libc::pid_t>,
+    graceful_descendants: Vec<GracefulDescendant>,
     #[cfg(windows)]
     _job: Option<crate::job_object::JobObject>,
     #[cfg(windows)]
@@ -102,6 +102,90 @@ impl ShutdownSemantics {
     }
 }
 
+/// Per-descendant bookkeeping captured immediately before the initial graceful
+/// interrupt.
+///
+/// We remember which captured descendants the initial interrupt already
+/// targeted (directly or through their process group) so the
+/// remaining-descendant fallback does not deliver a duplicate signal to them
+/// while still draining every captured survivor.
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GracefulDescendant {
+    pub(super) pid: libc::pid_t,
+    /// The descendant's process group at capture time, when resolvable. `None`
+    /// leaves the descendant eligible for the direct fallback.
+    pub(super) process_group_id: Option<libc::pid_t>,
+    /// Whether a successful initial signal request targeted this descendant.
+    /// This does not imply its signal handler has run.
+    pub(super) initially_signaled: bool,
+}
+
+#[cfg(unix)]
+impl GracefulDescendant {
+    fn captured(pid: libc::pid_t) -> Self {
+        let process_group_id = unsafe { libc::getpgid(pid) };
+        Self {
+            pid,
+            process_group_id: (process_group_id != -1).then_some(process_group_id),
+            initially_signaled: false,
+        }
+    }
+
+    fn mark_initially_signaled(&mut self) {
+        self.initially_signaled = true;
+    }
+
+    /// Record a direct PID delivery. The flag is only set when the kill
+    /// syscall was accepted, so a failed delivery stays eligible for the
+    /// fallback.
+    pub(super) fn record_direct_delivery(&mut self, delivered: bool) {
+        if delivered {
+            self.mark_initially_signaled();
+        }
+    }
+}
+
+#[cfg(unix)]
+fn capture_descendants(root_pid: libc::pid_t) -> Vec<GracefulDescendant> {
+    descendant_pids(root_pid)
+        .into_iter()
+        .map(GracefulDescendant::captured)
+        .collect()
+}
+
+/// Mark the captured descendants that belong to the process group that just
+/// accepted the initial signal.
+///
+/// This must only run after the group kill syscall succeeds and only against
+/// the membership snapshot taken before delivery, so a failed delivery leaves
+/// every descendant eligible for the fallback.
+#[cfg(unix)]
+pub(super) fn mark_group_targets(
+    descendants: &mut [GracefulDescendant],
+    delivered_process_group_id: libc::pid_t,
+) {
+    for descendant in descendants {
+        if descendant.process_group_id == Some(delivered_process_group_id) {
+            descendant.mark_initially_signaled();
+        }
+    }
+}
+
+/// Surviving captured descendants that the initial interrupt did not target,
+/// and which the fallback should therefore signal directly.
+#[cfg(unix)]
+pub(super) fn descendants_needing_fallback(
+    descendants: &[GracefulDescendant],
+    mut is_alive: impl FnMut(libc::pid_t) -> bool,
+) -> Vec<libc::pid_t> {
+    descendants
+        .iter()
+        .filter(|descendant| !descendant.initially_signaled && is_alive(descendant.pid))
+        .map(|descendant| descendant.pid)
+        .collect()
+}
+
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy)]
 pub(super) struct TargetIdentity {
@@ -147,8 +231,8 @@ pub(super) fn process_group_matches_identity(
 }
 
 #[cfg(unix)]
-pub(super) fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) {
-    let _ = unsafe { libc::kill(-process_group_id, signal) };
+pub(super) fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) -> bool {
+    unsafe { libc::kill(-process_group_id, signal) == 0 }
 }
 
 #[cfg(windows)]
@@ -351,7 +435,7 @@ impl ChildHandle {
                 #[cfg(unix)]
                 pty_controller_fd: None,
                 #[cfg(unix)]
-                graceful_descendant_pids: Vec::new(),
+                graceful_descendants: Vec::new(),
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
@@ -504,7 +588,7 @@ impl ChildHandle {
                 #[cfg(unix)]
                 pty_controller_fd,
                 #[cfg(unix)]
-                graceful_descendant_pids: Vec::new(),
+                graceful_descendants: Vec::new(),
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
@@ -531,12 +615,6 @@ impl ChildHandle {
     }
 
     #[cfg(unix)]
-    fn graceful_process_group_id(&self) -> Option<libc::pid_t> {
-        self.foreground_process_group_id()
-            .or_else(|| self.process_group_id())
-    }
-
-    #[cfg(unix)]
     fn foreground_process_group_id(&self) -> Option<libc::pid_t> {
         self.pty_controller_fd
             .and_then(|fd| match unsafe { libc::tcgetpgrp(fd) } {
@@ -545,22 +623,43 @@ impl ChildHandle {
             })
     }
 
+    /// Deliver the initial graceful signal to a resolved process group.
+    ///
+    /// Descendant membership was snapshotted before this call. Descendants are
+    /// marked as already targeted only after the kernel accepts the group
+    /// signal; a failed delivery leaves them unmarked so the
+    /// remaining-descendant fallback can retry them directly.
     #[cfg(unix)]
-    fn send_signal_to_process_group(&self, pid: libc::pid_t, signal: libc::c_int) {
-        let Some(process_group_id) = self.graceful_process_group_id() else {
-            debug!("missing process group id for child {pid}");
+    fn signal_initial_process_group(
+        &mut self,
+        process_group_id: Option<libc::pid_t>,
+        signal: libc::c_int,
+    ) {
+        let Some(process_group_id) = process_group_id else {
+            debug!("missing process group id for graceful interrupt");
             return;
         };
 
         debug!("sending signal {signal} to process group -{process_group_id}");
-        signal_process_group(process_group_id, signal);
+        if !signal_process_group(process_group_id, signal) {
+            debug!("failed to send signal {signal} to process group -{process_group_id}");
+            return;
+        }
+
+        mark_group_targets(&mut self.graceful_descendants, process_group_id);
     }
 
     #[cfg(unix)]
     pub(super) fn send_graceful_interrupt(&mut self, pid: libc::pid_t) {
         let child_process_group_id = self.process_group_id();
         let foreground_process_group_id = self.foreground_process_group_id();
-        self.graceful_descendant_pids = descendant_pids(pid);
+        let graceful_process_group_id = foreground_process_group_id.or(child_process_group_id);
+        self.graceful_descendants = capture_descendants(pid);
+        let captured_pids = self
+            .graceful_descendants
+            .iter()
+            .map(|descendant| descendant.pid)
+            .collect::<Vec<_>>();
 
         debug!(
             "graceful interrupt target={:?}, child pid={pid}, child pgid={:?}, pty foreground \
@@ -568,26 +667,27 @@ impl ChildHandle {
             self.shutdown_semantics.graceful_interrupt_target,
             child_process_group_id,
             foreground_process_group_id,
-            self.graceful_descendant_pids
+            captured_pids
         );
 
         match self.shutdown_semantics.graceful_interrupt_target {
             GracefulInterruptTarget::DirectChild => {
-                if self.graceful_descendant_pids.len() > 1 {
+                if self.graceful_descendants.len() > 1 {
                     debug!(
                         "sending SIGINT to process group because PTY child has nested descendants"
                     );
-                    self.send_signal_to_process_group(pid, libc::SIGINT);
+                    self.signal_initial_process_group(graceful_process_group_id, libc::SIGINT);
                     return;
                 }
 
-                if !self.graceful_descendant_pids.is_empty() {
-                    debug!(
-                        "sending SIGINT to descendant processes {:?}",
-                        self.graceful_descendant_pids
-                    );
-                    for descendant_pid in &self.graceful_descendant_pids {
-                        let _ = unsafe { libc::kill(*descendant_pid, libc::SIGINT) };
+                if !self.graceful_descendants.is_empty() {
+                    debug!("sending SIGINT to descendant processes {:?}", captured_pids);
+                    for descendant in &mut self.graceful_descendants {
+                        let delivered = unsafe { libc::kill(descendant.pid, libc::SIGINT) } == 0;
+                        descendant.record_direct_delivery(delivered);
+                        if !delivered {
+                            debug!("failed to send SIGINT to descendant {}", descendant.pid);
+                        }
                     }
                     return;
                 }
@@ -609,7 +709,7 @@ impl ChildHandle {
                 }
             }
             GracefulInterruptTarget::ProcessGroup => {
-                self.send_signal_to_process_group(pid, libc::SIGINT);
+                self.signal_initial_process_group(graceful_process_group_id, libc::SIGINT);
             }
         }
     }
@@ -623,46 +723,39 @@ impl ChildHandle {
             return false;
         }
 
-        let remaining_descendants = self
-            .graceful_descendant_pids
-            .iter()
-            .copied()
-            .filter(|pid| is_pid_alive(*pid))
-            .collect::<Vec<_>>();
+        let remaining_descendants =
+            descendants_needing_fallback(&self.graceful_descendants, is_pid_alive);
 
-        if remaining_descendants.is_empty() {
-            return false;
+        if !remaining_descendants.is_empty() {
+            debug!(
+                "sending SIGINT to remaining descendant processes {:?}",
+                remaining_descendants
+            );
+            for pid in remaining_descendants {
+                let _ = unsafe { libc::kill(pid, libc::SIGINT) };
+            }
         }
 
-        debug!(
-            "sending SIGINT to remaining descendant processes {:?}",
-            remaining_descendants
-        );
-        for pid in remaining_descendants {
-            let _ = unsafe { libc::kill(pid, libc::SIGINT) };
-        }
-
-        true
+        // Descendants the initial interrupt already reached may still be
+        // running cleanup, so the caller must drain every captured survivor
+        // even when no fallback signal was necessary.
+        self.has_running_descendants()
     }
 
     #[cfg(unix)]
     fn has_running_descendants(&self) -> bool {
-        self.graceful_descendant_pids
+        self.graceful_descendants
             .iter()
-            .copied()
-            .any(is_pid_alive)
+            .any(|descendant| is_pid_alive(descendant.pid))
     }
 
     #[cfg(unix)]
     fn kill_remaining_descendants(&self) {
-        for pid in self
-            .graceful_descendant_pids
-            .iter()
-            .copied()
-            .filter(|pid| is_pid_alive(*pid))
-        {
-            debug!("killing remaining descendant process {pid}");
-            let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+        for descendant in &self.graceful_descendants {
+            if is_pid_alive(descendant.pid) {
+                debug!("killing remaining descendant process {}", descendant.pid);
+                let _ = unsafe { libc::kill(descendant.pid, libc::SIGKILL) };
+            }
         }
     }
 
