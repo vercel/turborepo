@@ -1780,7 +1780,25 @@ impl RunBuilder {
         if exclusions.is_empty() {
             return engine;
         }
-        engine.remove_tasks(&exclusions)
+        // Native-task preferences select entrypoints, not the dependency closure.
+        // Keep excluded entrypoints when a retained task depends on them or schedules
+        // them with `with`. Dependencies may themselves have `with` siblings, so
+        // alternate both closures until no new tasks are added.
+        let mut retained_tasks: HashSet<TaskId<'static>> = engine
+            .task_ids()
+            .filter(|task_id| !exclusions.contains(*task_id))
+            .cloned()
+            .collect();
+        loop {
+            let previous_len = retained_tasks.len();
+            retained_tasks = super::task_filter::expand_with_siblings(&engine, retained_tasks);
+            let dependencies = engine.collect_task_dependencies(&retained_tasks);
+            retained_tasks.extend(dependencies);
+            if retained_tasks.len() == previous_len {
+                break;
+            }
+        }
+        engine.retain_filtered_tasks(&retained_tasks)
     }
 
     #[tracing::instrument(skip_all)]

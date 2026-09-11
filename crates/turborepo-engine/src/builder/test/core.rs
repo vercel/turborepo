@@ -1,4 +1,72 @@
+use test_case::test_case;
+
 use super::*;
+
+#[test_case("dependsOn", "^build", false; "topological dependency")]
+#[test_case("dependsOn", "a#build", false; "explicit dependency")]
+#[test_case("with", "a#build", false; "with task")]
+#[test_case("dependsOn", "^build", true; "topological dependency with only")]
+#[test_case("dependsOn", "a#build", true; "explicit dependency with only")]
+fn test_entrypoint_exclusions_preserve_referenced_tasks(
+    field: &str,
+    reference: &str,
+    tasks_only: bool,
+) {
+    let repo_root_dir = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_dir.path()).unwrap();
+    let package_graph = mock_package_graph(
+        &repo_root,
+        package_jsons! {
+            repo_root,
+            "a" => [],
+            "b" => ["a"],
+            "unrelated" => []
+        },
+    );
+    let loader = TestTurboJsonLoader::new(HashMap::from([(
+        PackageName::Root,
+        turbo_json(json!({
+            "tasks": {
+                "build": {},
+                "b#build": { (field): [reference] }
+            }
+        })),
+    )]));
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_workspaces(vec![
+            PackageName::from("a"),
+            PackageName::from("b"),
+            PackageName::from("unrelated"),
+        ])
+        .with_tasks([Spanned::new(TaskName::from("build"))])
+        .with_tasks_only(tasks_only)
+        .with_entrypoint_exclusions(HashSet::from([
+            TaskId::new("a", "build"),
+            TaskId::new("unrelated", "build"),
+        ]))
+        .build()
+        .unwrap();
+
+    // Exclusions choose entrypoints, not which referenced tasks may be visited.
+    assert!(engine.task_definition(&TaskId::new("a", "build")).is_some());
+    assert!(
+        engine
+            .task_definition(&TaskId::new("unrelated", "build"))
+            .is_none()
+    );
+    let expected = if field == "dependsOn" {
+        deps! {
+            "b#build" => ["a#build"],
+            "a#build" => ["___ROOT___"]
+        }
+    } else {
+        deps! {
+            "b#build" => ["___ROOT___"],
+            "a#build" => ["___ROOT___"]
+        }
+    };
+    assert_eq!(all_dependencies(&engine), expected);
+}
 
 #[test]
 fn test_default_engine() {

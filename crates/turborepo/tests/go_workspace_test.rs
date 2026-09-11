@@ -156,8 +156,10 @@ fn assert_go_build_cache_result(
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    // Library dependencies run uncached; check the executable's cache status.
+    let expected = format!("example.com/api:build: {expected}");
     assert!(
-        combined.contains(expected),
+        combined.contains(&expected),
         "{context} must report {expected:?}\noutput:\n{combined}"
     );
 }
@@ -531,6 +533,59 @@ fn package_task_names(dir: &Path, package: &str) -> Vec<String> {
 }
 
 #[test]
+fn test_go_build_dependencies_and_hash_do_not_depend_on_entrypoint() {
+    assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(false);
+}
+
+#[test]
+fn test_go_build_dependencies_and_hash_with_task_filtering() {
+    assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(true);
+}
+
+fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_using_tasks: bool) {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    for module in ["apps/api", "packages/lib"] {
+        assert!(!root.join(module).join("package.json").exists());
+    }
+    let config_path = root.join("turbo.json");
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["futureFlags"]["filterUsingTasks"] = serde_json::json!(filter_using_tasks);
+    config["tasks"]["typecheck"] = serde_json::json!({ "dependsOn": ["^build"] });
+    fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+
+    let indirect = run_turbo(root, &["run", "typecheck", "--dry-run=json"]);
+    let indirect_api = dry_run_task(&indirect, "example.com/api#build");
+    let expected_dependencies = serde_json::json!(["example.com/lib#build"]);
+    assert_eq!(indirect_api["dependencies"], expected_dependencies);
+
+    for args in [
+        vec!["run", "build", "--dry-run=json"],
+        vec!["run", "build", "--only", "--dry-run=json"],
+        vec!["run", "build", "typecheck", "--dry-run=json"],
+        vec!["run", "example.com/api#build", "--dry-run=json"],
+        vec!["run", "build", "--filter=example.com/api", "--dry-run=json"],
+    ] {
+        let direct = run_turbo(root, &args);
+        let direct_api = dry_run_task(&direct, "example.com/api#build");
+        assert_eq!(
+            direct_api["dependencies"], expected_dependencies,
+            "{args:?}"
+        );
+        assert_eq!(
+            direct_api["resolvedTaskDefinition"], indirect_api["resolvedTaskDefinition"],
+            "{args:?}"
+        );
+        assert_eq!(direct_api["hash"], indirect_api["hash"], "{args:?}");
+    }
+}
+
+#[test]
 fn test_pure_go_workspace_lists_modules() {
     if !go_available() {
         return;
@@ -599,7 +654,8 @@ fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     assert_command_success(&output, "warm mixed JavaScript and Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("js-pkg:build: cache hit")
+            && stdout.contains("example.com/api:build: cache hit"),
         "equivalent mixed tasks must hit cache:\n{stdout}"
     );
 }
@@ -1039,14 +1095,14 @@ fn test_go_cache_invalidates_every_north_star_input() {
     let root = tempdir.path();
 
     assert_go_build_cache_result(root, &[], "cache miss", "cold Go build");
-    assert_go_build_cache_result(root, &[], "FULL TURBO", "unchanged Go build");
+    assert_go_build_cache_result(root, &[], "cache hit", "unchanged Go build");
 
     fs::write(
         root.join("tools/independent/independent.go"),
         "package independent\n\nconst Value = \"still-independent\"\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "FULL TURBO", "unrelated module source change");
+    assert_go_build_cache_result(root, &[], "cache hit", "unrelated module source change");
 
     fs::write(
         root.join("apps/api/main.go"),
@@ -1451,7 +1507,7 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
     assert_command_success(&output, "warm filtered Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("example.com/api:build: cache hit"),
         "second build must hit cache: {stdout}"
     );
 
@@ -1460,7 +1516,7 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
     assert_command_success(&output, "restored filtered Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("example.com/api:build: cache hit"),
         "restoration must come from cache: {stdout}"
     );
     assert!(binary.exists(), "cache hit must restore the binary");
