@@ -5,6 +5,7 @@ use miette::Diagnostic;
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned};
+use turborepo_lockfiles::BerryResolutionMap;
 
 pub use crate::relationships::DependencyKind;
 
@@ -30,7 +31,7 @@ pub struct PackageJson {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolutions: Option<BTreeMap<String, String>>,
+    pub resolutions: Option<BerryResolutionMap>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]

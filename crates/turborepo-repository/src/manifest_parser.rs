@@ -599,7 +599,7 @@ mod test {
         );
         assert_eq!(
             pkg.resolutions,
-            Some(BTreeMap::from([("f".into(), "5.0.0".into())]))
+            Some([("f".into(), "5.0.0".into())].into_iter().collect())
         );
 
         let build = pkg.scripts.get("build").expect("build script");

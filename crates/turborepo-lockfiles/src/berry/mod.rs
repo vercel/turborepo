@@ -16,7 +16,11 @@ use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
 use rustc_hash::FxHashMap;
 use semver::Version;
-use serde::Deserialize;
+use serde::{
+    Deserialize, Serialize,
+    de::{MapAccess, Visitor},
+    ser::SerializeMap,
+};
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -63,7 +67,86 @@ type CatalogMap = Map<String, Map<String, String>>;
 // by the unscoped name of the dependency they target.
 type OverridesByName = FxHashMap<String, Vec<(Resolution, String)>>;
 type PackageExtensionMap = Map<String, Map<String, String>>;
-type ManifestParts = (Map<Resolution, String>, CatalogMap, PackageExtensionMap);
+type ManifestParts = (Vec<(Resolution, String)>, CatalogMap, PackageExtensionMap);
+
+/// A root manifest's Berry resolution entries in declaration order.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BerryResolutionMap(Vec<(String, String)>);
+
+impl BerryResolutionMap {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+
+    pub fn retain(&mut self, mut predicate: impl FnMut(&String, &String) -> bool) {
+        self.0.retain(|(key, value)| predicate(key, value));
+    }
+}
+
+impl FromIterator<(String, String)> for BerryResolutionMap {
+    fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl IntoIterator for BerryResolutionMap {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a BerryResolutionMap {
+    type Item = &'a (String, String);
+    type IntoIter = std::slice::Iter<'a, (String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl Serialize for BerryResolutionMap {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (key, value) in &self.0 {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for BerryResolutionMap {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ResolutionMapVisitor;
+
+        impl<'de> Visitor<'de> for ResolutionMapVisitor {
+            type Value = BerryResolutionMap;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a map of Berry resolution selectors to references")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut entries = Vec::with_capacity(map.size_hint().unwrap_or(0));
+                while let Some((key, value)) = map.next_entry::<String, String>()? {
+                    if let Some((_, existing)) = entries
+                        .iter_mut()
+                        .find(|(existing_key, _)| existing_key == &key)
+                    {
+                        *existing = value;
+                    } else {
+                        entries.push((key, value));
+                    }
+                }
+                Ok(BerryResolutionMap(entries))
+            }
+        }
+
+        deserializer.deserialize_map(ResolutionMapVisitor)
+    }
+}
 
 #[derive(Debug)]
 pub struct BerryLockfile {
@@ -84,9 +167,9 @@ pub struct BerryLockfile {
     // parsing (`populate_extensions`) and again during transitive closure
     // calculation, so scanning every override per edge is
     // O(edges x overrides). Grouping by target name turns that scan into a
-    // single hash lookup per edge. Each bucket preserves the ordered
-    // `Map<Resolution, String>` iteration order so the first matching
-    // override still wins, and overrides targeting other names can never
+    // single hash lookup per edge. Each bucket preserves root manifest
+    // declaration order so the first matching override wins, and overrides
+    // targeting other names can never
     // match. `Arc` makes the per-`subgraph` clone a refcount bump.
     overrides: Arc<OverridesByName>,
     // Map from workspace paths to package locators
@@ -135,7 +218,7 @@ struct DependencyMeta {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BerryManifest {
-    resolutions: Option<Map<String, String>>,
+    resolutions: Option<BerryResolutionMap>,
     // Yarn 4+ catalog support - default catalog
     catalog: Option<Map<String, String>>,
     // Yarn 4+ catalog support - named catalogs
@@ -198,7 +281,7 @@ impl BerryLockfile {
         let (overrides, catalogs, package_extensions) = if let Some(manifest) = manifest {
             manifest.into_parts()?
         } else {
-            (Map::new(), Map::new(), Map::new())
+            (Vec::new(), Map::new(), Map::new())
         };
 
         let mut this = Self {
@@ -637,9 +720,9 @@ impl BerryLockfile {
 }
 
 /// Groups overrides by the unscoped name of the dependency they target,
-/// preserving the ordered map's iteration order within each bucket so the
-/// first matching override still wins.
-fn group_overrides_by_name(overrides: Map<Resolution, String>) -> OverridesByName {
+/// preserving root manifest declaration order within each bucket so the first
+/// matching override wins.
+fn group_overrides_by_name(overrides: Vec<(Resolution, String)>) -> OverridesByName {
     let mut by_name = OverridesByName::default();
     for (resolution, reference) in overrides {
         by_name
@@ -846,7 +929,7 @@ impl BerryManifest {
                         let res = parse_resolution(&resolution)?;
                         Ok((res, reference))
                     })
-                    .collect::<Result<Map<_, _>, Error>>()
+                    .collect::<Result<Vec<_>, Error>>()
             })
             .transpose()?
             .unwrap_or_default();
@@ -992,6 +1075,72 @@ mod test {
         assert!(
             encoded.contains("buffer@npm:buffer@6.0.3"),
             "pruned lockfile should contain the npm alias entry"
+        );
+    }
+
+    #[test]
+    fn test_resolution_declaration_order_is_preserved() {
+        // Regression test for https://github.com/vercel/turborepo/issues/14040
+        let yaml = r#"__metadata:
+  version: 8
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  dependencies:
+    child: "npm:^1.0.0"
+  languageName: unknown
+  linkType: soft
+
+"child@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "child@npm:1.0.0"
+  languageName: node
+  linkType: hard
+
+"child@npm:1.0.0":
+  version: 1.0.0
+  resolution: "child@npm:1.0.0"
+  languageName: node
+  linkType: hard
+
+"child@npm:2.0.0":
+  version: 2.0.0
+  resolution: "child@npm:2.0.0"
+  languageName: node
+  linkType: hard
+"#;
+
+        let assert_resolution = |manifest_json: &str, expected: &str| {
+            let manifest: BerryManifest = serde_json::from_str(manifest_json).unwrap();
+            let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+            let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+            let resolved = lockfile
+                .resolve_package(".", "child", "npm:^1.0.0")
+                .unwrap()
+                .unwrap();
+            assert_eq!(resolved.key, format!("child@npm:{expected}"));
+
+            let dependencies = lockfile
+                .all_dependencies("root@workspace:.")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                dependencies.get("child").unwrap(),
+                &format!("npm:{expected}")
+            );
+        };
+
+        // issue #14040 declares the parent-specific selector first
+        assert_resolution(
+            r#"{"resolutions":{"root/child":"2.0.0","child":"1.0.0"}}"#,
+            "2.0.0",
+        );
+        // Reversing declaration order makes the generic selector win.
+        assert_resolution(
+            r#"{"resolutions":{"child":"1.0.0","root/child":"2.0.0"}}"#,
+            "1.0.0",
         );
     }
 
