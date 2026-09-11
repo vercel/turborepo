@@ -28,8 +28,9 @@ path and repeats the first package at the end to show where the cycle closes:
 Circular package dependency detected: @repo/pkg-a -> @repo/pkg-b -> @repo/pkg-c -> @repo/pkg-a
 ```
 
-Remove one of the dependencies in the reported path to make the package graph
-acyclic.
+The cycle check applies to the complete workspace package graph, independently
+of tag rules. Remove one of the dependencies in the reported path to make the
+package graph acyclic.
 
 ## Tags
 
