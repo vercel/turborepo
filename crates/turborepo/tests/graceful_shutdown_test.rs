@@ -17,7 +17,7 @@ mod unix {
 
     use nix::{
         sys::signal::{self, Signal},
-        unistd::Pid,
+        unistd::{Pid, getpgid},
     };
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use serde_json::{Value, json};
@@ -28,6 +28,10 @@ mod unix {
     const START_TIMEOUT: Duration = Duration::from_secs(15);
     const EXIT_TIMEOUT: Duration = Duration::from_secs(20);
     const MAX_PTY_OUTPUT_BYTES: usize = 256 * 1024;
+    /// Upper bound on how long a fixture process may run before it kills its
+    /// own process group. This is a hang backstop, not a pass condition: the
+    /// graceful tests still finish only after the release file is written.
+    const FIXTURE_WATCHDOG_SECS: u64 = 60;
 
     struct ChildGuard {
         child: Option<Child>,
@@ -102,6 +106,78 @@ mod unix {
                 .expect("child guard consumed")
                 .wait_with_output()
                 .expect("failed waiting for child output")
+        }
+
+        /// Assert turbo is still running. Used to prove the CLI waits for
+        /// in-flight task cleanup instead of exiting as soon as it forwards a
+        /// shutdown request.
+        fn assert_still_running(&mut self) {
+            let status = self
+                .child_mut()
+                .try_wait()
+                .expect("failed waiting for child exit");
+            assert!(
+                status.is_none(),
+                "turbo exited while task cleanup was still blocked: {status:?}"
+            );
+        }
+    }
+
+    /// Writes a blocked task's `release` file on drop so a failed assertion
+    /// cannot leave the task tree waiting forever.
+    struct ReleaseGuard {
+        path: PathBuf,
+    }
+
+    impl ReleaseGuard {
+        fn new(test_dir: &Path) -> Self {
+            Self {
+                path: test_dir.join("apps/app-a/release"),
+            }
+        }
+    }
+
+    impl Drop for ReleaseGuard {
+        fn drop(&mut self) {
+            let _ = fs::write(&self.path, b"");
+        }
+    }
+
+    /// Kills the task's own process group if the test fails before the run
+    /// reaches its normal teardown. Turborepo gives each task its own group, so
+    /// one group kill terminates the task and any looping descendants that
+    /// would otherwise keep turbo's inherited output pipes open on the panic
+    /// path. The kill only terminates those processes; it does not reap them.
+    /// The resolved group is checked against our own so a misresolved pgid can
+    /// never signal the test runner.
+    struct TaskTreeGuard {
+        pgid: Option<i32>,
+    }
+
+    impl TaskTreeGuard {
+        /// Resolve the task child's process group after its PID is readable.
+        /// A missing, non-positive, or own-group pgid is discarded.
+        fn new(task_pid: i32) -> Self {
+            let own_group = getpgid(None).map(Pid::as_raw).unwrap_or(0);
+            let pgid = getpgid(Some(Pid::from_raw(task_pid)))
+                .ok()
+                .map(Pid::as_raw)
+                .filter(|pgid| *pgid > 0 && *pgid != own_group);
+            Self { pgid }
+        }
+
+        /// Stop the panic-path kill once the task tree has drained, so a
+        /// recycled process group is never signaled after normal teardown.
+        fn disarm(&mut self) {
+            self.pgid = None;
+        }
+    }
+
+    impl Drop for TaskTreeGuard {
+        fn drop(&mut self) {
+            if let Some(pgid) = self.pgid.take() {
+                let _ = signal::kill(Pid::from_raw(-pgid), Signal::SIGKILL);
+            }
         }
     }
 
@@ -283,6 +359,48 @@ mod unix {
         .expect("failed to update turbo.json");
 
         (tempdir, test_dir)
+    }
+
+    /// A task that only finishes its SIGINT cleanup once the test writes a
+    /// `release` file. The task owns its background descendant: on shutdown it
+    /// waits for the external `release`, signals the private
+    /// `descendant.release`, and reaps the child before reporting cleanup done.
+    /// The descendant ignores INT and TERM and only exits when released, so
+    /// cleanup is coordinated by the parent rather than by inherited signals.
+    /// Every loop carries a watchdog deadline and the parent advertises
+    /// readiness only after the descendant has published `descendant.ready`.
+    fn blocked_cleanup_script(label: &str) -> String {
+        format!(
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "{label} cleanup start\n"; : > cleanup.started; deadline=$((SECONDS + {watchdog})); while [ ! -f release ]; do if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi; sleep 0.1; done; : > descendant.release; wait "$child"; printf "{label} cleanup done\n"; exit 0' INT
+(
+  trap '' INT TERM
+  : > descendant.ready
+  deadline=$((SECONDS + {watchdog}))
+  while [ ! -f descendant.release ]; do
+    if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+    sleep 0.2 || true
+  done
+) &
+child=$!
+printf '%s\n' "$child" > child.pid
+deadline=$((SECONDS + {watchdog}))
+while [ ! -f descendant.ready ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+  sleep 0.05 || true
+done
+printf "{label} ready child=%s\n" "$child"
+: > ready
+deadline=$((SECONDS + {watchdog}))
+while true; do
+  if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+  sleep 0.2 || true
+done
+"#,
+            label = label,
+            watchdog = FIXTURE_WATCHDOG_SECS,
+        )
     }
 
     fn turbo_bin() -> PathBuf {
@@ -937,5 +1055,204 @@ while true; do sleep 0.2 || true; done
                 .contains("Graceful shutdown timed out. Force killed Turborepo tasks: app-a#dev"),
             "expected auto-force banner after timeout\n{combined}"
         );
+    }
+
+    #[test]
+    fn native_turbo_sigterm_waits_for_graceful_task_cleanup() {
+        let (_tempdir, test_dir) =
+            setup_shutdown_fixture("sigterm-graceful.sh", &blocked_cleanup_script("sigterm"));
+        let app_dir = test_dir.join("apps/app-a");
+        let ready_file = app_dir.join("ready");
+        let cleanup_started_file = app_dir.join("cleanup.started");
+        let child_pid_file = app_dir.join("child.pid");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        let release = ReleaseGuard::new(&test_dir);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
+        let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
+        let mut task_guard = TaskTreeGuard::new(task_child_pid);
+
+        // SIGTERM goes to the native turbo PID. The supervisor turns this into
+        // a graceful SIGINT request to the task; this test asserts boundary
+        // behavior, not byte-for-byte forwarding of the incoming signal.
+        send_signal(child.child_mut().id() as i32, Signal::SIGTERM);
+
+        // Reaching the task trap means turbo accepted the signal and asked the
+        // task to shut down.
+        child.wait_for_startup_marker(&cleanup_started_file, START_TIMEOUT);
+        child.assert_still_running();
+
+        drop(release);
+
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            output.status.success(),
+            "graceful shutdown on SIGTERM should exit 0\n{combined}"
+        );
+        let cleanup_start = combined
+            .find("sigterm cleanup start")
+            .expect("expected task cleanup to start after SIGTERM");
+        let cleanup_done = combined
+            .find("sigterm cleanup done")
+            .expect("expected task cleanup to finish before turbo exits");
+        assert!(
+            cleanup_start < cleanup_done,
+            "cleanup completion should be emitted before turbo exits\n{combined}"
+        );
+        assert!(
+            !combined.contains("Force killed Turborepo tasks")
+                && !combined.contains("Graceful shutdown timed out")
+                && !combined.contains("Press CTRL+C again to exit forcefully."),
+            "graceful SIGTERM shutdown should not emit force-shutdown UX\n{combined}"
+        );
+
+        wait_for_process_gone(task_child_pid, Duration::from_secs(5));
+        task_guard.disarm();
+    }
+
+    /// SIGHUP reaches turbo as a process-directed signal while its output pipes
+    /// stay open. This does not model a terminal physically disappearing: the
+    /// supervisor's stdout/stderr are redirected pipes, and a disappearing
+    /// terminal would not close them. It only exercises the supervisor's hangup
+    /// listener.
+    #[test]
+    fn native_turbo_sighup_waits_for_graceful_task_cleanup() {
+        let (_tempdir, test_dir) =
+            setup_shutdown_fixture("sighup-graceful.sh", &blocked_cleanup_script("sighup"));
+        let app_dir = test_dir.join("apps/app-a");
+        let ready_file = app_dir.join("ready");
+        let cleanup_started_file = app_dir.join("cleanup.started");
+        let child_pid_file = app_dir.join("child.pid");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        let release = ReleaseGuard::new(&test_dir);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
+        let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
+        let mut task_guard = TaskTreeGuard::new(task_child_pid);
+
+        send_signal(child.child_mut().id() as i32, Signal::SIGHUP);
+
+        child.wait_for_startup_marker(&cleanup_started_file, START_TIMEOUT);
+        child.assert_still_running();
+
+        drop(release);
+
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            output.status.success(),
+            "graceful shutdown on SIGHUP should exit 0\n{combined}"
+        );
+        let cleanup_start = combined
+            .find("sighup cleanup start")
+            .expect("expected task cleanup to start after SIGHUP");
+        let cleanup_done = combined
+            .find("sighup cleanup done")
+            .expect("expected task cleanup to finish before turbo exits");
+        assert!(
+            cleanup_start < cleanup_done,
+            "cleanup completion should be emitted before turbo exits\n{combined}"
+        );
+        assert!(
+            !combined.contains("Force killed Turborepo tasks")
+                && !combined.contains("Graceful shutdown timed out")
+                && !combined.contains("Press CTRL+C again to exit forcefully."),
+            "graceful SIGHUP shutdown should not emit force-shutdown UX\n{combined}"
+        );
+
+        wait_for_process_gone(task_child_pid, Duration::from_secs(5));
+        task_guard.disarm();
+    }
+
+    #[test]
+    fn native_turbo_second_sigint_after_acknowledged_shutdown_force_kills_stubborn_task() {
+        let stubborn_script = format!(
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "second sigint shutdown requested\n"; : > cleanup.started' INT
+(
+  trap '' INT TERM
+  : > descendant.ready
+  deadline=$((SECONDS + {watchdog}))
+  while true; do
+    if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+    sleep 0.2 || true
+  done
+) &
+child=$!
+printf '%s\n' "$child" > child.pid
+deadline=$((SECONDS + {watchdog}))
+while [ ! -f descendant.ready ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+  sleep 0.05 || true
+done
+printf "second sigint ready child=%s\n" "$child"
+: > ready
+deadline=$((SECONDS + {watchdog}))
+while true; do
+  if [ "$SECONDS" -ge "$deadline" ]; then kill -KILL 0; fi
+  sleep 0.2 || true
+done
+"#,
+            watchdog = FIXTURE_WATCHDOG_SECS,
+        );
+        let (_tempdir, test_dir) = setup_shutdown_fixture("second-sigint.sh", &stubborn_script);
+        let app_dir = test_dir.join("apps/app-a");
+        let ready_file = app_dir.join("ready");
+        let cleanup_started_file = app_dir.join("cleanup.started");
+        let child_pid_file = app_dir.join("child.pid");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        child.wait_for_startup_marker(&ready_file, START_TIMEOUT);
+        let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
+        let mut task_guard = TaskTreeGuard::new(task_child_pid);
+
+        let turbo_pid = child.child_mut().id() as i32;
+        send_signal(turbo_pid, Signal::SIGINT);
+
+        // The stubborn task acknowledges the graceful request but never exits,
+        // so turbo must still be waiting before a second signal arrives. Two OS
+        // signals here are two real signals, not assumed to be two key presses.
+        child.wait_for_startup_marker(&cleanup_started_file, START_TIMEOUT);
+        child.assert_still_running();
+
+        send_signal(turbo_pid, Signal::SIGINT);
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            combined.contains("second sigint ready child="),
+            "task output should remain visible until it is force killed\n{combined}"
+        );
+        assert!(
+            combined.contains("Shutting down Turborepo tasks..."),
+            "expected non-interactive shutdown banner before force kill\n{combined}"
+        );
+        assert!(
+            combined.contains("Force killed Turborepo tasks: app-a#dev"),
+            "the second SIGINT should force kill the stubborn task\n{combined}"
+        );
+        assert!(
+            !combined.contains("Graceful shutdown timed out"),
+            "force kill should come from the second signal, not the timeout\n{combined}"
+        );
+
+        wait_for_process_gone(task_child_pid, Duration::from_secs(5));
+        task_guard.disarm();
     }
 }
