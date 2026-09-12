@@ -171,6 +171,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         self
     }
 
+    /// Exclude tasks from unqualified entrypoint selection, but still allow
+    /// them to be reached through dependencies or `with`.
     pub fn with_entrypoint_exclusions(mut self, exclusions: HashSet<TaskId<'static>>) -> Self {
         self.entrypoint_exclusions = exclusions;
         self
@@ -198,14 +200,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 workspaces
                     .iter()
                     .cartesian_product(self.tasks.iter())
-                    .filter_map(|(package, task_name)| {
-                        let task_id = task_name
+                    .map(|(package, task_name)| {
+                        task_name
                             .task_id()
                             .unwrap_or(TaskId::new(package.as_ref(), task_name.task()))
-                            .into_owned();
-                        (task_name.package().is_some()
-                            || !self.entrypoint_exclusions.contains(&task_id))
-                        .then_some(task_id)
+                            .into_owned()
                     })
                     .collect(),
             )
@@ -491,9 +490,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             topo_deps.iter().cartesian_product(dep_pkgs).for_each(
                 |((from, span), dependency_workspace)| {
                     let from_task_id = TaskId::from_graph(dependency_workspace, from);
-                    if self.entrypoint_exclusions.contains(&from_task_id) {
-                        return;
-                    }
                     if let Some(allowed_tasks) = &allowed_tasks
                         && !allowed_tasks.contains(&from_task_id)
                     {
@@ -519,9 +515,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
                     .into_owned();
-                if self.entrypoint_exclusions.contains(&sibling_task_id) {
-                    continue;
-                }
                 traversal_queue.push_back(span.to(sibling_task_id));
             }
 
@@ -530,9 +523,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
                     .into_owned();
-                if self.entrypoint_exclusions.contains(&from_task_id) {
-                    continue;
-                }
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {
