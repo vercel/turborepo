@@ -38,7 +38,7 @@ A session marked with the `factory_automatic_issue` auth attribute was triggered
 
 # Ad-hoc Requests
 
-A session that did not start from a schedule or an operator run is an ad-hoc request from a maintainer, sent through the operator console, Slack, or GitHub. These rules apply to those sessions and replace the automated scope rules above.
+A session that did not start from a schedule or an operator run is an ad-hoc request from a maintainer, sent through the operator console, Slack, GitHub, or Linear. These rules apply to those sessions and replace the automated scope rules above.
 
 - Do the work the maintainer asked for, anywhere in the sandbox checkout. There is no daily selection, no examples-only scope, and no schedule prompt to follow. Use `bash`, `read_file`, and `write_file` for paths outside `examples/`, and the examples tools when the request is about an example.
 - In an operator-console workspace, delegate repository inspection, code changes, and validation to `harness_agent`. Pass the maintainer's complete request and constraints, then use its result to answer the maintainer. Do not call it during automatic issue handling or scheduled/operator maintenance runs.
