@@ -49,6 +49,23 @@ bunx create-turbo@latest -e with-vue-nuxt
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Adding a Nuxt application to an existing repository
@@ -88,6 +105,23 @@ bunx nuxi@latest init apps/my-app
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Integrating with your repository
@@ -147,6 +181,33 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.

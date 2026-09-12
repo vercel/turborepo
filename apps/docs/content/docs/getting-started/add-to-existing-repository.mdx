@@ -90,6 +90,29 @@ We recommend you install `turbo` both globally and into your repository's root f
     ```
 
   </Tab>
+
+<Tab value="nub">
+
+    ```bash title="Terminal"
+    # Global install
+    nub add turbo --global
+    # Install in repository
+    nub add turbo --save-dev
+    ```
+
+  </Tab>
+
+<Tab value="aube">
+
+    ```bash title="Terminal"
+    # Global install
+    aube add turbo --global
+    # Install in repository
+    aube add turbo --save-dev
+    ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
@@ -262,6 +285,37 @@ Turborepo optimizes your repository using information from your package manager.
 
 </Tab>
 
+
+<Tab value="nub">
+
+```diff title="package.json"
+{
++  "devEngines": {
++    "packageManager": {
++      "name": "nub",
++      "version": "0.8.3"
++    }
++  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="package.json"
+{
++  "devEngines": {
++    "packageManager": {
++      "name": "aube",
++      "version": "2.2.9"
++    }
++  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 <Callout type="info">
@@ -333,6 +387,31 @@ The `workspaces` field tells your package manager which directories contain your
   ```
 
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
+  </Tab>
+
+
+<Tab value="nub">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://nub.dev" text="nub documentation" />
+  </Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+  <LinkToDocumentation href="https://aube.jdx.dev" text="aube workspace documentation" />
   </Tab>
 
 </PackageManagerTabs>

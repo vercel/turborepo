@@ -52,6 +52,23 @@ bunx @turbo/codemod migrate
 
 </Tab>
 
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx @turbo/codemod migrate
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx @turbo/codemod migrate
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 This will update your `turbo.json`(s) for many of the breaking changes from 1.x to 2.0.
@@ -134,6 +151,37 @@ Turborepo 2.0 requires that your Workspace define a package manager declaration 
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```diff title="./package.json"
+{
++ "devEngines": {
++   "packageManager": {
++     "name": "nub",
++     "version": "0.8.3"
++   }
++ }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="./package.json"
+{
++ "devEngines": {
++   "packageManager": {
++     "name": "aube",
++     "version": "2.2.9"
++   }
++ }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 </Step>

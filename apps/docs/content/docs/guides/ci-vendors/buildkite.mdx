@@ -115,6 +115,41 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
     ```
 
   </Tab>
+
+<Tab value="nub">
+
+    ```yaml title=".buildkite/pipeline.yml"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          nub install
+          nub run test
+
+      - label: ":hammer: Build"
+        command: |
+          nub install
+          nub run build
+    ```
+
+  </Tab>
+
+<Tab value="aube">
+
+    ```yaml title=".buildkite/pipeline.yml"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          aube install
+          aube run test
+
+      - label: ":hammer: Build"
+        command: |
+          aube install
+          aube run build
+    ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 ## Create a Pipeline

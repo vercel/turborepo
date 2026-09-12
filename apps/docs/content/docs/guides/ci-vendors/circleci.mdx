@@ -180,6 +180,73 @@ Create a file called `.circleci/config.yml` in your repository with the followin
     ```
 
   </Tab>
+
+<Tab value="nub">
+
+    ```yaml title=".circleci/config.yml"
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
+    jobs:
+      test:
+        docker:
+          - image: cimg/node:lts
+        steps:
+          - checkout
+          - node/install-packages
+          - run:
+            command: npm i -g nub
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: nub run build
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: nub run test
+            environment:
+              TURBO_UI: "false"
+    ```
+
+  </Tab>
+
+<Tab value="aube">
+
+    ```yaml title=".circleci/config.yml"
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
+    jobs:
+      test:
+        docker:
+          - image: cimg/node:lts
+        steps:
+          - checkout
+          - node/install-packages
+          - run:
+            command: npm i -g aube
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: aube run build
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: aube run test
+            environment:
+              TURBO_UI: "false"
+    ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 ## Remote Caching
