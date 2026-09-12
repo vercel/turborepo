@@ -1,8 +1,8 @@
 //! A command for outputting info about packages and tasks in a turborepo.
 //!
-//! Both `turbo ls` and `turbo query ls` are backed by this module. Data
-//! retrieval is done through the query server (GraphQL execution), keeping
-//! the ls command in sync with `turbo query` semantics.
+//! Both `turbo ls` and `turbo query ls` are backed by this module. Package
+//! listings use the package graph directly, while package details use the
+//! query server (GraphQL execution).
 
 use std::{fmt::Write, sync::Arc};
 
@@ -24,9 +24,6 @@ pub enum Error {
     #[error("Query returned errors")]
     QueryError,
 }
-
-// GraphQL query: list all packages with name and path
-const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
 
 const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } length } \
                                      allDependencies { items { name } length } allDependents { \
@@ -122,13 +119,11 @@ pub async fn run(
         .package_manager()
         .map(|pm| pm.name().to_string())
         .unwrap_or_default();
-    let filtered_pkgs = run.filtered_pkgs().clone();
-    let run: Arc<dyn QueryRun> = Arc::new(run);
-
     if packages.is_empty() {
-        let repo = query_packages(run, query_server, &filtered_pkgs, &package_manager_name).await?;
+        let repo = query_packages(&run, run.filtered_pkgs(), &package_manager_name);
         print_repo_details(&repo, color_config, output)?;
     } else {
+        let run: Arc<dyn QueryRun> = Arc::new(run);
         match output {
             Some(OutputFormat::Json) => {
                 let details_list =
@@ -170,51 +165,29 @@ pub async fn run(
     Ok(())
 }
 
-async fn query_packages(
-    run: Arc<dyn QueryRun>,
-    query_server: &dyn QueryServer,
+fn query_packages(
+    run: &dyn QueryRun,
     filtered_pkgs: &std::collections::HashSet<PackageName>,
     package_manager_name: &str,
-) -> Result<RepositoryDetailsDisplay, cli::Error> {
-    let result = query_server
-        .execute_query(run, PACKAGES_QUERY, None)
-        .await?;
-
-    if !result.errors.is_empty() {
-        return Err(Error::QueryError.into());
-    }
-
-    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
-    let items = value
-        .pointer("/data/packages/items")
-        .and_then(|v| v.as_array())
-        .map(Vec::as_slice)
-        .unwrap_or_default();
-
-    let mut packages: Vec<PackageDetailDisplay> = items
-        .iter()
-        .filter_map(|item| {
-            let name = item.get("name")?.as_str()?.to_string();
-            let path = item.get("path")?.as_str()?.to_string();
-            let package_name = PackageName::from(name.as_str());
-            if package_name == PackageName::Root {
-                return None;
-            }
-            if !filtered_pkgs.contains(&package_name) {
-                return None;
-            }
-            Some(PackageDetailDisplay { name, path })
+) -> RepositoryDetailsDisplay {
+    let mut packages = run
+        .pkg_dep_graph()
+        .package_scope_directories()
+        .filter(|(name, _)| name != &PackageName::Root && filtered_pkgs.contains(name))
+        .map(|(name, directory)| PackageDetailDisplay {
+            name: name.to_string(),
+            path: directory.to_unix().to_string(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     packages.sort_by(|a, b| a.name.cmp(&b.name));
 
-    Ok(RepositoryDetailsDisplay {
+    RepositoryDetailsDisplay {
         package_manager: package_manager_name.to_string(),
         packages: ItemsWithCount {
             count: packages.len(),
             items: packages,
         },
-    })
+    }
 }
 
 async fn query_package_details(
