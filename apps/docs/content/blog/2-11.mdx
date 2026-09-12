@@ -493,6 +493,8 @@ Stacked on top of the Turborepo 2.9 gains, the largest repository we benchmarked
 
 ## `devEngines.packageManager` support
 
+Starting with this release, Turborepo respects this `devEngines.packageManager` field in the repository's root `package.json`.
+
 For JavaScript toolchains, the `devEngines.packageManager` field is the modern way to declare the package manager expected by your repository:
 
 ```json title="package.json"
@@ -506,9 +508,7 @@ For JavaScript toolchains, the `devEngines.packageManager` field is the modern w
 }
 ```
 
-Starting with this release, Turborepo respects this field.
-
-In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository to `devEngines.packageManager`.
+In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository by removing the top-level `packageManager` field and replacing it with `devEngines.packageManager`.
 
 [Read the package manager documentation](/docs/support-policy#package-managers) to learn more.
 
