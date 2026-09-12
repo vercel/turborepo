@@ -29,8 +29,8 @@ async function callTool(
 
 function firstText(result: CallToolResult): string {
   const [first] = result.content;
-  assert.equal(first?.type, "text");
-  return first.type === "text" ? first.text : "";
+  assert.ok(first && first.type === "text");
+  return first.text;
 }
 
 test("performs the four arithmetic operations", async () => {
