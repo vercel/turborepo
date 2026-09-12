@@ -117,6 +117,16 @@ turbo run build --cache=local:rw
 turbo run build --cache=local:,remote:r
 ```
 
+### `--cache-workers <number>`
+
+Default: `10`
+
+Set the number of concurrent cache operations.
+
+```bash title="Terminal"
+turbo run build --cache-workers=4
+```
+
 ### `--cache-dir <path>`
 
 Default: `.turbo/cache`
@@ -645,6 +655,14 @@ Ignore the local filesystem cache for all tasks, using Remote Cache for reading 
 
 ```bash title="Terminal"
 turbo run build --remote-only
+```
+
+### `--single-package`
+
+Run `turbo` in [single-package workspace](/docs/guides/single-package-workspaces) mode, treating the repository as one package instead of discovering workspace packages.
+
+```bash title="Terminal"
+turbo run build --single-package
 ```
 
 ### `--summarize`
