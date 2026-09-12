@@ -22,9 +22,9 @@ import MilestonesImageLight from "../../public/images/blog/turbo-2-11/milestones
 
 <Authors authors={["anthonyshew"]} />
 
-Turborepo 2.11 expands what's possible in your Turborepo:
+Turborepo 2.11 adds native support for more languages, faster startup, and more control over your deployments:
 
-- [**Rust, Python, and Go native support (Experimental)**](#native-support-for-rust-python-and-go-experimental): Add Cargo, uv, and `go.work` workspaces to your Task Graph
+- [**Native support for Rust, Python, and Go (Experimental)**](#native-support-for-rust-python-and-go-experimental): One Task Graph, every language toolchain
 - [**Faster Time to First Task**](#up-to-4x-faster-startup): Up to 4x faster startup than Turborepo 2.9
 - [**`devEngines.packageManager` support**](#devenginespackagemanager-support): Declare your package manager with modern Node.js convention
 - [**nub and aube support**](#nub-and-aube-support): New JavaScript package managers
@@ -56,7 +56,7 @@ In addition to these new features, this is the first release of Turborepo with z
 
 ---
 
-Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+Upgrade or get started today.
 
 <PackageManagerTabs>
 
@@ -140,18 +140,17 @@ aubx create-turbo@latest
 
 Turborepo can now discover packages and dependency relationships from Cargo, uv, and `go.work` workspaces, putting each language toolchain into the same [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). This brings Turborepo's [task scheduling](/docs/crafting-your-repository/configuring-tasks), [filtering](/docs/crafting-your-repository/running-tasks#using-filters), [affectedness calculations](/docs/crafting-your-repository/constructing-ci#running-only-affected-tasks), [Watch Mode](/docs/crafting-your-repository/developing-applications#watch-mode), and [pruning](/docs/reference/prune) to your Rust, Python, and Go projects. You get one CLI, `turbo`, to handle all the tasks in your monorepo.
 
-You can use any of these languages by themselves or bring JavaScript, Rust, Python, and Go together in one unified experience. When you're using multiple languages, Turborepo will automatically parallelize your tasks to get your work done as fast as possible.
-
-| Turborepo command                        | Task examples                                                    |
+You can use any of these languages on its own or combine JavaScript, Rust, Python, and Go into one unified execution graph. Turborepo runs tasks in parallel across languages while respecting their dependencies.
+| Turborepo command | Task execution |
 | ---------------------------------------- | ---------------------------------------------------------------- |
-| `turbo run build`                        | `tsc build` + `cargo build` + `uv build` + `go build ./...`      |
-| `turbo run test`                         | `vitest run` + `cargo test` + `uv run pytest` + `go test ./...`  |
-| `turbo run check`                        | `tsc` + `cargo check` + `uv run mypy`                            |
-| `turbo run lint`                         | `eslint` + `cargo clippy` + `uv run ruff check` + `go vet ./...` |
-| `turbo run format`                       | `prettier` + `cargo fmt` + `uv run ruff format` + `go fmt ./...` |
-| `turbo run build test check lint format` | All of the commands above run in parallel                        |
+| `turbo run build` | `tsc build` + `cargo build` + `uv build` + `go build ./...` |
+| `turbo run test` | `vitest run` + `cargo test` + `uv run pytest` + `go test ./...` |
+| `turbo run check` | `tsc` + `cargo check` + `uv run mypy` |
+| `turbo run lint` | `eslint` + `cargo clippy` + `uv run ruff check` + `go vet ./...` |
+| `turbo run format` | `prettier` + `cargo fmt` + `uv run ruff format` + `go fmt ./...` |
+| `turbo run build test check lint format` | All of the commands above run in parallel |
 
-You can also create cross-toolchain dependencies in `turbo.json`. In the example below, tests for a Python API server wait for a Rust core package to be built:
+You can also create cross-toolchain dependencies in `turbo.json`. For example, tests for a Python API server wait for a Rust core package to be built:
 
 ```json title="turbo.json"
 {
@@ -171,7 +170,7 @@ Once the Rust dependency is done building, the Django server will run its Python
 
 Native Rust, Python, and Go support is [Experimental](/docs/support-policy#experimental) and subject to change. To learn more, visit the [Rust](/docs/guides/tools/rust), [Python](/docs/guides/tools/python), and [Go](/docs/guides/tools/go) guides.
 
-We look forward to your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
+Share your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/discussions/categories/rfc).
 
 ## Up to 4x faster startup
 
@@ -490,7 +489,7 @@ In 2.11, we've continued improving performance. Turborepo 2.11 is up to 4x faste
   </div>
 </div>
 
-Stacked on top of the 2.9 gains, the largest repository we benchmarked now reaches its first task over 20x faster than it did before 2.9. As with 2.9, the improvement you see will depend on the size and complexity of your repository.
+Stacked on top of the Turborepo 2.9 gains, the largest repository we benchmarked now reaches its first task over 20x faster than it did before 2.9. As with 2.9, the improvement you see will depend on the size and complexity of your repository.
 
 ## `devEngines.packageManager` support
 
@@ -517,7 +516,7 @@ In a future major version of Turborepo, the top-level `packageManager` will stop
 
 Turborepo now recognizes [nub](https://nubjs.com/) and [aube](https://aube.jdx.dev) as JavaScript package managers.
 
-Both of these package managers focus on improving security and speed for your repo. They use your existing npm, pnpm, Yarn, or Bun lockfile, making for easy migration.
+Both of these package managers focus on improving security and speed for dependency installation in your repo. They use your existing npm, pnpm, Yarn, or Bun lockfile, making for easy migration.
 
 Declare nub in your root `package.json`:
 
@@ -567,7 +566,7 @@ aubx create-turbo -m aube
 
 When preparing a deployment from a monorepo, it can be tricky to right-size your Docker images. Turborepo's `prune` command is meant to solve this problem, trimming your monorepo down to only the code that is needed for the application to deploy and run successfully.
 
-Until today, Turborepo would include workspace packages referenced through both dependencies _and_ development dependencies while calculating the pruning dependency closure. While this is a safe default, removing development-only workspace packages from the production image can optimize further.
+Until today, Turborepo would include workspace packages referenced through both dependencies and development dependencies while calculating the pruning dependency closure. While this is a safe default, removing development-only workspace packages from the production image can optimize further.
 
 In this release, we're giving you control to exclude workspace packages that are only reachable through `devDependencies` with the new `--production` flag for `turbo prune`:
 
