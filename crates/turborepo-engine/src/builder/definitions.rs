@@ -44,10 +44,8 @@ pub(super) enum RepoTaskProbe {
     /// No scope defines the task: every catalogue and config chain that
     /// could define it was read.
     NotFound,
-    /// The verdict is undetermined: a scope whose native catalogue may
-    /// define the task is still inventory-only. The owners recorded into the
-    /// probe's sink must be loaded and the probe repeated — the answer is
-    /// deferred, never guessed in either direction.
+    /// Task lookup reached an unloaded contributor. Load its metadata and
+    /// retry.
     NeedsLoad,
 }
 
