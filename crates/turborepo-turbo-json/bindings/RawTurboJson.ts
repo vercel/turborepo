@@ -49,7 +49,7 @@ globalDependencies?: Array<string>,
  */
 globalEnv?: Array<string>, 
 /**
- * An allowlist of environment variables that should be made to all tasks,
+ * An allowlist of environment variables that should be made available to all tasks,
  * but should not contribute to the task's cache key, e.g.
  * `AWS_SECRET_KEY`.
  *

@@ -296,8 +296,8 @@ pub struct RawGlobalConfig {
     #[ts(optional)]
     pub env: Option<Vec<Spanned<UnescapedString>>>,
 
-    /// An allowlist of environment variables that should be made to all tasks,
-    /// but should not contribute to the task's cache key.
+    /// An allowlist of environment variables that should be made available to
+    /// all tasks, but should not contribute to the task's cache key.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
@@ -492,8 +492,8 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
 
-    /// An allowlist of environment variables that should be made to all tasks,
-    /// but should not contribute to the task's cache key, e.g.
+    /// An allowlist of environment variables that should be made available to
+    /// all tasks, but should not contribute to the task's cache key, e.g.
     /// `AWS_SECRET_KEY`.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
