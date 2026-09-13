@@ -770,12 +770,35 @@ fn test_disabled_go_workspace_points_to_feature_flag() {
 }
 
 #[test]
-fn test_enabled_go_workspace_reports_missing_go_executable() {
+fn test_enabled_go_workspace_lists_modules_without_go_executable() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
 
-    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
+    // Static planning needs no `go` binary: with an empty PATH the pure-Go
+    // repository still lists its modules from go.work alone.
+    let output = run_turbo_with_env(tempdir.path(), &["ls", "--output=json"], &[("PATH", "")]);
+    assert_command_success(&output, "toolchain-free ls");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("ls emits JSON");
+    let names = json["packages"]["items"]
+        .as_array()
+        .expect("packages items")
+        .iter()
+        .map(|package| package["name"].as_str().expect("name").to_string())
+        .collect::<Vec<_>>();
+    for module in ["example.com/api", "example.com/lib"] {
+        assert!(
+            names.contains(&module.to_string()),
+            "listed modules {names:?} must include {module}"
+        );
+    }
 
+    // Selecting a Go task still requires the executable: preparation runs
+    // `go`, and the hard diagnostic keeps its requirement and remediation.
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &[("PATH", "")],
+    );
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -789,9 +812,8 @@ fn test_enabled_go_workspace_reports_missing_go_executable() {
 
 #[test]
 fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
-    if !go_available() {
-        return;
-    }
+    // The diagnostic comes from the static parser, so no `go` binary is
+    // needed to see it.
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
     fs::write(
@@ -803,11 +825,18 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     let output = run_turbo(tempdir.path(), &["ls"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // Diagnostic renderers can wrap this sentence at different words and add a
-    // continuation gutter depending on paths and platform terminal widths.
+    // The static parser diagnoses the unknown directive itself — the file,
+    // the directive, the directives go.work supports, and the repair —
+    // without pretending any `go` command ran and without falling back to
+    // JavaScript discovery.
     let normalized_stderr = normalize_rendered_diagnostic(&stderr);
     assert!(
-        normalized_stderr.contains("`go work edit -json` failed")
+        normalized_stderr.contains("go.work at")
+            && normalized_stderr.contains("contains an unknown `unsupported` directive")
+            && normalized_stderr.contains(
+                "The go command supports only `go`, `toolchain`, `use`, `replace`, and `godebug` \
+                 directives in go.work."
+            )
             && normalized_stderr.contains(
                 "Repair the repository-root go.work with `go work edit` and `go work use`."
             ),
@@ -815,6 +844,7 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     );
     assert!(!stderr.contains("package manager"), "{stderr}");
     assert!(!stderr.contains("failed to parse"), "{stderr}");
+    assert!(!stderr.contains("go work edit -json"), "{stderr}");
 }
 
 #[test]

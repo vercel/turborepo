@@ -5,10 +5,15 @@
 //! job is orchestration: decide *which* crates are in scope and *whether*
 //! anything changed, then hand the work to Cargo and get out of the way.
 //!
-//! Discovery shells out to `cargo metadata`, because Cargo is the only
-//! correct implementation of its own workspace-membership semantics (member
-//! globs, automatic path-dependency members, excludes, target-specific
-//! dependency tables, renames). Crates are classified into two shapes:
+//! Full discovery shells out to `cargo metadata`, because Cargo is the only
+//! correct implementation of its own workspace-membership semantics. Staged
+//! planning first parses manifests in-process (member globs, automatic
+//! path-dependency members, excludes, target-specific dependency tables, and
+//! renames), and derives the watch target-directory exclude from the ambient
+//! environment and repository-local configuration without invoking Cargo (see
+//! `static_target_directory`). It is then explicitly prepared by full
+//! discovery before Cargo tasks are hashed. Crates are classified into two
+//! shapes:
 //!
 //! * **Entrypoints** — crates with `bin`/`cdylib`/`staticlib` targets: the
 //!   deliverables of the workspace.
@@ -45,7 +50,7 @@ use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
-        PackageResolution, ResolutionCompleteness,
+        PackageResolution, ResolutionCompleteness, ResolutionUnavailableReason,
     },
     package_json::{DependencyKind, PackageJson},
     prune_knowledge::{PruneDomain, PrunePlan},
@@ -74,8 +79,10 @@ pub enum Error {
     LockfileRead(#[source] io::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::CargoLockError),
-    #[error("failed to parse root Cargo.toml: {0}")]
+    #[error("failed to parse Cargo.toml: {0}")]
     ManifestParse(#[from] Box<toml_edit::TomlError>),
+    #[error("failed to discover Cargo workspace members: {0}")]
+    WorkspaceDiscovery(#[from] crate::workspaces::Error),
     #[error("root Cargo.toml has no [workspace] table")]
     NotAWorkspace,
     #[error(
@@ -821,6 +828,13 @@ impl CargoTaskContract {
         endpoint: &toolchain::CompileCacheEndpoint,
         task_env: &std::collections::HashMap<String, String>,
     ) -> Vec<(String, String)> {
+        // Planning contracts intentionally have no compiler/configuration
+        // observation. Do not install a compiler-cache wrapper until full
+        // Cargo discovery has prepared this scope; importantly, this decision
+        // is data-only and does not probe `which`, Cargo, or rustc.
+        if self.workspace.is_none() {
+            return Vec::new();
+        }
         cargo_compile_cache_env(endpoint, task_env)
     }
 
@@ -845,7 +859,18 @@ impl CargoTaskContract {
             );
             io.env.push("RUSTFMT".to_string());
         }
-        if let Some(workspace) = &self.workspace
+        let workspace_is_deferred = self.workspace.is_none();
+        if workspace_is_deferred {
+            // Static planning discovers topology from manifests only. Cargo's
+            // effective compiler, target directory, and layered configuration
+            // are intentionally deferred to full discovery before hashing, so
+            // every Cargo verb must fail closed in a provisional graph.
+            io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            io.cache_reason = Some(
+                "Cargo compiler and output configuration are deferred until preparation"
+                    .to_string(),
+            );
+        } else if let Some(workspace) = &self.workspace
             && !workspace.compiler_identified
         {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
@@ -904,11 +929,13 @@ impl CargoTaskContract {
                 if subcommand == "build" {
                     if self.package.kind == CargoPackageKind::Library {
                         io.outputs = toolchain::DerivedOutputs::Unavailable;
-                        io.cache_reason = Some(
-                            "Cargo library artifacts have no stable outputs for Turborepo to \
-                             restore"
-                                .to_string(),
-                        );
+                        if !workspace_is_deferred {
+                            io.cache_reason = Some(
+                                "Cargo library artifacts have no stable outputs for Turborepo to \
+                                 restore"
+                                    .to_string(),
+                            );
+                        }
                     } else {
                         io.outputs = self
                             .workspace
@@ -1266,6 +1293,169 @@ fn cargo_output_layout(
     })
 }
 
+/// The ambient environment values that select Cargo's target directory.
+///
+/// Captured once per discovery so the derivation below is a pure function of
+/// the repository, its manifests, and these values — nothing probes a process.
+#[derive(Debug, Default)]
+struct CargoTargetSelection {
+    cargo_target_dir: Option<std::ffi::OsString>,
+    cargo_build_target_dir: Option<std::ffi::OsString>,
+}
+
+impl CargoTargetSelection {
+    fn current() -> Self {
+        // `var_os` preserves non-UTF-8 values, which fail closed in
+        // `static_target_directory` rather than being lossily coerced.
+        Self {
+            cargo_target_dir: std::env::var_os("CARGO_TARGET_DIR"),
+            cargo_build_target_dir: std::env::var_os("CARGO_BUILD_TARGET_DIR"),
+        }
+    }
+}
+
+/// What repository-local Cargo configuration proves about `build.target-dir`.
+#[derive(Debug, PartialEq, Eq)]
+enum RepositoryTargetDir {
+    /// No repository-local configuration selects a target directory.
+    Unselected,
+    /// A tracked, parseable configuration selects this spelling.
+    Configured(String),
+    /// A configuration exists but cannot prove its selection: unreadable,
+    /// unparsable, a non-string value, a symlinked path, or an `include`-ing
+    /// file whose merged content this parser does not resolve.
+    Unknown,
+}
+
+/// Read `build.target-dir` from the repository's own `.cargo` configuration.
+///
+/// Both accepted spellings (`config.toml` and the legacy `config`) are read;
+/// if both exist they must agree, because Cargo's choice between them is not
+/// something this parser proves.
+fn repository_target_dir(repo_root: &AbsoluteSystemPath) -> RepositoryTargetDir {
+    let repository_cargo = repo_root.as_std_path().join(".cargo");
+    let mut selected: Option<String> = None;
+    for name in ["config.toml", "config"] {
+        let path = repository_cargo.join(name);
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            // Any other stat failure leaves the selection unprovable.
+            Err(_) => return RepositoryTargetDir::Unknown,
+            Ok(_) => {}
+        }
+        let contents = match std::fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(_) => return RepositoryTargetDir::Unknown,
+        };
+        let config = match contents.parse::<toml_edit::DocumentMut>() {
+            Ok(config) => config,
+            Err(_) => return RepositoryTargetDir::Unknown,
+        };
+        // A symlinked or `include`-ing configuration is not provable from its
+        // own text, so it never contributes a watch exclude.
+        if path_contains_symlink(repo_root, &path) || config.get("include").is_some() {
+            return RepositoryTargetDir::Unknown;
+        }
+        let Some(value) = config
+            .get("build")
+            .and_then(|build| build.get("target-dir"))
+        else {
+            continue;
+        };
+        let Some(value) = value.as_str() else {
+            return RepositoryTargetDir::Unknown;
+        };
+        match &selected {
+            Some(existing) if existing != value => return RepositoryTargetDir::Unknown,
+            _ => selected = Some(value.to_string()),
+        }
+    }
+    match selected {
+        Some(value) => RepositoryTargetDir::Configured(value),
+        None => RepositoryTargetDir::Unselected,
+    }
+}
+
+/// Resolve one explicit `target-dir` spelling the way `cargo metadata` invoked
+/// at the repository root resolves it: absolute spellings stay absolute and
+/// relative spellings anchor to the root. Glob or parent-directory spellings
+/// stay unresolved, so the watch spec keeps watching rather than guessing.
+fn resolve_target_dir(
+    repo_root: &AbsoluteSystemPath,
+    value: &str,
+) -> Option<AbsoluteSystemPathBuf> {
+    if value.is_empty() || contains_glob_syntax(value) {
+        return None;
+    }
+    let path = std::path::Path::new(value);
+    if path
+        .components()
+        .any(|component| component == std::path::Component::ParentDir)
+    {
+        return None;
+    }
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        repo_root.as_std_path().join(path)
+    };
+    AbsoluteSystemPathBuf::new(path.to_str()?.to_string()).ok()
+}
+
+/// Derive the target directory Cargo would report, without invoking Cargo.
+///
+/// The precedence mirrors the location `cargo metadata` resolves for the
+/// repository root: `CARGO_TARGET_DIR`, then `CARGO_BUILD_TARGET_DIR`, then a
+/// tracked repository-local `build.target-dir`, then the default `target/` at
+/// the workspace root. Every case this function cannot prove — an
+/// unresolvable spelling, an unreadable or untracked configuration, or
+/// configuration outside the repository, which is never read here — returns
+/// `None`, leaving those trees watched: extra watch events recover, a silently
+/// ignored source change does not. A candidate that would contain a member
+/// manifest is refused for the same reason: ignoring it would drop that
+/// member's changes.
+fn static_target_directory(
+    repo_root: &AbsoluteSystemPath,
+    crates: &[CargoCrate],
+    selection: &CargoTargetSelection,
+    home: &CargoHomeEnvironment,
+) -> Option<AbsoluteSystemPathBuf> {
+    // Environment values override every configuration file, exactly as
+    // `cargo metadata` resolves them. A value that is set but not valid UTF-8
+    // is still an override — one this parser cannot resolve — so it fails
+    // closed instead of falling through to configuration below.
+    let configured = match (
+        &selection.cargo_target_dir,
+        &selection.cargo_build_target_dir,
+    ) {
+        (Some(value), _) | (None, Some(value)) => Some(value.to_str()?.to_string()),
+        (None, None) => None,
+    };
+    let candidate = match configured {
+        Some(value) => resolve_target_dir(repo_root, &value)?,
+        None => match repository_target_dir(repo_root) {
+            RepositoryTargetDir::Configured(value) => resolve_target_dir(repo_root, &value)?,
+            RepositoryTargetDir::Unknown => return None,
+            RepositoryTargetDir::Unselected => {
+                // Configuration outside the repository is never read here; its
+                // presence alone could relocate the target directory, so the
+                // watch spec stays complete instead of guessing the default.
+                if cargo_config_influence(repo_root, home).external_present {
+                    return None;
+                }
+                repo_root.join_component(TARGET_DIR)
+            }
+        },
+    };
+    if crates
+        .iter()
+        .any(|krate| candidate.contains(&krate.manifest_path))
+    {
+        return None;
+    }
+    Some(candidate)
+}
+
 fn cargo_change_observation(
     repo_root: &AbsoluteSystemPath,
     target_directory: Option<&AbsoluteSystemPath>,
@@ -1402,6 +1592,157 @@ impl CargoContributor {
             repo_root,
             resolve_external_dependencies,
         })
+    }
+
+    fn workspace_roots(&self) -> Vec<WorkspaceRoot> {
+        self.repo_root
+            .join_component(CARGO_TOML)
+            .exists()
+            .then(|| WorkspaceRoot::new("cargo", self.repo_root.clone()))
+            .into_iter()
+            .collect()
+    }
+
+    /// Manifest-first observation for staged package planning. This
+    /// deliberately avoids Cargo, rustc, `which`, and toolchain subprocesses;
+    /// the only configuration it consults is the repository-local
+    /// target-directory selection for the watch exclude, which stays
+    /// conservative wherever it cannot be proven (see
+    /// `static_target_directory`). Full discovery remains authoritative and
+    /// replaces this provisional result before Cargo tasks are hashed.
+    async fn discover_packages_statically_inner(
+        &self,
+    ) -> Result<DiscoveredPackages, toolchain::Error> {
+        let workspace =
+            turborepo_rayon_compat::block_in_place(|| discover_crates_statically(&self.repo_root))
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+        let workspace_roots = self.workspace_roots();
+        let crates = workspace.crates;
+        if crates.is_empty() {
+            return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
+        }
+
+        let workspace_name = workspace
+            .name
+            .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
+
+        // The target directory is the one watch fact that lives outside the
+        // manifests: build byproducts must not feed the watch loop, and the
+        // subprocess-free derivation is deliberately conservative wherever it
+        // cannot prove the location.
+        let target_directory = static_target_directory(
+            &self.repo_root,
+            &crates,
+            &CargoTargetSelection::current(),
+            &CargoHomeEnvironment::current(),
+        );
+        let fallback_inputs = std::iter::once(
+            AnchoredSystemPathBuf::from_raw(CARGO_TOML).expect("static path is valid"),
+        )
+        .chain(crates.iter().filter_map(|cargo_crate| {
+            AnchoredSystemPathBuf::new(&self.repo_root, &cargo_crate.manifest_path).ok()
+        }))
+        .collect::<Vec<_>>();
+
+        let mut packages = Vec::with_capacity(crates.len() + 1);
+        let mut crate_names = Vec::with_capacity(crates.len());
+        for cargo_crate in &crates {
+            let kind = if cargo_crate.is_entrypoint() {
+                CargoPackageKind::Entrypoint
+            } else {
+                CargoPackageKind::Library
+            };
+            let details = CargoPackageDetails {
+                kind,
+                deliverables: cargo_crate.deliverables.clone(),
+                manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
+            };
+            let native_tasks = native_tasks_for_package(&details, &cargo_crate.name);
+            let task_contract = CargoTaskContract::new(
+                self.repo_root.clone(),
+                details,
+                // Static task I/O stays provisional: the compiler identity and
+                // the output-layout configuration are not inspected here. (The
+                // watch target-directory exclude is derived separately, and
+                // conservatively.) `derived_task_io` treats this as explicitly
+                // provisional and fails caching closed until preparation.
+                None,
+            );
+            crate_names.push(cargo_crate.name.clone());
+            packages.push(
+                DiscoveredPackage::package(
+                    Some(cargo_crate.name.clone()),
+                    PackageJson::default(),
+                    cargo_crate.manifest_path.clone(),
+                )
+                .with_native_relationships(cargo_crate.relationships.clone())
+                .with_native_tasks(native_tasks)
+                .with_task_contract(
+                    crate::task_contracts::ScopeTaskContract::cargo(task_contract),
+                ),
+            );
+        }
+
+        let workspace_package_details = CargoPackageDetails {
+            kind: CargoPackageKind::Workspace,
+            deliverables: Vec::new(),
+            manifest_alters_output_layout: false,
+        };
+        let workspace_native_tasks =
+            native_tasks_for_package(&workspace_package_details, &workspace_name);
+        let workspace_task_contract =
+            CargoTaskContract::new(self.repo_root.clone(), workspace_package_details, None);
+        crate_names.sort();
+        let workspace_relationships = crate_names
+            .iter()
+            .cloned()
+            .map(|name| Relationship::internal(name, DependencyKind::Production))
+            .collect();
+        packages.push(
+            DiscoveredPackage::aggregate(
+                workspace_name.clone(),
+                PackageJson::default(),
+                self.repo_root.join_component(CARGO_TOML),
+            )
+            .with_native_relationships(workspace_relationships)
+            .with_native_tasks(workspace_native_tasks)
+            .with_task_contract(crate::task_contracts::ScopeTaskContract::cargo(
+                workspace_task_contract,
+            )),
+        );
+
+        let mut resolution_members = crate_names;
+        resolution_members.push(workspace_name);
+        resolution_members.sort();
+        let resolution = ExternalResolutionDomain::new(
+            crate::external_resolution::CARGO_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            resolution_members,
+            [AnchoredSystemPathBuf::from_raw(CARGO_LOCK)
+                .map_err(Error::from)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
+            // Cargo.lock closure resolution and compiler identity are
+            // authoritative only after preparation. Reporting this as
+            // unavailable prevents an empty static closure from being treated
+            // as a complete external-dependency observation.
+            ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(
+                "cargo-static-resolution-deferred",
+                "Cargo.lock and compiler resolution are deferred until Cargo preparation",
+            )),
+        )
+        .with_fallback_inputs(fallback_inputs);
+        let lockfile = read_lockfile(&self.repo_root).map_err(|error| error.to_string());
+        let prune_domain = CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile)
+            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+
+        Ok(DiscoveredPackages::new(packages, workspace_roots)
+            .with_external_resolution(resolution)
+            .with_change_observation(cargo_change_observation(
+                &self.repo_root,
+                target_directory.as_deref(),
+            ))
+            .with_prune_domain(Arc::new(prune_domain)))
     }
 }
 
@@ -1814,6 +2155,10 @@ impl RepositoryContributor for CargoContributor {
                 .with_prune_domain(Arc::new(prune_domain)))
         })
     }
+
+    fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(self.discover_packages_statically_inner())
+    }
 }
 
 /// The Cargo default build directory, relative to the repo root.
@@ -2070,6 +2415,563 @@ fn cargo_config_influence(
         }
     }
     influence
+}
+
+/// A path-valued dependency declaration read directly from Cargo.toml.
+/// `path` retains its manifest spelling until it is resolved relative to the
+/// declaration's owner (or the workspace root for `workspace = true`).
+#[derive(Clone)]
+struct StaticPathDependency {
+    path: String,
+    optional: bool,
+}
+
+fn static_manifest_document(
+    manifest_path: &AbsoluteSystemPath,
+) -> Result<toml_edit::DocumentMut, Error> {
+    let contents = manifest_path
+        .read_to_string()
+        .map_err(Error::WorkspaceFileRead)?;
+    contents
+        .parse()
+        .map_err(|error| Error::ManifestParse(Box::new(error)))
+}
+
+fn static_string_array(table: &toml_edit::Table, key: &str) -> Vec<String> {
+    table
+        .get(key)
+        .and_then(toml_edit::Item::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml_edit::Value::as_str)
+        .map(str::to_string)
+        .collect()
+}
+
+fn static_path_dependency(item: &toml_edit::Item) -> Option<StaticPathDependency> {
+    Some(StaticPathDependency {
+        path: item.get("path")?.as_str()?.to_string(),
+        optional: item
+            .get("optional")
+            .and_then(toml_edit::Item::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// Collect the path-valued entries of `[workspace.dependencies]`, which Cargo
+/// accepts as either a table or an inline table (`dependencies = { ... }`
+/// inside `[workspace]`).
+fn static_workspace_dependency_paths(
+    document: &toml_edit::DocumentMut,
+) -> HashMap<String, StaticPathDependency> {
+    document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table_like)
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml_edit::Item::as_table_like)
+        .into_iter()
+        .flat_map(|table| table.iter())
+        .filter_map(|(name, item)| {
+            static_path_dependency(item).map(|path| (name.to_string(), path))
+        })
+        .collect()
+}
+
+fn static_workspace_package_edition(document: &toml_edit::DocumentMut) -> Option<String> {
+    document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|package| package.get("edition"))
+        .and_then(toml_edit::Item::as_str)
+        .map(str::to_string)
+}
+
+fn static_workspace_metadata(document: &toml_edit::DocumentMut) -> serde_json::Value {
+    let mut metadata = serde_json::Map::new();
+    let name = document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|workspace| workspace.get("metadata"))
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|metadata| metadata.get("name"));
+    if let Some(name) = name {
+        // `workspace_name` owns the public validation/error behavior. Preserve
+        // that it was present even when it was not a string.
+        metadata.insert(
+            "name".to_string(),
+            name.as_str()
+                .map(|name| serde_json::Value::String(name.to_string()))
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    serde_json::Value::Object(metadata)
+}
+
+/// Read one dependency table's entries. `TableLike` covers both the
+/// `[dependencies]` table form and the inline `dependencies = { ... }` form;
+/// iteration order is the manifest's own in both cases.
+fn static_add_dependency_table(
+    dependencies: &mut Vec<MetadataDependency>,
+    table: &dyn toml_edit::TableLike,
+    kind: Option<&str>,
+    manifest_directory: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+) {
+    for (name, item) in table.iter() {
+        let inherited = item
+            .get("workspace")
+            .and_then(toml_edit::Item::as_bool)
+            .unwrap_or(false);
+        let dependency = if inherited {
+            workspace_dependencies.get(name).cloned()
+        } else {
+            static_path_dependency(item)
+        };
+        let Some(dependency) = dependency else {
+            continue;
+        };
+        let base = if inherited {
+            repo_root
+        } else {
+            manifest_directory
+        };
+        let optional = dependency.optional
+            || item
+                .get("optional")
+                .and_then(toml_edit::Item::as_bool)
+                .unwrap_or(false);
+        dependencies.push(MetadataDependency {
+            path: Some(AbsoluteSystemPathBuf::from_unknown(base, dependency.path).to_string()),
+            kind: kind.map(str::to_string),
+            optional,
+        });
+    }
+}
+
+/// Parse path dependencies from all normal and target-conditional Cargo
+/// dependency tables. Cargo reports every conditional table in metadata; the
+/// graph constructor keeps their relationship kinds while Cargo decides which
+/// ones are active for a particular invocation. Every level — the root
+/// dependency tables, the `target` table, each selector's view, and the
+/// selector's dependency tables — may be spelled as a table or an inline
+/// table, so all of them are read through `TableLike`.
+fn static_manifest_dependencies(
+    document: &toml_edit::DocumentMut,
+    manifest_path: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+) -> Vec<MetadataDependency> {
+    let Some(manifest_directory) = manifest_path.parent() else {
+        return Vec::new();
+    };
+    let mut dependencies = Vec::new();
+    for (table_name, kind) in [
+        ("dependencies", None),
+        ("dev-dependencies", Some("dev")),
+        ("build-dependencies", Some("build")),
+    ] {
+        if let Some(table) = document
+            .get(table_name)
+            .and_then(toml_edit::Item::as_table_like)
+        {
+            static_add_dependency_table(
+                &mut dependencies,
+                table,
+                kind,
+                manifest_directory,
+                repo_root,
+                workspace_dependencies,
+            );
+        }
+    }
+    if let Some(targets) = document
+        .get("target")
+        .and_then(toml_edit::Item::as_table_like)
+    {
+        for (_, target) in targets.iter() {
+            let Some(target) = target.as_table_like() else {
+                continue;
+            };
+            for (table_name, kind) in [
+                ("dependencies", None),
+                ("dev-dependencies", Some("dev")),
+                ("build-dependencies", Some("build")),
+            ] {
+                if let Some(table) = target
+                    .get(table_name)
+                    .and_then(toml_edit::Item::as_table_like)
+                {
+                    static_add_dependency_table(
+                        &mut dependencies,
+                        table,
+                        kind,
+                        manifest_directory,
+                        repo_root,
+                        workspace_dependencies,
+                    );
+                }
+            }
+        }
+    }
+    dependencies
+}
+
+fn static_path_is_file(path: &std::path::Path) -> Result<bool, Error> {
+    match std::fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(Error::WorkspaceFileRead(error)),
+    }
+}
+
+fn static_default_bin_path(
+    crate_directory: &AbsoluteSystemPath,
+    package_name: &str,
+    bin_name: &str,
+) -> Result<Option<AbsoluteSystemPathBuf>, Error> {
+    let mut candidates = Vec::new();
+    if bin_name == package_name {
+        candidates.push(crate_directory.join_components(&["src", "main.rs"]));
+    }
+    candidates.push(crate_directory.join_components(&["src", "bin", &format!("{bin_name}.rs")]));
+    candidates.push(crate_directory.join_components(&["src", "bin", bin_name, "main.rs"]));
+
+    for candidate in candidates {
+        if static_path_is_file(candidate.as_std_path())? {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
+}
+
+fn static_auto_bin_targets(
+    crate_directory: &AbsoluteSystemPath,
+    package_name: &str,
+    explicit_names: &HashSet<String>,
+    explicit_paths: &HashSet<String>,
+) -> Result<Vec<MetadataTarget>, Error> {
+    let mut targets = Vec::new();
+    let main = crate_directory.join_components(&["src", "main.rs"]);
+    if static_path_is_file(main.as_std_path())?
+        && !explicit_names.contains(package_name)
+        && !explicit_paths.contains(main.as_str())
+    {
+        targets.push(MetadataTarget {
+            name: package_name.to_string(),
+            kind: vec!["bin".to_string()],
+        });
+    }
+
+    let bin_directory = crate_directory.join_components(&["src", "bin"]);
+    let entries = match std::fs::read_dir(bin_directory.as_std_path()) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(targets),
+        Err(error) => return Err(Error::WorkspaceFileRead(error)),
+    };
+    for entry in entries {
+        let entry = entry.map_err(Error::WorkspaceFileRead)?;
+        // `std::fs::metadata` follows symlinks, matching Cargo's source-file
+        // checks while keeping this scan limited to direct files and one-level
+        // `src/bin/<name>/main.rs` directories.
+        let metadata = match std::fs::metadata(entry.path()) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(Error::WorkspaceFileRead(error)),
+        };
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let (name, path) = if metadata.is_file() && file_name.ends_with(".rs") {
+            let Some(name) = file_name.strip_suffix(".rs") else {
+                continue;
+            };
+            let path = entry.path();
+            let Some(path) = path
+                .to_str()
+                .and_then(|path| AbsoluteSystemPathBuf::new(path.to_string()).ok())
+            else {
+                continue;
+            };
+            (name.to_string(), path)
+        } else if metadata.is_dir() {
+            let path = entry.path().join("main.rs");
+            if !static_path_is_file(&path)? {
+                continue;
+            }
+            let Some(path) = path
+                .to_str()
+                .and_then(|path| AbsoluteSystemPathBuf::new(path.to_string()).ok())
+            else {
+                continue;
+            };
+            (file_name.to_string(), path)
+        } else {
+            continue;
+        };
+        if !explicit_names.contains(&name) && !explicit_paths.contains(path.as_str()) {
+            targets.push(MetadataTarget {
+                name,
+                kind: vec!["bin".to_string()],
+            });
+        }
+    }
+    targets.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(targets)
+}
+
+fn static_package_edition(
+    package: &toml_edit::Table,
+    workspace_edition: Option<&str>,
+) -> Option<String> {
+    package
+        .get("edition")
+        .and_then(toml_edit::Item::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            package
+                .get("edition")
+                .and_then(|edition| edition.get("workspace"))
+                .and_then(toml_edit::Item::as_bool)
+                .filter(|inherited| *inherited)
+                .and(workspace_edition)
+                .map(str::to_string)
+        })
+}
+
+/// Derive the subset of Cargo metadata target facts that determines this
+/// adapter's deliverables. Explicit targets are retained without probing a
+/// compiler; automatic binary targets are inferred only from Cargo's standard
+/// source paths.
+fn static_manifest_targets(
+    document: &toml_edit::DocumentMut,
+    package: &toml_edit::Table,
+    package_name: &str,
+    manifest_path: &AbsoluteSystemPath,
+    workspace_edition: Option<&str>,
+) -> Result<Vec<MetadataTarget>, Error> {
+    let Some(crate_directory) = manifest_path.parent() else {
+        return Ok(Vec::new());
+    };
+    let mut explicit_bins = Vec::new();
+    if let Some(bins) = document
+        .get("bin")
+        .and_then(toml_edit::Item::as_array_of_tables)
+    {
+        for bin in bins {
+            let name = bin
+                .get("name")
+                .and_then(toml_edit::Item::as_str)
+                .unwrap_or(package_name)
+                .to_string();
+            let path = match bin.get("path").and_then(toml_edit::Item::as_str) {
+                Some(path) => Some(AbsoluteSystemPathBuf::from_unknown(crate_directory, path)),
+                None => static_default_bin_path(crate_directory, package_name, &name)?,
+            };
+            explicit_bins.push((name, path));
+        }
+    }
+
+    let mut targets = Vec::new();
+    if let Some(lib) = document.get("lib").and_then(toml_edit::Item::as_table) {
+        let name = lib
+            .get("name")
+            .and_then(toml_edit::Item::as_str)
+            .unwrap_or(package_name)
+            .replace('-', "_");
+        let crate_types = static_string_array(lib, "crate-type");
+        targets.push(MetadataTarget {
+            name,
+            kind: if crate_types.is_empty() {
+                vec!["lib".to_string()]
+            } else {
+                crate_types
+            },
+        });
+    }
+
+    let explicit_names = explicit_bins
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect::<HashSet<_>>();
+    let explicit_paths = explicit_bins
+        .iter()
+        .filter_map(|(_, path)| path.as_ref())
+        .map(ToString::to_string)
+        .collect::<HashSet<_>>();
+    targets.extend(explicit_bins.into_iter().map(|(name, _)| MetadataTarget {
+        name,
+        kind: vec!["bin".to_string()],
+    }));
+
+    // Cargo 2015 disables automatic binary discovery whenever a manifest
+    // declares any explicit target. `autobins` always overrides that default;
+    // newer editions continue auto-discovery, except where an explicit name or
+    // source path already claims the inferred target.
+    let has_explicit_target = ["lib", "bin", "example", "test", "bench"]
+        .into_iter()
+        .any(|target| document.contains_key(target));
+    let edition_2015 = static_package_edition(package, workspace_edition)
+        .as_deref()
+        .is_none_or(|edition| edition == "2015");
+    let autobins = package
+        .get("autobins")
+        .and_then(toml_edit::Item::as_bool)
+        .unwrap_or(!edition_2015 || !has_explicit_target);
+    if autobins {
+        targets.extend(static_auto_bin_targets(
+            crate_directory,
+            package_name,
+            &explicit_names,
+            &explicit_paths,
+        )?);
+    }
+    Ok(targets)
+}
+
+fn static_metadata_package(
+    manifest_path: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+    workspace_edition: Option<&str>,
+) -> Result<Option<MetadataPackage>, Error> {
+    let document = static_manifest_document(manifest_path)?;
+    let Some(package) = document.get("package").and_then(toml_edit::Item::as_table) else {
+        return Ok(None);
+    };
+    let Some(name) = package
+        .get("name")
+        .and_then(toml_edit::Item::as_str)
+        .map(str::to_string)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(MetadataPackage {
+        // IDs only need to be unique and agree with `workspace_members` for
+        // `workspace_from_metadata`; manifest paths are stable without Cargo.
+        id: manifest_path.to_string(),
+        name: name.clone(),
+        source: None,
+        manifest_path: manifest_path.to_string(),
+        dependencies: static_manifest_dependencies(
+            &document,
+            manifest_path,
+            repo_root,
+            workspace_dependencies,
+        ),
+        targets: static_manifest_targets(
+            &document,
+            package,
+            &name,
+            manifest_path,
+            workspace_edition,
+        )?,
+    }))
+}
+
+fn static_path_is_automatic_member(
+    repo_root: &AbsoluteSystemPath,
+    directory: &AbsoluteSystemPath,
+    membership: &crate::workspaces::WorkspaceGlobs,
+) -> Result<bool, Error> {
+    if !repo_root.contains(directory) || !directory.join_component(CARGO_TOML).exists() {
+        return Ok(false);
+    }
+    membership
+        .target_is_workspace(repo_root, directory)
+        .map_err(Error::ResolutionPath)
+}
+
+/// Construct Cargo's graph-shaping metadata from manifests without invoking
+/// Cargo. The full discovery phase remains the authority for lockfile,
+/// compiler, config, and final workspace validation; this parser exists solely
+/// to make staged package selection subprocess-free.
+fn discover_crates_statically(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<DiscoveredWorkspace, Error> {
+    let root_manifest_path = repo_root.join_component(CARGO_TOML);
+    if !root_manifest_path.exists() {
+        return Ok(DiscoveredWorkspace {
+            name: None,
+            crates: Vec::new(),
+            has_packages: false,
+            target_directory: None,
+        });
+    }
+
+    let root_document = static_manifest_document(&root_manifest_path)?;
+    let workspace = root_document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table);
+    let root_is_package = root_document
+        .get("package")
+        .and_then(toml_edit::Item::as_table)
+        .is_some();
+    if workspace.is_none() && !root_is_package {
+        return Err(Error::NotAWorkspace);
+    }
+
+    let workspace_dependencies = static_workspace_dependency_paths(&root_document);
+    let workspace_edition = static_workspace_package_edition(&root_document);
+    let exclusions = workspace.map_or_else(Vec::new, |workspace| {
+        static_string_array(workspace, "exclude")
+    });
+    let automatic_members =
+        crate::workspaces::WorkspaceGlobs::new(vec!["**".to_string()], exclusions.clone())?;
+    let mut pending = Vec::new();
+    if let Some(workspace) = workspace {
+        let members = static_string_array(workspace, "members");
+        if !members.is_empty() {
+            let globs = crate::workspaces::WorkspaceGlobs::new(members, exclusions)?;
+            pending.extend(globs.get_manifests(repo_root, CARGO_TOML)?);
+        }
+    }
+    if root_is_package {
+        // Cargo makes a package in the workspace root a member even when it is
+        // not repeated in `[workspace].members`.
+        pending.push(root_manifest_path);
+    }
+
+    let mut seen = HashSet::new();
+    let mut packages = Vec::new();
+    let mut cursor = 0;
+    while cursor < pending.len() {
+        let manifest_path = pending[cursor].clone();
+        cursor += 1;
+        if !seen.insert(manifest_path.to_string()) {
+            continue;
+        }
+        let Some(package) = static_metadata_package(
+            &manifest_path,
+            repo_root,
+            &workspace_dependencies,
+            workspace_edition.as_deref(),
+        )?
+        else {
+            continue;
+        };
+        for dependency in &package.dependencies {
+            let Some(directory) = dependency.path.as_deref().and_then(metadata_path) else {
+                continue;
+            };
+            if static_path_is_automatic_member(repo_root, &directory, &automatic_members)? {
+                pending.push(directory.join_component(CARGO_TOML));
+            }
+        }
+        packages.push(package);
+    }
+    packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
+    let workspace_members = packages.iter().map(|package| package.id.clone()).collect();
+    let metadata = Metadata {
+        packages,
+        workspace_members,
+        target_directory: repo_root.join_component(TARGET_DIR).to_string(),
+        metadata: static_workspace_metadata(&root_document),
+    };
+    workspace_from_metadata(repo_root, &metadata)
 }
 
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
@@ -4509,5 +5411,1301 @@ release: 1.96.0-nightly\n",
             .expect("library build derives IO");
         assert_eq!(io.package_default_inputs, Some(true));
         assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+    }
+
+    #[test]
+    fn static_manifest_discovery_expands_members_excludes_and_path_members() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["crates/*"]
+exclude = ["crates/excluded", "support/excluded"]
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        write(&root, &["src", "lib.rs"], "");
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+automatic = { path = "../../support/automatic" }
+"#,
+        );
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "automatic", CARGO_TOML],
+            r#"
+[package]
+name = "automatic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+transitive = { path = "../transitive" }
+excluded = { path = "../excluded" }
+"#,
+        );
+        write(&root, &["support", "automatic", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "transitive", CARGO_TOML],
+            "[package]\nname = \"transitive\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["support", "transitive", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "excluded", CARGO_TOML],
+            "[package]\nname = \"excluded\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["support", "excluded", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["crates", "excluded", CARGO_TOML],
+            "[package]\nname = \"glob-excluded\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["crates", "excluded", "src", "lib.rs"], "");
+
+        let workspace = discover_crates_statically(&root).unwrap();
+        assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+        assert!(workspace.has_packages);
+        let mut names = workspace
+            .crates
+            .iter()
+            .map(|cargo_crate| cargo_crate.name.as_str())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["app", "automatic", "root-package", "transitive"]);
+        assert!(
+            workspace
+                .crates
+                .iter()
+                .all(|cargo_crate| cargo_crate.name != "excluded"),
+            "an excluded automatic path dependency must not become a member"
+        );
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+        assert_eq!(
+            app.relationships,
+            [Relationship::internal(
+                "automatic",
+                DependencyKind::Production
+            )]
+        );
+        let automatic = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "automatic")
+            .unwrap();
+        assert_eq!(
+            automatic.relationships,
+            [Relationship::internal(
+                "transitive",
+                DependencyKind::Production
+            )]
+        );
+        assert!(
+            workspace
+                .crates
+                .iter()
+                .any(|cargo_crate| cargo_crate.manifest_path == root.join_component(CARGO_TOML))
+        );
+    }
+
+    #[test]
+    fn static_manifest_dependencies_use_workspace_paths_renames_and_target_kinds() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.dependencies]
+renamed = { package = "actual", path = "crates/actual" }
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+renamed = { workspace = true }
+
+[build-dependencies]
+build-dependency = { path = "../build-dependency" }
+
+[target.'cfg(unix)'.dependencies]
+target-production = { path = "../target-production" }
+target-optional = { path = "../target-optional", optional = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+target-development = { path = "../target-development" }
+"#,
+        );
+        for name in [
+            "actual",
+            "build-dependency",
+            "target-production",
+            "target-optional",
+            "target-development",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+
+        let workspace = discover_crates_statically(&root).unwrap();
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+        assert_eq!(
+            app.relationships,
+            [
+                Relationship::internal("actual", DependencyKind::Production),
+                Relationship::internal("build-dependency", DependencyKind::Production),
+                Relationship::internal("target-development", DependencyKind::Development),
+                Relationship::internal("target-optional", DependencyKind::Optional),
+                Relationship::internal("target-production", DependencyKind::Production),
+            ]
+        );
+    }
+
+    /// Cargo accepts every dependency table in two spellings: a `[table]`
+    /// section or an inline `key = { ... }` table. Both spellings of the same
+    /// manifests must discover identically, and the expectations are pinned
+    /// explicitly so a regression that breaks both spellings equally cannot
+    /// pass the parity comparison silently.
+    #[test]
+    fn static_manifest_dependencies_match_inline_and_table_workspace_and_member_forms() {
+        let (_tmp, root) = tempdir_root();
+        let write_root_and_member = |root_manifest: &str, app_manifest: &str| {
+            write(&root, &[CARGO_TOML], root_manifest);
+            write(&root, &["crates", "app", CARGO_TOML], app_manifest);
+        };
+        write_root_and_member(
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.dependencies]
+renamed = { package = "actual", path = "crates/actual" }
+
+[workspace.metadata]
+name = "cargo-workspace"
+
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+root-normal = { path = "crates/root-normal" }
+
+[dev-dependencies]
+root-dev = { path = "crates/root-dev" }
+
+[build-dependencies]
+root-build = { path = "crates/root-build" }
+"#,
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+renamed = { workspace = true }
+app-normal = { path = "../app-normal" }
+
+[dev-dependencies]
+app-dev = { path = "../app-dev" }
+
+[build-dependencies]
+app-build = { path = "../app-build" }
+"#,
+        );
+        for name in [
+            "actual",
+            "app-build",
+            "app-dev",
+            "app-normal",
+            "root-build",
+            "root-dev",
+            "root-normal",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+        // The root manifest is itself a member: its `src/main.rs` gives it an
+        // automatic binary deliverable that the parity comparison must keep.
+        write(&root, &["src", "main.rs"], "fn main() {}\n");
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+
+        let assert_expected = |workspace: &DiscoveredWorkspace| {
+            assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+            assert!(workspace.has_packages);
+            let mut names = workspace
+                .crates
+                .iter()
+                .map(|cargo_crate| cargo_crate.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort();
+            assert_eq!(
+                names,
+                [
+                    "actual",
+                    "app",
+                    "app-build",
+                    "app-dev",
+                    "app-normal",
+                    "root-build",
+                    "root-dev",
+                    "root-normal",
+                    "root-package",
+                ]
+            );
+            let app = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "app")
+                .unwrap();
+            assert_eq!(
+                app.relationships,
+                [
+                    Relationship::internal("actual", DependencyKind::Production),
+                    Relationship::internal("app-build", DependencyKind::Production),
+                    Relationship::internal("app-dev", DependencyKind::Development),
+                    Relationship::internal("app-normal", DependencyKind::Production),
+                ]
+            );
+            let root_package = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "root-package")
+                .unwrap();
+            assert_eq!(
+                root_package.relationships,
+                [
+                    Relationship::internal("root-build", DependencyKind::Production),
+                    Relationship::internal("root-dev", DependencyKind::Development),
+                    Relationship::internal("root-normal", DependencyKind::Production),
+                ]
+            );
+            assert_eq!(
+                root_package.deliverables,
+                [Deliverable {
+                    name: "root-package".to_string(),
+                    kind: DeliverableKind::Bin,
+                }]
+            );
+        };
+
+        let table_form = discover_crates_statically(&root).unwrap();
+        assert_expected(&table_form);
+
+        // Rewrite the same manifest paths with the inline spellings: the
+        // workspace dependency view, the root member's dependency tables, and
+        // the member's dependency tables all become inline tables.
+        write_root_and_member(
+            r#"
+dependencies = { root-normal = { path = "crates/root-normal" } }
+dev-dependencies = { root-dev = { path = "crates/root-dev" } }
+build-dependencies = { root-build = { path = "crates/root-build" } }
+
+[workspace]
+members = ["crates/app"]
+dependencies = { renamed = { package = "actual", path = "crates/actual" } }
+
+[workspace.metadata]
+name = "cargo-workspace"
+
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+"#,
+            r#"
+dependencies = { renamed = { workspace = true }, app-normal = { path = "../app-normal" } }
+dev-dependencies = { app-dev = { path = "../app-dev" } }
+build-dependencies = { app-build = { path = "../app-build" } }
+
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+"#,
+        );
+        let inline_form = discover_crates_statically(&root).unwrap();
+        assert_expected(&inline_form);
+
+        assert_eq!(inline_form.crates, table_form.crates);
+    }
+
+    /// The target-conditional tables nest three levels deep (`target`, each
+    /// selector, the selector's dependency tables), and every level accepts
+    /// the inline spelling. Both spellings must discover identically.
+    #[test]
+    fn static_manifest_dependencies_match_inline_and_table_target_forms() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        let write_app = |manifest: &str| {
+            write(&root, &["crates", "app", CARGO_TOML], manifest);
+        };
+        write_app(
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[target.'cfg(unix)'.dependencies]
+target-normal = { path = "../target-normal" }
+target-optional = { path = "../target-optional", optional = true }
+
+[target.'cfg(windows)'.dev-dependencies]
+target-dev = { path = "../target-dev" }
+
+[target.'cfg(windows)'.build-dependencies]
+target-build = { path = "../target-build" }
+"#,
+        );
+        for name in [
+            "target-build",
+            "target-dev",
+            "target-normal",
+            "target-optional",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+        write(
+            &root,
+            &["crates", "app", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+
+        let assert_expected = |workspace: &DiscoveredWorkspace| {
+            assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+            assert!(workspace.has_packages);
+            let mut names = workspace
+                .crates
+                .iter()
+                .map(|cargo_crate| cargo_crate.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort();
+            assert_eq!(
+                names,
+                [
+                    "app",
+                    "target-build",
+                    "target-dev",
+                    "target-normal",
+                    "target-optional"
+                ]
+            );
+            let app = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "app")
+                .unwrap();
+            assert_eq!(
+                app.relationships,
+                [
+                    Relationship::internal("target-build", DependencyKind::Production),
+                    Relationship::internal("target-dev", DependencyKind::Development),
+                    Relationship::internal("target-normal", DependencyKind::Production),
+                    Relationship::internal("target-optional", DependencyKind::Optional),
+                ]
+            );
+            assert_eq!(
+                app.deliverables,
+                [Deliverable {
+                    name: "app".to_string(),
+                    kind: DeliverableKind::Bin,
+                }]
+            );
+        };
+
+        let table_form = discover_crates_statically(&root).unwrap();
+        assert_expected(&table_form);
+
+        // Inline tables cannot span lines in TOML, so the entire `target`
+        // nesting is a single key: the outer table, each selector's view, and
+        // the selector's dependency tables are all inline tables.
+        write_app(
+            r#"
+target = { 'cfg(unix)' = { dependencies = { target-normal = { path = "../target-normal" }, target-optional = { path = "../target-optional", optional = true } } }, 'cfg(windows)' = { dev-dependencies = { target-dev = { path = "../target-dev" } }, build-dependencies = { target-build = { path = "../target-build" } } } }
+
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+"#,
+        );
+        let inline_form = discover_crates_statically(&root).unwrap();
+        assert_expected(&inline_form);
+
+        assert_eq!(inline_form.crates, table_form.crates);
+    }
+
+    #[test]
+    fn static_manifest_targets_follow_auto_explicit_and_lib_rules() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2021"
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        let write_package = |directory: &str, contents: &str| {
+            write(&root, &["crates", directory, CARGO_TOML], contents);
+        };
+        write_package(
+            "auto",
+            "[package]\nname = \"auto\"\nversion = \"0.1.0\"\nedition.workspace = true\n",
+        );
+        write(
+            &root,
+            &["crates", "auto", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "auto", "src", "bin", "extra.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "auto", "src", "bin", "nested", "main.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "disabled",
+            "[package]\nname = \"disabled\"\nversion = \"0.1.0\"\nedition.workspace = \
+             true\nautobins = false\n",
+        );
+        write(
+            &root,
+            &["crates", "disabled", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "inherited",
+            r#"
+[package]
+name = "inherited"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "custom"
+path = "src/main.rs"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "inherited", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "inherited", "src", "bin", "extra.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "named",
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "app"
+path = "src/custom.rs"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "named", "src", "custom.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "named", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "default-main",
+            r#"
+[package]
+name = "default-main"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "default-main"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "default-main", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "nested",
+            r#"
+[package]
+name = "nested"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "nested"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "nested", "src", "bin", "nested", "main.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "legacy",
+            r#"
+[package]
+name = "legacy"
+version = "0.1.0"
+edition = "2015"
+
+[[bin]]
+name = "legacy-explicit"
+path = "src/main.rs"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "legacy", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "legacy", "src", "bin", "ignored.rs"],
+            "fn main() {}\n",
+        );
+        write_package(
+            "legacy-enabled",
+            r#"
+[package]
+name = "legacy-enabled"
+version = "0.1.0"
+edition = "2015"
+autobins = true
+
+[[bin]]
+name = "custom"
+path = "src/custom.rs"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "legacy-enabled", "src", "custom.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "legacy-enabled", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "legacy-enabled", "src", "bin", "extra.rs"],
+            "fn main() {}\n",
+        );
+        for (directory, target, source) in [
+            ("legacy-lib", "[lib]", "src/lib.rs"),
+            (
+                "legacy-example",
+                "[[example]]\nname = \"legacy-example\"",
+                "examples/legacy-example.rs",
+            ),
+            (
+                "legacy-test",
+                "[[test]]\nname = \"legacy-test\"",
+                "tests/legacy-test.rs",
+            ),
+            (
+                "legacy-bench",
+                "[[bench]]\nname = \"legacy-bench\"",
+                "benches/legacy-bench.rs",
+            ),
+        ] {
+            write_package(
+                directory,
+                &format!(
+                    "[package]\nname = \"{directory}\"\nversion = \"0.1.0\"\nedition = \
+                     \"2015\"\n\n{target}\n"
+                ),
+            );
+            write(
+                &root,
+                &["crates", directory, "src", "main.rs"],
+                "fn main() {}\n",
+            );
+            let source = AbsoluteSystemPathBuf::from_unknown(
+                &root.join_components(&["crates", directory]),
+                source,
+            );
+            std::fs::create_dir_all(source.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(source.as_std_path(), "fn main() {}\n").unwrap();
+        }
+        write_package(
+            "ffi",
+            r#"
+[package]
+name = "ffi"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+name = "ffi_name"
+crate-type = ["rlib", "cdylib", "staticlib"]
+"#,
+        );
+        write(&root, &["crates", "ffi", "src", "lib.rs"], "");
+
+        let workspace = discover_crates_statically(&root).unwrap();
+        let deliverables = |name: &str| {
+            let mut deliverables = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == name)
+                .unwrap()
+                .deliverables
+                .iter()
+                .map(|deliverable| format!("{}:{:?}", deliverable.name, deliverable.kind))
+                .collect::<Vec<_>>();
+            deliverables.sort();
+            deliverables
+        };
+        assert_eq!(
+            deliverables("auto"),
+            ["auto:Bin", "extra:Bin", "nested:Bin"]
+        );
+        assert!(deliverables("disabled").is_empty());
+        assert_eq!(deliverables("inherited"), ["custom:Bin", "extra:Bin"]);
+        assert_eq!(deliverables("app"), ["app:Bin"]);
+        assert_eq!(deliverables("default-main"), ["default-main:Bin"]);
+        assert_eq!(deliverables("nested"), ["nested:Bin"]);
+        assert_eq!(deliverables("legacy"), ["legacy-explicit:Bin"]);
+        assert_eq!(
+            deliverables("legacy-enabled"),
+            ["custom:Bin", "extra:Bin", "legacy-enabled:Bin"]
+        );
+        for name in [
+            "legacy-lib",
+            "legacy-example",
+            "legacy-test",
+            "legacy-bench",
+        ] {
+            assert!(
+                deliverables(name).is_empty(),
+                "Cargo 2015 explicit targets disable automatic bins: {name}"
+            );
+        }
+        assert_eq!(
+            deliverables("ffi"),
+            ["ffi_name:Cdylib", "ffi_name:Staticlib"]
+        );
+
+        let default_main = root.join_components(&["crates", "default-main"]);
+        assert_eq!(
+            static_default_bin_path(&default_main, "default-main", "default-main").unwrap(),
+            Some(default_main.join_components(&["src", "main.rs"]))
+        );
+        let nested = root.join_components(&["crates", "nested"]);
+        assert_eq!(
+            static_default_bin_path(&nested, "nested", "nested").unwrap(),
+            Some(nested.join_components(&["src", "bin", "nested", "main.rs"]))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn static_manifest_targets_follow_symlinked_sources() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            "[workspace]\nmembers = [\"crates/app\"]\n\n[workspace.metadata]\nname = \
+             \"cargo-workspace\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "src", "linked-target.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "src", "nested-target", "main.rs"],
+            "fn main() {}\n",
+        );
+        let bin_directory = root.join_components(&["crates", "app", "src", "bin"]);
+        std::fs::create_dir_all(bin_directory.as_std_path()).unwrap();
+        std::os::unix::fs::symlink(
+            "../linked-target.rs",
+            bin_directory.join_component("linked.rs").as_std_path(),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            "../nested-target",
+            bin_directory.join_component("nested").as_std_path(),
+        )
+        .unwrap();
+
+        let workspace = discover_crates_statically(&root).unwrap();
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+        let mut deliverables = app
+            .deliverables
+            .iter()
+            .map(|deliverable| format!("{}:{:?}", deliverable.name, deliverable.kind))
+            .collect::<Vec<_>>();
+        deliverables.sort();
+        assert_eq!(deliverables, ["linked:Bin", "nested:Bin"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn static_cargo_contributor_is_provisional_and_resolution_is_unavailable() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        // Static discovery reads this as prune input only; it deliberately does
+        // not parse Cargo.lock into external package identities.
+        write(&root, &[CARGO_LOCK], "version = 4\n");
+
+        let contributor = CargoContributor::new(root.clone());
+        let (packages, roots, resolutions, changes, prune_domains) = contributor
+            .discover_packages_statically()
+            .await
+            .expect("manifest-only Cargo discovery must not need a toolchain")
+            .into_parts();
+        assert_eq!(roots, vec![WorkspaceRoot::new("cargo", root.clone())]);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(prune_domains.len(), 1);
+        assert_eq!(resolutions.len(), 1);
+        let resolution = &resolutions[0];
+        assert_eq!(resolution.definition_sources()[0].as_str(), CARGO_LOCK);
+        assert!(
+            resolution
+                .fallback_inputs()
+                .iter()
+                .any(|input| input.as_str() == CARGO_TOML)
+        );
+        assert!(
+            resolution
+                .fallback_inputs()
+                .iter()
+                .any(|input| input.as_str() == "crates/app/Cargo.toml")
+        );
+        assert!(matches!(
+            resolution.data(),
+            ExternalResolutionData::Unavailable(reason)
+                if reason.code() == "cargo-static-resolution-deferred"
+        ));
+        let mut resolution_members = resolution.members().to_vec();
+        resolution_members.sort();
+        assert_eq!(resolution_members, ["app", "cargo-workspace"]);
+
+        let app = packages
+            .into_iter()
+            .map(DiscoveredPackage::into_parts)
+            .find(|package| package.name.as_deref() == Some("app"))
+            .unwrap();
+        let task_names = app
+            .native_tasks
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|task| task.name())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            task_names,
+            ["build", "run", "dev", "test", "check", "lint", "format"]
+        );
+        let contract = app.task_contract.unwrap();
+        assert_eq!(
+            contract.dependency_source_inputs(),
+            crate::task_contracts::DependencySourceInputs::Include
+        );
+        let endpoint = toolchain::CompileCacheEndpoint {
+            url: "http://127.0.0.1:42123".to_string(),
+            token: "proxy-token".to_string(),
+            wrapper: "/path/to/turbo".to_string(),
+            server_port: 46123,
+        };
+        assert!(
+            contract
+                .compile_cache_env(&endpoint, &std::collections::HashMap::new())
+                .is_empty()
+        );
+
+        let app_context = task_context(&contributor, &root, "app", "crates/app");
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        for task in ["build", "test"] {
+            let io = contract
+                .derived_task_io(&app_context, task, "../..", &[], true, &context)
+                .unwrap();
+            assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+            assert_eq!(
+                io.cache_reason.as_deref(),
+                Some("Cargo compiler and output configuration are deferred until preparation")
+            );
+            if task == "build" {
+                assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+            }
+        }
+    }
+
+    fn fixture_crate(root: &AbsoluteSystemPath, rel: &[&str]) -> CargoCrate {
+        CargoCrate {
+            name: "app".to_string(),
+            manifest_path: root.join_components(rel),
+            relationships: Vec::new(),
+            deliverables: Vec::new(),
+            manifest_alters_output_layout: false,
+        }
+    }
+
+    fn target_selection(
+        cargo_target_dir: Option<&str>,
+        cargo_build_target_dir: Option<&str>,
+    ) -> CargoTargetSelection {
+        CargoTargetSelection {
+            cargo_target_dir: cargo_target_dir.map(std::ffi::OsString::from),
+            cargo_build_target_dir: cargo_build_target_dir.map(std::ffi::OsString::from),
+        }
+    }
+
+    fn static_target(
+        root: &AbsoluteSystemPath,
+        crates: &[CargoCrate],
+        selection: &CargoTargetSelection,
+    ) -> Option<AbsoluteSystemPathBuf> {
+        // A default home keeps these unit tests hermetic: no ambient HOME,
+        // USERPROFILE, or CARGO_HOME can inject an external configuration.
+        static_target_directory(root, crates, selection, &CargoHomeEnvironment::default())
+    }
+
+    #[test]
+    fn static_target_directory_defaults_to_workspace_target() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            Some(root.join_component(TARGET_DIR))
+        );
+    }
+
+    #[test]
+    fn static_target_directory_honors_explicit_environment_overrides() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        // Relative spellings anchor to the repository root, exactly as
+        // `cargo metadata` invoked there resolves them; absolute spellings
+        // resolve as-is.
+        assert_eq!(
+            static_target(&root, &crates, &target_selection(Some("env-target"), None)),
+            Some(root.join_component("env-target"))
+        );
+        assert_eq!(
+            static_target(
+                &root,
+                &crates,
+                &target_selection(None, Some("build-env-target"))
+            ),
+            Some(root.join_component("build-env-target"))
+        );
+        // CARGO_TARGET_DIR outranks CARGO_BUILD_TARGET_DIR.
+        assert_eq!(
+            static_target(
+                &root,
+                &crates,
+                &target_selection(Some("primary"), Some("secondary"))
+            ),
+            Some(root.join_component("primary"))
+        );
+        let absolute = root.join_component("absolute-env-target");
+        assert_eq!(
+            static_target(
+                &root,
+                &crates,
+                &target_selection(Some(absolute.as_str()), None)
+            ),
+            Some(absolute)
+        );
+
+        // A target directory outside the repository derives fine; the
+        // observation then drops it, because there is nothing inside the
+        // repository to ignore.
+        let outside = tempfile::tempdir().unwrap();
+        let outside_root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(outside.path())
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        let derived = static_target(
+            &root,
+            &crates,
+            &target_selection(Some(outside_root.as_str()), None),
+        );
+        assert_eq!(derived, Some(outside_root));
+        assert_eq!(
+            cargo_change_observation(&root, derived.as_deref()),
+            ChangeObservation::new()
+                .with_rediscovery_file_name(CARGO_TOML)
+                .with_resolution_path(CARGO_LOCK)
+        );
+    }
+
+    #[test]
+    fn static_target_directory_fails_closed_on_unresolvable_values() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        for value in ["", "targets/*", "../outside", "nested/../escape"] {
+            assert_eq!(
+                static_target(&root, &crates, &target_selection(Some(value), None)),
+                None,
+                "value {value:?} must not become a watch exclude"
+            );
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            // A set-but-uninterpretable override still suppresses the
+            // configuration fallback: it fails closed instead of guessing.
+            let selection = CargoTargetSelection {
+                cargo_target_dir: Some(std::ffi::OsString::from_vec(vec![0xff])),
+                cargo_build_target_dir: None,
+            };
+            assert_eq!(static_target(&root, &crates, &selection), None);
+        }
+    }
+
+    #[test]
+    fn static_target_directory_reads_repository_configuration() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        write(
+            &root,
+            &[".cargo", "config.toml"],
+            "[build]\ntarget-dir = \"configured-target\"\n",
+        );
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            Some(root.join_component("configured-target"))
+        );
+        // Environment overrides outrank the configuration file.
+        assert_eq!(
+            static_target(&root, &crates, &target_selection(Some("env-target"), None)),
+            Some(root.join_component("env-target"))
+        );
+
+        let absolute = root.join_component("absolute-configured-target");
+        write(
+            &root,
+            &[".cargo", "config.toml"],
+            &format!("[build]\ntarget-dir = {:?}\n", absolute.as_str()),
+        );
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            Some(absolute)
+        );
+
+        // The legacy `config` spelling selects too, when it is the only one.
+        std::fs::remove_file(
+            root.join_components(&[".cargo", "config.toml"])
+                .as_std_path(),
+        )
+        .unwrap();
+        write(
+            &root,
+            &[".cargo", "config"],
+            "[build]\ntarget-dir = \"legacy\"\n",
+        );
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            Some(root.join_component("legacy"))
+        );
+    }
+
+    #[test]
+    fn static_target_directory_fails_closed_on_unprovable_configuration() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        for contents in [
+            "not toml {{{",
+            "[build]\ntarget-dir = 42\n",
+            "[build]\ntarget-dir = \"out/*\"\n",
+            "[build]\ntarget-dir = \"../escape\"\n",
+            "include = \"other.toml\"\n",
+        ] {
+            write(&root, &[".cargo", "config.toml"], contents);
+            assert_eq!(
+                static_target(&root, &crates, &CargoTargetSelection::default()),
+                None,
+                "configuration {contents:?} must not become a watch exclude"
+            );
+        }
+
+        // Both spellings present and disagreeing: Cargo's choice between them
+        // is unproven, so nothing is ignored.
+        write(
+            &root,
+            &[".cargo", "config.toml"],
+            "[build]\ntarget-dir = \"one\"\n",
+        );
+        write(
+            &root,
+            &[".cargo", "config"],
+            "[build]\ntarget-dir = \"two\"\n",
+        );
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            None
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn static_target_directory_fails_closed_on_symlinked_configuration() {
+        let (_tmp, root) = tempdir_root();
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        write(
+            &root,
+            &["real-cargo", "config.toml"],
+            "[build]\ntarget-dir = \"configured-target\"\n",
+        );
+        std::os::unix::fs::symlink(
+            root.join_component("real-cargo").as_std_path(),
+            root.join_component(".cargo").as_std_path(),
+        )
+        .unwrap();
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            None
+        );
+    }
+
+    #[test]
+    fn static_target_directory_prefers_extra_watch_over_external_configuration() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        std::fs::create_dir_all(repo.as_std_path()).unwrap();
+        let crates = vec![fixture_crate(&repo, &["crates", "app", CARGO_TOML])];
+
+        // Configuration outside the repository is never read; because it could
+        // relocate the target directory, no exclude is derived at all. Extra
+        // watch events are the accepted cost — a false negative is not.
+        write(&root, &[".cargo", "config.toml"], "[net]\nretry = 2\n");
+        assert_eq!(
+            static_target(&repo, &crates, &CargoTargetSelection::default()),
+            None
+        );
+
+        // A repository-local selection still wins over external presence.
+        write(
+            &repo,
+            &[".cargo", "config.toml"],
+            "[build]\ntarget-dir = \"configured-target\"\n",
+        );
+        assert_eq!(
+            static_target(&repo, &crates, &CargoTargetSelection::default()),
+            Some(repo.join_component("configured-target"))
+        );
+    }
+
+    #[test]
+    fn static_target_directory_never_ignores_member_sources() {
+        let (_tmp, root) = tempdir_root();
+        // A member under the default target directory: ignoring `target/`
+        // would drop this member's changes, so no exclude is derived.
+        let crates = vec![fixture_crate(&root, &["target", "tool", CARGO_TOML])];
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            None
+        );
+
+        // The same guard applies to configured directories.
+        write(
+            &root,
+            &[".cargo", "config.toml"],
+            "[build]\ntarget-dir = \"crates\"\n",
+        );
+        let crates = vec![fixture_crate(&root, &["crates", "app", CARGO_TOML])];
+        assert_eq!(
+            static_target(&root, &crates, &CargoTargetSelection::default()),
+            None
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn static_watch_spec_derives_default_target_without_native_probes() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            "[workspace]\nmembers = [\"crates/app\"]\n\n[workspace.metadata]\nname = \
+             \"cargo-workspace\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+
+        // Like the metadata path (whose `cargo metadata` subprocess inherits
+        // the same environment), this exercises the ambient environment and
+        // Cargo home; the derivation reads files only and spawns nothing.
+        let contributor = CargoContributor::new(root.clone());
+        let (packages, _roots, resolutions, changes, _prune) = contributor
+            .discover_packages_statically()
+            .await
+            .expect("static Cargo discovery must not require cargo or rustc probes")
+            .into_parts();
+
+        // The watch spec matches the metadata path's ordinary default: the
+        // workspace-root `target/` directory is ignored so build byproducts
+        // cannot feed the watch loop.
+        assert_eq!(changes.len(), 1);
+        assert_eq!(
+            changes[0],
+            ChangeObservation::new()
+                .with_rediscovery_file_name(CARGO_TOML)
+                .with_resolution_path(CARGO_LOCK)
+                .with_ignore_prefix(TARGET_DIR)
+        );
+
+        // No probe-derived facts anywhere: resolution stays deferred, and no
+        // contract installs the compiler-cache wrapper that a rustc identity
+        // would enable.
+        assert!(matches!(
+            resolutions[0].data(),
+            ExternalResolutionData::Unavailable(reason)
+                if reason.code() == "cargo-static-resolution-deferred"
+        ));
+        let endpoint = toolchain::CompileCacheEndpoint {
+            url: "http://127.0.0.1:42123".to_string(),
+            token: "proxy-token".to_string(),
+            wrapper: "/path/to/turbo".to_string(),
+            server_port: 46123,
+        };
+        for package in packages {
+            let parts = package.into_parts();
+            let contract = parts.task_contract.expect("Cargo scopes carry contracts");
+            assert!(
+                contract
+                    .compile_cache_env(&endpoint, &std::collections::HashMap::new())
+                    .is_empty()
+            );
+        }
     }
 }

@@ -381,7 +381,31 @@ pub enum PackageResolutionState {
         completeness: ResolutionCompleteness,
         fingerprint: ResolutionFingerprint,
     },
-    Unavailable(ResolutionUnavailableReason),
+    /// Resolution was never attempted for this package's toolchain in the
+    /// current generation: staged planning left the toolchain unprepared.
+    /// Distinct from [`PackageResolutionState::Unavailable`], which records an
+    /// attempted failure and keeps its historical global-fallback behavior.
+    ///
+    /// `fallback` is the consumer-scoped conservative fingerprint hashed from
+    /// the domain's declared fallback inputs: consumers of this package's
+    /// tasks (transit-task hash chaining) invalidate when those files change,
+    /// instead of a stable empty fingerprint that would silently cache
+    /// dependents of a commandless native transit task.
+    Deferred {
+        fallback: Option<ResolutionFingerprint>,
+    },
+    /// Resolution was attempted and failed. For contributor-supplied domains
+    /// the failure's conservative fallback is routed per-consumer: `fallback`
+    /// carries the same fingerprint [`PackageResolutionState::Deferred`] uses,
+    /// and the domain is excluded from the repo-wide fallback, so co-selection
+    /// cannot change unrelated task hashes based on this domain's
+    /// availability. The core lockfile-pipeline domain keeps the historical
+    /// behavior: `fallback: None`, a stable empty fingerprint, and the global
+    /// file fallback.
+    Unavailable {
+        reason: ResolutionUnavailableReason,
+        fallback: Option<ResolutionFingerprint>,
+    },
     Missing,
     NotApplicable,
 }
@@ -389,6 +413,8 @@ pub enum PackageResolutionState {
 impl PackageResolutionState {
     /// Existing unavailable and non-applicable states remain cache-eligible.
     /// Partial resolution is explicit and cannot safely participate in caching.
+    /// Deferred domains carry deterministic fallback fingerprints, so caching
+    /// them stays eligible and correct.
     pub fn cache_eligible(&self) -> bool {
         !matches!(
             self,
@@ -402,7 +428,21 @@ impl PackageResolutionState {
     pub fn task_hash(&self) -> Option<&str> {
         match self {
             Self::Resolved { fingerprint, .. } => Some(fingerprint.as_str()),
-            Self::Unavailable(_) | Self::NotApplicable => Some(""),
+            // Deferred (staged, never-attempted) and contributor-supplied
+            // attempted failures contribute a consumer-scoped conservative
+            // fingerprint — hashed from the domain's declared fallback inputs
+            // — so consumers of the domain's members invalidate when the
+            // underlying files change. They never fail the external-deps map;
+            // a domain with no fallback inputs keeps the stable empty
+            // fingerprint. The core lockfile domain keeps its historical
+            // stable empty fingerprint.
+            Self::Deferred { fallback } | Self::Unavailable { fallback, .. } => {
+                Some(match fallback {
+                    Some(fingerprint) => fingerprint.as_str(),
+                    None => "",
+                })
+            }
+            Self::NotApplicable => Some(""),
             Self::Missing => None,
         }
     }
@@ -458,6 +498,15 @@ pub struct ExternalResolutionDomain {
     /// Paths are relative to `root` and apply uniformly to every toolchain.
     fallback_inputs: Vec<AnchoredSystemPathBuf>,
     data: ExternalResolutionData,
+    /// Whether a repository contributor supplied this domain, as opposed to
+    /// core's own lockfile pipeline. Provenance, not identity — no toolchain
+    /// is named — and it does not move with selection the way preparation
+    /// state does. Contributor-supplied unavailable domains route their
+    /// conservative fallback per-consumer (member fallback fingerprints) so
+    /// that co-selection cannot change unrelated task hashes regardless of
+    /// the domain's availability; the core lockfile domain keeps its
+    /// historical global fallback.
+    contributor_supplied: bool,
 }
 
 impl ExternalResolutionDomain {
@@ -481,7 +530,21 @@ impl ExternalResolutionDomain {
             fallback_inputs: definition_sources.clone(),
             definition_sources,
             data,
+            contributor_supplied: false,
         }
+    }
+
+    /// Marks this domain as supplied by a repository contributor (as opposed
+    /// to core's own lockfile pipeline). Set by the package graph builder when
+    /// collecting contributor observations; not part of the producer API.
+    pub(crate) fn mark_contributor_supplied(&mut self) {
+        self.contributor_supplied = true;
+    }
+
+    /// Whether a repository contributor supplied this domain. See the field
+    /// documentation for the fallback routing this provenance drives.
+    pub(crate) fn is_contributor_supplied(&self) -> bool {
+        self.contributor_supplied
     }
 
     /// Adds conservative inputs used when this domain cannot provide exact
@@ -1068,10 +1131,18 @@ mod tests {
 
     #[test]
     fn package_resolution_state_preserves_hash_and_cache_semantics() {
-        let unavailable = PackageResolutionState::Unavailable(ResolutionUnavailableReason::new(
-            "missing",
-            "missing lockfile",
-        ));
+        let core_unavailable = PackageResolutionState::Unavailable {
+            reason: ResolutionUnavailableReason::new("missing", "missing lockfile"),
+            fallback: None,
+        };
+        let contributor_unavailable = PackageResolutionState::Unavailable {
+            reason: ResolutionUnavailableReason::new("missing", "missing native lockfile"),
+            fallback: Some(ResolutionFingerprint::new("fallback-hash")),
+        };
+        let deferred_without_fallback = PackageResolutionState::Deferred { fallback: None };
+        let deferred_with_fallback = PackageResolutionState::Deferred {
+            fallback: Some(ResolutionFingerprint::new("fallback-hash")),
+        };
         let partial = PackageResolutionState::Resolved {
             completeness: ResolutionCompleteness::Partial(ResolutionIncompleteReason::new(
                 "partial",
@@ -1080,8 +1151,20 @@ mod tests {
             fingerprint: ResolutionFingerprint::new("partial-hash"),
         };
 
-        assert_eq!(unavailable.task_hash(), Some(""));
-        assert!(unavailable.cache_eligible());
+        // The core lockfile domain keeps its historical semantics: a stable
+        // empty fingerprint, with its fallback delivered globally instead.
+        assert_eq!(core_unavailable.task_hash(), Some(""));
+        assert!(core_unavailable.cache_eligible());
+        // Deferred (staged, never-attempted) and contributor-supplied
+        // attempted failures contribute a consumer-scoped conservative
+        // fingerprint instead, so consumers of the domain's members
+        // invalidate on the underlying files — the domain's availability can
+        // no longer move co-selected task hashes.
+        assert_eq!(deferred_without_fallback.task_hash(), Some(""));
+        assert_eq!(deferred_with_fallback.task_hash(), Some("fallback-hash"));
+        assert_eq!(contributor_unavailable.task_hash(), Some("fallback-hash"));
+        assert!(deferred_with_fallback.cache_eligible());
+        assert!(contributor_unavailable.cache_eligible());
         assert_eq!(PackageResolutionState::Missing.task_hash(), None);
         assert!(!partial.cache_eligible());
     }

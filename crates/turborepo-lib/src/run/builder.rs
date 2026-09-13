@@ -20,10 +20,11 @@ use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
+    toolchain::{PlanningUncertaintyKind, ToolchainId},
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_scope::filter::ResolutionError;
+use turborepo_scope::{filter::ResolutionError, TargetSelector};
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::{TaskId, TaskName};
@@ -44,6 +45,38 @@ type FilteredPackages = (
     HashSet<PackageName>,
 );
 
+/// Selection-side inputs for [`RunBuilder::refuse_unproven_selection`].
+///
+/// Everything needed to prove a selection independent of a contributor's
+/// unresolved planning facts, with no knowledge of which language any
+/// toolchain is: which toolchains preparation will resolve, the resolved
+/// package selection, which task names are in play, and whether the
+/// selection expanded dependents or dependencies.
+struct UnresolvedPlanningContext<'a> {
+    /// Toolchains whose observations preparation will replace for this run.
+    resolving_toolchains: &'a HashSet<ToolchainId>,
+    /// Packages resolved by scope resolution. Together with the engine's
+    /// retained task packages this forms the consulted set: the traversal
+    /// closure and the catalogue domain.
+    filtered_packages: &'a HashMap<PackageName, PackageInclusionReason>,
+    /// Task names the run requests for every consulted catalogue: unqualified
+    /// task arguments only. Qualified arguments (`js#dev`) name a task for
+    /// one package; their scopes are captured by the engine's task ids.
+    /// `--filter` does not support `pkg#task` syntax.
+    requested_task_names: &'a HashSet<String>,
+    /// Whether the selection expanded dependents: `--affected`, `...pkg`
+    /// selectors, `pkg...[range]` match-dependencies, or a watch rerun's
+    /// affectedness. Dependents completeness depends on edges pointing into
+    /// the selected set.
+    dependents_direction: bool,
+    /// Whether the selection expanded dependencies: `pkg...`,
+    /// `pkg^...`, or match-dependencies selectors. The dependency closure
+    /// is computed through each member's outgoing edges, and `filtered_pkgs`
+    /// is frozen from the planning graph — preparation re-collects task
+    /// edges but cannot repair package-level selection.
+    dependencies_direction: bool,
+}
+
 #[derive(Default)]
 struct TaskEntrypointSelection {
     candidates: HashSet<TaskId<'static>>,
@@ -54,7 +87,7 @@ struct TaskEntrypointSelection {
 
 use crate::{
     commands::CommandBase,
-    engine::{task_has_command, Engine, EngineBuilder, EngineExt},
+    engine::{task_has_command, Engine, EngineBuilder, EngineExt, TaskNode},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     repository_graph::RepositoryGraphFeatures,
@@ -484,6 +517,360 @@ impl RunBuilder {
         Some(prefixes)
     }
 
+    /// The toolchains that own at least one finally-participating task.
+    ///
+    /// Selection is drawn only from tasks that will actually execute — a task
+    /// with a resolved command, honoring `command` overrides and excluding
+    /// commandless transit/opt-out nodes. Package dependency ancestors that
+    /// never execute are deliberately not considered, so an unselected
+    /// toolchain is never prepared.
+    fn participating_toolchains(
+        pkg_dep_graph: &PackageGraph,
+        engine: &Engine,
+    ) -> HashSet<ToolchainId> {
+        let mut selection = HashSet::new();
+        for node in engine.tasks() {
+            let TaskNode::Task(task) = node else {
+                continue;
+            };
+            if !task_has_command(engine, pkg_dep_graph, task) {
+                continue;
+            }
+            if let Some(toolchain) =
+                pkg_dep_graph.package_toolchain(&PackageName::from(task.package()))
+            {
+                selection.insert(toolchain.clone());
+            }
+        }
+        selection
+    }
+
+    /// Retain exactly the finalized task set in a rebuilt (prepared) engine,
+    /// re-expanding `with` siblings and dependency edges from the rebuilt
+    /// graph.
+    ///
+    /// Refuses if a finalized task no longer exists: static planning topology
+    /// that diverges from eager topology would otherwise silently drop a
+    /// dependency.
+    fn retain_prepared_tasks(
+        engine: Engine,
+        finalized: &HashSet<TaskId<'static>>,
+    ) -> Result<Engine, Error> {
+        for task in finalized {
+            if engine.task_definition(task).is_none() {
+                return Err(Error::StagedTaskTopologyMismatch {
+                    task: task.to_string(),
+                });
+            }
+        }
+        let expanded = super::task_filter::expand_with_siblings(&engine, finalized.clone());
+        let mut retained = expanded.clone();
+        retained.extend(engine.collect_task_dependencies(&expanded));
+        Ok(engine.retain_task_subset(&retained))
+    }
+
+    /// Refuse a prepared engine that would execute a task in a toolchain left
+    /// unprepared. Such a task's hash-relevant contracts are only the static
+    /// planning observation, so executing it would hash stale inputs.
+    fn refuse_unprepared_toolchains(
+        pkg_dep_graph: &PackageGraph,
+        engine: &Engine,
+        unprepared: &HashSet<ToolchainId>,
+    ) -> Result<(), Error> {
+        if unprepared.is_empty() {
+            return Ok(());
+        }
+        for node in engine.tasks() {
+            let TaskNode::Task(task) = node else {
+                continue;
+            };
+            if !task_has_command(engine, pkg_dep_graph, task) {
+                continue;
+            }
+            if let Some(toolchain) =
+                pkg_dep_graph.package_toolchain(&PackageName::from(task.package()))
+            {
+                if unprepared.contains(toolchain) {
+                    return Err(Error::StagedUnpreparedToolchain {
+                        toolchain: toolchain.to_string(),
+                        task: task.to_string(),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Refuse a selection that cannot be proven exact against a contributor's
+    /// unresolved planning facts, before any preparation (and therefore
+    /// before any native invocation) is allowed to resolve them.
+    ///
+    /// Planning uncertainty is deliberately ignored for selections that
+    /// provably never consult it: a JavaScript-only run never invokes an
+    /// unrelated toolchain. Four precise conditions block a run, each
+    /// refusing with a diagnostic naming the scope:
+    ///
+    /// 1. A retained task in an edge-uncertain scope of a toolchain whose facts
+    ///    will remain static: the task's dependency structure is hashed into
+    ///    every dependent, and nothing will ever replace the partial facts. A
+    ///    selected toolchain that *will* be prepared is exempt: the prepared
+    ///    rebuild re-collects its dependency closure.
+    /// 2. A catalogue-uncertain scope inside the consulted set — the resolved
+    ///    filtered packages plus the engine's retained task packages, phantoms
+    ///    included — whose unresolved task names are in play. Without a
+    ///    selected owner nothing can ever resolve the catalogue. With a
+    ///    selected owner, preparation is allowed only when every relevant
+    ///    uncertain task is already retained as a real command: membership is
+    ///    then proven and preparation only resolves shape, never inventing
+    ///    membership. A relevant task that is absent or only a phantom is
+    ///    possibly absent — the frozen selection cannot gain it after
+    ///    preparation.
+    /// 3. A dependents-direction selection whose closure an edge-uncertain
+    ///    scope could extend: a missing dependent cannot be recovered after
+    ///    preparation refreezes the finalized task set, so this also blocks
+    ///    prepared toolchains.
+    /// 4. A dependencies-direction closure that traverses an edge-uncertain
+    ///    scope: `filtered_pkgs` is frozen from the planning graph, and
+    ///    preparation re-collects task edges but cannot repair package-level
+    ///    selection. The closure is provable only when every candidate the
+    ///    unknown edges could add is already a closure member.
+    fn refuse_unproven_selection(
+        pkg_dep_graph: &PackageGraph,
+        engine: &Engine,
+        context: &UnresolvedPlanningContext<'_>,
+    ) -> Result<(), Error> {
+        let engine_task_packages: HashSet<PackageName> = engine
+            .tasks()
+            .filter_map(|node| match node {
+                TaskNode::Task(task) => Some(PackageName::from(task.package())),
+                TaskNode::Root => None,
+            })
+            .collect();
+        // Real commands the engine retains, per scope: contributed tasks
+        // with a resolved command. Membership of these tasks is proven even
+        // when the rest of the scope's catalogue is not.
+        let mut commanded_tasks: HashMap<&str, HashSet<&str>> = HashMap::new();
+        for node in engine.tasks() {
+            if let TaskNode::Task(task) = node {
+                if task_has_command(engine, pkg_dep_graph, task) {
+                    commanded_tasks
+                        .entry(task.package())
+                        .or_default()
+                        .insert(task.task());
+                }
+            }
+        }
+        // Packages the selection actually consults: the resolved filtered
+        // set plus every package the final engine retains, phantoms included.
+        // This is both the traversal closure (unknown edges into/out of these
+        // could extend it) and the catalogue domain (these are the scopes
+        // whose task catalogues the run's selection can consult) — derived
+        // from the actual selection, never from raw filter patterns or mode
+        // flags, so narrowed, excluded, and affected-only selections do not
+        // consult unrelated scopes while config-wired phantoms stay in scope.
+        let mut consulted_packages: HashSet<&PackageName> =
+            context.filtered_packages.keys().collect();
+        consulted_packages.extend(engine_task_packages.iter());
+
+        for (toolchain, uncertainty) in pkg_dep_graph.planning_uncertainties() {
+            let scope = PackageName::from(uncertainty.scope());
+            match uncertainty.kind() {
+                PlanningUncertaintyKind::InternalEdges => {
+                    // (1) A retained task whose hashed dependency structure
+                    // will never be replaced with exact facts.
+                    if !context.resolving_toolchains.contains(toolchain) {
+                        let retained = engine.tasks().find_map(|node| match node {
+                            TaskNode::Task(task) => {
+                                (task.package() == uncertainty.scope()).then_some(task)
+                            }
+                            TaskNode::Root => None,
+                        });
+                        // `turborepo-lib` is edition 2021: no let-chains here.
+                        if let Some(task) = retained {
+                            return Err(Error::UnresolvedPlanningFact {
+                                toolchain: toolchain.to_string(),
+                                fact: "internal dependency edges".to_string(),
+                                package: uncertainty.scope().to_string(),
+                                code: uncertainty.code().to_string(),
+                                detail: uncertainty.message().to_string(),
+                                reason: format!(
+                                    "task `{task}` is retained by this run, so its dependency \
+                                     structure — hashed into every dependent — cannot be proven \
+                                     without the `{toolchain}` toolchain, whose facts this run \
+                                     never resolves"
+                                ),
+                            });
+                        }
+                    }
+                    // (3) A dependents-direction closure the unknown edges
+                    // could extend.
+                    if context.dependents_direction {
+                        let unbounded_or_touching =
+                            uncertainty.possible_targets().is_none_or(|targets| {
+                                targets.iter().any(|target| {
+                                    consulted_packages.contains(&PackageName::from(target.as_str()))
+                                })
+                            });
+                        if unbounded_or_touching {
+                            return Err(Error::UnresolvedPlanningFact {
+                                toolchain: toolchain.to_string(),
+                                fact: "internal dependency edges".to_string(),
+                                package: uncertainty.scope().to_string(),
+                                code: uncertainty.code().to_string(),
+                                detail: uncertainty.message().to_string(),
+                                reason: format!(
+                                    "this run expands dependents, and the dependents of the \
+                                     selection cannot be proven complete while `{scope}`'s edges \
+                                     toward it are unresolved"
+                                ),
+                            });
+                        }
+                    }
+                    // (4) A dependencies-direction closure computed through
+                    // this scope's own unknown outgoing edges. Preparation
+                    // cannot repair the frozen package selection, so the
+                    // closure is provable only when every candidate the
+                    // unknown edges could add is already a closure member.
+                    if context.dependencies_direction && consulted_packages.contains(&scope) {
+                        let provably_closed =
+                            uncertainty.possible_targets().is_some_and(|targets| {
+                                targets.iter().all(|target| {
+                                    consulted_packages.contains(&PackageName::from(target.as_str()))
+                                })
+                            });
+                        if !provably_closed {
+                            return Err(Error::UnresolvedPlanningFact {
+                                toolchain: toolchain.to_string(),
+                                fact: "internal dependency edges".to_string(),
+                                package: uncertainty.scope().to_string(),
+                                code: uncertainty.code().to_string(),
+                                detail: uncertainty.message().to_string(),
+                                reason: format!(
+                                    "this run expands dependencies through `{scope}`, whose \
+                                     unresolved edges could add packages to the selection that \
+                                     preparation cannot recover"
+                                ),
+                            });
+                        }
+                    }
+                }
+                PlanningUncertaintyKind::TaskCatalogue => {
+                    // (2) Whether this scope participates in the run's task
+                    // set can be proven, or preparation resolves it. The
+                    // domain is the actual consulted set: resolved filtered
+                    // packages plus engine-retained packages (phantoms
+                    // included), never a raw pattern union.
+                    if !consulted_packages.contains(&scope) {
+                        continue;
+                    }
+                    // Task names this run's selection consults *for this
+                    // scope*: the requested names (which apply to every
+                    // in-domain scope) plus every task the engine already
+                    // retains for the scope — phantoms included, because a
+                    // config-wired phantom's reality matters to the run.
+                    let mut in_play: HashSet<&str> = context
+                        .requested_task_names
+                        .iter()
+                        .map(String::as_str)
+                        .collect();
+                    in_play.extend(engine.tasks().filter_map(|node| match node {
+                        TaskNode::Task(task) => {
+                            (task.package() == uncertainty.scope()).then_some(task.task())
+                        }
+                        TaskNode::Root => None,
+                    }));
+                    // Relevant uncertain names: the whole in-play set when
+                    // the record is unnarrowed, otherwise the uncertain names
+                    // that are in play. Names not in play are ignored — an
+                    // uncertain task this run never selects cannot change
+                    // this run's selection.
+                    let relevant: Vec<&str> = if uncertainty.uncertain_task_names().is_empty() {
+                        in_play.into_iter().collect()
+                    } else {
+                        uncertainty
+                            .uncertain_task_names()
+                            .iter()
+                            .map(String::as_str)
+                            .filter(|&name| in_play.contains(name))
+                            .collect()
+                    };
+                    if relevant.is_empty() {
+                        continue;
+                    }
+                    if !context.resolving_toolchains.contains(toolchain) {
+                        // No selected owner: nothing will ever resolve the
+                        // catalogue for this run.
+                        return Err(Error::UnresolvedPlanningFact {
+                            toolchain: toolchain.to_string(),
+                            fact: "the task catalogue".to_string(),
+                            package: uncertainty.scope().to_string(),
+                            code: uncertainty.code().to_string(),
+                            detail: uncertainty.message().to_string(),
+                            reason: format!(
+                                "whether `{scope}` participates in this run's task set cannot be \
+                                 proven, and this run never selects the `{toolchain}` toolchain \
+                                 to resolve it"
+                            ),
+                        });
+                    }
+                    // Selected owner: preparation replaces the observation.
+                    // Allow it only when every relevant uncertain task is
+                    // already retained as a real command — membership is
+                    // proven and preparation only resolves shape, never
+                    // inventing membership. A relevant task that is absent
+                    // or only a phantom is possibly absent: the frozen
+                    // selection cannot gain it after preparation.
+                    let unproven: Vec<&str> = relevant
+                        .into_iter()
+                        .filter(|&name| {
+                            !commanded_tasks
+                                .get(uncertainty.scope())
+                                .is_some_and(|tasks| tasks.contains(name))
+                        })
+                        .collect();
+                    if !unproven.is_empty() {
+                        return Err(Error::UnresolvedPlanningFact {
+                            toolchain: toolchain.to_string(),
+                            fact: "the task catalogue".to_string(),
+                            package: uncertainty.scope().to_string(),
+                            code: uncertainty.code().to_string(),
+                            detail: uncertainty.message().to_string(),
+                            reason: format!(
+                                "the {} task{} for `{scope}` {} possibly absent: not retained as \
+                                 a real command during planning, and preparation cannot add a \
+                                 task the frozen selection never included",
+                                unproven.join(", "),
+                                if unproven.len() == 1 { "" } else { "s" },
+                                if unproven.len() == 1 { "is" } else { "are" },
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse the run's filter patterns once for the unresolved-planning
+    /// check. Patterns that fail to parse here already failed scope
+    /// resolution; skipping them cannot bypass a refusal.
+    fn parse_filter_selectors(patterns: &[String]) -> Vec<TargetSelector> {
+        patterns
+            .iter()
+            .filter_map(|pattern| pattern.parse::<TargetSelector>().ok())
+            .collect()
+    }
+
+    /// Whether this run's selection expanded dependents: `--affected`
+    /// (package- or task-level), a watch rerun's affectedness, or any
+    /// `...pkg` selector — including excludes, whose completeness depends on
+    /// the same edges.
+    fn selection_expands_dependents(&self, selectors: &[TargetSelector]) -> bool {
+        self.opts.scope_opts.affected_range.is_some()
+            || self.changed_files_for_watch.is_some()
+            || selector_expands_dependents(selectors)
+    }
+
     /// Resolve the set of packages that should participate in this run.
     ///
     /// Starts with the result of scope resolution (which handles `--filter`
@@ -861,14 +1248,28 @@ impl RunBuilder {
         }
 
         // --parallel removes inter-package dependencies from the graph after
-        // construction, so a graph shared with other runs cannot be reused
-        // for it.
+        // construction, so a graph shared with other runs cannot be reused for
+        // it. A shared graph may also be a staged planning graph whose
+        // hash-relevant facts were never prepared for this run's task selection;
+        // such a graph carries no plan to prepare them. Reuse only graphs that
+        // are fully prepared — a generic capability of the graph, with no
+        // per-toolchain knowledge here.
+        let shared_is_reusable = self
+            .shared_pkg_graph
+            .as_ref()
+            .is_some_and(|graph| graph.is_fully_prepared());
         let shared_pkg_graph = if self.opts.run_opts.parallel {
+            None
+        } else if self.shared_pkg_graph.is_some() && !shared_is_reusable {
+            tracing::debug!(
+                "bypassing shared package graph: staged replanning required for the selected tasks"
+            );
             None
         } else {
             self.shared_pkg_graph.clone()
         };
-        let mut pkg_dep_graph = match shared_pkg_graph {
+        let mut staged_plan = None;
+        let mut pkg_dep_graph: Arc<PackageGraph> = match shared_pkg_graph {
             Some(graph) => {
                 tracing::debug!("reusing package graph from previous run");
                 graph
@@ -888,12 +1289,18 @@ impl RunBuilder {
                 let builder = graph_features.configure(builder);
 
                 let graph = builder
-                    .build()
+                    .build_staged()
                     .instrument(tracing::info_span!("pkg_dep_graph_build"))
                     .await;
 
                 match graph {
-                    Ok(graph) => Arc::new(graph),
+                    Ok(graph) => {
+                        // Take unique ownership of the planning graph so
+                        // `--parallel` can mutate it; the plan owns none of it.
+                        let (planning, plan) = graph.into_parts();
+                        staged_plan = Some(plan);
+                        planning
+                    }
                     // if we can't find the package.json, it is a bug, and we should report it.
                     // likely cause is that package discovery watching is not up to date.
                     // note: there _is_ a false positive from a race condition that can occur
@@ -1022,6 +1429,11 @@ impl RunBuilder {
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
+        // The loader captures only topology-stable inputs from the planning
+        // graph — scope directories and task-catalogue names — never task
+        // contracts. Hash-relevant contracts reach the engine from the graph
+        // passed to `build_engine`, which is the prepared graph below, so the
+        // engine never retains static-planning I/O.
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
             if task_access_enabled {
@@ -1381,6 +1793,92 @@ impl RunBuilder {
                 task_entrypoints.selected,
                 &task_entrypoints.orchestration,
             );
+        }
+
+        // Toolchains that own a finally-participating task are fully
+        // discovered here, after selection is final and before any hashing.
+        // "Participating" means the task will actually execute, honoring
+        // command overrides and excluding commandless transit/opt-out nodes;
+        // unexecuted package dependencies never trigger a toolchain. Toolchain
+        // identity comes from the graph, so no language is special-cased.
+        if let Some(staged) = staged_plan.take() {
+            let selection = Self::participating_toolchains(&pkg_dep_graph, &engine);
+            // Refuse selections that cannot be proven exact against
+            // unresolved planning facts — before any preparation, and
+            // therefore before any native invocation, is allowed to resolve
+            // them. Selections that provably never consult those facts (an
+            // unrelated JavaScript-only run) ignore them here.
+            {
+                let selectors = Self::parse_filter_selectors(&self.opts.scope_opts.filter_patterns);
+                let resolving_toolchains = staged.resolving_toolchains(&selection);
+                // Task names this run puts in play for every consulted
+                // catalogue: unqualified task arguments only. A qualified
+                // argument (`js#dev`) names a task for one package; its scope
+                // is captured by the engine's retained task ids instead.
+                // `--filter` has no `pkg#task` syntax.
+                let task_names_in_play: HashSet<String> = self
+                    .opts
+                    .run_opts
+                    .tasks
+                    .iter()
+                    .map(|task| TaskName::from(task.as_str()))
+                    .filter(|task| task.package().is_none())
+                    .map(|task| task.task().to_string())
+                    .collect();
+                Self::refuse_unproven_selection(
+                    &pkg_dep_graph,
+                    &engine,
+                    &UnresolvedPlanningContext {
+                        resolving_toolchains: &resolving_toolchains,
+                        filtered_packages: &filtered_pkgs,
+                        requested_task_names: &task_names_in_play,
+                        dependents_direction: self.selection_expands_dependents(&selectors),
+                        dependencies_direction: selector_expands_dependencies(&selectors),
+                    },
+                )?;
+            }
+            if staged.requires_preparation(&selection) {
+                // Toolchains that will remain static even after this
+                // preparation. A retained task in one of these must not
+                // execute with stale contracts.
+                let unprepared = staged.unprepared_toolchains(&selection);
+                // The exact final task set, retained so the prepared rebuild
+                // cannot undo task-level/strict/affected pruning.
+                let finalized_tasks: HashSet<TaskId<'static>> = engine
+                    .tasks()
+                    .filter_map(|node| match node {
+                        TaskNode::Task(task) => Some(task.clone()),
+                        TaskNode::Root => None,
+                    })
+                    .collect();
+                pkg_dep_graph = staged.prepare(&selection).await?;
+                // --parallel removed inter-package dependencies from the
+                // planning graph; reapply after preparation.
+                if self.opts.run_opts.parallel {
+                    let Some(graph) = Arc::get_mut(&mut pkg_dep_graph) else {
+                        unreachable!("--parallel runs never reuse a shared package graph");
+                    };
+                    graph.remove_package_dependencies();
+                }
+                let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+                    Box::new(all_pkgs.iter())
+                } else {
+                    Box::new(filtered_pkgs.keys())
+                };
+                engine = self.build_engine(
+                    &pkg_dep_graph,
+                    &root_turbo_json,
+                    engine_pkgs,
+                    &entrypoint_exclusions,
+                    &turbo_json_loader,
+                    &env_at_execution_start,
+                )?;
+                engine = Self::retain_prepared_tasks(engine, &finalized_tasks)?;
+                // The rebuilt graph may reach a dependency in a toolchain that
+                // was not prepared here (eager topology differs from planning).
+                // Refuse rather than execute it with stale contracts.
+                Self::refuse_unprepared_toolchains(&pkg_dep_graph, &engine, &unprepared)?;
+            }
         }
 
         // The engine is final: every task the run will hash is known. Send
@@ -1895,6 +2393,26 @@ fn selector_selects_only_package_names(selector: &turborepo_scope::TargetSelecto
         && !selector.follow_prod_deps_only
 }
 
+/// Whether any selector traverses edges *into* the selected set:
+/// `...pkg` dependents expansion, or `pkg...[range]` match-dependencies
+/// (which selects dependents of changed packages — a reverse traversal,
+/// despite the name).
+fn selector_expands_dependents(selectors: &[TargetSelector]) -> bool {
+    selectors
+        .iter()
+        .any(|selector| selector.include_dependents || selector.match_dependencies)
+}
+
+/// Whether any selector traverses the selected set's *outgoing* edges:
+/// `pkg...` dependency expansion. Match-dependencies is excluded: it
+/// reverse-traverses from changed packages and never follows a closure
+/// member's own dependencies.
+fn selector_expands_dependencies(selectors: &[TargetSelector]) -> bool {
+    selectors
+        .iter()
+        .any(|selector| selector.include_dependencies)
+}
+
 /// Whether every turbo.json in the repository loads successfully and declares
 /// no `with` siblings. Configs are preloaded by this point, so this is an
 /// in-memory scan, and it only runs for otherwise eligible runs.
@@ -2401,5 +2919,1091 @@ mod origins_match_tests {
     #[test]
     fn empty_url_returns_false() {
         assert!(!origins_match("", "https://vercel.com/api"));
+    }
+}
+
+/// Generic staged-orchestration tests. The fake contributor uses only the open
+/// `ToolchainId` and the trait defaults; no language is named.
+#[cfg(test)]
+mod staged_selection_tests {
+    use std::collections::{HashMap, HashSet};
+
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_repository::{
+        change_mapper::PackageInclusionReason,
+        discovery::{DiscoveryResponse, Error as DiscoveryError, PackageDiscovery},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
+        },
+    };
+    use turborepo_task_id::TaskId;
+    use turborepo_types::{TaskCommandOverride, TaskDefinition};
+
+    use super::*;
+    use crate::engine::{Building, Engine};
+
+    struct EmptyDiscovery;
+
+    impl PackageDiscovery for EmptyDiscovery {
+        async fn discover_packages(&self) -> Result<DiscoveryResponse, DiscoveryError> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, DiscoveryError> {
+            self.discover_packages().await
+        }
+    }
+
+    struct FakeContributor {
+        id: ToolchainId,
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for FakeContributor {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            let package = DiscoveredPackage::package(
+                Some("native".to_string()),
+                PackageJson::default(),
+                self.root.join_components(&["native", "manifest"]),
+            )
+            .with_native_relationships(Vec::new());
+            let root = self.root.clone();
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![package],
+                    vec![WorkspaceRoot::new("fake", root)],
+                ))
+            })
+        }
+
+        fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
+            self.discover_packages()
+        }
+    }
+
+    async fn graph_with_fake_toolchain(root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        PackageGraph::builder_optional(root, None)
+            .with_package_discovery(EmptyDiscovery)
+            .with_contributor(Arc::new(FakeContributor {
+                id: ToolchainId::new("fake-native"),
+                root: root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    fn add_task(
+        builder: &mut Engine<Building>,
+        package: &str,
+        task: &str,
+        definition: TaskDefinition,
+    ) -> TaskId<'static> {
+        let task_id = TaskId::new(package, task).into_owned();
+        builder.get_index(&task_id);
+        builder.add_definition(task_id.clone(), definition);
+        task_id
+    }
+
+    #[tokio::test]
+    async fn participating_toolchains_skip_commandless_and_opt_out_tasks() {
+        let tmp = tempfile::TempDir::with_prefix("participating_toolchains").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = graph_with_fake_toolchain(&root).await;
+
+        let mut builder: Engine<Building> = Engine::new();
+        // A resolved argv executes and selects the owning toolchain.
+        add_task(
+            &mut builder,
+            "native",
+            "run",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
+                ..Default::default()
+            },
+        );
+        // An explicit opt-out never executes.
+        add_task(
+            &mut builder,
+            "native",
+            "skip",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::OptOut),
+                ..Default::default()
+            },
+        );
+        // A commandless transit task has no command in the catalogue.
+        add_task(&mut builder, "native", "transit", TaskDefinition::default());
+        let engine: Engine = builder.seal();
+
+        let selection = RunBuilder::participating_toolchains(&graph, &engine);
+        assert_eq!(
+            selection,
+            HashSet::from([ToolchainId::new("fake-native")]),
+            "only the toolchain owning an executing task is selected"
+        );
+    }
+
+    #[tokio::test]
+    async fn retain_prepared_tasks_keeps_prepared_dependency_closure() {
+        let mut builder: Engine<Building> = Engine::new();
+        let run = add_task(&mut builder, "native", "run", TaskDefinition::default());
+        let dep = add_task(&mut builder, "native", "dep", TaskDefinition::default());
+        let extra = add_task(&mut builder, "native", "extra", TaskDefinition::default());
+        let run_idx = builder.get_index(&run);
+        let dep_idx = builder.get_index(&dep);
+        let extra_idx = builder.get_index(&extra);
+        builder.task_graph_mut().add_edge(run_idx, dep_idx, ());
+        // `extra` is a dependency that only exists after preparation.
+        builder.task_graph_mut().add_edge(run_idx, extra_idx, ());
+        builder.connect_to_root(&run);
+        let engine = builder.seal();
+
+        let finalized: HashSet<TaskId<'static>> = [run.clone(), dep.clone()].into_iter().collect();
+        let retained = RunBuilder::retain_prepared_tasks(engine, &finalized).unwrap();
+        let ids: HashSet<String> = retained.task_ids().map(ToString::to_string).collect();
+
+        assert!(ids.contains("native#run"));
+        assert!(ids.contains("native#dep"));
+        assert!(
+            ids.contains("native#extra"),
+            "a dependency introduced by preparation must not be dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn retain_prepared_tasks_refuses_a_missing_finalized_task() {
+        let mut builder: Engine<Building> = Engine::new();
+        let run = add_task(&mut builder, "native", "run", TaskDefinition::default());
+        let engine = builder.seal();
+
+        let finalized: HashSet<TaskId<'static>> =
+            [run, TaskId::new("native", "gone")].into_iter().collect();
+        assert!(
+            RunBuilder::retain_prepared_tasks(engine, &finalized).is_err(),
+            "a finalized task missing after preparation must be refused, not dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn unprepared_toolchain_execution_is_refused() {
+        let tmp = tempfile::TempDir::with_prefix("unprepared_toolchain").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = graph_with_fake_toolchain(&root).await;
+
+        let mut builder: Engine<Building> = Engine::new();
+        add_task(
+            &mut builder,
+            "native",
+            "run",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
+                ..Default::default()
+            },
+        );
+        let engine: Engine = builder.seal();
+
+        let unprepared: HashSet<ToolchainId> =
+            [ToolchainId::new("fake-native")].into_iter().collect();
+        assert!(
+            RunBuilder::refuse_unprepared_toolchains(&graph, &engine, &unprepared).is_err(),
+            "executing a task in an unprepared toolchain must be refused"
+        );
+
+        let none: HashSet<ToolchainId> = HashSet::new();
+        assert!(RunBuilder::refuse_unprepared_toolchains(&graph, &engine, &none).is_ok());
+    }
+
+    /// Generic fake whose *static* observation contributes the same inventory
+    /// as full discovery but reports planning uncertainty for its own scope.
+    /// Full discovery resolves everything. Only the open `ToolchainId` and
+    /// trait defaults are used; no language is named.
+    struct UncertainContributor {
+        root: AbsoluteSystemPathBuf,
+        /// Every scope this observation contributes; the first is the one the
+        /// uncertainties are scoped to.
+        scopes: Vec<String>,
+        uncertainties: Vec<turborepo_repository::toolchain::PlanningUncertainty>,
+    }
+
+    impl RepositoryContributor for UncertainContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("uncertain-native")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            self.observation(Vec::new())
+        }
+
+        fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
+            self.observation(self.uncertainties.clone())
+        }
+    }
+
+    impl UncertainContributor {
+        fn observation(
+            &self,
+            uncertainties: Vec<turborepo_repository::toolchain::PlanningUncertainty>,
+        ) -> DiscoverPackagesFuture<'_> {
+            let packages = self
+                .scopes
+                .iter()
+                .map(|scope| {
+                    DiscoveredPackage::package(
+                        Some(scope.clone()),
+                        PackageJson::default(),
+                        self.root.join_components(&[scope.as_str(), "manifest"]),
+                    )
+                    .with_native_relationships(Vec::new())
+                })
+                .collect();
+            let root = self.root.clone();
+            Box::pin(async move {
+                let mut discovered =
+                    DiscoveredPackages::new(packages, vec![WorkspaceRoot::new("uncertain", root)]);
+                for uncertainty in uncertainties {
+                    discovered = discovered.with_planning_uncertainty(uncertainty);
+                }
+                Ok(discovered)
+            })
+        }
+    }
+
+    type PlanningGraph = Arc<PackageGraph>;
+
+    async fn planning_graph_with_scopes(
+        root: &AbsoluteSystemPathBuf,
+        uncertainties: Vec<turborepo_repository::toolchain::PlanningUncertainty>,
+        scopes: &[&str],
+    ) -> PlanningGraph {
+        let staged = PackageGraph::builder_optional(root, None)
+            .with_package_discovery(EmptyDiscovery)
+            .with_contributor(Arc::new(UncertainContributor {
+                root: root.clone(),
+                scopes: scopes.iter().map(|scope| scope.to_string()).collect(),
+                uncertainties,
+            }))
+            .build_staged()
+            .await
+            .unwrap();
+        let (planning, _plan) = staged.into_parts();
+        planning
+    }
+
+    async fn planning_graph_with_uncertainty(
+        root: &AbsoluteSystemPathBuf,
+        uncertainties: Vec<turborepo_repository::toolchain::PlanningUncertainty>,
+    ) -> PlanningGraph {
+        planning_graph_with_scopes(root, uncertainties, &["native"]).await
+    }
+
+    fn root_only_context<'a>(
+        resolving: &'a HashSet<ToolchainId>,
+        filtered_packages: &'a HashMap<PackageName, PackageInclusionReason>,
+        requested_task_names: &'a HashSet<String>,
+    ) -> UnresolvedPlanningContext<'a> {
+        UnresolvedPlanningContext {
+            resolving_toolchains: resolving,
+            filtered_packages,
+            requested_task_names,
+            dependents_direction: false,
+            dependencies_direction: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn unrelated_selection_ignores_unresolved_planning_facts() {
+        let tmp = tempfile::TempDir::with_prefix("unrelated_selection").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                )
+                .with_possible_targets(["native"]),
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ],
+        )
+        .await;
+
+        // An unrelated JavaScript-only run: a root task, the uncertain scope
+        // outside the selection domain, no dependents expansion, and the
+        // uncertain task name not in play. The unresolved facts are ignored,
+        // not failed — and the toolchain is never invoked.
+        let mut builder: Engine<Building> = Engine::new();
+        let build = add_task(&mut builder, "//", "build", TaskDefinition::default());
+        builder.connect_to_root(&build);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let filtered_packages = HashMap::new();
+        let requested: HashSet<String> = ["build".to_string()].into_iter().collect();
+        let context = root_only_context(&resolving, &filtered_packages, &requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "a selection that provably never consults the unresolved facts must ignore them"
+        );
+    }
+
+    #[tokio::test]
+    async fn commandless_task_in_uncertain_scope_is_refused() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_transit").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                ),
+            ],
+        )
+        .await;
+
+        // A commandless transit task retained by the run: its dependency
+        // structure is hashed into every dependent and nothing will replace
+        // the partial facts, so the run is refused with a targeted
+        // diagnostic naming the scope.
+        let mut builder: Engine<Building> = Engine::new();
+        let transit = add_task(&mut builder, "native", "transit", TaskDefinition::default());
+        builder.connect_to_root(&transit);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let filtered_packages = HashMap::new();
+        let requested: HashSet<String> = ["build".to_string()].into_iter().collect();
+        let context = root_only_context(&resolving, &filtered_packages, &requested);
+        let error = RunBuilder::refuse_unproven_selection(&graph, &engine, &context)
+            .expect_err("a retained transit task in an edge-uncertain scope must be refused");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic naming the uncertain scope, got {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn preparing_toolchain_exempts_retained_uncertain_tasks() {
+        let tmp = tempfile::TempDir::with_prefix("preparing_toolchain").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                ),
+            ],
+        )
+        .await;
+
+        // The same retained transit task, but the toolchain is selected: the
+        // prepared rebuild re-collects the dependency closure, so the
+        // uncertainty must not block the run before preparation.
+        let mut builder: Engine<Building> = Engine::new();
+        let transit = add_task(&mut builder, "native", "transit", TaskDefinition::default());
+        builder.connect_to_root(&transit);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> =
+            [ToolchainId::new("uncertain-native")].into_iter().collect();
+        let filtered_packages = HashMap::new();
+        let requested: HashSet<String> = HashSet::new();
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &filtered_packages,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: false,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "a toolchain that will be prepared replaces its uncertainty; the run must proceed to \
+             preparation"
+        );
+    }
+
+    #[tokio::test]
+    async fn catalogue_uncertainty_blocks_only_task_names_in_play() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_catalogue").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ],
+        )
+        .await;
+
+        let mut builder: Engine<Building> = Engine::new();
+        let build = add_task(&mut builder, "//", "build", TaskDefinition::default());
+        builder.connect_to_root(&build);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        // An unfiltered run resolves every package, uncertain scopes included.
+        let unfiltered = |packages: &[&str]| -> HashMap<PackageName, PackageInclusionReason> {
+            packages
+                .iter()
+                .map(|name| {
+                    (
+                        PackageName::from(*name),
+                        PackageInclusionReason::IncludedByFilter {
+                            filters: Vec::new(),
+                        },
+                    )
+                })
+                .collect()
+        };
+        let all_packages = unfiltered(&["native", "js-app"]);
+        // `build` is requested and in the engine; the uncertain `dev` task is
+        // not in play, so the catalogue question never arises.
+        let build_only: HashSet<String> = ["build".to_string()].into_iter().collect();
+        assert!(
+            RunBuilder::refuse_unproven_selection(
+                &graph,
+                &engine,
+                &root_only_context(&resolving, &all_packages, &build_only)
+            )
+            .is_ok(),
+            "an uncertain task name this run never requests is ignored"
+        );
+
+        // Requesting the uncertain task name makes the catalogue question
+        // unprovable: whether the scope participates cannot be answered.
+        let dev_requested: HashSet<String> = ["dev".to_string()].into_iter().collect();
+        let error = RunBuilder::refuse_unproven_selection(
+            &graph,
+            &engine,
+            &root_only_context(&resolving, &all_packages, &dev_requested),
+        )
+        .expect_err("requesting an uncertain task name must be refused");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+
+        // A resolved selection that excludes the uncertain scope ignores the
+        // catalogue question entirely.
+        let js_only = unfiltered(&["js-app"]);
+        assert!(
+            RunBuilder::refuse_unproven_selection(
+                &graph,
+                &engine,
+                &root_only_context(&resolving, &js_only, &dev_requested)
+            )
+            .is_ok(),
+            "a resolved selection that excludes the scope ignores the fact"
+        );
+    }
+
+    #[tokio::test]
+    async fn dependents_expansion_is_refused_when_uncertain_edges_touch_the_closure() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_dependents").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let bounded = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                )
+                .with_possible_targets(["native"]),
+            ]
+        };
+        let unbounded = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                ),
+            ]
+        };
+
+        let builder: Engine<Building> = Engine::new();
+        let engine: Engine = builder.seal();
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let requested: HashSet<String> = HashSet::new();
+        let empty_selection = HashMap::new();
+
+        // Bounded unknown edges that touch nothing in the closure are
+        // provably independent: the dependents set cannot be extended.
+        let graph = planning_graph_with_uncertainty(&root, bounded()).await;
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &empty_selection,
+            requested_task_names: &requested,
+            dependents_direction: true,
+            dependencies_direction: false,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "bounded unknown edges outside the closure are provably independent"
+        );
+
+        // The same bounded uncertainty with the candidate inside the closure:
+        // a missing dependent cannot be recovered after preparation refreezes
+        // the finalized task set.
+        let mut native_selected = HashMap::new();
+        native_selected.insert(
+            PackageName::from("native"),
+            PackageInclusionReason::IncludedByFilter {
+                filters: vec!["native".to_string()],
+            },
+        );
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &native_selected,
+            requested_task_names: &requested,
+            dependents_direction: true,
+            dependencies_direction: false,
+        };
+        let error = RunBuilder::refuse_unproven_selection(&graph, &engine, &context)
+            .expect_err("dependents touching an uncertain edge must be refused");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+
+        // Unbounded unknown edges make any dependents expansion unprovable.
+        let graph = planning_graph_with_uncertainty(&root, unbounded()).await;
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &empty_selection,
+            requested_task_names: &requested,
+            dependents_direction: true,
+            dependencies_direction: false,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_err(),
+            "unbounded unknown edges make dependents unprovable"
+        );
+
+        // Without dependents expansion, unbounded edges are irrelevant.
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &empty_selection,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: false,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "dependents-direction is what makes unknown edges selection-relevant"
+        );
+    }
+
+    #[tokio::test]
+    async fn dependencies_expansion_through_uncertain_scope_is_refused_unless_closed() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_dependencies").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        // Two contributed scopes; the uncertain one could connect to either.
+        let uncertain = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                )
+                .with_possible_targets(["native", "native-two"]),
+            ]
+        };
+        let unbounded = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::internal_edges(
+                    "native",
+                    "ambiguous-remote-replacement",
+                    "an active remote requirement could upgrade a local replacement",
+                ),
+            ]
+        };
+        let builder: Engine<Building> = Engine::new();
+        let engine: Engine = builder.seal();
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let requested: HashSet<String> = HashSet::new();
+
+        let selected = |names: &[&str]| -> HashMap<PackageName, PackageInclusionReason> {
+            names
+                .iter()
+                .map(|name| {
+                    (
+                        PackageName::from(*name),
+                        PackageInclusionReason::IncludedByFilter {
+                            filters: vec![name.to_string()],
+                        },
+                    )
+                })
+                .collect()
+        };
+
+        // Every candidate is already a closure member: the dependency closure
+        // is provably identical under every resolution, so a dependencies
+        // expansion through the uncertain scope is allowed.
+        let graph = planning_graph_with_scopes(&root, uncertain(), &["native", "native-two"]).await;
+        let both = selected(&["native", "native-two"]);
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &both,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: true,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "a closure containing every candidate is provably complete"
+        );
+
+        // A candidate outside the closure could be added by the unknown edge,
+        // and the frozen `filtered_pkgs` cannot be repaired by preparation.
+        let native_only = selected(&["native"]);
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &native_only,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: true,
+        };
+        let error = RunBuilder::refuse_unproven_selection(&graph, &engine, &context).expect_err(
+            "a dependencies expansion through an uncertain scope with outside candidates must be \
+             refused",
+        );
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+
+        // Unbounded unknown edges inside the closure are never provable.
+        let graph = planning_graph_with_scopes(&root, unbounded(), &["native", "native-two"]).await;
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &both,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: true,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_err(),
+            "unbounded unknown edges make the dependency closure unprovable"
+        );
+
+        // Without dependency expansion, an uncertain scope inside the
+        // selection is fine: a plain package filter consults no edges, and
+        // preparation re-collects task edges for retained tasks.
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &native_only,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: false,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "plain package filters never consult the uncertain edges"
+        );
+
+        // An uncertain scope outside the closure is irrelevant.
+        let js_only = selected(&["js-app"]);
+        let context = UnresolvedPlanningContext {
+            resolving_toolchains: &resolving,
+            filtered_packages: &js_only,
+            requested_task_names: &requested,
+            dependents_direction: false,
+            dependencies_direction: true,
+        };
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "an uncertain scope outside the closure cannot extend it"
+        );
+    }
+
+    #[tokio::test]
+    async fn selected_owner_allows_preparation_when_uncertain_tasks_are_retained_real() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_catalogue_allowed").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        // `dev`'s runnable target is unproven, but `build` is known: the
+        // contributor retains it as a real command and the owner is selected.
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ],
+        )
+        .await;
+
+        let mut builder: Engine<Building> = Engine::new();
+        let build = add_task(
+            &mut builder,
+            "native",
+            "build",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["native-build".to_string()])),
+                ..Default::default()
+            },
+        );
+        builder.connect_to_root(&build);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> =
+            [ToolchainId::new("uncertain-native")].into_iter().collect();
+        let filtered_packages = HashMap::new();
+        let requested: HashSet<String> = ["build".to_string()].into_iter().collect();
+        // The refusal runs before preparation; the repository staged tests
+        // prove that an allowed selection then invokes full discovery. The
+        // engine's retained `native#build` puts the scope in the consulted
+        // set even with an empty filtered map.
+        let context = root_only_context(&resolving, &filtered_packages, &requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "a retained-real task with an out-of-play uncertain task must proceed to preparation"
+        );
+    }
+
+    #[tokio::test]
+    async fn possibly_absent_uncertain_task_refuses_even_for_selected_owner() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_catalogue_refused").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let dev_uncertain = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ]
+        };
+        let whole_catalogue = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the whole task catalogue cannot be proven",
+                ),
+            ]
+        };
+
+        let mut builder: Engine<Building> = Engine::new();
+        let build = add_task(
+            &mut builder,
+            "native",
+            "build",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["native-build".to_string()])),
+                ..Default::default()
+            },
+        );
+        builder.connect_to_root(&build);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> =
+            [ToolchainId::new("uncertain-native")].into_iter().collect();
+        let filtered_packages = HashMap::new();
+
+        // A requested uncertain task that is not retained as a real command
+        // is possibly absent: preparation cannot add it to the frozen
+        // selection, even though the owner is selected.
+        let graph = planning_graph_with_uncertainty(&root, dev_uncertain()).await;
+        let dev_requested: HashSet<String> = ["dev".to_string()].into_iter().collect();
+        let error = RunBuilder::refuse_unproven_selection(
+            &graph,
+            &engine,
+            &root_only_context(&resolving, &filtered_packages, &dev_requested),
+        )
+        .expect_err("a possibly-absent requested task must be refused");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+
+        // Whole-catalogue uncertainty: `build` retained real is proven, so
+        // requesting it proceeds; requesting the unproven `dev` refuses.
+        let graph = planning_graph_with_uncertainty(&root, whole_catalogue()).await;
+        let build_requested: HashSet<String> = ["build".to_string()].into_iter().collect();
+        assert!(
+            RunBuilder::refuse_unproven_selection(
+                &graph,
+                &engine,
+                &root_only_context(&resolving, &filtered_packages, &build_requested)
+            )
+            .is_ok(),
+            "a retained-real task is proven even under whole-catalogue uncertainty"
+        );
+        let error = RunBuilder::refuse_unproven_selection(
+            &graph,
+            &engine,
+            &root_only_context(&resolving, &filtered_packages, &dev_requested),
+        )
+        .expect_err("a possibly-absent requested task must be refused");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shape_uncertain_task_retained_real_allows_preparation() {
+        let tmp = tempfile::TempDir::with_prefix("uncertain_shape").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        // `dev` is retained as a real command — membership proven, only its
+        // shape unproven — so a selected owner may prepare and resolve the
+        // shape without inventing membership.
+        let graph = planning_graph_with_uncertainty(
+            &root,
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ],
+        )
+        .await;
+
+        let mut builder: Engine<Building> = Engine::new();
+        let dev = add_task(
+            &mut builder,
+            "native",
+            "dev",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["native-dev".to_string()])),
+                ..Default::default()
+            },
+        );
+        builder.connect_to_root(&dev);
+        let engine: Engine = builder.seal();
+
+        let filtered_packages = HashMap::new();
+        let requested: HashSet<String> = ["dev".to_string()].into_iter().collect();
+
+        let resolving: HashSet<ToolchainId> =
+            [ToolchainId::new("uncertain-native")].into_iter().collect();
+        let context = root_only_context(&resolving, &filtered_packages, &requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "a retained-real uncertain task only needs its shape resolved, which preparation does"
+        );
+
+        // Without a selected owner, nothing can ever resolve even the shape.
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let context = root_only_context(&resolving, &filtered_packages, &requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_err(),
+            "an unselected owner can never resolve the catalogue"
+        );
+    }
+
+    #[tokio::test]
+    async fn qualified_and_excluded_selectors_do_not_consult_uncertain_catalogues() {
+        let tmp = tempfile::TempDir::with_prefix("scope_guard_selectors").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let dev_uncertain = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ]
+        };
+        let graph =
+            planning_graph_with_scopes(&root, dev_uncertain(), &["native", "native-two", "js-app"])
+                .await;
+
+        let selected = |names: &[&str]| -> HashMap<PackageName, PackageInclusionReason> {
+            names
+                .iter()
+                .map(|name| {
+                    (
+                        PackageName::from(*name),
+                        PackageInclusionReason::IncludedByFilter {
+                            filters: vec![name.to_string()],
+                        },
+                    )
+                })
+                .collect()
+        };
+
+        // Qualified task arguments (`js#dev`, `native#build`) put no task
+        // name in play for foreign catalogues: their scopes are captured by
+        // the engine's retained task ids, and only unqualified arguments
+        // contribute requested names.
+        let mut builder: Engine<Building> = Engine::new();
+        let js_dev = add_task(&mut builder, "js-app", "dev", TaskDefinition::default());
+        let native_build = add_task(
+            &mut builder,
+            "native",
+            "build",
+            TaskDefinition {
+                command: Some(TaskCommandOverride::Argv(vec!["native-build".to_string()])),
+                ..Default::default()
+            },
+        );
+        builder.connect_to_root(&js_dev);
+        builder.connect_to_root(&native_build);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let qualified_only: HashSet<String> = HashSet::new();
+        let both_selected = selected(&["js-app", "native"]);
+        let context = root_only_context(&resolving, &both_selected, &qualified_only);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &engine, &context).is_ok(),
+            "qualified arguments must not put their task names in foreign catalogues"
+        );
+
+        // An excluded scope is never consulted: the resolved selection
+        // excludes it and the engine retains nothing for it.
+        let js_builder: Engine<Building> = {
+            let mut builder: Engine<Building> = Engine::new();
+            let build = add_task(&mut builder, "js-app", "build", TaskDefinition::default());
+            builder.connect_to_root(&build);
+            builder
+        };
+        let js_engine: Engine = js_builder.seal();
+        let js_only = selected(&["js-app"]);
+        let dev_requested: HashSet<String> = ["dev".to_string()].into_iter().collect();
+        let context = root_only_context(&resolving, &js_only, &dev_requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &js_engine, &context).is_ok(),
+            "an excluded scope's catalogue is never consulted"
+        );
+
+        // The same unqualified request against a selection that includes the
+        // uncertain scope is refused — proving the pass above came from the
+        // exclusion, not from the task name being out of play.
+        let with_native = selected(&["js-app", "native"]);
+        let context = root_only_context(&resolving, &with_native, &dev_requested);
+        assert!(
+            RunBuilder::refuse_unproven_selection(&graph, &js_engine, &context).is_err(),
+            "an in-scope uncertain catalogue with an in-play task name must be refused"
+        );
+    }
+
+    #[tokio::test]
+    async fn config_wired_phantom_bring_scope_into_catalogue_consultation() {
+        let tmp = tempfile::TempDir::with_prefix("phantom_consulted").unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let dev_uncertain = || {
+            vec![
+                turborepo_repository::toolchain::PlanningUncertainty::task_catalogue(
+                    "native",
+                    "constrained-runnable-target",
+                    "the dev task's runnable target cannot be proven",
+                )
+                .with_uncertain_task_names(["dev"]),
+            ]
+        };
+        let graph = planning_graph_with_uncertainty(&root, dev_uncertain()).await;
+
+        // A JS-only selection whose engine retains a config-wired phantom
+        // `native#dev` (created by a `dependsOn` reference): the phantom
+        // brings the scope into the consulted set and its task name into
+        // play, so the required task's reality cannot be silently ignored.
+        let mut builder: Engine<Building> = Engine::new();
+        let js_build = add_task(&mut builder, "js-app", "build", TaskDefinition::default());
+        let native_dev = add_task(&mut builder, "native", "dev", TaskDefinition::default());
+        builder.connect_to_root(&js_build);
+        builder.connect_to_root(&native_dev);
+        let engine: Engine = builder.seal();
+
+        let resolving: HashSet<ToolchainId> = HashSet::new();
+        let filtered_packages: HashMap<PackageName, PackageInclusionReason> = [(
+            PackageName::from("js-app"),
+            PackageInclusionReason::IncludedByFilter {
+                filters: vec!["js-app".to_string()],
+            },
+        )]
+        .into_iter()
+        .collect();
+        let build_requested: HashSet<String> = ["build".to_string()].into_iter().collect();
+        let context = root_only_context(&resolving, &filtered_packages, &build_requested);
+        let error = RunBuilder::refuse_unproven_selection(&graph, &engine, &context)
+            .expect_err("a config-wired phantom's reality cannot be silently ignored");
+        assert!(
+            matches!(
+                error,
+                Error::UnresolvedPlanningFact { ref package, .. } if package == "native"
+            ),
+            "expected a targeted diagnostic, got {error}"
+        );
+    }
+
+    #[test]
+    fn match_dependencies_selectors_expand_dependents() {
+        let parse = |pattern: &str| pattern.parse::<TargetSelector>().unwrap();
+        // `...foo` selects dependents of foo: reverse edges.
+        let dependents = parse("...foo");
+        assert!(dependents.include_dependents);
+        assert!(selector_expands_dependents(&[dependents.clone()]));
+        assert!(!selector_expands_dependencies(&[dependents]));
+
+        // `foo...[main]` selects dependents of changed packages — also a
+        // reverse traversal, despite the name — so it must count as
+        // dependents-direction, never dependencies-direction.
+        let match_dependencies = parse("foo...[main]");
+        assert!(match_dependencies.match_dependencies);
+        assert!(selector_expands_dependents(&[match_dependencies.clone()]));
+        assert!(!selector_expands_dependencies(&[match_dependencies]));
+
+        // `foo...` follows foo's own outgoing edges: forward traversal.
+        let dependencies = parse("foo...");
+        assert!(dependencies.include_dependencies);
+        assert!(!selector_expands_dependents(&[dependencies.clone()]));
+        assert!(selector_expands_dependencies(&[dependencies]));
+
+        // Plain name selectors traverse nothing.
+        let plain = parse("foo");
+        assert!(!selector_expands_dependents(&[plain.clone()]));
+        assert!(!selector_expands_dependencies(&[plain]));
     }
 }

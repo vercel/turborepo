@@ -459,7 +459,18 @@ impl Subscriber {
         let builder = PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
             .with_single_package_mode(self.single_package)
             .with_allow_no_package_manager(self.allow_no_package_manager);
-        let Ok(pkg_dep_graph) = self.graph_features.configure(builder).build().await else {
+        // Bootstrap the watcher from subprocess-free planning topology. The
+        // watcher only needs scope paths, change classification, and the
+        // discovery snapshot, all of which static discovery provides; it must
+        // not invoke native toolchains (a missing compiler binary would
+        // otherwise terminate watcher initialization). Runs replan and prepare
+        // selected toolchains themselves.
+        let Ok(staged) = self.graph_features.configure(builder).build_staged().await else {
+            tracing::debug!("package graph not available, package watcher not available");
+            return None;
+        };
+        let (planning, _plan) = staged.into_parts();
+        let Ok(pkg_dep_graph) = Arc::try_unwrap(planning) else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;
         };
