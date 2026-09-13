@@ -452,6 +452,17 @@ mod tests {
                     ))
                 })
             }
+            fn discover_package_scopes(&self) -> crate::toolchain::DiscoverPackageScopesFuture<'_> {
+                Box::pin(async move {
+                    let output = self.discover_packages().await?;
+                    Ok(
+                        crate::toolchain::DiscoveredPackageScopes::from_full_observation(
+                            output.packages(),
+                            output.workspace_roots(),
+                        ),
+                    )
+                })
+            }
         }
 
         let graph = PackageGraphBuilder::new(root, PackageJson::default())

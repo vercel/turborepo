@@ -1,8 +1,27 @@
-//! Regression coverage for staged toolchain discovery: a native toolchain
-//! (Go, Rust, Python) that owns no finally-participating task must never be
-//! invoked or required. Planning discovers every contributor without
-//! subprocesses; only selected owners are fully discovered. On Unix, spy
-//! shims prepended to the child `PATH` make any consultation observable.
+//! Regression coverage for lazy native toolchain discovery.
+//!
+//! The repository graph is built from subprocess-free scope inventories:
+//! JavaScript is authoritative from the start, and each native toolchain
+//! (Go, Rust, Python) contributes only its scope identities and manifests
+//! until a run actually consults it. The contract under test:
+//!
+//! - Narrow, explicit JavaScript selections — include filters by name,
+//!   directory, or glob, `package#task` arguments, `--only`, and exclusions
+//!   that remove every native scope — never load a native owner, so no native
+//!   subprocess runs, even when the native graph holds version-sensitive
+//!   replacements or build-tag-dependent task catalogues.
+//! - A queried native scope loads its owner's authoritative metadata — tasks,
+//!   edges, contracts — before the final selection, even when no native task
+//!   ultimately runs.
+//! - Unfiltered runs, `--affected`, and other graph-wide queries may load every
+//!   contributor to preserve exact native semantics.
+//! - A JavaScript task's dependency on a native scope demands that scope's
+//!   owner; there are no per-toolchain filter special cases.
+//! - Failures are ordinary toolchain errors. There is no planning-refusal or
+//!   reconciliation framework.
+//!
+//! On Unix, spy shims prepended to the child `PATH` make any consultation
+//! observable.
 
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
@@ -280,9 +299,11 @@ fn write_rust_workspace(dir: &Path) {
     write_rust_sources(dir);
 }
 
-/// Isolated fixture for the `dev` probe regression: a JavaScript package with a
-/// `dev` script and a Go workspace whose only module is a library (no `main`
-/// package, so no runnable `dev` target).
+/// Fixture for the broad-query contract: a JavaScript package with a `dev`
+/// script and a Go workspace whose only module is a library (no `main`
+/// package, so no runnable `dev` target). An unfiltered `dev` query selects
+/// the Go scopes too — the library module and the `go-workspace` aggregate —
+/// so the Go owner is loaded even though no Go task can run.
 #[cfg(unix)]
 fn write_js_dev_go_library_workspace(dir: &Path) {
     write_file(dir, ".gitignore", ".turbo\nnode_modules\ndist\n");
@@ -339,17 +360,20 @@ fn write_js_dev_go_library_workspace(dir: &Path) {
 /// requires `example.com/alias` behind version-specific local replacements
 /// while an active remote requirement (`example.com/remote`) could raise the
 /// selected version past `v1.0.0` and flip the replacement target from
-/// `go-lib` to `go-extra`. That edge is exactly the fact static planning
-/// cannot prove without native metadata, making this the ambiguous
-/// counterpart of [`write_mixed_workspace`]'s closed replacement graph.
+/// `go-lib` to `go-extra`. Which replacement wins is a fact only `go` can
+/// decide. A JavaScript-only filter provably never consults the Go scopes,
+/// so the Go owner is never loaded and the replacements cannot matter to
+/// the run — the lazy-native counterpart of
+/// [`write_mixed_workspace`]'s closed replacement graph, where querying the
+/// Go scope does load the owner.
 #[cfg(unix)]
-fn write_js_go_ambiguous_replacement_workspace(dir: &Path) {
+fn write_js_go_version_sensitive_replacement_workspace(dir: &Path) {
     write_file(dir, ".gitignore", ".turbo\nnode_modules\ndist\n");
     write_file(
         dir,
         "package.json",
         r#"{
-  "name": "toolchain-scope-ambiguous-alias",
+  "name": "toolchain-scope-version-alias",
   "private": true,
   "packageManager": "npm@10.5.0",
   "workspaces": ["packages/js-app", "packages/js-lib"]
@@ -422,22 +446,20 @@ replace (
     );
 }
 
-/// The ambiguous counterpart of [`write_js_dev_go_library_workspace`]: the
-/// same JavaScript `dev` script beside a Go module whose only `main` package
+/// A JavaScript `dev` script beside a Go module whose only `main` package
 /// sits behind a build constraint (`//go:build integration` on
-/// `cmd/service/main.go`), so whether the module is a runnable `main` with a
-/// `dev` task or a library without one is environment-dependent — the one
-/// fact static planning cannot sample without `go`. The constraint never
-/// holds under default tags, so a real `go` classifies the module as a
-/// library on every host: its `build` task keeps the exact library command
-/// shape everywhere, which is what makes the module's `build` selection
-/// provable while its `dev` selection is not.
+/// `cmd/service/main.go`), so whether the module has a runnable `dev` target
+/// is a build-tag fact only `go` can resolve: the constraint never holds
+/// under default tags, so a real `go` classifies the module as a library on
+/// every host. Lazy discovery resolves that fact by loading the Go owner
+/// whenever the module's scope is queried — and never needs to when a narrow
+/// JavaScript selection provably never consults it.
 ///
 /// `filter_using_tasks` toggles `futureFlags.filterUsingTasks`, which resolves
 /// `--filter` at the task level instead of the package level.
 /// `js_dev_depends_on_go_dev` adds a cross-language task dependency
 /// (`js-dev#dev` → `example.com/api#dev`) to `turbo.json`, pointing at the
-/// unprovable native `dev` task. The `dev` task is deliberately
+/// build-tag-dependent native `dev` task. The `dev` task is deliberately
 /// non-persistent so that dependency is legal configuration (persistent
 /// tasks cannot be depended on); every test using this fixture only
 /// dry-runs, so the non-persistent `dev` semantics are irrelevant.
@@ -721,7 +743,7 @@ fn spy_dry_run(
 }
 
 // ---------------------------------------------------------------------------
-// No native task in the final graph
+// Narrow JavaScript selections never load a native owner
 // ---------------------------------------------------------------------------
 
 #[cfg(unix)]
@@ -761,23 +783,6 @@ fn js_package_task_argument_never_invokes_native_toolchains() {
         "JavaScript pkg#task argument",
     );
     spy.assert_no_invocations(&output, "JavaScript pkg#task argument");
-}
-
-/// `js-only` is declared for every package but only JavaScript packages have a
-/// command for it, so no native task participates.
-#[cfg(unix)]
-#[test]
-fn task_without_native_participants_never_invokes_native_toolchains() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_mixed_workspace(tempdir.path(), base_tasks());
-    let spy = ToolchainSpy::new(&spy::all_tools());
-
-    let (summary, output) = spy_dry_run(tempdir.path(), &["js-only"], &spy);
-    let ids = task_ids(&summary);
-    let combined = combined_output(&output);
-    assert!(ids.contains("js-app#js-only"), "ids: {ids:?}\n{combined}");
-    assert!(ids.contains("js-lib#js-only"), "ids: {ids:?}\n{combined}");
-    spy.assert_no_invocations(&output, "task with no native command");
 }
 
 /// `--only` prunes the engine to the selected package's own tasks: without
@@ -824,7 +829,7 @@ fn task_filtering_never_invokes_native_toolchains() {
 }
 
 /// `--parallel` removes inter-package dependencies after graph construction;
-/// the staged path must still leave native toolchains untouched.
+/// the lazy path must still leave native toolchains untouched.
 #[cfg(unix)]
 #[test]
 fn parallel_js_only_never_invokes_native_toolchains() {
@@ -867,8 +872,14 @@ fn command_opt_out_never_invokes_native_toolchains() {
     spy.assert_no_invocations(&output, "command opt-out");
 }
 
-/// A requested task no package can run still builds the planning graph; it must
-/// fail without consulting a native toolchain.
+/// A requested task no package can run must fail without consulting a native
+/// toolchain — via the `package#task` argument form, which names its owner
+/// exactly: `js-app` is a JavaScript package whose task catalogue is
+/// authoritative without any subprocess, so the unknown task is answered
+/// against that known owner. An unqualified task name is a repo-wide
+/// catalogue question that any native scope may own, so validating it
+/// demands native metadata instead; see
+/// `unqualified_missing_task_fails_after_loading_real_native_metadata`.
 #[cfg(unix)]
 #[test]
 fn missing_task_never_invokes_native_toolchains() {
@@ -876,14 +887,14 @@ fn missing_task_never_invokes_native_toolchains() {
     setup_mixed_workspace(tempdir.path(), base_tasks());
     let spy = ToolchainSpy::new(&spy::all_tools());
 
-    let output = spy_run(tempdir.path(), &["run", "doesnotexist"], &spy);
+    let output = spy_run(tempdir.path(), &["run", "js-app#doesnotexist"], &spy);
     let combined = combined_output(&output);
     assert!(
         !output.status.success(),
         "unknown task must fail:\n{combined}"
     );
     assert!(
-        combined.contains("Could not find task `doesnotexist` in project"),
+        combined.contains("Could not find task `js-app#doesnotexist` in project"),
         "expected a missing-task diagnostic:\n{combined}"
     );
     spy.assert_no_invocations(&output, "missing task");
@@ -912,43 +923,128 @@ fn real_js_execution_never_invokes_native_toolchains() {
     spy.assert_no_invocations(&output, "real JavaScript execution");
 }
 
-/// A change to a JavaScript package makes `--affected` select only JavaScript
-/// work.
+/// A Go edge that only native metadata can resolve — an active remote
+/// requirement could raise `example.com/alias` past `v1.0.0` and flip its
+/// version-specific replacement from `go-lib` to `go-extra` — is irrelevant
+/// to a JavaScript-only selection: the filter provably never consults the Go
+/// scopes, so the Go owner is never loaded. The run succeeds on a cold cache
+/// with real execution, and the failing `go` spy proves zero probes. Contrast
+/// with `js_filter_never_invokes_native_toolchains`, whose Go graph is exact
+/// once the owner is loaded.
 #[cfg(unix)]
 #[test]
-fn affected_js_change_never_invokes_native_toolchains() {
+fn js_only_filter_succeeds_with_remote_sensitive_go_replacements() {
+    if which::which("node").is_err() {
+        eprintln!("skipping: node is not on PATH");
+        return;
+    }
     let tempdir = tempfile::tempdir().unwrap();
-    setup_mixed_workspace(tempdir.path(), base_tasks());
-    common::git(tempdir.path(), &["checkout", "-b", "feature"]);
-    write_file(
-        tempdir.path(),
-        "packages/js-app/src/index.js",
-        "module.exports = 1;\n",
-    );
-    common::git(tempdir.path(), &["add", "."]);
-    common::git(
-        tempdir.path(),
-        &["commit", "-m", "change js-app", "--quiet"],
-    );
+    write_js_go_version_sensitive_replacement_workspace(tempdir.path());
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::NATIVE_TOOLS);
 
-    let spy = ToolchainSpy::new(&spy::all_tools());
-    let (summary, output) = spy_dry_run(tempdir.path(), &["build", "--affected"], &spy);
+    let output = spy_run(tempdir.path(), &["run", "build", "--filter=js-app"], &spy);
+    assert_success(
+        &output,
+        "JavaScript-only build over a version-sensitive Go graph",
+    );
+    assert!(
+        tempdir.path().join("packages/js-app/dist").is_dir(),
+        "the cold-cache JavaScript build must actually execute"
+    );
+    spy.assert_no_invocations(
+        &output,
+        "JavaScript-only filter with remote-sensitive replacements",
+    );
+}
+
+/// A task-level filter (`futureFlags.filterUsingTasks`) that explicitly
+/// selects the JavaScript package never consults the Go scope's task
+/// catalogue, so the Go owner is never loaded — even though the module's
+/// `dev` classification depends on build tags only `go` can resolve. The
+/// `package#task` CLI argument form is covered separately by
+/// `js_package_task_argument_never_invokes_native_toolchains` and needs no
+/// flag; the two selection forms are deliberately not conflated. Contrast
+/// `unqualified_dev_query_loads_the_go_owner`, whose unfiltered request does
+/// load the Go owner.
+#[cfg(unix)]
+#[test]
+fn task_level_js_dev_filter_ignores_a_platform_constrained_go_module() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), true, false);
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::GO);
+
+    let (summary, output) = spy_dry_run(tempdir.path(), &["dev", "--filter=js-dev"], &spy);
+    assert_task_ids(
+        &summary,
+        &BTreeSet::from(["js-dev#dev".to_string()]),
+        "task-level JavaScript dev filter",
+    );
+    spy.assert_no_invocations(&output, "task-level JavaScript dev filter");
+}
+
+/// A `package#task` CLI argument narrows the selection to the referenced
+/// package even without `--filter`, so the run provably never consults the
+/// Go scopes: the Go owner is never loaded and the build-tag-dependent `dev`
+/// catalogue is never asked about. The argument form needs no future flag;
+/// `js_package_task_argument_never_invokes_native_toolchains` covers it
+/// against the fully loaded mixed repository.
+#[cfg(unix)]
+#[test]
+fn qualified_js_dev_argument_never_loads_the_go_owner() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::GO);
+
+    let (summary, output) = spy_dry_run(tempdir.path(), &["js-dev#dev"], &spy);
+    assert_task_ids(
+        &summary,
+        &BTreeSet::from(["js-dev#dev".to_string()]),
+        "qualified JavaScript dev argument",
+    );
+    spy.assert_no_invocations(&output, "qualified JavaScript dev argument");
+}
+
+/// An exclude-only filter is a near-repository-wide query: it keeps every
+/// scope that is not excluded, including the `go-workspace` aggregate, so
+/// excluding only the Go module would still select a Go scope and load its
+/// owner. Excluding every Go scope — the module and the aggregate — leaves a
+/// provably JavaScript-only selection, so the Go owner is never loaded and
+/// the build-tag-dependent `dev` catalogue is never asked about.
+#[cfg(unix)]
+#[test]
+fn excluding_every_go_scope_keeps_a_js_dev_run_native_free() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::GO);
+
+    let (summary, output) = spy_dry_run(
+        tempdir.path(),
+        &["dev", "--filter=!example.com/api", "--filter=!go-workspace"],
+        &spy,
+    );
     let ids = task_ids(&summary);
     let combined = combined_output(&output);
-    assert!(ids.contains("js-app#build"), "ids: {ids:?}\n{combined}");
+    assert!(
+        ids.contains("js-dev#dev"),
+        "the JavaScript dev task must be selected: {ids:?}\n{combined}"
+    );
     assert!(
         ids.iter().all(|id| id.starts_with("js-")),
-        "affected should select only JavaScript work: {ids:?}\n{combined}"
+        "no Go scope may participate once every Go scope is excluded: {ids:?}\n{combined}"
     );
-    spy.assert_no_invocations(&output, "--affected JavaScript change");
+    spy.assert_no_invocations(&output, "exclude-only JavaScript dev filter");
 }
 
 // ---------------------------------------------------------------------------
-// Native task in the final graph: the owning toolchain is required
+// Native owners load on demand
 // ---------------------------------------------------------------------------
 
-/// Selecting a Rust task must fully discover the Rust contributor; the failing
-/// `cargo` shim proves the toolchain was invoked rather than skipped.
+/// Selecting a Rust task loads the Rust owner's authoritative metadata; the
+/// failing `cargo` shim proves the toolchain was invoked rather than skipped.
 #[cfg(unix)]
 #[test]
 fn selected_cargo_task_invokes_cargo() {
@@ -964,9 +1060,10 @@ fn selected_cargo_task_invokes_cargo() {
     spy.assert_invoked("cargo", &output, "Rust task selection");
 }
 
-/// Selecting a Go task must invoke `go`; a failed invocation must error rather
-/// than silently dropping the task. The log assertion also rules out an
-/// unimplemented static-discovery path passing for the wrong reason.
+/// Selecting a Go task loads the Go owner, so the run depends on a usable
+/// `go`: a failed invocation must error with the ordinary toolchain
+/// diagnostic rather than silently dropping the task or refusing the plan.
+/// The log assertion also rules out the run passing for the wrong reason.
 #[cfg(unix)]
 #[test]
 fn selected_go_task_requires_a_usable_go_executable() {
@@ -979,17 +1076,22 @@ fn selected_go_task_requires_a_usable_go_executable() {
         &["run", "build", "--filter=example.com/api", "--dry-run=json"],
         &spy,
     );
+    let combined = combined_output(&output);
     spy.assert_invoked("go", &output, "Go task selection");
     assert!(
         !output.status.success(),
-        "selecting a Go task must not silently succeed without a usable `go`:\n{}",
-        combined_output(&output)
+        "selecting a Go task must not silently succeed without a usable `go`:\n{combined}"
+    );
+    assert!(
+        combined.contains("`go work edit -json` failed"),
+        "an unusable `go` must surface the ordinary Go toolchain error, not a planning \
+         refusal:\n{combined}"
     );
 }
 
-/// Selecting a Python task must fully discover the Python contributor. uv may
-/// fall back to manifest discovery when its binary fails, so the assertion is
-/// on the observed invocation.
+/// Selecting a Python task loads the Python owner's authoritative metadata.
+/// uv may fall back to manifest discovery when its binary fails, so the
+/// assertion is on the observed invocation.
 #[cfg(unix)]
 #[test]
 fn selected_python_task_invokes_uv() {
@@ -1005,13 +1107,13 @@ fn selected_python_task_invokes_uv() {
     spy.assert_invoked("uv", &output, "Python task selection");
 }
 
-/// An explicit cross-language `dependsOn` pulls `example.com/api#build` into a
-/// JavaScript-filtered run, so the Go owner is selected even though `--filter`
-/// never mentioned it. Contrast with
+/// An explicit cross-language `dependsOn` pulls `example.com/api#build` into
+/// a JavaScript-filtered run, so the Go owner is loaded even though
+/// `--filter` never mentioned it. Contrast with
 /// `js_filter_never_invokes_native_toolchains`.
 #[cfg(unix)]
 #[test]
-fn cross_language_task_dependency_prepares_the_native_owner() {
+fn cross_language_task_dependency_loads_the_native_owner() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_mixed_workspace(
         tempdir.path(),
@@ -1031,7 +1133,7 @@ fn cross_language_task_dependency_prepares_the_native_owner() {
     spy.assert_invoked("go", &output, "cross-language task dependency");
     assert!(
         !output.status.success(),
-        "the pulled-in Go owner must be prepared even for a JavaScript-only filter:\n{}",
+        "the pulled-in Go owner must be loaded even for a JavaScript-only filter:\n{}",
         combined_output(&output)
     );
 }
@@ -1070,37 +1172,295 @@ fn cross_language_task_dependency_appears_in_the_selected_graph() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Review-driven regressions
-// ---------------------------------------------------------------------------
-
-/// An unqualified `dev` request with only a library-only Go module present must
-/// not probe Go at all: a library has no runnable `dev` target, so it cannot
-/// own a participating task.
+/// The constrained module's `dev` classification depends on build tags, but
+/// its `build` task does not: under default build tags the module classifies
+/// as a library on every host, so the library command shape — `go build
+/// ./...`, uncached, because a library produces no tracked output — holds
+/// whether or not the constrained `main` package ever counts. An explicit
+/// native build selection loads the Go owner and retains the real command
+/// shape. Complements
+/// `constrained_go_module_dev_selection_resolves_build_tags_with_go`, which
+/// resolves the build-tag-dependent `dev` classification. Requires a real
+/// `go`; the module declares no dependencies, so discovery never touches the
+/// network.
 #[cfg(unix)]
 #[test]
-fn dev_js_script_never_probes_a_library_only_go_module() {
+fn constrained_go_module_build_selection_retains_the_real_command() {
+    if which::which("go").is_err() {
+        eprintln!("skipping: go is not on PATH");
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = common::run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+    );
+    assert_success(&output, "explicit native build selection");
+    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let combined = combined_output(&output);
+    assert!(
+        task_ids(&summary).contains("example.com/api#build"),
+        "the native build task must be selected: {:?}\n{combined}",
+        task_ids(&summary)
+    );
+    let task = dry_run_task(&summary, "example.com/api#build");
+    assert_eq!(
+        task["command"], "go build ./...",
+        "the library build must retain its real command shape\n{combined}"
+    );
+    assert_eq!(
+        task["resolvedTaskDefinition"]["cache"], false,
+        "a library build produces no tracked output, so it stays uncached\n{combined}"
+    );
+}
+
+/// Querying the constrained module's own `dev` task loads the Go owner, and
+/// the owner resolves build tags with the real `go` command: under default
+/// tags the `//go:build integration` constraint never holds, so the module
+/// classifies as a library and its `dev` stays commandless rather than
+/// guessing a runnable target. Complements
+/// `constrained_go_module_build_selection_retains_the_real_command`, which
+/// keeps the module's real library `build` command. Requires a real `go`;
+/// the module declares no dependencies, so discovery never touches the
+/// network.
+#[cfg(unix)]
+#[test]
+fn constrained_go_module_dev_selection_resolves_build_tags_with_go() {
+    if which::which("go").is_err() {
+        eprintln!("skipping: go is not on PATH");
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = common::run_turbo(
+        tempdir.path(),
+        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+    );
+    assert_success(
+        &output,
+        "native dev selection over a build-tag-constrained module",
+    );
+    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let combined = combined_output(&output);
+    let dev = dry_run_task(&summary, "example.com/api#dev");
+    assert_eq!(
+        dev["command"], "<NONEXISTENT>",
+        "actual `go` must resolve the build tags: the constrained main never counts under default \
+         tags, so the module's dev stays commandless\n{combined}"
+    );
+}
+
+/// Querying the constrained module's `dev` catalogue loads the Go owner, so
+/// the run depends on a usable `go`: the failing spy proves the owner was
+/// invoked, and the failure is the ordinary Go toolchain error — never a
+/// planning refusal. With a real `go` the same query resolves the build tags
+/// and succeeds; see
+/// `constrained_go_module_dev_selection_resolves_build_tags_with_go`.
+#[cfg(unix)]
+#[test]
+fn constrained_go_module_dev_selection_demands_a_usable_go_executable() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::GO);
+
+    let output = spy_run(
+        tempdir.path(),
+        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+        &spy,
+    );
+    let combined = combined_output(&output);
+    spy.assert_invoked("go", &output, "native dev selection");
+    assert!(
+        !output.status.success(),
+        "a dev selection whose owner cannot run must fail:\n{combined}"
+    );
+    assert!(
+        combined.contains("`go work edit -json` failed"),
+        "the failure must be the ordinary Go toolchain error, not a planning refusal:\n{combined}"
+    );
+}
+
+/// A cross-language `dependsOn` on the constrained module's `dev` task must
+/// demand the Go owner even for a task-level JavaScript-only filter
+/// (`futureFlags.filterUsingTasks`): the dependency edge reaches a Go scope,
+/// whose task catalogue only the owner can answer, so `go` is loaded before
+/// the final selection. The failing spy proves the demand; the failure is the
+/// ordinary toolchain error. Contrast
+/// `task_level_js_dev_filter_ignores_a_platform_constrained_go_module`: the
+/// same command without the dependency never loads Go.
+#[cfg(unix)]
+#[test]
+fn cross_language_dev_dependency_loads_the_go_owner() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_platform_constrained_workspace(tempdir.path(), true, true);
+    setup::setup_git(tempdir.path()).unwrap();
+    let spy = ToolchainSpy::new(spy::GO);
+
+    let output = spy_run(
+        tempdir.path(),
+        &["run", "dev", "--filter=js-dev", "--dry-run=json"],
+        &spy,
+    );
+    let combined = combined_output(&output);
+    spy.assert_invoked("go", &output, "cross-language dev dependency");
+    assert!(
+        !output.status.success(),
+        "the demanded Go owner must be loaded even for a JavaScript-only filter:\n{combined}"
+    );
+    assert!(
+        combined.contains("`go work edit -json` failed"),
+        "the failure must be the ordinary Go toolchain error, not a planning refusal:\n{combined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Broad queries may load every contributor
+// ---------------------------------------------------------------------------
+
+/// An unqualified `dev` request is a repository-wide query: it selects every
+/// scope, including the library-only Go module and the `go-workspace`
+/// aggregate, so the Go owner is loaded to preserve exact native semantics —
+/// even though no Go task can run, because a library has no runnable `dev`
+/// target. The failing spy proves the load; the failure is the ordinary
+/// toolchain error.
+#[cfg(unix)]
+#[test]
+fn unqualified_dev_query_loads_the_go_owner() {
     let tempdir = tempfile::tempdir().unwrap();
     write_js_dev_go_library_workspace(tempdir.path());
     setup::setup_git(tempdir.path()).unwrap();
     let spy = ToolchainSpy::new(spy::GO);
 
     let output = spy_run(tempdir.path(), &["run", "dev", "--dry-run=json"], &spy);
-    assert_success(&output, "unqualified dev dry run");
-    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let ids = task_ids(&summary);
+    let combined = combined_output(&output);
+    spy.assert_invoked("go", &output, "unqualified dev query");
     assert!(
-        ids.contains("js-dev#dev"),
-        "ids: {ids:?}\n{}",
-        combined_output(&output)
+        !output.status.success(),
+        "an unqualified query whose contributor cannot run must fail:\n{combined}"
     );
-    // A library-only Go module may carry a commandless `dev` node, but it must
-    // never make the Go owner participate, so no `go` process is spawned.
-    spy.assert_no_invocations(&output, "unqualified JS dev with a library-only Go module");
+    assert!(
+        combined.contains("`go work edit -json` failed"),
+        "the failure must be the ordinary Go toolchain error, not a planning refusal:\n{combined}"
+    );
 }
 
+/// `js-only` is declared for every package but only JavaScript packages have
+/// a command for it, so no native task would run — yet the request is
+/// unqualified, a repository-wide query that may load every contributor to
+/// preserve exact native semantics. Native metadata may therefore load even
+/// though no native task ultimately participates. Owner loading is unordered,
+/// so with failing spies the first loaded contributor aborts the run; at
+/// least one native consultation must be observed.
+#[cfg(unix)]
+#[test]
+fn unqualified_task_query_may_load_every_native_contributor() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_mixed_workspace(tempdir.path(), base_tasks());
+    let spy = ToolchainSpy::new(spy::NATIVE_TOOLS);
+
+    let output = spy_run(tempdir.path(), &["run", "js-only", "--dry-run=json"], &spy);
+    let combined = combined_output(&output);
+    let invocations = spy.invocations();
+    assert!(
+        !invocations.is_empty(),
+        "an unqualified query may load every native contributor, so a native toolchain must have \
+         been consulted, but saw {invocations:?}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.status.success(),
+        "the failing native spy must fail the run with its ordinary toolchain error:\n{combined}"
+    );
+}
+
+/// `--affected` answers depend on the whole graph, so it is a complete-graph
+/// query: every contributor is loaded up front, even when the change itself
+/// touches only JavaScript. The failing spy proves the Go owner is loaded
+/// before affectedness is resolved; the failure is the ordinary toolchain
+/// error.
+#[cfg(unix)]
+#[test]
+fn affected_query_loads_the_go_owner() {
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_library_workspace(tempdir.path());
+    setup::setup_git(tempdir.path()).unwrap();
+    common::git(tempdir.path(), &["checkout", "-b", "feature"]);
+    write_file(
+        tempdir.path(),
+        "packages/js-dev/src/index.js",
+        "module.exports = 1;\n",
+    );
+    common::git(tempdir.path(), &["add", "."]);
+    common::git(
+        tempdir.path(),
+        &["commit", "-m", "change js-dev", "--quiet"],
+    );
+
+    let spy = ToolchainSpy::new(spy::GO);
+    let output = spy_run(
+        tempdir.path(),
+        &["run", "dev", "--affected", "--dry-run=json"],
+        &spy,
+    );
+    let combined = combined_output(&output);
+    spy.assert_invoked(
+        "go",
+        &output,
+        "affected query over a JavaScript-only change",
+    );
+    assert!(
+        !output.status.success(),
+        "the failing native spy must fail the run with its ordinary toolchain error:\n{combined}"
+    );
+}
+
+/// An unqualified task name is a repo-wide catalogue question — any scope,
+/// including a native one, may own the task — so validating it demands the
+/// Go owner's real metadata even when the package filter selects only
+/// JavaScript. With `go` present the metadata loads and the genuinely
+/// unknown task fails with the ordinary missing-task diagnostic: neither a
+/// suppressed empty run nor a toolchain error. (With an unusable `go`, the
+/// same query fails with the ordinary toolchain error instead.) Contrast
+/// `missing_task_never_invokes_native_toolchains`: the qualified
+/// `package#task` form is exact against its known JavaScript owner and never
+/// consults native metadata.
+#[cfg(unix)]
+#[test]
+fn unqualified_missing_task_fails_after_loading_real_native_metadata() {
+    if which::which("go").is_err() {
+        eprintln!("skipping: go is not on PATH");
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    write_js_dev_go_library_workspace(tempdir.path());
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = common::run_turbo(tempdir.path(), &["run", "doesnotexist", "--filter=js-dev"]);
+    let combined = combined_output(&output);
+    assert!(
+        !output.status.success(),
+        "an unknown unqualified task must fail once the catalogue is answered exactly:\n{combined}"
+    );
+    assert!(
+        combined.contains("Could not find task `doesnotexist` in project"),
+        "expected the ordinary missing-task diagnostic after real native metadata \
+         loaded:\n{combined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Hash stability under native co-selection
+// ---------------------------------------------------------------------------
+
 /// The hash of an unchanged JavaScript task must not depend on whether a Rust
-/// owner is prepared alongside it.
+/// owner is loaded alongside it.
 #[test]
 fn unchanged_js_task_hash_is_stable_with_a_selected_rust_owner() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -1135,13 +1495,14 @@ fn unchanged_js_task_hash_is_stable_with_a_selected_rust_owner() {
     assert_eq!(
         task_hash(&with_rust, "js-lib#build"),
         baseline,
-        "an unchanged JavaScript task hash must not change when a Rust owner is prepared"
+        "an unchanged JavaScript task hash must not change when a Rust owner is loaded"
     );
 }
 
-/// Same invariant for a Go owner: a selected Go task, whose static observation
-/// reports external resolution `Unavailable`, must not perturb the JavaScript
-/// task hash through global fallback inputs.
+/// Same invariant for a Go owner: a selected Go task must not perturb the
+/// JavaScript task hash through global fallback inputs — the Go domain's
+/// failures route consumer-scoped fallbacks, and a successful Go discovery
+/// contributes no JavaScript-facing hash input.
 #[cfg(unix)]
 #[test]
 fn unchanged_js_task_hash_is_stable_with_a_selected_go_owner() {
@@ -1180,7 +1541,7 @@ fn unchanged_js_task_hash_is_stable_with_a_selected_go_owner() {
     assert_eq!(
         task_hash(&with_go, "js-lib#build"),
         baseline,
-        "an unchanged JavaScript task hash must not change when a Go owner is prepared"
+        "an unchanged JavaScript task hash must not change when a Go owner is loaded"
     );
 }
 
@@ -1193,8 +1554,8 @@ fn unchanged_js_task_hash_is_stable_with_a_selected_go_owner() {
 /// through the fallback fingerprint. (No cache-policy assertion here:
 /// `PackageResolutionState::cache_eligible` has no production caller, so
 /// there is no Partial-task caching behavior to pin.) A JavaScript-only
-/// selection is protected trivially: the Rust owner is never prepared, so
-/// its lock never feeds any hash.
+/// selection is protected trivially: the Rust owner is never loaded, so its
+/// lock never feeds any hash.
 #[test]
 fn unchanged_js_task_hash_with_partial_rust_resolution() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -1256,7 +1617,7 @@ version = "0.2.0"
          fallbacks preserve JavaScript-owned behavior"
     );
     // The Partial resolution still yields a participating, hashable Rust
-    // task: preparation completed and the fallback fingerprint feeds it.
+    // task: the owner loaded and the fallback fingerprint feeds it.
     assert!(
         !task_hash(&co_selected, "rust-app#build").is_empty(),
         "the Partial Rust task must still be selected and hashed\n{combined}"
@@ -1264,262 +1625,19 @@ version = "0.2.0"
 }
 
 // ---------------------------------------------------------------------------
-// Planning-uncertainty regressions
-// ---------------------------------------------------------------------------
-
-/// A Go edge that only native metadata can resolve — an active remote
-/// requirement could raise `example.com/alias` past `v1.0.0` and flip its
-/// version-specific replacement from `go-lib` to `go-extra` — must not fail
-/// planning for a JavaScript-only selection: the run succeeds on a cold cache
-/// with real execution, and the failing `go` spy proves zero probes. Contrast
-/// with `js_filter_never_invokes_native_toolchains`, whose Go graph is exact.
-#[cfg(unix)]
-#[test]
-fn js_only_filter_succeeds_with_remote_sensitive_go_replacements() {
-    if which::which("node").is_err() {
-        eprintln!("skipping: node is not on PATH");
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_go_ambiguous_replacement_workspace(tempdir.path());
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::NATIVE_TOOLS);
-
-    let output = spy_run(tempdir.path(), &["run", "build", "--filter=js-app"], &spy);
-    assert_success(&output, "JavaScript-only build over an ambiguous Go graph");
-    assert!(
-        tempdir.path().join("packages/js-app/dist").is_dir(),
-        "the cold-cache JavaScript build must actually execute"
-    );
-    spy.assert_no_invocations(
-        &output,
-        "JavaScript-only filter with remote-sensitive replacements",
-    );
-}
-
-/// A platform-constrained Go module's `dev` catalogue cannot be proven
-/// without `go`, but a task-level filter (`futureFlags.filterUsingTasks`)
-/// that explicitly selects the JavaScript package provably never consults
-/// that catalogue, so the selection stays exact and `go` is never probed.
-/// The `package#task` CLI argument form is covered separately by
-/// `js_package_task_argument_never_invokes_native_toolchains` and needs no
-/// flag; the two selection forms are deliberately not conflated. Contrast
-/// with `dev_js_script_never_probes_a_library_only_go_module`, whose Go
-/// module's catalogue is exact.
-#[cfg(unix)]
-#[test]
-fn task_level_js_dev_filter_ignores_a_platform_constrained_go_module() {
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), true, false);
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::GO);
-
-    let (summary, output) = spy_dry_run(tempdir.path(), &["dev", "--filter=js-dev"], &spy);
-    assert_task_ids(
-        &summary,
-        &BTreeSet::from(["js-dev#dev".to_string()]),
-        "task-level JavaScript dev filter",
-    );
-    spy.assert_no_invocations(&output, "task-level JavaScript dev filter");
-}
-
-/// Selecting `dev` on the ambiguous Go module itself must be refused with the
-/// unresolved planning fact — naming the Go toolchain, the task catalogue,
-/// and the `example.com/api` scope — before preparation, so the failing `go`
-/// spy proves the refusal happens without ever invoking `go` to resolve it.
-#[cfg(unix)]
-#[test]
-fn ambiguous_native_dev_selection_is_refused_without_invoking_go() {
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::GO);
-
-    let output = spy_run(
-        tempdir.path(),
-        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
-        &spy,
-    );
-    let combined = combined_output(&output);
-    assert!(
-        !output.status.success(),
-        "a dev selection that cannot be proven exact must be refused:\n{combined}"
-    );
-    assert!(
-        combined.contains("cannot prove this run's task selection"),
-        "expected the unresolved-planning diagnostic:\n{combined}"
-    );
-    assert!(
-        combined.contains("toolchain `go`") && combined.contains("the task catalogue"),
-        "the refusal must name the Go toolchain and the unresolved fact:\n{combined}"
-    );
-    assert!(
-        combined.contains("`example.com/api`"),
-        "the refusal must name the ambiguous Go scope:\n{combined}"
-    );
-    spy.assert_no_invocations(&output, "ambiguous native dev selection");
-}
-
-/// The constrained module's `dev` catalogue is unprovable, but its `build`
-/// task is exact: under default build tags the module classifies as a
-/// library on every host, so the library command shape — `go build ./...`,
-/// uncached, because a library produces no tracked output — holds whether or
-/// not the constrained `main` package ever counts. An explicit native build
-/// selection must therefore prepare Go and retain the real command shape
-/// instead of being refused. Complements
-/// `ambiguous_native_dev_selection_is_refused_without_invoking_go`, which
-/// refuses the same module's unprovable `dev` selection without invoking
-/// `go`. Requires a real `go`; the module declares no dependencies, so
-/// preparation never touches the network.
-#[cfg(unix)]
-#[test]
-fn constrained_go_module_build_selection_retains_the_real_command() {
-    if which::which("go").is_err() {
-        eprintln!("skipping: go is not on PATH");
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
-    setup::setup_git(tempdir.path()).unwrap();
-
-    let output = common::run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
-    );
-    assert_success(&output, "explicit native build selection");
-    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let combined = combined_output(&output);
-    assert!(
-        task_ids(&summary).contains("example.com/api#build"),
-        "the native build task must be selected: {:?}\n{combined}",
-        task_ids(&summary)
-    );
-    let task = dry_run_task(&summary, "example.com/api#build");
-    assert_eq!(
-        task["command"], "go build ./...",
-        "the prepared library build must retain its real command shape\n{combined}"
-    );
-    assert_eq!(
-        task["resolvedTaskDefinition"]["cache"], false,
-        "a library build produces no tracked output, so it stays uncached\n{combined}"
-    );
-}
-
-/// A `package#task` CLI argument narrows the selection to the referenced
-/// package even without `--filter`, so the ambiguous Go module's uncertain
-/// `dev` catalogue is provably never consulted: the run must succeed without
-/// probing `go`. Contrast an unqualified `dev` request, whose task set
-/// genuinely cannot be proven. The argument form needs no future flag;
-/// `js_package_task_argument_never_invokes_native_toolchains` covers it
-/// against an exact native graph.
-#[cfg(unix)]
-#[test]
-fn qualified_js_dev_argument_ignores_the_ambiguous_go_catalogue() {
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::GO);
-
-    let (summary, output) = spy_dry_run(tempdir.path(), &["js-dev#dev"], &spy);
-    assert_task_ids(
-        &summary,
-        &BTreeSet::from(["js-dev#dev".to_string()]),
-        "qualified JavaScript dev argument",
-    );
-    spy.assert_no_invocations(&output, "qualified JavaScript dev argument");
-}
-
-/// An exclude-only filter provably removes the ambiguous Go module from the
-/// selection, so its uncertain `dev` catalogue is never consulted and the
-/// JavaScript `dev` run must succeed without probing `go`. The exclusion —
-/// not a repository-wide catalogue domain — bounds what the run can ask
-/// about. The Go workspace aggregate keeps a commandless `dev` node — the
-/// root `dev` task config applies to every scope, and exclude-only selects
-/// all of them minus the excluded module — so it may appear, but only as a
-/// `<NONEXISTENT>` phantom that executes nothing.
-#[cfg(unix)]
-#[test]
-fn excluding_the_ambiguous_go_module_keeps_a_js_dev_run_exact() {
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), false, false);
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::GO);
-
-    let (summary, output) =
-        spy_dry_run(tempdir.path(), &["dev", "--filter=!example.com/api"], &spy);
-    let ids = task_ids(&summary);
-    let combined = combined_output(&output);
-    assert!(
-        ids.contains("js-dev#dev"),
-        "the JavaScript dev task must be selected: {ids:?}\n{combined}"
-    );
-    assert!(
-        !ids.contains("example.com/api#dev"),
-        "the excluded module must not participate: {ids:?}\n{combined}"
-    );
-    assert!(
-        ids.iter()
-            .all(|id| id.starts_with("js-") || id == "go-workspace#dev"),
-        "only JavaScript work and the commandless aggregate may remain: {ids:?}\n{combined}"
-    );
-    let aggregate = dry_run_task(&summary, "go-workspace#dev");
-    assert_eq!(
-        aggregate["command"], "<NONEXISTENT>",
-        "the aggregate's phantom dev node must stay commandless\n{combined}"
-    );
-    spy.assert_no_invocations(&output, "exclude-only JavaScript dev filter");
-}
-
-/// A cross-language `dependsOn` on the ambiguous module's unprovable `dev`
-/// task must refuse the run with the unresolved-planning diagnostic: the
-/// static catalogue never contributed that task, so the dependency is a
-/// phantom that preparation cannot recover, and the run must not silently
-/// execute the JavaScript task while ignoring it. The refusal happens before
-/// preparation, so `go` is never invoked. Contrast
-/// `task_level_js_dev_filter_ignores_a_platform_constrained_go_module`: the
-/// same command and flag without the dependency succeeds.
-#[cfg(unix)]
-#[test]
-fn cross_language_dev_dependency_on_an_uncertain_catalogue_is_refused() {
-    let tempdir = tempfile::tempdir().unwrap();
-    write_js_dev_go_platform_constrained_workspace(tempdir.path(), true, true);
-    setup::setup_git(tempdir.path()).unwrap();
-    let spy = ToolchainSpy::new(spy::GO);
-
-    let output = spy_run(
-        tempdir.path(),
-        &["run", "dev", "--filter=js-dev", "--dry-run=json"],
-        &spy,
-    );
-    let combined = combined_output(&output);
-    assert!(
-        !output.status.success(),
-        "a dependency on an unprovable native task must be refused:\n{combined}"
-    );
-    assert!(
-        combined.contains("cannot prove this run's task selection"),
-        "expected the unresolved-planning diagnostic:\n{combined}"
-    );
-    assert!(
-        combined.contains("toolchain `go`") && combined.contains("the task catalogue"),
-        "the refusal must name the Go toolchain and the unresolved fact:\n{combined}"
-    );
-    assert!(
-        combined.contains("`example.com/api`"),
-        "the refusal must name the ambiguous Go scope:\n{combined}"
-    );
-    spy.assert_no_invocations(&output, "cross-language dev dependency");
-}
-
-// ---------------------------------------------------------------------------
 // Non-run commands
 // ---------------------------------------------------------------------------
 
-/// Non-run commands share the graph builder and must keep working: `ls` skips
-/// external dependencies and still reports native packages, without needing a
-/// native toolchain executable.
+/// Non-run commands share the run builder, so `ls` is an unfiltered,
+/// repository-wide query: it loads the Cargo owner, whose authoritative
+/// discovery lists the crates — exactly like an unfiltered `turbo run`, `ls`
+/// requires a usable Cargo.
 #[test]
 fn non_run_command_discovers_native_packages() {
+    if which::which("cargo").is_err() {
+        eprintln!("skipping: cargo is not on PATH");
+        return;
+    }
     let tempdir = tempfile::tempdir().unwrap();
     write_rust_workspace(tempdir.path());
     setup::setup_git(tempdir.path()).unwrap();

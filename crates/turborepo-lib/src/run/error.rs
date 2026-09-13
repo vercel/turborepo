@@ -77,44 +77,6 @@ pub enum Error {
     GlobalFileHashTaskIncomplete,
     #[error("Affected range was not configured")]
     MissingAffectedRange,
-    #[error(
-        "staged toolchain discovery disagrees with the planning graph: task `{task}` selected \
-         during planning is missing after preparation"
-    )]
-    #[diagnostic(help(
-        "A repository contributor reported a different task topology during planning than during \
-         preparation. Static discovery must report the same scopes and task catalogue as full \
-         discovery."
-    ))]
-    StagedTaskTopologyMismatch { task: String },
-    #[error(
-        "staged preparation left toolchain `{toolchain}` unprepared, but task `{task}` would \
-         execute with only its static planning contracts"
-    )]
-    #[diagnostic(help(
-        "A repository contributor reported a different task topology during planning than during \
-         preparation, so a dependency task appeared in a toolchain that was not prepared. Static \
-         discovery must report the same scopes and task catalogue as full discovery."
-    ))]
-    StagedUnpreparedToolchain { toolchain: String, task: String },
-    #[error(
-        "cannot prove this run's task selection: toolchain `{toolchain}` could not resolve {fact} \
-         for `{package}` during planning ({code}: {detail}); {reason}"
-    )]
-    #[diagnostic(help(
-        "Subprocess-free planning reported an unresolved fact that this run's selection depends \
-         on. Select a task owned by the `{toolchain}` toolchain so it is fully discovered, or \
-         narrow the run to packages whose selection does not depend on that fact. Contributor \
-         detail: {detail}"
-    ))]
-    UnresolvedPlanningFact {
-        toolchain: String,
-        fact: String,
-        package: String,
-        code: String,
-        detail: String,
-        reason: String,
-    },
     #[error("No package found with name '{name}' in workspace")]
     #[diagnostic(help(
         "This repository contains a Cargo workspace, but Cargo package support is not enabled. \

@@ -186,10 +186,6 @@ pub struct DiscoveredPackages {
     external_resolutions: Vec<ExternalResolutionDomain>,
     change_observations: Vec<ChangeObservation>,
     prune_domains: Vec<Arc<dyn PruneDomain>>,
-    /// Facts this static observation could not prove. Only meaningful on
-    /// static (planning) observations; full discovery must resolve every
-    /// fact or fail (see [`DiscoveredPackages::validate_full_discovery`]).
-    planning_uncertainties: Vec<PlanningUncertainty>,
 }
 
 pub type DiscoveredPackagesParts = (
@@ -208,7 +204,6 @@ impl DiscoveredPackages {
             external_resolutions: Vec::new(),
             change_observations: Vec::new(),
             prune_domains: Vec::new(),
-            planning_uncertainties: Vec::new(),
         }
     }
 
@@ -225,69 +220,6 @@ impl DiscoveredPackages {
     pub fn with_prune_domain(mut self, domain: Arc<dyn PruneDomain>) -> Self {
         self.prune_domains.push(domain);
         self
-    }
-
-    /// Records one planning fact this static observation could not prove,
-    /// scoped to a package this same observation contributes.
-    ///
-    /// See [`PlanningUncertainty`] for the contract: the contributor returns
-    /// its provable inventory and reports the remainder as uncertainty,
-    /// rather than failing the whole observation (which would fail planning
-    /// for every toolchain, including unrelated ones).
-    pub fn with_planning_uncertainty(mut self, uncertainty: PlanningUncertainty) -> Self {
-        self.planning_uncertainties.push(uncertainty);
-        self
-    }
-
-    /// The planning facts this observation could not prove.
-    pub fn planning_uncertainties(&self) -> &[PlanningUncertainty] {
-        &self.planning_uncertainties
-    }
-
-    /// Validates a static observation's uncertainty records against the same
-    /// observation's inventory: every uncertainty scope, and every bounded
-    /// possible target, must be a scope this observation contributes.
-    ///
-    /// A scope that only full discovery would contribute is topology
-    /// divergence, which static discovery already promises not to produce;
-    /// refusing here keeps unknown scopes from silently becoming
-    /// no-edge graph nodes.
-    pub(crate) fn validate_static_planning_contract(
-        &self,
-    ) -> Result<(), PlanningContractViolation> {
-        let contributes = |identity: &str| {
-            self.packages
-                .iter()
-                .any(|package| package.name.as_deref() == Some(identity))
-        };
-        for uncertainty in &self.planning_uncertainties {
-            if !contributes(&uncertainty.scope) {
-                return Err(PlanningContractViolation::UnknownScope {
-                    scope: uncertainty.scope.clone(),
-                });
-            }
-            if let Some(targets) = &uncertainty.possible_targets
-                && let Some(unknown) = targets.iter().find(|target| !contributes(target))
-            {
-                return Err(PlanningContractViolation::UnknownTarget {
-                    scope: uncertainty.scope.clone(),
-                    target: unknown.clone(),
-                });
-            }
-        }
-        Ok(())
-    }
-
-    /// Validates a full (subprocess-time) discovery observation: every fact
-    /// must be resolved. Full discovery reporting uncertainty would leave a
-    /// selected toolchain with facts no phase can ever prove.
-    pub(crate) fn validate_full_discovery(&self) -> Result<(), PlanningContractViolation> {
-        if let Some(uncertainty) = self.planning_uncertainties.first() {
-            return Err(PlanningContractViolation::UncertaintyAfterFullDiscovery {
-                scope: uncertainty.scope.clone(),
-            });
-        }
-        Ok(())
     }
 
     pub fn packages(&self) -> &[DiscoveredPackage] {
@@ -379,6 +311,20 @@ impl DiscoveredPackage {
         self
     }
 
+    /// The authoritative identity of this observed scope, when it has one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Absolute path to the scope's native manifest.
+    pub fn manifest_path(&self) -> &AbsoluteSystemPath {
+        &self.manifest_path
+    }
+
+    pub(crate) fn scope_kind(&self) -> DiscoveredScopeKind {
+        self.scope_kind
+    }
+
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
@@ -415,194 +361,129 @@ pub enum Error {
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
-/// Returned by the default
-/// [`RepositoryContributor::discover_packages_statically`]: a contributor that
-/// cannot separate planning from full discovery must say so explicitly rather
-/// than shelling out during planning.
-#[derive(Debug, thiserror::Error)]
-#[error(
-    "toolchain `{toolchain}` does not support subprocess-free planning discovery; implement \
-     `RepositoryContributor::discover_packages_statically`"
-)]
-pub struct StaticDiscoveryUnsupported {
-    pub toolchain: ToolchainId,
-}
-
-/// The class of planning fact a contributor could not prove statically.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlanningUncertaintyKind {
-    /// The scope's internal dependency edges cannot be proven without full
-    /// discovery.
-    ///
-    /// Relationships the observation *does* contribute for the scope must
-    /// hold under every resolution of the unknown remainder (a provable
-    /// subset). Core never treats the unproven remainder as "no edge": the
-    /// record travels with the planning graph, and any run whose selection
-    /// or hashing depends on those edges is refused with a targeted
-    /// diagnostic rather than silently planned against partial topology.
-    InternalEdges,
-    /// The scope's task catalogue cannot be proven exhaustively without full
-    /// discovery. The observation contributes every task it can prove and
-    /// records the task names it cannot; an empty name list means the whole
-    /// catalogue is uncertain.
-    TaskCatalogue,
-}
-
-/// One unresolved planning fact, scoped to a package owned by the reporting
-/// contributor.
-///
-/// This is the deferred-static-planning channel: instead of failing static
-/// discovery (which fails planning for *every* toolchain, including entirely
-/// unrelated ones), a contributor returns its provable inventory and reports
-/// what it could not prove. Core then:
-///
-/// - ignores the record for selections that provably never consult it (an
-///   unrelated JavaScript-only run never invokes the reporting toolchain),
-/// - refuses, with a diagnostic naming the scope, selections whose task set or
-///   dependency structure cannot be proven exact, and
-/// - fully prepares the contributor when one of its own commanded tasks is
-///   selected, which replaces the static observation — and its uncertainties —
-///   with authoritative facts.
-///
-/// Scope bounding keeps the refusal precise: a native workspace's unresolved
-/// edges can only connect to its own contributed scopes (cross-ecosystem
-/// references appear only through explicit task configuration, which is
-/// config, not discovery), so the contributor lists the possible targets
-/// when it can. Unbounded records are permitted and treated conservatively.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlanningUncertainty {
-    scope: String,
-    kind: PlanningUncertaintyKind,
-    /// For [`PlanningUncertaintyKind::InternalEdges`]: the contributed
-    /// identities the unknown edges could connect to, when the contributor
-    /// can bound them. `None` means unbounded. Every listed identity must be
-    /// contributed by the same observation.
-    possible_targets: Option<Vec<String>>,
-    /// For [`PlanningUncertaintyKind::TaskCatalogue`]: the task names that
-    /// could not be proven. Empty means the entire catalogue is uncertain.
-    uncertain_task_names: Vec<String>,
-    /// Stable machine-readable classifier (e.g.
-    /// `ambiguous-remote-replacement`).
-    code: String,
-    /// Human explanation of what could not be proven and why.
-    message: String,
-}
-
-impl PlanningUncertainty {
-    /// Records that `scope`'s internal edges cannot be proven. Unbounded:
-    /// the unknown edges could connect to anything. Bound them with
-    /// [`PlanningUncertainty::with_possible_targets`] when the candidates
-    /// are known, so unrelated selections can be proven independent.
-    pub fn internal_edges(
-        scope: impl Into<String>,
-        code: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            scope: scope.into(),
-            kind: PlanningUncertaintyKind::InternalEdges,
-            possible_targets: None,
-            uncertain_task_names: Vec::new(),
-            code: code.into(),
-            message: message.into(),
-        }
-    }
-
-    /// Records that `scope`'s task catalogue cannot be proven exhaustively.
-    /// The whole catalogue is uncertain; narrow it with
-    /// [`PlanningUncertainty::with_uncertain_task_names`] when only specific
-    /// tasks are unresolved.
-    pub fn task_catalogue(
-        scope: impl Into<String>,
-        code: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            scope: scope.into(),
-            kind: PlanningUncertaintyKind::TaskCatalogue,
-            possible_targets: None,
-            uncertain_task_names: Vec::new(),
-            code: code.into(),
-            message: message.into(),
-        }
-    }
-
-    /// Bounds internal-edge uncertainty to the identities the unknown edges
-    /// could connect to. Every identity must be contributed by the same
-    /// observation.
-    pub fn with_possible_targets(
-        mut self,
-        targets: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Self {
-        self.possible_targets = Some(targets.into_iter().map(Into::into).collect());
-        self
-    }
-
-    /// Narrows task-catalogue uncertainty to specific task names.
-    pub fn with_uncertain_task_names(
-        mut self,
-        names: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Self {
-        self.uncertain_task_names = names.into_iter().map(Into::into).collect();
-        self
-    }
-
-    /// The contributor-owned scope whose facts are unresolved.
-    pub fn scope(&self) -> &str {
-        &self.scope
-    }
-
-    pub fn kind(&self) -> PlanningUncertaintyKind {
-        self.kind
-    }
-
-    /// Bounded candidate identities for internal-edge uncertainty; `None`
-    /// when unbounded.
-    pub fn possible_targets(&self) -> Option<&[String]> {
-        self.possible_targets.as_deref()
-    }
-
-    /// The task names that could not be proven; empty means the entire
-    /// catalogue is uncertain.
-    pub fn uncertain_task_names(&self) -> &[String] {
-        &self.uncertain_task_names
-    }
-
-    /// Stable machine-readable classifier for diagnostics.
-    pub fn code(&self) -> &str {
-        &self.code
-    }
-
-    /// Human explanation surfaced in targeted diagnostics.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
-/// A contributor observation violated the planning-uncertainty contract.
-#[derive(Debug, thiserror::Error)]
-pub enum PlanningContractViolation {
-    #[error(
-        "planning uncertainty names scope `{scope}`, which the same observation does not \
-         contribute"
-    )]
-    UnknownScope { scope: String },
-    #[error(
-        "planning uncertainty for scope `{scope}` names possible target `{target}`, which the \
-         same observation does not contribute; report unbounded uncertainty instead"
-    )]
-    UnknownTarget { scope: String, target: String },
-    #[error(
-        "full discovery reported planning uncertainty for scope `{scope}`; full discovery must \
-         resolve every fact or fail"
-    )]
-    UncertaintyAfterFullDiscovery { scope: String },
-}
-
 /// The future returned by [`RepositoryContributor::discover_packages`]. Boxed
 /// so the contributor trait stays object-safe.
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
+
+/// The future returned by
+/// [`RepositoryContributor::discover_package_scopes`]. Boxed so the
+/// contributor trait stays object-safe.
+pub type DiscoverPackageScopesFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<DiscoveredPackageScopes, Error>> + Send + 'a>>;
+
+/// One scope identity from a [`DiscoveredPackageScopes`] inventory: the
+/// user-facing name and the native manifest that defines it. Nothing else.
+///
+/// An inventory never claims tasks, edges, or contracts; it is scope metadata
+/// for query narrowing and lazy loading, never a pretend executable task
+/// graph.
+#[derive(Debug, Clone)]
+pub struct DiscoveredPackageScope {
+    name: Option<String>,
+    manifest_path: AbsoluteSystemPathBuf,
+    scope_kind: DiscoveredScopeKind,
+}
+
+impl DiscoveredPackageScope {
+    /// A real-package scope. `name: None` preserves full discovery's
+    /// unnamed-package suppression.
+    pub fn new(name: Option<String>, manifest_path: AbsoluteSystemPathBuf) -> Self {
+        Self {
+            name,
+            manifest_path,
+            scope_kind: DiscoveredScopeKind::Package,
+        }
+    }
+
+    /// Converts this scope into an execution-only aggregate, matching a
+    /// [`DiscoveredPackage::aggregate`] observation from full discovery.
+    pub(crate) fn into_aggregate(mut self) -> Self {
+        self.scope_kind = DiscoveredScopeKind::Aggregate;
+        self
+    }
+
+    /// The scope's user-facing identity, when it has one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Absolute path to the scope's native manifest (`package.json`,
+    /// `Cargo.toml`, `go.mod`, `pyproject.toml`, ...).
+    pub fn manifest_path(&self) -> &AbsoluteSystemPath {
+        &self.manifest_path
+    }
+
+    pub(crate) fn scope_kind(&self) -> DiscoveredScopeKind {
+        self.scope_kind
+    }
+}
+
+/// Cheap, exact, subprocess-free scope inventory from one contributor, as
+/// returned by [`RepositoryContributor::discover_package_scopes`].
+///
+/// Scope names, manifest paths, and workspace roots only — see
+/// [`DiscoveredPackageScope`]. Every identity here must equal the identity
+/// [`RepositoryContributor::discover_packages`] contributes.
+#[derive(Debug, Default, Clone)]
+pub struct DiscoveredPackageScopes {
+    scopes: Vec<DiscoveredPackageScope>,
+    workspace_roots: Vec<WorkspaceRoot>,
+}
+
+pub type DiscoveredPackageScopesParts = (Vec<DiscoveredPackageScope>, Vec<WorkspaceRoot>);
+
+impl DiscoveredPackageScopes {
+    pub fn new(scopes: Vec<DiscoveredPackageScope>, workspace_roots: Vec<WorkspaceRoot>) -> Self {
+        Self {
+            scopes,
+            workspace_roots,
+        }
+    }
+
+    /// Project a full observation envelope into its scope inventory.
+    ///
+    /// For contributors whose full discovery is already subprocess-free
+    /// (in-process manifest parsing — JavaScript, and any in-process
+    /// producer), this is a faithful `discover_package_scopes`
+    /// implementation: same scopes, same roots. Contributors that shell out
+    /// during full discovery must not use it by calling `discover_packages`;
+    /// their inventory has to come from in-process parsing alone.
+    pub fn from_full_observation(
+        packages: &[DiscoveredPackage],
+        workspace_roots: &[WorkspaceRoot],
+    ) -> Self {
+        let scopes = packages
+            .iter()
+            .map(|package| {
+                let mut scope = DiscoveredPackageScope::new(
+                    package.name().map(str::to_string),
+                    package.manifest_path().to_owned(),
+                );
+                if matches!(package.scope_kind(), DiscoveredScopeKind::Aggregate) {
+                    scope = scope.into_aggregate();
+                }
+                scope
+            })
+            .collect();
+        Self {
+            scopes,
+            workspace_roots: workspace_roots.to_vec(),
+        }
+    }
+
+    pub fn scopes(&self) -> &[DiscoveredPackageScope] {
+        &self.scopes
+    }
+
+    pub fn workspace_roots(&self) -> &[WorkspaceRoot] {
+        &self.workspace_roots
+    }
+
+    pub fn into_parts(self) -> DiscoveredPackageScopesParts {
+        (self.scopes, self.workspace_roots)
+    }
+}
 
 /// A command resolved from native-task knowledge, as plain data. The executor
 /// turns it into a process, applying the task's environment, stdin policy,
@@ -659,68 +540,36 @@ pub trait RepositoryContributor: Send + Sync {
     /// in one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 
-    /// Planning discovery: the subprocess-free observation used to build a
-    /// repository graph for task selection.
+    /// Cheap, subprocess-free inventory of the scopes this contributor owns.
     ///
-    /// Implementations MUST NOT invoke toolchain subprocesses, and MUST report
-    /// the same scope identities, workspace roots, and task-catalogue names as
-    /// [`RepositoryContributor::discover_packages`] (topology may not diverge —
-    /// see [`crate::package_graph::StagedPackageGraph::prepare`]). External
-    /// resolution and derived-I/O contract facts may be deferred to
-    /// preparation.
+    /// This is the lazy-loading boundary: core builds a repository graph from
+    /// these inventories (plus the always-in-process JavaScript discovery)
+    /// without invoking any native toolchain, resolves package-level queries
+    /// against it, and then calls [`RepositoryContributor::discover_packages`]
+    /// — the authoritative observation — for exactly the contributors whose
+    /// scopes or task metadata a run actually consults.
     ///
-    /// # Partial knowledge
+    /// Contract:
     ///
-    /// A fact that cannot be proven without the toolchain's subprocesses —
-    /// for example an internal edge whose resolution depends on metadata
-    /// only the native tool can compute — must be *reported*, not guessed and
-    /// not failed:
+    /// - Implementations MUST NOT invoke toolchain subprocesses. Manifest and
+    ///   workspace-definition parsing happens in-process.
+    /// - Implementations MUST report exactly the scope names, manifest paths,
+    ///   and workspace roots that [`RepositoryContributor::discover_packages`]
+    ///   would contribute. Identity may not diverge between the two methods;
+    ///   that invariant is what lets core narrow queries against an inventory
+    ///   without loading the toolchain.
+    /// - Implementations MUST NOT claim tasks, edges, relationships, task
+    ///   contracts, external resolutions, change observations, or prune
+    ///   domains. Those are authoritative full-discovery facts; an inventory
+    ///   that guessed them would be a pretend task graph.
+    /// - A scope with no name is still reported (`name: None`) so the
+    ///   unnamed-package suppression matches full discovery.
     ///
-    /// - Contribute the scopes, edges, and catalogue entries that are proven
-    ///   under every possible resolution, and attach a [`PlanningUncertainty`]
-    ///   for each unproven fact (scoped to a contributed package) via
-    ///   [`DiscoveredPackages::with_planning_uncertainty`].
-    /// - Never invent a speculative edge, task, or superset to make the
-    ///   observation complete, and never fail the whole observation for a
-    ///   scoped fact: a hard failure aborts planning for every toolchain,
-    ///   including runs that never touch this one.
-    /// - Contributed relationships for an edge-uncertain scope must hold under
-    ///   every resolution of the unproven remainder (a provable subset), and
-    ///   bounded possible targets must be contributed scopes. Core rejects
-    ///   records that name unknown scopes rather than treating them as absent
-    ///   edges.
-    ///
-    /// Core keeps the records with the planning graph, ignores them for
-    /// selections that provably never consult them, refuses (with a targeted
-    /// diagnostic naming the scope) selections that cannot be proven exact,
-    /// and resolves them by preparing this contributor when one of its own
-    /// commanded tasks is selected. Contributors that report planning
-    /// uncertainty must therefore also return `true` from
-    /// [`RepositoryContributor::requires_preparation`].
-    ///
-    /// There is deliberately no fallback to
-    /// [`RepositoryContributor::discover_packages`]: doing so would silently
-    /// run subprocesses during planning. Contributors that cannot separate the
-    /// two phases must surface [`StaticDiscoveryUnsupported`] instead.
-    fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
-        let toolchain = self.id();
-        Box::pin(async move {
-            Err(Error::Failed(Box::new(StaticDiscoveryUnsupported {
-                toolchain,
-            })))
-        })
-    }
-
-    /// Whether a static observation must be replaced by
-    /// [`RepositoryContributor::discover_packages`] before tasks are hashed.
-    ///
-    /// `false` means the static observation is already complete — for example
-    /// in-process manifest parsing that is identical in both phases. The
-    /// default is `true`: a contributor that shells out during full discovery
-    /// must be prepared.
-    fn requires_preparation(&self) -> bool {
-        true
-    }
+    /// Errors use the existing diagnostics for the underlying cause (for
+    /// example a malformed manifest). Core does not fall back to
+    /// [`RepositoryContributor::discover_packages`] on failure: doing so would
+    /// silently run subprocesses for runs that never touch this toolchain.
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_>;
 }
 
 /// A Turborepo-served compile cache endpoint, as plain data.
@@ -1062,14 +911,16 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
     }
 
     /// JavaScript discovery parses already-located `package.json` manifests
-    /// in-process; the planning observation is complete, so there is nothing to
-    /// prepare before hashing.
-    fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
-        self.discover_packages()
-    }
-
-    fn requires_preparation(&self) -> bool {
-        false
+    /// in-process, so its scope inventory is a projection of its full
+    /// observation: same scopes, same workspace roots, no subprocesses.
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
+            ))
+        })
     }
 }
 

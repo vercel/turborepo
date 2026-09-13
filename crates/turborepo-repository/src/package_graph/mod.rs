@@ -35,7 +35,7 @@ mod javascript;
 pub mod lockfile_closure;
 mod projections;
 
-pub use builder::{Error, PackageGraphBuilder, StagedPackageGraph, StagedPlan};
+pub use builder::{Error, LazyPackageGraph, LazyPlan, PackageGraphBuilder};
 pub use javascript::ChangedPackagesError;
 pub use projections::{
     AffectedRelationships, FilteringRelationships, HashRelationships, OrderingRelationships,
@@ -140,18 +140,11 @@ pub struct PackageGraph {
     change_knowledge: Arc<crate::change_knowledge::ChangeKnowledge>,
     /// Immutable native prune domains from the same discovery generation.
     prune_knowledge: Arc<crate::prune_knowledge::PruneKnowledge>,
-    /// Unresolved planning facts reported by static observations, keyed by
-    /// the reporting contributor. Only toolchains whose facts remain static
-    /// carry records here: preparation replaces a selected toolchain's
-    /// observation — and its uncertainties — with authoritative facts.
-    /// Generic knowledge: no toolchain is named by core.
-    planning_uncertainties:
-        BTreeMap<crate::toolchain::ToolchainId, Vec<crate::toolchain::PlanningUncertainty>>,
-    /// Toolchains whose hash-relevant facts were left as static planning
-    /// observations (not prepared) for this generation. Empty means every
-    /// contributor was fully discovered. Generic provenance — no toolchain is
-    /// named here.
-    deferred_toolchains: BTreeSet<crate::toolchain::ToolchainId>,
+    /// Scopes this graph carries as inventory-only metadata, keyed by scope
+    /// identity and mapped to the owning, not-yet-loaded toolchain. The set
+    /// is fixed at construction: loading a toolchain produces a new graph.
+    /// Generic knowledge — no toolchain is named by core.
+    unloaded_scopes: BTreeMap<PackageName, crate::toolchain::ToolchainId>,
 }
 
 /// The WorkspacePackage.
@@ -1103,49 +1096,41 @@ impl PackageGraph {
         self.package_view(package)?.toolchain()
     }
 
-    /// Whether every contributor was fully discovered for this generation.
+    /// The owning, not-yet-loaded toolchain for a scope that this graph
+    /// carries as inventory-only metadata.
     ///
-    /// A graph with `false` still carries an authoritative package topology and
-    /// task catalogue, but some toolchain's hash-relevant facts are only the
-    /// static planning observation. Consumers that reuse a graph across task
-    /// selections must replan instead of reusing such a graph. Unresolved
-    /// planning facts also mark a graph non-reusable, even when every
-    /// contributor claims its observation is complete: a reused graph carries
-    /// no plan to prepare or refuse against.
-    pub fn is_fully_prepared(&self) -> bool {
-        self.deferred_toolchains.is_empty() && self.planning_uncertainties.is_empty()
-    }
-
-    /// Unresolved planning facts retained by this graph, each tagged with the
-    /// toolchain that reported it. Only toolchains whose facts remain static
-    /// (never prepared for this graph) appear here.
-    ///
-    /// Selection consumers must treat these records as blocking wherever the
-    /// selection depends on the reported fact: the graph's topology for that
-    /// scope is a provable subset, never the exact truth.
-    pub fn planning_uncertainties(
+    /// Inventory scopes are graph nodes with exact identity, directory, and
+    /// provenance — addressable for package-level queries — but they carry no
+    /// task catalogue, edges, or contracts. `None` means the scope is either
+    /// not an inventory scope or not a scope at all; consult
+    /// [`PackageGraph::package_view`] to distinguish. Consumers that need an
+    /// inventory scope's task metadata must load its owner first.
+    pub fn unloaded_scope_owner(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            &crate::toolchain::ToolchainId,
-            &crate::toolchain::PlanningUncertainty,
-        ),
-    > {
-        self.planning_uncertainties
-            .iter()
-            .flat_map(|(toolchain, uncertainties)| {
-                uncertainties
-                    .iter()
-                    .map(move |uncertainty| (toolchain, uncertainty))
-            })
+        package: &PackageName,
+    ) -> Option<&crate::toolchain::ToolchainId> {
+        self.unloaded_scopes.get(package)
     }
 
-    /// Whether a toolchain's hash-relevant facts were left as static planning
-    /// observations. Deferred toolchains are excluded from conservative global
-    /// hash inputs so that co-presence of an unselected toolchain cannot change
-    /// an unrelated task's hash. Generic provenance — no toolchain is named.
-    pub fn is_toolchain_deferred(&self, toolchain: &crate::toolchain::ToolchainId) -> bool {
-        self.deferred_toolchains.contains(toolchain)
+    /// Every toolchain that still owns at least one inventory-only scope in
+    /// this graph. Generic provenance — no toolchain is named here.
+    pub fn unloaded_owners(&self) -> BTreeSet<crate::toolchain::ToolchainId> {
+        self.unloaded_scopes.values().cloned().collect()
+    }
+
+    /// Whether this graph carries any inventory-only scope. A graph with no
+    /// unloaded scopes is a complete snapshot that any consumer can reuse;
+    /// a graph with some must re-inventory (or load) before finalizing
+    /// selections that could consult them.
+    pub fn has_unloaded_scopes(&self) -> bool {
+        !self.unloaded_scopes.is_empty()
+    }
+
+    /// The lockfile as the shared handle construction retained. Graph
+    /// recomputation reuses this handle instead of re-reading the lockfile
+    /// from disk mid-run.
+    pub(crate) fn shared_lockfile(&self) -> Option<&Arc<dyn Lockfile>> {
+        self.lockfile.as_ref()
     }
 
     /// Whether this identity represents a real package rather than an
@@ -1244,7 +1229,6 @@ impl PackageGraph {
             .external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let deferred = &self.deferred_toolchains;
         // One conservative fingerprint per unresolved domain, computed once
         // per call: consumer-scoping comes from routing it through each
         // member's task hash, so only tasks that (transitively) consume a
@@ -1259,16 +1243,6 @@ impl PackageGraph {
                         .as_deref()
                         .and_then(|generation| generation.domain(domain_id))
                         .map_or(PackageResolutionState::Missing, |domain| {
-                            // A toolchain left unprepared was never resolved;
-                            // report Deferred — with a consumer-scoped
-                            // conservative fingerprint — rather than pretending
-                            // a failure was attempted.
-                            if deferred.contains(domain.toolchain()) {
-                                return PackageResolutionState::Deferred {
-                                    fallback: self
-                                        .domain_fallback_fingerprint(domain, &mut fallbacks),
-                                };
-                            }
                             match domain.data() {
                                 ExternalResolutionData::Resolved { completeness, .. } => domain
                                     .data()
@@ -1332,10 +1306,9 @@ impl PackageGraph {
             .collect()
     }
 
-    /// The conservative fingerprint for a domain whose resolution was never
-    /// attempted (a deferred, static planning observation): a deterministic
-    /// hash of the domain's declared fallback inputs, anchored at the domain
-    /// root.
+    /// The conservative fingerprint for a domain whose exact package-level
+    /// resolution is unavailable or partial: a deterministic hash of the
+    /// domain's declared fallback inputs, anchored at the domain root.
     ///
     /// Each input contributes its anchored path, a presence marker, and a
     /// content hash, so a file appearing, disappearing, or changing content
@@ -1724,19 +1697,14 @@ impl PackageGraph {
     /// the main engine parser-neutral. The historical single-package
     /// JavaScript fallback is retained for graphs without a generation.
     ///
-    /// Domains belonging to a [deferred](Self::is_toolchain_deferred) toolchain
-    /// are skipped: their exact resolution was never attempted, so folding
-    /// their conservative inputs into the repo-wide hash would make an
-    /// unrelated task's hash depend on whether an unselected toolchain's files
-    /// happen to exist. Their members instead carry a consumer-scoped fallback
-    /// fingerprint (see [`PackageResolutionState::Deferred`]), which reaches
-    /// exactly the tasks that consume them. Contributor-supplied domains that
-    /// were attempted and failed or resolved partially are skipped for the
-    /// same reason and carry the same per-consumer fingerprints (see
-    /// [`PackageResolutionState::Unavailable`] and the partial combination in
-    /// [`Self::package_resolution_states`]): a native domain's state must not
-    /// be able to move an unrelated task's hash. The core lockfile domain
-    /// keeps its historical global fallback.
+    /// Contributor-supplied unavailable and partial domains never contribute
+    /// here: their conservative fallback is routed per-consumer through the
+    /// claiming members' fingerprints (see
+    /// [`PackageResolutionState::Unavailable`] and the partial fingerprint
+    /// combination in [`Self::package_resolution_states`]), so a native
+    /// domain's availability or partiality cannot move an unrelated task's
+    /// hash. The core lockfile domain keeps its historical global fallback
+    /// for both.
     pub fn external_resolution_fallback_inputs(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
         let Some(generation) = self.resolution_generation() else {
             let package_manager = self.package_manager()?;
@@ -1750,9 +1718,6 @@ impl PackageGraph {
 
         let mut paths = Vec::new();
         for domain in generation.domains() {
-            if self.is_toolchain_deferred(domain.toolchain()) {
-                continue;
-            }
             // Contributor-supplied unavailable and partial domains never
             // contribute here: their conservative fallback is routed
             // per-consumer through the claiming members' fingerprints (see
@@ -2747,18 +2712,16 @@ mod test {
         );
     }
 
-    /// A contributor with an open toolchain id whose static observation
-    /// reports an unavailable external-resolution domain. The planning graph
-    /// must contribute a consumer-scoped fallback fingerprint — hashed from
-    /// the domain's declared fallback inputs — to the domain's members, so a
-    /// JavaScript package hashing a commandless native transit task
-    /// invalidates when the native files change. The repo-wide hash stays
-    /// unperturbed: co-presence of an unselected toolchain must not change an
-    /// unrelated task's hash.
+    /// A contributor with an open toolchain id whose full discovery reports
+    /// an external-resolution domain that is unavailable or partial. A loaded
+    /// member must carry a consumer-scoped fallback fingerprint — hashed from
+    /// the domain's declared fallback inputs — so a JavaScript package hashing
+    /// a commandless native transit task invalidates when the native files
+    /// change, while the repo-wide hash stays unperturbed: a native domain's
+    /// availability must not move an unrelated task's hash.
     struct FallbackDomainContributor {
         root: AbsoluteSystemPathBuf,
-        /// What full discovery reports for the domain, so the *prepared*
-        /// graph's routing is observable.
+        /// What full discovery reports for the domain.
         full: FullDomainData,
     }
 
@@ -2780,9 +2743,21 @@ mod test {
             Box::pin(async move { Ok(observation) })
         }
 
-        fn discover_packages_statically(&self) -> crate::toolchain::DiscoverPackagesFuture<'_> {
-            let observation = self.observation(FullDomainData::Unavailable("native-unavailable"));
-            Box::pin(async move { Ok(observation) })
+        fn discover_package_scopes(&self) -> crate::toolchain::DiscoverPackageScopesFuture<'_> {
+            let scope = crate::toolchain::DiscoveredPackageScope::new(
+                Some("native-pkg".to_string()),
+                self.root.join_components(&["native", "manifest"]),
+            );
+            let root = self.root.clone();
+            Box::pin(async move {
+                Ok(crate::toolchain::DiscoveredPackageScopes::new(
+                    vec![scope],
+                    vec![crate::toolchain::WorkspaceRoot::new(
+                        "fallback-native",
+                        root,
+                    )],
+                ))
+            })
         }
     }
 
@@ -2848,104 +2823,11 @@ mod test {
         }
     }
 
+    /// The inventory graph carries the native scope as exact identity with no
+    /// resolution claims: an inventory is scope metadata, never a pretend
+    /// catalogue of authoritative facts.
     #[tokio::test]
-    async fn deferred_domain_contributes_consumer_scoped_fallback_fingerprint() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        let lockfile = root.join_components(&["native", "manifest.lock"]);
-        fs::create_dir_all(root.join_component("native")).unwrap();
-        fs::write(&lockfile, b"lock-v1").unwrap();
-
-        let build_planning = || {
-            PackageGraph::builder(
-                &root,
-                PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-            )
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(FallbackDomainContributor {
-                root: root.clone(),
-                full: FullDomainData::Resolved,
-            }))
-            .build_staged()
-        };
-
-        let staged = build_planning().await.unwrap();
-        let planning = staged.planning_graph();
-        assert!(
-            planning.is_toolchain_deferred(&crate::toolchain::ToolchainId::new("fallback-native")),
-            "the native toolchain stays static for a JavaScript-only selection"
-        );
-        // Consumer-scoped: the deferred domain's fallback inputs never reach
-        // the repo-wide hash, so unrelated JavaScript tasks never hash an
-        // unselected toolchain's files. Attempted-but-unavailable domains (the
-        // JavaScript lockfile here) keep their historical global fallback.
-        let global_fallback = planning.external_resolution_fallback_inputs();
-        assert!(
-            global_fallback.as_ref().is_none_or(|paths| {
-                !paths
-                    .iter()
-                    .any(|path| path.file_name() == Some("manifest.lock".as_ref()))
-            }),
-            "a deferred domain must not contribute to the repo-wide hash; got {global_fallback:?}"
-        );
-        let states = planning.package_resolution_states();
-        let PackageResolutionState::Deferred { fallback } = states
-            .get("native-pkg")
-            .expect("the deferred domain's member claims a Deferred resolution state")
-        else {
-            panic!(
-                "expected a deferred state, got {:?}",
-                states.get("native-pkg")
-            );
-        };
-        let first = fallback
-            .clone()
-            .expect("a deferred domain with fallback inputs contributes a fingerprint");
-
-        // The fingerprint tracks the declared inputs' contents: changing the
-        // native lockfile changes what every consumer of this member hashes.
-        fs::write(&lockfile, b"lock-v2").unwrap();
-        let second_staged = build_planning().await.unwrap();
-        let second_states = second_staged.planning_graph().package_resolution_states();
-        let PackageResolutionState::Deferred { fallback } =
-            second_states.get("native-pkg").expect("member state")
-        else {
-            panic!("expected a deferred state");
-        };
-        let second = fallback
-            .clone()
-            .expect("the rebuilt planning graph contributes a fingerprint");
-        assert_ne!(
-            first.as_str(),
-            second.as_str(),
-            "a changed fallback input must change the consumer-scoped fingerprint"
-        );
-
-        // Preparing the toolchain replaces the deferred domain with exact
-        // resolution: the member's state becomes Resolved, not Deferred.
-        let native: HashSet<crate::toolchain::ToolchainId> =
-            std::iter::once(crate::toolchain::ToolchainId::new("fallback-native")).collect();
-        let prepared = second_staged.prepare(&native).await.unwrap();
-        let prepared_states = prepared.package_resolution_states();
-        assert!(
-            matches!(
-                prepared_states.get("native-pkg"),
-                Some(PackageResolutionState::Resolved { .. })
-            ),
-            "preparation resolves the domain exactly; got {:?}",
-            prepared_states.get("native-pkg")
-        );
-    }
-
-    /// A selected toolchain whose full discovery still cannot resolve its
-    /// domain (an invalid native lockfile) must route the failure
-    /// per-consumer — the member carries the conservative fingerprint — so
-    /// the domain's availability cannot move an unrelated JavaScript task's
-    /// hash. The core JavaScript lockfile domain, attempted and failed in the
-    /// same graph, keeps its historical behavior: no member fingerprint and
-    /// the global file fallback.
-    #[tokio::test]
-    async fn prepared_unavailable_native_domain_is_routed_per_consumer() {
+    async fn inventory_scope_makes_no_resolution_claims() {
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         fs::create_dir_all(root.join_component("native")).unwrap();
@@ -2955,7 +2837,63 @@ mod test {
         )
         .unwrap();
 
-        let staged = PackageGraph::builder(
+        let lazy = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_contributor(Arc::new(FallbackDomainContributor {
+            root: root.clone(),
+            full: FullDomainData::Resolved,
+        }))
+        .build_lazy()
+        .await
+        .unwrap();
+        let graph = lazy.graph();
+
+        assert_eq!(
+            graph.unloaded_scope_owner(&PackageName::from("native-pkg")),
+            Some(&crate::toolchain::ToolchainId::new("fallback-native"))
+        );
+        let states = graph.package_resolution_states();
+        assert!(
+            matches!(
+                states.get("native-pkg"),
+                Some(PackageResolutionState::NotApplicable) | None
+            ),
+            "an inventory-only scope claims no resolution state; got {:?}",
+            states.get("native-pkg")
+        );
+        let global_fallback = graph.external_resolution_fallback_inputs();
+        assert!(
+            global_fallback.as_ref().is_none_or(|paths| {
+                !paths
+                    .iter()
+                    .any(|path| path.file_name() == Some("manifest.lock".as_ref()))
+            }),
+            "an inventory-only scope contributes no fallback inputs; got {global_fallback:?}"
+        );
+    }
+
+    /// A loaded toolchain whose full discovery still cannot resolve its
+    /// domain (an invalid native lockfile) must route the failure
+    /// per-consumer — the member carries the conservative fingerprint — so
+    /// the domain's availability cannot move an unrelated JavaScript task's
+    /// hash. The core JavaScript lockfile domain, attempted and failed in the
+    /// same graph, keeps its historical behavior: no member fingerprint and
+    /// the global file fallback.
+    #[tokio::test]
+    async fn loaded_unavailable_native_domain_is_routed_per_consumer() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        fs::create_dir_all(root.join_component("native")).unwrap();
+        fs::write(
+            root.join_components(&["native", "manifest.lock"]),
+            b"lock-v1",
+        )
+        .unwrap();
+
+        let (_inventory, mut plan) = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
@@ -2964,18 +2902,19 @@ mod test {
             root: root.clone(),
             full: FullDomainData::Unavailable("native-lockfile-invalid"),
         }))
-        .build_staged()
+        .build_lazy()
         .await
-        .unwrap();
+        .unwrap()
+        .into_parts();
 
         let native: HashSet<crate::toolchain::ToolchainId> =
             std::iter::once(crate::toolchain::ToolchainId::new("fallback-native")).collect();
-        let prepared = staged.prepare(&native).await.unwrap();
-        let prepared_states = prepared.package_resolution_states();
+        let loaded = plan.load(&native).await.unwrap();
+        let loaded_states = loaded.package_resolution_states();
 
         // The contributor-supplied domain's member carries the conservative
         // fingerprint, never a stable empty one.
-        match prepared_states.get("native-pkg") {
+        match loaded_states.get("native-pkg") {
             Some(PackageResolutionState::Unavailable { fallback, .. }) => assert!(
                 fallback.is_some(),
                 "a contributor-supplied unavailable domain contributes a per-consumer fingerprint"
@@ -2984,7 +2923,7 @@ mod test {
         }
         // The core lockfile domain keeps its historical semantics: no member
         // fingerprint, delivered globally instead.
-        match prepared_states.get(ROOT_PKG_NAME) {
+        match loaded_states.get(ROOT_PKG_NAME) {
             Some(PackageResolutionState::Unavailable { fallback, .. }) => assert!(
                 fallback.is_none(),
                 "the core lockfile domain must not change behavior"
@@ -2993,7 +2932,7 @@ mod test {
         }
         // The repo-wide fallback contains the core domain's inputs but never
         // the contributor-supplied domain's.
-        let global_fallback = prepared.external_resolution_fallback_inputs();
+        let global_fallback = loaded.external_resolution_fallback_inputs();
         assert!(
             global_fallback.as_ref().is_some_and(|paths| {
                 paths
@@ -3008,7 +2947,7 @@ mod test {
         );
     }
 
-    /// A selected toolchain whose full discovery resolves its domain only
+    /// A loaded toolchain whose full discovery resolves its domain only
     /// partially must route the partial fallback per-consumer too: the
     /// member's fingerprint combines its partial exact resolution with the
     /// declared fallback files, and the domain contributes nothing to the
@@ -3016,15 +2955,15 @@ mod test {
     /// unaffected while consumers of the member see lock/source changes.
     /// Partial cache eligibility is unchanged: still not eligible.
     #[tokio::test]
-    async fn prepared_partial_native_domain_is_routed_per_consumer() {
+    async fn loaded_partial_native_domain_is_routed_per_consumer() {
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         let lockfile = root.join_components(&["native", "manifest.lock"]);
         fs::create_dir_all(root.join_component("native")).unwrap();
         fs::write(&lockfile, b"lock-v1").unwrap();
 
-        let build_and_prepare = || async {
-            let staged = PackageGraph::builder(
+        let build_and_load = || async {
+            let (_inventory, mut plan) = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root" })).unwrap(),
             )
@@ -3033,16 +2972,17 @@ mod test {
                 root: root.clone(),
                 full: FullDomainData::Partial,
             }))
-            .build_staged()
+            .build_lazy()
             .await
-            .unwrap();
+            .unwrap()
+            .into_parts();
             let native: HashSet<crate::toolchain::ToolchainId> =
                 std::iter::once(crate::toolchain::ToolchainId::new("fallback-native")).collect();
-            staged.prepare(&native).await.unwrap()
+            plan.load(&native).await.unwrap()
         };
 
-        let prepared = build_and_prepare().await;
-        let states = prepared.package_resolution_states();
+        let loaded = build_and_load().await;
+        let states = loaded.package_resolution_states();
         let state = states
             .get("native-pkg")
             .expect("the partial domain's member claims a state");
@@ -3066,7 +3006,7 @@ mod test {
         };
         // No global contribution: the core lockfile inputs stay, the
         // contributor-supplied partial domain's never appear.
-        let global_fallback = prepared.external_resolution_fallback_inputs();
+        let global_fallback = loaded.external_resolution_fallback_inputs();
         assert!(
             global_fallback.as_ref().is_none_or(|paths| {
                 paths
@@ -3083,8 +3023,8 @@ mod test {
         // The member hash tracks the fallback files: a changed lockfile
         // changes what every consumer of this member hashes.
         fs::write(&lockfile, b"lock-v2").unwrap();
-        let prepared = build_and_prepare().await;
-        let states = prepared.package_resolution_states();
+        let loaded = build_and_load().await;
+        let states = loaded.package_resolution_states();
         match states.get("native-pkg") {
             Some(PackageResolutionState::Resolved { fingerprint, .. }) => assert_ne!(
                 first.as_str(),

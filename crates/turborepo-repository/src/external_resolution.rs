@@ -381,27 +381,14 @@ pub enum PackageResolutionState {
         completeness: ResolutionCompleteness,
         fingerprint: ResolutionFingerprint,
     },
-    /// Resolution was never attempted for this package's toolchain in the
-    /// current generation: staged planning left the toolchain unprepared.
-    /// Distinct from [`PackageResolutionState::Unavailable`], which records an
-    /// attempted failure and keeps its historical global-fallback behavior.
-    ///
-    /// `fallback` is the consumer-scoped conservative fingerprint hashed from
-    /// the domain's declared fallback inputs: consumers of this package's
-    /// tasks (transit-task hash chaining) invalidate when those files change,
-    /// instead of a stable empty fingerprint that would silently cache
-    /// dependents of a commandless native transit task.
-    Deferred {
-        fallback: Option<ResolutionFingerprint>,
-    },
     /// Resolution was attempted and failed. For contributor-supplied domains
     /// the failure's conservative fallback is routed per-consumer: `fallback`
-    /// carries the same fingerprint [`PackageResolutionState::Deferred`] uses,
-    /// and the domain is excluded from the repo-wide fallback, so co-selection
-    /// cannot change unrelated task hashes based on this domain's
-    /// availability. The core lockfile-pipeline domain keeps the historical
-    /// behavior: `fallback: None`, a stable empty fingerprint, and the global
-    /// file fallback.
+    /// carries a fingerprint hashed from the domain's declared fallback
+    /// inputs, and the domain is excluded from the repo-wide fallback, so
+    /// co-selection cannot change unrelated task hashes based on this
+    /// domain's availability. The core lockfile-pipeline domain keeps the
+    /// historical behavior: `fallback: None`, a stable empty fingerprint, and
+    /// the global file fallback.
     Unavailable {
         reason: ResolutionUnavailableReason,
         fallback: Option<ResolutionFingerprint>,
@@ -413,8 +400,6 @@ pub enum PackageResolutionState {
 impl PackageResolutionState {
     /// Existing unavailable and non-applicable states remain cache-eligible.
     /// Partial resolution is explicit and cannot safely participate in caching.
-    /// Deferred domains carry deterministic fallback fingerprints, so caching
-    /// them stays eligible and correct.
     pub fn cache_eligible(&self) -> bool {
         !matches!(
             self,
@@ -428,20 +413,17 @@ impl PackageResolutionState {
     pub fn task_hash(&self) -> Option<&str> {
         match self {
             Self::Resolved { fingerprint, .. } => Some(fingerprint.as_str()),
-            // Deferred (staged, never-attempted) and contributor-supplied
-            // attempted failures contribute a consumer-scoped conservative
-            // fingerprint — hashed from the domain's declared fallback inputs
-            // — so consumers of the domain's members invalidate when the
-            // underlying files change. They never fail the external-deps map;
-            // a domain with no fallback inputs keeps the stable empty
-            // fingerprint. The core lockfile domain keeps its historical
-            // stable empty fingerprint.
-            Self::Deferred { fallback } | Self::Unavailable { fallback, .. } => {
-                Some(match fallback {
-                    Some(fingerprint) => fingerprint.as_str(),
-                    None => "",
-                })
-            }
+            // Contributor-supplied attempted failures contribute a
+            // consumer-scoped conservative fingerprint — hashed from the
+            // domain's declared fallback inputs — so consumers of the
+            // domain's members invalidate when the underlying files change.
+            // They never fail the external-deps map; a domain with no
+            // fallback inputs keeps the stable empty fingerprint. The core
+            // lockfile domain keeps its historical stable empty fingerprint.
+            Self::Unavailable { fallback, .. } => Some(match fallback {
+                Some(fingerprint) => fingerprint.as_str(),
+                None => "",
+            }),
             Self::NotApplicable => Some(""),
             Self::Missing => None,
         }
@@ -1139,10 +1121,6 @@ mod tests {
             reason: ResolutionUnavailableReason::new("missing", "missing native lockfile"),
             fallback: Some(ResolutionFingerprint::new("fallback-hash")),
         };
-        let deferred_without_fallback = PackageResolutionState::Deferred { fallback: None };
-        let deferred_with_fallback = PackageResolutionState::Deferred {
-            fallback: Some(ResolutionFingerprint::new("fallback-hash")),
-        };
         let partial = PackageResolutionState::Resolved {
             completeness: ResolutionCompleteness::Partial(ResolutionIncompleteReason::new(
                 "partial",
@@ -1155,15 +1133,11 @@ mod tests {
         // empty fingerprint, with its fallback delivered globally instead.
         assert_eq!(core_unavailable.task_hash(), Some(""));
         assert!(core_unavailable.cache_eligible());
-        // Deferred (staged, never-attempted) and contributor-supplied
-        // attempted failures contribute a consumer-scoped conservative
-        // fingerprint instead, so consumers of the domain's members
-        // invalidate on the underlying files — the domain's availability can
-        // no longer move co-selected task hashes.
-        assert_eq!(deferred_without_fallback.task_hash(), Some(""));
-        assert_eq!(deferred_with_fallback.task_hash(), Some("fallback-hash"));
+        // Contributor-supplied attempted failures contribute a consumer-scoped
+        // conservative fingerprint instead, so consumers of the domain's
+        // members invalidate on the underlying files — the domain's
+        // availability can no longer move co-selected task hashes.
         assert_eq!(contributor_unavailable.task_hash(), Some("fallback-hash"));
-        assert!(deferred_with_fallback.cache_eligible());
         assert!(contributor_unavailable.cache_eligible());
         assert_eq!(PackageResolutionState::Missing.task_hash(), None);
         assert!(!partial.cache_eligible());

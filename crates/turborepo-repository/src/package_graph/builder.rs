@@ -30,8 +30,8 @@ use crate::{
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     relationships::{Relationship, RelationshipTarget},
     toolchain::{
-        DiscoveredPackage, DiscoveredPackageParts, DiscoveredPackages, DiscoveredScopeKind,
-        JavaScriptContributor, RepositoryContributor, ToolchainId,
+        DiscoveredPackage, DiscoveredPackageParts, DiscoveredPackageScopes, DiscoveredPackages,
+        DiscoveredScopeKind, JavaScriptContributor, RepositoryContributor, ToolchainId,
     },
 };
 
@@ -114,19 +114,6 @@ pub enum Error {
     UnknownRelationshipTarget { identity: String },
     #[error("repository contributor {id} was registered more than once")]
     DuplicateContributor { id: ToolchainId },
-    #[error("staged toolchain {id} has no static planning observation to replace")]
-    MissingStagedContribution { id: ToolchainId },
-    #[error(
-        "staged preparation dropped planning scope `{scope}`; package topology diverged between \
-         static planning and preparation"
-    )]
-    StagedScopeMismatch { scope: String },
-    #[error("toolchain `{toolchain}` violated the static planning contract: {violation}")]
-    PlanningContract {
-        toolchain: ToolchainId,
-        #[source]
-        violation: crate::toolchain::PlanningContractViolation,
-    },
     #[error(
         "toolchain {toolchain} contributed multiple workspace roots: accepted {accepted_kind} \
          root {accepted_root}, conflicting {conflicting_kind} root {conflicting_root}"
@@ -436,25 +423,32 @@ where
         }
     }
 
-    /// Build a planning graph using subprocess-free static discovery, retaining
-    /// a construction-scoped plan that can later prepare only the toolchains
-    /// that own a finally-selected task.
+    /// Build a graph from subprocess-free scope inventories, retaining a
+    /// construction-scoped plan that can later load the contributors whose
+    /// scopes or task metadata a consumer actually consults.
     ///
-    /// Nothing outside this plan is retained: [`StagedPackageGraph::prepare`]
-    /// consumes it and yields an immutable completed [`PackageGraph`] that owns
-    /// no toolchains.
+    /// JavaScript is always discovered authoritatively (its discovery is
+    /// in-process manifest parsing); every additional contributor starts as
+    /// an inventory-only observation: its scopes appear as graph nodes with
+    /// names, directories, and owner provenance, but no task catalogue, no
+    /// edges, and no contracts. An inventory is scope metadata for query
+    /// narrowing — never a pretend executable task graph.
+    ///
+    /// Nothing outside the plan is retained: [`LazyPlan::load`] consumes
+    /// loading requests and yields immutable completed graphs that own no
+    /// toolchains.
     #[tracing::instrument(skip(self))]
-    pub async fn build_staged(
+    pub async fn build_lazy(
         self,
-    ) -> Result<StagedPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
+    ) -> Result<LazyPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
         if self.is_single_package {
-            // Single-package mode consults no additional contributors, so there
-            // is nothing to stage or prepare.
+            // Single-package mode consults no additional contributors, so
+            // there is nothing to inventory or load.
             let repo_root = self.repo_root.to_owned();
-            let graph = self.build().await?;
-            return Ok(StagedPackageGraph {
-                planning: Arc::new(graph),
-                plan: StagedPlan::empty(repo_root),
+            let graph = Arc::new(self.build().await?);
+            return Ok(LazyPackageGraph {
+                graph,
+                plan: LazyPlan::empty(repo_root),
             });
         }
 
@@ -470,7 +464,7 @@ where
             ..
         } = self;
 
-        // Preserve a caller-supplied lockfile across planning and preparation.
+        // Preserve a caller-supplied lockfile across every recomputation.
         let lockfile: Option<Arc<dyn Lockfile>> = lockfile.map(Arc::from);
 
         // Resolve the package manager up front exactly as `build` does, so the
@@ -491,113 +485,114 @@ where
             extra_contributors,
         )?;
 
-        let static_outputs = discover_statically(
-            javascript.as_ref(),
-            &extra_contributors,
-            package_jsons.as_ref(),
-        )
-        .await?;
-        let deferred_toolchains =
-            contributors_requiring_preparation(javascript.as_ref(), &extra_contributors);
-        let planning = assemble(
-            repo_root,
-            root_package_json.clone(),
-            lockfile.clone(),
+        // JavaScript is authoritative from the start; every other contributor
+        // contributes its subprocess-free scope inventory. An inventory that
+        // fails (for example a malformed manifest) fails construction with
+        // the existing diagnostics — core never falls back to running the
+        // toolchain for a run that may not need it.
+        let mut observations = Vec::with_capacity(extra_contributors.len() + 1);
+        if let Some(javascript) = javascript.as_ref() {
+            let output = match package_jsons.as_ref() {
+                Some(package_jsons) => {
+                    javascript
+                        .discover_preparsed_packages(package_jsons.clone())
+                        .await?
+                }
+                None => javascript.discover_packages().await?,
+            };
+            observations.push((
+                ToolchainId::JAVASCRIPT,
+                ContributorObservation::Full(output),
+            ));
+        }
+        for contributor in &extra_contributors {
+            let id = contributor.id();
+            let inventory = contributor.discover_package_scopes().await?;
+            observations.push((id, ContributorObservation::Inventory(inventory)));
+        }
+
+        let plan = LazyPlan {
+            repo_root: repo_root.to_owned(),
+            root_package_json,
+            lockfile,
             load_lockfile,
-            known_pm.clone(),
-            javascript.clone(),
-            extra_contributors.clone(),
-            static_outputs.clone(),
-            deferred_toolchains,
-        )
-        .await?;
-        let planning_scopes: Vec<PackageName> = planning
-            .package_scope_directories()
-            .map(|(name, _)| name)
-            .collect();
-
-        Ok(StagedPackageGraph {
-            planning: Arc::new(planning),
-            plan: StagedPlan {
-                repo_root: repo_root.to_owned(),
-                root_package_json,
-                lockfile,
-                load_lockfile,
-                package_manager: known_pm,
-                javascript,
-                extra_contributors,
-                static_outputs,
-                planning_scopes,
-            },
-        })
+            package_manager: known_pm,
+            javascript,
+            extra_contributors,
+            observations,
+        };
+        let graph = Arc::new(plan.reassemble().await?);
+        Ok(LazyPackageGraph { graph, plan })
     }
 }
 
-/// A planning package graph plus the construction state required to prepare
-/// the toolchains that own finally-selected tasks.
+/// A package graph built from scope inventories plus the construction state
+/// required to authoritatively load the contributors whose scopes or task
+/// metadata a consumer consults.
 ///
-/// The plan is construction-scoped: [`StagedPlan::prepare`] consumes it, and
-/// the completed [`PackageGraph`] it returns is immutable and retains no
-/// contributor.
-pub struct StagedPackageGraph<P> {
-    planning: Arc<PackageGraph>,
-    plan: StagedPlan<P>,
+/// The plan is construction-scoped: [`LazyPackageGraph::into_parts`] splits
+/// them, [`LazyPlan::load`] fulfills loading requests, and every completed
+/// [`PackageGraph`] is immutable and retains no contributor.
+pub struct LazyPackageGraph<P> {
+    graph: Arc<PackageGraph>,
+    plan: LazyPlan<P>,
 }
 
-impl<P> StagedPackageGraph<P> {
-    /// The subprocess-free planning graph. Package topology and task-catalogue
-    /// names are authoritative for selection; only hash-relevant facts that
-    /// static discovery defers are provisional.
-    pub fn planning_graph(&self) -> &PackageGraph {
-        &self.planning
+impl<P> LazyPackageGraph<P> {
+    /// The inventory graph: JavaScript is authoritative; every other
+    /// contributor's scopes are inventory-only (no tasks, edges, or
+    /// contracts). Package-level identity and directory queries are exact;
+    /// anything that needs an unloaded scope's task metadata must load its
+    /// owner first.
+    pub fn graph(&self) -> &PackageGraph {
+        &self.graph
     }
 
-    /// Split into the planning graph and the preparation plan.
+    /// Split into the graph and the load plan.
     ///
-    /// The planning graph is returned as a uniquely owned `Arc` so callers such
-    /// as `--parallel` may mutate it before preparation.
-    pub fn into_parts(self) -> (Arc<PackageGraph>, StagedPlan<P>) {
-        (self.planning, self.plan)
+    /// The graph is returned as a uniquely owned `Arc` so callers such as
+    /// `--parallel` may mutate it before loading.
+    pub fn into_parts(self) -> (Arc<PackageGraph>, LazyPlan<P>) {
+        (self.graph, self.plan)
     }
 }
 
-impl<P: PackageDiscovery + Send + Sync> StagedPackageGraph<P> {
-    /// See [`StagedPlan::requires_preparation`].
-    pub fn requires_preparation(&self, selection: &HashSet<ToolchainId>) -> bool {
-        self.plan.requires_preparation(selection)
-    }
+/// One contributor's retained observation during lazy construction.
+#[derive(Clone)]
+enum ContributorObservation {
+    /// Authoritative full discovery output.
+    Full(DiscoveredPackages),
+    /// Subprocess-free scope inventory: identities and workspace roots only.
+    Inventory(DiscoveredPackageScopes),
+}
 
-    /// See [`StagedPlan::prepare`].
-    pub async fn prepare(
-        self,
-        selection: &HashSet<ToolchainId>,
-    ) -> Result<Arc<PackageGraph>, Error> {
-        self.plan.prepare(selection).await
+impl ContributorObservation {
+    fn is_full(&self) -> bool {
+        matches!(self, ContributorObservation::Full(_))
     }
 }
 
-/// Construction-scoped plan retained between staged planning and preparation.
-///
-/// Toolchains are held only here; the completed graph owns none.
-pub struct StagedPlan<P> {
+/// Construction-scoped plan retained between inventory construction and
+/// authoritative loading. Contributors are held only here; completed graphs
+/// own none, so a shared graph snapshot never retains live toolchains at
+/// runtime.
+pub struct LazyPlan<P> {
     repo_root: AbsoluteSystemPathBuf,
     root_package_json: Option<PackageJson>,
-    /// Reused for preparation so `with_lockfile` inputs are not lost or
-    /// re-read. Shared with the planning graph via `Arc`.
+    /// Reused across every recomputation so `with_lockfile` inputs are not
+    /// lost or re-read. Refreshed from each produced graph.
     lockfile: Option<Arc<dyn Lockfile>>,
     load_lockfile: bool,
     package_manager: Option<PackageManager>,
     javascript: Option<Arc<JavaScriptContributor<P>>>,
     extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
-    /// One static planning observation per contributor (JavaScript first).
-    static_outputs: Vec<(ToolchainId, DiscoveredPackages)>,
-    /// Non-root scope identities observed during planning. A prepared graph
-    /// that lost one is refused: captured task-catalogue/config inputs would no
-    /// longer be valid.
-    planning_scopes: Vec<PackageName>,
+    /// One observation per contributor, JavaScript first when present.
+    /// Inventory-only contributors are replaced — monotonically — by full
+    /// discovery when loaded.
+    observations: Vec<(ToolchainId, ContributorObservation)>,
 }
 
-impl<P> StagedPlan<P> {
+impl<P> LazyPlan<P> {
     fn empty(repo_root: AbsoluteSystemPathBuf) -> Self {
         Self {
             repo_root,
@@ -607,264 +602,120 @@ impl<P> StagedPlan<P> {
             package_manager: None,
             javascript: None,
             extra_contributors: Vec::new(),
-            static_outputs: Vec::new(),
-            planning_scopes: Vec::new(),
+            observations: Vec::new(),
         }
+    }
+
+    fn contributor(&self, owner: &ToolchainId) -> Option<&Arc<dyn RepositoryContributor>> {
+        self.extra_contributors
+            .iter()
+            .find(|contributor| &contributor.id() == owner)
     }
 }
 
-impl<P: PackageDiscovery + Send + Sync> StagedPlan<P> {
-    /// Toolchains that will not be fully discovered for `selection` even though
-    /// they declare preparation required. Retained tasks in these toolchains
-    /// must not execute.
-    pub fn unprepared_toolchains(&self, selection: &HashSet<ToolchainId>) -> HashSet<ToolchainId> {
-        let mut unprepared = HashSet::new();
-        if let Some(javascript) = &self.javascript {
-            let id = javascript.id();
-            if javascript.requires_preparation() && !selection.contains(&id) {
-                unprepared.insert(id);
-            }
-        }
-        for contributor in &self.extra_contributors {
-            let id = contributor.id();
-            if contributor.requires_preparation() && !selection.contains(&id) {
-                unprepared.insert(id);
-            }
-        }
-        unprepared
+impl<P: PackageDiscovery + Send + Sync> LazyPlan<P> {
+    /// The toolchains whose observations are authoritative for the current
+    /// generation. JavaScript is present whenever the repository has a
+    /// JavaScript project; inventory-only contributors are absent until
+    /// loaded. Loading is monotone: an id never leaves this set.
+    pub fn loaded_owners(&self) -> BTreeSet<ToolchainId> {
+        self.observations
+            .iter()
+            .filter(|(_, observation)| observation.is_full())
+            .map(|(id, _)| id.clone())
+            .collect()
     }
 
-    /// Toolchains whose observation [`StagedPlan::prepare`] will replace for
-    /// `selection`: selected contributors that declare preparation required.
-    /// A selected contributor that does *not* require preparation keeps its
-    /// static observation verbatim, so any planning uncertainty it reported
-    /// would persist forever — selection consumers must treat such records
-    /// as unresolvable.
-    pub fn resolving_toolchains(&self, selection: &HashSet<ToolchainId>) -> HashSet<ToolchainId> {
-        let mut resolving = HashSet::new();
-        if let Some(javascript) = &self.javascript {
-            let id = javascript.id();
-            if javascript.requires_preparation() && selection.contains(&id) {
-                resolving.insert(id);
-            }
-        }
-        for contributor in &self.extra_contributors {
-            let id = contributor.id();
-            if contributor.requires_preparation() && selection.contains(&id) {
-                resolving.insert(id);
-            }
-        }
-        resolving
-    }
-
-    /// Whether any toolchain in `selection` must be fully discovered before
-    /// hashing. When `false`, the planning graph is complete for the selection
-    /// and no preparation (and no second assembly) is required.
-    pub fn requires_preparation(&self, selection: &HashSet<ToolchainId>) -> bool {
-        let check = |contributor: &dyn RepositoryContributor| {
-            selection.contains(&contributor.id()) && contributor.requires_preparation()
-        };
-        self.javascript
-            .as_ref()
-            .is_some_and(|javascript| check(javascript.as_ref()))
-            || self
-                .extra_contributors
+    /// Authoritatively discover `owners` and return the recomputed graph.
+    ///
+    /// Every requested contributor that is still inventory-only is replaced
+    /// by its full [`RepositoryContributor::discover_packages`] observation;
+    /// already-loaded contributors are reused verbatim and never invoked
+    /// again. Loading is monotone — it never unloads — so repeated calls
+    /// converge, and the graph a consumer finalizes is built only after its
+    /// demands have settled.
+    pub async fn load(&mut self, owners: &HashSet<ToolchainId>) -> Result<PackageGraph, Error> {
+        for owner in owners {
+            if self
+                .observations
                 .iter()
-                .any(|contributor| check(contributor.as_ref()))
-    }
-}
-
-impl<P: PackageDiscovery + Send + Sync> StagedPlan<P> {
-    /// Fully discover only the selected toolchains that require preparation and
-    /// return the completed graph. Every other contributor's static observation
-    /// is reused verbatim and is never invoked.
-    pub async fn prepare(
-        mut self,
-        selection: &HashSet<ToolchainId>,
-    ) -> Result<Arc<PackageGraph>, Error> {
-        let deferred_toolchains: BTreeSet<ToolchainId> =
-            self.unprepared_toolchains(selection).into_iter().collect();
-        let planning_scopes = std::mem::take(&mut self.planning_scopes);
-
-        if let Some(javascript) = self.javascript.clone() {
-            prepare_contribution(javascript.as_ref(), selection, &mut self.static_outputs).await?;
-        }
-        for contributor in &self.extra_contributors {
-            prepare_contribution(contributor.as_ref(), selection, &mut self.static_outputs).await?;
-        }
-        let graph = assemble(
-            &self.repo_root,
-            self.root_package_json,
-            self.lockfile,
-            self.load_lockfile,
-            self.package_manager,
-            self.javascript,
-            self.extra_contributors,
-            self.static_outputs,
-            deferred_toolchains,
-        )
-        .await?;
-
-        // A prepared graph must retain every planning scope; otherwise the
-        // captured task catalogue / config inputs are stale.
-        for scope in &planning_scopes {
-            if graph.package_task_context(scope).is_none() {
-                return Err(Error::StagedScopeMismatch {
-                    scope: scope.to_string(),
-                });
+                .any(|(id, observation)| id == owner && observation.is_full())
+            {
+                continue;
+            }
+            let Some(contributor) = self.contributor(owner) else {
+                // Owners originate from the graph's unloaded scopes, which
+                // only registered contributors produce. Unknown ids cannot
+                // be requested through the public flow; ignore defensively
+                // rather than inventing an error for a caller bug.
+                tracing::debug!(toolchain = %owner, "load requested for an unregistered toolchain");
+                continue;
+            };
+            let output = contributor.discover_packages().await?;
+            if let Some(slot) = self.observations.iter_mut().find(|(id, _)| id == owner) {
+                slot.1 = ContributorObservation::Full(output);
             }
         }
-        Ok(Arc::new(graph))
+        let graph = self.reassemble().await?;
+        // Retain the lockfile the graph consumed so the next recomputation
+        // reuses it instead of re-reading it mid-run.
+        self.lockfile = graph.shared_lockfile().cloned();
+        Ok(graph)
     }
-}
 
-/// The toolchains that declare preparation required among the registered
-/// contributors. Generic capability query — no toolchain is named.
-fn contributors_requiring_preparation<P: PackageDiscovery + Send + Sync>(
-    javascript: Option<&Arc<JavaScriptContributor<P>>>,
-    extra_contributors: &[Arc<dyn RepositoryContributor>],
-) -> BTreeSet<ToolchainId> {
-    let mut requiring = BTreeSet::new();
-    if let Some(javascript) = javascript
-        && javascript.requires_preparation()
-    {
-        requiring.insert(javascript.id());
-    }
-    for contributor in extra_contributors {
-        if contributor.requires_preparation() {
-            requiring.insert(contributor.id());
-        }
-    }
-    requiring
-}
+    /// Recompute the graph from the retained observations: JavaScript and
+    /// loaded contributors assemble authoritatively; inventory-only
+    /// contributors contribute scope nodes and workspace roots. Contributors
+    /// are never invoked here.
+    async fn reassemble(&self) -> Result<PackageGraph, Error> {
+        let contributions: Vec<(ToolchainId, ContributorObservation)> = self.observations.clone();
+        let repo_root: &AbsoluteSystemPath = &self.repo_root;
 
-/// Collect every contributor's subprocess-free planning observation, in the
-/// same order as eager discovery (JavaScript first). Each observation's
-/// planning-uncertainty records are validated against its own inventory
-/// before planning proceeds: an unknown scope is a contract violation, not
-/// a silent no-edge package.
-async fn discover_statically<P: PackageDiscovery + Send + Sync>(
-    javascript: Option<&Arc<JavaScriptContributor<P>>>,
-    extra_contributors: &[Arc<dyn RepositoryContributor>],
-    package_jsons: Option<&HashMap<AbsoluteSystemPathBuf, PackageJson>>,
-) -> Result<Vec<(ToolchainId, DiscoveredPackages)>, Error> {
-    let mut outputs = Vec::with_capacity(extra_contributors.len() + 1);
-    if let Some(javascript) = javascript {
-        // A caller-supplied manifest set stands in for JavaScript discovery, so
-        // planning uses it rather than walking the workspace.
-        let output = match package_jsons {
-            Some(package_jsons) => {
-                javascript
-                    .discover_preparsed_packages(package_jsons.clone())
-                    .await?
+        // If no retained lockfile, start reading it on a blocking thread
+        // concurrently with assembly. A pure Cargo workspace has no root
+        // package.json and therefore no lockfile to read.
+        let lockfile_future = if self.load_lockfile && self.lockfile.is_none() {
+            match (self.package_manager.clone(), self.root_package_json.clone()) {
+                (Some(pm), Some(root_package_json)) => {
+                    let repo_root = self.repo_root.clone();
+                    Some(tokio::task::spawn_blocking(
+                        move || -> Option<Box<dyn Lockfile>> {
+                            pm.read_lockfile(&repo_root, &root_package_json).ok()
+                        },
+                    ))
+                }
+                _ => None,
             }
-            None => javascript.discover_packages_statically().await?,
+        } else {
+            None
         };
-        outputs.push((ToolchainId::JAVASCRIPT, output));
-    }
-    for contributor in extra_contributors {
-        let id = contributor.id();
-        let output = contributor.discover_packages_statically().await?;
-        outputs.push((id, output));
-    }
-    for (id, output) in &outputs {
-        output
-            .validate_static_planning_contract()
-            .map_err(|violation| Error::PlanningContract {
-                toolchain: id.clone(),
-                violation,
-            })?;
-    }
-    Ok(outputs)
-}
 
-/// Replace a contributor's static observation with full discovery when it is
-/// selected and declares that preparation is required. Full discovery must
-/// resolve every planning fact: any uncertainty it reports is refused rather
-/// than carried into a prepared graph that nothing can ever complete.
-async fn prepare_contribution(
-    contributor: &dyn RepositoryContributor,
-    selection: &HashSet<ToolchainId>,
-    outputs: &mut [(ToolchainId, DiscoveredPackages)],
-) -> Result<(), Error> {
-    let id = contributor.id();
-    if !selection.contains(&id) || !contributor.requires_preparation() {
-        return Ok(());
+        let state = BuildState {
+            repo_root,
+            single: false,
+            assembler: PackageGraphAssembler::new(self.root_package_json.clone()),
+            knowledge: None,
+            relationship_knowledge: None,
+            native_relationships: HashMap::new(),
+            native_external_resolutions: Vec::new(),
+            native_task_observations: Vec::new(),
+            native_change_observations: Vec::new(),
+            native_prune_domains: Vec::new(),
+            root_package_json: self.root_package_json.clone(),
+            lockfile: self.lockfile.clone(),
+            load_lockfile: self.load_lockfile,
+            package_manager: self.package_manager.clone(),
+            package_jsons: None,
+            state: std::marker::PhantomData,
+            javascript: self.javascript.clone(),
+            extra_contributors: self.extra_contributors.clone(),
+            contributions: Some(contributions),
+            unloaded_scopes: BTreeMap::new(),
+        };
+        let state = state.parse_package_jsons().await?;
+        let state = state.resolve_lockfile(lockfile_future).await?;
+        Ok(state.build_inner().await?)
     }
-    let Some(slot) = outputs.iter_mut().find(|(existing, _)| existing == &id) else {
-        return Err(Error::MissingStagedContribution { id });
-    };
-    let output = contributor.discover_packages().await?;
-    output
-        .validate_full_discovery()
-        .map_err(|violation| Error::PlanningContract {
-            toolchain: id,
-            violation,
-        })?;
-    slot.1 = output;
-    Ok(())
-}
-
-/// Assemble a completed [`PackageGraph`] from precomputed contributor outputs.
-///
-/// Reads the JavaScript lockfile concurrently with no discovery, mirroring the
-/// eager pipeline; contributors are never invoked here.
-async fn assemble<P>(
-    repo_root: &AbsoluteSystemPath,
-    root_package_json: Option<PackageJson>,
-    lockfile: Option<Arc<dyn Lockfile>>,
-    load_lockfile: bool,
-    package_manager: Option<PackageManager>,
-    javascript: Option<Arc<JavaScriptContributor<P>>>,
-    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
-    contributions: Vec<(ToolchainId, DiscoveredPackages)>,
-    deferred_toolchains: BTreeSet<ToolchainId>,
-) -> Result<PackageGraph, Error>
-where
-    P: PackageDiscovery + Send + Sync,
-{
-    let lockfile_future = if load_lockfile && lockfile.is_none() {
-        match (package_manager.clone(), root_package_json.clone()) {
-            (Some(pm), Some(root_package_json)) => {
-                let repo_root = repo_root.to_owned();
-                Some(tokio::task::spawn_blocking(
-                    move || -> Option<Box<dyn Lockfile>> {
-                        pm.read_lockfile(&repo_root, &root_package_json).ok()
-                    },
-                ))
-            }
-            _ => None,
-        }
-    } else {
-        None
-    };
-
-    let state = BuildState {
-        repo_root,
-        single: false,
-        assembler: PackageGraphAssembler::new(root_package_json.clone()),
-        knowledge: None,
-        relationship_knowledge: None,
-        native_relationships: HashMap::new(),
-        native_external_resolutions: Vec::new(),
-        native_task_observations: Vec::new(),
-        native_change_observations: Vec::new(),
-        native_prune_domains: Vec::new(),
-        root_package_json,
-        lockfile,
-        load_lockfile,
-        package_manager,
-        package_jsons: None,
-        state: std::marker::PhantomData,
-        javascript,
-        extra_contributors,
-        contributions: Some(contributions),
-        planning_uncertainties: BTreeMap::new(),
-        deferred_toolchains,
-    };
-    let state = state.parse_package_jsons().await?;
-    let state = state.resolve_lockfile(lockfile_future).await?;
-    Ok(state.build_inner().await?)
 }
 
 struct BuildState<'a, S, T> {
@@ -895,21 +746,18 @@ struct BuildState<'a, S, T> {
     /// Additional package contributors. JavaScript is kept typed above so
     /// pre-parsed manifest input cannot be routed through an open ID.
     extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
-    /// Precomputed contributor outputs. When `Some`, assembly consumes them
-    /// instead of invoking discovery: `build_staged`/`prepare` supply one
-    /// entry per registered contributor (JavaScript first when present). The
-    /// eager [`super::PackageGraphBuilder::build`] path leaves this `None`.
-    contributions: Option<Vec<(ToolchainId, DiscoveredPackages)>>,
-    /// Unresolved planning facts reported by static observations, keyed by
-    /// the reporting contributor. Full-discovery observations never
-    /// contribute here (they are refused instead), so a non-empty map marks
-    /// toolchains whose facts remain static for this graph.
-    planning_uncertainties: BTreeMap<ToolchainId, Vec<crate::toolchain::PlanningUncertainty>>,
-    /// Toolchains whose hash-relevant facts were left as static planning
-    /// observations. Eager construction is always empty; staged planning lists
-    /// every contributor that requires preparation, and preparation lists only
-    /// those it did not prepare.
-    deferred_toolchains: BTreeSet<ToolchainId>,
+    /// Precomputed contributor observations. When `Some`, assembly consumes
+    /// them instead of invoking discovery: the lazy construction path
+    /// supplies one entry per registered contributor (JavaScript first when
+    /// present), each either authoritative full discovery or an
+    /// inventory-only scope observation. The eager
+    /// [`super::PackageGraphBuilder::build`] path leaves this `None`.
+    contributions: Option<Vec<(ToolchainId, ContributorObservation)>>,
+    /// Scopes contributed by inventory-only observations, keyed by scope
+    /// identity and mapped to the owning, not-yet-loaded toolchain. Eager
+    /// construction is always empty. These scopes are graph nodes for
+    /// identity/directory queries — never executable task metadata.
+    unloaded_scopes: BTreeMap<PackageName, ToolchainId>,
 }
 
 struct PackageGraphAssembler {
@@ -1181,8 +1029,7 @@ where
             javascript,
             extra_contributors,
             contributions: None,
-            planning_uncertainties: BTreeMap::new(),
-            deferred_toolchains: BTreeSet::new(),
+            unloaded_scopes: BTreeMap::new(),
         })
     }
 }
@@ -1197,7 +1044,7 @@ type ContributorPair<D> = (
 
 /// Construct the typed JavaScript contributor (when a root `package.json`
 /// exists) plus the additional contributors, rejecting duplicate toolchain
-/// ids. Shared by eager construction and staged planning.
+/// ids. Shared by eager construction and lazy (re)computation.
 fn build_contributors<T>(
     repo_root: &AbsoluteSystemPath,
     root_package_json: &Option<PackageJson>,
@@ -1310,8 +1157,14 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
         let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
         let mut workspace_roots = Vec::new();
-        // Staged assembly injects precomputed outputs (static planning or
-        // prepared); eager assembly discovers from the contributors now.
+        // Scope observations contributed by inventory-only observations. They
+        // become graph nodes with a default descriptor (exactly what full
+        // native discovery contributes) but no task, relationship, or
+        // contract facts.
+        let mut inventory_scopes: Vec<PackageScopeObservation> = Vec::new();
+        let mut inventory_descriptors: Vec<(String, PackageJson)> = Vec::new();
+        // Lazy assembly injects precomputed observations; eager assembly
+        // discovers from the contributors now.
         let contributor_outputs = match self.contributions.take() {
             Some(outputs) => outputs,
             None => {
@@ -1328,57 +1181,76 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                         }
                         None => javascript.discover_packages().await?,
                     };
-                    output.validate_full_discovery().map_err(|violation| {
-                        Error::PlanningContract {
-                            toolchain: ToolchainId::JAVASCRIPT,
-                            violation,
-                        }
-                    })?;
-                    contributor_outputs.push((ToolchainId::JAVASCRIPT, output));
+                    contributor_outputs.push((
+                        ToolchainId::JAVASCRIPT,
+                        ContributorObservation::Full(output),
+                    ));
                 }
                 for contributor in &self.extra_contributors {
                     let id = contributor.id();
                     let output = contributor.discover_packages().await?;
-                    output.validate_full_discovery().map_err(|violation| {
-                        Error::PlanningContract {
-                            toolchain: id.clone(),
-                            violation,
-                        }
-                    })?;
-                    contributor_outputs.push((id, output));
+                    contributor_outputs.push((id, ContributorObservation::Full(output)));
                 }
                 contributor_outputs
             }
         };
-        for (id, output) in contributor_outputs {
-            // Uncertainty records only ride static (planning) observations;
-            // full observations were refused above and by `prepare`.
-            let uncertainties = output.planning_uncertainties().to_vec();
-            let (packages, roots, external_resolutions, changes, prune_domains) =
-                output.into_parts();
-            if !uncertainties.is_empty() {
-                self.planning_uncertainties
-                    .entry(id.clone())
-                    .or_default()
-                    .extend(uncertainties);
+        for (id, observation) in contributor_outputs {
+            match observation {
+                ContributorObservation::Full(output) => {
+                    let (packages, roots, external_resolutions, changes, prune_domains) =
+                        output.into_parts();
+                    // Mark every contributor-supplied resolution domain at
+                    // collection: core's own lockfile pipeline (which appends
+                    // the JavaScript domain during assembly) is the only other
+                    // producer, so marking here is exact provenance —
+                    // capability-owned versus core-owned — without naming any
+                    // toolchain.
+                    for mut domain in external_resolutions {
+                        domain.mark_contributor_supplied();
+                        self.native_external_resolutions.push(domain);
+                    }
+                    self.native_change_observations.extend(changes);
+                    self.native_prune_domains.extend(prune_domains);
+                    workspace_roots.extend(
+                        roots
+                            .into_iter()
+                            .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+                    );
+                    discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
+                }
+                ContributorObservation::Inventory(inventory) => {
+                    let (scopes, roots) = inventory.into_parts();
+                    workspace_roots.extend(
+                        roots
+                            .into_iter()
+                            .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+                    );
+                    for scope in scopes {
+                        let identity = scope.name().map(str::to_string);
+                        // A default descriptor mirrors what full native
+                        // discovery contributes: the node is addressable by
+                        // name (so JavaScript declared dependencies naming
+                        // this scope classify as internal, exactly as under
+                        // eager discovery) while carrying no native facts.
+                        if let Some(name) = identity.clone() {
+                            inventory_descriptors.push((name.clone(), PackageJson::default()));
+                            self.unloaded_scopes
+                                .insert(PackageName::Other(name), id.clone());
+                        }
+                        let observation = PackageScopeObservation {
+                            identity,
+                            name_source: None,
+                            definition_path: scope.manifest_path().to_owned(),
+                            toolchain: id.clone(),
+                            scope_kind: match scope.scope_kind() {
+                                DiscoveredScopeKind::Package => ScopeKind::Package,
+                                DiscoveredScopeKind::Aggregate => ScopeKind::Aggregate,
+                            },
+                        };
+                        inventory_scopes.push(observation);
+                    }
+                }
             }
-            // Mark every contributor-supplied resolution domain at
-            // collection: core's own lockfile pipeline (which appends the
-            // JavaScript domain during assembly) is the only other producer,
-            // so marking here is exact provenance — capability-owned versus
-            // core-owned — without naming any toolchain.
-            for mut domain in external_resolutions {
-                domain.mark_contributor_supplied();
-                self.native_external_resolutions.push(domain);
-            }
-            self.native_change_observations.extend(changes);
-            self.native_prune_domains.extend(prune_domains);
-            workspace_roots.extend(
-                roots
-                    .into_iter()
-                    .map(|root| WorkspaceRootObservation::new(root, id.clone())),
-            );
-            discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
         let _span = tracing::info_span!("add_packages").entered();
@@ -1397,6 +1269,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 self.native_task_observations.push(tasks);
             }
         }
+        // Inventory-only scopes join the same knowledge and descriptor sets:
+        // identity and directory queries see them, and task metadata never
+        // claims anything on their behalf.
+        observations.extend(inventory_scopes);
+        descriptors.extend(inventory_descriptors);
         let root_name = self.root_package_json.as_ref().map(|package_json| {
             package_json
                 .name
@@ -1437,8 +1314,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             extra_contributors,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
             ..
         } = self;
         Ok(BuildState {
@@ -1461,8 +1337,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_jsons: None,
             state: std::marker::PhantomData,
             contributions: None,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
         })
     }
 
@@ -1616,10 +1491,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             change_knowledge,
             prune_knowledge,
             // Single-package construction is always eager: every contributor
-            // was fully discovered, so nothing is unresolved.
-            planning_uncertainties: BTreeMap::new(),
-            // Single-package construction is always eager.
-            deferred_toolchains: BTreeSet::new(),
+            // was fully discovered, so no scope is inventory-only.
+            unloaded_scopes: BTreeMap::new(),
         })
     }
 }
@@ -1791,8 +1664,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             load_lockfile,
             javascript,
             extra_contributors,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
             ..
         } = self;
         Ok(BuildState {
@@ -1816,8 +1688,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             javascript,
             extra_contributors,
             contributions: None,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
         })
     }
 }
@@ -1936,8 +1807,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             native_change_observations,
             native_prune_domains,
             root_package_json,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
             ..
         } = self;
         let knowledge = knowledge.ok_or(discovery::Error::Failed(Box::new(
@@ -2038,8 +1908,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             task_contract_knowledge,
             change_knowledge,
             prune_knowledge,
-            planning_uncertainties,
-            deferred_toolchains,
+            unloaded_scopes,
         })
     }
 }
@@ -2104,7 +1973,10 @@ mod test {
     use turborepo_errors::Spanned;
 
     use super::*;
-    use crate::toolchain::{DiscoverPackagesFuture, DiscoveredPackages, WorkspaceRoot};
+    use crate::toolchain::{
+        DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackageScope,
+        DiscoveredPackageScopes, DiscoveredPackages, WorkspaceRoot,
+    };
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
@@ -2157,6 +2029,16 @@ mod test {
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async move { Ok(DiscoveredPackages::new(Vec::new(), self.roots.clone())) })
         }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
     }
 
     struct PackageWithoutRootContributor {
@@ -2177,6 +2059,16 @@ mod test {
                         self.root.join_components(&["orphan", "manifest"]),
                     )],
                     Vec::new(),
+                ))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
                 ))
             })
         }
@@ -2201,6 +2093,16 @@ mod test {
                 ))
             })
         }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
     }
 
     fn custom_package(
@@ -2216,410 +2118,218 @@ mod test {
         )
     }
 
-    /// Generic orchestration fake: counts subprocess-free planning observations
-    /// and full observations separately, and returns different packages for
-    /// each so substitution is observable. It uses only the trait defaults for
-    /// preparation policy, so the test exercises the open `ToolchainId` path
-    /// with no language-specific branches.
-    struct StagingContributor {
+    /// Generic lazy-loading fake: counts scope-inventory and full-discovery
+    /// observations separately so substitution is observable. It uses only
+    /// the open `ToolchainId` — no language-specific branches.
+    struct LazyContributor {
         id: ToolchainId,
         root: AbsoluteSystemPathBuf,
-        static_packages: Vec<DiscoveredPackage>,
-        prepared_packages: Vec<DiscoveredPackage>,
-        /// Planning facts the static observation cannot prove. Must be scoped
-        /// to packages the same observation contributes.
-        static_uncertainties: Vec<crate::toolchain::PlanningUncertainty>,
-        /// Contract-violating uncertainties reported by *full* discovery.
-        full_uncertainties: Vec<crate::toolchain::PlanningUncertainty>,
-        static_calls: Arc<AtomicUsize>,
+        scopes: Vec<DiscoveredPackageScope>,
+        full_packages: Vec<DiscoveredPackage>,
+        inventory_calls: Arc<AtomicUsize>,
         full_calls: Arc<AtomicUsize>,
     }
 
-    impl StagingContributor {
+    impl LazyContributor {
         fn new(
             id: ToolchainId,
             root: &AbsoluteSystemPath,
-            static_packages: Vec<DiscoveredPackage>,
-            prepared_packages: Vec<DiscoveredPackage>,
+            scope_names: &[&str],
+            full_packages: Vec<DiscoveredPackage>,
         ) -> Self {
+            let scopes = scope_names
+                .iter()
+                .map(|&name| {
+                    DiscoveredPackageScope::new(
+                        Some(name.to_string()),
+                        root.join_components(&["native", name, "manifest"]),
+                    )
+                })
+                .collect();
             Self {
                 id,
                 root: root.to_owned(),
-                static_packages,
-                prepared_packages,
-                static_uncertainties: Vec::new(),
-                full_uncertainties: Vec::new(),
-                static_calls: Arc::new(AtomicUsize::new(0)),
+                scopes,
+                full_packages,
+                inventory_calls: Arc::new(AtomicUsize::new(0)),
                 full_calls: Arc::new(AtomicUsize::new(0)),
             }
         }
 
-        fn with_static_uncertainties(
-            mut self,
-            uncertainties: Vec<crate::toolchain::PlanningUncertainty>,
-        ) -> Self {
-            self.static_uncertainties = uncertainties;
-            self
-        }
-
-        fn with_full_uncertainties(
-            mut self,
-            uncertainties: Vec<crate::toolchain::PlanningUncertainty>,
-        ) -> Self {
-            self.full_uncertainties = uncertainties;
-            self
+        fn native_package(root: &AbsoluteSystemPath, name: &str) -> DiscoveredPackage {
+            DiscoveredPackage::package(
+                Some(name.to_string()),
+                PackageJson::default(),
+                root.join_components(&["native", name, "manifest"]),
+            )
+            .with_native_relationships(Vec::new())
+            .with_native_tasks(vec![crate::native_tasks::NativeTask::command_task(
+                format!("{name}-check"),
+                format!("{name} check"),
+                crate::native_tasks::NativeCommandProgram::Tool("native".to_string()),
+                crate::native_tasks::NativeCommandArguments::new(vec!["check".to_string()]),
+                None,
+                crate::native_tasks::WorkingDirectoryPolicy::PackageDirectory,
+            )])
         }
     }
 
-    impl RepositoryContributor for StagingContributor {
+    impl RepositoryContributor for LazyContributor {
         fn id(&self) -> ToolchainId {
             self.id.clone()
         }
 
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             self.full_calls.fetch_add(1, Ordering::SeqCst);
-            let packages = self.prepared_packages.clone();
-            let uncertainties = self.full_uncertainties.clone();
+            let packages = self.full_packages.clone();
             let root = self.root.clone();
             Box::pin(async move {
-                let mut discovered =
-                    DiscoveredPackages::new(packages, vec![WorkspaceRoot::new("staging", root)]);
-                for uncertainty in uncertainties {
-                    discovered = discovered.with_planning_uncertainty(uncertainty);
-                }
-                Ok(discovered)
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("lazy", root)],
+                ))
             })
         }
 
-        fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
-            self.static_calls.fetch_add(1, Ordering::SeqCst);
-            let packages = self.static_packages.clone();
-            let uncertainties = self.static_uncertainties.clone();
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            self.inventory_calls.fetch_add(1, Ordering::SeqCst);
+            let scopes = self.scopes.clone();
             let root = self.root.clone();
             Box::pin(async move {
-                let mut discovered =
-                    DiscoveredPackages::new(packages, vec![WorkspaceRoot::new("staging", root)]);
-                for uncertainty in uncertainties {
-                    discovered = discovered.with_planning_uncertainty(uncertainty);
-                }
-                Ok(discovered)
+                Ok(DiscoveredPackageScopes::new(
+                    scopes,
+                    vec![WorkspaceRoot::new("lazy", root)],
+                ))
             })
         }
     }
 
-    fn staged_native_package(root: &AbsoluteSystemPath) -> DiscoveredPackage {
-        DiscoveredPackage::package(
-            Some("native-pkg".to_string()),
-            PackageJson::default(),
-            root.join_components(&["native", "manifest"]),
-        )
-        .with_native_relationships(Vec::new())
-    }
-
     #[tokio::test]
-    async fn staged_build_defers_full_discovery_and_prepares_only_selected_toolchains() {
+    async fn lazy_build_inventories_scopes_without_full_discovery() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
             &root,
-            // Planning sees only the scope skeleton; the package arrives on
-            // preparation.
-            Vec::new(),
-            vec![staged_native_package(&root)],
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
         );
-        let static_calls = contributor.static_calls.clone();
-        let full_calls = contributor.full_calls.clone();
+        let (inventory_calls, full_calls) = (
+            contributor.inventory_calls.clone(),
+            contributor.full_calls.clone(),
+        );
 
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
+        let lazy = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_contributor(Arc::new(contributor))
-            .build_staged()
+            .build_lazy()
             .await
             .unwrap();
+        let graph = lazy.graph();
 
-        assert_eq!(static_calls.load(Ordering::SeqCst), 1);
         assert_eq!(
             full_calls.load(Ordering::SeqCst),
             0,
-            "planning must not run full (subprocess-time) discovery"
+            "an inventory-only graph never invokes full native discovery"
+        );
+        assert_eq!(inventory_calls.load(Ordering::SeqCst), 1);
+        // The inventory scope is an exact graph node: identity, directory,
+        // and provenance are addressable, and it is marked as belonging to a
+        // not-yet-loaded owner.
+        let native = PackageName::from("native-pkg");
+        assert_eq!(
+            graph.unloaded_scope_owner(&native),
+            Some(&ToolchainId::new("lazy-native"))
+        );
+        assert!(graph.has_unloaded_scopes());
+        assert_eq!(
+            graph.unloaded_owners(),
+            BTreeSet::from([ToolchainId::new("lazy-native")])
+        );
+        assert_eq!(
+            graph.package_toolchain(&native),
+            Some(&ToolchainId::new("lazy-native"))
+        );
+    }
+
+    #[tokio::test]
+    async fn lazy_load_replaces_inventory_with_authoritative_facts() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
+            &root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
+        );
+        let full_calls = contributor.full_calls.clone();
+
+        let (graph, mut plan) = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(contributor))
+            .build_lazy()
+            .await
+            .unwrap()
+            .into_parts();
+        // The inventory graph marks the scope as belonging to a
+        // not-yet-loaded owner; loading replaces that marking below.
+        assert_eq!(
+            graph.unloaded_scope_owner(&PackageName::from("native-pkg")),
+            Some(&ToolchainId::new("lazy-native"))
         );
         assert!(
-            staged
-                .planning_graph()
-                .package_task_context(&PackageName::from("native-pkg"))
-                .is_none(),
-            "the planning graph carries only static observations"
+            !plan
+                .loaded_owners()
+                .contains(&ToolchainId::new("lazy-native"))
         );
 
-        let js_only: HashSet<ToolchainId> = std::iter::once(ToolchainId::JAVASCRIPT).collect();
+        let owners = std::iter::once(ToolchainId::new("lazy-native")).collect();
+        let graph = Arc::new(plan.load(&owners).await.unwrap());
+        assert_eq!(full_calls.load(Ordering::SeqCst), 1);
         assert!(
-            !staged.requires_preparation(&js_only),
-            "a JavaScript-only selection never needs preparation"
+            plan.loaded_owners()
+                .contains(&ToolchainId::new("lazy-native"))
         );
-        let native: HashSet<ToolchainId> =
-            std::iter::once(ToolchainId::new("staged-native")).collect();
-        assert!(staged.requires_preparation(&native));
 
-        let prepared = staged.prepare(&native).await.unwrap();
+        // The loaded scope is authoritative: no longer inventory-only, with
+        // its native task catalogue present.
+        let native = PackageName::from("native-pkg");
+        assert_eq!(graph.unloaded_scope_owner(&native), None);
+        assert!(!graph.has_unloaded_scopes());
+        assert!(
+            graph
+                .package_task_context(&native)
+                .is_some_and(|context| context.native_tasks().registers("native-pkg-check"))
+        );
+    }
+
+    #[tokio::test]
+    async fn lazy_load_is_monotone() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
+            &root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
+        );
+        let full_calls = contributor.full_calls.clone();
+
+        let (_graph, mut plan) = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(contributor))
+            .build_lazy()
+            .await
+            .unwrap()
+            .into_parts();
+
+        let owners = std::iter::once(ToolchainId::new("lazy-native")).collect();
+        let _ = plan.load(&owners).await.unwrap();
+        let _ = plan.load(&owners).await.unwrap();
         assert_eq!(
             full_calls.load(Ordering::SeqCst),
             1,
-            "a selected toolchain is fully discovered exactly once"
-        );
-        assert_eq!(
-            static_calls.load(Ordering::SeqCst),
-            1,
-            "unselected tools are not re-planned"
-        );
-        assert_eq!(
-            prepared
-                .package_toolchain(&PackageName::from("native-pkg"))
-                .map(ToolchainId::as_str),
-            Some("staged-native"),
-            "the prepared graph reflects full discovery"
-        );
-    }
-
-    #[tokio::test]
-    async fn staged_prepare_reuses_static_observations_for_unselected_toolchains() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            Vec::new(),
-            vec![staged_native_package(&root)],
-        );
-        let static_calls = contributor.static_calls.clone();
-        let full_calls = contributor.full_calls.clone();
-
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await
-            .unwrap();
-
-        // The run path only prepares when `requires_preparation` says so; even
-        // when it prepares for another selection, an unselected toolchain's
-        // static observation is reused verbatim and it is never invoked.
-        let js_only: HashSet<ToolchainId> = std::iter::once(ToolchainId::JAVASCRIPT).collect();
-        let prepared = staged.prepare(&js_only).await.unwrap();
-
-        assert_eq!(static_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(full_calls.load(Ordering::SeqCst), 0);
-        assert!(
-            prepared
-                .package_task_context(&PackageName::from("native-pkg"))
-                .is_none(),
-            "an unselected toolchain keeps its static (empty) observation"
-        );
-    }
-
-    #[tokio::test]
-    async fn staged_uncertainty_defers_instead_of_failing_unrelated_selections() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            vec![staged_native_package(&root)],
-            vec![staged_native_package(&root)],
-        )
-        .with_static_uncertainties(vec![
-            crate::toolchain::PlanningUncertainty::internal_edges(
-                "native-pkg",
-                "ambiguous-remote-replacement",
-                "an active remote requirement could upgrade a local replacement",
-            )
-            .with_possible_targets(["native-pkg"]),
-            crate::toolchain::PlanningUncertainty::task_catalogue(
-                "native-pkg",
-                "constrained-runnable-target",
-                "the dev task's runnable target cannot be proven",
-            )
-            .with_uncertain_task_names(["dev"]),
-        ]);
-        let full_calls = contributor.full_calls.clone();
-
-        // Planning succeeds: the contributor returned its provable inventory
-        // and reported the remainder, instead of failing the whole graph for
-        // a scoped fact.
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await
-            .unwrap();
-
-        let uncertainties: Vec<_> = staged.planning_graph().planning_uncertainties().collect();
-        assert_eq!(
-            uncertainties.len(),
-            2,
-            "the planning graph retains every reported uncertainty"
-        );
-        assert!(
-            staged
-                .planning_graph()
-                .package_task_context(&PackageName::from("native-pkg"))
-                .is_some(),
-            "the provable inventory is planned normally"
-        );
-
-        // An unrelated selection never invokes the toolchain, and the
-        // unresolved facts stay attached to its scopes — ignored, not failed.
-        let js_only: HashSet<ToolchainId> = std::iter::once(ToolchainId::JAVASCRIPT).collect();
-        let prepared = staged.prepare(&js_only).await.unwrap();
-        assert_eq!(
-            full_calls.load(Ordering::SeqCst),
-            0,
-            "an unrelated selection never invokes the reporting toolchain"
-        );
-        assert_eq!(
-            prepared.planning_uncertainties().count(),
-            2,
-            "unresolved facts persist for a toolchain that was never prepared"
-        );
-    }
-
-    #[tokio::test]
-    async fn staged_prepare_replaces_selected_toolchain_uncertainties() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            vec![staged_native_package(&root)],
-            vec![staged_native_package(&root)],
-        )
-        .with_static_uncertainties(vec![
-            crate::toolchain::PlanningUncertainty::internal_edges(
-                "native-pkg",
-                "ambiguous-remote-replacement",
-                "an active remote requirement could upgrade a local replacement",
-            ),
-        ]);
-
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await
-            .unwrap();
-        assert_eq!(staged.planning_graph().planning_uncertainties().count(), 1);
-
-        // Selecting the toolchain fully discovers it: the static observation
-        // — and its uncertainties — are replaced with authoritative facts.
-        let native: HashSet<ToolchainId> =
-            std::iter::once(ToolchainId::new("staged-native")).collect();
-        let prepared = staged.prepare(&native).await.unwrap();
-        assert_eq!(
-            prepared.planning_uncertainties().count(),
-            0,
-            "preparation resolves every uncertainty of a selected toolchain"
-        );
-    }
-
-    #[tokio::test]
-    async fn staged_uncertainty_naming_an_uncontributed_scope_fails_planning() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            vec![staged_native_package(&root)],
-            vec![staged_native_package(&root)],
-        )
-        .with_static_uncertainties(vec![
-            crate::toolchain::PlanningUncertainty::internal_edges(
-                "ghost-scope",
-                "ambiguous-remote-replacement",
-                "uncertainty scoped to a scope the observation never contributed",
-            ),
-        ]);
-
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await;
-        let error = match staged {
-            Err(error) => error,
-            // `StagedPackageGraph` is not `Debug`; report the violation only.
-            Ok(_) => panic!("an uncertainty naming an unknown scope must fail planning"),
-        };
-        assert!(
-            matches!(error, Error::PlanningContract { .. }),
-            "an uncertainty naming an unknown scope must not silently become a no-edge package; \
-             got {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn staged_uncertainty_with_uncontributed_target_fails_planning() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            vec![staged_native_package(&root)],
-            vec![staged_native_package(&root)],
-        )
-        .with_static_uncertainties(vec![
-            crate::toolchain::PlanningUncertainty::internal_edges(
-                "native-pkg",
-                "ambiguous-remote-replacement",
-                "bounded to a target the observation never contributed",
-            )
-            .with_possible_targets(["ghost-target"]),
-        ]);
-
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await;
-        let error = match staged {
-            Err(error) => error,
-            Ok(_) => panic!("an uncertainty naming an unknown target must fail planning"),
-        };
-        assert!(
-            matches!(error, Error::PlanningContract { .. }),
-            "a bounded uncertainty must name contributed scopes; got {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn full_discovery_reporting_uncertainty_is_refused() {
-        let root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let contributor = StagingContributor::new(
-            ToolchainId::new("staged-native"),
-            &root,
-            vec![staged_native_package(&root)],
-            vec![staged_native_package(&root)],
-        )
-        .with_full_uncertainties(vec![
-            crate::toolchain::PlanningUncertainty::task_catalogue(
-                "native-pkg",
-                "still-uncertain",
-                "full discovery must resolve every fact or fail",
-            ),
-        ]);
-
-        let staged = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(contributor))
-            .build_staged()
-            .await
-            .unwrap();
-        let native: HashSet<ToolchainId> =
-            std::iter::once(ToolchainId::new("staged-native")).collect();
-        let prepared = staged.prepare(&native).await;
-        assert!(
-            matches!(prepared, Err(Error::PlanningContract { .. })),
-            "a selected toolchain's full discovery must not report uncertainty; got {prepared:?}"
+            "loading an already-loaded owner never rediscovers it"
         );
     }
 

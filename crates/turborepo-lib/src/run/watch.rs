@@ -839,8 +839,21 @@ impl WatchClient {
                 let (run, _analytics) = run_builder.build(&signal_handler, telemetry).await?;
 
                 // A rerun that rebuilt the graph refreshes the shared copy so
-                // later partial reruns can reuse it again.
-                if needs_fresh_graph {
+                // later partial reruns can reuse it again. A reused snapshot
+                // that still carried inventory-only scopes was bypassed and
+                // upgraded to a complete graph by this run (watch reruns load
+                // every owner), so the shared copy is refreshed from the
+                // upgraded graph too: without this, every source-only rerun
+                // would re-run the full native discovery from the stale
+                // inventory snapshot forever. The upgraded snapshot also
+                // carries the native watch specs, so later manifest changes
+                // invalidate the shared graph correctly.
+                if needs_fresh_graph
+                    || self
+                        .shared_pkg_graph
+                        .as_deref()
+                        .is_some_and(PackageGraph::has_unloaded_scopes)
+                {
                     self.shared_pkg_graph = Some(run.pkg_dep_graph_handle());
                 }
 

@@ -51,13 +51,14 @@ use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{
         ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
-        PackageResolution, ResolutionCompleteness, ResolutionUnavailableReason,
+        PackageResolution, ResolutionCompleteness,
     },
     package_json::PackageJson,
     prune_knowledge::{PruneDomain, PrunePlan},
     relationships::{DependencyKind, Relationship},
     toolchain::{
-        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+        self, DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScope, DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor,
         ToolchainId, WorkspaceRoot,
     },
 };
@@ -135,20 +136,6 @@ pub enum Error {
     UnsupportedLocalMetadataNode(String),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
-    #[error("failed to parse uv.lock without running uv: {0}")]
-    LockfileParse(String),
-    #[error("uv.lock has no [[package]] array")]
-    LockfileMissingPackages,
-    #[error("uv.lock package entry is missing a string name")]
-    LockfileMissingPackageName,
-    #[error("uv.lock has no entry for workspace member {0:?}")]
-    LockfileMissingMember(String),
-    #[error("uv.lock dependency closure references unknown package {0:?}")]
-    LockfileUnknownPackage(String),
-    #[error("uv.lock dependency reference to {0:?} does not match any locked package table")]
-    LockfileUnresolvedReference(String),
-    #[error("uv.lock dependency reference to {0:?} is ambiguous across forked resolutions")]
-    LockfileAmbiguousReference(String),
     #[error("uv workspace member manifest has no parent directory: {0}")]
     InvalidMemberManifestPath(String),
     #[error("uv workspace metadata returned member path outside the repository: {0}")]
@@ -753,8 +740,8 @@ fn workspace_name(
     }
     // Legal, but re-introduces exactly the toolchain-id/package-name
     // confusion user-chosen names exist to remove. Gated on `emit_warnings`:
-    // static planning discovery must stay silent because preparation's full
-    // discovery, which replaces it, owns the advice and must emit it once.
+    // the scope inventory stays silent because it only reports names, while
+    // full discovery owns the advice and emits it exactly once.
     if emit_warnings && (name == "python" || name == "javascript" || name == "rust") {
         tracing::warn!(
             "the uv workspace is named {name:?}, which is also a toolchain id; consider a more \
@@ -813,9 +800,9 @@ pub struct DiscoveredWorkspace {
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
 ///
-/// `emit_warnings` follows the caller: static planning passes `false` because
-/// preparation's full discovery owns every user-facing warning, while full
-/// discovery's manifest fallback passes `true`.
+/// `emit_warnings` follows the caller: the lazy scope inventory passes `false`
+/// because it only reports names and full discovery owns every user-facing
+/// warning, while full discovery's manifest fallback passes `true`.
 fn discover_workspace_from_manifests(
     repo_root: &AbsoluteSystemPath,
     emit_warnings: bool,
@@ -2473,279 +2460,6 @@ fn package_resolution(
 }
 
 // ---------------------------------------------------------------------------
-// Static (probe-free) uv.lock reachability
-// ---------------------------------------------------------------------------
-
-/// One resolved dependency edge from a locked package table. uv records
-/// `version` and `source` on a reference when the referenced name has multiple
-/// resolved forks; when both are absent the name must resolve to exactly one
-/// table or the reference is ambiguous.
-struct LockfileReference {
-    name: String,
-    version: Option<String>,
-    source: Option<String>,
-}
-
-/// One `[[package]]` table from uv.lock, reduced to the facts probe-free
-/// discovery needs: whether uv considers it local to the workspace, how to
-/// discriminate it from same-named forks, how to identify it externally, and
-/// which resolved tables it references.
-struct LockfilePackage {
-    name: String,
-    local: bool,
-    version: Option<String>,
-    source: Option<String>,
-    identity: turborepo_lockfiles::Package,
-    dependencies: Vec<LockfileReference>,
-}
-
-/// Canonical, comparable form of a lockfile `source` table: sorted `key+value`
-/// segments joined by spaces. Local, registry, git, and URL sources are all
-/// distinguishable, and two references to the same fork compare equal.
-fn lockfile_source_key(source: &toml::Value) -> Option<String> {
-    let source = source.as_table()?;
-    let mut segments = Vec::with_capacity(source.len());
-    for (key, value) in source {
-        let value = serde_json::to_value(value).ok()?;
-        segments.push(format!("{key}+{}", canonical_json(&value)));
-    }
-    segments.sort();
-    Some(segments.join(" "))
-}
-
-/// Parse uv.lock's `[[package]]` array without invoking uv. uv.lock is a fully
-/// resolved graph, so its dependency edges are sufficient to reconstruct the
-/// same per-member external closures that `uv workspace metadata` reports.
-fn parse_lockfile_packages(contents: &str) -> Result<Vec<LockfilePackage>, Error> {
-    let document: toml::Value =
-        toml::from_str(contents).map_err(|error| Error::LockfileParse(error.to_string()))?;
-    let packages = document
-        .as_table()
-        .and_then(|document| document.get("package"))
-        .and_then(toml::Value::as_array)
-        .ok_or(Error::LockfileMissingPackages)?;
-    packages.iter().map(lockfile_package).collect()
-}
-
-fn lockfile_package(package: &toml::Value) -> Result<LockfilePackage, Error> {
-    let table = package.as_table().ok_or(Error::LockfileMissingPackages)?;
-    let name = table
-        .get("name")
-        .and_then(toml::Value::as_str)
-        .ok_or(Error::LockfileMissingPackageName)?
-        .to_string();
-    let source = table.get("source").and_then(lockfile_source_key);
-    let local = table
-        .get("source")
-        .and_then(toml::Value::as_table)
-        .is_some_and(|source| {
-            source
-                .keys()
-                .any(|key| matches!(key.as_str(), "editable" | "virtual" | "directory" | "path"))
-        });
-    let identity = lockfile_package_identity(table, &name, source.as_deref());
-    let version = table
-        .get("version")
-        .and_then(toml::Value::as_str)
-        .map(str::to_string);
-    let dependencies = lockfile_package_dependencies(table)?;
-    Ok(LockfilePackage {
-        name,
-        local,
-        version,
-        source,
-        identity,
-        dependencies,
-    })
-}
-
-/// Mirror the shape of [`metadata_package_identity`]: version, then the
-/// canonicalized `source` table, then every artifact hash, so the fingerprint
-/// changes whenever the locked entry does.
-fn lockfile_package_identity(
-    table: &toml::Table,
-    name: &str,
-    source: Option<&str>,
-) -> turborepo_lockfiles::Package {
-    let mut version = table
-        .get("version")
-        .and_then(toml::Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    if let Some(source) = source {
-        version.push(' ');
-        version.push_str(source);
-    }
-    let mut hashes = table
-        .get("sdist")
-        .and_then(toml::Value::as_table)
-        .and_then(|artifact| artifact.get("hash"))
-        .and_then(toml::Value::as_str)
-        .into_iter()
-        .chain(
-            table
-                .get("wheels")
-                .and_then(toml::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|wheel| {
-                    wheel
-                        .as_table()
-                        .and_then(|wheel| wheel.get("hash"))
-                        .and_then(toml::Value::as_str)
-                }),
-        )
-        .collect::<Vec<_>>();
-    hashes.sort_unstable();
-    hashes.dedup();
-    for hash in hashes {
-        version.push(' ');
-        version.push_str(hash);
-    }
-    turborepo_lockfiles::Package {
-        key: name.to_string(),
-        version,
-    }
-}
-
-fn lockfile_reference(entry: &toml::Value) -> Option<LockfileReference> {
-    let table = entry.as_table()?;
-    Some(LockfileReference {
-        name: table.get("name").and_then(toml::Value::as_str)?.to_string(),
-        version: table
-            .get("version")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
-        source: table.get("source").and_then(lockfile_source_key),
-    })
-}
-
-fn lockfile_references(value: Option<&toml::Value>) -> Result<Vec<LockfileReference>, Error> {
-    value
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|entry| {
-            lockfile_reference(entry).ok_or_else(|| {
-                Error::LockfileParse(
-                    "uv.lock dependency entry is missing a string name".to_string(),
-                )
-            })
-        })
-        .collect()
-}
-
-/// Every resolved table a locked entry references: `dependencies` plus all
-/// `optional-dependencies` and `dev-dependencies` groups, matching the metadata
-/// path's traversal of `optional_dependencies` and `dependency_groups`.
-fn lockfile_package_dependencies(table: &toml::Table) -> Result<Vec<LockfileReference>, Error> {
-    let mut dependencies = lockfile_references(table.get("dependencies"))?;
-    for group_key in ["optional-dependencies", "dev-dependencies"] {
-        for group in table
-            .get(group_key)
-            .and_then(toml::Value::as_table)
-            .into_iter()
-            .flat_map(|groups| groups.values())
-        {
-            dependencies.extend(lockfile_references(Some(group))?);
-        }
-    }
-    Ok(dependencies)
-}
-
-/// Resolve one reference to a single locked table. A reference carrying
-/// `version` or `source` must match a table on those discriminators; a
-/// reference carrying neither is unambiguous only when the name maps to exactly
-/// one table. Anything else (no match, or several candidates) is an error,
-/// which callers surface as conservative `Unavailable` rather than a silently
-/// merged closure.
-fn resolve_lockfile_reference(
-    packages: &[LockfilePackage],
-    by_name: &HashMap<String, Vec<usize>>,
-    reference: &LockfileReference,
-) -> Result<usize, Error> {
-    let candidates = by_name
-        .get(&reference.name)
-        .ok_or_else(|| Error::LockfileUnknownPackage(reference.name.clone()))?;
-    let matches = candidates
-        .iter()
-        .copied()
-        .filter(|index| {
-            let package = &packages[*index];
-            reference
-                .version
-                .as_deref()
-                .is_none_or(|version| package.version.as_deref() == Some(version))
-                && reference
-                    .source
-                    .as_deref()
-                    .is_none_or(|source| package.source.as_deref() == Some(source))
-        })
-        .collect::<Vec<_>>();
-    match matches.as_slice() {
-        [index] => Ok(*index),
-        [] => Err(Error::LockfileUnresolvedReference(reference.name.clone())),
-        _ => Err(Error::LockfileAmbiguousReference(reference.name.clone())),
-    }
-}
-
-/// Per-member transitive closures of locked external packages, derived from
-/// uv.lock alone — no `uv workspace metadata`, no `which`, no process probes.
-///
-/// Traversal follows resolved references table-by-table, so same-named forks do
-/// not leak into each other's closures: a member that depends on `dep` v1 stays
-/// clear of a `dep` v2 that only another member pulls in. Local workspace
-/// members are traversed to reach the externals they pull in but are excluded
-/// from the returned identity sets; a reachable local package that is not a
-/// declared member is rejected, matching the metadata path.
-fn lockfile_external_closures(
-    contents: &str,
-    members: &[String],
-) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
-    let packages = parse_lockfile_packages(contents)?;
-    let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
-    for (index, package) in packages.iter().enumerate() {
-        by_name.entry(package.name.clone()).or_default().push(index);
-    }
-    let member_set: HashSet<&str> = members.iter().map(String::as_str).collect();
-    let mut closures = HashMap::with_capacity(members.len());
-    for member in members {
-        let roots = by_name
-            .get(member)
-            .ok_or_else(|| Error::LockfileMissingMember(member.clone()))?;
-        let local_roots = roots
-            .iter()
-            .copied()
-            .filter(|index| packages[*index].local)
-            .collect::<Vec<_>>();
-        if local_roots.is_empty() {
-            return Err(Error::LockfileMissingMember(member.clone()));
-        }
-        let mut visited = HashSet::new();
-        let mut pending = local_roots;
-        let mut external = HashSet::new();
-        while let Some(index) = pending.pop() {
-            if !visited.insert(index) {
-                continue;
-            }
-            let package = &packages[index];
-            if package.local {
-                if !member_set.contains(package.name.as_str()) {
-                    return Err(Error::UnsupportedLocalMetadataNode(package.name.clone()));
-                }
-            } else {
-                external.insert(package.identity.clone());
-            }
-            for reference in &package.dependencies {
-                pending.push(resolve_lockfile_reference(&packages, &by_name, reference)?);
-            }
-        }
-        closures.insert(member.clone(), external);
-    }
-    Ok(closures)
-}
-
-// ---------------------------------------------------------------------------
 // Prune
 // ---------------------------------------------------------------------------
 
@@ -2998,263 +2712,6 @@ fn uv_change_observation(
 }
 
 // ---------------------------------------------------------------------------
-// Contributor output assembly
-// ---------------------------------------------------------------------------
-
-/// Member names whose locked external closures feed the workspace domain: every
-/// discovered package plus the root project when the root is itself a package.
-fn closure_member_names(workspace: &DiscoveredWorkspace) -> Vec<String> {
-    let mut members: Vec<String> = workspace
-        .packages
-        .iter()
-        .map(|package| package.name.clone())
-        .collect();
-    if let Some(root_project) = &workspace.root_project_name {
-        members.push(root_project.clone());
-    }
-    members
-}
-
-/// How a discovery path supplied external resolution data to assembly.
-enum UvResolutionPlan {
-    /// Per-member closures were produced; `completeness` records how confident
-    /// the producer is. Complete data must carry one row per member.
-    Resolved(ResolutionCompleteness),
-    /// No terminal resolution data is available. Consumers must fall back
-    /// conservatively (for example, treat a lockfile change as affecting every
-    /// package) rather than read an empty closure as "no dependencies".
-    Unavailable(ResolutionUnavailableReason),
-}
-
-/// Assemble one contributor's [`DiscoveredPackages`] from discovery facts and
-/// resolution data. Shared by full (metadata-backed) and static (lockfile-only)
-/// discovery so identities, topology, task catalogue, and change facts cannot
-/// drift between them.
-///
-/// `closures` maps each closure member to its transitive set of locked external
-/// identities; `toolchain_packages` carries probe-derived uv/Python identities
-/// (empty for static discovery). `uv_version` gates build cacheability the same
-/// way full discovery does. `emit_warnings` gates user-facing diagnostics: the
-/// static planning pass supplies `false` because preparation replaces its
-/// output with full discovery, which emits each warning exactly once; full
-/// discovery supplies `true`.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "assembly takes the union of full and static discovery facts"
-)]
-fn assemble_contributor_output(
-    repo_root: &AbsoluteSystemPath,
-    workspace: DiscoveredWorkspace,
-    workspace_roots: Vec<WorkspaceRoot>,
-    mut closures: HashMap<String, HashSet<turborepo_lockfiles::Package>>,
-    toolchain_packages: &[turborepo_lockfiles::Package],
-    toolchain_identified: bool,
-    uv_version: Option<&node_semver::Version>,
-    emit_warnings: bool,
-    resolution_plan: UvResolutionPlan,
-    lockfile: Result<String, String>,
-    metadata: Option<UvWorkspaceMetadata>,
-) -> Result<DiscoveredPackages, Error> {
-    let DiscoveredWorkspace {
-        name,
-        packages,
-        root_project_name,
-        quality_plan,
-        pytest,
-    } = workspace;
-
-    // Using Turborepo with Python requires naming the workspace: the
-    // synthetic workspace package is a real package (task keys, filters), and
-    // every package must have a name. Only enforced when there are members to
-    // host — a memberless manifest doesn't demand a name for nothing.
-    let workspace_name = name.ok_or(Error::MissingWorkspaceName)?;
-
-    let mut package_directories: HashMap<String, String> = packages
-        .iter()
-        .map(|package| {
-            let directory = package.manifest_path.parent().ok_or_else(|| {
-                Error::InvalidMemberManifestPath(package.manifest_path.to_string())
-            })?;
-            let directory = AnchoredSystemPathBuf::new(repo_root, directory)?;
-            Ok((package.name.clone(), directory.to_unix().to_string()))
-        })
-        .collect::<Result<_, Error>>()?;
-    if let Some(root_project) = &root_project_name {
-        package_directories.insert(root_project.clone(), ".".to_string());
-    }
-    let mut workspace_directories: Vec<String> = packages
-        .iter()
-        .filter_map(|package| package_directories.get(&package.name).cloned())
-        .collect();
-    workspace_directories.sort();
-    workspace_directories.dedup();
-    let change_observation = uv_change_observation(repo_root, &workspace_directories);
-    let prune_domain = UvPruneKnowledge::discover(
-        repo_root,
-        package_directories.clone(),
-        root_project_name.clone(),
-        lockfile.clone(),
-        metadata,
-    )?;
-
-    // The workspace-scoped closure covers every member plus the root project's
-    // own dependencies (when the root is a package).
-    let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
-        .values()
-        .flatten()
-        .cloned()
-        .chain(toolchain_packages.iter().cloned())
-        .collect();
-
-    let fallback_inputs =
-        std::iter::once(
-            AnchoredSystemPathBuf::from_raw(PYPROJECT_TOML).expect("static path is valid"),
-        )
-        .chain(packages.iter().filter_map(|package| {
-            AnchoredSystemPathBuf::new(repo_root, &package.manifest_path).ok()
-        }))
-        .collect::<Vec<_>>();
-
-    let resolved = matches!(resolution_plan, UvResolutionPlan::Resolved(_));
-    let mut discovered = Vec::with_capacity(packages.len() + 1);
-    let mut resolutions = Vec::with_capacity(packages.len() + 1);
-    let mut package_names = Vec::with_capacity(packages.len());
-    for package in packages {
-        let kind = if package.buildable {
-            UvPackageKind::Package
-        } else {
-            UvPackageKind::VirtualPackage
-        };
-        let package_directory = package_directories
-            .get(&package.name)
-            .map_or(".", String::as_str);
-        let build_cacheable = uv_version.is_some_and(|uv_version| {
-            package
-                .bundled_uv_build_requirement
-                .as_deref()
-                .is_some_and(|requirement| bundled_uv_build_matches(requirement, uv_version))
-        });
-        let native_tasks = python_tasks_for_package(
-            kind,
-            &package.name,
-            package_directory,
-            &[],
-            &package.quality_plan,
-            package.pytest.as_ref(),
-            emit_warnings && !quality_plan.format_homogeneous,
-            toolchain_identified,
-            build_cacheable,
-        );
-        let task_contract = UvTaskContract::new(kind, &package.name);
-        if resolved {
-            // Each package contributes its already-classified native internal
-            // relationships directly. External dependencies (locked
-            // registry/git/URL distributions) participate in the package's
-            // task hash through the same external-dependency mechanism JS
-            // packages use, scoped to the package's transitive closure — a
-            // dependency bump only invalidates packages that depend on it.
-            let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
-            if package.quality_plan.uses_root_tools() {
-                // Root-owned tools execute against the root environment.
-                external_dependencies.extend(workspace_externals.iter().cloned());
-            }
-            external_dependencies.extend(toolchain_packages.iter().cloned());
-            resolutions.push(package_resolution(
-                package.name.clone(),
-                &external_dependencies,
-            ));
-        }
-        package_names.push(package.name.clone());
-        discovered.push(
-            DiscoveredPackage::package(
-                Some(package.name),
-                PackageJson::default(),
-                package.manifest_path,
-            )
-            .with_native_relationships(package.relationships)
-            .with_native_tasks(native_tasks)
-            .with_task_contract(crate::task_contracts::ScopeTaskContract::python(
-                task_contract,
-            )),
-        );
-    }
-
-    // The workspace aggregate, anchored at the root pyproject.toml and named by
-    // the user via `[tool.turbo] name`. It depends on every package so
-    // `--affected` and dependent-filters propagate package changes to it.
-    let workspace_native_tasks = python_tasks_for_package(
-        UvPackageKind::Workspace,
-        &workspace_name,
-        ".",
-        &workspace_directories,
-        &quality_plan,
-        pytest.as_ref(),
-        emit_warnings,
-        toolchain_identified,
-        false,
-    );
-    let workspace_task_contract = UvTaskContract::workspace(&workspace_name, workspace_directories);
-    package_names.sort();
-    let workspace_relationships = package_names
-        .iter()
-        .map(|name| Relationship::internal(name.clone(), DependencyKind::Production))
-        .collect();
-    if resolved {
-        resolutions.push(package_resolution(
-            workspace_name.clone(),
-            &workspace_externals,
-        ));
-    }
-    discovered.push(
-        DiscoveredPackage::aggregate(
-            workspace_name.clone(),
-            PackageJson::default(),
-            repo_root.join_component(PYPROJECT_TOML),
-        )
-        .with_native_relationships(workspace_relationships)
-        .with_native_tasks(workspace_native_tasks)
-        .with_task_contract(crate::task_contracts::ScopeTaskContract::python(
-            workspace_task_contract,
-        )),
-    );
-
-    let (members, data) = match resolution_plan {
-        UvResolutionPlan::Resolved(completeness) => {
-            let members = resolutions
-                .iter()
-                .map(|resolution| resolution.package().to_string())
-                .collect::<Vec<_>>();
-            (
-                members,
-                ExternalResolutionData::Resolved {
-                    completeness,
-                    packages: resolutions,
-                },
-            )
-        }
-        UvResolutionPlan::Unavailable(reason) => {
-            let mut members = package_names.clone();
-            members.push(workspace_name);
-            members.sort();
-            (members, ExternalResolutionData::Unavailable(reason))
-        }
-    };
-    let resolution = ExternalResolutionDomain::new(
-        crate::external_resolution::PYTHON_RESOLUTION_DOMAIN.clone(),
-        ToolchainId::PYTHON,
-        AnchoredSystemPathBuf::default(),
-        members,
-        [AnchoredSystemPathBuf::from_raw(UV_LOCK)?],
-        data,
-    )
-    .with_fallback_inputs(fallback_inputs);
-    Ok(DiscoveredPackages::new(discovered, workspace_roots)
-        .with_external_resolution(resolution)
-        .with_change_observation(change_observation)
-        .with_prune_domain(Arc::new(prune_domain)))
-}
-
-// ---------------------------------------------------------------------------
 // The contributor
 // ---------------------------------------------------------------------------
 
@@ -3277,78 +2734,67 @@ impl UvContributor {
             .into_iter()
             .collect()
     }
+}
 
-    /// Probe-free discovery for core's staged toolchain preparation: no `uv`,
-    /// `which`, Python, or any other process is invoked, nothing warns about a
-    /// missing toolchain, and no user-facing warnings are emitted at all —
-    /// preparation replaces this output with full discovery, which owns every
-    /// warning, whenever the toolchain is selected. Package membership,
-    /// internal topology, task catalogue, and change facts come from manifests;
-    /// locked-dependency consumer reachability comes from parsing uv.lock
-    /// directly.
-    async fn discover_packages_statically_inner(
-        &self,
-    ) -> Result<DiscoveredPackages, toolchain::Error> {
-        let workspace = turborepo_rayon_compat::block_in_place(|| {
-            discover_workspace_from_manifests(&self.repo_root, false)
-        })
-        .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-        let workspace_roots = self.workspace_roots();
-        if workspace.packages.is_empty() {
-            return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
-        }
+/// The plain-data scope inventory behind lazy discovery: every workspace
+/// member's name and manifest path, plus the workspace aggregate's name, or
+/// `None` when the workspace has no members. Manifest parsing only — no `uv`,
+/// Python, or `which` subprocess — and no facts beyond scope identity, which
+/// full discovery owns.
+type WorkspaceScopeInventory = (Vec<(String, AbsoluteSystemPathBuf)>, String);
 
-        // Read uv.lock once: its bytes feed both reachability and the prune
-        // domain. A missing or malformed lockfile yields explicit `Unavailable`
-        // so consumers fall back conservatively instead of silently seeing an
-        // empty closure as "no external dependencies".
-        let lockfile = read_lockfile(&self.repo_root).map_err(|error| error.to_string());
-        let closure_members = closure_member_names(&workspace);
-        let (closures, resolution_plan) = match &lockfile {
-            Ok(contents) => match lockfile_external_closures(contents, &closure_members) {
-                Ok(closures) => (
-                    closures,
-                    UvResolutionPlan::Resolved(ResolutionCompleteness::Complete),
-                ),
-                Err(error) => (
-                    HashMap::new(),
-                    UvResolutionPlan::Unavailable(ResolutionUnavailableReason::new(
-                        "uv-lockfile-unparsed",
-                        error.to_string(),
-                    )),
-                ),
-            },
-            Err(reason) => (
-                HashMap::new(),
-                UvResolutionPlan::Unavailable(ResolutionUnavailableReason::new(
-                    "uv-lockfile-unavailable",
-                    reason.clone(),
-                )),
-            ),
-        };
-
-        assemble_contributor_output(
-            &self.repo_root,
-            workspace,
-            workspace_roots,
-            closures,
-            &[],
-            false,
-            None,
-            // Static planning stays silent; full discovery owns user-facing
-            // warnings and emits each exactly once.
-            false,
-            resolution_plan,
-            lockfile,
-            None,
-        )
-        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+fn package_scope_inventory(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Option<WorkspaceScopeInventory>, Error> {
+    let workspace = discover_workspace_from_manifests(repo_root, false)?;
+    if workspace.packages.is_empty() {
+        return Ok(None);
     }
+    // Mirrors full discovery: a workspace with members must be named so the
+    // aggregate scope has an identity.
+    let aggregate = workspace.name.ok_or(Error::MissingWorkspaceName)?;
+    let members = workspace
+        .packages
+        .into_iter()
+        .map(|package| (package.name, package.manifest_path))
+        .collect();
+    Ok(Some((members, aggregate)))
 }
 
 impl RepositoryContributor for UvContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::PYTHON
+    }
+
+    /// The cheap scope inventory for lazy discovery: every workspace member's
+    /// name and manifest path, plus the workspace aggregate scope, without
+    /// invoking `uv`, Python, `which`, or any other process. Scope identities
+    /// match [`RepositoryContributor::discover_packages`] exactly; facts
+    /// beyond identity — tasks, relationships, external resolution, hashing,
+    /// and prune — stay with full discovery, which remains authoritative
+    /// (including its manifest fallback when uv is unavailable).
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let inventory =
+                turborepo_rayon_compat::block_in_place(|| package_scope_inventory(&self.repo_root))
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let workspace_roots = self.workspace_roots();
+            let Some((members, aggregate)) = inventory else {
+                return Ok(DiscoveredPackageScopes::new(Vec::new(), workspace_roots));
+            };
+            let mut scopes = members
+                .into_iter()
+                .map(|(name, manifest_path)| DiscoveredPackageScope::new(Some(name), manifest_path))
+                .collect::<Vec<_>>();
+            scopes.push(
+                DiscoveredPackageScope::new(
+                    Some(aggregate),
+                    self.repo_root.join_component(PYPROJECT_TOML),
+                )
+                .into_aggregate(),
+            );
+            Ok(DiscoveredPackageScopes::new(scopes, workspace_roots))
+        })
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -3396,12 +2842,65 @@ impl RepositoryContributor for UvContributor {
                 }
             };
             let workspace_roots = self.workspace_roots();
-            if workspace.packages.is_empty() {
+            let packages = workspace.packages;
+            if packages.is_empty() {
                 return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
             }
 
-            let closure_members = closure_member_names(&workspace);
-            let closures = metadata
+            // Using Turborepo with Python requires naming the workspace: the
+            // synthetic workspace package is a real package (task keys,
+            // filters), and every package must have a name. Only enforced
+            // when there are members to host — a memberless manifest doesn't
+            // demand a name for nothing.
+            let workspace_name = workspace
+                .name
+                .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
+
+            let mut package_directories: HashMap<String, String> = packages
+                .iter()
+                .map(|package| {
+                    let directory = package.manifest_path.parent().ok_or_else(|| {
+                        Error::InvalidMemberManifestPath(package.manifest_path.to_string())
+                    })?;
+                    let directory = AnchoredSystemPathBuf::new(&self.repo_root, directory)?;
+                    Ok((package.name.clone(), directory.to_unix().to_string()))
+                })
+                .collect::<Result<_, Error>>()
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            if let Some(root_project) = &workspace.root_project_name {
+                package_directories.insert(root_project.clone(), ".".to_string());
+            }
+            let mut workspace_directories: Vec<String> = packages
+                .iter()
+                .filter_map(|package| package_directories.get(&package.name).cloned())
+                .collect();
+            workspace_directories.sort();
+            workspace_directories.dedup();
+            let change_observation = uv_change_observation(&self.repo_root, &workspace_directories);
+            let prune_domain = UvPruneKnowledge::discover(
+                &self.repo_root,
+                package_directories.clone(),
+                workspace.root_project_name.clone(),
+                lockfile.clone(),
+                metadata.clone(),
+            )
+            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+
+            // Each package contributes its already-classified native
+            // internal relationships directly. External dependencies (locked
+            // registry/git/URL distributions) participate in each package
+            // task's hash through the same external-dependency mechanism JS
+            // packages use, scoped to the package's transitive closure — a
+            // dependency bump only invalidates packages that actually depend
+            // on it.
+            let mut closure_members: Vec<String> = packages
+                .iter()
+                .map(|package| package.name.clone())
+                .collect();
+            if let Some(root_project) = &workspace.root_project_name {
+                closure_members.push(root_project.clone());
+            }
+            let mut closures = metadata
                 .as_ref()
                 .map(|metadata| external_closures(metadata, &closure_members))
                 .transpose()
@@ -3421,32 +2920,145 @@ impl RepositoryContributor for UvContributor {
                 .as_ref()
                 .map(|identity| identity.packages.as_slice())
                 .unwrap_or_default();
-            let resolution_plan = UvResolutionPlan::Resolved(resolution_incomplete.map_or(
-                ResolutionCompleteness::Complete,
-                ResolutionCompleteness::Partial,
-            ));
 
-            assemble_contributor_output(
-                &self.repo_root,
-                workspace,
-                workspace_roots,
-                closures,
-                toolchain_packages,
-                toolchain_identified,
-                toolchain_identity
-                    .as_ref()
-                    .map(|identity| &identity.uv_version),
-                true,
-                resolution_plan,
-                lockfile,
-                metadata,
+            // The workspace-scoped closure covers every member plus the root
+            // project's own dependencies (when the root is a package).
+            let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
+                .values()
+                .flatten()
+                .cloned()
+                .chain(toolchain_packages.iter().cloned())
+                .collect();
+
+            let fallback_inputs = std::iter::once(
+                AnchoredSystemPathBuf::from_raw(PYPROJECT_TOML).expect("static path is valid"),
             )
-            .map_err(|error| toolchain::Error::Failed(Box::new(error)))
-        })
-    }
+            .chain(packages.iter().filter_map(|package| {
+                AnchoredSystemPathBuf::new(&self.repo_root, &package.manifest_path).ok()
+            }))
+            .collect::<Vec<_>>();
+            let mut discovered = Vec::with_capacity(packages.len() + 1);
+            let mut resolutions = Vec::with_capacity(packages.len() + 1);
+            let mut package_names = Vec::with_capacity(packages.len());
+            for package in packages {
+                let kind = if package.buildable {
+                    UvPackageKind::Package
+                } else {
+                    UvPackageKind::VirtualPackage
+                };
+                let package_directory = package_directories
+                    .get(&package.name)
+                    .map_or(".", String::as_str);
+                let build_cacheable = toolchain_identity.as_ref().is_some_and(|identity| {
+                    package
+                        .bundled_uv_build_requirement
+                        .as_deref()
+                        .is_some_and(|requirement| {
+                            bundled_uv_build_matches(requirement, &identity.uv_version)
+                        })
+                });
+                let native_tasks = python_tasks_for_package(
+                    kind,
+                    &package.name,
+                    package_directory,
+                    &[],
+                    &package.quality_plan,
+                    package.pytest.as_ref(),
+                    !workspace.quality_plan.format_homogeneous,
+                    toolchain_identified,
+                    build_cacheable,
+                );
+                let task_contract = UvTaskContract::new(kind, &package.name);
+                let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
+                if package.quality_plan.uses_root_tools() {
+                    // Root-owned tools execute against the root environment.
+                    external_dependencies.extend(workspace_externals.iter().cloned());
+                }
+                external_dependencies.extend(toolchain_packages.iter().cloned());
+                resolutions.push(package_resolution(
+                    package.name.clone(),
+                    &external_dependencies,
+                ));
+                package_names.push(package.name.clone());
+                discovered.push(
+                    DiscoveredPackage::package(
+                        Some(package.name),
+                        PackageJson::default(),
+                        package.manifest_path,
+                    )
+                    .with_native_relationships(package.relationships)
+                    .with_native_tasks(native_tasks)
+                    .with_task_contract(
+                        crate::task_contracts::ScopeTaskContract::python(task_contract),
+                    ),
+                );
+            }
 
-    fn discover_packages_statically(&self) -> DiscoverPackagesFuture<'_> {
-        Box::pin(self.discover_packages_statically_inner())
+            // The workspace aggregate, anchored at the root pyproject.toml
+            // and named by the user via `[tool.turbo] name`. It depends on
+            // every package so `--affected` and dependent-filters propagate
+            // package changes to it.
+            let workspace_native_tasks = python_tasks_for_package(
+                UvPackageKind::Workspace,
+                &workspace_name,
+                ".",
+                &workspace_directories,
+                &workspace.quality_plan,
+                workspace.pytest.as_ref(),
+                true,
+                toolchain_identified,
+                false,
+            );
+            let workspace_task_contract =
+                UvTaskContract::workspace(&workspace_name, workspace_directories);
+            package_names.sort();
+            let workspace_relationships = package_names
+                .into_iter()
+                .map(|name| Relationship::internal(name, DependencyKind::Production))
+                .collect();
+            resolutions.push(package_resolution(
+                workspace_name.clone(),
+                &workspace_externals,
+            ));
+            discovered.push(
+                DiscoveredPackage::aggregate(
+                    workspace_name,
+                    PackageJson::default(),
+                    self.repo_root.join_component(PYPROJECT_TOML),
+                )
+                .with_native_relationships(workspace_relationships)
+                .with_native_tasks(workspace_native_tasks)
+                .with_task_contract(
+                    crate::task_contracts::ScopeTaskContract::python(workspace_task_contract),
+                ),
+            );
+
+            let members = resolutions
+                .iter()
+                .map(|resolution| resolution.package().to_string())
+                .collect::<Vec<_>>();
+            let resolution = ExternalResolutionDomain::new(
+                crate::external_resolution::PYTHON_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::PYTHON,
+                AnchoredSystemPathBuf::default(),
+                members,
+                [AnchoredSystemPathBuf::from_raw(UV_LOCK)
+                    .map_err(Error::from)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
+                ExternalResolutionData::Resolved {
+                    completeness: resolution_incomplete.map_or(
+                        ResolutionCompleteness::Complete,
+                        ResolutionCompleteness::Partial,
+                    ),
+                    packages: resolutions,
+                },
+            )
+            .with_fallback_inputs(fallback_inputs);
+            Ok(DiscoveredPackages::new(discovered, workspace_roots)
+                .with_external_resolution(resolution)
+                .with_change_observation(change_observation)
+                .with_prune_domain(Arc::new(prune_domain)))
+        })
     }
 }
 
@@ -4027,6 +3639,86 @@ version = "0.1.0"
                 .all(|relationship| relationship.declaration_name() == "py-lib"
                     && relationship.orders_tasks())
         );
+    }
+
+    #[test]
+    fn test_package_scope_inventory_reports_members_and_aggregate() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root);
+
+        // Manifest parsing only: no uv, Python, or which subprocess is needed.
+        let (members, aggregate) = package_scope_inventory(&root)
+            .expect("the inventory must not require uv or python")
+            .expect("a workspace with members has an aggregate scope");
+        let names = members
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["py-app", "py-lib"]);
+        assert_eq!(aggregate, "acme");
+        for (name, manifest_path) in &members {
+            assert_eq!(
+                manifest_path,
+                &root
+                    .join_components(&["packages", name.as_str()])
+                    .join_component(PYPROJECT_TOML)
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_scope_inventory_without_workspace_is_empty() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "solo"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        assert!(package_scope_inventory(&root).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_package_scope_inventory_requires_workspace_name() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "root-project"
+version = "0.1.0"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+"#,
+            )
+            .unwrap();
+        let package_dir = root.join_components(&["packages", "lib"]);
+        package_dir.create_dir_all().unwrap();
+        package_dir
+            .join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "lib"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        // Members without a [tool.turbo] name leave the aggregate scope
+        // unnamed; the inventory fails exactly like full discovery.
+        assert!(matches!(
+            package_scope_inventory(&root),
+            Err(Error::MissingWorkspaceName)
+        ));
     }
 
     #[test]
@@ -4873,563 +4565,6 @@ local = { path = "packages/gone-dir" }
         let error =
             prune_root_manifest("[project]\nname = \"x\"\n", &[], &HashSet::new()).unwrap_err();
         assert!(matches!(error, Error::NotAWorkspace));
-    }
-
-    /// A lockfile whose reachable graph is only partially interesting: `app`
-    /// reaches `lib` (local), `requests` (registry) which reaches `urllib3`, an
-    /// optional `idna` and a dev `pytest`; `lib` reaches `six`; `unused` is not
-    /// reachable from either member.
-    const STATIC_LOCKFILE: &str = r#"
-version = 1
-revision = 3
-
-[manifest]
-members = ["app", "lib"]
-
-[[package]]
-name = "app"
-version = "0.1.0"
-source = { editable = "packages/app" }
-dependencies = [
-    { name = "lib" },
-    { name = "requests" },
-]
-
-[package.optional-dependencies]
-extra = [{ name = "idna" }]
-
-[package.dev-dependencies]
-test = [{ name = "pytest" }]
-
-[[package]]
-name = "lib"
-version = "0.1.0"
-source = { virtual = "packages/lib" }
-dependencies = [{ name = "six" }]
-
-[[package]]
-name = "requests"
-version = "2.32.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [{ name = "urllib3" }]
-wheels = [{ url = "https://example.invalid/requests.whl", hash = "sha256:aaa" }]
-
-[[package]]
-name = "urllib3"
-version = "2.0.0"
-source = { registry = "https://pypi.org/simple" }
-wheels = [{ url = "https://example.invalid/urllib3.whl", hash = "sha256:bbb" }]
-
-[[package]]
-name = "idna"
-version = "3.0.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "pytest"
-version = "8.0.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "six"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "unused"
-version = "9.9.9"
-source = { registry = "https://pypi.org/simple" }
-"#;
-
-    fn closure_names(
-        closures: &HashMap<String, HashSet<turborepo_lockfiles::Package>>,
-        member: &str,
-    ) -> Vec<String> {
-        let mut names = closures
-            .get(member)
-            .unwrap()
-            .iter()
-            .map(|package| package.key.clone())
-            .collect::<Vec<_>>();
-        names.sort();
-        names
-    }
-
-    #[test]
-    fn test_lockfile_external_closures_follow_transitive_dependencies() {
-        let members = vec!["app".to_string(), "lib".to_string()];
-        let closures = lockfile_external_closures(STATIC_LOCKFILE, &members).unwrap();
-
-        // `six` arrives transitively through the local `lib` edge, so it is part
-        // of `app`'s closure even though `app` never names it directly.
-        assert_eq!(
-            closure_names(&closures, "app"),
-            ["idna", "pytest", "requests", "six", "urllib3"]
-        );
-        assert_eq!(closure_names(&closures, "lib"), ["six"]);
-
-        let requests = closures["app"]
-            .iter()
-            .find(|package| package.key == "requests")
-            .unwrap();
-        assert!(
-            requests
-                .version
-                .starts_with("2.32.5 registry+https://pypi.org/simple")
-        );
-        assert!(requests.version.contains("sha256:aaa"));
-        // A hash-only change must move the fingerprint even when the version is
-        // unchanged, because changed-package detection compares whole tables.
-        let mutated = STATIC_LOCKFILE.replace("sha256:aaa", "sha256:ccc");
-        let mutated = lockfile_external_closures(&mutated, &members).unwrap();
-        assert_ne!(mutated["app"], closures["app"]);
-    }
-
-    #[test]
-    fn test_lockfile_external_closures_reject_unknown_and_local_members() {
-        let members = vec!["app".to_string()];
-        assert!(matches!(
-            lockfile_external_closures(STATIC_LOCKFILE, &["missing".to_string()]),
-            Err(Error::LockfileMissingMember(member)) if member == "missing"
-        ));
-
-        let with_path_dep = STATIC_LOCKFILE.replace(
-            "{ name = \"requests\" },",
-            "{ name = \"requests\" }, { name = \"pathdep\" },",
-        );
-        let with_path_dep = with_path_dep.replace(
-            "[[package]]\nname = \"lib\"",
-            "[[package]]\nname = \"pathdep\"\nversion = \"0.1.0\"\nsource = { path = \
-             \"../pathdep\" }\n\n[[package]]\nname = \"lib\"",
-        );
-        assert!(matches!(
-            lockfile_external_closures(&with_path_dep, &members),
-            Err(Error::UnsupportedLocalMetadataNode(node)) if node == "pathdep"
-        ));
-    }
-
-    /// Two members that depend on different resolved forks of the same name:
-    /// `app` on `dep` v1 from registry A, `other` on `dep` v2 from registry B,
-    /// and only v2 reaches `leaf`.
-    const FORKED_LOCKFILE: &str = r#"
-version = 1
-revision = 3
-
-[manifest]
-members = ["app", "other"]
-
-[[package]]
-name = "app"
-version = "0.1.0"
-source = { editable = "packages/app" }
-dependencies = [
-    { name = "dep", version = "1.0.0", source = { registry = "https://a.example/simple" } },
-]
-
-[[package]]
-name = "other"
-version = "0.1.0"
-source = { editable = "packages/other" }
-dependencies = [
-    { name = "dep", version = "2.0.0", source = { registry = "https://b.example/simple" } },
-]
-
-[[package]]
-name = "dep"
-version = "1.0.0"
-source = { registry = "https://a.example/simple" }
-
-[[package]]
-name = "dep"
-version = "2.0.0"
-source = { registry = "https://b.example/simple" }
-dependencies = [{ name = "leaf" }]
-
-[[package]]
-name = "leaf"
-version = "1.0.0"
-source = { registry = "https://b.example/simple" }
-"#;
-
-    #[test]
-    fn test_lockfile_external_closures_keep_forked_resolutions_separate() {
-        let members = vec!["app".to_string(), "other".to_string()];
-        let closures = lockfile_external_closures(FORKED_LOCKFILE, &members).unwrap();
-
-        assert_eq!(closure_names(&closures, "app"), ["dep"]);
-        assert_eq!(closure_names(&closures, "other"), ["dep", "leaf"]);
-        let app_dep = closures["app"]
-            .iter()
-            .find(|package| package.key == "dep")
-            .unwrap();
-        assert!(
-            app_dep
-                .version
-                .starts_with("1.0.0 registry+https://a.example/simple")
-        );
-        let other_dep = closures["other"]
-            .iter()
-            .find(|package| package.key == "dep")
-            .unwrap();
-        assert!(
-            other_dep
-                .version
-                .starts_with("2.0.0 registry+https://b.example/simple")
-        );
-        assert_ne!(app_dep, other_dep);
-
-        // Changing only the v2 fork's reachable leaf must not move `app`'s
-        // closure, while `other`'s does move.
-        let mutated = FORKED_LOCKFILE.replace(
-            "name = \"leaf\"\nversion = \"1.0.0\"",
-            "name = \"leaf\"\nversion = \"1.1.0\"",
-        );
-        let mutated = lockfile_external_closures(&mutated, &members).unwrap();
-        assert_eq!(mutated["app"], closures["app"]);
-        assert_ne!(mutated["other"], closures["other"]);
-    }
-
-    #[test]
-    fn test_lockfile_external_closures_reject_ambiguous_and_unresolved_references() {
-        let members = vec!["app".to_string(), "other".to_string()];
-
-        // Dropping the discriminator leaves two same-named forks; a closure
-        // derived by name alone would silently merge them.
-        let ambiguous = FORKED_LOCKFILE.replace(
-            "    { name = \"dep\", version = \"1.0.0\", source = { registry = \"https://a.example/simple\" } },\n",
-            "    { name = \"dep\" },\n",
-        );
-        assert!(matches!(
-            lockfile_external_closures(&ambiguous, &members),
-            Err(Error::LockfileAmbiguousReference(name)) if name == "dep"
-        ));
-
-        let unresolved = FORKED_LOCKFILE.replace(
-            "version = \"1.0.0\", source = { registry = \"https://a.example/simple\" } },\n]",
-            "version = \"3.0.0\", source = { registry = \"https://a.example/simple\" } },\n]",
-        );
-        assert!(matches!(
-            lockfile_external_closures(&unresolved, &members),
-            Err(Error::LockfileUnresolvedReference(name)) if name == "dep"
-        ));
-    }
-
-    /// The metadata equivalent of [`static_lockfile_for_manifest_workspace`],
-    /// built in-process so parity tests never invoke uv.
-    fn metadata_for_manifest_workspace(root: &AbsoluteSystemPath) -> UvWorkspaceMetadata {
-        let member =
-            |name: &str, path: &str| serde_json::json!({ "name": name, "path": path, "id": name });
-        let external = |name: &str, version: &str| {
-            serde_json::json!({
-                "name": name,
-                "version": version,
-                "source": { "registry": { "url": "https://pypi.org/simple" } },
-                "kind": "package",
-                "dependencies": []
-            })
-        };
-        serde_json::from_value(serde_json::json!({
-            "members": [
-                member("py-app", &root.join_components(&["packages", "py-app"]).to_string()),
-                member("py-lib", &root.join_components(&["packages", "py-lib"]).to_string()),
-                member("root-project", &root.to_string()),
-            ],
-            "resolution": {
-                "py-app": {
-                    "name": "py-app",
-                    "version": "0.1.0",
-                    "source": { "virtual": "packages/py-app" },
-                    "kind": "package",
-                    "dependencies": [{ "id": "py-lib" }, { "id": "click" }, { "id": "ruff" }],
-                    "dependency_groups": [{ "name": "dev", "id": "py-app:dev" }]
-                },
-                "py-app:dev": {
-                    "name": "py-app",
-                    "version": "0.1.0",
-                    "source": { "virtual": "packages/py-app" },
-                    "kind": { "group": "dev" },
-                    "dependencies": [{ "id": "pytest" }]
-                },
-                "py-lib": {
-                    "name": "py-lib",
-                    "version": "0.1.0",
-                    "source": { "editable": "packages/py-lib" },
-                    "kind": "package",
-                    "dependencies": [{ "id": "six" }]
-                },
-                "root-project": {
-                    "name": "root-project",
-                    "version": "0.1.0",
-                    "source": { "virtual": "." },
-                    "kind": "package",
-                    "dependencies": [{ "id": "py-app" }, { "id": "mypy" }]
-                },
-                "click": external("click", "8.1.0"),
-                "ruff": external("ruff", "0.5.0"),
-                "pytest": external("pytest", "8.0.0"),
-                "six": external("six", "1.16.0"),
-                "mypy": external("mypy", "1.10.0"),
-            }
-        }))
-        .unwrap()
-    }
-
-    fn static_lockfile_for_manifest_workspace() -> String {
-        r#"
-version = 1
-revision = 3
-
-[manifest]
-members = ["py-app", "py-lib", "root-project"]
-
-[[package]]
-name = "py-app"
-version = "0.1.0"
-source = { virtual = "packages/py-app" }
-dependencies = [
-    { name = "py-lib" },
-    { name = "click" },
-    { name = "ruff" },
-]
-
-[package.dev-dependencies]
-dev = [{ name = "pytest" }]
-
-[[package]]
-name = "py-lib"
-version = "0.1.0"
-source = { editable = "packages/py-lib" }
-dependencies = [{ name = "six" }]
-
-[[package]]
-name = "root-project"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "py-app" },
-    { name = "mypy" },
-]
-
-[[package]]
-name = "click"
-version = "8.1.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "ruff"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "pytest"
-version = "8.0.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "six"
-version = "1.16.0"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "mypy"
-version = "1.10.0"
-source = { registry = "https://pypi.org/simple" }
-"#
-        .to_string()
-    }
-
-    #[tokio::test]
-    async fn test_static_discovery_needs_no_toolchain_and_reports_reachability() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        write_workspace(&root);
-        root.join_component(UV_LOCK)
-            .create_with_contents(static_lockfile_for_manifest_workspace())
-            .unwrap();
-
-        let contributor = UvContributor::new(root.clone());
-        let output = contributor
-            .discover_packages_statically_inner()
-            .await
-            .expect("static discovery must not require uv or python probes");
-
-        let (packages, roots, resolutions, changes, prune_domains) = output.into_parts();
-        let names = packages
-            .into_iter()
-            .map(|package| package.into_parts().name.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(names, ["py-app", "py-lib", "acme"]);
-        assert_eq!(roots.len(), 1);
-        assert!(!changes.is_empty(), "change facts must be contributed");
-        assert_eq!(prune_domains.len(), 1);
-
-        assert_eq!(resolutions.len(), 1);
-        let domain = &resolutions[0];
-        let ExternalResolutionData::Resolved {
-            completeness: ResolutionCompleteness::Complete,
-            packages: rows,
-        } = domain.data()
-        else {
-            panic!("static discovery with a valid uv.lock must resolve completely");
-        };
-        let row = |name: &str| {
-            rows.iter()
-                .find(|row| row.package() == name)
-                .unwrap()
-                .identities()
-                .iter()
-                .map(|identity| identity.key().to_string())
-                .collect::<Vec<_>>()
-        };
-        let mut py_app = row("py-app");
-        py_app.sort();
-        assert!(py_app.contains(&"click".to_string()));
-        // Reachability crosses the local py-lib edge.
-        assert!(py_app.contains(&"six".to_string()));
-        assert!(py_app.contains(&"pytest".to_string()));
-        // Probe-derived toolchain identities are absent by construction.
-        assert!(rows.iter().all(|row| {
-            row.identities()
-                .iter()
-                .all(|identity| identity.key() != "uv" && identity.key() != "python")
-        }));
-        // `py-lib` has no tools of its own, so its quality tasks fall back to
-        // root-owned tools; the shared assembly then adds the workspace-wide
-        // external union, exactly as the metadata path does. The lockfile
-        // closure itself contributes `six`.
-        let mut py_lib = row("py-lib");
-        py_lib.sort();
-        assert!(py_lib.contains(&"six".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_static_discovery_without_lockfile_is_unavailable_not_empty() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        write_workspace(&root);
-
-        let contributor = UvContributor::new(root.clone());
-        let output = contributor
-            .discover_packages_statically_inner()
-            .await
-            .unwrap();
-        let (_packages, _roots, resolutions, _changes, _prune) = output.into_parts();
-
-        // A missing lockfile must be explicit `Unavailable`: a `Resolved` domain
-        // with empty identities would silently drop every affected task.
-        assert_eq!(resolutions.len(), 1);
-        let domain = &resolutions[0];
-        assert!(matches!(
-            domain.data(),
-            ExternalResolutionData::Unavailable(reason) if reason.code() == "uv-lockfile-unavailable"
-        ));
-        let mut members = domain.members().to_vec();
-        members.sort();
-        assert_eq!(members, ["acme", "py-app", "py-lib"]);
-    }
-
-    /// Exact-parity snapshot of one discovery output: per-package native task
-    /// catalogue (ordered), native relationship topology (sorted), and
-    /// per-member external resolution identity names (sorted).
-    type PackageSnapshot = (
-        String,
-        Vec<(String, Option<crate::native_tasks::TaskEntrypoint>)>,
-        Vec<String>,
-    );
-    type ResolutionSnapshot = (String, Vec<String>);
-
-    fn parity_snapshot(
-        output: DiscoveredPackages,
-    ) -> (Vec<PackageSnapshot>, Vec<ResolutionSnapshot>) {
-        let (discovered, _roots, resolutions, _changes, _prune) = output.into_parts();
-        let packages = discovered
-            .into_iter()
-            .map(|package| {
-                let parts = package.into_parts();
-                let catalogue = parts
-                    .native_tasks
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|task| (task.name().to_string(), task.contract().entrypoint()))
-                    .collect::<Vec<_>>();
-                let mut topology = parts
-                    .native_relationships
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|relationship| format!("{relationship:?}"))
-                    .collect::<Vec<_>>();
-                topology.sort();
-                (parts.name.unwrap(), catalogue, topology)
-            })
-            .collect::<Vec<_>>();
-
-        let resolution = resolutions
-            .iter()
-            .flat_map(|domain| {
-                let ExternalResolutionData::Resolved { packages, .. } = domain.data() else {
-                    return Vec::new();
-                };
-                packages
-                    .iter()
-                    .map(|row| {
-                        let mut names = row
-                            .identities()
-                            .iter()
-                            .map(|identity| identity.key().to_string())
-                            .collect::<Vec<_>>();
-                        names.sort();
-                        (row.package().to_string(), names)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        (packages, resolution)
-    }
-
-    /// Metadata-derived topology must equal manifest-derived topology exactly,
-    /// including internal edges that depend on `[tool.uv.sources]` overrides.
-    #[tokio::test]
-    async fn test_static_and_metadata_discovery_agree_on_topology_and_catalogue() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
-        write_workspace(&root);
-        let lockfile = static_lockfile_for_manifest_workspace();
-        root.join_component(UV_LOCK)
-            .create_with_contents(&lockfile)
-            .unwrap();
-
-        let contributor = UvContributor::new(root.clone());
-        let static_output = contributor
-            .discover_packages_statically_inner()
-            .await
-            .unwrap();
-
-        let metadata = metadata_for_manifest_workspace(&root);
-        let metadata_workspace = discover_workspace_from_metadata(&root, &metadata).unwrap();
-        let metadata_closures =
-            external_closures(&metadata, &closure_member_names(&metadata_workspace)).unwrap();
-        let full_output = assemble_contributor_output(
-            &root,
-            metadata_workspace,
-            contributor.workspace_roots(),
-            metadata_closures,
-            &[],
-            false,
-            None,
-            true,
-            UvResolutionPlan::Resolved(ResolutionCompleteness::Complete),
-            Ok(lockfile),
-            Some(metadata),
-        )
-        .unwrap();
-
-        assert_eq!(
-            parity_snapshot(static_output),
-            parity_snapshot(full_output),
-            "static and metadata discovery must agree on task catalogue, topology, and per-member \
-             external identities"
-        );
     }
 
     #[test]

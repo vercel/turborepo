@@ -770,30 +770,28 @@ fn test_disabled_go_workspace_points_to_feature_flag() {
 }
 
 #[test]
-fn test_enabled_go_workspace_lists_modules_without_go_executable() {
+fn test_enabled_go_workspace_reports_missing_go_executable() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
 
-    // Static planning needs no `go` binary: with an empty PATH the pure-Go
-    // repository still lists its modules from go.work alone.
-    let output = run_turbo_with_env(tempdir.path(), &["ls", "--output=json"], &[("PATH", "")]);
-    assert_command_success(&output, "toolchain-free ls");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("ls emits JSON");
-    let names = json["packages"]["items"]
-        .as_array()
-        .expect("packages items")
-        .iter()
-        .map(|package| package["name"].as_str().expect("name").to_string())
-        .collect::<Vec<_>>();
-    for module in ["example.com/api", "example.com/lib"] {
-        assert!(
-            names.contains(&module.to_string()),
-            "listed modules {names:?} must include {module}"
-        );
-    }
+    // `ls` is an unfiltered, repository-wide query: lazy native discovery
+    // may load every contributor for it. The Go scope inventory itself needs
+    // no `go` binary, but the loaded owner does, so a missing `go` fails the
+    // listing with the ordinary missing-toolchain diagnostic.
+    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
 
-    // Selecting a Go task still requires the executable: preparation runs
-    // `go`, and the hard diagnostic keeps its requirement and remediation.
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Go is required for experimental Go workspaces")
+            && stderr.contains("Install Go 1.22 or newer")
+            && stderr.contains("PATH"),
+        "missing Go diagnostic must identify the requirement and remediation: {stderr}"
+    );
+    assert!(!stderr.contains("package manager"), "{stderr}");
+
+    // Selecting a Go task narrows the query to the Go scope, which loads the
+    // same owner; the diagnostic keeps its requirement and remediation.
     let output = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--filter=example.com/api", "--dry-run=json"],
@@ -812,8 +810,9 @@ fn test_enabled_go_workspace_lists_modules_without_go_executable() {
 
 #[test]
 fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
-    // The diagnostic comes from the static parser, so no `go` binary is
-    // needed to see it.
+    // The scope inventory parses go.work in-process, so it detects the
+    // malformed directive before any `go` subprocess: with an empty PATH the
+    // diagnostic is identical, which proves no toolchain ran.
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
     fs::write(
@@ -822,10 +821,10 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["ls"]);
+    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // The static parser diagnoses the unknown directive itself — the file,
+    // The inventory parser diagnoses the unknown directive itself — the file,
     // the directive, the directives go.work supports, and the repair —
     // without pretending any `go` command ran and without falling back to
     // JavaScript discovery.
