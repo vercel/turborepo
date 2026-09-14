@@ -5,7 +5,7 @@ mod common;
 use std::{collections::HashSet, fs, path::Path};
 
 use common::{run_turbo, run_turbo_with_env, setup};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const PLAN_QUERY: &str = r#"query {
   globalEnvironment { env passThroughEnv }
