@@ -202,7 +202,6 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
-#[graphql(concrete(name = "ChangedTasks", params(ChangedTask)))]
 #[graphql(concrete(name = "Files", params(file::File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
@@ -603,6 +602,48 @@ struct ChangedTask {
     task: task::RepositoryTask,
 }
 
+#[derive(SimpleObject)]
+#[graphql(complex)]
+struct ChangedTasks {
+    items: Vec<ChangedTask>,
+    length: usize,
+}
+
+#[ComplexObject]
+impl ChangedTasks {
+    /// The collection and all its transitive dependencies, with each task once.
+    /// Includes non-executable task nodes and sorts by package name, then task
+    /// name.
+    async fn with_dependencies(&self) -> Result<Array<task::RepositoryTask>, Error> {
+        let Some(first) = self.items.first() else {
+            return Ok(Vec::new().into());
+        };
+        let run = first.task.package.run();
+        let mut task_ids: HashSet<_> = self
+            .items
+            .iter()
+            .map(|item| {
+                turborepo_task_id::TaskId::from_static(
+                    item.task.package.get_name().to_string(),
+                    item.task.name.clone(),
+                )
+            })
+            .collect();
+        task_ids.extend(run.engine().collect_task_dependencies(&task_ids));
+        let mut tasks = task_ids
+            .into_iter()
+            .map(|task_id| task::RepositoryTask::new(&task_id, run))
+            .collect::<Result<Array<_>, _>>()?;
+        tasks.sort_by(|a, b| {
+            a.package
+                .get_name()
+                .cmp(b.package.get_name())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        Ok(tasks)
+    }
+}
+
 fn resolve_file_path(
     repo_root: &AbsoluteSystemPath,
     path: String,
@@ -683,7 +724,7 @@ impl RepositoryQuery {
         #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
         tasks: Option<Vec<String>>,
         filter: Option<PackagePredicate>,
-    ) -> Result<Array<ChangedTask>, Error> {
+    ) -> Result<ChangedTasks, Error> {
         let task_level_results =
             affected_tasks::calculate_affected_tasks(&self.run, base.clone(), head.clone())?;
         let mut reasons: HashMap<_, _> = task_level_results
@@ -738,7 +779,7 @@ impl RepositoryQuery {
         let mut scheduled = selected.clone();
         scheduled.extend(engine.collect_task_dependencies(&selected));
 
-        let mut changed_tasks: Array<ChangedTask> = scheduled
+        let mut changed_tasks: Vec<ChangedTask> = scheduled
             .into_iter()
             .map(|task_id| {
                 let task = task::RepositoryTask::new(&task_id, &self.run).map_err(|error| {
@@ -767,7 +808,20 @@ impl RepositoryQuery {
                 .cmp(b.task.package.get_name())
                 .then_with(|| a.task.name.cmp(&b.task.name))
         });
-        Ok(changed_tasks)
+        Ok(ChangedTasks {
+            length: changed_tasks.len(),
+            items: changed_tasks,
+        })
+    }
+
+    /// Configured global environment patterns, without expanding names or
+    /// values.
+    async fn global_environment(&self) -> task::Environment {
+        let config = self.run.root_turbo_json();
+        task::Environment {
+            env: config.global_env.clone(),
+            pass_through_env: config.global_pass_through_env.clone().unwrap_or_default(),
+        }
     }
 
     /// Gets a single package by name

@@ -41,6 +41,71 @@ When passed a file path, the command will read the file and run the query.
 turbo query query.gql
 ```
 
+## Task planning
+
+Select task metadata without collecting a full `turbo run --dry=json` summary:
+
+```bash title="Terminal"
+turbo query '
+query {
+  globalEnvironment { env passThroughEnv }
+  affectedTasks(base: "origin/main", head: "HEAD", tasks: ["lint", "test"]) {
+    items { fullName }
+    withDependencies {
+      length
+      items {
+        fullName
+        name
+        command
+        package { name path }
+        directDependencies { items { fullName } }
+        environment { env passThroughEnv }
+      }
+    }
+  }
+}
+'
+```
+
+You can also save the query as `ci-plan.gql` and run `turbo query ci-plan.gql`.
+
+### `withDependencies`
+
+`affectedTasks.withDependencies` returns the tasks in the collection and their
+transitive dependencies, deduplicated by task ID and sorted by package name, then
+task name. `length` counts the unique tasks. An empty selection returns an empty
+collection.
+
+Each task appears once, even when several tasks share the same dependency. Select
+only `fullName` beneath `directDependencies` to represent edges without repeating
+each task's dependency tree. Unlike nesting `allDependencies` beneath every task,
+this keeps the graph output proportional to its nodes and direct edges.
+
+The collection includes non-executable transit and leaf dependencies, as well as
+implicit native tasks and command overrides. `command` is `null` for tasks without
+a command. The internal graph root is excluded; configured root tasks such as
+`//#lint` are included when required.
+
+This does not change `affectedTasks.items`: that collection retains its existing
+affected-task selection and runnable dependency behavior. `withDependencies`
+provides the complete dependency graph, including non-executable leaf nodes.
+
+### Environment patterns
+
+`globalEnvironment` exposes `globalEnv` and `globalPassThroughEnv` as `env` and
+`passThroughEnv`. Each task's `environment` exposes its configured `env` and
+`passThroughEnv` after resolving Package Configurations, inheritance, and
+`$TURBO_EXTENDS$`. These fields are also available on tasks outside an affected
+query, such as `package(name: "web") { tasks { items { environment { env } } } }`.
+
+Both fields return arrays, using `[]` when no patterns are configured. Global
+patterns remain separate from task patterns. Wildcards and exclusions are
+preserved: these are configuration patterns, not environment variable values,
+expanded names, framework-inferred variables, or a complete process environment.
+
+The query does not execute tasks or report cache hits. Unlike dry-run summaries,
+this selection does not include file-hash inventories.
+
 ## Shorthands
 
 Shorthands generate GraphQL queries for common operations so you don't need to write them by hand. The JSON output is identical to what you'd get from a raw query.
