@@ -310,7 +310,12 @@ impl Lockfile for NpmLockfile {
     fn human_name(&self, package: &Package) -> Option<String> {
         let npm_package = self.packages.get(&package.key)?;
         let version = npm_package.version.as_deref()?;
-        let name = package.key.split("node_modules/").last()?;
+        // Aliased dependencies are stored under the alias path, but npm records
+        // the resolved package's actual name in the entry itself.
+        let name = npm_package
+            .name
+            .as_deref()
+            .or_else(|| package.key.split("node_modules/").last())?;
         Some(format!("{name}@{version}"))
     }
 

@@ -709,4 +709,60 @@ mod tests {
         let packages = workspace.lockfile_packages().await;
         assert!(packages.errors.is_empty());
     }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_npm_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"npm@10.5.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"alias-test","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"alias-test","version":"1.0.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}},"node_modules/alias":{"name":"JSONStream","version":"1.0.0"}}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_yarn_classic_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"yarn@1.22.22","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("yarn.lock"),
+            r#"# yarn lockfile v1
+
+"alias@npm:JSONStream@1.0.0":
+  version "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
+    }
 }
