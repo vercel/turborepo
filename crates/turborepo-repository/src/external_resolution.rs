@@ -24,6 +24,10 @@ pub struct ExternalDeclaration {
     package_name: String,
     specifier: String,
     kind: DependencyKind,
+    /// Exact version the declaring package's resolution locked this dependency
+    /// to, when the producer could determine it. Absent for declaration-only
+    /// inputs (for example a graph built without a lockfile).
+    resolved_version: Option<Arc<str>>,
 }
 
 impl ExternalDeclaration {
@@ -40,7 +44,14 @@ impl ExternalDeclaration {
             package_name: package_name.into(),
             specifier: specifier.into(),
             kind,
+            resolved_version: None,
         }
+    }
+
+    /// Attach the exact version this declaration resolved to.
+    pub fn with_resolved_version(mut self, version: impl Into<Arc<str>>) -> Self {
+        self.resolved_version = Some(version.into());
+        self
     }
 
     pub fn source(&self) -> &str {
@@ -59,6 +70,12 @@ impl ExternalDeclaration {
         &self.specifier
     }
 
+    /// Exact version this declaration resolved to in the declaring package's
+    /// lockfile resolution, when known.
+    pub fn resolved_version(&self) -> Option<&str> {
+        self.resolved_version.as_deref()
+    }
+
     pub fn kind(&self) -> DependencyKind {
         self.kind
     }
@@ -73,6 +90,19 @@ pub struct ExternalDeclarations {
 
 impl ExternalDeclarations {
     pub(crate) fn build(relationships: &RelationshipKnowledge) -> Self {
+        Self::build_with_resolved_versions(relationships, |_, _, _| None)
+    }
+
+    /// Build the declaration view, attaching the exact resolved version for
+    /// each external declaration when `resolve` can determine one.
+    ///
+    /// `resolve` is called with the declaring package identity, the applied
+    /// declaration name (the lockfile lookup key, which differs from the
+    /// resolved package name for aliases), and the declared specifier.
+    pub(crate) fn build_with_resolved_versions(
+        relationships: &RelationshipKnowledge,
+        resolve: impl Fn(&str, &str, &str) -> Option<Arc<str>>,
+    ) -> Self {
         let mut declarations = Vec::new();
         let mut ranges = HashMap::new();
         for group in relationships.groups() {
@@ -87,13 +117,19 @@ impl ExternalDeclarations {
                 else {
                     continue;
                 };
-                declarations.push(ExternalDeclaration::new(
+                let mut declaration = ExternalDeclaration::new(
                     group.source(),
                     relationship.declaration_name(),
                     name,
                     specifier,
                     relationship.kind(),
-                ));
+                );
+                if let Some(version) =
+                    resolve(group.source(), relationship.declaration_name(), specifier)
+                {
+                    declaration = declaration.with_resolved_version(version);
+                }
+                declarations.push(declaration);
             }
             ranges.insert(group.source().to_string(), start..declarations.len());
         }

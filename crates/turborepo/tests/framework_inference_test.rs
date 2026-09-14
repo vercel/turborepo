@@ -71,6 +71,56 @@ fn test_turbo_ci_vendor_env_key_excludes_var() {
     );
 }
 
+/// The fixture resolves Next.js above the 16.1.0 floor for the runtime
+/// deployment ID, so outside Vercel's builder Next.js still inlines
+/// `NEXT_DEPLOYMENT_ID` and it must participate in the task hash.
+#[test]
+fn test_next_deployment_id_inferred_outside_vercel_builder() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_framework(tempdir.path());
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--dry=json"],
+        &[("NEXT_DEPLOYMENT_ID", "dpl_test")],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let inferred = json["tasks"][0]["environmentVariables"]["inferred"]
+        .as_array()
+        .unwrap();
+    // Dry runs report inferred values as SHA-256 digests, so assert the name.
+    assert_eq!(inferred.len(), 1);
+    assert!(
+        inferred[0]
+            .as_str()
+            .unwrap()
+            .starts_with("NEXT_DEPLOYMENT_ID=")
+    );
+}
+
+/// Inside Vercel's builder that same Next.js version reads the deployment ID at
+/// runtime, and the legacy `VERCEL_DEPLOYMENT_ID` conditional no longer
+/// applies, so neither id may invalidate the build cache.
+#[test]
+fn test_deployment_ids_not_hashed_in_vercel_builder() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_framework(tempdir.path());
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--dry=json"],
+        &[
+            ("NOW_BUILDER", "1"),
+            ("VERCEL_SKEW_PROTECTION_ENABLED", "1"),
+            ("NEXT_DEPLOYMENT_ID", "dpl_test"),
+            ("VERCEL_DEPLOYMENT_ID", "dpl_test"),
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let inferred = &json["tasks"][0]["environmentVariables"]["inferred"];
+    assert_eq!(inferred, &serde_json::json!([]));
+}
+
 #[test]
 fn test_framework_inference_disabled() {
     let tempdir = tempfile::tempdir().unwrap();

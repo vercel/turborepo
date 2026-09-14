@@ -1,8 +1,10 @@
 export type FrameworkStrategy = "all" | "some";
 
 export interface EnvConditional {
-  when: { key: string; value?: string };
+  when: { key: string; value?: string; absent?: boolean };
   include: Array<string>;
+  fromVersion?: string;
+  untilVersion?: string;
 }
 
 export interface Framework {

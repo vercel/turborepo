@@ -51,7 +51,13 @@
     "envConditionals": [
       {
         "when": { "key": "VERCEL_SKEW_PROTECTION_ENABLED", "value": "1" },
-        "include": ["VERCEL_DEPLOYMENT_ID"]
+        "include": ["VERCEL_DEPLOYMENT_ID"],
+        "untilVersion": "16.1.0"
+      },
+      {
+        "when": { "key": "NOW_BUILDER", "absent": true },
+        "include": ["NEXT_DEPLOYMENT_ID"],
+        "fromVersion": "16.1.0"
       }
     ],
     "dependencyMatch": {

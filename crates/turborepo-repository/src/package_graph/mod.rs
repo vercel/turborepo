@@ -441,9 +441,31 @@ struct ExternalDependencyIndex {
 }
 
 impl PackageGraph {
+    /// External declarations for every package, with exact resolved versions
+    /// attached when a lockfile is available.
+    ///
+    /// Resolution runs once per declaration here, not once per task hash, so
+    /// the many consumers of this view stay cheap. Declarations that cannot be
+    /// resolved keep an absent version, which consumers read as "unknowable".
     fn external_declaration_view(&self) -> &ExternalDeclarations {
-        self.external_declarations
-            .get_or_init(|| ExternalDeclarations::build(&self.relationship_knowledge))
+        self.external_declarations.get_or_init(|| {
+            let Some(lockfile) = self.lockfile.as_deref() else {
+                return ExternalDeclarations::build(&self.relationship_knowledge);
+            };
+            let directories: HashMap<&str, &AnchoredSystemPath> =
+                self.knowledge.package_json_packages().collect();
+            ExternalDeclarations::build_with_resolved_versions(
+                &self.relationship_knowledge,
+                |source, declaration_name, specifier| {
+                    let directory = directories.get(source)?;
+                    let package = lockfile
+                        .resolve_package(directory.to_unix().as_str(), declaration_name, specifier)
+                        .ok()
+                        .flatten()?;
+                    Some(Arc::from(package.version.as_str()))
+                },
+            )
+        })
     }
 
     pub fn external_declarations<'a>(

@@ -28,7 +28,10 @@ use turborepo_engine::TaskNode;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, WildcardMapCache};
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, TaskHashable, TurboHash};
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
+use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations,
+    package_graph::{PackageGraph, PackageName, PackageTaskContext},
+};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
@@ -534,7 +537,13 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         package_context: &PackageTaskContext<'_>,
     ) -> Result<(), Error> {
         self.validate_package_context(task_id, package_context)?;
-        let env_vars = self.calculate_env_vars(task_id, task_definition, task_env_mode, None)?;
+        let env_vars = self.calculate_env_vars(
+            task_id,
+            task_definition,
+            task_env_mode,
+            None,
+            package_context.external_declarations(),
+        )?;
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
@@ -579,13 +588,21 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 debug!(
                     "framework: {}, env_prefix: {:?}",
                     framework.slug(),
-                    framework.env(self.env_at_execution_start)
+                    framework.env(
+                        self.env_at_execution_start,
+                        package_context.external_declarations()
+                    )
                 );
                 telemetry.track_framework(framework.slug().to_string());
             });
         let framework_slug = framework.as_ref().map(|f| f.slug());
-        let env_vars =
-            self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
+        let env_vars = self.calculate_env_vars(
+            task_id,
+            task_definition,
+            task_env_mode,
+            framework,
+            package_context.external_declarations(),
+        )?;
 
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes =
@@ -661,9 +678,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_definition: &T,
         _task_env_mode: EnvMode,
         framework: Option<&Framework>,
+        declarations: PackageExternalDeclarations<'_>,
     ) -> Result<DetailedMap, Error> {
         if let Some(framework) = framework {
-            let mut computed_wildcards = framework.env(self.env_at_execution_start);
+            let mut computed_wildcards = framework.env(self.env_at_execution_start, declarations);
 
             match self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY") {
                 Some(exclude_prefix) if !exclude_prefix.is_empty() => {

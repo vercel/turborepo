@@ -4,6 +4,7 @@
 
 use std::{collections::HashMap, sync::OnceLock};
 
+use semver::Version;
 use serde::Deserialize;
 use turborepo_repository::{
     external_resolution::PackageExternalDeclarations, relationships::DependencyKind,
@@ -28,6 +29,10 @@ struct Matcher {
 struct EnvConditionKey {
     key: String,
     value: Option<String>,
+    /// When `true`, the conditional matches only if `key` is absent from the
+    /// environment. Mutually exclusive with `value` in practice.
+    #[serde(default)]
+    absent: Option<bool>,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -35,6 +40,16 @@ struct EnvConditionKey {
 struct EnvConditional {
     when: EnvConditionKey,
     include: Vec<String>,
+    /// Inclusive floor on the resolved version of the framework's gated
+    /// dependency. A conditional with a floor only applies when the exact
+    /// resolved version is known and at least this version.
+    #[serde(default)]
+    from_version: Option<String>,
+    /// Exclusive ceiling on the resolved version of the framework's gated
+    /// dependency. Unknown versions satisfy the ceiling so they keep legacy
+    /// behavior.
+    #[serde(default)]
+    until_version: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -55,22 +70,100 @@ impl Framework {
         self.slug.clone()
     }
 
-    pub fn env(&self, env_at_execution_start: &HashMap<String, String>) -> Vec<String> {
+    /// Environment variables this framework's tasks depend on, given the
+    /// package's external declarations.
+    ///
+    /// Declaration versions gate the version-sensitive conditionals: a
+    /// conditional with a `fromVersion` applies only once the framework's
+    /// gated dependency is known to resolve to at least that version, while an
+    /// `untilVersion` ceiling also applies when the version is unknown so
+    /// legacy behavior is preserved.
+    pub fn env(
+        &self,
+        env_at_execution_start: &HashMap<String, String>,
+        declarations: PackageExternalDeclarations<'_>,
+    ) -> Vec<String> {
         let mut env_vars = self.env_wildcards.clone();
 
         if let Some(env_conditionals) = &self.env_conditionals {
-            for conditional in env_conditionals {
-                let (key, expected_value) = (&conditional.when.key, &conditional.when.value);
+            let dependency_version = self.resolved_dependency_version(declarations);
 
-                if let Some(actual_value) = env_at_execution_start.get(key)
-                    && (expected_value.is_none() || expected_value.as_ref() == Some(actual_value))
-                {
+            for conditional in env_conditionals {
+                if conditional.matches(env_at_execution_start, dependency_version.as_ref()) {
                     env_vars.extend(conditional.include.iter().cloned());
                 }
             }
         }
 
         env_vars
+    }
+
+    /// Resolved version of the first gated dependency this framework declares,
+    /// when the package locks it to a parseable exact version.
+    fn resolved_dependency_version(
+        &self,
+        declarations: PackageExternalDeclarations<'_>,
+    ) -> Option<Version> {
+        self.dependency_match
+            .dependencies
+            .iter()
+            .find_map(|dependency| {
+                declarations
+                    .iter()
+                    .find(|declaration| declaration.package_name() == dependency)
+                    .and_then(|declaration| declaration.resolved_version())
+                    .and_then(|version| Version::parse(version).ok())
+            })
+    }
+}
+
+impl EnvConditional {
+    fn matches(
+        &self,
+        env_at_execution_start: &HashMap<String, String>,
+        dependency_version: Option<&Version>,
+    ) -> bool {
+        self.when.matches(env_at_execution_start) && self.matches_version(dependency_version)
+    }
+
+    fn matches_version(&self, dependency_version: Option<&Version>) -> bool {
+        // Malformed bounds are inert: they are rejected at test time rather
+        // than changing which variables a release hashes.
+        if let Some(floor) = self
+            .from_version
+            .as_ref()
+            .and_then(|floor| Version::parse(floor).ok())
+            && !dependency_version.is_some_and(|version| version >= &floor)
+        {
+            // A floor requires a known version at or above it.
+            return false;
+        }
+
+        if let Some(ceiling) = self
+            .until_version
+            .as_ref()
+            .and_then(|ceiling| Version::parse(ceiling).ok())
+            && dependency_version.is_some_and(|version| version >= &ceiling)
+        {
+            // An unknown version satisfies the ceiling.
+            return false;
+        }
+
+        true
+    }
+}
+
+impl EnvConditionKey {
+    fn matches(&self, env_at_execution_start: &HashMap<String, String>) -> bool {
+        if self.absent == Some(true) {
+            return !env_at_execution_start.contains_key(&self.key);
+        }
+
+        env_at_execution_start.get(&self.key).is_some_and(|actual| {
+            self.value
+                .as_ref()
+                .is_none_or(|expected| expected == actual)
+        })
     }
 }
 
@@ -172,6 +265,27 @@ mod tests {
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
         )
+    }
+
+    /// A declaration view for a package that depends on `next`, optionally
+    /// locked to an exact resolved version.
+    fn next_declarations(version: Option<&str>) -> Vec<ExternalDeclaration> {
+        let declaration = ExternalDeclaration::new(
+            "workspace",
+            "next",
+            "next",
+            "^16.0.0",
+            DependencyKind::Production,
+        );
+        vec![match version {
+            Some(version) => declaration.with_resolved_version(version),
+            None => declaration,
+        }]
+    }
+
+    /// A declaration view for a package whose resolved versions are unknowable.
+    fn unknown_version() -> PackageExternalDeclarations<'static> {
+        PackageExternalDeclarations::new(&[], "workspace")
     }
 
     #[test_case(PackageJson::default(), None, true; "empty dependencies")]
@@ -389,7 +503,7 @@ mod tests {
         let framework = get_framework_by_slug("nextjs");
 
         let env_at_execution_start = HashMap::new();
-        let env_vars = framework.env(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start, unknown_version());
 
         assert_eq!(
             env_vars,
@@ -399,7 +513,7 @@ mod tests {
     }
 
     #[test]
-    fn test_env_with_matching_condition() {
+    fn test_env_with_legacy_deployment_id_below_version_floor() {
         let framework = get_framework_by_slug("nextjs");
 
         let mut env_at_execution_start = HashMap::new();
@@ -408,14 +522,19 @@ mod tests {
             "1".to_string(),
         );
 
-        let env_vars = framework.env(&env_at_execution_start);
+        let declarations = next_declarations(Some("16.0.9"));
+        let env_vars = framework.env(
+            &env_at_execution_start,
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+        );
 
         let mut expected_vars = framework.env_wildcards.clone();
         expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
 
         assert_eq!(
             env_vars, expected_vars,
-            "Expected VERCEL_DEPLOYMENT_ID to be included when condition is met"
+            "Expected VERCEL_DEPLOYMENT_ID below the version floor so Next.js 16.0.x keeps \
+             hashing the deployment ID it baked into the build"
         );
     }
 
@@ -429,7 +548,7 @@ mod tests {
             "0".to_string(),
         );
 
-        let env_vars = framework.env(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start, unknown_version());
 
         assert_eq!(
             env_vars,
@@ -452,7 +571,7 @@ mod tests {
             "random".to_string(),
         );
 
-        let env_vars = framework.env(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start, unknown_version());
 
         let mut expected_vars = framework.env_wildcards.clone();
         expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
@@ -473,8 +592,11 @@ mod tests {
                 when: EnvConditionKey {
                     key: "ANOTHER_CONDITION".to_string(),
                     value: Some("true".to_string()),
+                    absent: None,
                 },
                 include: vec!["ADDITIONAL_ENV_VAR".to_string()],
+                from_version: None,
+                until_version: None,
             });
         }
 
@@ -485,7 +607,7 @@ mod tests {
         );
         env_at_execution_start.insert("ANOTHER_CONDITION".to_string(), "true".to_string());
 
-        let env_vars = framework.env(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start, unknown_version());
 
         let mut expected_vars = framework.env_wildcards.clone();
         expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
@@ -496,6 +618,158 @@ mod tests {
             "Expected both VERCEL_DEPLOYMENT_ID and ADDITIONAL_ENV_VAR when both conditions are \
              met"
         );
+    }
+
+    #[test]
+    fn test_env_unknown_version_keeps_legacy_deployment_id() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        // Without a resolved version the floor-gated conditional cannot be
+        // proven applicable, while the ceiling still admits the legacy one.
+        let env_vars = framework.env(&env_at_execution_start, unknown_version());
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected an unknown Next.js version to preserve legacy behavior"
+        );
+    }
+
+    #[test]
+    fn test_env_unknown_version_does_not_assume_modern_nextjs() {
+        let framework = get_framework_by_slug("nextjs");
+
+        // No NOW_BUILDER and no skew-protection flag: only a known version at
+        // or above the floor may pull in NEXT_DEPLOYMENT_ID.
+        let env_vars = framework.env(&HashMap::new(), unknown_version());
+
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected unknown versions to stay out of the version-gated conditional"
+        );
+    }
+
+    #[test]
+    fn test_env_hashes_next_deployment_id_above_version_floor() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let declarations = next_declarations(Some("16.1.0"));
+        let env_vars = framework.env(
+            &HashMap::new(),
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+        );
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("NEXT_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected NEXT_DEPLOYMENT_ID outside Vercel's builder, where Next.js still reads it \
+             at build time"
+        );
+    }
+
+    #[test]
+    fn test_env_replaces_legacy_deployment_id_above_version_floor() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        let declarations = next_declarations(Some("16.1.0"));
+        let env_vars = framework.env(
+            &env_at_execution_start,
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+        );
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("NEXT_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected NEXT_DEPLOYMENT_ID to replace VERCEL_DEPLOYMENT_ID at and above the floor"
+        );
+    }
+
+    #[test]
+    fn test_env_skips_deployment_ids_in_vercel_builder() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert("NOW_BUILDER".to_string(), "1".to_string());
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        let declarations = next_declarations(Some("16.1.0"));
+        let env_vars = framework.env(
+            &env_at_execution_start,
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+        );
+
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected Vercel's builder to hash neither deployment ID once Next.js supplies it at \
+             runtime"
+        );
+    }
+
+    #[test]
+    fn test_env_builder_flag_does_not_affect_legacy_deployment_id() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert("NOW_BUILDER".to_string(), "1".to_string());
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        let declarations = next_declarations(Some("16.0.9"));
+        let env_vars = framework.env(
+            &env_at_execution_start,
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+        );
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected the builder flag to leave pre-floor behavior untouched"
+        );
+    }
+
+    #[test]
+    fn test_framework_version_bounds_are_valid_semver() {
+        for framework in get_frameworks().expect("framework JSON failed to parse") {
+            for conditional in framework.env_conditionals.iter().flatten() {
+                for bound in [&conditional.from_version, &conditional.until_version]
+                    .into_iter()
+                    .flatten()
+                {
+                    assert!(
+                        Version::parse(bound).is_ok(),
+                        "{} has an unparseable version bound: {bound}",
+                        framework.slug()
+                    );
+                }
+            }
+        }
     }
 
     #[test]
