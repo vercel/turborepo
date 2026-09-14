@@ -2775,7 +2775,7 @@ mod test {
             )
             .with_native_relationships(Vec::new());
             let lock: AnchoredSystemPathBuf =
-                AnchoredSystemPathBuf::new(&self.root, &self.root.join_component("native"))
+                AnchoredSystemPathBuf::new(&self.root, self.root.join_component("native"))
                     .unwrap()
                     .join_component("manifest.lock");
             let data = match data {
@@ -2869,7 +2869,7 @@ mod test {
             global_fallback.as_ref().is_none_or(|paths| {
                 !paths
                     .iter()
-                    .any(|path| path.file_name() == Some("manifest.lock".as_ref()))
+                    .any(|path| path.file_name() == Some("manifest.lock"))
             }),
             "an inventory-only scope contributes no fallback inputs; got {global_fallback:?}"
         );
@@ -2937,10 +2937,10 @@ mod test {
             global_fallback.as_ref().is_some_and(|paths| {
                 paths
                     .iter()
-                    .any(|path| path.file_name() == Some("package.json".as_ref()))
+                    .any(|path| path.file_name() == Some("package.json"))
                     && !paths
                         .iter()
-                        .any(|path| path.file_name() == Some("manifest.lock".as_ref()))
+                        .any(|path| path.file_name() == Some("manifest.lock"))
             }),
             "the global fallback keeps the core lockfile inputs and excludes the \
              contributor-supplied domain; got {global_fallback:?}"
@@ -3011,10 +3011,10 @@ mod test {
             global_fallback.as_ref().is_none_or(|paths| {
                 paths
                     .iter()
-                    .any(|path| path.file_name() == Some("package.json".as_ref()))
+                    .any(|path| path.file_name() == Some("package.json"))
                     && !paths
                         .iter()
-                        .any(|path| path.file_name() == Some("manifest.lock".as_ref()))
+                        .any(|path| path.file_name() == Some("manifest.lock"))
             }),
             "the global fallback keeps the core lockfile inputs and excludes the \
              contributor-supplied partial domain; got {global_fallback:?}"

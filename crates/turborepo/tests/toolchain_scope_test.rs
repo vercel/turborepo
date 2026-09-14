@@ -551,7 +551,6 @@ fn assert_success(output: &std::process::Output, context: &str) {
     );
 }
 
-#[cfg(unix)]
 fn combined_output(output: &std::process::Output) -> String {
     format!(
         "{}{}",
