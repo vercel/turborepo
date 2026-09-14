@@ -47,7 +47,7 @@
   {
     "slug": "nextjs",
     "name": "Next.js",
-    "envWildcards": ["NEXT_PUBLIC_*"],
+    "envWildcards": ["NEXT_PUBLIC_*", "NEXT_DEPLOYMENT_ID"],
     "envConditionals": [
       {
         "when": { "key": "VERCEL_SKEW_PROTECTION_ENABLED", "value": "1" },
