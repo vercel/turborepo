@@ -142,10 +142,17 @@ fn test_uv_filter_by_package() {
     setup_uv_pure_workspace(tempdir.path());
 
     let json = dry_run_tasks(tempdir.path(), &["build", "--filter=py-lib"]);
+    assert_eq!(json["packages"], serde_json::json!(["py-lib"]));
     assert_eq!(task_ids(&json), vec!["py-lib#build".to_string()]);
 
     let json = dry_run_tasks(tempdir.path(), &["build", "--filter=py-app"]);
-    assert_eq!(task_ids(&json), vec!["py-app#build".to_string()]);
+    assert_eq!(json["packages"], serde_json::json!(["py-app"]));
+    // Package selection does not exclude the selected task's dependencies.
+    assert_eq!(task_ids(&json), ["py-app#build", "py-lib#build"]);
+    assert_eq!(
+        find_task(&json, "py-app#build")["dependencies"],
+        serde_json::json!(["py-lib#build"])
+    );
 
     let json = dry_run_tasks(tempdir.path(), &["format", "--filter=py-app"]);
     assert_eq!(task_ids(&json), vec!["py-app#format".to_string()]);
@@ -169,6 +176,64 @@ fn test_uv_filter_by_package() {
         !ids.contains(&"acme#build".to_string()),
         "the workspace aggregate does not build: {ids:?}"
     );
+}
+
+#[test]
+fn test_uv_build_dependencies_and_hash_do_not_depend_on_entrypoint() {
+    assert_uv_build_dependencies_and_hash_do_not_depend_on_entrypoint(false);
+}
+
+#[test]
+fn test_uv_build_dependencies_and_hash_with_task_filtering() {
+    assert_uv_build_dependencies_and_hash_do_not_depend_on_entrypoint(true);
+}
+
+fn assert_uv_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_using_tasks: bool) {
+    if !uv_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_uv_pure_workspace(root);
+    let config_path = root.join("turbo.json");
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["futureFlags"]["filterUsingTasks"] = serde_json::json!(filter_using_tasks);
+    config["tasks"]["check"]["dependsOn"] = serde_json::json!(["py-app#build"]);
+    fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+
+    // Reach the app build as a dependency rather than a requested entrypoint.
+    let indirect = dry_run_tasks(root, &["run", "check"]);
+    let indirect_app = find_task(&indirect, "py-app#build");
+    let expected_dependencies = serde_json::json!(["py-lib#build"]);
+    assert_eq!(indirect_app["dependencies"], expected_dependencies);
+    let indirect_hash = indirect_app["hash"]
+        .as_str()
+        .expect("indirect py-app#build must have a computed hash");
+
+    for args in [
+        vec!["run", "build"],
+        vec!["run", "build", "--only"],
+        vec!["run", "build", "check"],
+        vec!["run", "py-app#build"],
+        vec!["run", "build", "--filter=py-app"],
+    ] {
+        let direct = dry_run_tasks(root, &args);
+        let direct_app = find_task(&direct, "py-app#build");
+        assert_eq!(
+            direct_app["dependencies"], expected_dependencies,
+            "build dependencies must not depend on entrypoint: {args:?}"
+        );
+        assert_eq!(
+            direct_app["resolvedTaskDefinition"], indirect_app["resolvedTaskDefinition"],
+            "build definition must not depend on entrypoint: {args:?}"
+        );
+        assert_eq!(
+            direct_app["hash"].as_str(),
+            Some(indirect_hash),
+            "build hash must not depend on entrypoint: {args:?}"
+        );
+    }
 }
 
 #[test]
@@ -660,10 +725,10 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
     append_manifest(
         tempdir.path(),
         "packages/py-app/pyproject.toml",
-        "\n[dependency-groups]\ndev = [\"ruff==0.12.0\"]\n",
+        "\n[dependency-groups]\ndev = [\"ruff>=0.12.0,<=0.12.1\"]\n",
     );
     let lock = std::process::Command::new("uv")
-        .arg("lock")
+        .args(["lock", "--upgrade-package", "ruff==0.12.0"])
         .current_dir(tempdir.path())
         .output()
         .expect("uv lock runs");
@@ -681,25 +746,69 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
         .expect("git commit runs");
     assert_command_success(&commit, "git commit");
 
-    let manifest = tempdir.path().join("packages/py-app/pyproject.toml");
-    let contents = fs::read_to_string(&manifest)
-        .unwrap()
-        .replace("ruff==0.12.0", "ruff==0.12.1");
-    fs::write(manifest, contents).unwrap();
+    let before = dry_run_tasks(tempdir.path(), &["run", "build", "--filter=py-app"]);
+
+    // Keep the manifest unchanged so only lockfile analysis can select py-app.
     let lock = std::process::Command::new("uv")
-        .arg("lock")
+        .args(["lock", "--upgrade-package", "ruff==0.12.1"])
         .current_dir(tempdir.path())
         .output()
         .expect("uv lock runs");
     assert_command_success(&lock, "updated uv lock");
-
-    let json = dry_run_tasks(
-        tempdir.path(),
-        &["build", "--filter=[HEAD]", "--log-order", "grouped"],
+    let diff = std::process::Command::new("git")
+        .args(["diff", "--name-only", "HEAD"])
+        .current_dir(tempdir.path())
+        .output()
+        .expect("git diff runs");
+    assert_command_success(&diff, "lockfile-only diff");
+    assert_eq!(
+        String::from_utf8(diff.stdout).unwrap().trim(),
+        "uv.lock",
+        "the dependency update must change only the lockfile"
     );
-    let ids = task_ids(&json);
-    assert!(ids.contains(&"py-app#build".to_string()), "ids: {ids:?}");
-    assert!(!ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
+
+    let after = dry_run_tasks(
+        tempdir.path(),
+        &["run", "build", "--filter=[HEAD]", "--log-order", "grouped"],
+    );
+    // Lockfile changes can also select the repository root and the workspace
+    // aggregate. Assert member affectedness separately from those root scopes.
+    let packages = after["packages"]
+        .as_array()
+        .expect("selected packages array");
+    assert!(
+        packages.contains(&serde_json::json!("py-app")),
+        "the member whose external dependency changed must be selected: {packages:?}"
+    );
+    assert!(
+        !packages.contains(&serde_json::json!("py-lib")),
+        "the unaffected library must not be selected: {packages:?}"
+    );
+    assert_eq!(task_ids(&after), ["py-app#build", "py-lib#build"]);
+    assert_eq!(
+        find_task(&after, "py-app#build")["dependencies"],
+        serde_json::json!(["py-lib#build"]),
+        "the unaffected library must remain as a task dependency"
+    );
+    for task_id in ["py-app#build", "py-lib#build"] {
+        let before_hash = find_task(&before, task_id)["hash"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{task_id} must have a computed baseline hash"));
+        let after_hash = find_task(&after, task_id)["hash"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{task_id} must have a computed updated hash"));
+        if task_id == "py-app#build" {
+            assert_ne!(
+                before_hash, after_hash,
+                "Ruff upgrade must invalidate {task_id}"
+            );
+        } else {
+            assert_eq!(
+                before_hash, after_hash,
+                "Ruff upgrade must not invalidate {task_id}"
+            );
+        }
+    }
 }
 
 #[test]
