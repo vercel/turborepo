@@ -5,7 +5,10 @@ use std::{
 
 use petgraph::Direction;
 use turborepo_engine::TaskNode;
-use turborepo_repository::change_mapper::{AllPackageChangeReason, PackageInclusionReason};
+use turborepo_repository::{
+    change_mapper::{AllPackageChangeReason, PackageInclusionReason},
+    package_graph::PackageName,
+};
 use turborepo_task_id::TaskId;
 
 use crate::{Error, QueryRun};
@@ -21,9 +24,8 @@ pub enum TaskChangeReason {
         task_name: String,
         package_name: String,
     },
-    /// A package-level dependency changed. Unlike `DependencyTaskChanged`,
-    /// there is no specific upstream task — the package graph edge triggered
-    /// this.
+    /// This package's lockfile-derived external dependency closure changed.
+    /// Unlike `DependencyTaskChanged`, there is no specific upstream task.
     PackageDependencyChanged { package_name: String },
     /// A global file (package.json, turbo.json, etc.) changed, affecting all
     /// tasks.
@@ -63,7 +65,18 @@ pub fn calculate_affected_tasks(
     head: Option<String>,
 ) -> Result<Vec<AffectedTask>, Error> {
     let affected_packages = run.calculate_affected_packages(base.clone(), head.clone())?;
+    calculate_affected_tasks_with_packages(run, base, head, &affected_packages)
+}
 
+/// Reuse legacy package affectedness when the caller also needs its detailed
+/// reasons. This remains raw task affectedness, without scheduled
+/// prerequisites.
+pub(crate) fn calculate_affected_tasks_with_packages(
+    run: &Arc<dyn QueryRun>,
+    base: Option<String>,
+    head: Option<String>,
+    affected_packages: &HashMap<PackageName, PackageInclusionReason>,
+) -> Result<Vec<AffectedTask>, Error> {
     // Check if this is an "all packages changed" scenario
     let all_packages_reason = affected_packages.values().find_map(|reason| match reason {
         PackageInclusionReason::All(all_reason) => Some(all_reason.clone()),
@@ -315,8 +328,8 @@ mod tests {
         pkg_dep_graph: PackageGraph,
         affected_packages: HashMap<PackageName, PackageInclusionReason>,
         changed_files: HashSet<AnchoredSystemPathBuf>,
-        #[allow(dead_code)]
         repo_root: AbsoluteSystemPathBuf,
+        root_turbo_json: TurboJson,
     }
 
     impl QueryRun for MockQueryRun {
@@ -341,7 +354,7 @@ mod tests {
         }
 
         fn root_turbo_json(&self) -> &TurboJson {
-            unimplemented!("not needed for affected_tasks tests")
+            &self.root_turbo_json
         }
 
         fn calculate_affected_packages(
@@ -362,6 +375,339 @@ mod tests {
 
         fn check_boundaries(&self, _show_progress: bool) -> BoundariesFuture<'_> {
             unimplemented!("not needed for affected_tasks tests")
+        }
+    }
+
+    // These packages intentionally have no manifest dependency edges. Only the
+    // explicit task edges connect app-a to lib-a and the unchanged lib-b.
+    async fn affected_packages_query_run(
+        root: &AbsoluteSystemPath,
+        affected_using_task_inputs: bool,
+        filter_using_tasks: bool,
+        files: &[&str],
+    ) -> Arc<MockQueryRun> {
+        let pkg_dep_graph =
+            make_pkg_graph(root, &["app-a", "lib-a", "lib-b", "ignored", "no-tasks"]).await;
+        let source_task = TaskDefinition {
+            inputs: TaskInputs {
+                globs: vec!["src/**".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let engine = make_engine_with_edges(
+            &[
+                (TaskId::new("lib-a", "build"), source_task.clone()),
+                (TaskId::new("lib-a", "test"), source_task.clone()),
+                (TaskId::new("lib-b", "build"), source_task.clone()),
+                (TaskId::new("app-a", "build"), source_task.clone()),
+                (TaskId::new("app-a", "test"), source_task.clone()),
+                (TaskId::new("ignored", "build"), source_task),
+                (
+                    TaskId::new("//", "build"),
+                    TaskDefinition {
+                        inputs: TaskInputs {
+                            globs: vec!["root.txt".to_string()],
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                ),
+            ],
+            &[
+                (TaskId::new("app-a", "build"), TaskId::new("lib-a", "build")),
+                (TaskId::new("app-a", "test"), TaskId::new("lib-a", "build")),
+                (TaskId::new("app-a", "build"), TaskId::new("lib-b", "build")),
+            ],
+        );
+        let affected_packages = files
+            .iter()
+            .map(|file| {
+                let package = file
+                    .strip_prefix("packages/")
+                    .and_then(|file| file.split('/').next())
+                    .unwrap_or("//");
+                (
+                    PackageName::from(package),
+                    PackageInclusionReason::FileChanged {
+                        file: AnchoredSystemPathBuf::from_raw(file).unwrap(),
+                    },
+                )
+            })
+            .collect();
+        let mut root_turbo_json = TurboJson::default();
+        root_turbo_json.future_flags.affected_using_task_inputs = affected_using_task_inputs;
+        root_turbo_json.future_flags.filter_using_tasks = filter_using_tasks;
+        Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph,
+            affected_packages,
+            changed_files: files
+                .iter()
+                .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+                .collect(),
+            repo_root: root.to_owned(),
+            root_turbo_json,
+        })
+    }
+
+    async fn query_data(run: Arc<dyn QueryRun>, query: &str) -> serde_json::Value {
+        let result = crate::execute_query(run, query, None).await.unwrap();
+        let result: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
+        assert!(result.get("errors").is_none(), "{result}");
+        result["data"].clone()
+    }
+
+    #[tokio::test]
+    async fn affected_packages_projects_raw_task_owners_and_preserves_predicates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run =
+            affected_packages_query_run(root, true, false, &["packages/lib-a/src/index.ts"]).await;
+        // The existing dependency-count predicate counts the queryable root
+        // node, even though app-a has no manifest dependencies on either lib.
+        let data = query_data(
+            run,
+            r#"{
+                affectedPackages {
+                    length
+                    items {
+                        name
+                        reason {
+                            __typename
+                            ... on FileChanged { filePath }
+                            ... on DependencyChanged { dependencyName }
+                        }
+                    }
+                }
+                filtered: affectedPackages(filter: {and: [
+                    {equal: {field: NAME, value: "app-a"}},
+                    {equal: {field: DIRECT_DEPENDENCY_COUNT, value: 1}}
+                ]}) { length items { name } }
+                prerequisite: affectedPackages(filter: {equal: {field: NAME, value: "lib-b"}}) {
+                    length items { name }
+                }
+            }"#,
+        )
+        .await;
+        assert_eq!(
+            data,
+            serde_json::json!({
+                "affectedPackages": {
+                    "length": 2,
+                    "items": [
+                        {"name": "app-a", "reason": {
+                            "__typename": "DependencyChanged", "dependencyName": "lib-a"
+                        }},
+                        {"name": "lib-a", "reason": {
+                            "__typename": "FileChanged", "filePath": "packages/lib-a/src/index.ts"
+                        }}
+                    ]
+                },
+                "filtered": {"length": 1, "items": [{"name": "app-a"}]},
+                "prerequisite": {"length": 0, "items": []}
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn affected_packages_preserves_lockfile_reasons_and_maps_upstream_task_changes() {
+        use serde_json::json;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for (reason, expected) in [
+            (
+                PackageInclusionReason::LockfileChanged {
+                    added: vec![turborepo_lockfiles::Package {
+                        key: "new-dep".to_string(),
+                        version: "2.0.0".to_string(),
+                    }],
+                    removed: vec![turborepo_lockfiles::Package {
+                        key: "old-dep".to_string(),
+                        version: "1.0.0".to_string(),
+                    }],
+                },
+                json!({
+                    "__typename": "LockfileChanged", "empty": false,
+                    "added": {"length": 1, "items": [{"name": "new-dep"}]},
+                    "removed": {"length": 1, "items": [{"name": "old-dep"}]}
+                }),
+            ),
+            (
+                PackageInclusionReason::ConservativeRootLockfileChanged,
+                json!({"__typename": "ConservativeRootLockfileChanged", "empty": false}),
+            ),
+        ] {
+            let mut run = affected_packages_query_run(root, true, false, &[]).await;
+            Arc::get_mut(&mut run).unwrap().affected_packages = HashMap::from([
+                (PackageName::from("lib-a"), reason),
+                // Legacy package propagation must not replace the task graph's
+                // explanation for app-a with an unrelated package dependency.
+                (
+                    PackageName::from("app-a"),
+                    PackageInclusionReason::DependencyChanged {
+                        dependency: PackageName::from("lib-b"),
+                    },
+                ),
+            ]);
+            let data = query_data(
+                run,
+                "{ affectedPackages { length items { name reason {
+                    __typename
+                    ... on LockfileChanged { empty added { length items { name } }
+                        removed { length items { name } } }
+                    ... on ConservativeRootLockfileChanged { empty }
+                    ... on DependencyChanged { dependencyName }
+                } } } }",
+            )
+            .await;
+            assert_eq!(
+                data["affectedPackages"],
+                json!({"length": 2, "items": [
+                    {"name": "app-a", "reason": {
+                        "__typename": "DependencyChanged", "dependencyName": "lib-a"
+                    }},
+                    {"name": "lib-a", "reason": expected}
+                ]})
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn affected_packages_preserves_structured_global_reasons_for_raw_task_owners() {
+        use serde_json::json;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for (reason, expected) in [
+            (
+                AllPackageChangeReason::GitRefNotFound {
+                    from_ref: Some("missing-base".to_string()),
+                    to_ref: Some("missing-head".to_string()),
+                },
+                json!({"__typename": "GitRefNotFound", "fromRef": "missing-base", "toRef": "missing-head"}),
+            ),
+            (
+                AllPackageChangeReason::RootInternalDepChanged {
+                    root_internal_dep: PackageName::from("lib-a"),
+                },
+                json!({"__typename": "RootInternalDepChanged", "rootInternalDep": "lib-a"}),
+            ),
+            (
+                AllPackageChangeReason::ScmError {
+                    error: "git failed".to_string(),
+                },
+                json!({"__typename": "ScmError", "error": "git failed"}),
+            ),
+            (
+                AllPackageChangeReason::LockfileChangeDetectionFailed,
+                json!({"__typename": "LockfileChangeDetectionFailed", "empty": false}),
+            ),
+            (
+                AllPackageChangeReason::LockfileChangedWithoutDetails,
+                json!({"__typename": "LockfileChangedWithoutDetails", "empty": false}),
+            ),
+            (
+                AllPackageChangeReason::ConservativeFallback,
+                json!({"__typename": "AllPackagesChanged", "empty": false}),
+            ),
+        ] {
+            let mut run = affected_packages_query_run(root, true, false, &[]).await;
+            // Only the taskless package appears in the legacy map. Its global
+            // reason applies to raw task owners, but it must not join the result.
+            Arc::get_mut(&mut run).unwrap().affected_packages = HashMap::from([(
+                PackageName::from("no-tasks"),
+                PackageInclusionReason::All(reason),
+            )]);
+            let data = query_data(
+                run,
+                "{ affectedPackages { length items { name reason {
+                    __typename
+                    ... on GitRefNotFound { fromRef toRef }
+                    ... on RootInternalDepChanged { rootInternalDep }
+                    ... on ScmError { error }
+                    ... on LockfileChangeDetectionFailed { empty }
+                    ... on LockfileChangedWithoutDetails { empty }
+                    ... on AllPackagesChanged { empty }
+                } } } }",
+            )
+            .await;
+            let items: Vec<_> = ["//", "app-a", "ignored", "lib-a", "lib-b"]
+                .into_iter()
+                .map(|name| json!({"name": name, "reason": expected}))
+                .collect();
+            assert_eq!(
+                data["affectedPackages"],
+                json!({"length": 5, "items": items})
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn affected_packages_flag_off_keeps_legacy_owners_even_with_filter_using_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for filter_using_tasks in [false, true] {
+            let run = affected_packages_query_run(
+                root,
+                false,
+                filter_using_tasks,
+                &["packages/lib-a/src/index.ts"],
+            )
+            .await;
+            let data = query_data(
+                run,
+                "{ affectedPackages { length items { name reason { __typename ... on FileChanged \
+                 { filePath } } } } }",
+            )
+            .await;
+            assert_eq!(
+                data["affectedPackages"],
+                serde_json::json!({"length": 1, "items": [{
+                    "name": "lib-a",
+                    "reason": {"__typename": "FileChanged", "filePath": "packages/lib-a/src/index.ts"}
+                }]})
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn affected_packages_ignores_non_inputs_and_packages_without_tasks_only_with_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for enabled in [false, true] {
+            let run = affected_packages_query_run(
+                root,
+                enabled,
+                false,
+                &[
+                    "packages/ignored/README.md",
+                    "packages/no-tasks/src/index.ts",
+                ],
+            )
+            .await;
+            let data = query_data(run, "{ affectedPackages { length items { name } } }").await;
+            let expected = if enabled {
+                serde_json::json!({"length": 0, "items": []})
+            } else {
+                serde_json::json!({"length": 2, "items": [{"name": "ignored"}, {"name": "no-tasks"}]})
+            };
+            assert_eq!(data["affectedPackages"], expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn affected_packages_preserves_root_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for enabled in [false, true] {
+            let run = affected_packages_query_run(root, enabled, false, &["root.txt"]).await;
+            let data = query_data(run, "{ affectedPackages { length items { name } } }").await;
+            assert_eq!(
+                data["affectedPackages"],
+                serde_json::json!({"length": 1, "items": [{"name": "//"}]})
+            );
         }
     }
 
@@ -420,6 +766,7 @@ mod tests {
             affected_packages,
             changed_files,
             repo_root: root.to_owned(),
+            root_turbo_json: TurboJson::default(),
         });
 
         let result = calculate_affected_tasks(&mock, None, None).unwrap();
@@ -469,6 +816,7 @@ mod tests {
             affected_packages,
             changed_files,
             repo_root: root.to_owned(),
+            root_turbo_json: TurboJson::default(),
         });
 
         let result = calculate_affected_tasks(&mock, None, None).unwrap();
@@ -521,6 +869,7 @@ mod tests {
             affected_packages: HashMap::new(),
             changed_files: HashSet::new(),
             repo_root: root.to_owned(),
+            root_turbo_json: TurboJson::default(),
         });
 
         let affected = calculate_affected_tasks(&mock, None, None).unwrap();
@@ -573,6 +922,7 @@ mod tests {
             affected_packages,
             changed_files,
             repo_root: root.to_owned(),
+            root_turbo_json: TurboJson::default(),
         });
 
         let result = calculate_affected_tasks(&mock, None, None).unwrap();

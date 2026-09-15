@@ -1721,6 +1721,178 @@ fn test_prune_produces_buildable_cargo_workspace() {
     );
 }
 
+/// Task-only edges can cross toolchains in both directions. The package
+/// projection is cyclic, but js-pkg#build -> app#build -> js-pkg#prepare is
+/// not.
+#[test]
+fn test_prune_task_aware_cross_toolchain_buildable_output() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        let tempdir = cargo_tempdir();
+        let dir = tempdir.path();
+        setup_cargo_monorepo(dir);
+        let mut config = json!({
+            "futureFlags": {"experimentalCargoWorkspaces": true},
+            "tasks": {
+                "build": {"dependsOn": ["^build"]},
+                "js-pkg#build": {"dependsOn": ["app#build"]},
+                "app#build": {"dependsOn": ["^build", "js-pkg#prepare"]},
+                "prepare": {}
+            }
+        });
+        if let Some(flag) = flag {
+            config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+        }
+        fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+        fs::write(
+            dir.join("packages/js-pkg/package.json"),
+            json!({
+                "name": "js-pkg", "version": "1.0.0",
+                "scripts": {"build": "echo js-pkg built", "prepare": "echo js-pkg prepared"}
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        // There is no package-manifest dependency between js-pkg and app.
+        for scope in ["js-pkg", "app"] {
+            let output = run_turbo(dir, &["prune", scope]);
+            assert_command_success(&output, "cross-toolchain prune");
+            let out = dir.join("out");
+            let task_aware = flag == Some(true);
+            assert_eq!(
+                out.join("crates/app/src/main.rs").exists(),
+                task_aware || scope == "app"
+            );
+            assert_eq!(
+                out.join("packages/js-pkg/package.json").exists(),
+                task_aware || scope == "js-pkg"
+            );
+            if task_aware {
+                assert!(out.join("crates/lib-a/src/lib.rs").exists());
+                assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
+                let build = cargo_command(&out)
+                    .args(["build", "--locked", "-p", "app"])
+                    .output()
+                    .expect("cargo build runs");
+                assert_command_success(&build, "task-aware pruned cargo build --locked");
+                // Resolve npm.cmd through PATHEXT on Windows.
+                let npm = which::which("npm").expect("npm is available on PATH");
+                let install = std::process::Command::new(npm)
+                    .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
+                    .current_dir(&out)
+                    .output()
+                    .expect("npm ci runs");
+                assert_command_success(&install, "task-aware pruned npm ci");
+                let build = run_turbo(&out, &["run", "build", "--filter=js-pkg"]);
+                assert_command_success(&build, "task-aware pruned cross-toolchain build");
+            }
+            fs::remove_dir_all(out).unwrap();
+        }
+    }
+}
+
+/// An aggregate has a task namespace even though its directory is not copied.
+/// Retaining it must preserve both configured tasks and native task overrides.
+#[test]
+fn test_prune_task_aware_cargo_aggregate_configuration() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = cargo_tempdir();
+            let dir = tempdir.path();
+            setup_cargo_monorepo(dir);
+            let mut config = json!({
+                "futureFlags": {"experimentalCargoWorkspaces": true},
+                "tasks": {
+                    "build": {},
+                    "js-pkg#build": {"dependsOn": ["acme#generate"]},
+                    "acme#generate": {"dependsOn": ["acme#check"]},
+                    "acme#check": {"cache": false, "env": ["AGGREGATE_CHECK"]}
+                }
+            });
+            if let Some(flag) = flag {
+                config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+            }
+            fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+            // Root workspace artifacts must come from the Cargo prune plan,
+            // not a recursive copy of the aggregate's directory.
+            fs::write(dir.join("unrelated-root-file"), "not a prune input").unwrap();
+
+            // No task names a member crate. Its retention (and thus a nonempty
+            // Cargo plan) must come from the aggregate's install closure, even
+            // in production mode.
+            let mut args = vec!["prune", "js-pkg", "--production"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert_command_success(&output, "prune aggregate task dependency");
+            let out = dir.join("out");
+            let (full, manifests) = if docker {
+                (out.join("full"), out.join("json"))
+            } else {
+                (out.clone(), out.clone())
+            };
+            let pruned: serde_json::Value =
+                serde_json::from_slice(&fs::read(full.join("turbo.json")).unwrap()).unwrap();
+            let task_aware = flag == Some(true);
+            for task in ["acme#generate", "acme#check"] {
+                if task_aware {
+                    assert_eq!(pruned["tasks"][task], config["tasks"][task], "lost {task}");
+                } else {
+                    assert!(
+                        pruned["tasks"].get(task).is_none(),
+                        "legacy prune kept {task}"
+                    );
+                }
+            }
+            assert!(!full.join("unrelated-root-file").exists());
+            assert_eq!(full.join("Cargo.toml").exists(), task_aware);
+            assert_eq!(manifests.join("Cargo.lock").exists(), task_aware);
+            if !task_aware {
+                continue;
+            }
+            for member in ["app", "lib-a", "lib-a-test-util"] {
+                let manifest = format!("crates/{member}/Cargo.toml");
+                assert!(full.join(&manifest).exists(), "missing {manifest}");
+                assert!(
+                    manifests.join(&manifest).exists(),
+                    "missing install {manifest}"
+                );
+            }
+            let manifest = fs::read_to_string(full.join("Cargo.toml")).unwrap();
+            assert!(manifest.contains("name = \"acme\""));
+            assert_eq!(
+                fs::read(full.join("Cargo.lock")).unwrap(),
+                fs::read(manifests.join("Cargo.lock")).unwrap()
+            );
+
+            let output = run_turbo(&full, &["run", "build", "--filter=js-pkg", "--dry=json"]);
+            assert_command_success(&output, "pruned aggregate task graph");
+            let dry: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let tasks = dry["tasks"].as_array().unwrap();
+            assert!(tasks.iter().any(|task| task["taskId"] == "acme#generate"));
+            let check = tasks
+                .iter()
+                .find(|task| task["taskId"] == "acme#check")
+                .unwrap();
+            assert_eq!(check["command"], "cargo check --workspace --locked");
+            assert_eq!(check["resolvedTaskDefinition"]["cache"], false);
+
+            let output = run_turbo(&full, &["run", "build", "--filter=js-pkg"]);
+            assert_command_success(&output, "pruned aggregate task execution");
+            let build = cargo_command(&full)
+                .args(["build", "--workspace", "--locked"])
+                .output()
+                .expect("cargo build runs");
+            assert_command_success(&build, "pruned aggregate workspace build");
+        }
+    }
+}
+
 /// Docker layout: the json layer carries everything needed to resolve
 /// dependencies (manifests + lockfile), the full layer carries sources.
 #[test]
@@ -2744,6 +2916,84 @@ fn test_ls_and_query_show_implicit_cargo_task_commands() {
     assert!(output.status.success(), "query failed: {output:?}");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     insta::assert_json_snapshot!("cargo_native_tasks_query", json["data"]["package"]["tasks"]);
+}
+
+#[test]
+fn test_query_affected_packages_task_inputs_cross_toolchain() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        let tempdir = cargo_tempdir();
+        let dir = tempdir.path();
+        setup_cargo_monorepo(dir);
+        // js-pkg has no manifest dependency on app, only an explicit task edge.
+        // app's unchanged Cargo prerequisites must not become affected owners.
+        let mut config = json!({
+            "futureFlags": {"experimentalCargoWorkspaces": true},
+            "tasks": {
+                "build": {"dependsOn": ["^build"]},
+                "js-pkg#build": {"dependsOn": ["app#build"]}
+            }
+        });
+        if let Some(flag) = flag {
+            config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+        }
+        fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+        let gitignore = fs::read_to_string(dir.join(".gitignore")).unwrap();
+        fs::write(
+            dir.join(".gitignore"),
+            format!("{gitignore}\n.test-home/\n"),
+        )
+        .unwrap();
+        let commit = std::process::Command::new("git")
+            .args([
+                "commit",
+                "-am",
+                "Configure cross-toolchain query",
+                "--quiet",
+            ])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert_command_success(&commit, "commit query configuration before source change");
+        fs::write(
+            dir.join("crates/app/src/main.rs"),
+            "fn main() { println!(\"changed\"); }\n",
+        )
+        .unwrap();
+        let diff = std::process::Command::new("git")
+            .args(["diff", "--name-only", "HEAD"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert_command_success(&diff, "check source-only query diff");
+        assert_eq!(
+            String::from_utf8_lossy(&diff.stdout).trim(),
+            "crates/app/src/main.rs"
+        );
+
+        let output = run_turbo(
+            dir,
+            &[
+                "query",
+                r#"{ affectedPackages(base: "HEAD") { length items { name } } }"#,
+            ],
+        );
+        assert_command_success(&output, "query cross-toolchain affected packages");
+        let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert!(result.get("errors").is_none(), "{result}");
+        // The Cargo workspace container is affected by its member's change.
+        let mut expected = vec![json!({"name": "acme"}), json!({"name": "app"})];
+        if flag == Some(true) {
+            expected.push(json!({"name": "js-pkg"}));
+        }
+        // Exact membership also excludes lib-a, lib-a-test-util, and the JS root.
+        assert_eq!(
+            result["data"]["affectedPackages"],
+            json!({"length": expected.len(), "items": expected}),
+            "affectedUsingTaskInputs={flag:?}"
+        );
+    }
 }
 
 #[test]

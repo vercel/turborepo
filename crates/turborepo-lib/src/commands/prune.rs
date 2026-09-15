@@ -88,6 +88,9 @@ pub enum Error {
     Contribution(#[from] turborepo_repository::toolchain::Error),
     #[error(transparent)]
     PruneKnowledge(#[from] turborepo_repository::prune_knowledge::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Engine(#[from] turborepo_engine::BuilderError),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -119,6 +122,9 @@ static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<C
             ),
         ]
     });
+
+#[path = "prune_tasks.rs"]
+mod prune_tasks;
 
 #[path = "prune_js.rs"]
 mod prune_js;
@@ -195,7 +201,15 @@ pub async fn prune(
 
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
-    let workspaces = prune.internal_dependencies()?;
+    let mut workspaces = prune.internal_dependencies()?;
+    if base.opts().future_flags.affected_using_task_inputs {
+        workspaces = prune_tasks::retain_task_dependencies(
+            base,
+            &prune.package_graph,
+            workspaces,
+            production,
+        )?;
+    }
     prune.plan_package_copies(&workspaces)?;
     let retained_workspace_names: HashSet<_> = workspaces
         .iter()
@@ -273,6 +287,14 @@ pub async fn prune(
                 if context.kind() == PackageTaskContextKind::Aggregate
                     || context.directory().components().next().is_none()
                 {
+                    if base.opts().future_flags.affected_using_task_inputs {
+                        // No directory copy does not mean no task namespace:
+                        // preserve configured tasks and native task overrides.
+                        // The aggregate's install closure retains its members,
+                        // which seed the domain plan below (not the aggregate,
+                        // which is not itself a lockfile package).
+                        workspace_names.push(workspace);
+                    }
                     continue;
                 }
                 prune.copy_package_dir(context.directory(), definition_path)?;
