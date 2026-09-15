@@ -64,20 +64,32 @@ The synthetic `go-workspace` scope depends on every member. Module paths cannot 
 
 ## Built-in tasks
 
-| Scope | Turbo task | Go command |
+| Scope | Turborepo task | Go command |
 | --- | --- | --- |
-| Any module | `turbo build` | `go build ./...` |
-| Module with exactly one `main` package | `turbo build` | `go build -o dist/<name> <import-path>` |
-| Module with exactly one `main` package | `turbo dev` | `go run <import-path>` |
-| Any module | `turbo test` | `go test ./...` |
-| Any module | `turbo lint` | `go vet ./...` |
-| Any module | `turbo format` | `go fmt ./...` |
+| Module with zero or multiple `main` packages | `turbo run build` | `go build ./...` |
+| Module with exactly one `main` package | `turbo run build` | `go build <target>` |
+| Module with exactly one `main` package | `turbo run dev` | `go run <target>` |
+| Any module | `turbo run test` | `go test ./...` |
+| Any module | `turbo run lint` | `go vet ./...` |
+| Any module | `turbo run format` | `go fmt ./...` |
 
 Running `turbo run test`, `turbo run lint`, or `turbo run format` from the repository root runs the corresponding command in each member module. Filtered runs select the same per-module tasks, so local filtered `test` and `lint` runs share cache entries with unfiltered CI runs. There are no built-in `go-workspace#test`, `go-workspace#lint`, or `go-workspace#format` tasks; omit `--filter=go-workspace` to run verification across all modules.
 
 Formatting stays uncached and package-aware, leaving `testdata` and nested non-member modules untouched. `go fmt` does not support cross-module workspace patterns.
 
-Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `dev`.
+For a module with exactly one runnable `main` package, Turborepo selects that package as `<target>` (`.` or a relative path such as `./cmd/server`) and runs the command from the module directory. Builds use [Go's default output behavior](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies): the binary is written directly into the module directory, not `dist/` or `bin/`. Its name is the last non-major-version component of the package import path, with `.exe` appended for Windows. For example, `go build ./cmd/server` produces `./server`, and a main package at the root of module `example.com/api/v2` produces `./api`.
+
+Go also reports its normal output-name conflicts. For example, a main package in `./server` cannot produce `./server` from the module directory because that source directory already exists. Use an explicit `-o` command override for these layouts.
+
+Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `dev`; their `build` runs `go build ./...` as a compilation check without producing deployable binaries. This decision is per module, not per `go.work`: multiple modules with one main package each can each produce a binary.
+
+<Callout type="warn">
+  Earlier experimental releases wrote runnable-module binaries to `dist/`. Update
+  deployment start commands, Docker `COPY` paths, and other binary consumers to
+  use the module-local path, or [override the build command](#override-or-remove-defaults)
+  to preserve your existing output location and name. Removing a `package.json`
+  wrapper does not migrate its custom build command automatically.
+</Callout>
 
 Arguments after Turborepo's `--` are placed before package patterns for `build`, `test`, `lint`, and `format`. Arguments to `dev` follow the main import path and become program arguments.
 
@@ -119,6 +131,23 @@ Enable `experimentalTaskCommand` to replace a command without a shell:
 }
 ```
 
+To preserve a custom binary path, enable `experimentalTaskCommand` in the root configuration as above, then replace the build command in the module's Package Configuration:
+
+```json title="./apps/api/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["go", "build", "-o", "bin/pigo-api", "."],
+      "inputs": ["$TURBO_DEFAULT$", "!bin/pigo-api"],
+      "outputs": ["bin/pigo-api"]
+    }
+  }
+}
+```
+
+`command` replaces the entire build command. `outputs` declares files to cache; it does not change Go's output path. Exclude custom generated binaries from `inputs` so they do not invalidate their own build cache.
+
 ## Hashing and caching
 
 Native task hashes include:
@@ -131,7 +160,7 @@ Native task hashes include:
 
 Checkout paths, `GOCACHE`, `GOMODCACHE`, credentials, proxy authentication, and telemetry settings are excluded. Go's mutable build and module caches remain Go's responsibility and are never Turborepo outputs.
 
-A module with one runnable main package gets one restorable `dist/<name>` binary. Library builds default to uncached because Go's internal build artifacts have no stable output for Turborepo to restore. `dev` and source-mutating `format` tasks are uncached. Build arguments disable automatic output caching because flags can relocate or reshape the binary.
+A module with one runnable main package gets one restorable `<name>` binary in the module directory (`<name>.exe` for Windows). Turborepo excludes generated binary paths for both Windows and non-Windows targets from automatic module and dependency source inputs, while preserving tracked files, Go source files, embedded inputs, and same-named directories. Automatic build caching is disabled when the inferred output may overlap source inputs or source classification is unavailable. Library and multi-main builds default to uncached because Go's internal build artifacts have no stable output for Turborepo to restore. `dev` and source-mutating `format` tasks are uncached. Build arguments disable automatic output caching because flags can relocate or reshape the binary.
 
 ## Affectedness and watch mode
 

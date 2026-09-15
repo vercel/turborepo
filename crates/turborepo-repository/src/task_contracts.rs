@@ -287,6 +287,15 @@ impl ScopeTaskContract {
         self.dependency_source_inputs
     }
 
+    /// Package-relative artifacts to omit from automatic dependency source
+    /// inputs.
+    pub(crate) fn source_input_exclusions(&self) -> &[String] {
+        match &self.dynamic {
+            Some(DynamicTaskContract::Go(contract)) => contract.source_input_exclusions(),
+            _ => &[],
+        }
+    }
+
     /// Explicitly classifies dependency source input participation.
     pub fn with_dependency_source_inputs(mut self, participation: DependencySourceInputs) -> Self {
         self.dependency_source_inputs = participation;

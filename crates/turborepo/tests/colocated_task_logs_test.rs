@@ -62,7 +62,7 @@ fn setup_workspace(dir: &Path) {
     // Use the existing mixed Go/npm fixture, but no npm install: every build
     // command is replaced, including the fixture's standalone JS and Go tasks.
     setup::copy_fixture("go_monorepo", dir).unwrap();
-    // Keep both Go modules as libraries: executable metadata derives dist/api
+    // Keep both Go modules as libraries: executable metadata derives api
     // even with outputs:[], and unfiltered Go builds prefer executables over
     // libraries. This regression needs all five tasks and only implicit logs.
     fs::write(
