@@ -683,6 +683,9 @@ mod tests {
             "..",
             "a/b",
             "a\\b",
+            "a-b",
+            "root",
+            "unnamed",
             "a:*?<>|[]{}",
             "trailing. ",
             "unicodé/包",
@@ -701,12 +704,22 @@ mod tests {
                 assert_eq!(unix, sharable_workspace_relative_log_file(task, Some(name)));
                 let (directory, file) = unix.as_str().rsplit_once('/').unwrap();
                 assert_eq!(directory, ".turbo");
+                assert!(is_scoped_task_log_filename(file));
+                assert!(
+                    file.len()
+                        <= SCOPED_LOG_PREFIX.len()
+                            + SCOPED_LOG_LABEL_MAX_LEN * 2
+                            + 2
+                            + SCOPED_LOG_DIGEST_LEN
+                            + 4
+                );
                 let digest = file
-                    .strip_prefix(SCOPED_LOG_PREFIX)
-                    .unwrap()
                     .strip_suffix(".log")
-                    .unwrap();
-                assert_eq!(digest.len(), 64);
+                    .unwrap()
+                    .rsplit_once('-')
+                    .unwrap()
+                    .1;
+                assert_eq!(digest.len(), SCOPED_LOG_DIGEST_LEN);
                 assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
                 assert!(paths.insert(unix.as_str().to_lowercase()), "{name}#{task}");
                 assert_eq!(
@@ -729,6 +742,44 @@ mod tests {
             task.hashable_outputs("build", Some("app")),
             task.hashable_outputs("build", Some("other"))
         );
+    }
+
+    #[test]
+    fn scoped_task_log_names_are_readable_and_disambiguated() {
+        assert_eq!(
+            sharable_workspace_relative_log_file("build", Some("@repo/js")).as_str(),
+            ".turbo/turbo-build-repo-js-444eee26cd60b933.log",
+        );
+        assert!(
+            sharable_workspace_relative_log_file("build:prod", Some("example.com/module"))
+                .as_str()
+                .starts_with(".turbo/turbo-build-prod-example-com-module-")
+        );
+        assert!(
+            sharable_workspace_relative_log_file("build", Some("//"))
+                .as_str()
+                .starts_with(".turbo/turbo-build-root-")
+        );
+        let long_prefix = "a".repeat(80);
+        for (left, right) in [
+            ("a/b".to_string(), "a-b".to_string()),
+            (format!("{long_prefix}/one"), format!("{long_prefix}/two")),
+        ] {
+            assert_eq!(scoped_log_label(&left), scoped_log_label(&right));
+            assert_ne!(
+                sharable_workspace_relative_log_file("build", Some(&left)),
+                sharable_workspace_relative_log_file("build", Some(&right)),
+            );
+        }
+        for ordinary in [
+            "notes.log",
+            "turbo-build.log",
+            "turbo-build-app-not-a-digest.log",
+            "turbo-build/app-444eee26cd60b933.log",
+            "turbo--444eee26cd60b933.log",
+        ] {
+            assert!(!is_scoped_task_log_filename(ordinary), "{ordinary}");
+        }
     }
 
     #[test]
@@ -1029,6 +1080,54 @@ pub const LOG_DIR: &str = ".turbo";
 
 /// Filename prefix for identity-isolated logs in shared package directories.
 pub const SCOPED_LOG_PREFIX: &str = "turbo-";
+const SCOPED_LOG_LABEL_MAX_LEN: usize = 32;
+const SCOPED_LOG_DIGEST_LEN: usize = 16;
+
+/// A readable, bounded ASCII label. The digest, not this lossy label,
+/// identifies the original package and task names.
+fn scoped_log_label(name: &str) -> String {
+    let mut label = String::with_capacity(SCOPED_LOG_LABEL_MAX_LEN);
+    for byte in name.bytes() {
+        if label.len() == SCOPED_LOG_LABEL_MAX_LEN {
+            break;
+        }
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            label.push(char::from(byte.to_ascii_lowercase()));
+        } else if !label.is_empty() && !label.ends_with('-') {
+            label.push('-');
+        }
+    }
+    if label.ends_with('-') {
+        label.pop();
+    }
+    if label.is_empty() {
+        label.push_str("unnamed");
+    }
+    label
+}
+
+/// Recognize the managed scoped-log filename shape. Keep this alongside the
+/// generator so cache filtering and output-watcher registration cannot drift.
+pub fn is_scoped_task_log_filename(filename: &str) -> bool {
+    let Some(stem) = filename
+        .strip_prefix(SCOPED_LOG_PREFIX)
+        .and_then(|name| name.strip_suffix(".log"))
+    else {
+        return false;
+    };
+    let Some((labels, digest)) = stem.rsplit_once('-') else {
+        return false;
+    };
+    labels.len() <= SCOPED_LOG_LABEL_MAX_LEN * 2 + 1
+        && !labels.starts_with('-')
+        && !labels.ends_with('-')
+        && labels.contains('-')
+        && labels
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        && digest.len() == SCOPED_LOG_DIGEST_LEN
+        && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
 
 /// Generate the log filename for a task, escaping colons in the task name.
 ///
@@ -1064,16 +1163,22 @@ pub fn sharable_workspace_relative_log_file(
     match namespace {
         None => log_dir.join_component(&task_log_filename(task_name)),
         Some(namespace) => {
-            // Length framing makes the identity tuple unambiguous. A fixed-size
-            // digest avoids path separators, glob syntax, case-folding aliases,
-            // Windows device names, and component-length limits in native names.
+            // Length framing makes the original identity tuple unambiguous.
+            // Readable labels are sanitized and bounded; the short digest
+            // disambiguates sanitization, truncation, and case-folding aliases.
             let hash = Sha256::new()
                 .chain_update(b"turborepo-task-log-v1\0")
                 .chain_update((namespace.len() as u64).to_le_bytes())
                 .chain_update(namespace.as_bytes())
                 .chain_update(task_name.as_bytes())
                 .finalize();
-            log_dir.join_component(&format!("{SCOPED_LOG_PREFIX}{hash:x}.log"))
+            let digest = format!("{hash:x}");
+            let task = scoped_log_label(task_name);
+            let package = scoped_log_label(if namespace == "//" { "root" } else { namespace });
+            log_dir.join_component(&format!(
+                "{SCOPED_LOG_PREFIX}{task}-{package}-{}.log",
+                &digest[..SCOPED_LOG_DIGEST_LEN],
+            ))
         }
     }
 }

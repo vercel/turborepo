@@ -4,7 +4,10 @@
 //! Parsers contribute normalized facts here; descriptors remain transient
 //! inputs to repository construction.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -197,6 +200,7 @@ pub(crate) struct RepositoryKnowledge {
     /// Directories shared by multiple task namespaces, including the root
     /// namespace and aggregate scopes (but not the structural graph sentinel).
     shared_directories: HashSet<AnchoredSystemPathBuf>,
+    shared_physical_directories: Arc<HashSet<std::path::PathBuf>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,6 +261,10 @@ impl RepositoryKnowledge {
 
     pub(crate) fn is_directory_shared(&self, directory: &AnchoredSystemPath) -> bool {
         self.shared_directories.contains(directory)
+    }
+
+    pub(crate) fn shared_physical_directories(&self) -> &Arc<HashSet<std::path::PathBuf>> {
+        &self.shared_physical_directories
     }
 
     pub(crate) fn root_javascript_scope(&self) -> Option<&RootJavaScriptScope> {
@@ -435,6 +443,13 @@ impl RepositoryKnowledge {
         }
         // Build from the complete scope inventory, independent of loaded tasks
         // or filters. Retain every lexical alias of each shared directory.
+        let shared_physical_directories = Arc::new(
+            directories
+                .iter()
+                .filter(|(_, scopes)| scopes.len() > 1)
+                .map(|(path, _)| path.clone())
+                .collect(),
+        );
         let shared_directories = directories
             .into_values()
             .filter(|scopes| scopes.len() > 1)
@@ -449,6 +464,7 @@ impl RepositoryKnowledge {
             scopes,
             scope_lookup,
             shared_directories,
+            shared_physical_directories,
         })
     }
 }

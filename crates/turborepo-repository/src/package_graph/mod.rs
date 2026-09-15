@@ -276,6 +276,7 @@ pub struct PackageTaskContext<'a> {
     native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
     task_contract: crate::task_contracts::ScopeTaskContract,
     directory_is_shared: bool,
+    shared_physical_directories: Option<&'a Arc<HashSet<std::path::PathBuf>>>,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
 }
@@ -337,6 +338,7 @@ impl<'a> PackageTaskContext<'a> {
             native_tasks,
             task_contract,
             directory_is_shared: false,
+            shared_physical_directories: None,
             kind,
             toolchain,
         }
@@ -359,6 +361,14 @@ impl<'a> PackageTaskContext<'a> {
     /// selection.
     pub fn log_namespace(&self) -> Option<&str> {
         self.directory_is_shared.then(|| self.package.as_str())
+    }
+
+    /// Shared execution directories in this inventory. Cache output filtering
+    /// uses their physical identities, even when another scope captures them.
+    pub fn shared_physical_directories(&self) -> Arc<HashSet<std::path::PathBuf>> {
+        self.shared_physical_directories
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Whether this real package/root scope is defined by package.json.
@@ -1016,6 +1026,7 @@ impl PackageGraph {
             native_tasks,
             task_contract,
             directory_is_shared: self.knowledge.is_directory_shared(directory),
+            shared_physical_directories: Some(self.knowledge.shared_physical_directories()),
             kind,
             toolchain,
         })

@@ -319,6 +319,8 @@ fn colocated_task_logs_are_isolated_and_restored_with_stable_hashes() {
         let legacy = format!("{directory}/.turbo/turbo-build.log");
         if *directory == "packages/lib" {
             assert_ne!(path, legacy, "co-located identities need namespaced logs");
+            let package_label = package.replace(['.', '/'], "-");
+            assert!(path.starts_with(&format!("{directory}/.turbo/turbo-build-{package_label}-")));
             assert_eq!(
                 path.rsplit_once('/').unwrap().0,
                 "packages/lib/.turbo",

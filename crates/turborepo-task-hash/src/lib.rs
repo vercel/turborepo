@@ -1640,7 +1640,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, PackageName::Root, true),
-            "c505351ef1bfef24",
+            "cfa6b9fc4e5d67b7",
             "pure Cargo root Turbo hash bytes changed"
         );
         assert_eq!(
@@ -1650,7 +1650,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, cargo_aggregate, true,),
-            "9dae20d974b88fc0",
+            "2fdfb72d5f32ff50",
             "Cargo aggregate hash bytes changed"
         );
     }
@@ -1687,7 +1687,7 @@ mod test {
         let app_task_hash = "24cf5aae0bca8de3";
         // The root and aggregate share a directory, so their log inclusions
         // intentionally invalidate the old shared-path task hashes.
-        let workspace_task_hash = "38b0c751c892bfcd";
+        let workspace_task_hash = "97ed96a33f7e0058";
         assert_eq!(
             cargo_cache,
             HashMap::from([
@@ -1700,7 +1700,7 @@ mod test {
         for (graph, package, expected) in [
             (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
-            (&cargo_graph, PackageName::Root, "5c7dc97c53da06f0"),
+            (&cargo_graph, PackageName::Root, "399d7918d1a47930"),
         ] {
             assert_eq!(monorepo_context_hash(graph, package), expected);
         }

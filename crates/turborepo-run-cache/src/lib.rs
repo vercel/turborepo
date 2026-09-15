@@ -205,6 +205,8 @@ impl RunCache {
             task_output_logs,
             caching_disabled,
             log_file_path,
+            scoped_log: package_context.log_namespace().is_some(),
+            shared_physical_directories: package_context.shared_physical_directories(),
             output_watcher: self.output_watcher.clone(),
             ui: self.ui,
             warnings: self.warnings.clone(),
@@ -225,7 +227,7 @@ impl RunCache {
     }
 }
 
-/// Recognize only managed, digest-named log files in the reserved namespace.
+/// Recognize managed, identity-suffixed log files inside .turbo.
 /// Ordinary user artifacts (including other .log files) are not filtered out.
 fn is_scoped_task_log(path: &AbsoluteSystemPath) -> bool {
     let Some(parent) = path.as_std_path().parent() else {
@@ -240,9 +242,7 @@ fn has_scoped_task_log_name(path: &AbsoluteSystemPath) -> bool {
     path.as_std_path()
         .file_name()
         .and_then(|name| name.to_str())
-        .and_then(|name| name.strip_prefix(turborepo_types::SCOPED_LOG_PREFIX))
-        .and_then(|name| name.strip_suffix(".log"))
-        .is_some_and(|stem| stem.len() == 64 && stem.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .is_some_and(turborepo_types::is_scoped_task_log_filename)
 }
 
 fn expand_symlinked_output_roots(
@@ -371,6 +371,10 @@ pub struct TaskCache {
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
+    /// Use authoritative scope metadata: a legacy task name can resemble a
+    /// scoped filename without opting into scoped-log behavior.
+    scoped_log: bool,
+    shared_physical_directories: Arc<HashSet<std::path::PathBuf>>,
     output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
@@ -470,8 +474,17 @@ impl TaskCache {
         Ok(log_writer)
     }
 
+    fn is_managed_scoped_log(&self, path: &AbsoluteSystemPath) -> bool {
+        is_scoped_task_log(path)
+            && path
+                .as_std_path()
+                .parent()
+                .and_then(std::path::Path::parent)
+                .is_some_and(|directory| self.shared_physical_directories.contains(directory))
+    }
+
     fn scoped_log_glob(&self) -> Option<String> {
-        is_scoped_task_log(&self.log_file_path).then(|| {
+        self.scoped_log.then(|| {
             AnchoredSystemPathBuf::relative_path_between(
                 &self.run_cache.repo_root,
                 &self.log_file_path,
@@ -761,21 +774,23 @@ impl TaskCache {
         // including through an output-directory symlink. Only followed outputs
         // and digest-named log candidates need physical-path lookups; ordinary
         // artifacts stay cheap. Literal alias paths need the same protection.
-        files_to_be_cached.retain(|path| {
-            if path == &self.log_file_path {
-                return true;
-            }
-            if is_scoped_task_log(path) {
-                return false;
-            }
-            (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
-                || path
-                    .to_realpath()
-                    .map(|physical| !is_scoped_task_log(&physical))
-                    .unwrap_or(true)
-        });
+        if !self.shared_physical_directories.is_empty() {
+            files_to_be_cached.retain(|path| {
+                if path == &self.log_file_path {
+                    return true;
+                }
+                if self.is_managed_scoped_log(path) {
+                    return false;
+                }
+                (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
+                    || path
+                        .to_realpath()
+                        .map(|physical| !self.is_managed_scoped_log(&physical))
+                        .unwrap_or(true)
+            });
+        }
         // Scoped logs are implicit outputs, even when a user glob excludes them.
-        if is_scoped_task_log(&self.log_file_path) && self.log_file_path.exists() {
+        if self.scoped_log && self.log_file_path.exists() {
             files_to_be_cached.insert(self.log_file_path.clone());
         }
 
@@ -1149,6 +1164,111 @@ mod test {
         );
     }
 
+    #[tokio::test]
+    async fn unshared_task_name_resembling_scoped_log_keeps_legacy_behavior() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = javascript_graph(&root, "packages").await;
+        let cache = run_cache(&root);
+        let name = "build-app-444eee26cd60b933";
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: Vec::new(),
+                exclusions: vec![".turbo/**".to_string()],
+            },
+            ..Default::default()
+        };
+        let mut task = cache
+            .task_cache(
+                &definition,
+                &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                TaskId::new("app", name),
+                "ordinary-task",
+            )
+            .unwrap();
+        assert!(super::is_scoped_task_log(&task.log_file_path));
+        assert!(task.scoped_log_glob().is_none());
+        let mut writer = task.output_writer(std::io::sink()).unwrap();
+        writeln!(writer, "ordinary log").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        task.save_outputs(
+            Duration::from_millis(1),
+            &PackageTaskEventBuilder::new("app", name),
+        )
+        .await
+        .unwrap();
+        // Compare with an ordinary legacy task instead of imposing different
+        // output-exclusion semantics on the lookalike filename.
+        let mut control = cache
+            .task_cache(
+                &definition,
+                &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                TaskId::new("app", "build"),
+                "ordinary-control",
+            )
+            .unwrap();
+        let mut writer = control.output_writer(std::io::sink()).unwrap();
+        writeln!(writer, "ordinary log").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        control
+            .save_outputs(
+                Duration::from_millis(1),
+                &PackageTaskEventBuilder::new("app", "build"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            task.expanded_outputs.is_empty(),
+            control.expanded_outputs.is_empty()
+        );
+
+        // Nor should a broad legacy output glob lose an ordinary artifact that
+        // happens to resemble the scoped naming convention.
+        let artifact = root.join_components(&[
+            "packages",
+            "app",
+            ".turbo",
+            "turbo-build-other-1234567890abcdef.log",
+        ]);
+        artifact.create_with_contents("ordinary artifact").unwrap();
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec![".turbo/**".to_string()],
+                exclusions: Vec::new(),
+            },
+            ..Default::default()
+        };
+        let mut broad_task = cache
+            .task_cache(
+                &definition,
+                &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                TaskId::new("app", name),
+                "ordinary-broad-task",
+            )
+            .unwrap();
+        broad_task
+            .save_outputs(
+                Duration::from_millis(1),
+                &PackageTaskEventBuilder::new("app", name),
+            )
+            .await
+            .unwrap();
+        assert!(
+            broad_task
+                .expanded_outputs
+                .contains(&root.anchor(&artifact).unwrap())
+        );
+        cache.cache.wait().await.unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn pure_native_root_and_cargo_aggregate_use_repository_directory() {
         let tmp = tempdir().unwrap();
@@ -1272,6 +1392,8 @@ mod test {
             task_output_logs,
             caching_disabled: false,
             log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
+            scoped_log: false,
+            shared_physical_directories: Arc::default(),
             output_watcher: None,
             ui,
             warnings,

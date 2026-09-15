@@ -321,12 +321,15 @@ async fn aliased_scope_directories_have_distinct_physical_logs() {
             .unwrap()
             .to_str()
             .unwrap();
+        assert!(turborepo_types::is_scoped_task_log_filename(filename));
+        assert!(filename.starts_with("turbo-build-"));
         let digest = filename
-            .strip_prefix(turborepo_types::SCOPED_LOG_PREFIX)
-            .unwrap()
             .strip_suffix(".log")
-            .unwrap();
-        assert_eq!(digest.len(), 64);
+            .unwrap()
+            .rsplit_once('-')
+            .unwrap()
+            .1;
+        assert_eq!(digest.len(), 16);
         assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert_eq!(
             physical.read_to_string().unwrap(),
@@ -724,6 +727,103 @@ async fn watcher_tracks_excluded_scoped_log_deletion_and_hash_switches() {
         watcher.assert_registration_pair(task);
     }
     assert_eq!(artifact.read_to_string().unwrap(), "unchanged artifact\n");
+}
+
+#[tokio::test]
+async fn unshared_root_outputs_preserve_peer_logs_and_ordinary_lookalikes() {
+    let tmp = tempdir().unwrap();
+    let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+        .unwrap()
+        .to_realpath()
+        .unwrap();
+    let graph = graph(&root).await;
+    let cache = run_cache(&root);
+    let mut peers = Vec::new();
+    for name in NAMES {
+        let peer = cache
+            .task_cache(
+                &TaskDefinition::default(),
+                &graph
+                    .package_task_context(&PackageName::from(name))
+                    .unwrap(),
+                TaskId::new(name, "build").into_owned(),
+                "peer-hash",
+            )
+            .unwrap();
+        let mut writer = peer.output_writer(std::io::sink()).unwrap();
+        writeln!(writer, "original {name}").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        peers.push(peer);
+    }
+    let artifact = root.join_components(&[
+        "packages",
+        "solo",
+        ".turbo",
+        "turbo-build-other-444eee26cd60b933.log",
+    ]);
+    artifact.ensure_dir().unwrap();
+    artifact.create_with_contents("ordinary artifact").unwrap();
+    let definition = TaskDefinition {
+        outputs: TaskOutputs {
+            inclusions: vec![
+                "packages/app/.turbo/**".to_string(),
+                "packages/solo/.turbo/**".to_string(),
+            ],
+            exclusions: Vec::new(),
+        },
+        ..Default::default()
+    };
+    let mut root_task = cache
+        .task_cache(
+            &definition,
+            &graph.package_task_context(&PackageName::Root).unwrap(),
+            TaskId::new("//", "build"),
+            "root-capture",
+        )
+        .unwrap();
+    assert!(root_task.scoped_log_glob().is_none());
+    let mut writer = root_task.output_writer(std::io::sink()).unwrap();
+    writeln!(writer, "root output").unwrap();
+    writer.flush().unwrap();
+    drop(writer);
+    let telemetry = PackageTaskEventBuilder::new("//", "build");
+    root_task
+        .save_outputs(Duration::from_millis(1), &telemetry)
+        .await
+        .unwrap();
+    cache.cache.wait().await.unwrap();
+    assert!(
+        root_task
+            .expanded_outputs
+            .contains(&root.anchor(&artifact).unwrap())
+    );
+    for (index, peer) in peers.iter().enumerate() {
+        assert!(
+            !root_task
+                .expanded_outputs
+                .contains(&root.anchor(&peer.log_file_path).unwrap())
+        );
+        peer.log_file_path
+            .create_with_contents(format!("newer peer {index}"))
+            .unwrap();
+    }
+    artifact.remove_file().unwrap();
+    let (_, mut handle) = recording_task_handle();
+    assert!(
+        root_task
+            .restore_outputs(&mut handle, None, &telemetry)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(artifact.read_to_string().unwrap(), "ordinary artifact");
+    for (index, peer) in peers.iter().enumerate() {
+        assert_eq!(
+            peer.log_file_path.read_to_string().unwrap(),
+            format!("newer peer {index}")
+        );
+    }
 }
 
 #[tokio::test]
