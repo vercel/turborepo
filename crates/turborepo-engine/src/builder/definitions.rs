@@ -5,6 +5,7 @@ use turborepo_errors::Spanned;
 use turborepo_repository::{
     native_tasks::{NativeTaskContract, NativeTaskExecution},
     package_graph::{PackageGraph, PackageName, PackageNode},
+    toolchain::ToolchainId,
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
@@ -35,14 +36,38 @@ pub(super) struct TaskDefMemoKey {
     registered_task: bool,
 }
 
+/// The outcome of a repo-wide task-definition probe.
+pub(super) enum RepoTaskProbe {
+    /// A loaded scope's catalogue or some package's config chain defines
+    /// the task.
+    Defined,
+    /// No scope defines the task: every catalogue and config chain that
+    /// could define it was read.
+    NotFound,
+    /// Task lookup reached an unloaded contributor. Load its metadata and
+    /// retry.
+    NeedsLoad,
+}
+
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     // Helper methods used when building the engine
-    /// Checks if there's a task definition somewhere in the repository
-    pub fn has_task_definition_in_repo(
+    /// Checks if there's a task definition somewhere in the repository,
+    /// reporting when the verdict requires loading an inventory-only scope's
+    /// authoritative catalogue first.
+    ///
+    /// A qualified name (`pkg#task`) can only be defined by its own scope's
+    /// catalogue or by any package's config chain, so an inventory-only scope
+    /// other than the named one decides nothing. An unqualified name may be
+    /// defined by any scope's catalogue, so every inventory-only scope's
+    /// owner is recorded. Config chains are read exactly regardless of
+    /// loading.
+    pub(super) fn probe_task_definition_in_repo(
         loader: &L,
         package_graph: &PackageGraph,
         task_name: &TaskName<'static>,
-    ) -> Result<bool, BuilderError> {
+        unloaded_owners: &mut Vec<ToolchainId>,
+    ) -> Result<RepoTaskProbe, BuilderError> {
+        let qualified_target = task_name.package().map(PackageName::from);
         let packages =
             std::iter::once(PackageName::Root).chain(package_graph.node_views().filter_map(
                 |(node, _)| match node {
@@ -53,6 +78,19 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 },
             ));
         for package in packages {
+            if let Some(owner) = package_graph.unloaded_scope_owner(&package) {
+                if qualified_target
+                    .as_ref()
+                    .is_none_or(|target| target == &package)
+                {
+                    // This scope's catalogue is unread and may define the
+                    // task; record the owner so the caller can load it and
+                    // re-probe. Other loaded scopes are still checked below:
+                    // an exact config-chain definition needs no loading.
+                    unloaded_owners.push(owner.clone());
+                }
+                continue;
+            }
             let task_id = task_name
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(package.as_str(), task_name.task()));
@@ -63,10 +101,37 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 task_name,
                 &task_id,
             )? {
-                return Ok(true);
+                return Ok(RepoTaskProbe::Defined);
             }
         }
-        Ok(false)
+        Ok(if unloaded_owners.is_empty() {
+            RepoTaskProbe::NotFound
+        } else {
+            RepoTaskProbe::NeedsLoad
+        })
+    }
+
+    /// Checks if there's a task definition somewhere in the repository.
+    ///
+    /// Over a graph that still carries inventory-only scopes, a verdict that
+    /// would need their catalogues reports `false` rather than guessing; the
+    /// engine builder uses [`Self::probe_task_definition_in_repo`], which
+    /// defers to loading instead.
+    pub fn has_task_definition_in_repo(
+        loader: &L,
+        package_graph: &PackageGraph,
+        task_name: &TaskName<'static>,
+    ) -> Result<bool, BuilderError> {
+        let mut unloaded_owners = Vec::new();
+        Ok(matches!(
+            Self::probe_task_definition_in_repo(
+                loader,
+                package_graph,
+                task_name,
+                &mut unloaded_owners
+            )?,
+            RepoTaskProbe::Defined
+        ))
     }
 
     /// Checks if there's a task definition in the current run

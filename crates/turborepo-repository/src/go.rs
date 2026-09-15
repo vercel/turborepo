@@ -21,6 +21,8 @@ use std::{
 use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
+mod scope_inventory;
+
 use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{
@@ -35,8 +37,9 @@ use crate::{
     relationships::{DependencyKind, Relationship, RelationshipTarget},
     task_contracts::DependencySourceInputs,
     toolchain::{
-        self, DerivedInputSafety, DerivedOutputs, DiscoverPackagesFuture, DiscoveredPackage,
-        DiscoveredPackages, RepositoryContributor, ToolchainId, WorkspaceRoot,
+        self, DerivedInputSafety, DerivedOutputs, DiscoverPackageScopesFuture,
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackageScopes, DiscoveredPackages,
+        RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 
@@ -173,6 +176,22 @@ pub enum Error {
         #[source]
         source: turbopath::PathError,
     },
+    #[error("failed to read {path}: {source}")]
+    ManifestRead {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("malformed go.work: {reason}. Repair the directive and run `go work sync`.")]
+    MalformedGoWork { reason: String },
+    #[error(
+        "go.work at {path} contains an unknown `{directive}` directive. The go command supports \
+         only `go`, `toolchain`, `use`, `replace`, and `godebug` directives in go.work. Repair \
+         the repository-root go.work with `go work edit` and `go work use`."
+    )]
+    UnknownGoWorkDirective { path: String, directive: String },
+    #[error("malformed go.mod at {path}: {reason}. Repair the directive and run `go mod tidy`.")]
+    MalformedGoMod { path: String, reason: String },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -1698,6 +1717,24 @@ impl GoContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self { repo_root })
     }
+
+    /// Cheap scope inventory without invoking `go` (see [`scope_inventory`]).
+    ///
+    /// Core's lazy discovery needs only the workspace's scope identities —
+    /// which Go modules exist, their manifests, the `go-workspace` aggregate,
+    /// and the workspace root — to route a selection, so unrelated selections
+    /// never spawn a `go` process. Identities match
+    /// [`Self::discover_packages`], which remains the single source of
+    /// tasks, edges, contracts, external resolution, and prune facts once a
+    /// selection actually needs Go.
+    async fn discover_package_scopes_inner(
+        &self,
+    ) -> Result<DiscoveredPackageScopes, toolchain::Error> {
+        turborepo_rayon_compat::block_in_place(|| {
+            scope_inventory::discover_package_scopes(&self.repo_root)
+        })
+        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+    }
 }
 
 impl RepositoryContributor for GoContributor {
@@ -1850,6 +1887,10 @@ impl RepositoryContributor for GoContributor {
                 None => discovered,
             })
         })
+    }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(self.discover_package_scopes_inner())
     }
 }
 
@@ -2553,8 +2594,14 @@ mod tests {
     }
 
     fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        // Canonicalized onto the path `go` reports: `go list -m all` emits
+        // canonical replacement directories, so a tempdir behind a symlink
+        // (for example `/var` -> `/private/var` on macOS) would otherwise
+        // look outside this repository to the authoritative resolver.
         AbsoluteSystemPathBuf::try_from(tempdir.path())
             .expect("temporary repository root is absolute")
+            .to_realpath()
+            .expect("temporary repository root canonicalizes")
     }
 
     fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {

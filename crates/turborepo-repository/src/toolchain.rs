@@ -179,7 +179,7 @@ impl WorkspaceRoot {
 }
 
 /// One contributor's package/scope and native workspace-root observations.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DiscoveredPackages {
     packages: Vec<DiscoveredPackage>,
     workspace_roots: Vec<WorkspaceRoot>,
@@ -311,6 +311,20 @@ impl DiscoveredPackage {
         self
     }
 
+    /// The authoritative identity of this observed scope, when it has one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Absolute path to the scope's native manifest.
+    pub fn manifest_path(&self) -> &AbsoluteSystemPath {
+        &self.manifest_path
+    }
+
+    pub(crate) fn scope_kind(&self) -> DiscoveredScopeKind {
+        self.scope_kind
+    }
+
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
         let Self {
             name,
@@ -351,6 +365,125 @@ pub enum Error {
 /// so the contributor trait stays object-safe.
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
+
+/// The future returned by
+/// [`RepositoryContributor::discover_package_scopes`]. Boxed so the
+/// contributor trait stays object-safe.
+pub type DiscoverPackageScopesFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<DiscoveredPackageScopes, Error>> + Send + 'a>>;
+
+/// One scope identity from a [`DiscoveredPackageScopes`] inventory: the
+/// user-facing name and the native manifest that defines it. Nothing else.
+///
+/// An inventory never claims tasks, edges, or contracts; it is scope metadata
+/// for query narrowing and lazy loading, never a pretend executable task
+/// graph.
+#[derive(Debug, Clone)]
+pub struct DiscoveredPackageScope {
+    name: Option<String>,
+    manifest_path: AbsoluteSystemPathBuf,
+    scope_kind: DiscoveredScopeKind,
+}
+
+impl DiscoveredPackageScope {
+    /// A real-package scope. `name: None` preserves full discovery's
+    /// unnamed-package suppression.
+    pub fn new(name: Option<String>, manifest_path: AbsoluteSystemPathBuf) -> Self {
+        Self {
+            name,
+            manifest_path,
+            scope_kind: DiscoveredScopeKind::Package,
+        }
+    }
+
+    /// Converts this scope into an execution-only aggregate, matching a
+    /// [`DiscoveredPackage::aggregate`] observation from full discovery.
+    pub(crate) fn into_aggregate(mut self) -> Self {
+        self.scope_kind = DiscoveredScopeKind::Aggregate;
+        self
+    }
+
+    /// The scope's user-facing identity, when it has one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Absolute path to the scope's native manifest (`package.json`,
+    /// `Cargo.toml`, `go.mod`, `pyproject.toml`, ...).
+    pub fn manifest_path(&self) -> &AbsoluteSystemPath {
+        &self.manifest_path
+    }
+
+    pub(crate) fn scope_kind(&self) -> DiscoveredScopeKind {
+        self.scope_kind
+    }
+}
+
+/// Cheap, exact, subprocess-free scope inventory from one contributor, as
+/// returned by [`RepositoryContributor::discover_package_scopes`].
+///
+/// Scope names, manifest paths, and workspace roots only — see
+/// [`DiscoveredPackageScope`]. Every identity here must equal the identity
+/// [`RepositoryContributor::discover_packages`] contributes.
+#[derive(Debug, Default, Clone)]
+pub struct DiscoveredPackageScopes {
+    scopes: Vec<DiscoveredPackageScope>,
+    workspace_roots: Vec<WorkspaceRoot>,
+}
+
+pub type DiscoveredPackageScopesParts = (Vec<DiscoveredPackageScope>, Vec<WorkspaceRoot>);
+
+impl DiscoveredPackageScopes {
+    pub fn new(scopes: Vec<DiscoveredPackageScope>, workspace_roots: Vec<WorkspaceRoot>) -> Self {
+        Self {
+            scopes,
+            workspace_roots,
+        }
+    }
+
+    /// Project a full observation envelope into its scope inventory.
+    ///
+    /// For contributors whose full discovery is already subprocess-free
+    /// (in-process manifest parsing — JavaScript, and any in-process
+    /// producer), this is a faithful `discover_package_scopes`
+    /// implementation: same scopes, same roots. Contributors that shell out
+    /// during full discovery must not use it by calling `discover_packages`;
+    /// their inventory has to come from in-process parsing alone.
+    pub fn from_full_observation(
+        packages: &[DiscoveredPackage],
+        workspace_roots: &[WorkspaceRoot],
+    ) -> Self {
+        let scopes = packages
+            .iter()
+            .map(|package| {
+                let mut scope = DiscoveredPackageScope::new(
+                    package.name().map(str::to_string),
+                    package.manifest_path().to_owned(),
+                );
+                if matches!(package.scope_kind(), DiscoveredScopeKind::Aggregate) {
+                    scope = scope.into_aggregate();
+                }
+                scope
+            })
+            .collect();
+        Self {
+            scopes,
+            workspace_roots: workspace_roots.to_vec(),
+        }
+    }
+
+    pub fn scopes(&self) -> &[DiscoveredPackageScope] {
+        &self.scopes
+    }
+
+    pub fn workspace_roots(&self) -> &[WorkspaceRoot] {
+        &self.workspace_roots
+    }
+
+    pub fn into_parts(self) -> DiscoveredPackageScopesParts {
+        (self.scopes, self.workspace_roots)
+    }
+}
 
 /// A command resolved from native-task knowledge, as plain data. The executor
 /// turns it into a process, applying the task's environment, stdin policy,
@@ -406,6 +539,37 @@ pub trait RepositoryContributor: Send + Sync {
     /// Discover this contributor's packages/scopes and native workspace roots
     /// in one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
+
+    /// Cheap, subprocess-free inventory of the scopes this contributor owns.
+    ///
+    /// This is the lazy-loading boundary: core builds a repository graph from
+    /// these inventories (plus the always-in-process JavaScript discovery)
+    /// without invoking any native toolchain, resolves package-level queries
+    /// against it, and then calls [`RepositoryContributor::discover_packages`]
+    /// — the authoritative observation — for exactly the contributors whose
+    /// scopes or task metadata a run actually consults.
+    ///
+    /// Contract:
+    ///
+    /// - Implementations MUST NOT invoke toolchain subprocesses. Manifest and
+    ///   workspace-definition parsing happens in-process.
+    /// - Implementations MUST report exactly the scope names, manifest paths,
+    ///   and workspace roots that [`RepositoryContributor::discover_packages`]
+    ///   would contribute. Identity may not diverge between the two methods;
+    ///   that invariant is what lets core narrow queries against an inventory
+    ///   without loading the toolchain.
+    /// - Implementations MUST NOT claim tasks, edges, relationships, task
+    ///   contracts, external resolutions, change observations, or prune
+    ///   domains. Those are authoritative full-discovery facts; an inventory
+    ///   that guessed them would be a pretend task graph.
+    /// - A scope with no name is still reported (`name: None`) so the
+    ///   unnamed-package suppression matches full discovery.
+    ///
+    /// Errors use the existing diagnostics for the underlying cause (for
+    /// example a malformed manifest). Core does not fall back to
+    /// [`RepositoryContributor::discover_packages`] on failure: doing so would
+    /// silently run subprocesses for runs that never touch this toolchain.
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_>;
 }
 
 /// A Turborepo-served compile cache endpoint, as plain data.
@@ -743,6 +907,19 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
                     .collect::<Result<Vec<_>, Error>>()
             })?;
             Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
+        })
+    }
+
+    /// JavaScript discovery parses already-located `package.json` manifests
+    /// in-process, so its scope inventory is a projection of its full
+    /// observation: same scopes, same workspace roots, no subprocesses.
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
+            ))
         })
     }
 }

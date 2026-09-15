@@ -19,8 +19,9 @@ use turborepo_repository::{
     package_json::PackageJson,
     package_manager::PackageManager,
     toolchain::{
-        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
-        DiscoveredPackage, DiscoveredPackages, RepositoryContributor, ToolchainId, WorkspaceRoot,
+        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackageScopesFuture,
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackageScopes, DiscoveredPackages,
+        RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -169,6 +170,16 @@ impl RepositoryContributor for AggregateContributor {
             ))
         })
     }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
+            ))
+        })
+    }
 }
 
 fn mock_aggregate_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
@@ -254,6 +265,16 @@ impl RepositoryContributor for StubIOContributor {
                     package("lib", &[]),
                 ],
                 vec![WorkspaceRoot::new("stub-io", self.repo_root.clone())],
+            ))
+        })
+    }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
             ))
         })
     }
@@ -580,5 +601,6 @@ fn task_names(tasks: &[Spanned<TaskName<'static>>]) -> Vec<String> {
 mod core;
 mod extends;
 mod inheritance;
+mod lazy_loading;
 mod syntax;
 mod workspace;
