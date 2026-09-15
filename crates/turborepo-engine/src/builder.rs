@@ -20,7 +20,7 @@ use turborepo_graph_utils as graph;
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     task_contracts::TaskEnvironmentDomain,
-    toolchain::TaskIOEnvironment,
+    toolchain::{TaskIOEnvironment, ToolchainId},
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
@@ -36,6 +36,18 @@ mod definitions;
 mod inheritance;
 
 pub use inheritance::{TaskInheritanceResolver, ValidationMode};
+
+/// Internal construction outcome: the built engine, the distinct owners of
+/// inventory-only scopes whose task metadata construction consulted, and
+/// every consultation as `(task, owner)`. [`EngineBuilder::build`] treats
+/// non-empty demand records as an error;
+/// [`EngineBuilder::build_with_unloaded_demands`] returns them as
+/// orchestration state.
+struct BuiltWithDemands {
+    engine: Engine<crate::Built, TaskDefinition>,
+    owners: HashSet<ToolchainId>,
+    unloaded: Vec<(Spanned<TaskId<'static>>, ToolchainId)>,
+}
 
 /// Builder for constructing a task execution engine.
 ///
@@ -213,7 +225,78 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         }
     }
 
-    pub fn build(mut self) -> Result<Engine<crate::Built, TaskDefinition>, BuilderError> {
+    /// Build the engine.
+    ///
+    /// Only the lazy run path constructs an engine over a graph that still
+    /// carries inventory-only scopes, and it uses
+    /// [`EngineBuilder::build_with_unloaded_demands`]. A normal build must
+    /// never silently ignore such scopes — their task metadata was never
+    /// read — so each consultation is surfaced as a missing task definition,
+    /// the standard diagnostic for a task whose definition cannot be found,
+    /// in dev and release builds alike.
+    pub fn build(self) -> Result<Engine<crate::Built, TaskDefinition>, BuilderError> {
+        let BuiltWithDemands {
+            engine,
+            owners: _,
+            unloaded,
+        } = self.build_inner()?;
+        if !unloaded.is_empty() {
+            let errors = unloaded
+                .into_iter()
+                .map(|(task_id, _owner)| {
+                    let (span, text) = task_id.span_and_text("turbo.json");
+                    MissingTaskError::MissingTaskDefinition {
+                        name: task_id.as_inner().to_string(),
+                        span,
+                        text,
+                    }
+                })
+                .collect();
+            return Err(BuilderError::MissingTasks(errors));
+        }
+        Ok(engine)
+    }
+
+    /// Build the engine while recording the owners of inventory-only scopes
+    /// whose task metadata construction consulted.
+    ///
+    /// Recording happens *before* the metadata would be read: an
+    /// inventory-only scope's task catalogue is unknown — never empty — so
+    /// construction demands the owner and skips that scope for this pass
+    /// instead of raising `MissingTasks` for a task it may define or
+    /// creating a guessed commandless task from config-only data. The
+    /// returned demand set is internal orchestration state, not an error:
+    /// the caller loads the owners and rebuilds until no new demands arise,
+    /// so the finalized engine is built only once every consulted scope is
+    /// authoritative.
+    ///
+    /// Demands respect the builder's query scope: they arise from the
+    /// workspace set passed to [`EngineBuilder::with_workspaces`] and from
+    /// dependency edges (`pkg#task`, topological `^task`, `with` siblings,
+    /// and the root's hashed internal dependencies, which are implied
+    /// dependencies of every package) actually traversed during
+    /// construction — never from scanning namespaces outside the query.
+    pub fn build_with_unloaded_demands(
+        self,
+    ) -> Result<(Engine<crate::Built, TaskDefinition>, HashSet<ToolchainId>), BuilderError> {
+        let BuiltWithDemands {
+            engine,
+            owners,
+            unloaded: _,
+        } = self.build_inner()?;
+        Ok((engine, owners))
+    }
+
+    /// Shared construction, returning the engine together with its
+    /// inventory-scope demands. [`EngineBuilder::build`] treats non-empty
+    /// demand records as an error;
+    /// [`EngineBuilder::build_with_unloaded_demands`] returns them as
+    /// orchestration state.
+    fn build_inner(mut self) -> Result<BuiltWithDemands, BuilderError> {
+        // Consultations of inventory-only scopes: the task that needed the
+        // metadata, and the owner that must be loaded to provide it.
+        let mut unloaded: Vec<(Spanned<TaskId<'static>>, ToolchainId)> = Vec::new();
+        let package_graph = self.package_graph;
         let turbo_json_loader = self
             .turbo_json_loader
             .take()
@@ -229,7 +312,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 TaskInheritanceResolver::new(turbo_json_loader).resolve(&PackageName::Root)?;
             tasks_set.extend(root_tasks);
 
-            // Collect tasks from each workspace and its extends chain
+            // Collect tasks from each workspace and its extends chain.
+            // (Repository-wide `add_all_tasks` engines are built only after
+            // every workspace-set member is loaded: the run path loads
+            // graph-dependent selections up front and excludes inventory-only
+            // scopes from the set. Config-chain resolution for an inventory
+            // scope stays exact for config-defined tasks; anything those
+            // tasks depend on is caught by the traversal demand hooks below.)
             for workspace in self.workspaces.iter() {
                 let implicit_tasks =
                     if let Some(context) = self.package_graph.package_task_context(workspace) {
@@ -273,6 +362,19 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 continue;
             }
 
+            // An inventory-only scope's task catalogue is unknown; demand its
+            // owner rather than reading (or guessing) metadata for it. The
+            // workspace set is the run's query scope — a demand never arises
+            // from scanning namespaces outside it.
+            if Self::note_unloaded_scope(
+                package_graph,
+                &mut unloaded,
+                task.to(task_id.clone().into_owned()),
+                workspace,
+            ) {
+                continue;
+            }
+
             if Self::has_task_definition_or_registered(
                 turbo_json_loader,
                 self.package_graph,
@@ -307,17 +409,34 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             // `retain` in the standard way. Instead we store the possible error
             // outside of the loop and short circuit checks if we've encountered an error.
             let mut error = None;
-            missing_tasks.retain(|task_name, _| {
+            missing_tasks.retain(|task_name, span| {
                 // If we've already encountered an error skip checking the rest.
                 if error.is_some() {
                     return true;
                 }
-                match Self::has_task_definition_in_repo(
+                let mut probe_owners = Vec::new();
+                match Self::probe_task_definition_in_repo(
                     turbo_json_loader,
-                    self.package_graph,
+                    package_graph,
                     task_name,
+                    &mut probe_owners,
                 ) {
-                    Ok(has_defn) => !has_defn,
+                    Ok(definitions::RepoTaskProbe::Defined) => false,
+                    Ok(definitions::RepoTaskProbe::NotFound) => true,
+                    Ok(definitions::RepoTaskProbe::NeedsLoad) => {
+                        // Defer the verdict: the missing-task diagnostic must
+                        // not fire before the owner's authoritative catalogue
+                        // is loaded, and the probe never guesses either way.
+                        // Record the demand; the task counts as not-missing
+                        // for this pass and the pass after loading re-probes.
+                        let task_id = task_name
+                            .task_id()
+                            .unwrap_or_else(|| TaskId::new(ROOT_PKG_NAME, task_name.task()));
+                        for owner in probe_owners {
+                            unloaded.push((span.to(task_id.clone().into_owned()), owner));
+                        }
+                        false
+                    }
                     Err(e) => {
                         error.get_or_insert(e);
                         true
@@ -378,6 +497,19 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             HashMap::new();
 
         while let Some(task_id) = traversal_queue.pop_front() {
+            // A dependency edge reached an inventory-only scope: its native
+            // task catalogue and contracts are unknown. Demand the owner and
+            // skip this task for the pass — never create a guessed
+            // commandless task from config-only data. The pass after the
+            // owner loads re-resolves the edge authoritatively.
+            if Self::note_unloaded_scope(
+                package_graph,
+                &mut unloaded,
+                task_id.to(task_id.as_inner().clone().into_owned()),
+                &PackageName::from(task_id.package()),
+            ) {
+                continue;
+            }
             {
                 let (task_id, span) = task_id.clone().split();
                 engine.add_task_location(task_id.into_owned(), span);
@@ -495,6 +627,20 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     {
                         return;
                     }
+                    // The dependency workspace is an inventory-only scope: the
+                    // `^task` may exist there. Demand its owner instead of
+                    // creating a guessed commandless task for it. (The root's
+                    // hashed internal dependencies are settled separately by
+                    // the run's closure loading, before any pass finalizes;
+                    // this hook covers the `^task` edges tasks declare.)
+                    if Self::note_unloaded_scope(
+                        package_graph,
+                        &mut unloaded,
+                        span.to(from_task_id.clone().into_owned()),
+                        dependency_workspace,
+                    ) {
+                        return;
+                    }
                     let from_task_index = engine.get_index(&from_task_id);
                     has_topo_deps = true;
                     engine
@@ -515,6 +661,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
                     .into_owned();
+                if Self::note_unloaded_scope(
+                    package_graph,
+                    &mut unloaded,
+                    span.to(sibling_task_id.clone().into_owned()),
+                    &PackageName::from(sibling_task_id.package()),
+                ) {
+                    continue;
+                }
                 traversal_queue.push_back(span.to(sibling_task_id));
             }
 
@@ -526,6 +680,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {
+                    continue;
+                }
+                // A `pkg#task` dependency targeting an inventory-only scope:
+                // demand its owner instead of resolving the task against
+                // config-only data or reporting it missing.
+                if Self::note_unloaded_scope(
+                    package_graph,
+                    &mut unloaded,
+                    span.to(from_task_id.clone().into_owned()),
+                    &PackageName::from(from_task_id.package()),
+                ) {
                     continue;
                 }
                 has_deps = true;
@@ -553,7 +718,32 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         let engine = engine.seal();
         validate_dependency_outputs_inputs(&engine)?;
-        Ok(engine)
+        let owners: HashSet<ToolchainId> =
+            unloaded.iter().map(|(_, owner)| owner.clone()).collect();
+        Ok(BuiltWithDemands {
+            engine,
+            owners,
+            unloaded,
+        })
+    }
+
+    /// Records a demand for the owner of an inventory-only scope and returns
+    /// `true` when the scope is inventory-only. Construction must not read
+    /// (or guess) task metadata for such a scope: its catalogue is unknown
+    /// until the owner is authoritatively loaded.
+    fn note_unloaded_scope(
+        package_graph: &PackageGraph,
+        demands: &mut Vec<(Spanned<TaskId<'static>>, ToolchainId)>,
+        task_id: Spanned<TaskId<'static>>,
+        package: &PackageName,
+    ) -> bool {
+        match package_graph.unloaded_scope_owner(package) {
+            Some(owner) => {
+                demands.push((task_id, owner.clone()));
+                true
+            }
+            None => false,
+        }
     }
 
     /// Returns the path from a task's package directory to the repo root

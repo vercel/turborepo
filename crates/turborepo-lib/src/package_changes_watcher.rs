@@ -459,6 +459,11 @@ impl Subscriber {
         let builder = PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
             .with_single_package_mode(self.single_package)
             .with_allow_no_package_manager(self.allow_no_package_manager);
+        // The watcher bootstraps from a complete graph snapshot: its change
+        // classification needs every toolchain's authoritative change
+        // knowledge, so it conservatively discovers everything (the accepted
+        // whole-graph tradeoff of lazy native discovery). Runs narrow and
+        // load lazily for themselves.
         let Ok(pkg_dep_graph) = self.graph_features.configure(builder).build().await else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;

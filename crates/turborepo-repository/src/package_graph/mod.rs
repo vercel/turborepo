@@ -21,7 +21,7 @@ use crate::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
         ExternalResolutionDomainId, ExternalResolutionGeneration, ExternalResolutionStatus,
         JAVASCRIPT_RESOLUTION_DOMAIN, PYTHON_RESOLUTION_DOMAIN, PackageExternalDeclarations,
-        PackageResolutionState,
+        PackageResolutionState, ResolutionFingerprint,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -35,7 +35,7 @@ mod javascript;
 pub mod lockfile_closure;
 mod projections;
 
-pub use builder::{Error, PackageGraphBuilder};
+pub use builder::{Error, LazyPackageGraph, LazyPlan, PackageGraphBuilder};
 pub use javascript::ChangedPackagesError;
 pub use projections::{
     AffectedRelationships, FilteringRelationships, HashRelationships, OrderingRelationships,
@@ -140,6 +140,11 @@ pub struct PackageGraph {
     change_knowledge: Arc<crate::change_knowledge::ChangeKnowledge>,
     /// Immutable native prune domains from the same discovery generation.
     prune_knowledge: Arc<crate::prune_knowledge::PruneKnowledge>,
+    /// Scopes this graph carries as inventory-only metadata, keyed by scope
+    /// identity and mapped to the owning, not-yet-loaded toolchain. The set
+    /// is fixed at construction: loading a toolchain produces a new graph.
+    /// Generic knowledge — no toolchain is named by core.
+    unloaded_scopes: BTreeMap<PackageName, crate::toolchain::ToolchainId>,
 }
 
 /// The WorkspacePackage.
@@ -1091,6 +1096,43 @@ impl PackageGraph {
         self.package_view(package)?.toolchain()
     }
 
+    /// The owning, not-yet-loaded toolchain for a scope that this graph
+    /// carries as inventory-only metadata.
+    ///
+    /// Inventory scopes are graph nodes with exact identity, directory, and
+    /// provenance — addressable for package-level queries — but they carry no
+    /// task catalogue, edges, or contracts. `None` means the scope is either
+    /// not an inventory scope or not a scope at all; consult
+    /// [`PackageGraph::package_view`] to distinguish. Consumers that need an
+    /// inventory scope's task metadata must load its owner first.
+    pub fn unloaded_scope_owner(
+        &self,
+        package: &PackageName,
+    ) -> Option<&crate::toolchain::ToolchainId> {
+        self.unloaded_scopes.get(package)
+    }
+
+    /// Every toolchain that still owns at least one inventory-only scope in
+    /// this graph. Generic provenance — no toolchain is named here.
+    pub fn unloaded_owners(&self) -> BTreeSet<crate::toolchain::ToolchainId> {
+        self.unloaded_scopes.values().cloned().collect()
+    }
+
+    /// Whether this graph carries any inventory-only scope. A graph with no
+    /// unloaded scopes is a complete snapshot that any consumer can reuse;
+    /// a graph with some must re-inventory (or load) before finalizing
+    /// selections that could consult them.
+    pub fn has_unloaded_scopes(&self) -> bool {
+        !self.unloaded_scopes.is_empty()
+    }
+
+    /// The lockfile as the shared handle construction retained. Graph
+    /// recomputation reuses this handle instead of re-reading the lockfile
+    /// from disk mid-run.
+    pub(crate) fn shared_lockfile(&self) -> Option<&Arc<dyn Lockfile>> {
+        self.lockfile.as_ref()
+    }
+
     /// Whether this identity represents a real package rather than an
     /// execution-only scope.
     pub fn is_real_package(&self, package: &PackageName) -> bool {
@@ -1187,6 +1229,11 @@ impl PackageGraph {
             .external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // One conservative fingerprint per unresolved domain, computed once
+        // per call: consumer-scoping comes from routing it through each
+        // member's task hash, so only tasks that (transitively) consume a
+        // member invalidate on these files.
+        let mut fallbacks = HashMap::<ExternalResolutionDomainId, ResolutionFingerprint>::new();
         self.package_task_contexts()
             .map(|context| {
                 let state = match resolution.claims.get(context.package().as_str()) {
@@ -1202,13 +1249,54 @@ impl PackageGraph {
                                     .package_resolution(context.package().as_str())
                                     .and_then(|package| package.fingerprint())
                                     .map_or(PackageResolutionState::Missing, |fingerprint| {
+                                        // Contributor-supplied partial resolution
+                                        // combines the member's partial exact
+                                        // fingerprint with the domain's fallback
+                                        // file fingerprint, so consumers see
+                                        // lock/source changes the partial listing
+                                        // does not capture — without perturbing
+                                        // the repo-wide hash. Cache eligibility
+                                        // is unchanged: partial stays ineligible.
+                                        let fingerprint = if matches!(
+                                            completeness,
+                                            crate::external_resolution::ResolutionCompleteness::Partial(_)
+                                        ) && domain.is_contributor_supplied()
+                                            && let Some(fallback) = self
+                                                .domain_fallback_fingerprint(
+                                                    domain,
+                                                    &mut fallbacks,
+                                                ) {
+                                            combine_resolution_fingerprints(
+                                                fingerprint,
+                                                &fallback,
+                                            )
+                                        } else {
+                                            fingerprint.clone()
+                                        };
                                         PackageResolutionState::Resolved {
                                             completeness: completeness.clone(),
-                                            fingerprint: fingerprint.clone(),
+                                            fingerprint,
                                         }
                                     }),
                                 ExternalResolutionData::Unavailable(reason) => {
-                                    PackageResolutionState::Unavailable(reason.clone())
+                                    // Contributor-supplied domains route their
+                                    // conservative fallback per-consumer: the
+                                    // domain's availability must not be able
+                                    // to move co-selected task hashes, so the
+                                    // member carries a fingerprint instead of
+                                    // contributing to the repo-wide hash. The
+                                    // core lockfile domain keeps the historical
+                                    // stable empty fingerprint and global
+                                    // fallback.
+                                    let fallback = if domain.is_contributor_supplied() {
+                                        self.domain_fallback_fingerprint(domain, &mut fallbacks)
+                                    } else {
+                                        None
+                                    };
+                                    PackageResolutionState::Unavailable {
+                                        reason: reason.clone(),
+                                        fallback,
+                                    }
                                 }
                             }
                         }),
@@ -1216,6 +1304,48 @@ impl PackageGraph {
                 (context.package().as_str().to_string(), state)
             })
             .collect()
+    }
+
+    /// The conservative fingerprint for a domain whose exact package-level
+    /// resolution is unavailable or partial: a deterministic hash of the
+    /// domain's declared fallback inputs, anchored at the domain root.
+    ///
+    /// Each input contributes its anchored path, a presence marker, and a
+    /// content hash, so a file appearing, disappearing, or changing content
+    /// changes the fingerprint. `None` when the domain declares no fallback
+    /// inputs.
+    fn domain_fallback_fingerprint(
+        &self,
+        domain: &crate::external_resolution::ExternalResolutionDomain,
+        cache: &mut HashMap<ExternalResolutionDomainId, ResolutionFingerprint>,
+    ) -> Option<ResolutionFingerprint> {
+        // `xxhash-rust` 0.8 exposes only the one-shot `xxh64` function, so the
+        // per-input digests are folded into one small combined buffer.
+        use xxhash_rust::xxh64::xxh64;
+
+        if domain.fallback_inputs().is_empty() {
+            return None;
+        }
+        if let Some(fingerprint) = cache.get(domain.id()) {
+            return Some(fingerprint.clone());
+        }
+        let domain_root = self.repo_root().resolve(domain.root());
+        let mut combined = Vec::new();
+        for input in domain.fallback_inputs() {
+            combined.extend_from_slice(input.as_str().as_bytes());
+            combined.push(0);
+            match std::fs::read(domain_root.resolve(input)) {
+                Ok(contents) => {
+                    combined.push(1);
+                    combined.extend_from_slice(&xxh64(&contents, 0).to_be_bytes());
+                }
+                // Absence is state: a file appearing changes the fingerprint.
+                Err(_) => combined.push(2),
+            }
+        }
+        let fingerprint = ResolutionFingerprint::new(format!("{:016x}", xxh64(&combined, 0)));
+        cache.insert(domain.id().clone(), fingerprint.clone());
+        Some(fingerprint)
     }
 
     #[cfg(test)]
@@ -1559,12 +1689,22 @@ impl PackageGraph {
         identities
     }
 
-    /// Conservative global-hash inputs for every toolchain whose exact
-    /// external resolution is unavailable or partial.
+    /// Conservative global-hash inputs for domains whose exact external
+    /// resolution is unavailable or partial — restricted to core's own
+    /// lockfile domain.
     ///
     /// Contributors declare these paths on their resolution domains, keeping
     /// the main engine parser-neutral. The historical single-package
     /// JavaScript fallback is retained for graphs without a generation.
+    ///
+    /// Contributor-supplied unavailable and partial domains never contribute
+    /// here: their conservative fallback is routed per-consumer through the
+    /// claiming members' fingerprints (see
+    /// [`PackageResolutionState::Unavailable`] and the partial fingerprint
+    /// combination in [`Self::package_resolution_states`]), so a native
+    /// domain's availability or partiality cannot move an unrelated task's
+    /// hash. The core lockfile domain keeps its historical global fallback
+    /// for both.
     pub fn external_resolution_fallback_inputs(&self) -> Option<Vec<AbsoluteSystemPathBuf>> {
         let Some(generation) = self.resolution_generation() else {
             let package_manager = self.package_manager()?;
@@ -1578,16 +1718,22 @@ impl PackageGraph {
 
         let mut paths = Vec::new();
         for domain in generation.domains() {
-            let needs_fallback = matches!(
-                domain.data(),
-                ExternalResolutionData::Unavailable(_)
-                    | ExternalResolutionData::Resolved {
-                        completeness: crate::external_resolution::ResolutionCompleteness::Partial(
-                            _
-                        ),
-                        ..
-                    }
-            );
+            // Contributor-supplied unavailable and partial domains never
+            // contribute here: their conservative fallback is routed
+            // per-consumer through the claiming members' fingerprints (see
+            // [`PackageResolutionState::Unavailable`] and the partial
+            // fingerprint combination in [`Self::package_resolution_states`]),
+            // so a native domain's availability or partiality cannot move an
+            // unrelated task's hash. The core lockfile domain keeps the
+            // historical global fallback for both.
+            let needs_fallback = match domain.data() {
+                ExternalResolutionData::Unavailable(_) => !domain.is_contributor_supplied(),
+                ExternalResolutionData::Resolved {
+                    completeness: crate::external_resolution::ResolutionCompleteness::Partial(_),
+                    ..
+                } => !domain.is_contributor_supplied(),
+                _ => false,
+            };
             if !needs_fallback {
                 continue;
             }
@@ -1814,6 +1960,23 @@ impl AsRef<str> for PackageName {
             PackageName::Other(package) => package,
         }
     }
+}
+
+/// Deterministically combines a member's partial exact resolution
+/// fingerprint with its domain's fallback file fingerprint, so consumers
+/// invalidate on either the partial listing or the underlying lock/source
+/// files changing.
+fn combine_resolution_fingerprints(
+    resolved: &ResolutionFingerprint,
+    fallback: &ResolutionFingerprint,
+) -> ResolutionFingerprint {
+    use xxhash_rust::xxh64::xxh64;
+
+    let mut combined = Vec::new();
+    combined.extend_from_slice(resolved.as_str().as_bytes());
+    combined.push(0);
+    combined.extend_from_slice(fallback.as_str().as_bytes());
+    ResolutionFingerprint::new(format!("{:016x}", xxh64(&combined, 0)))
 }
 
 #[cfg(test)]
@@ -2547,6 +2710,329 @@ mod test {
             resolved.external_resolution_fallback_inputs().is_none(),
             "resolved domains must not use the global file fallback"
         );
+    }
+
+    /// A contributor with an open toolchain id whose full discovery reports
+    /// an external-resolution domain that is unavailable or partial. A loaded
+    /// member must carry a consumer-scoped fallback fingerprint — hashed from
+    /// the domain's declared fallback inputs — so a JavaScript package hashing
+    /// a commandless native transit task invalidates when the native files
+    /// change, while the repo-wide hash stays unperturbed: a native domain's
+    /// availability must not move an unrelated task's hash.
+    struct FallbackDomainContributor {
+        root: AbsoluteSystemPathBuf,
+        /// What full discovery reports for the domain.
+        full: FullDomainData,
+    }
+
+    /// The terminal data an observation reports for the test domain.
+    #[derive(Clone, Copy)]
+    enum FullDomainData {
+        Resolved,
+        Unavailable(&'static str),
+        Partial,
+    }
+
+    impl crate::toolchain::RepositoryContributor for FallbackDomainContributor {
+        fn id(&self) -> crate::toolchain::ToolchainId {
+            crate::toolchain::ToolchainId::new("fallback-native")
+        }
+
+        fn discover_packages(&self) -> crate::toolchain::DiscoverPackagesFuture<'_> {
+            let observation = self.observation(self.full);
+            Box::pin(async move { Ok(observation) })
+        }
+
+        fn discover_package_scopes(&self) -> crate::toolchain::DiscoverPackageScopesFuture<'_> {
+            let scope = crate::toolchain::DiscoveredPackageScope::new(
+                Some("native-pkg".to_string()),
+                self.root.join_components(&["native", "manifest"]),
+            );
+            let root = self.root.clone();
+            Box::pin(async move {
+                Ok(crate::toolchain::DiscoveredPackageScopes::new(
+                    vec![scope],
+                    vec![crate::toolchain::WorkspaceRoot::new(
+                        "fallback-native",
+                        root,
+                    )],
+                ))
+            })
+        }
+    }
+
+    impl FallbackDomainContributor {
+        fn observation(&self, data: FullDomainData) -> crate::toolchain::DiscoveredPackages {
+            use crate::external_resolution::{
+                ExternalResolutionData, ExternalResolutionDomain, ExternalResolutionDomainId,
+                ResolutionIncompleteReason, ResolutionUnavailableReason,
+            };
+
+            let package = crate::toolchain::DiscoveredPackage::package(
+                Some("native-pkg".to_string()),
+                PackageJson::default(),
+                self.root.join_components(&["native", "manifest"]),
+            )
+            .with_native_relationships(Vec::new());
+            let lock: AnchoredSystemPathBuf =
+                AnchoredSystemPathBuf::new(&self.root, self.root.join_component("native"))
+                    .unwrap()
+                    .join_component("manifest.lock");
+            let data = match data {
+                FullDomainData::Unavailable(code) => ExternalResolutionData::Unavailable(
+                    ResolutionUnavailableReason::new(code, "this domain could not be resolved"),
+                ),
+                FullDomainData::Partial => ExternalResolutionData::Resolved {
+                    completeness: crate::external_resolution::ResolutionCompleteness::Partial(
+                        ResolutionIncompleteReason::new(
+                            "native-partial",
+                            "the native lockfile resolved only partially",
+                        ),
+                    ),
+                    packages: vec![crate::external_resolution::PackageResolution::new(
+                        "native-pkg",
+                        Vec::new(),
+                    )],
+                },
+                FullDomainData::Resolved => ExternalResolutionData::Resolved {
+                    completeness: crate::external_resolution::ResolutionCompleteness::Complete,
+                    packages: vec![crate::external_resolution::PackageResolution::new(
+                        "native-pkg",
+                        Vec::new(),
+                    )],
+                },
+            };
+            // An open domain id: core validates builtin ids only, and this
+            // test contributes none of them.
+            let domain = ExternalResolutionDomain::new(
+                ExternalResolutionDomainId::new("fallback-native"),
+                crate::toolchain::ToolchainId::new("fallback-native"),
+                AnchoredSystemPathBuf::default(),
+                ["native-pkg".to_string()],
+                [lock],
+                data,
+            );
+            crate::toolchain::DiscoveredPackages::new(
+                vec![package],
+                vec![crate::toolchain::WorkspaceRoot::new(
+                    "fallback-native",
+                    self.root.clone(),
+                )],
+            )
+            .with_external_resolution(domain)
+        }
+    }
+
+    /// The inventory graph carries the native scope as exact identity with no
+    /// resolution claims: an inventory is scope metadata, never a pretend
+    /// catalogue of authoritative facts.
+    #[tokio::test]
+    async fn inventory_scope_makes_no_resolution_claims() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        fs::create_dir_all(root.join_component("native")).unwrap();
+        fs::write(
+            root.join_components(&["native", "manifest.lock"]),
+            b"lock-v1",
+        )
+        .unwrap();
+
+        let lazy = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_contributor(Arc::new(FallbackDomainContributor {
+            root: root.clone(),
+            full: FullDomainData::Resolved,
+        }))
+        .build_lazy()
+        .await
+        .unwrap();
+        let graph = lazy.graph();
+
+        assert_eq!(
+            graph.unloaded_scope_owner(&PackageName::from("native-pkg")),
+            Some(&crate::toolchain::ToolchainId::new("fallback-native"))
+        );
+        let states = graph.package_resolution_states();
+        assert!(
+            matches!(
+                states.get("native-pkg"),
+                Some(PackageResolutionState::NotApplicable) | None
+            ),
+            "an inventory-only scope claims no resolution state; got {:?}",
+            states.get("native-pkg")
+        );
+        let global_fallback = graph.external_resolution_fallback_inputs();
+        assert!(
+            global_fallback.as_ref().is_none_or(|paths| {
+                !paths
+                    .iter()
+                    .any(|path| path.file_name() == Some("manifest.lock"))
+            }),
+            "an inventory-only scope contributes no fallback inputs; got {global_fallback:?}"
+        );
+    }
+
+    /// A loaded toolchain whose full discovery still cannot resolve its
+    /// domain (an invalid native lockfile) must route the failure
+    /// per-consumer — the member carries the conservative fingerprint — so
+    /// the domain's availability cannot move an unrelated JavaScript task's
+    /// hash. The core JavaScript lockfile domain, attempted and failed in the
+    /// same graph, keeps its historical behavior: no member fingerprint and
+    /// the global file fallback.
+    #[tokio::test]
+    async fn loaded_unavailable_native_domain_is_routed_per_consumer() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        fs::create_dir_all(root.join_component("native")).unwrap();
+        fs::write(
+            root.join_components(&["native", "manifest.lock"]),
+            b"lock-v1",
+        )
+        .unwrap();
+
+        let (_inventory, mut plan) = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_contributor(Arc::new(FallbackDomainContributor {
+            root: root.clone(),
+            full: FullDomainData::Unavailable("native-lockfile-invalid"),
+        }))
+        .build_lazy()
+        .await
+        .unwrap()
+        .into_parts();
+
+        let native: HashSet<crate::toolchain::ToolchainId> =
+            std::iter::once(crate::toolchain::ToolchainId::new("fallback-native")).collect();
+        let loaded = plan.load(&native).await.unwrap();
+        let loaded_states = loaded.package_resolution_states();
+
+        // The contributor-supplied domain's member carries the conservative
+        // fingerprint, never a stable empty one.
+        match loaded_states.get("native-pkg") {
+            Some(PackageResolutionState::Unavailable { fallback, .. }) => assert!(
+                fallback.is_some(),
+                "a contributor-supplied unavailable domain contributes a per-consumer fingerprint"
+            ),
+            other => panic!("expected an unavailable state, got {other:?}"),
+        }
+        // The core lockfile domain keeps its historical semantics: no member
+        // fingerprint, delivered globally instead.
+        match loaded_states.get(ROOT_PKG_NAME) {
+            Some(PackageResolutionState::Unavailable { fallback, .. }) => assert!(
+                fallback.is_none(),
+                "the core lockfile domain must not change behavior"
+            ),
+            other => panic!("expected an unavailable state, got {other:?}"),
+        }
+        // The repo-wide fallback contains the core domain's inputs but never
+        // the contributor-supplied domain's.
+        let global_fallback = loaded.external_resolution_fallback_inputs();
+        assert!(
+            global_fallback.as_ref().is_some_and(|paths| {
+                paths
+                    .iter()
+                    .any(|path| path.file_name() == Some("package.json"))
+                    && !paths
+                        .iter()
+                        .any(|path| path.file_name() == Some("manifest.lock"))
+            }),
+            "the global fallback keeps the core lockfile inputs and excludes the \
+             contributor-supplied domain; got {global_fallback:?}"
+        );
+    }
+
+    /// A loaded toolchain whose full discovery resolves its domain only
+    /// partially must route the partial fallback per-consumer too: the
+    /// member's fingerprint combines its partial exact resolution with the
+    /// declared fallback files, and the domain contributes nothing to the
+    /// repo-wide hash — so an unrelated co-selected JavaScript task's hash is
+    /// unaffected while consumers of the member see lock/source changes.
+    /// Partial cache eligibility is unchanged: still not eligible.
+    #[tokio::test]
+    async fn loaded_partial_native_domain_is_routed_per_consumer() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let lockfile = root.join_components(&["native", "manifest.lock"]);
+        fs::create_dir_all(root.join_component("native")).unwrap();
+        fs::write(&lockfile, b"lock-v1").unwrap();
+
+        let build_and_load = || async {
+            let (_inventory, mut plan) = PackageGraph::builder(
+                &root,
+                PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+            )
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(FallbackDomainContributor {
+                root: root.clone(),
+                full: FullDomainData::Partial,
+            }))
+            .build_lazy()
+            .await
+            .unwrap()
+            .into_parts();
+            let native: HashSet<crate::toolchain::ToolchainId> =
+                std::iter::once(crate::toolchain::ToolchainId::new("fallback-native")).collect();
+            plan.load(&native).await.unwrap()
+        };
+
+        let loaded = build_and_load().await;
+        let states = loaded.package_resolution_states();
+        let state = states
+            .get("native-pkg")
+            .expect("the partial domain's member claims a state");
+        let first = match state {
+            PackageResolutionState::Resolved {
+                completeness: crate::external_resolution::ResolutionCompleteness::Partial(reason),
+                fingerprint,
+            } => {
+                assert_eq!(reason.code(), "native-partial");
+                assert!(
+                    !fingerprint.as_str().is_empty(),
+                    "the member combines its partial exact fingerprint with the fallback"
+                );
+                assert!(
+                    !state.cache_eligible(),
+                    "partial resolution stays cache-ineligible"
+                );
+                fingerprint.clone()
+            }
+            other => panic!("expected a partial resolved state, got {other:?}"),
+        };
+        // No global contribution: the core lockfile inputs stay, the
+        // contributor-supplied partial domain's never appear.
+        let global_fallback = loaded.external_resolution_fallback_inputs();
+        assert!(
+            global_fallback.as_ref().is_none_or(|paths| {
+                paths
+                    .iter()
+                    .any(|path| path.file_name() == Some("package.json"))
+                    && !paths
+                        .iter()
+                        .any(|path| path.file_name() == Some("manifest.lock"))
+            }),
+            "the global fallback keeps the core lockfile inputs and excludes the \
+             contributor-supplied partial domain; got {global_fallback:?}"
+        );
+
+        // The member hash tracks the fallback files: a changed lockfile
+        // changes what every consumer of this member hashes.
+        fs::write(&lockfile, b"lock-v2").unwrap();
+        let loaded = build_and_load().await;
+        let states = loaded.package_resolution_states();
+        match states.get("native-pkg") {
+            Some(PackageResolutionState::Resolved { fingerprint, .. }) => assert_ne!(
+                first.as_str(),
+                fingerprint.as_str(),
+                "a changed fallback input must change the member fingerprint"
+            ),
+            other => panic!("expected a partial resolved state, got {other:?}"),
+        }
     }
 
     #[tokio::test]

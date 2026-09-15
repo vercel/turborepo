@@ -993,6 +993,20 @@ mod test {
                 ))
             })
         }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
+        }
     }
 
     /// Make a project resolver with the provided dependencies. Extras is for

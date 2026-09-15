@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -30,8 +30,8 @@ use crate::{
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     relationships::{Relationship, RelationshipTarget},
     toolchain::{
-        DiscoveredPackage, DiscoveredPackageParts, DiscoveredScopeKind, JavaScriptContributor,
-        RepositoryContributor, ToolchainId,
+        DiscoveredPackage, DiscoveredPackageParts, DiscoveredPackageScopes, DiscoveredPackages,
+        DiscoveredScopeKind, JavaScriptContributor, RepositoryContributor, ToolchainId,
     },
 };
 
@@ -422,6 +422,300 @@ where
             }
         }
     }
+
+    /// Build a graph from subprocess-free scope inventories, retaining a
+    /// construction-scoped plan that can later load the contributors whose
+    /// scopes or task metadata a consumer actually consults.
+    ///
+    /// JavaScript is always discovered authoritatively (its discovery is
+    /// in-process manifest parsing); every additional contributor starts as
+    /// an inventory-only observation: its scopes appear as graph nodes with
+    /// names, directories, and owner provenance, but no task catalogue, no
+    /// edges, and no contracts. An inventory is scope metadata for query
+    /// narrowing — never a pretend executable task graph.
+    ///
+    /// Nothing outside the plan is retained: [`LazyPlan::load`] consumes
+    /// loading requests and yields immutable completed graphs that own no
+    /// toolchains.
+    #[tracing::instrument(skip(self))]
+    pub async fn build_lazy(
+        self,
+    ) -> Result<LazyPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
+        if self.is_single_package {
+            // Single-package mode consults no additional contributors, so
+            // there is nothing to inventory or load.
+            let repo_root = self.repo_root.to_owned();
+            let graph = Arc::new(self.build().await?);
+            return Ok(LazyPackageGraph {
+                graph,
+                plan: LazyPlan::empty(repo_root),
+            });
+        }
+
+        let repo_root = self.repo_root;
+        let PackageGraphBuilder {
+            root_package_json,
+            package_discovery,
+            package_manager,
+            extra_contributors,
+            lockfile,
+            load_lockfile,
+            package_jsons,
+            ..
+        } = self;
+
+        // Preserve a caller-supplied lockfile across every recomputation.
+        let lockfile: Option<Arc<dyn Lockfile>> = lockfile.map(Arc::from);
+
+        // Resolve the package manager up front exactly as `build` does, so the
+        // typed JavaScript contributor never re-runs discovery for it.
+        let known_pm = package_manager
+            .or_else(|| {
+                root_package_json.as_ref().and_then(|root_package_json| {
+                    PackageManager::get_package_manager(repo_root, root_package_json).ok()
+                })
+            })
+            .map(|pm| pm.with_resolved_nub_lockfile(repo_root));
+
+        let (javascript, extra_contributors) = build_contributors(
+            repo_root,
+            &root_package_json,
+            package_discovery,
+            known_pm.clone(),
+            extra_contributors,
+        )?;
+
+        // JavaScript is authoritative from the start; every other contributor
+        // contributes its subprocess-free scope inventory. An inventory that
+        // fails (for example a malformed manifest) fails construction with
+        // the existing diagnostics — core never falls back to running the
+        // toolchain for a run that may not need it.
+        let mut observations = Vec::with_capacity(extra_contributors.len() + 1);
+        if let Some(javascript) = javascript.as_ref() {
+            let output = match package_jsons.as_ref() {
+                Some(package_jsons) => {
+                    javascript
+                        .discover_preparsed_packages(package_jsons.clone())
+                        .await?
+                }
+                None => javascript.discover_packages().await?,
+            };
+            observations.push((
+                ToolchainId::JAVASCRIPT,
+                ContributorObservation::Full(output),
+            ));
+        }
+        for contributor in &extra_contributors {
+            let id = contributor.id();
+            let inventory = contributor.discover_package_scopes().await?;
+            observations.push((id, ContributorObservation::Inventory(inventory)));
+        }
+
+        let plan = LazyPlan {
+            repo_root: repo_root.to_owned(),
+            root_package_json,
+            lockfile,
+            load_lockfile,
+            package_manager: known_pm,
+            javascript,
+            extra_contributors,
+            observations,
+        };
+        let graph = Arc::new(plan.reassemble().await?);
+        Ok(LazyPackageGraph { graph, plan })
+    }
+}
+
+/// A package graph built from scope inventories plus the construction state
+/// required to authoritatively load the contributors whose scopes or task
+/// metadata a consumer consults.
+///
+/// The plan is construction-scoped: [`LazyPackageGraph::into_parts`] splits
+/// them, [`LazyPlan::load`] fulfills loading requests, and every completed
+/// [`PackageGraph`] is immutable and retains no contributor.
+pub struct LazyPackageGraph<P> {
+    graph: Arc<PackageGraph>,
+    plan: LazyPlan<P>,
+}
+
+impl<P> LazyPackageGraph<P> {
+    /// The inventory graph: JavaScript is authoritative; every other
+    /// contributor's scopes are inventory-only (no tasks, edges, or
+    /// contracts). Package-level identity and directory queries are exact;
+    /// anything that needs an unloaded scope's task metadata must load its
+    /// owner first.
+    pub fn graph(&self) -> &PackageGraph {
+        &self.graph
+    }
+
+    /// Split into the graph and the load plan.
+    ///
+    /// The graph is returned as a uniquely owned `Arc` so callers such as
+    /// `--parallel` may mutate it before loading.
+    pub fn into_parts(self) -> (Arc<PackageGraph>, LazyPlan<P>) {
+        (self.graph, self.plan)
+    }
+}
+
+/// One contributor's retained observation during lazy construction.
+#[derive(Clone)]
+enum ContributorObservation {
+    /// Authoritative full discovery output.
+    Full(DiscoveredPackages),
+    /// Subprocess-free scope inventory: identities and workspace roots only.
+    Inventory(DiscoveredPackageScopes),
+}
+
+impl ContributorObservation {
+    fn is_full(&self) -> bool {
+        matches!(self, ContributorObservation::Full(_))
+    }
+}
+
+/// Construction-scoped plan retained between inventory construction and
+/// authoritative loading. Contributors are held only here; completed graphs
+/// own none, so a shared graph snapshot never retains live toolchains at
+/// runtime.
+pub struct LazyPlan<P> {
+    repo_root: AbsoluteSystemPathBuf,
+    root_package_json: Option<PackageJson>,
+    /// Reused across every recomputation so `with_lockfile` inputs are not
+    /// lost or re-read. Refreshed from each produced graph.
+    lockfile: Option<Arc<dyn Lockfile>>,
+    load_lockfile: bool,
+    package_manager: Option<PackageManager>,
+    javascript: Option<Arc<JavaScriptContributor<P>>>,
+    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+    /// One observation per contributor, JavaScript first when present.
+    /// Inventory-only contributors are replaced — monotonically — by full
+    /// discovery when loaded.
+    observations: Vec<(ToolchainId, ContributorObservation)>,
+}
+
+impl<P> LazyPlan<P> {
+    fn empty(repo_root: AbsoluteSystemPathBuf) -> Self {
+        Self {
+            repo_root,
+            root_package_json: None,
+            lockfile: None,
+            load_lockfile: false,
+            package_manager: None,
+            javascript: None,
+            extra_contributors: Vec::new(),
+            observations: Vec::new(),
+        }
+    }
+
+    fn contributor(&self, owner: &ToolchainId) -> Option<&Arc<dyn RepositoryContributor>> {
+        self.extra_contributors
+            .iter()
+            .find(|contributor| &contributor.id() == owner)
+    }
+}
+
+impl<P: PackageDiscovery + Send + Sync> LazyPlan<P> {
+    /// The toolchains whose observations are authoritative for the current
+    /// generation. JavaScript is present whenever the repository has a
+    /// JavaScript project; inventory-only contributors are absent until
+    /// loaded. Loading is monotone: an id never leaves this set.
+    pub fn loaded_owners(&self) -> BTreeSet<ToolchainId> {
+        self.observations
+            .iter()
+            .filter(|(_, observation)| observation.is_full())
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Authoritatively discover `owners` and return the recomputed graph.
+    ///
+    /// Every requested contributor that is still inventory-only is replaced
+    /// by its full [`RepositoryContributor::discover_packages`] observation;
+    /// already-loaded contributors are reused verbatim and never invoked
+    /// again. Loading is monotone — it never unloads — so repeated calls
+    /// converge, and the graph a consumer finalizes is built only after its
+    /// demands have settled.
+    pub async fn load(&mut self, owners: &HashSet<ToolchainId>) -> Result<PackageGraph, Error> {
+        for owner in owners {
+            if self
+                .observations
+                .iter()
+                .any(|(id, observation)| id == owner && observation.is_full())
+            {
+                continue;
+            }
+            let Some(contributor) = self.contributor(owner) else {
+                // Owners originate from the graph's unloaded scopes, which
+                // only registered contributors produce. Unknown ids cannot
+                // be requested through the public flow; ignore defensively
+                // rather than inventing an error for a caller bug.
+                tracing::debug!(toolchain = %owner, "load requested for an unregistered toolchain");
+                continue;
+            };
+            let output = contributor.discover_packages().await?;
+            if let Some(slot) = self.observations.iter_mut().find(|(id, _)| id == owner) {
+                slot.1 = ContributorObservation::Full(output);
+            }
+        }
+        let graph = self.reassemble().await?;
+        // Retain the lockfile the graph consumed so the next recomputation
+        // reuses it instead of re-reading it mid-run.
+        self.lockfile = graph.shared_lockfile().cloned();
+        Ok(graph)
+    }
+
+    /// Recompute the graph from the retained observations: JavaScript and
+    /// loaded contributors assemble authoritatively; inventory-only
+    /// contributors contribute scope nodes and workspace roots. Contributors
+    /// are never invoked here.
+    async fn reassemble(&self) -> Result<PackageGraph, Error> {
+        let contributions: Vec<(ToolchainId, ContributorObservation)> = self.observations.clone();
+        let repo_root: &AbsoluteSystemPath = &self.repo_root;
+
+        // If no retained lockfile, start reading it on a blocking thread
+        // concurrently with assembly. A pure Cargo workspace has no root
+        // package.json and therefore no lockfile to read.
+        let lockfile_future = if self.load_lockfile && self.lockfile.is_none() {
+            match (self.package_manager.clone(), self.root_package_json.clone()) {
+                (Some(pm), Some(root_package_json)) => {
+                    let repo_root = self.repo_root.clone();
+                    Some(tokio::task::spawn_blocking(
+                        move || -> Option<Box<dyn Lockfile>> {
+                            pm.read_lockfile(&repo_root, &root_package_json).ok()
+                        },
+                    ))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        let state = BuildState {
+            repo_root,
+            single: false,
+            assembler: PackageGraphAssembler::new(self.root_package_json.clone()),
+            knowledge: None,
+            relationship_knowledge: None,
+            native_relationships: HashMap::new(),
+            native_external_resolutions: Vec::new(),
+            native_task_observations: Vec::new(),
+            native_change_observations: Vec::new(),
+            native_prune_domains: Vec::new(),
+            root_package_json: self.root_package_json.clone(),
+            lockfile: self.lockfile.clone(),
+            load_lockfile: self.load_lockfile,
+            package_manager: self.package_manager.clone(),
+            package_jsons: None,
+            state: std::marker::PhantomData,
+            javascript: self.javascript.clone(),
+            extra_contributors: self.extra_contributors.clone(),
+            contributions: Some(contributions),
+            unloaded_scopes: BTreeMap::new(),
+        };
+        let state = state.parse_package_jsons().await?;
+        let state = state.resolve_lockfile(lockfile_future).await?;
+        Ok(state.build_inner().await?)
+    }
 }
 
 struct BuildState<'a, S, T> {
@@ -438,7 +732,7 @@ struct BuildState<'a, S, T> {
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
-    lockfile: Option<Box<dyn Lockfile>>,
+    lockfile: Option<Arc<dyn Lockfile>>,
     load_lockfile: bool,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -452,6 +746,18 @@ struct BuildState<'a, S, T> {
     /// Additional package contributors. JavaScript is kept typed above so
     /// pre-parsed manifest input cannot be routed through an open ID.
     extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+    /// Precomputed contributor observations. When `Some`, assembly consumes
+    /// them instead of invoking discovery: the lazy construction path
+    /// supplies one entry per registered contributor (JavaScript first when
+    /// present), each either authoritative full discovery or an
+    /// inventory-only scope observation. The eager
+    /// [`super::PackageGraphBuilder::build`] path leaves this `None`.
+    contributions: Option<Vec<(ToolchainId, ContributorObservation)>>,
+    /// Scopes contributed by inventory-only observations, keyed by scope
+    /// identity and mapped to the owning, not-yet-loaded toolchain. Eager
+    /// construction is always empty. These scopes are graph nodes for
+    /// identity/directory queries — never executable task metadata.
+    unloaded_scopes: BTreeMap<PackageName, ToolchainId>,
 }
 
 struct PackageGraphAssembler {
@@ -687,11 +993,6 @@ where
             package_manager,
             extra_contributors,
         } = builder;
-        // Pure Cargo workspace: with no root package.json there is no
-        // JavaScript project, so the typed JavaScript contributor is neither
-        // constructed nor queried for a package manager. The graph is built
-        // entirely from the extra contributors (Cargo).
-        let no_javascript = root_package_json.is_none();
         let assembler = PackageGraphAssembler::new(root_package_json.clone());
 
         // The discovery strategy is shared (via the JavaScript contributor)
@@ -699,28 +1000,13 @@ where
         // caching wrapper guarantees the underlying strategy runs once. For a
         // pure Cargo workspace there is no JavaScript project, so discovery and
         // the typed contributor are not constructed.
-        let mut additional_contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
-        let javascript = if no_javascript {
-            None
-        } else {
-            let javascript = Arc::new(JavaScriptContributor::new(
-                CachingPackageDiscovery::new(package_discovery.build().map_err(Into::into)?),
-                repo_root.to_owned(),
-                package_manager,
-            ));
-            Some(javascript)
-        };
-        for contributor in extra_contributors {
-            let id = contributor.id();
-            if (javascript.is_some() && id == ToolchainId::JAVASCRIPT)
-                || additional_contributors
-                    .iter()
-                    .any(|existing| existing.id() == id)
-            {
-                return Err(Error::DuplicateContributor { id });
-            }
-            additional_contributors.push(contributor);
-        }
+        let (javascript, extra_contributors) = build_contributors(
+            repo_root,
+            &root_package_json,
+            package_discovery,
+            package_manager,
+            extra_contributors,
+        )?;
 
         Ok(BuildState {
             repo_root,
@@ -734,16 +1020,69 @@ where
             native_task_observations: Vec::new(),
             native_change_observations: Vec::new(),
             native_prune_domains: Vec::new(),
-            lockfile,
+            lockfile: lockfile.map(Arc::from),
             load_lockfile,
             package_manager: None,
             package_jsons,
             root_package_json,
             state: std::marker::PhantomData,
             javascript,
-            extra_contributors: additional_contributors,
+            extra_contributors,
+            contributions: None,
+            unloaded_scopes: BTreeMap::new(),
         })
     }
+}
+
+/// The typed JavaScript contributor (when a root `package.json` exists) plus
+/// the additional registered contributors, as produced by
+/// [`build_contributors`].
+type ContributorPair<D> = (
+    Option<Arc<JavaScriptContributor<CachingPackageDiscovery<D>>>>,
+    Vec<Arc<dyn RepositoryContributor>>,
+);
+
+/// Construct the typed JavaScript contributor (when a root `package.json`
+/// exists) plus the additional contributors, rejecting duplicate toolchain
+/// ids. Shared by eager construction and lazy (re)computation.
+fn build_contributors<T>(
+    repo_root: &AbsoluteSystemPath,
+    root_package_json: &Option<PackageJson>,
+    package_discovery: T,
+    package_manager: Option<PackageManager>,
+    extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+) -> Result<ContributorPair<T::Output>, Error>
+where
+    T: PackageDiscoveryBuilder,
+    T::Output: Send + Sync + 'static,
+    T::Error: Into<crate::package_manager::Error>,
+{
+    // Pure Cargo workspace: with no root package.json there is no JavaScript
+    // project, so the typed JavaScript contributor is neither constructed nor
+    // queried for a package manager. The graph is built entirely from the
+    // extra contributors (Cargo).
+    let javascript = if root_package_json.is_none() {
+        None
+    } else {
+        Some(Arc::new(JavaScriptContributor::new(
+            CachingPackageDiscovery::new(package_discovery.build().map_err(Into::into)?),
+            repo_root.to_owned(),
+            package_manager,
+        )))
+    };
+    let mut additional_contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
+    for contributor in extra_contributors {
+        let id = contributor.id();
+        if (javascript.is_some() && id == ToolchainId::JAVASCRIPT)
+            || additional_contributors
+                .iter()
+                .any(|existing| existing.id() == id)
+        {
+            return Err(Error::DuplicateContributor { id });
+        }
+        additional_contributors.push(contributor);
+    }
+    Ok((javascript, additional_contributors))
 }
 
 impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManager, T> {
@@ -816,41 +1155,102 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     // need our own type
     #[tracing::instrument(skip(self))]
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
-        // A pre-supplied set of parsed package.json files (used by the
-        // package-change watcher and tests) stands in for JavaScript
-        // discovery only; other toolchains always discover for themselves.
         let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
         let mut workspace_roots = Vec::new();
-        let mut contributor_outputs = Vec::with_capacity(self.extra_contributors.len() + 1);
-        if let Some(javascript) = self.javascript.as_ref() {
-            let output = match self.package_jsons.take() {
-                Some(package_jsons) => {
-                    javascript
-                        .discover_preparsed_packages(package_jsons)
-                        .await?
+        // Scope observations contributed by inventory-only observations. They
+        // become graph nodes with a default descriptor (exactly what full
+        // native discovery contributes) but no task, relationship, or
+        // contract facts.
+        let mut inventory_scopes: Vec<PackageScopeObservation> = Vec::new();
+        let mut inventory_descriptors: Vec<(String, PackageJson)> = Vec::new();
+        // Lazy assembly injects precomputed observations; eager assembly
+        // discovers from the contributors now.
+        let contributor_outputs = match self.contributions.take() {
+            Some(outputs) => outputs,
+            None => {
+                // A pre-supplied set of parsed package.json files (used by the
+                // package-change watcher and tests) stands in for JavaScript
+                // discovery only; other toolchains always discover for themselves.
+                let mut contributor_outputs = Vec::with_capacity(self.extra_contributors.len() + 1);
+                if let Some(javascript) = self.javascript.as_ref() {
+                    let output = match self.package_jsons.take() {
+                        Some(package_jsons) => {
+                            javascript
+                                .discover_preparsed_packages(package_jsons)
+                                .await?
+                        }
+                        None => javascript.discover_packages().await?,
+                    };
+                    contributor_outputs.push((
+                        ToolchainId::JAVASCRIPT,
+                        ContributorObservation::Full(output),
+                    ));
                 }
-                None => javascript.discover_packages().await?,
-            };
-            contributor_outputs.push((ToolchainId::JAVASCRIPT, output));
-        }
-        for contributor in &self.extra_contributors {
-            let id = contributor.id();
-            let output = contributor.discover_packages().await?;
-            contributor_outputs.push((id, output));
-        }
-        for (id, output) in contributor_outputs {
-            let (packages, roots, external_resolutions, changes, prune_domains) =
-                output.into_parts();
-            self.native_external_resolutions
-                .extend(external_resolutions);
-            self.native_change_observations.extend(changes);
-            self.native_prune_domains.extend(prune_domains);
-            workspace_roots.extend(
-                roots
-                    .into_iter()
-                    .map(|root| WorkspaceRootObservation::new(root, id.clone())),
-            );
-            discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
+                for contributor in &self.extra_contributors {
+                    let id = contributor.id();
+                    let output = contributor.discover_packages().await?;
+                    contributor_outputs.push((id, ContributorObservation::Full(output)));
+                }
+                contributor_outputs
+            }
+        };
+        for (id, observation) in contributor_outputs {
+            match observation {
+                ContributorObservation::Full(output) => {
+                    let (packages, roots, external_resolutions, changes, prune_domains) =
+                        output.into_parts();
+                    // Mark every contributor-supplied resolution domain at
+                    // collection: core's own lockfile pipeline (which appends
+                    // the JavaScript domain during assembly) is the only other
+                    // producer, so marking here is exact provenance —
+                    // capability-owned versus core-owned — without naming any
+                    // toolchain.
+                    for mut domain in external_resolutions {
+                        domain.mark_contributor_supplied();
+                        self.native_external_resolutions.push(domain);
+                    }
+                    self.native_change_observations.extend(changes);
+                    self.native_prune_domains.extend(prune_domains);
+                    workspace_roots.extend(
+                        roots
+                            .into_iter()
+                            .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+                    );
+                    discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
+                }
+                ContributorObservation::Inventory(inventory) => {
+                    let (scopes, roots) = inventory.into_parts();
+                    workspace_roots.extend(
+                        roots
+                            .into_iter()
+                            .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+                    );
+                    for scope in scopes {
+                        let identity = scope.name().map(str::to_string);
+                        // A default descriptor mirrors what full native
+                        // discovery contributes: the node is addressable by
+                        // name (so JavaScript declared dependencies naming
+                        // this scope classify as internal, exactly as under
+                        // eager discovery) while carrying no native facts.
+                        if let Some(name) = identity.clone() {
+                            inventory_descriptors.push((name.clone(), PackageJson::default()));
+                            self.unloaded_scopes
+                                .insert(PackageName::Other(name), id.clone());
+                        }
+                        let observation = PackageScopeObservation {
+                            identity,
+                            name_source: None,
+                            definition_path: scope.manifest_path().to_owned(),
+                            toolchain: id.clone(),
+                            scope_kind: match scope.scope_kind() {
+                                DiscoveredScopeKind::Package => ScopeKind::Package,
+                                DiscoveredScopeKind::Aggregate => ScopeKind::Aggregate,
+                            },
+                        };
+                        inventory_scopes.push(observation);
+                    }
+                }
+            }
         }
 
         let _span = tracing::info_span!("add_packages").entered();
@@ -869,6 +1269,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 self.native_task_observations.push(tasks);
             }
         }
+        // Inventory-only scopes join the same knowledge and descriptor sets:
+        // identity and directory queries see them, and task metadata never
+        // claims anything on their behalf.
+        observations.extend(inventory_scopes);
+        descriptors.extend(inventory_descriptors);
         let root_name = self.root_package_json.as_ref().map(|package_json| {
             package_json
                 .name
@@ -909,6 +1314,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             javascript,
             extra_contributors,
+            unloaded_scopes,
             ..
         } = self;
         Ok(BuildState {
@@ -930,6 +1336,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             extra_contributors,
             package_jsons: None,
             state: std::marker::PhantomData,
+            contributions: None,
+            unloaded_scopes,
         })
     }
 
@@ -1069,7 +1477,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_workspace_index,
             node_lookup,
             root_package_json,
-            lockfile: lockfile.map(Arc::from),
+            lockfile,
             package_manager,
             knowledge,
             relationship_knowledge,
@@ -1082,6 +1490,9 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             task_contract_knowledge,
             change_knowledge,
             prune_knowledge,
+            // Single-package construction is always eager: every contributor
+            // was fully discovered, so no scope is inventory-only.
+            unloaded_scopes: BTreeMap::new(),
         })
     }
 }
@@ -1172,7 +1583,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
     async fn populate_lockfile(
         &mut self,
         package_manager: &PackageManager,
-    ) -> Result<Box<dyn Lockfile>, Error> {
+    ) -> Result<Arc<dyn Lockfile>, Error> {
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
             None => {
@@ -1181,7 +1592,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                     .as_ref()
                     .expect("JavaScript package manager requires a root package.json");
                 let lockfile = package_manager.read_lockfile(self.repo_root, root_package_json)?;
-                Ok(lockfile)
+                Ok(Arc::from(lockfile))
             }
         }
     }
@@ -1211,7 +1622,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             && let Some(handle) = lockfile_future
             && let Ok(Some(lockfile)) = handle.await
         {
-            self.lockfile = Some(lockfile);
+            self.lockfile = Some(Arc::from(lockfile));
         }
 
         let lockfile = if self.load_lockfile {
@@ -1253,6 +1664,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             load_lockfile,
             javascript,
             extra_contributors,
+            unloaded_scopes,
             ..
         } = self;
         Ok(BuildState {
@@ -1275,6 +1687,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             state: std::marker::PhantomData,
             javascript,
             extra_contributors,
+            contributions: None,
+            unloaded_scopes,
         })
     }
 }
@@ -1325,7 +1739,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .transpose()
             .map_err(Error::from)
             .map_err(build_failure)?;
-        let arc_lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take().map(Arc::from);
+        let arc_lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take();
         let mut external_resolution = ExternalResolutionKnowledge::absent();
         let mut native_external_resolutions = std::mem::take(&mut self.native_external_resolutions);
 
@@ -1393,6 +1807,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             native_change_observations,
             native_prune_domains,
             root_package_json,
+            unloaded_scopes,
             ..
         } = self;
         let knowledge = knowledge.ok_or(discovery::Error::Failed(Box::new(
@@ -1493,6 +1908,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             task_contract_knowledge,
             change_knowledge,
             prune_knowledge,
+            unloaded_scopes,
         })
     }
 }
@@ -1549,12 +1965,18 @@ fn package_name_from_identity(identity: &str) -> PackageName {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use turborepo_errors::Spanned;
 
     use super::*;
-    use crate::toolchain::{DiscoverPackagesFuture, DiscoveredPackages, WorkspaceRoot};
+    use crate::toolchain::{
+        DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackageScope,
+        DiscoveredPackageScopes, DiscoveredPackages, WorkspaceRoot,
+    };
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
@@ -1607,6 +2029,16 @@ mod test {
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async move { Ok(DiscoveredPackages::new(Vec::new(), self.roots.clone())) })
         }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
     }
 
     struct PackageWithoutRootContributor {
@@ -1627,6 +2059,16 @@ mod test {
                         self.root.join_components(&["orphan", "manifest"]),
                     )],
                     Vec::new(),
+                ))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
                 ))
             })
         }
@@ -1651,6 +2093,16 @@ mod test {
                 ))
             })
         }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
     }
 
     fn custom_package(
@@ -1664,6 +2116,221 @@ mod test {
             descriptor,
             root.join_components(&["custom-packages", &directory, "custom-manifest"]),
         )
+    }
+
+    /// Generic lazy-loading fake: counts scope-inventory and full-discovery
+    /// observations separately so substitution is observable. It uses only
+    /// the open `ToolchainId` — no language-specific branches.
+    struct LazyContributor {
+        id: ToolchainId,
+        root: AbsoluteSystemPathBuf,
+        scopes: Vec<DiscoveredPackageScope>,
+        full_packages: Vec<DiscoveredPackage>,
+        inventory_calls: Arc<AtomicUsize>,
+        full_calls: Arc<AtomicUsize>,
+    }
+
+    impl LazyContributor {
+        fn new(
+            id: ToolchainId,
+            root: &AbsoluteSystemPath,
+            scope_names: &[&str],
+            full_packages: Vec<DiscoveredPackage>,
+        ) -> Self {
+            let scopes = scope_names
+                .iter()
+                .map(|&name| {
+                    DiscoveredPackageScope::new(
+                        Some(name.to_string()),
+                        root.join_components(&["native", name, "manifest"]),
+                    )
+                })
+                .collect();
+            Self {
+                id,
+                root: root.to_owned(),
+                scopes,
+                full_packages,
+                inventory_calls: Arc::new(AtomicUsize::new(0)),
+                full_calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        fn native_package(root: &AbsoluteSystemPath, name: &str) -> DiscoveredPackage {
+            DiscoveredPackage::package(
+                Some(name.to_string()),
+                PackageJson::default(),
+                root.join_components(&["native", name, "manifest"]),
+            )
+            .with_native_relationships(Vec::new())
+            .with_native_tasks(vec![crate::native_tasks::NativeTask::command_task(
+                format!("{name}-check"),
+                format!("{name} check"),
+                crate::native_tasks::NativeCommandProgram::Tool("native".to_string()),
+                crate::native_tasks::NativeCommandArguments::new(vec!["check".to_string()]),
+                None,
+                crate::native_tasks::WorkingDirectoryPolicy::PackageDirectory,
+            )])
+        }
+    }
+
+    impl RepositoryContributor for LazyContributor {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            self.full_calls.fetch_add(1, Ordering::SeqCst);
+            let packages = self.full_packages.clone();
+            let root = self.root.clone();
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("lazy", root)],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            self.inventory_calls.fetch_add(1, Ordering::SeqCst);
+            let scopes = self.scopes.clone();
+            let root = self.root.clone();
+            Box::pin(async move {
+                Ok(DiscoveredPackageScopes::new(
+                    scopes,
+                    vec![WorkspaceRoot::new("lazy", root)],
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn lazy_build_inventories_scopes_without_full_discovery() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
+            &root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
+        );
+        let (inventory_calls, full_calls) = (
+            contributor.inventory_calls.clone(),
+            contributor.full_calls.clone(),
+        );
+
+        let lazy = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(contributor))
+            .build_lazy()
+            .await
+            .unwrap();
+        let graph = lazy.graph();
+
+        assert_eq!(
+            full_calls.load(Ordering::SeqCst),
+            0,
+            "an inventory-only graph never invokes full native discovery"
+        );
+        assert_eq!(inventory_calls.load(Ordering::SeqCst), 1);
+        // The inventory scope is an exact graph node: identity, directory,
+        // and provenance are addressable, and it is marked as belonging to a
+        // not-yet-loaded owner.
+        let native = PackageName::from("native-pkg");
+        assert_eq!(
+            graph.unloaded_scope_owner(&native),
+            Some(&ToolchainId::new("lazy-native"))
+        );
+        assert!(graph.has_unloaded_scopes());
+        assert_eq!(
+            graph.unloaded_owners(),
+            BTreeSet::from([ToolchainId::new("lazy-native")])
+        );
+        assert_eq!(
+            graph.package_toolchain(&native),
+            Some(&ToolchainId::new("lazy-native"))
+        );
+    }
+
+    #[tokio::test]
+    async fn lazy_load_replaces_inventory_with_authoritative_facts() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
+            &root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
+        );
+        let full_calls = contributor.full_calls.clone();
+
+        let (graph, mut plan) = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(contributor))
+            .build_lazy()
+            .await
+            .unwrap()
+            .into_parts();
+        // The inventory graph marks the scope as belonging to a
+        // not-yet-loaded owner; loading replaces that marking below.
+        assert_eq!(
+            graph.unloaded_scope_owner(&PackageName::from("native-pkg")),
+            Some(&ToolchainId::new("lazy-native"))
+        );
+        assert!(
+            !plan
+                .loaded_owners()
+                .contains(&ToolchainId::new("lazy-native"))
+        );
+
+        let owners = std::iter::once(ToolchainId::new("lazy-native")).collect();
+        let graph = Arc::new(plan.load(&owners).await.unwrap());
+        assert_eq!(full_calls.load(Ordering::SeqCst), 1);
+        assert!(
+            plan.loaded_owners()
+                .contains(&ToolchainId::new("lazy-native"))
+        );
+
+        // The loaded scope is authoritative: no longer inventory-only, with
+        // its native task catalogue present.
+        let native = PackageName::from("native-pkg");
+        assert_eq!(graph.unloaded_scope_owner(&native), None);
+        assert!(!graph.has_unloaded_scopes());
+        assert!(
+            graph
+                .package_task_context(&native)
+                .is_some_and(|context| context.native_tasks().registers("native-pkg-check"))
+        );
+    }
+
+    #[tokio::test]
+    async fn lazy_load_is_monotone() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let contributor = LazyContributor::new(
+            ToolchainId::new("lazy-native"),
+            &root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(&root, "native-pkg")],
+        );
+        let full_calls = contributor.full_calls.clone();
+
+        let (_graph, mut plan) = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_contributor(Arc::new(contributor))
+            .build_lazy()
+            .await
+            .unwrap()
+            .into_parts();
+
+        let owners = std::iter::once(ToolchainId::new("lazy-native")).collect();
+        let _ = plan.load(&owners).await.unwrap();
+        let _ = plan.load(&owners).await.unwrap();
+        assert_eq!(
+            full_calls.load(Ordering::SeqCst),
+            1,
+            "loading an already-loaded owner never rediscovers it"
+        );
     }
 
     #[tokio::test]

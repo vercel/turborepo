@@ -20,10 +20,11 @@ use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
+    toolchain::ToolchainId,
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_scope::filter::ResolutionError;
+use turborepo_scope::{filter::ResolutionError, TargetSelector};
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::{TaskId, TaskName};
@@ -484,6 +485,55 @@ impl RunBuilder {
         Some(prefixes)
     }
 
+    /// Parse the run's filter patterns for the lazy-loading decision.
+    ///
+    /// `None` means a pattern did not parse: the run then conservatively
+    /// requires a complete graph (scope resolution surfaces the actual parse
+    /// error either way, so nothing is bypassed).
+    fn parse_filter_selectors(patterns: &[String]) -> Option<Vec<TargetSelector>> {
+        patterns
+            .iter()
+            .map(|pattern| pattern.parse::<TargetSelector>())
+            .collect::<Result<_, _>>()
+            .ok()
+    }
+
+    /// Whether this run must narrow against a complete graph snapshot rather
+    /// than an inventory graph.
+    ///
+    /// Graph-dependent queries — dependency (`pkg...`) or dependents
+    /// (`...pkg`) expansion, match-dependencies, git ranges — and
+    /// affectedness, watch reruns, and whole-graph engines (`add_all_tasks`)
+    /// have answers that depend on edges and task catalogues only
+    /// authoritative discovery provides, so every unloaded owner is loaded up
+    /// front: the accepted conservative tradeoff of lazy native discovery.
+    ///
+    /// The no-turbo-json loader path is also complete-graph: it infers the
+    /// repository's task set from every scope's native catalogue, which is a
+    /// task-catalogue query over all scopes.
+    ///
+    /// Strict task entrypoint selection is likewise a whole-repo catalogue
+    /// query: it asks whether any scope's catalogue participates in each
+    /// requested task, and an inventory-only catalogue would silently answer
+    /// no. Loading up front preserves the eager baseline exactly — a generic
+    /// flag semantic, with no per-toolchain knowledge here.
+    fn requires_complete_graph_snapshot(
+        &self,
+        selectors: Option<&[TargetSelector]>,
+        micro_frontend_configs: Option<&MicrofrontendsConfigs>,
+    ) -> bool {
+        let Some(selectors) = selectors else {
+            return true;
+        };
+        self.opts.scope_opts.affected_range.is_some()
+            || self.changed_files_for_watch.is_some()
+            || self.add_all_tasks
+            || self.opts.future_flags.strict_task_entrypoint_selection
+            || selectors_require_complete_graph(selectors)
+            || (!self.opts.repo_opts.root_turbo_json_path.exists()
+                && (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some()))
+    }
+
     /// Resolve the set of packages that should participate in this run.
     ///
     /// Starts with the result of scope resolution (which handles `--filter`
@@ -610,79 +660,6 @@ impl RunBuilder {
         }
 
         Ok((filtered_pkgs, filter_mode, unqualified_entrypoint_packages))
-    }
-
-    /// Whether a `filterUsingTasks` run can resolve its task scope from the
-    /// package-level filter instead of constructing a repository-wide task
-    /// engine and pruning it after the fact.
-    ///
-    /// With `--only`, the engine is exactly `{package x requested task}` plus
-    /// `with` siblings, so a selector that only names packages selects the
-    /// same tasks whether the engine is built for every workspace or only for
-    /// the packages the filter resolves to. Every condition below is required
-    /// for that equivalence to hold; anything else keeps the general
-    /// full-graph path.
-    fn task_filter_can_use_package_scope(
-        &self,
-        pkg_dep_graph: &PackageGraph,
-        turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
-    ) -> bool {
-        // `--only` prunes the engine to {package x requested task}, which is
-        // what makes the package-scoped construction equivalent.
-        if !self.opts.run_opts.only {
-            return false;
-        }
-        // Affected selectors, watch reruns, all-tasks graphs, and package
-        // inference all require the repository-wide engine.
-        if self.opts.scope_opts.affected_range.is_some()
-            || self.changed_files_for_watch.is_some()
-            || self.add_all_tasks
-            || self.opts.scope_opts.pkg_inference_root.is_some()
-        {
-            return false;
-        }
-        // Strict entrypoint selection consults command participation across
-        // the whole engine, which the scoped engine cannot answer.
-        if self.opts.future_flags.strict_task_entrypoint_selection {
-            return false;
-        }
-        // Only plain package-name selectors (optionally excluded) resolve
-        // identically at the package and task level. Directory selectors, git
-        // ranges, and dependency/dependent expansion have task-level
-        // semantics.
-        if !self.opts.scope_opts.filter_patterns.iter().all(|pattern| {
-            pattern
-                .parse::<turborepo_scope::TargetSelector>()
-                .map(|selector| selector_selects_only_package_names(&selector))
-                .unwrap_or(false)
-        }) {
-            return false;
-        }
-        // Mixing `pkg#task` arguments with unqualified task arguments lets the
-        // scoped engine pick up tasks the task-level filter would prune.
-        let task_names: Vec<TaskName> = self
-            .opts
-            .run_opts
-            .tasks
-            .iter()
-            .map(|task| TaskName::from(task.as_str()))
-            .collect();
-        let qualified = task_names
-            .iter()
-            .filter(|task| task.package().is_some())
-            .count();
-        if qualified != 0 && qualified != task_names.len() {
-            return false;
-        }
-        // Native task contracts change entrypoint eligibility per package.
-        if pkg_dep_graph
-            .package_task_contexts()
-            .any(|context| context.task_contract().task_entrypoint_domain().is_some())
-        {
-            return false;
-        }
-        // `with` siblings can pull tasks of other packages into the engine.
-        repo_configs_have_no_with_declarations(pkg_dep_graph, turbo_json_loader)
     }
 
     /// Packages whose turbo.json a scoped engine may consult: the filtered
@@ -861,14 +838,28 @@ impl RunBuilder {
         }
 
         // --parallel removes inter-package dependencies from the graph after
-        // construction, so a graph shared with other runs cannot be reused
-        // for it.
+        // construction, so a graph shared with other runs cannot be reused for
+        // it. A shared graph that still carries inventory-only scopes has no
+        // construction plan attached (snapshots never retain live toolchains),
+        // so this run re-inventories instead of reusing it; only complete
+        // snapshots are reusable — a generic property of the graph, with no
+        // per-toolchain knowledge here.
+        let shared_is_reusable = self
+            .shared_pkg_graph
+            .as_ref()
+            .is_some_and(|graph| !graph.has_unloaded_scopes());
         let shared_pkg_graph = if self.opts.run_opts.parallel {
+            None
+        } else if self.shared_pkg_graph.is_some() && !shared_is_reusable {
+            tracing::debug!(
+                "bypassing shared package graph: inventory-only scopes require re-inventorying"
+            );
             None
         } else {
             self.shared_pkg_graph.clone()
         };
-        let mut pkg_dep_graph = match shared_pkg_graph {
+        let mut lazy_plan = None;
+        let mut pkg_dep_graph: Arc<PackageGraph> = match shared_pkg_graph {
             Some(graph) => {
                 tracing::debug!("reusing package graph from previous run");
                 graph
@@ -888,12 +879,18 @@ impl RunBuilder {
                 let builder = graph_features.configure(builder);
 
                 let graph = builder
-                    .build()
+                    .build_lazy()
                     .instrument(tracing::info_span!("pkg_dep_graph_build"))
                     .await;
 
                 match graph {
-                    Ok(graph) => Arc::new(graph),
+                    Ok(graph) => {
+                        // Take unique ownership of the graph so `--parallel`
+                        // can mutate it; the plan owns none of it.
+                        let (graph, plan) = graph.into_parts();
+                        lazy_plan = Some(plan);
+                        graph
+                    }
                     // if we can't find the package.json, it is a bug, and we should report it.
                     // likely cause is that package discovery watching is not up to date.
                     // note: there _is_ a false positive from a race condition that can occur
@@ -1011,6 +1008,28 @@ impl RunBuilder {
             )?
         };
 
+        // Graph-dependent queries (dependency/dependent expansion, git
+        // ranges), affectedness, watch reruns, whole-graph engines, and the
+        // no-turbo-json inference loader cannot narrow against an inventory:
+        // load every unloaded owner up front -- the accepted conservative
+        // tradeoff of lazy native discovery. This must happen before the
+        // turbo.json loader is constructed: the no-turbo-json loader infers
+        // the repository's task set from every scope's native catalogue, and
+        // an inventory scope would capture an empty (guessed) catalogue.
+        let selectors = Self::parse_filter_selectors(&self.opts.scope_opts.filter_patterns);
+        if let Some(plan) = lazy_plan.as_mut() {
+            if self.requires_complete_graph_snapshot(
+                selectors.as_deref(),
+                micro_frontend_configs.as_ref(),
+            ) {
+                let owners: HashSet<ToolchainId> =
+                    pkg_dep_graph.unloaded_owners().into_iter().collect();
+                if !owners.is_empty() {
+                    pkg_dep_graph = Arc::new(plan.load(&owners).await?);
+                }
+            }
+        }
+
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
         let root_native_tasks = pkg_dep_graph
@@ -1022,6 +1041,11 @@ impl RunBuilder {
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
+        // The loader captures topology-stable inputs from the graph — scope
+        // directories and root scripts — and reads package configs lazily per
+        // package. It never captures hash-relevant contracts: those reach the
+        // engine from the graph passed to `build_engine`, which by then is
+        // authoritative for every scope the run consults.
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
             if task_access_enabled {
@@ -1096,11 +1120,6 @@ impl RunBuilder {
             turbo_json_loader.load(&PackageName::Root)?.clone()
         };
 
-        {
-            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
-            pkg_dep_graph.validate()?;
-        }
-
         let env_at_execution_start = {
             let _span = tracing::info_span!("env_infer").entered();
             EnvironmentVariableMap::infer()
@@ -1133,110 +1152,6 @@ impl RunBuilder {
         // Resolution knowledge is complete at package-graph construction, so
         // scope filtering can read lockfile-affected packages without joining
         // deferred closure work.
-        let (mut filtered_pkgs, mut filter_mode, unqualified_entrypoint_packages) = {
-            let _span = tracing::info_span!("calculate_filtered_packages").entered();
-            Self::calculate_filtered_packages(
-                &self.repo_root,
-                package_resolution_opts,
-                &pkg_dep_graph,
-                &scm,
-                &root_turbo_json,
-            )?
-        };
-        if use_task_level_affected {
-            filter_mode = FilterMode::ExplicitSelection;
-        }
-        // The root Turbo task namespace exists independently of a root
-        // JavaScript package scope. Non-root namespaces, including aggregate
-        // scopes, come from authoritative repository knowledge.
-        let task_namespace_packages: Vec<_> = std::iter::once(PackageName::Root)
-            .chain(
-                pkg_dep_graph
-                    .package_scope_directories()
-                    .map(|(name, _)| name)
-                    .filter(|name| name != &PackageName::Root),
-            )
-            .collect();
-        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
-            &pkg_dep_graph,
-            unqualified_entrypoint_packages.iter(),
-            task_namespace_packages.iter(),
-            &filter_mode,
-        );
-        let explicitly_requested_tasks: HashSet<_> = self
-            .opts
-            .run_opts
-            .tasks
-            .iter()
-            .filter_map(|task| {
-                TaskName::from(task.as_str())
-                    .task_id()
-                    .map(TaskId::into_owned)
-            })
-            .collect();
-        scoped_entrypoint_exclusions
-            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
-
-        let task_level_affected_package_scope = if has_task_level_affected_package_scope {
-            Some(filtered_pkgs.keys().cloned().collect())
-        } else {
-            None
-        };
-
-        let use_watch_task_level_filter = self
-            .changed_files_for_watch
-            .as_ref()
-            .is_some_and(|changed_files| !changed_files.is_empty())
-            && self.opts.future_flags.watch_using_task_inputs;
-
-        let needs_all_packages = use_task_level_affected
-            || use_task_level_filter
-            || use_watch_task_level_filter
-            || self.add_all_tasks;
-        let entrypoint_exclusions = if needs_all_packages {
-            HashSet::new()
-        } else {
-            scoped_entrypoint_exclusions
-        };
-
-        // Config preloading overlaps engine construction. Repository-wide
-        // engines consult every package's config, but scoped engines only
-        // consult the filtered packages and the dependency closure their
-        // `^task` edges follow, so narrow runs skip preloading unrelated
-        // packages and let the engine load anything else lazily.
-        crate::rayon_compat::block_in_place(|| {
-            let _span = tracing::info_span!("turbo_json_preload").entered();
-            if needs_all_packages {
-                turbo_json_loader.preload_all();
-            } else {
-                let packages = Self::scoped_preload_packages(&pkg_dep_graph, filtered_pkgs.keys());
-                turbo_json_loader.preload_packages(packages);
-            }
-        });
-
-        // When task-level filtering or add_all_tasks is active, the engine must
-        // contain tasks for ALL packages so that tasks in packages not flagged
-        // by package-level scope resolution can still be matched. The
-        // task-level filter (below) does the pruning when needed.
-        let all_pkgs: Vec<PackageName> = if needs_all_packages {
-            task_namespace_packages
-        } else {
-            Vec::new()
-        };
-        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
-            Box::new(all_pkgs.iter())
-        } else {
-            Box::new(filtered_pkgs.keys())
-        };
-
-        let mut engine = self.build_engine(
-            &pkg_dep_graph,
-            &root_turbo_json,
-            engine_pkgs,
-            &entrypoint_exclusions,
-            &turbo_json_loader,
-            &env_at_execution_start,
-        )?;
 
         let task_access = {
             let _span = tracing::info_span!("task_access_setup").entered();
@@ -1250,23 +1165,169 @@ impl RunBuilder {
             ta
         };
 
-        // --parallel removes inter-package dependencies from the package graph,
-        // requiring a fresh engine build. Affected filtering runs once afterward
-        // rather than on both engines to avoid a redundant SCM query.
-        if self.opts.run_opts.parallel {
-            // A --parallel run never reuses a shared package graph (the
-            // sharing path above opts out for parallel), so this Arc is
-            // uniquely owned here.
-            let Some(graph) = Arc::get_mut(&mut pkg_dep_graph) else {
-                unreachable!("--parallel runs never reuse a shared package graph");
+        let use_watch_task_level_filter = self
+            .changed_files_for_watch
+            .as_ref()
+            .is_some_and(|changed_files| !changed_files.is_empty())
+            && self.opts.future_flags.watch_using_task_inputs;
+
+        let needs_all_packages = use_task_level_affected
+            || use_task_level_filter
+            || use_watch_task_level_filter
+            || self.add_all_tasks;
+
+        // The task graph is finalized only after the run's metadata demands
+        // settle. Each pass recomputes package selection and the engine over
+        // the current graph; engine construction records the owner of any
+        // inventory-only scope it had to consult, that owner is loaded, and
+        // the pass repeats with authoritative facts. Loading is monotone, so
+        // the loop terminates; the final selection below runs exactly once,
+        // on the settled graph and engine — no frozen task set, no post-hoc
+        // reconciliation.
+        let mut engine;
+        let mut filtered_pkgs;
+        let mut filter_mode;
+        let mut unqualified_entrypoint_packages;
+        let mut entrypoint_exclusions;
+        let mut all_pkgs;
+        let mut task_level_affected_package_scope;
+        loop {
+            let (resolution, mode, entrypoint_packages) = {
+                let _span = tracing::info_span!("calculate_filtered_packages").entered();
+                Self::calculate_filtered_packages(
+                    &self.repo_root,
+                    package_resolution_opts,
+                    &pkg_dep_graph,
+                    &scm,
+                    &root_turbo_json,
+                )?
             };
-            graph.remove_package_dependencies();
+            filtered_pkgs = resolution;
+            filter_mode = mode;
+            unqualified_entrypoint_packages = entrypoint_packages;
+            if use_task_level_affected {
+                filter_mode = FilterMode::ExplicitSelection;
+            }
+
+            // Narrowing: the existing package filter resolver matched this
+            // selection against the inventory's exact identities (names,
+            // directories, globs, negation — none of which need edges). Load
+            // exactly the owners of the inventory-only scopes the selection
+            // named, then recompute: identities do not change on load.
+            //
+            // The root's internal dependencies are hashed into every task —
+            // their package directories feed the global hash regardless of
+            // any `^task` edges — so their closure must be settled before
+            // the run finalizes. An inventory-only scope inside the closure
+            // has unknown outgoing edges: loading its owner can grow the
+            // closure (and the hashed directory set) further, so each pass
+            // re-checks until the closure reaches no unloaded scope.
+            if let Some(plan) = lazy_plan.as_mut() {
+                let mut owners_to_load: HashSet<ToolchainId> = filtered_pkgs
+                    .keys()
+                    .filter_map(|package| pkg_dep_graph.unloaded_scope_owner(package))
+                    .cloned()
+                    .collect();
+                owners_to_load.extend(
+                    pkg_dep_graph
+                        .root_internal_package_dependencies()
+                        .into_iter()
+                        .filter_map(|package| pkg_dep_graph.unloaded_scope_owner(&package.name))
+                        .cloned(),
+                );
+                if !owners_to_load.is_empty() {
+                    pkg_dep_graph = Arc::new(plan.load(&owners_to_load).await?);
+                    continue;
+                }
+            }
+
+            // The root Turbo task namespace exists independently of a root
+            // JavaScript package scope. Non-root namespaces, including
+            // aggregate scopes, come from authoritative repository knowledge.
+            let task_namespace_packages: Vec<_> = std::iter::once(PackageName::Root)
+                .chain(
+                    pkg_dep_graph
+                        .package_scope_directories()
+                        .map(|(name, _)| name)
+                        .filter(|name| name != &PackageName::Root),
+                )
+                .collect();
+            let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
+                &pkg_dep_graph,
+                unqualified_entrypoint_packages.iter(),
+                task_namespace_packages.iter(),
+                &filter_mode,
+            );
+            let explicitly_requested_tasks: HashSet<_> = self
+                .opts
+                .run_opts
+                .tasks
+                .iter()
+                .filter_map(|task| {
+                    TaskName::from(task.as_str())
+                        .task_id()
+                        .map(TaskId::into_owned)
+                })
+                .collect();
+            scoped_entrypoint_exclusions
+                .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
+
+            task_level_affected_package_scope = if has_task_level_affected_package_scope {
+                Some(filtered_pkgs.keys().cloned().collect())
+            } else {
+                None
+            };
+
+            entrypoint_exclusions = if needs_all_packages {
+                HashSet::new()
+            } else {
+                scoped_entrypoint_exclusions
+            };
+
+            // Config preloading overlaps engine construction. Repository-wide
+            // engines consult every package's config, but scoped engines only
+            // consult the filtered packages and the dependency closure their
+            // `^task` edges follow, so narrow runs skip preloading unrelated
+            // packages and let the engine load anything else lazily.
+            crate::rayon_compat::block_in_place(|| {
+                let _span = tracing::info_span!("turbo_json_preload").entered();
+                if needs_all_packages {
+                    turbo_json_loader.preload_all();
+                } else {
+                    let packages =
+                        Self::scoped_preload_packages(&pkg_dep_graph, filtered_pkgs.keys());
+                    turbo_json_loader.preload_packages(packages);
+                }
+            });
+
+            // When task-level filtering or add_all_tasks is active, the engine
+            // must contain tasks for ALL packages so that tasks in packages
+            // not flagged by package-level scope resolution can still be
+            // matched. The task-level filter (below) does the pruning when
+            // needed.
+            //
+            // Inventory-only scopes are excluded from the repository-wide
+            // workspace set: package-level resolution already loaded every
+            // scope the selectors named (inventory identities are exact), so
+            // an unloaded scope's tasks can only enter this run through a
+            // dependency edge — and engine construction demands the owner for
+            // exactly those. Whole-workspace enumeration therefore never
+            // demands unrelated native owners.
+            all_pkgs = if needs_all_packages {
+                task_namespace_packages
+                    .into_iter()
+                    .filter(|package| pkg_dep_graph.unloaded_scope_owner(package).is_none())
+                    .collect()
+            } else {
+                Vec::new()
+            };
             let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
                 Box::new(all_pkgs.iter())
             } else {
                 Box::new(filtered_pkgs.keys())
             };
-            engine = self.build_engine(
+
+            let (built_engine, mut demands) = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
                 engine_pkgs,
@@ -1274,6 +1335,72 @@ impl RunBuilder {
                 &turbo_json_loader,
                 &env_at_execution_start,
             )?;
+            engine = built_engine;
+
+            // --parallel removes inter-package dependencies from the package
+            // graph, requiring a fresh engine build. Affected filtering runs
+            // once afterward rather than on both engines to avoid a
+            // redundant SCM query.
+            if self.opts.run_opts.parallel {
+                // A --parallel run never reuses a shared package graph (the
+                // sharing path above opts out for parallel), so this Arc is
+                // uniquely owned here.
+                let Some(graph) = Arc::get_mut(&mut pkg_dep_graph) else {
+                    unreachable!("--parallel runs never reuse a shared package graph");
+                };
+                graph.remove_package_dependencies();
+                let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+                    Box::new(all_pkgs.iter())
+                } else {
+                    Box::new(filtered_pkgs.keys())
+                };
+                let (rebuilt_engine, rebuilt_demands) = self.build_engine(
+                    &pkg_dep_graph,
+                    &root_turbo_json,
+                    engine_pkgs,
+                    &entrypoint_exclusions,
+                    &turbo_json_loader,
+                    &env_at_execution_start,
+                )?;
+                engine = rebuilt_engine;
+                demands.extend(rebuilt_demands);
+            }
+
+            // Settle: load the owners construction had to consult and repeat
+            // the pass. A reused complete snapshot has no inventory-only
+            // scopes, so it records no demands.
+            let newly_demanded: HashSet<ToolchainId> = match lazy_plan.as_ref() {
+                Some(plan) => {
+                    let loaded = plan.loaded_owners();
+                    demands
+                        .iter()
+                        .filter(|owner| !loaded.contains(*owner))
+                        .cloned()
+                        .collect()
+                }
+                None => {
+                    debug_assert!(
+                        demands.is_empty(),
+                        "a complete graph snapshot cannot produce metadata demands"
+                    );
+                    HashSet::new()
+                }
+            };
+            if newly_demanded.is_empty() {
+                break;
+            }
+            let Some(plan) = lazy_plan.as_mut() else {
+                unreachable!("metadata demands require a construction plan");
+            };
+            pkg_dep_graph = Arc::new(plan.load(&newly_demanded).await?);
+        }
+
+        // Validate the settled graph: the inventory graph and every
+        // intermediate recomputation are provisional by construction, so
+        // the invariant check belongs on the graph the run finalizes.
+        {
+            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
+            pkg_dep_graph.validate()?;
         }
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
@@ -1802,6 +1929,12 @@ impl RunBuilder {
     }
 
     #[tracing::instrument(skip_all)]
+    /// Build the engine for the current graph, returning it together with
+    /// the owners of inventory-only scopes whose task metadata construction
+    /// consulted. The demands are internal orchestration state: the caller
+    /// loads the owners and rebuilds until no new demands arise, so the
+    /// finalized engine never contains a task resolved against
+    /// inventory-only metadata.
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
@@ -1810,7 +1943,7 @@ impl RunBuilder {
         entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
         environment: &EnvironmentVariableMap,
-    ) -> Result<Engine, Error> {
+    ) -> Result<(Engine, HashSet<ToolchainId>), Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())
@@ -1853,7 +1986,7 @@ impl RunBuilder {
             builder = builder.do_not_validate_engine();
         }
 
-        let mut engine = builder.build()?;
+        let (mut engine, unloaded_demands) = builder.build_with_unloaded_demands()?;
 
         // In watch mode with the future flag, filter the engine to only tasks
         // whose declared inputs match the changed files.
@@ -1895,51 +2028,23 @@ impl RunBuilder {
             }
         }
 
-        Ok(engine)
+        Ok((engine, unloaded_demands))
     }
 }
 
-/// Whether a selector's semantics are purely package-level: it names
-/// packages (by name pattern, possibly for exclusion) and does not use
-/// directory selectors, git ranges, or dependency/dependent expansion.
-fn selector_selects_only_package_names(selector: &turborepo_scope::TargetSelector) -> bool {
-    !selector.name_pattern.is_empty()
-        && selector.parent_dir.is_none()
-        && selector.git_range.is_none()
-        && !selector.include_dependencies
-        && !selector.include_dependents
-        && !selector.exclude_self
-        && !selector.match_dependencies
-        && !selector.follow_prod_deps_only
-}
-
-/// Whether every turbo.json in the repository loads successfully and declares
-/// no `with` siblings. Configs are preloaded by this point, so this is an
-/// in-memory scan, and it only runs for otherwise eligible runs.
-fn repo_configs_have_no_with_declarations(
-    pkg_dep_graph: &PackageGraph,
-    turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
-) -> bool {
-    let packages = std::iter::once(PackageName::Root).chain(
-        pkg_dep_graph
-            .package_scope_directories()
-            .map(|(name, _)| name),
-    );
-    for package in packages {
-        match turbo_json_loader.load(&package) {
-            // Workspaces without a turbo.json fall back to the root chain.
-            Err(err) if err.is_no_turbo_json() => continue,
-            // A config that fails to load surfaces as an error while building
-            // the repository-wide engine; keep that behavior.
-            Err(_) => return false,
-            Ok(turbo_json) => {
-                if turbo_json.tasks.values().any(|def| def.with.is_some()) {
-                    return false;
-                }
-            }
-        }
-    }
-    true
+/// Whether any selector's answer depends on the package graph's edges or on
+/// git history: dependency (`pkg...`) or dependents (`...pkg`) expansion,
+/// match-dependencies (`pkg...[range]` — a reverse traversal, despite the
+/// name), or git ranges. Such queries cannot be narrowed against an
+/// inventory graph, whose edges are only the always-loaded JavaScript ones;
+/// the run conservatively loads every native owner for them instead.
+fn selectors_require_complete_graph(selectors: &[TargetSelector]) -> bool {
+    selectors.iter().any(|selector| {
+        selector.include_dependencies
+            || selector.include_dependents
+            || selector.match_dependencies
+            || selector.git_range.is_some()
+    })
 }
 
 /// Whether every file this task hashes stays inside its package directory.
@@ -2419,5 +2524,58 @@ mod origins_match_tests {
     #[test]
     fn empty_url_returns_false() {
         assert!(!origins_match("", "https://vercel.com/api"));
+    }
+}
+
+/// Generic lazy-loading decision tests. Selector classification is purely
+/// structural — no language is named, no toolchain is special-cased.
+#[cfg(test)]
+mod lazy_selector_tests {
+    use turborepo_scope::TargetSelector;
+
+    use super::selectors_require_complete_graph;
+
+    fn selectors(patterns: &[&str]) -> Vec<TargetSelector> {
+        patterns
+            .iter()
+            .map(|pattern| pattern.parse::<TargetSelector>())
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn package_level_selectors_do_not_require_a_complete_graph() {
+        // Exact names, name globs, directories, and negation resolve against
+        // inventory identities alone; the existing scope resolver handles
+        // them without edges.
+        for patterns in [
+            vec!["web"],
+            vec!["@repo/*"],
+            vec!["./apps/*"],
+            vec!["!web"],
+            vec!["web", "!docs"],
+            vec!["!{**/docs/**}"],
+        ] {
+            assert!(
+                !selectors_require_complete_graph(&selectors(&patterns)),
+                "{patterns:?} must narrow against an inventory graph"
+            );
+        }
+    }
+
+    #[test]
+    fn graph_dependent_selectors_require_a_complete_graph() {
+        for patterns in [
+            vec!["web..."],
+            vec!["...web"],
+            vec!["web^..."],
+            vec!["web...[main]"],
+            vec!["web", "...docs"],
+        ] {
+            assert!(
+                selectors_require_complete_graph(&selectors(&patterns)),
+                "{patterns:?} depends on edges or git history and cannot narrow"
+            );
+        }
     }
 }

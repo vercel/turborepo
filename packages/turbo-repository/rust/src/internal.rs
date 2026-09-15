@@ -502,8 +502,9 @@ mod tests {
 
     use turborepo_errors::Spanned;
     use turborepo_repository::toolchain::{
-        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
-        ToolchainId, WorkspaceRoot,
+        DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, ToolchainId,
+        WorkspaceRoot,
     };
 
     use super::*;
@@ -538,6 +539,16 @@ mod tests {
                         ),
                     ],
                     vec![WorkspaceRoot::new("custom", self.root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
                 ))
             })
         }
