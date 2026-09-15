@@ -1777,7 +1777,9 @@ fn test_prune_task_aware_cross_toolchain_buildable_output() {
                     .output()
                     .expect("cargo build runs");
                 assert_command_success(&build, "task-aware pruned cargo build --locked");
-                let install = std::process::Command::new("npm")
+                // Resolve npm.cmd through PATHEXT on Windows.
+                let npm = which::which("npm").expect("npm is available on PATH");
+                let install = std::process::Command::new(npm)
                     .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
                     .current_dir(&out)
                     .output()
