@@ -63,6 +63,23 @@ bunx create-turbo@latest
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Use a base `tsconfig` file
@@ -154,6 +171,29 @@ First, install the `@repo/typescript-config` package into your package:
 }
 ```
 </Tab>
+
+<Tab value="nub">
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+     "@repo/typescript-config": "workspace:*",
+     "typescript": "latest"
+  }
+}
+```
+</Tab>
+
+<Tab value="aube">
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+     "@repo/typescript-config": "workspace:*",
+     "typescript": "latest"
+  }
+}
+```
+</Tab>
+
 </PackageManagerTabs>
 
 Then, extend the `tsconfig.json` for the package from the `@repo/typescript-config` package. In this example, the `web` package is a Next.js application:

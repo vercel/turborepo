@@ -23,7 +23,8 @@ export function Tabs({
   );
 }
 
-const packageManagers = ["pnpm", "yarn", "npm", "bun"];
+const legacyPackageManagers = ["pnpm", "yarn", "npm", "bun"];
+const packageManagers = [...legacyPackageManagers, "nub", "aube"];
 
 const checkPackageManagerIndex = (index: number, provided: string) => {
   if (provided !== packageManagers[index]) {
@@ -54,9 +55,14 @@ export function PackageManagerTabs({
     (child): child is TabElement => isValidElement(child)
   );
 
-  if (packageManagers.length > childElements.length) {
+  const items =
+    childElements.length === legacyPackageManagers.length
+      ? legacyPackageManagers
+      : packageManagers;
+
+  if (items.length !== childElements.length) {
     throw new Error(
-      `Package manager tab is missing. Expected ${packageManagers.length} tabs, got ${childElements.length}.`
+      `Package manager tab is missing. Expected ${legacyPackageManagers.length} or ${packageManagers.length} tabs, got ${childElements.length}.`
     );
   }
 
@@ -73,7 +79,7 @@ export function PackageManagerTabs({
   return (
     <FumaTabs
       groupId="package-manager"
-      items={packageManagers}
+      items={items}
       persist
       {...props}
     >

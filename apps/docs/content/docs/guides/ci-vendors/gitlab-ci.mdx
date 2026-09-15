@@ -133,6 +133,53 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
 </Tab>
 
+
+<Tab value="nub">
+    ```yaml title=".gitlab-ci.yml"
+    default:
+      image: node:20
+      cache:
+        key:
+          files:
+            - nub.lock
+        paths:
+          - node_modules/
+      before_script:
+          - nub install
+
+    build:
+    script: - nub run build
+
+    test:
+    script: - nub run test
+
+    ```
+
+</Tab>
+
+<Tab value="aube">
+    ```yaml title=".gitlab-ci.yml"
+    default:
+      image: node:20
+      cache:
+        key:
+          files:
+            - aube-lock.yaml
+        paths:
+          - node_modules/
+      before_script:
+          - aube install
+
+    build:
+    script: - aube run build
+
+    test:
+    script: - aube run test
+
+    ```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Remote Caching
