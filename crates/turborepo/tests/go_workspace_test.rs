@@ -1411,6 +1411,85 @@ fn test_affected_go_tasks_follow_internal_module_relationships() {
 }
 
 #[test]
+fn test_affected_colocated_packages_include_both_dependency_chains() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_go_monorepo(dir);
+    fs::write(
+        dir.join("packages/lib/package.json"),
+        r#"{"name":"@repo/lib","scripts":{"build":"echo javascript build"}}"#,
+    )
+    .unwrap();
+    let consumer_path = dir.join("packages/js-pkg/package.json");
+    let mut consumer: serde_json::Value =
+        serde_json::from_slice(&fs::read(&consumer_path).unwrap()).unwrap();
+    consumer["dependencies"] = serde_json::json!({"@repo/lib": "*"});
+    fs::write(consumer_path, serde_json::to_vec(&consumer).unwrap()).unwrap();
+    fs::create_dir(dir.join("packages/unrelated")).unwrap();
+    fs::write(
+        dir.join("packages/unrelated/package.json"),
+        r#"{"name":"unrelated","scripts":{"build":"echo unrelated"}}"#,
+    )
+    .unwrap();
+    // Exercise package-based affectedness, not task-input matching, which can
+    // already match multiple tasks in one directory.
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{
+          "futureFlags": {
+            "experimentalGoWorkspaces": true,
+            "experimentalTaskCommand": true,
+            "affectedUsingTaskInputs": false,
+            "filterUsingTasks": false,
+            "watchUsingTaskInputs": false
+          },
+          "tasks": {"build": {"dependsOn": ["^build"]}}
+        }"#,
+    )
+    .unwrap();
+    common::git(dir, &["add", "."]);
+    common::git(
+        dir,
+        &[
+            "commit",
+            "-m",
+            "add colocated package and consumer",
+            "--quiet",
+        ],
+    );
+
+    let source = dir.join("packages/lib/lib.go");
+    let contents = fs::read_to_string(&source).unwrap();
+    fs::write(source, format!("{contents}\n// Source changed.\n")).unwrap();
+    let output = run_turbo_with_env(
+        dir,
+        &["run", "build", "--affected", "--dry=json"],
+        &[("TURBO_SCM_BASE", "HEAD")],
+    );
+    assert_command_success(&output, "co-located package-based affectedness");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let actual = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        actual,
+        [
+            "@repo/lib#build",
+            "js-pkg#build",
+            "example.com/lib#build",
+            "example.com/api#build"
+        ]
+        .into()
+    );
+}
+
+#[test]
 fn test_affected_go_tasks_do_not_cross_independent_modules() {
     if !go_available() {
         return;
