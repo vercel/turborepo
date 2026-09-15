@@ -8,7 +8,7 @@ use regex::regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
 pub struct GitRange {
     pub from_ref: Option<String>,
     pub to_ref: Option<String>,

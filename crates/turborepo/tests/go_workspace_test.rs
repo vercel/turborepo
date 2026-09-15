@@ -627,6 +627,59 @@ fn test_mixed_go_workspace_lists_js_and_go_packages() {
 }
 
 #[test]
+fn test_colocated_go_and_javascript_cwd_inference() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_go_monorepo(dir);
+    let shared = dir.join("packages/lib");
+    fs::write(
+        shared.join("package.json"),
+        r#"{"name":"@repo/lib","scripts":{"build":"echo javascript build"}}"#,
+    )
+    .unwrap();
+    let source_dir = shared.join("src");
+    fs::create_dir(&source_dir).unwrap();
+
+    let task_ids = |cwd: &Path, args: &[&str]| {
+        let output = run_turbo(cwd, args);
+        assert_command_success(&output, "co-located package scope inference");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        json["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|task| task["taskId"].as_str().unwrap().to_string())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let expected = [
+        "@repo/lib#build".to_string(),
+        "example.com/lib#build".to_string(),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        task_ids(
+            dir,
+            &["run", "build", "--filter=./packages/lib", "--dry-run=json"],
+        ),
+        expected
+    );
+    for cwd in [&shared, &source_dir] {
+        assert_eq!(task_ids(cwd, &["run", "build", "--dry-run=json"]), expected);
+        assert_eq!(
+            task_ids(
+                cwd,
+                &["run", "build", "--filter=@repo/lib", "--dry-run=json"]
+            ),
+            ["@repo/lib#build".to_string()].into_iter().collect()
+        );
+    }
+}
+
+#[test]
 fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     if !go_available() {
         return;
