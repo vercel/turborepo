@@ -593,7 +593,12 @@ impl Workspace {
             turborepo_repository::change_mapper::PackageMapping::None => Err(Error::from_reason(
                 "iterated to the root of the workspace and found no package",
             )),
-            turborepo_repository::change_mapper::PackageMapping::Package((package, _reason)) => {
+            turborepo_repository::change_mapper::PackageMapping::Packages(packages) => {
+                // Preserve this singular API's historical name-based tie-break.
+                // The mapper sorts co-located owners; affected_packages keeps all of them.
+                let (package, _reason) = packages.first().ok_or_else(|| {
+                    Error::from_reason("iterated to the root of the workspace and found no package")
+                })?;
                 let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
                     Ok(path) => path,
                     Err(e) => return Err(Error::from_reason(e.to_string())),
