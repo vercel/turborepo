@@ -979,6 +979,20 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     assert_eq!(lint["command"], "go vet ./apps/api/... ./packages/lib/...");
     assert_eq!(lint["directory"], "");
 
+    let output = run_turbo(tempdir.path(), &["run", "format", "--dry-run=json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(2));
+    for (name, directory) in [
+        ("example.com/api#format", Path::new("apps").join("api")),
+        ("example.com/lib#format", Path::new("packages").join("lib")),
+    ] {
+        let task = dry_run_task(&output, name);
+        assert_eq!(task["command"], "go fmt ./...");
+        assert_eq!(task["directory"], directory.to_string_lossy().as_ref());
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+    }
+
     let output = run_turbo(
         tempdir.path(),
         &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
@@ -1565,6 +1579,82 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
         String::from_utf8_lossy(&output.stdout).contains("passed-to-go"),
         "go run must receive pass-through arguments: {output:?}"
     );
+}
+
+#[test]
+fn test_go_format_runs_per_module_without_formatting_non_packages() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    let sources = [
+        (
+            "apps/api/format.go",
+            "package main\nfunc   formatMe( ){ }\n",
+            "package main\n\nfunc formatMe() {}\n",
+        ),
+        (
+            "packages/lib/format.go",
+            "package lib\nfunc   formatMe( ){ }\n",
+            "package lib\n\nfunc formatMe() {}\n",
+        ),
+    ];
+    let ignored_sources = [
+        "packages/lib/testdata/example/ignored.go",
+        "packages/lib/nested/ignored.go",
+    ];
+    let ignored_content = "package ignored\nfunc   untouched( ){ }\n";
+    for path in ignored_sources {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, ignored_content).unwrap();
+    }
+    fs::write(
+        root.join("packages/lib/nested/go.mod"),
+        "module example.com/nested\n\ngo 1.22\n",
+    )
+    .unwrap();
+    for (path, unformatted, _) in sources {
+        fs::write(root.join(path), unformatted).unwrap();
+    }
+
+    let output = run_turbo(root, &["run", "format", "--filter=example.com/lib"]);
+    assert_command_success(&output, "filtered native Go format");
+    assert_eq!(
+        fs::read_to_string(root.join(sources[0].0)).unwrap(),
+        sources[0].1
+    );
+    assert_eq!(
+        fs::read_to_string(root.join(sources[1].0)).unwrap(),
+        sources[1].2
+    );
+
+    // Restore identical inputs before each run: source-mutating tasks must not
+    // replay a cached success instead of formatting the files again.
+    for _ in 0..2 {
+        for (path, unformatted, _) in sources {
+            fs::write(root.join(path), unformatted).unwrap();
+        }
+        let output = run_turbo(root, &["run", "format"]);
+        assert_command_success(&output, "workspace-wide native Go format");
+        for (path, _, formatted) in sources {
+            assert_eq!(
+                fs::read_to_string(root.join(path)).unwrap(),
+                formatted,
+                "{path}"
+            );
+        }
+        for path in ignored_sources {
+            assert_eq!(
+                fs::read_to_string(root.join(path)).unwrap(),
+                ignored_content,
+                "format must leave non-package source untouched: {path}"
+            );
+        }
+    }
 }
 
 #[test]

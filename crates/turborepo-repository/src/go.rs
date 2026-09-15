@@ -1319,7 +1319,9 @@ pub fn native_tasks_for_workspace(
     let mut module_patterns = module_patterns.to_vec();
     module_patterns.sort();
     module_patterns.dedup();
-    let mut tasks = [("test", "test"), ("lint", "vet"), ("format", "fmt")]
+    // Unlike test and vet, go fmt does not support cross-module workspace
+    // patterns. Leave formatting to the package-scoped tasks instead.
+    let mut tasks = [("test", "test"), ("lint", "vet")]
         .into_iter()
         .map(|(name, subcommand)| {
             go_command_task(
@@ -1331,7 +1333,7 @@ pub fn native_tasks_for_workspace(
                 } else {
                     PassThroughPlacement::BeforeSuffix
                 },
-                (name == "format").then_some(false),
+                None,
                 TaskEntrypoint::PreferredOnly,
                 WorkingDirectoryPolicy::RepositoryRoot,
             )
@@ -2893,11 +2895,19 @@ mod tests {
             lint.args,
             ["vet", "-json", "./..."].map(std::ffi::OsString::from)
         );
+        let format = resolve_go_cmd(&context, "format", Some(&["-n".to_string()]), None);
+        assert_eq!(format.program, std::ffi::OsString::from("go"));
+        assert_eq!(
+            format.args,
+            ["fmt", "-n", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(format.cwd, root.join_components(&["apps", "api"]));
+        assert_eq!(task_cache(&context, "format"), Some(false));
         assert!(context.native_tasks().get("vet").is_none());
         assert!(
             !native_tasks_for_workspace(&["./apps/api/...".to_string()])
                 .iter()
-                .any(|task| task.name() == "vet")
+                .any(|task| matches!(task.name(), "vet" | "format"))
         );
         assert_eq!(
             context
