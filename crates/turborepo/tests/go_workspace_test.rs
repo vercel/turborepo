@@ -963,42 +963,64 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
-    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
-    let task = dry_run_task(&output, "go-workspace#test");
-    assert_eq!(task["command"], "go test ./apps/api/... ./packages/lib/...");
-    assert_eq!(task["directory"], "");
-
-    let output = run_turbo(tempdir.path(), &["run", "lint", "--dry-run=json"]);
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
-    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
-    let lint = dry_run_task(&output, "go-workspace#lint");
-    assert_eq!(lint["command"], "go vet ./apps/api/... ./packages/lib/...");
-    assert_eq!(lint["directory"], "");
-
-    let output = run_turbo(tempdir.path(), &["run", "format", "--dry-run=json"]);
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
-    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(2));
-    for (name, directory) in [
-        ("example.com/api#format", Path::new("apps").join("api")),
-        ("example.com/lib#format", Path::new("packages").join("lib")),
-    ] {
-        let task = dry_run_task(&output, name);
-        assert_eq!(task["command"], "go fmt ./...");
-        assert_eq!(task["directory"], directory.to_string_lossy().as_ref());
-        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
-    }
-
-    let output = run_turbo(
+    let combined = run_turbo(
         tempdir.path(),
-        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+        &["run", "test", "lint", "format", "--dry-run=json"],
     );
-    let lint = dry_run_task(&output, "example.com/lib#lint");
-    assert_eq!(lint["command"], "go vet ./...");
+    assert_command_success(&combined, "combined Go verification dry run");
+    for (task_name, command) in [
+        ("test", "go test ./..."),
+        ("lint", "go vet ./..."),
+        ("format", "go fmt ./..."),
+    ] {
+        let output = run_turbo(tempdir.path(), &["run", task_name, "--dry-run=json"]);
+        assert_command_success(&output, "unfiltered Go verification dry run");
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+        assert_eq!(json["tasks"].as_array().map(Vec::len), Some(2));
+        for (package, directory) in [
+            ("example.com/api", "apps/api"),
+            ("example.com/lib", "packages/lib"),
+        ] {
+            let task_id = format!("{package}#{task_name}");
+            let task = dry_run_task(&output, &task_id);
+            assert_eq!(task["command"], command);
+            assert_eq!(
+                Path::new(task["directory"].as_str().expect("task directory")),
+                Path::new(directory)
+            );
+            assert_eq!(
+                task["resolvedTaskDefinition"]["cache"],
+                task_name != "format"
+            );
+            assert!(task["hash"].as_str().is_some_and(|hash| !hash.is_empty()));
+            assert_eq!(task["hash"], dry_run_task(&combined, &task_id)["hash"]);
+
+            for filter in [
+                format!("--filter={package}"),
+                format!("--filter=./{directory}"),
+            ] {
+                let filtered = run_turbo(
+                    tempdir.path(),
+                    &["run", task_name, &filter, "--dry-run=json"],
+                );
+                let filtered_task = dry_run_task(&filtered, &task_id);
+                assert_eq!(
+                    task["hash"], filtered_task["hash"],
+                    "{task_id} with {filter}"
+                );
+                assert_eq!(task["command"], filtered_task["command"]);
+                assert_eq!(task["dependencies"], filtered_task["dependencies"]);
+            }
+        }
+    }
+    let workspace_tasks = package_task_names(tempdir.path(), "go-workspace");
+    assert!(
+        !workspace_tasks
+            .iter()
+            .any(|task| matches!(task.as_str(), "test" | "lint" | "format")),
+        "verification must only be registered on modules: {workspace_tasks:?}"
+    );
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
     let build = dry_run_task(&output, "example.com/api#build");
@@ -1051,6 +1073,80 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         stderr.contains("Could not find task `run` in project"),
         "unexpected stderr: {stderr}"
     );
+}
+
+#[test]
+fn test_go_verification_reuses_cache_across_filtered_and_unfiltered_runs() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    // Share Go's compiler cache across invocations, outside the task inputs.
+    let go_cache = tempfile::tempdir().unwrap();
+    let go_cache_path = go_cache.path().to_string_lossy();
+    let environment = [("GOCACHE", go_cache_path.as_ref())];
+
+    for task in ["test", "lint"] {
+        for (filter, expected) in [
+            (Some("--filter=./packages/lib"), vec![("lib", "cache miss")]),
+            (None, vec![("lib", "cache hit"), ("api", "cache miss")]),
+            (Some("--filter=./apps/api"), vec![("api", "cache hit")]),
+        ] {
+            let mut args = vec!["run", task, "--log-order=grouped"];
+            args.extend(filter);
+            let output = run_turbo_with_env(tempdir.path(), &args, &environment);
+            assert_command_success(&output, "Go verification cache reuse");
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            for (package, status) in expected {
+                let expected = format!("example.com/{package}:{task}: {status}");
+                assert!(
+                    combined.contains(&expected),
+                    "expected {expected:?}: {combined}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_go_verification_hash_changes_only_for_module_and_dependents() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_e2e_workspace(tempdir.path());
+    let args = ["run", "test", "lint", "--dry-run=json"];
+    let before = run_turbo(tempdir.path(), &args);
+    assert_command_success(&before, "original Go verification hashes");
+
+    fs::write(
+        tempdir.path().join("packages/lib/lib.go"),
+        "package lib\n\nfunc Greet() string { return \"changed\" }\n",
+    )
+    .unwrap();
+    let after = run_turbo(tempdir.path(), &args);
+    assert_command_success(&after, "changed Go verification hashes");
+    for task in ["test", "lint"] {
+        for package in ["lib", "api"] {
+            let task_id = format!("example.com/{package}#{task}");
+            assert_ne!(
+                dry_run_task(&before, &task_id)["hash"],
+                dry_run_task(&after, &task_id)["hash"],
+                "{task_id} must track changed module sources"
+            );
+        }
+        let task_id = format!("example.com/independent#{task}");
+        assert_eq!(
+            dry_run_task(&before, &task_id)["hash"],
+            dry_run_task(&after, &task_id)["hash"],
+            "{task_id} must not track unrelated modules"
+        );
+    }
 }
 
 #[test]
@@ -1794,14 +1890,22 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     let aggregate = &query["data"]["aggregate"];
     assert_eq!(aggregate["name"], "go-workspace");
     assert_eq!(aggregate["path"], "");
-    assert!(
-        aggregate["tasks"]["items"]
-            .as_array()
-            .is_some_and(|tasks| tasks.iter().any(|task| {
-                task["name"] == "test"
-                    && task["command"] == "go test ./apps/api/... ./packages/lib/..."
-            }))
-    );
+    for (name, command) in [
+        ("test", "go test ./..."),
+        ("lint", "go vet ./..."),
+        ("format", "go fmt ./..."),
+    ] {
+        assert!(api["tasks"]["items"].as_array().is_some_and(|tasks| {
+            tasks
+                .iter()
+                .any(|task| task["name"] == name && task["command"] == command)
+        }));
+        assert!(
+            aggregate["tasks"]["items"]
+                .as_array()
+                .is_some_and(|tasks| tasks.iter().all(|task| task["name"] != name))
+        );
+    }
 
     let output = run_turbo(
         tempdir.path(),
@@ -1930,9 +2034,9 @@ fn test_go_regression_profile_outputs_are_not_log_only_cache_hits() {
     let profile = outputs.path().join("coverage.out");
     let flag = format!("-coverprofile={}", profile.display());
     let cache_path = cache.path().to_str().unwrap();
-    // Cover both a module and the workspace aggregate, which derive their IO
-    // separately. The report deliberately lives outside default input globs.
-    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
+    // Cover both executable and library modules. The report deliberately lives
+    // outside default input globs.
+    for filter in ["--filter=example.com/api", "--filter=example.com/lib"] {
         let args = ["run", "test", filter, "--", &flag];
         for _ in 0..2 {
             let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
@@ -2033,12 +2137,11 @@ func TestCustom(t *testing.T) {
 "#,
     )
     .unwrap();
-    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
-        let output = run_turbo_with_env(
-            root.path(),
-            &["run", "test", filter, "--", "-args", "-custom=expected"],
-            &[("GOCACHE", cache_path)],
-        );
+    for filter in [Some("--filter=example.com/api"), None] {
+        let mut args = vec!["run", "test"];
+        args.extend(filter);
+        args.extend(["--", "-args", "-custom=expected"]);
+        let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
         assert_command_success(&output, "Go test with test-binary arguments");
         assert!(
             String::from_utf8_lossy(&output.stdout).contains("example.com/api/subpackage"),

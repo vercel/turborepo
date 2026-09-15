@@ -1310,44 +1310,21 @@ pub fn native_tasks_for_module(
     tasks
 }
 
-/// Build workspace-wide verification tasks over explicit module patterns.
-pub fn native_tasks_for_workspace(
-    module_patterns: &[String],
-) -> Vec<crate::native_tasks::NativeTask> {
+/// Build the workspace's non-executing build contract.
+pub fn native_tasks_for_workspace() -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::NativeTask;
 
-    let mut module_patterns = module_patterns.to_vec();
-    module_patterns.sort();
-    module_patterns.dedup();
-    // Unlike test and vet, go fmt does not support cross-module workspace
-    // patterns. Leave formatting to the package-scoped tasks instead.
-    let mut tasks = [("test", "test"), ("lint", "vet")]
-        .into_iter()
-        .map(|(name, subcommand)| {
-            go_command_task(
-                name,
-                subcommand,
-                module_patterns.clone(),
-                if name == "test" {
-                    PassThroughPlacement::AfterSuffix
-                } else {
-                    PassThroughPlacement::BeforeSuffix
-                },
-                None,
-                TaskEntrypoint::PreferredOnly,
-                WorkingDirectoryPolicy::RepositoryRoot,
-            )
-        })
-        .collect::<Vec<_>>();
-    tasks.push(NativeTask::contract_task(
+    // Verification runs per module so filtered and unfiltered invocations select
+    // the same tasks and share cache entries. Formatting is also module-scoped:
+    // go fmt does not support cross-module workspace patterns.
+    vec![NativeTask::contract_task(
         "build",
         NativeTaskContract::new(
             toolchain::TaskDefaults::default(),
             Some(TaskEntrypoint::Excluded),
             false,
         ),
-    ));
-    tasks
+    )]
 }
 
 /// Effective `go env` values that alter compilation, package selection, tests,
@@ -1775,18 +1752,6 @@ impl RepositoryContributor for GoContributor {
             })
             .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            let mut module_patterns = workspace
-                .modules
-                .iter()
-                .filter_map(|module| {
-                    let directory = module.manifest_path.parent()?;
-                    let directory =
-                        turbopath::AnchoredSystemPathBuf::new(&self.repo_root, directory).ok()?;
-                    Some(format!("./{}/...", directory.to_unix()))
-                })
-                .collect::<Vec<_>>();
-            module_patterns.sort();
-
             let mut module_names = workspace
                 .modules
                 .iter()
@@ -1821,7 +1786,7 @@ impl RepositoryContributor for GoContributor {
                     self.repo_root.join_component(GO_WORK),
                 )
                 .with_native_relationships(workspace_relationships)
-                .with_native_tasks(native_tasks_for_workspace(&module_patterns))
+                .with_native_tasks(native_tasks_for_workspace())
                 .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
                     GoTaskContract::workspace(&environment.target_os, &cache_prefixes)
                         .with_go_flags(
@@ -2904,10 +2869,13 @@ mod tests {
         assert_eq!(format.cwd, root.join_components(&["apps", "api"]));
         assert_eq!(task_cache(&context, "format"), Some(false));
         assert!(context.native_tasks().get("vet").is_none());
-        assert!(
-            !native_tasks_for_workspace(&["./apps/api/...".to_string()])
-                .iter()
-                .any(|task| matches!(task.name(), "vet" | "format"))
+        let workspace_tasks = native_tasks_for_workspace();
+        assert_eq!(workspace_tasks.len(), 1);
+        assert_eq!(workspace_tasks[0].name(), "build");
+        assert!(!workspace_tasks[0].participates());
+        assert_eq!(
+            workspace_tasks[0].contract().entrypoint(),
+            Some(TaskEntrypoint::Excluded)
         );
         assert_eq!(
             context
@@ -3095,10 +3063,7 @@ mod tests {
             &root,
             GO_WORKSPACE_NAME,
             "",
-            native_tasks_for_workspace(&[
-                "./apps/api/...".to_string(),
-                "./packages/lib/...".to_string(),
-            ]),
+            native_tasks_for_workspace(),
             crate::package_graph::PackageTaskContextKind::Aggregate,
             crate::task_contracts::ScopeTaskContract::go(workspace_contract.clone()),
         );
@@ -3117,7 +3082,7 @@ mod tests {
             assert!(aggregate_io.input_globs.iter().any(|glob| glob == input));
         }
         assert_eq!(aggregate_io.outputs, DerivedOutputs::Resolved(Vec::new()));
-        assert_eq!(task_cache(&workspace, "lint"), None);
+        assert!(workspace.native_tasks().get("lint").is_none());
     }
 
     #[test]
