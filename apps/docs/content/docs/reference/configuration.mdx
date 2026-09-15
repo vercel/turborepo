@@ -359,6 +359,13 @@ Without this flag, `--affected` operates at the **package level**: if any file i
 
 In this example, if only `README.md` changed in a package, `build` would not run because it excludes `README.md` from its inputs.
 
+This flag also makes package-oriented queries and pruning follow the Task Graph:
+
+- [`turbo query`](/docs/reference/query)'s `affectedPackages` returns the packages that own affected tasks, including dependents connected only through explicit `package#task` dependencies. Packages with no affected tasks are omitted, and unchanged task prerequisites are not reported as affected.
+- [`turbo prune`](/docs/reference/prune) retains packages needed by the tasks of retained packages, along with their package dependencies and inherited Package Configurations. The arguments remain package names, so pruning considers all configured tasks rather than a single task such as `build`.
+
+Both behaviors follow task dependencies within and across enabled toolchains. For example, a JavaScript task depending on `mycrate#build:types` can make its package affected when the Rust task changes, and pruning the JavaScript package retains the crate even without a package-manifest dependency. With the flag disabled, both operations retain their package-based behavior.
+
 <Callout type="info">
   Changes to root configuration files (`package.json`, `turbo.json`,
   `turbo.jsonc`), the package manager lockfile, or

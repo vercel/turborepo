@@ -546,6 +546,74 @@ enum PackageChangeReason {
     InFilteredDirectory(InFilteredDirectory),
 }
 
+/// Collapse task owners without changing the ChangedPackage reason union. The
+/// lexicographically first affected task in each package supplies its reason,
+/// independent of the raw calculator's hash-map iteration order.
+fn project_affected_task_packages(
+    mut tasks: Vec<affected_tasks::AffectedTask>,
+    legacy_packages: &HashMap<PackageName, PackageInclusionReason>,
+    convert_reason: impl Fn(PackageInclusionReason) -> PackageChangeReason,
+) -> HashMap<PackageName, PackageChangeReason> {
+    use affected_tasks::TaskChangeReason;
+
+    let global_reason = legacy_packages
+        .values()
+        .find(|reason| matches!(reason, PackageInclusionReason::All(_)));
+    tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    let mut packages = HashMap::new();
+    for task in tasks {
+        packages
+            .entry(PackageName::from(task.task_id.package()))
+            .or_insert_with(|| match task.reason {
+                TaskChangeReason::FileChanged { file_path } => {
+                    PackageChangeReason::FileChanged(FileChanged { file_path })
+                }
+                TaskChangeReason::DependencyTaskChanged { package_name, .. } => {
+                    PackageChangeReason::DependencyChanged(DependencyChanged {
+                        dependency_name: package_name,
+                    })
+                }
+                TaskChangeReason::PackageDependencyChanged { package_name } => {
+                    // This seeds the owner's own tasks from a lockfile change,
+                    // not from a dependency on itself. Retain added/removed
+                    // external packages (or the conservative lockfile reason).
+                    legacy_packages
+                        .get(&PackageName::from(package_name))
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+                TaskChangeReason::GlobalFileChanged { file_path } => {
+                    PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                        file_path,
+                    })
+                }
+                TaskChangeReason::GlobalDepsChanged { file_path } => {
+                    PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged { file_path })
+                }
+                TaskChangeReason::AllTasksChanged { .. } => {
+                    // The raw calculator uses a description for global changes.
+                    // Keep the original structured reason, even for task owners
+                    // absent from the legacy package map. With no global reason,
+                    // this is the input matcher's conservative fallback.
+                    global_reason
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+            });
+    }
+    packages
+}
+
 #[derive(SimpleObject)]
 struct ChangedPackage {
     reason: PackageChangeReason,
@@ -679,9 +747,35 @@ impl RepositoryQuery {
         head: Option<String>,
         filter: Option<PackagePredicate>,
     ) -> Result<Array<ChangedPackage>, Error> {
-        let mut packages = self
+        let affected_packages = if self
             .run
-            .calculate_affected_packages(base, head)?
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+        {
+            // Project raw affectedness, not the affectedTasks resolver's scheduled
+            // tasks: unchanged prerequisites are not affected packages. Keep the
+            // QueryRun method legacy, since the raw calculator calls it itself.
+            let legacy_packages = self
+                .run
+                .calculate_affected_packages(base.clone(), head.clone())?;
+            let tasks = affected_tasks::calculate_affected_tasks_with_packages(
+                &self.run,
+                base,
+                head,
+                &legacy_packages,
+            )?;
+            project_affected_task_packages(tasks, &legacy_packages, |reason| {
+                self.convert_change_reason(reason)
+            })
+        } else {
+            self.run
+                .calculate_affected_packages(base, head)?
+                .into_iter()
+                .map(|(package, reason)| (package, self.convert_change_reason(reason)))
+                .collect()
+        };
+        let mut packages = affected_packages
             .into_iter()
             .filter(|(package, _)| {
                 package != &PackageName::Root
@@ -690,7 +784,7 @@ impl RepositoryQuery {
             .map(|(package, reason)| {
                 Ok(ChangedPackage {
                     package: Package::new(self.run.clone(), package)?,
-                    reason: self.convert_change_reason(reason),
+                    reason,
                 })
             })
             .filter(|package: &Result<ChangedPackage, Error>| {
@@ -1014,6 +1108,46 @@ mod tests {
     use turbopath::AbsoluteSystemPath;
 
     use super::{resolve_file_path, Error};
+
+    #[test]
+    fn affected_package_projection_chooses_first_task_reason_regardless_of_order() {
+        use turborepo_task_id::TaskId;
+
+        use super::{
+            affected_tasks::{AffectedTask, TaskChangeReason},
+            project_affected_task_packages, PackageChangeReason, PackageName,
+        };
+
+        for reverse in [false, true] {
+            let mut tasks = vec![
+                AffectedTask {
+                    task_id: TaskId::new("app", "build"),
+                    reason: TaskChangeReason::DependencyTaskChanged {
+                        package_name: "lib".to_string(),
+                        task_name: "build".to_string(),
+                    },
+                },
+                AffectedTask {
+                    task_id: TaskId::new("app", "test"),
+                    reason: TaskChangeReason::FileChanged {
+                        file_path: "app/test.ts".to_string(),
+                    },
+                },
+            ];
+            if reverse {
+                tasks.reverse();
+            }
+            let packages = project_affected_task_packages(tasks, &Default::default(), |_| {
+                unreachable!("task dependency reasons do not use legacy package reasons")
+            });
+            assert_eq!(packages.len(), 1);
+            assert!(matches!(
+                packages.get(&PackageName::from("app")),
+                Some(PackageChangeReason::DependencyChanged(reason))
+                    if reason.dependency_name == "lib"
+            ));
+        }
+    }
 
     #[test]
     fn resolve_file_path_allows_repo_relative_files() {

@@ -54,7 +54,11 @@ pub struct FutureFlags {
     /// Use task-level `inputs` globs to determine which tasks are affected by
     /// changed files when running with `--affected`. When enabled, only tasks
     /// whose declared inputs match the changed files are selected, rather than
-    /// selecting all tasks in changed packages.
+    /// selecting all tasks in changed packages. `turbo query`'s
+    /// `affectedPackages` reports the owners of affected tasks, including
+    /// dependents connected only by explicit task dependencies. `turbo prune`
+    /// retains task dependency owners and their package dependencies, including
+    /// across enabled toolchains, in addition to its package-based closure.
     #[serde(default)]
     pub affected_using_task_inputs: bool,
     /// When GitHub Actions reports a base branch that is not available as a
