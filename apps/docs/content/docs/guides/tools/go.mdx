@@ -130,9 +130,9 @@ To preserve a custom binary path, enable `experimentalTaskCommand` in the root c
   "extends": ["//"],
   "tasks": {
     "build": {
-      "command": ["go", "build", "-o", "bin/pigo-api", "."],
-      "inputs": ["$TURBO_DEFAULT$", "!bin/pigo-api"],
-      "outputs": ["bin/pigo-api"]
+      "command": ["go", "build", "-o", "bin/my-api", "."],
+      "inputs": ["$TURBO_DEFAULT$", "!bin/my-api"],
+      "outputs": ["bin/my-api"]
     }
   }
 }
