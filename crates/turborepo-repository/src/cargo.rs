@@ -2445,7 +2445,10 @@ fn discover_crates_from_manifests(
     while cursor < pending.len() {
         let manifest_path = pending[cursor].clone();
         cursor += 1;
-        if !seen.insert(manifest_path.to_string()) {
+        // Workspace globs and path dependencies can spell the same Windows
+        // path with different separators. Compare native paths so those
+        // representations resolve to one workspace member.
+        if !seen.insert(manifest_path.as_std_path().to_path_buf()) {
             continue;
         }
         let Some(package) =
