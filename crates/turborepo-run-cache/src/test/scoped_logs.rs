@@ -183,7 +183,7 @@ async fn concurrent_scoped_logs_save_restore_and_replay_independently() {
         let log_dir = root.join_components(&["packages", "app", ".turbo"]);
         // A user-owned .log in the reserved directory must not be mistaken for
         // a managed digest-named task log when output globs are broad.
-        let notes = log_dir.join_components(&["task-logs", "notes.log"]);
+        let notes = log_dir.join_component("notes.log");
         notes.create_with_contents("user artifact\n").unwrap();
         for (index, task) in tasks.iter_mut().enumerate() {
             task.save_outputs(
@@ -308,7 +308,7 @@ async fn aliased_scope_directories_have_distinct_physical_logs() {
         .map(|task| task.log_file_path.to_realpath().unwrap())
         .collect();
     assert_eq!(physical_paths.len(), NAMES.len());
-    let physical_log_dir = root.join_components(&["packages", "app", ".turbo", "task-logs"]);
+    let physical_log_dir = root.join_components(&["packages", "app", ".turbo"]);
     for (name, task) in NAMES.iter().zip(&tasks) {
         let physical = task.log_file_path.to_realpath().unwrap();
         assert_eq!(
@@ -321,7 +321,11 @@ async fn aliased_scope_directories_have_distinct_physical_logs() {
             .unwrap()
             .to_str()
             .unwrap();
-        let digest = filename.strip_suffix(".log").unwrap();
+        let digest = filename
+            .strip_prefix(turborepo_types::SCOPED_LOG_PREFIX)
+            .unwrap()
+            .strip_suffix(".log")
+            .unwrap();
         assert_eq!(digest.len(), 64);
         assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert_eq!(
@@ -405,10 +409,10 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
             writer.flush().unwrap();
         }
         let app = root.join_components(&["packages", "app"]);
-        std::os::unix::fs::symlink(".turbo/task-logs", app.join_component("logs")).unwrap();
+        std::os::unix::fs::symlink(".turbo", app.join_component("logs")).unwrap();
         // For the glob variant, a non-managed file proves that the symlink's
         // contents really are followed. The literal variant does not select it.
-        let notes = app.join_components(&[".turbo", "task-logs", "notes.log"]);
+        let notes = app.join_components(&[".turbo", "notes.log"]);
         notes.create_with_contents("user artifact\n").unwrap();
         let task = &mut tasks[0];
         let telemetry = PackageTaskEventBuilder::new(NAMES[0], "build");

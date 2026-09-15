@@ -231,10 +231,8 @@ fn is_scoped_task_log(path: &AbsoluteSystemPath) -> bool {
     let Some(parent) = path.as_std_path().parent() else {
         return false;
     };
-    let in_log_directory = parent.file_name()
-        == Some(std::ffi::OsStr::new(turborepo_types::SCOPED_LOG_DIR))
-        && parent.parent().and_then(std::path::Path::file_name)
-            == Some(std::ffi::OsStr::new(turborepo_types::LOG_DIR));
+    let in_log_directory =
+        parent.file_name() == Some(std::ffi::OsStr::new(turborepo_types::LOG_DIR));
     in_log_directory && has_scoped_task_log_name(path)
 }
 
@@ -242,6 +240,7 @@ fn has_scoped_task_log_name(path: &AbsoluteSystemPath) -> bool {
     path.as_std_path()
         .file_name()
         .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_prefix(turborepo_types::SCOPED_LOG_PREFIX))
         .and_then(|name| name.strip_suffix(".log"))
         .is_some_and(|stem| stem.len() == 64 && stem.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }

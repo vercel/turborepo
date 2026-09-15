@@ -699,9 +699,13 @@ mod tests {
             ] {
                 let unix = sharable_workspace_relative_log_file(task, Some(name));
                 assert_eq!(unix, sharable_workspace_relative_log_file(task, Some(name)));
-                assert!(unix.as_str().starts_with(".turbo/task-logs/"));
-                let file = unix.as_str().rsplit('/').next().unwrap();
-                let digest = file.strip_suffix(".log").unwrap();
+                let (directory, file) = unix.as_str().rsplit_once('/').unwrap();
+                assert_eq!(directory, ".turbo");
+                let digest = file
+                    .strip_prefix(SCOPED_LOG_PREFIX)
+                    .unwrap()
+                    .strip_suffix(".log")
+                    .unwrap();
                 assert_eq!(digest.len(), 64);
                 assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
                 assert!(paths.insert(unix.as_str().to_lowercase()), "{name}#{task}");
@@ -1023,8 +1027,8 @@ impl Default for TaskDefinition {
 /// Directory where turbo stores task logs
 pub const LOG_DIR: &str = ".turbo";
 
-/// Reserved directory for identity-isolated logs in shared package directories.
-pub const SCOPED_LOG_DIR: &str = "task-logs";
+/// Filename prefix for identity-isolated logs in shared package directories.
+pub const SCOPED_LOG_PREFIX: &str = "turbo-";
 
 /// Generate the log filename for a task, escaping colons in the task name.
 ///
@@ -1069,9 +1073,7 @@ pub fn sharable_workspace_relative_log_file(
                 .chain_update(namespace.as_bytes())
                 .chain_update(task_name.as_bytes())
                 .finalize();
-            log_dir
-                .join_component(SCOPED_LOG_DIR)
-                .join_component(&format!("{hash:x}.log"))
+            log_dir.join_component(&format!("{SCOPED_LOG_PREFIX}{hash:x}.log"))
         }
     }
 }

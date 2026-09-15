@@ -319,7 +319,11 @@ fn colocated_task_logs_are_isolated_and_restored_with_stable_hashes() {
         let legacy = format!("{directory}/.turbo/turbo-build.log");
         if *directory == "packages/lib" {
             assert_ne!(path, legacy, "co-located identities need namespaced logs");
-            assert!(path.starts_with("packages/lib/.turbo/"));
+            assert_eq!(
+                path.rsplit_once('/').unwrap().0,
+                "packages/lib/.turbo",
+                "scoped logs must not introduce another directory"
+            );
             assert!(
                 !dir.join(legacy).exists(),
                 "no legacy shared log should be written"
