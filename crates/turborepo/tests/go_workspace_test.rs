@@ -984,12 +984,12 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
     assert_eq!(json["tasks"].as_array().map(Vec::len), Some(2));
     for (name, directory) in [
-        ("example.com/api#format", "apps/api"),
-        ("example.com/lib#format", "packages/lib"),
+        ("example.com/api#format", Path::new("apps").join("api")),
+        ("example.com/lib#format", Path::new("packages").join("lib")),
     ] {
         let task = dry_run_task(&output, name);
         assert_eq!(task["command"], "go fmt ./...");
-        assert_eq!(task["directory"], directory);
+        assert_eq!(task["directory"], directory.to_string_lossy().as_ref());
         assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
     }
 
