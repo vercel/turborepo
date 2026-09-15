@@ -122,6 +122,16 @@ System environment variables are always overridden by flag values provided direc
         if one is not found.
       </td>
     </tr>
+    <tr id="turbo_env_mode">
+      <td>
+        <code>TURBO_ENV_MODE</code>
+      </td>
+      <td>
+        <span>Sets the environment mode, similar to using the</span>{" "}
+        <code>[--env-mode](/docs/reference/run#--env-mode-option)</code>
+        <span> flag.</span>
+      </td>
+    </tr>
     <tr id="turbo_force">
       <td>
         <code>TURBO_FORCE</code>
@@ -274,6 +284,15 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>Always ignore the local filesystem cache for all tasks.</td>
     </tr>
+    <tr id="turbo_root_turbo_json">
+      <td>
+        <code>TURBO_ROOT_TURBO_JSON</code>
+      </td>
+      <td>
+        Use the <code>turbo.json</code> located at the provided path instead of
+        the one at the root of the repository.
+      </td>
+    </tr>
     <tr id="turbo_run_summary">
       <td>
         <code>TURBO_RUN_SUMMARY</code>
@@ -338,12 +357,30 @@ System environment variables are always overridden by flag values provided direc
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
+    <tr id="turbo_tui_scrollback_length">
+      <td>
+        <code>TURBO_TUI_SCROLLBACK_LENGTH</code>
+      </td>
+      <td>
+        Number of lines to keep in scrollback for each task in the terminal
+        UI. Defaults to <code>2048</code>.
+      </td>
+    </tr>
     <tr id="turbo_ui">
       <td>
         <code>TURBO_UI</code>
       </td>
       <td>
         Enables TUI when passed true or 1, disables when passed false or 0.
+      </td>
+    </tr>
+    <tr id="turbo_watch_startup_timeout">
+      <td>
+        <code>TURBO_WATCH_STARTUP_TIMEOUT</code>
+      </td>
+      <td>
+        Number of seconds <code>turbo watch</code> waits for the file watcher
+        to become ready before failing. Defaults to <code>120</code>.
       </td>
     </tr>
     <tr id="turbo_concurrency">
