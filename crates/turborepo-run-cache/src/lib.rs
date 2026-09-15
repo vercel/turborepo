@@ -177,12 +177,17 @@ impl RunCache {
             });
         }
         let package_directory = package_context.directory();
-        let log_file_path = self
-            .repo_root
-            .resolve(package_directory)
-            .resolve(&TaskDefinition::workspace_relative_log_file(task_id.task()));
-        let repo_relative_globs =
-            task_definition.repo_relative_hashable_outputs(&task_id, package_directory);
+        let log_file_path = self.repo_root.resolve(package_directory).resolve(
+            &TaskDefinition::workspace_relative_log_file(
+                task_id.task(),
+                package_context.log_namespace(),
+            ),
+        );
+        let repo_relative_globs = task_definition.repo_relative_hashable_outputs(
+            &task_id,
+            package_directory,
+            package_context.log_namespace(),
+        );
 
         let mut task_output_logs = task_definition.output_logs;
         if let Some(task_output_logs_override) = self.task_output_logs {
@@ -218,6 +223,27 @@ impl RunCache {
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
+}
+
+/// Recognize only managed, digest-named log files in the reserved namespace.
+/// Ordinary user artifacts (including other .log files) are not filtered out.
+fn is_scoped_task_log(path: &AbsoluteSystemPath) -> bool {
+    let Some(parent) = path.as_std_path().parent() else {
+        return false;
+    };
+    let in_log_directory = parent.file_name()
+        == Some(std::ffi::OsStr::new(turborepo_types::SCOPED_LOG_DIR))
+        && parent.parent().and_then(std::path::Path::file_name)
+            == Some(std::ffi::OsStr::new(turborepo_types::LOG_DIR));
+    in_log_directory && has_scoped_task_log_name(path)
+}
+
+fn has_scoped_task_log_name(path: &AbsoluteSystemPath) -> bool {
+    path.as_std_path()
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(".log"))
+        .is_some_and(|stem| stem.len() == 64 && stem.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
 fn expand_symlinked_output_roots(
@@ -445,6 +471,42 @@ impl TaskCache {
         Ok(log_writer)
     }
 
+    fn scoped_log_glob(&self) -> Option<String> {
+        is_scoped_task_log(&self.log_file_path).then(|| {
+            AnchoredSystemPathBuf::relative_path_between(
+                &self.run_cache.repo_root,
+                &self.log_file_path,
+            )
+            .to_unix()
+            .to_string()
+        })
+    }
+
+    async fn notify_outputs_written(
+        &self,
+        watcher: &dyn OutputWatcher,
+        inclusions: Vec<String>,
+        exclusions: Vec<String>,
+        time_saved: u64,
+    ) -> Result<(), OutputWatcherError> {
+        watcher
+            .notify_outputs_written(self.hash.clone(), inclusions, exclusions, time_saved)
+            .await?;
+        if let Some(log) = self.scoped_log_glob() {
+            // A separate registration lets the implicit log override user
+            // exclusions without weakening exclusions for ordinary artifacts.
+            watcher
+                .notify_outputs_written(
+                    format!("{}-task-log", self.hash),
+                    vec![log],
+                    Vec::new(),
+                    time_saved,
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Check if a cache entry exists for this task.
     ///
     /// Used by dry runs to report cache status without restoring outputs.
@@ -524,7 +586,23 @@ impl TaskCache {
             self.repo_relative_globs.inclusions.len()
         };
 
-        let has_changed_outputs = changed_output_count > 0;
+        let scoped_log_changed =
+            if let (Some(watcher), Some(log)) = (&self.output_watcher, self.scoped_log_glob()) {
+                match watcher
+                    .get_changed_outputs(format!("{}-task-log", self.hash), vec![log])
+                    .await
+                {
+                    Ok(changed) => !changed.is_empty(),
+                    Err(error) => {
+                        telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
+                        debug!(%error, "Failed to check scoped task log; restoring from cache");
+                        true
+                    }
+                }
+            } else {
+                false
+            };
+        let has_changed_outputs = changed_output_count > 0 || scoped_log_changed;
 
         let cache_status = if has_changed_outputs {
             // Note that we currently don't use the output globs when restoring, but we
@@ -570,9 +648,9 @@ impl TaskCache {
                     .iter()
                     .map(|g| g.as_ref().to_string())
                     .collect();
-                if let Err(err) = output_watcher
+                if let Err(err) = self
                     .notify_outputs_written(
-                        self.hash.clone(),
+                        output_watcher.as_ref(),
                         inclusion_strings.clone(),
                         exclusion_strings,
                         cache_hit_metadata.time_saved,
@@ -670,14 +748,37 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
-        let files_to_be_cached = files_to_be_cached
+        let followed_outputs = expand_symlinked_output_roots(
+            &self.run_cache.repo_root,
+            &validated_inclusions,
+            &validated_exclusions,
+        )?;
+        let mut files_to_be_cached = files_to_be_cached
             .into_iter()
-            .chain(expand_symlinked_output_roots(
-                &self.run_cache.repo_root,
-                &validated_inclusions,
-                &validated_exclusions,
-            )?)
+            .chain(followed_outputs.iter().cloned())
             .collect::<HashSet<_>>();
+
+        // Broad user output globs must not bundle a peer's managed task log,
+        // including through an output-directory symlink. Only followed outputs
+        // and digest-named log candidates need physical-path lookups; ordinary
+        // artifacts stay cheap. Literal alias paths need the same protection.
+        files_to_be_cached.retain(|path| {
+            if path == &self.log_file_path {
+                return true;
+            }
+            if is_scoped_task_log(path) {
+                return false;
+            }
+            (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
+                || path
+                    .to_realpath()
+                    .map(|physical| !is_scoped_task_log(&physical))
+                    .unwrap_or(true)
+        });
+        // Scoped logs are implicit outputs, even when a user glob excludes them.
+        if is_scoped_task_log(&self.log_file_path) && self.log_file_path.exists() {
+            files_to_be_cached.insert(self.log_file_path.clone());
+        }
 
         for path in &files_to_be_cached {
             if !self.run_cache.repo_root.contains(path) {
@@ -723,9 +824,9 @@ impl TaskCache {
                 .iter()
                 .map(|g| g.as_ref().to_string())
                 .collect();
-            if let Err(err) = output_watcher
+            if let Err(err) = self
                 .notify_outputs_written(
-                    self.hash.to_string(),
+                    output_watcher.as_ref(),
                     inclusion_strings,
                     exclusion_strings,
                     duration.as_millis() as u64,
@@ -854,6 +955,8 @@ fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
 
 #[cfg(test)]
 mod test {
+    mod scoped_logs;
+
     use std::{
         collections::HashSet,
         io::Write,
@@ -876,7 +979,9 @@ mod test {
     };
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
-    use turborepo_types::{OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs};
+    use turborepo_types::{
+        OutputLogsMode, RunCacheOpts, TaskDefinition, TaskDefinitionExt, TaskOutputs,
+    };
     use turborepo_ui::ColorConfig;
 
     use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
@@ -1062,6 +1167,7 @@ mod test {
             ..Default::default()
         };
 
+        let mut log_paths = HashSet::new();
         for package in [PackageName::Root, PackageName::from("cargo-workspace")] {
             let task_cache = cache
                 .task_cache(
@@ -1071,14 +1177,14 @@ mod test {
                     "hash",
                 )
                 .unwrap();
-            assert_eq!(
-                task_cache.log_file_path,
-                repo_root.join_components(&[".turbo", "turbo-build.log"])
-            );
+            let relative =
+                TaskDefinition::workspace_relative_log_file("build", Some(package.as_str()));
+            assert_eq!(task_cache.log_file_path, repo_root.resolve(&relative));
+            assert!(log_paths.insert(task_cache.log_file_path.clone()));
             assert_eq!(
                 task_cache.repo_relative_globs,
                 TaskOutputs {
-                    inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string(),],
+                    inclusions: vec![relative.to_unix().to_string(), "dist/**".to_string()],
                     exclusions: Vec::new(),
                 }
             );

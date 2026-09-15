@@ -587,7 +587,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let env_vars =
             self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
 
-        let outputs = task_definition.hashable_outputs(task_id);
+        let outputs = task_definition.hashable_outputs(task_id, package_context.log_namespace());
         let task_dependency_hashes =
             self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
         let external_deps_hash: Option<&str> = if !is_monorepo {
@@ -1304,6 +1304,27 @@ mod test {
     }
 
     #[tokio::test]
+    async fn scoped_log_paths_separate_equal_hash_inputs_and_invalidate_legacy_entries() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let unshared = javascript_graph(&root).await;
+        let legacy_hash = context_hash(&unshared, PackageName::Root, true);
+        let shared = cargo_graph(&root).await;
+        // Both contexts use the same directory, task name, empty file hash,
+        // definition, and global hash. Ignore external resolution here to prove
+        // that log identity alone distinguishes them.
+        let root_hash = context_hash(&shared, PackageName::Root, true);
+        let aggregate_hash = context_hash(&shared, PackageName::from("cargo-workspace"), true);
+        assert_ne!(root_hash, aggregate_hash);
+        assert_ne!(root_hash, legacy_hash);
+        assert_ne!(aggregate_hash, legacy_hash);
+        assert_eq!(
+            context_hash(&unshared, PackageName::Root, true),
+            legacy_hash
+        );
+    }
+
+    #[tokio::test]
     async fn task_hash_uses_identity_bound_context_and_rejects_mismatch() {
         let tmp = tempdir().unwrap();
         let repo_root =
@@ -1619,7 +1640,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, PackageName::Root, true),
-            "f296efc7e9b4061a",
+            "3746f9b64ff47506",
             "pure Cargo root Turbo hash bytes changed"
         );
         assert_eq!(
@@ -1629,7 +1650,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, cargo_aggregate, true,),
-            "f296efc7e9b4061a",
+            "c9c32b27a28e7da4",
             "Cargo aggregate hash bytes changed"
         );
     }
@@ -1664,7 +1685,9 @@ mod test {
         let cargo_cache = compute_external_deps_hashes(&cargo_graph).unwrap();
         let external_hash = "bef1fc07e0fccabe";
         let app_task_hash = "24cf5aae0bca8de3";
-        let workspace_task_hash = "7d86d24eb004e72c";
+        // The root and aggregate share a directory, so their log inclusions
+        // intentionally invalidate the old shared-path task hashes.
+        let workspace_task_hash = "d6b0ff703e67af0f";
         assert_eq!(
             cargo_cache,
             HashMap::from([
@@ -1677,7 +1700,7 @@ mod test {
         for (graph, package, expected) in [
             (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
-            (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
+            (&cargo_graph, PackageName::Root, "ddc1cb261dc0f3d2"),
         ] {
             assert_eq!(monorepo_context_hash(graph, package), expected);
         }

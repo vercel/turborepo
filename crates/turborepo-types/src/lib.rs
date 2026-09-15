@@ -24,6 +24,7 @@ use globwalk::{GlobError, ValidatedGlob};
 use schemars::JsonSchema;
 pub use secret::SecretString;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use ts_rs::TS;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
@@ -663,11 +664,67 @@ mod tests {
 
     #[test]
     fn test_sharable_workspace_relative_log_file() {
-        let path = sharable_workspace_relative_log_file("build");
+        let path = sharable_workspace_relative_log_file("build", None);
         assert_eq!(path.as_str(), ".turbo/turbo-build.log");
 
-        let path = sharable_workspace_relative_log_file("build:prod");
+        let path = sharable_workspace_relative_log_file("build:prod", None);
         assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
+    }
+
+    #[test]
+    fn scoped_task_logs_are_bounded_portable_and_identity_specific() {
+        let long_name = "long/".repeat(1000);
+        let names = [
+            "@scope/pkg",
+            "example.com/module",
+            "//",
+            "CON",
+            "con",
+            "..",
+            "a/b",
+            "a\\b",
+            "a:*?<>|[]{}",
+            "trailing. ",
+            "unicodé/包",
+            long_name.as_str(),
+        ];
+        let mut paths = std::collections::HashSet::new();
+        for name in names {
+            for task in [
+                "build",
+                "build:prod",
+                "build$colon$prod",
+                "../CON",
+                long_name.as_str(),
+            ] {
+                let unix = sharable_workspace_relative_log_file(task, Some(name));
+                assert_eq!(unix, sharable_workspace_relative_log_file(task, Some(name)));
+                assert!(unix.as_str().starts_with(".turbo/task-logs/"));
+                let file = unix.as_str().rsplit('/').next().unwrap();
+                let digest = file.strip_suffix(".log").unwrap();
+                assert_eq!(digest.len(), 64);
+                assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+                assert!(paths.insert(unix.as_str().to_lowercase()), "{name}#{task}");
+                assert_eq!(
+                    TaskDefinition::workspace_relative_log_file(task, Some(name)).to_unix(),
+                    unix,
+                );
+            }
+        }
+        // Delimiter-like names must not alias a different identity tuple.
+        assert_ne!(
+            sharable_workspace_relative_log_file("bc", Some("a")),
+            sharable_workspace_relative_log_file("c", Some("ab")),
+        );
+        let task = TaskDefinition::default();
+        assert_ne!(
+            task.hashable_outputs("build", None),
+            task.hashable_outputs("build", Some("app"))
+        );
+        assert_ne!(
+            task.hashable_outputs("build", Some("app")),
+            task.hashable_outputs("build", Some("other"))
+        );
     }
 
     #[test]
@@ -680,7 +737,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = task_def.hashable_outputs("build");
+        let result = task_def.hashable_outputs("build", None);
 
         // Log file should be included and outputs should be sorted
         assert!(
@@ -702,7 +759,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = task_def.hashable_outputs("build");
+        let result = task_def.hashable_outputs("build", None);
 
         // Should be sorted
         assert_eq!(
@@ -722,7 +779,7 @@ mod tests {
     #[test]
     fn test_hashable_outputs_escapes_colons() {
         let task_def = TaskDefinition::default();
-        let result = task_def.hashable_outputs("build:prod");
+        let result = task_def.hashable_outputs("build:prod", None);
 
         assert!(
             result
@@ -733,13 +790,13 @@ mod tests {
 
     #[test]
     fn test_task_definition_ext_workspace_relative_log_file() {
-        let path = TaskDefinition::workspace_relative_log_file("build");
+        let path = TaskDefinition::workspace_relative_log_file("build", None);
         #[cfg(not(windows))]
         assert_eq!(path.as_str(), ".turbo/turbo-build.log");
         #[cfg(windows)]
         assert_eq!(path.as_str(), ".turbo\\turbo-build.log");
 
-        let path = TaskDefinition::workspace_relative_log_file("build:prod");
+        let path = TaskDefinition::workspace_relative_log_file("build:prod", None);
         #[cfg(not(windows))]
         assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
         #[cfg(windows)]
@@ -966,6 +1023,9 @@ impl Default for TaskDefinition {
 /// Directory where turbo stores task logs
 pub const LOG_DIR: &str = ".turbo";
 
+/// Reserved directory for identity-isolated logs in shared package directories.
+pub const SCOPED_LOG_DIR: &str = "task-logs";
+
 /// Generate the log filename for a task, escaping colons in the task name.
 ///
 /// # Example
@@ -980,20 +1040,40 @@ pub fn task_log_filename(task_name: &str) -> String {
 
 /// Get the workspace-relative path to the log file for a task as a
 /// `RelativeUnixPathBuf`. This is used for cache hash computation and is
-/// platform-independent.
+/// platform-independent. Pass the authoritative package context's log namespace
+/// for shared directories; `None` retains the legacy filename and hash bytes.
 ///
 /// # Example
 /// ```
 /// use turborepo_types::sharable_workspace_relative_log_file;
-/// let path = sharable_workspace_relative_log_file("build");
+/// let path = sharable_workspace_relative_log_file("build", None);
 /// assert_eq!(path.as_str(), ".turbo/turbo-build.log");
 /// ```
-pub fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
+pub fn sharable_workspace_relative_log_file(
+    task_name: &str,
+    namespace: Option<&str>,
+) -> RelativeUnixPathBuf {
     let log_dir = match RelativeUnixPathBuf::new(LOG_DIR) {
         Ok(log_dir) => log_dir,
         Err(_) => unreachable!("LOG_DIR is a valid relative unix path"),
     };
-    log_dir.join_component(&task_log_filename(task_name))
+    match namespace {
+        None => log_dir.join_component(&task_log_filename(task_name)),
+        Some(namespace) => {
+            // Length framing makes the identity tuple unambiguous. A fixed-size
+            // digest avoids path separators, glob syntax, case-folding aliases,
+            // Windows device names, and component-length limits in native names.
+            let hash = Sha256::new()
+                .chain_update(b"turborepo-task-log-v1\0")
+                .chain_update((namespace.len() as u64).to_le_bytes())
+                .chain_update(namespace.as_bytes())
+                .chain_update(task_name.as_bytes())
+                .finalize();
+            log_dir
+                .join_component(SCOPED_LOG_DIR)
+                .join_component(&format!("{hash:x}.log"))
+        }
+    }
 }
 
 impl TaskDefinition {
@@ -1004,15 +1084,17 @@ impl TaskDefinition {
     ///
     /// # Arguments
     /// * `task_name` - The task name (e.g., "build" or "build:prod")
+    /// * `namespace` - The package context's log namespace, if its directory is
+    ///   shared
     ///
     /// # Returns
     /// A `TaskOutputs` with:
     /// - The log file path prepended to inclusions
     /// - All inclusions sorted
     /// - All exclusions sorted
-    pub fn hashable_outputs(&self, task_name: &str) -> TaskOutputs {
+    pub fn hashable_outputs(&self, task_name: &str, namespace: Option<&str>) -> TaskOutputs {
         let mut inclusion_outputs =
-            vec![sharable_workspace_relative_log_file(task_name).to_string()];
+            vec![sharable_workspace_relative_log_file(task_name, namespace).to_string()];
         inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
 
         let mut hashable = TaskOutputs {
@@ -1039,37 +1121,53 @@ impl TaskDefinition {
 /// Extension trait for TaskDefinition providing path and output methods.
 pub trait TaskDefinitionExt {
     /// Get the workspace-relative path to the log file for a task
-    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf;
+    fn workspace_relative_log_file(
+        task_name: &str,
+        namespace: Option<&str>,
+    ) -> AnchoredSystemPathBuf;
 
     /// Get the hashable outputs for a task (delegates to the inherent method)
-    fn hashable_outputs_for_task(&self, task_name: &TaskId) -> TaskOutputs;
+    fn hashable_outputs_for_task(&self, task_name: &TaskId, namespace: Option<&str>)
+    -> TaskOutputs;
 
     /// Get the repo-relative hashable outputs for a task
     fn repo_relative_hashable_outputs(
         &self,
         task_name: &TaskId,
         workspace_dir: &AnchoredSystemPath,
+        namespace: Option<&str>,
     ) -> TaskOutputs;
 }
 
 impl TaskDefinitionExt for TaskDefinition {
-    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
-        let log_dir = match AnchoredSystemPath::new(LOG_DIR) {
-            Ok(log_dir) => log_dir,
-            Err(_) => unreachable!("LOG_DIR is a valid anchored system path"),
-        };
-        log_dir.join_component(&task_log_filename(task_name))
+    fn workspace_relative_log_file(
+        task_name: &str,
+        namespace: Option<&str>,
+    ) -> AnchoredSystemPathBuf {
+        let unix_path = sharable_workspace_relative_log_file(task_name, namespace);
+        match AnchoredSystemPathBuf::from_raw(
+            unix_path
+                .as_str()
+                .replace('/', std::path::MAIN_SEPARATOR_STR),
+        ) {
+            Ok(path) => path,
+            Err(_) => unreachable!("task log paths are anchored within .turbo"),
+        }
     }
 
-    fn hashable_outputs_for_task(&self, task_name: &TaskId) -> TaskOutputs {
-        // Delegate to the canonical implementation in TaskDefinition
-        TaskDefinition::hashable_outputs(self, task_name.task())
+    fn hashable_outputs_for_task(
+        &self,
+        task_name: &TaskId,
+        namespace: Option<&str>,
+    ) -> TaskOutputs {
+        TaskDefinition::hashable_outputs(self, task_name.task(), namespace)
     }
 
     fn repo_relative_hashable_outputs(
         &self,
         task_name: &TaskId,
         workspace_dir: &AnchoredSystemPath,
+        namespace: Option<&str>,
     ) -> TaskOutputs {
         let make_glob_repo_relative = |glob: &str| -> String {
             if workspace_dir.as_str().is_empty() {
@@ -1084,7 +1182,7 @@ impl TaskDefinitionExt for TaskDefinition {
         // At this point repo_relative_globs are still workspace relative, but
         // the processing in the rest of the function converts this to be repo
         // relative.
-        let mut repo_relative_globs = self.hashable_outputs_for_task(task_name);
+        let mut repo_relative_globs = self.hashable_outputs_for_task(task_name, namespace);
 
         for input in repo_relative_globs.inclusions.iter_mut() {
             let relative_input = make_glob_repo_relative(input.as_str());
@@ -1277,7 +1375,7 @@ pub trait TaskDefinitionHashInfo {
     /// Returns the task outputs configuration
     fn outputs(&self) -> &TaskOutputs;
     /// Returns the hashable outputs for this task (includes log file)
-    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
+    fn hashable_outputs(&self, task_id: &TaskId, namespace: Option<&str>) -> TaskOutputs;
 }
 
 impl TaskDefinitionHashInfo for TaskDefinition {
@@ -1305,9 +1403,9 @@ impl TaskDefinitionHashInfo for TaskDefinition {
         &self.outputs
     }
 
-    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
+    fn hashable_outputs(&self, task_id: &TaskId, namespace: Option<&str>) -> TaskOutputs {
         // Delegate to the canonical implementation in TaskDefinition
-        TaskDefinition::hashable_outputs(self, task_id.task())
+        TaskDefinition::hashable_outputs(self, task_id.task(), namespace)
     }
 }
 

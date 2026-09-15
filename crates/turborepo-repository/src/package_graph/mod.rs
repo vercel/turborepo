@@ -275,6 +275,7 @@ pub struct PackageTaskContext<'a> {
     external_declarations: &'a ExternalDeclarations,
     native_tasks: &'a crate::native_tasks::ScopeNativeTasks,
     task_contract: crate::task_contracts::ScopeTaskContract,
+    directory_is_shared: bool,
     kind: PackageTaskContextKind,
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
 }
@@ -335,6 +336,7 @@ impl<'a> PackageTaskContext<'a> {
             external_declarations,
             native_tasks,
             task_contract,
+            directory_is_shared: false,
             kind,
             toolchain,
         }
@@ -350,6 +352,13 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn directory(&self) -> &'a AnchoredSystemPath {
         self.directory
+    }
+
+    /// A stable identity to namespace task logs when multiple execution scopes
+    /// share this directory. Based on the complete inventory, not task
+    /// selection.
+    pub fn log_namespace(&self) -> Option<&str> {
+        self.directory_is_shared.then(|| self.package.as_str())
     }
 
     /// Whether this real package/root scope is defined by package.json.
@@ -1006,6 +1015,7 @@ impl PackageGraph {
             external_declarations: self.external_declaration_view(),
             native_tasks,
             task_contract,
+            directory_is_shared: self.knowledge.is_directory_shared(directory),
             kind,
             toolchain,
         })
