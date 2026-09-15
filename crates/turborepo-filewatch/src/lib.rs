@@ -1335,6 +1335,12 @@ fn is_not_found(err: &notify::Error) -> bool {
     }
 }
 
+fn is_missing_watch(err: &notify::Error) -> bool {
+    // A backend or another reconciliation pass may already have removed the
+    // watch. Only cleanup is idempotent; watch registration must still fail.
+    matches!(err.kind, notify::ErrorKind::WatchNotFound) || is_not_found(err)
+}
+
 #[cfg(feature = "manual_recursive_watch")]
 fn watch_recursively(
     root: &AbsoluteSystemPath,
@@ -1478,7 +1484,7 @@ fn reconcile_ordinary_watches(
             Ok(()) => {
                 watched.remove(&path);
             }
-            Err(error) if is_not_found(&error) => {
+            Err(error) if is_missing_watch(&error) => {
                 watched.remove(&path);
             }
             Err(error) => return Err(error.into()),
@@ -1585,7 +1591,7 @@ fn refresh_explicit_watches(
                 Ok(()) => {
                     watched.remove(&path);
                 }
-                Err(error) if is_not_found(&error) => {
+                Err(error) if is_missing_watch(&error) => {
                     watched.remove(&path);
                 }
                 Err(error) => return Err(error.into()),
@@ -1799,7 +1805,7 @@ fn reconcile_control_watches(
             Ok(()) => {
                 watched.remove(&stale);
             }
-            Err(error) if is_not_found(&error) => {
+            Err(error) if is_missing_watch(&error) => {
                 watched.remove(&stale);
             }
             Err(error) => return Err(error.into()),
@@ -2011,6 +2017,115 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         (path, tmp)
+    }
+
+    #[test]
+    fn missing_watch_errors_are_only_tolerated_during_cleanup() {
+        let missing_watch = notify::Error::watch_not_found();
+        assert!(super::is_missing_watch(&missing_watch));
+        assert!(!super::is_not_found(&missing_watch));
+        assert!(super::is_missing_watch(&notify::Error::io(
+            std::io::ErrorKind::NotFound.into(),
+        )));
+        for error in [
+            notify::Error::io(std::io::ErrorKind::PermissionDenied.into()),
+            notify::Error::generic("backend failure"),
+            notify::Error::new(notify::ErrorKind::MaxFilesWatch),
+            notify::Error::path_not_found(),
+        ] {
+            assert!(!super::is_missing_watch(&error), "{error}");
+        }
+    }
+
+    #[cfg(feature = "manual_recursive_watch")]
+    #[test]
+    fn explicit_watch_cleanup_tolerates_already_removed_watch() {
+        #[cfg(not(target_os = "macos"))]
+        use notify::Watcher;
+
+        // Exercise both backend removal and ordinary reconciliation running
+        // before the explicit watch list has been refreshed. No event timing
+        // or filesystem deletion is needed to reproduce the stale bookkeeping.
+        for ordinary_cleanup in [false, true] {
+            let (repo_root, _tmp) = temp_dir();
+            let repo_root = repo_root.to_realpath().unwrap();
+            repo_root
+                .join_component(".gitignore")
+                .create_with_contents("dist/\n")
+                .unwrap();
+            let output = repo_root.join_components(&["apps", "api", "dist"]);
+            output.create_dir_all().unwrap();
+            let output = output.as_std_path().to_owned();
+            let cookie_dir = repo_root.join_components(&[".turbo", "cookies"]);
+            let repository_ignore = super::RepositoryIgnore::new(repo_root.as_std_path());
+            assert!(!repository_ignore.is_relevant(&output, true));
+            let mut watcher = super::make_watcher(
+                #[cfg(target_os = "macos")]
+                super::MacOsBackend::Poll,
+                |_: notify::Result<Event>| {},
+            )
+            .unwrap();
+            let mut watched = Default::default();
+            let mut explicit_watched = Default::default();
+            super::refresh_explicit_watches(
+                repo_root.as_std_path(),
+                cookie_dir.as_std_path(),
+                std::slice::from_ref(&output),
+                &mut watcher,
+                &mut watched,
+                &mut explicit_watched,
+                &repository_ignore,
+            )
+            .unwrap();
+            assert!(watched.contains(&output));
+            assert!(explicit_watched.contains(&output));
+
+            if ordinary_cleanup {
+                super::reconcile_ordinary_watches(
+                    repo_root.as_std_path(),
+                    cookie_dir.as_std_path(),
+                    &[],
+                    &mut watcher,
+                    &mut watched,
+                    &repository_ignore,
+                )
+                .unwrap();
+                assert!(!watched.contains(&output));
+            } else {
+                watcher.unwatch(&output).unwrap();
+            }
+
+            // Repeated cleanup must succeed and clear both tracking sets.
+            for _ in 0..2 {
+                super::refresh_explicit_watches(
+                    repo_root.as_std_path(),
+                    cookie_dir.as_std_path(),
+                    &[],
+                    &mut watcher,
+                    &mut watched,
+                    &mut explicit_watched,
+                    &repository_ignore,
+                )
+                .unwrap();
+                assert!(!watched.contains(&output));
+                assert!(explicit_watched.is_empty());
+            }
+
+            // A later subscription must install a real backend watch again.
+            super::refresh_explicit_watches(
+                repo_root.as_std_path(),
+                cookie_dir.as_std_path(),
+                std::slice::from_ref(&output),
+                &mut watcher,
+                &mut watched,
+                &mut explicit_watched,
+                &repository_ignore,
+            )
+            .unwrap();
+            assert!(watched.contains(&output));
+            assert!(explicit_watched.contains(&output));
+            watcher.unwatch(&output).unwrap();
+        }
     }
 
     #[test]
