@@ -83,14 +83,6 @@ Go also reports its normal output-name conflicts. For example, a main package in
 
 Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `dev`; their `build` runs `go build ./...` as a compilation check without producing deployable binaries. This decision is per module, not per `go.work`: multiple modules with one main package each can each produce a binary.
 
-<Callout type="warn">
-  Earlier experimental releases wrote runnable-module binaries to `dist/`. Update
-  deployment start commands, Docker `COPY` paths, and other binary consumers to
-  use the module-local path, or [override the build command](#override-or-remove-defaults)
-  to preserve your existing output location and name. Removing a `package.json`
-  wrapper does not migrate its custom build command automatically.
-</Callout>
-
 Arguments after Turborepo's `--` are placed before package patterns for `build`, `test`, `lint`, and `format`. Arguments to `dev` follow the main import path and become program arguments.
 
 ```bash title="Terminal"
