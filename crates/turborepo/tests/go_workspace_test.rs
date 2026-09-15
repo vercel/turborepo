@@ -1084,7 +1084,7 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     assert!(
         build["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
 
     let output = run_turbo(
@@ -2276,7 +2276,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert!(
         dry_run["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
     assert!(
         dry_run["hashOfExternalDependencies"]
@@ -2317,7 +2317,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert!(
         summarized_build["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
     assert!(
         summarized_build["hashOfExternalDependencies"]
