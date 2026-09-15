@@ -516,7 +516,12 @@ impl SnapshotOutputWatcher {
             vec![
                 WatchRegistration {
                     hash: task.hash.clone(),
-                    inclusions: task.repo_relative_globs.inclusions.clone(),
+                    inclusions: task
+                        .repo_relative_globs
+                        .inclusions
+                        .iter()
+                        .map(|glob| glob.replace('\\', "/"))
+                        .collect(),
                     exclusions: vec!["packages/app/.turbo/**".to_string()],
                 },
                 WatchRegistration {

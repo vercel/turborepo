@@ -165,6 +165,11 @@ fn run(dir: &Path, state: &Path, dry: bool, filter: Option<&str>, warm: bool) ->
         .map(|(_, _, identity)| *identity)
         .collect::<Vec<_>>()
         .join(",");
+    // Native discovery should not contend with parallel tests for Cargo's
+    // global package-cache lock. Keep this cache outside the fixture's inputs.
+    let cargo_home = state.join("cargo-home");
+    fs::create_dir_all(&cargo_home).unwrap();
+    let timeout = Duration::from_secs(if cfg!(windows) { 180 } else { 60 });
     let mut command = common::turbo_command(dir);
     command
         .args([
@@ -177,6 +182,9 @@ fn run(dir: &Path, state: &Path, dry: bool, filter: Option<&str>, warm: bool) ->
             "--output-logs=full",
         ])
         .env("TURBO_CONFIG_DIR_PATH", state.join("config"))
+        .env("CARGO_HOME", cargo_home)
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
         .env("COLOCATED_LOG_STATE", state)
         .env("COLOCATED_LOG_PARTICIPANTS", participants)
         .env(
@@ -187,7 +195,7 @@ fn run(dir: &Path, state: &Path, dry: bool, filter: Option<&str>, warm: bool) ->
         .env("GOTOOLCHAIN", "local")
         .env_remove("GOWORK")
         .env_remove("GOFLAGS")
-        .timeout(Duration::from_secs(60));
+        .timeout(timeout);
     command.arg(if dry { "--dry=json" } else { "--summarize" });
     if let Some(package) = filter {
         command.arg(format!("--filter={package}"));
@@ -196,7 +204,8 @@ fn run(dir: &Path, state: &Path, dry: bool, filter: Option<&str>, warm: bool) ->
     let combined = common::combined_output(&output);
     assert!(
         output.status.success(),
-        "dry={dry}, filter={filter:?}, warm={warm}: {combined}"
+        "dry={dry}, filter={filter:?}, warm={warm}, status={}, timeout={timeout:?}: {combined}",
+        output.status,
     );
     let summary = if dry {
         serde_json::from_slice(&output.stdout).expect("dry run emits JSON")
