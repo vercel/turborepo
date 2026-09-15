@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_task_id::TaskId;
 use turborepo_types::{
-    EngineInfo, EnvMode, HashTrackerInfo, LOG_DIR, RunOptsInfo, TaskDefinition, task_log_filename,
+    EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo, TaskDefinition, TaskDefinitionExt,
 };
 
 use crate::{
@@ -145,7 +144,10 @@ where
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
         let log_file = if task_definition.cache {
-            let relative_log_file = workspace_relative_log_file(task_id.task())?;
+            let relative_log_file = TaskDefinition::workspace_relative_log_file(
+                task_id.task(),
+                package_context.log_namespace(),
+            );
             Some(
                 package_context
                     .directory()
@@ -279,14 +281,6 @@ fn summary_command(
             })
             .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
     }
-}
-
-/// Get the workspace-relative path to the log file for a task.
-fn workspace_relative_log_file(
-    task_name: &str,
-) -> Result<turbopath::AnchoredSystemPathBuf, turbopath::PathError> {
-    let log_dir = AnchoredSystemPath::new(LOG_DIR)?;
-    Ok(log_dir.join_component(&task_log_filename(task_name)))
 }
 
 #[cfg(test)]

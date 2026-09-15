@@ -2533,7 +2533,13 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         );
     }
 
-    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
+    // The aggregate shares the repository directory with the root task
+    // namespace, so its log stays isolated even when it is the only selection.
+    for (task, subcommand, log_filename) in [
+        ("test", "test", "turbo-test-acme-c7aba2810dce6e39.log"),
+        ("check", "check", "turbo-check-acme-45f6384ef100a60b.log"),
+        ("lint", "clippy", "turbo-lint-acme-40a8d1eb4ccc4540.log"),
+    ] {
         let output = run_turbo(
             tempdir.path(),
             &["run", task, "--filter=acme", "--dry-run=json"],
@@ -2550,7 +2556,7 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
             format!("cargo {subcommand} --workspace --locked")
         );
         assert_eq!(definition["directory"], "");
-        let log_file = Path::new(".turbo").join(format!("turbo-{task}.log"));
+        let log_file = Path::new(".turbo").join(log_filename);
         assert_eq!(
             definition["logFile"].as_str().map(Path::new),
             Some(log_file.as_path())
