@@ -570,7 +570,29 @@ pub trait RepositoryContributor: Send + Sync {
     /// [`RepositoryContributor::discover_packages`] on failure: doing so would
     /// silently run subprocesses for runs that never touch this toolchain.
     fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_>;
+
+    /// Subprocess-free, conservative package inputs for affectedness only.
+    /// Separate from identity inventory and authoritative task relationships.
+    /// Some must cover every real package and include every possible local
+    /// input across target/feature/marker choices. Unknown inputs must be
+    /// marked unresolved. None means this contributor cannot provide static
+    /// dependency knowledge.
+    fn discover_static_dependencies(&self) -> DiscoverStaticDependenciesFuture<'_> {
+        Box::pin(async { Ok(None) })
+    }
 }
+
+pub type DiscoverStaticDependenciesFuture<'a> = Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    Option<Vec<crate::static_dependencies::StaticPackageDependencies>>,
+                    Error,
+                >,
+            > + Send
+            + 'a,
+    >,
+>;
 
 /// A Turborepo-served compile cache endpoint, as plain data.
 #[derive(Debug, Clone, PartialEq, Eq)]

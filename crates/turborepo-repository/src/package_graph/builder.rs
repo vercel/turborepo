@@ -593,6 +593,41 @@ pub struct LazyPlan<P> {
 }
 
 impl<P> LazyPlan<P> {
+    /// Read manifest-only dependency inputs without promoting any owner to
+    /// authoritative discovery or retaining contributors in the result.
+    pub async fn static_affectedness(
+        &self,
+        graph: &PackageGraph,
+    ) -> Result<crate::static_dependencies::StaticAffectedness, Error> {
+        let mut result = crate::static_dependencies::StaticAffectedness::default();
+        for owner in graph.unloaded_owners() {
+            match self.contributor(&owner) {
+                Some(contributor) => match contributor.discover_static_dependencies().await? {
+                    Some(packages) => {
+                        let reported = packages
+                            .iter()
+                            .map(|package| package.package.clone())
+                            .collect::<HashSet<_>>();
+                        let expected = graph
+                            .package_task_contexts()
+                            .filter(|context| {
+                                graph.is_real_package(context.package())
+                                    && context.toolchain() == Some(&owner)
+                            })
+                            .map(|context| context.package().to_string())
+                            .collect::<HashSet<_>>();
+                        result.unsupported |= reported != expected;
+                        result.packages.extend(packages);
+                    }
+                    None => result.unsupported = true,
+                },
+                None => result.unsupported = true,
+            }
+        }
+        result.index_inputs();
+        Ok(result)
+    }
+
     fn empty(repo_root: AbsoluteSystemPathBuf) -> Self {
         Self {
             repo_root,

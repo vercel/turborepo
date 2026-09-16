@@ -44,20 +44,36 @@ Packages are sorted by `relativePath`, then `toolchain`, then `name`.
 Language IDs are `javascript`, `rust`, `python`, and `go`; native root kinds are
 `cargo`, `uv`, and `go`.
 
-Static discovery inventories native manifests without loading authoritative
-native dependency metadata. `unloadedToolchains` is sorted, and
-`dependencyGraphComplete` is false while native owners remain unloaded. For any
-nonempty change list in that state, `affectedCandidates` returns **all real
-packages, including JavaScript**, with `conservative: true`: unknown cross-language
-dependents cannot safely be excluded. Configured root `globalDependencies` or
-`global.inputs` also trigger conservative fallback-all for nonempty changes.
-Package manifest and nested lockfile changes also return all candidates: static
-current-state discovery cannot reconstruct dependency edges removed by those edits.
+`dependencyGraphComplete` remains false while native authoritative metadata is
+unloaded. The independent `affectednessComplete` getter indicates whether declared
+local package inputs can be inferred statically. Do not use the former to disable
+selective native affectedness.
 
-For JavaScript-only repositories without custom global inputs, candidates use
-existing package change mapping plus the transitive input-dependent closure.
-This is package-level affectedness, not analysis of arbitrary task inputs or
-build-script file reads.
+Cargo path dependencies include workspace inheritance, aliases, build/dev inputs,
+optional features, and every target-conditional branch. uv inputs include
+workspace sources, local paths to workspace members, normalized names, extras,
+dependency groups, and the union of conditional source choices. Member source
+overrides take precedence over root sources. Co-located package scopes propagate
+changes between ecosystems. No compiler, resolver, or language command runs.
+
+Source changes select their package owners and transitive dependents. For example,
+a Rust library change selects its Rust consumers but not unrelated Python or
+JavaScript packages. Native workspace lockfiles and toolchain configuration
+invalidate the corresponding native workspace and its dependents. Manifest edits
+in any ecosystem and nested JavaScript lockfile edits still select all packages:
+removed/renamed scopes can erase historical cross-language relationships, including
+connections through co-located package scopes.
+
+Unresolved cases return all packages with `conservative: true`: unsupported
+contributors (currently Go), Cargo patch/replace or source/path overrides,
+non-member local dependencies, Python dynamic dependencies or dependency metadata
+overrides, and explicit Maturin manifest-path configuration. Inspect
+`affectednessComplete` rather than assuming every unloaded toolchain is unresolved.
+Global inputs only trigger fallback when a changed path matches; exclusions are
+ignored conservatively and unsupported patterns fall back to all.
+
+These are repository-declared package inputs, not arbitrary build-script reads,
+external dependency resolution, task ordering, or exact target/feature selection.
 An empty change list always returns `{ packages: [], conservative: false }`.
 Changed paths must be workspace-relative, using the current system's path
 separator; absolute paths and paths escaping the repository are rejected. The

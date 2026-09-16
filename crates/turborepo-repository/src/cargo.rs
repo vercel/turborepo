@@ -12,8 +12,10 @@
 //! identity — which crates, which manifests, the workspace aggregate, and
 //! the workspace root — so [`RepositoryContributor::discover_package_scopes`]
 //! parses the same manifests in-process, without invoking Cargo, rustc, or
-//! `which`. Every other fact (tasks, edges, contracts, resolution, hashing,
-//! prune) belongs to full discovery, which stays authoritative. Crates are
+//! `which`. A separate static-dependency query exposes conservative local
+//! inputs for affectedness; it does not promote inventory to authoritative task
+//! knowledge. Tasks, contracts, external resolution, hashing, and prune remain
+//! full-discovery concerns. Crates are
 //! classified into two shapes:
 //!
 //! * **Entrypoints** — crates with `bin`/`cdylib`/`staticlib` targets: the
@@ -1605,7 +1607,115 @@ fn package_scope_inventory(
     Ok(Some((members, aggregate)))
 }
 
+fn static_cargo_configs(
+    repo_root: &AbsoluteSystemPath,
+    manifest: &AbsoluteSystemPath,
+) -> Vec<AbsoluteSystemPathBuf> {
+    let mut result = Vec::new();
+    let mut directory = manifest.parent();
+    while let Some(path) = directory {
+        if !repo_root.contains(path) {
+            break;
+        }
+        for file in [".cargo/config", ".cargo/config.toml"] {
+            result.push(AbsoluteSystemPathBuf::from_unknown(path, file));
+        }
+        directory = path.parent();
+    }
+    result
+}
+
+fn static_package_dependencies(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Vec<crate::static_dependencies::StaticPackageDependencies>, Error> {
+    let workspace = discover_crates_from_manifests(repo_root)?;
+    if workspace.crates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root = static_manifest_document(&repo_root.join_component(CARGO_TOML))?;
+    let inherited = static_workspace_dependency_paths(&root);
+    let mut unresolved = root.get("patch").is_some() || root.get("replace").is_some();
+    let mut invalidation_paths = Vec::new();
+    for path in [
+        CARGO_TOML,
+        CARGO_LOCK,
+        ".cargo/config",
+        ".cargo/config.toml",
+        "rust-toolchain",
+        "rust-toolchain.toml",
+    ] {
+        invalidation_paths.push(AbsoluteSystemPathBuf::from_unknown(repo_root, path));
+    }
+    let configs = workspace
+        .crates
+        .iter()
+        .flat_map(|package| static_cargo_configs(repo_root, &package.manifest_path))
+        .collect::<BTreeSet<_>>();
+    for path in configs {
+        if path.as_std_path().is_symlink() {
+            unresolved = true;
+            continue;
+        }
+        if path.exists() {
+            let config = static_manifest_document(&path)?;
+            unresolved |= ["paths", "source", "patch", "replace"]
+                .iter()
+                .any(|key| config.get(key).is_some());
+        }
+    }
+    let directories = workspace
+        .crates
+        .iter()
+        .filter_map(|package| package.manifest_path.parent())
+        .map(|path| path.as_std_path().to_path_buf())
+        .collect::<HashSet<_>>();
+    workspace
+        .crates
+        .into_iter()
+        .map(|package| {
+            let document = static_manifest_document(&package.manifest_path)?;
+            let mut package_inputs = invalidation_paths.clone();
+            package_inputs.extend(static_cargo_configs(repo_root, &package.manifest_path));
+            let unknown_path = static_manifest_dependencies(
+                &document,
+                &package.manifest_path,
+                repo_root,
+                &inherited,
+            )
+            .iter()
+            .filter_map(|dependency| dependency.path.as_deref())
+            .any(|path| {
+                metadata_path(path).is_none_or(|path| !directories.contains(path.as_std_path()))
+            });
+            Ok(crate::static_dependencies::StaticPackageDependencies {
+                package: package.name,
+                dependencies: package
+                    .relationships
+                    .iter()
+                    .filter_map(|relationship| match relationship.target() {
+                        crate::relationships::RelationshipTarget::Internal(name) => {
+                            Some(name.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+                invalidation_paths: package_inputs,
+                invalidation_file_names: vec![CARGO_TOML.to_string()],
+                unresolved: unresolved || unknown_path,
+            })
+        })
+        .collect()
+}
+
 impl RepositoryContributor for CargoContributor {
+    fn discover_static_dependencies(&self) -> toolchain::DiscoverStaticDependenciesFuture<'_> {
+        Box::pin(async move {
+            turborepo_rayon_compat::block_in_place(|| static_package_dependencies(&self.repo_root))
+                .map(Some)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+        })
+    }
+
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
     }

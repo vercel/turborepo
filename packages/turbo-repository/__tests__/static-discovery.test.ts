@@ -181,7 +181,7 @@ async function runIsolated(
     ];
     const mixedPackages = [
       jsPackages[0], pkg("core", "crates/core", "rust", "Cargo.toml"),
-      pkg("example.com/service", "go/service", "go", "go.mod"),
+      pkg("service", "go/service", "go", "go.mod"),
       ...jsPackages.slice(1), pkg("py-api", "python/api", "python", "pyproject.toml")
     ];
     ${body}
@@ -200,7 +200,241 @@ async function runIsolated(
   return readFile(log, "utf8");
 }
 
+async function selectiveFixture(t: TestContext) {
+  const result = await fixture(t);
+  const { root } = result;
+  await write(
+    root,
+    "turbo.json",
+    JSON.stringify({
+      futureFlags: {
+        experimentalCargoWorkspaces: true,
+        experimentalPythonWorkspaces: true
+      },
+      tasks: {}
+    })
+  );
+  await write(
+    root,
+    "Cargo.toml",
+    '[workspace]\nmembers = ["crates/*"]\nresolver = "2"\n[workspace.metadata]\nname = "rust-aggregate"\n[workspace.dependencies]\nrenamed = { package = "core", path = "crates/core" }\n'
+  );
+  await write(
+    root,
+    "crates/app/Cargo.toml",
+    '[package]\nname = "rust-app"\nversion = "0.1.0"\n[target.\'cfg(windows)\'.build-dependencies]\nrenamed = { workspace = true, optional = true }\n'
+  );
+  await write(
+    root,
+    "python/shared/pyproject.toml",
+    '[project]\nname = "Py_Core"\nversion = "0.1.0"\n'
+  );
+  await write(
+    root,
+    "python/api/pyproject.toml",
+    '[project]\nname = "py-api"\nversion = "0.1.0"\n[project.optional-dependencies]\nfeature = ["Py.Core>=0.1; sys_platform == \'win32\'"]\n[tool.uv.sources]\nPy_Core = [{ workspace = true, marker = "sys_platform == \'win32\'" }, { index = "pypi", marker = "sys_platform != \'win32\'" }]\n'
+  );
+  return result;
+}
+
 describe("StaticWorkspace", () => {
+  it("selectively propagates Cargo and uv dependencies without language tools", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    const invoked = await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      assert.equal(workspace.dependencyGraphComplete, false);
+      assert.equal(workspace.affectednessComplete, true);
+      assert.deepEqual(workspace.unloadedToolchains, ["python", "rust"]);
+      for (const [file, expected] of [
+        ["apps/web/deleted.js", ["web"]],
+        ["crates/core/src/deleted.rs", ["core", "rust-app"]],
+        ["crates/app/src/deleted.rs", ["rust-app"]],
+        ["python/shared/deleted.py", ["py-api", "py-core"]],
+        ["python/api/deleted.py", ["py-api"]],
+        ["Cargo.lock", ["core", "rust-app"]],
+        ["uv.lock", ["py-api", "py-core"]],
+      ]) {
+        const candidates = await workspace.affectedCandidates([file]);
+        assert.equal(candidates.conservative, false, file);
+        assert.deepEqual(candidates.packages.map(p => p.name).sort(), expected, file);
+      }
+      for (const file of ["Cargo.toml", "pyproject.toml", "crates/removed/Cargo.toml", "python/removed/pyproject.toml"]) {
+        assert.deepEqual(await workspace.affectedCandidates([file]), { packages: await workspace.findPackages(), conservative: true });
+      }
+      assert.deepEqual(await workspace.affectedCandidates([]), { packages: [], conservative: false });
+    `,
+      process.platform === "win32" ? "empty" : "trap"
+    );
+    assert.equal(invoked, "");
+  });
+
+  it("propagates across co-located native and JavaScript packages", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    await write(
+      root,
+      "crates/app/package.json",
+      JSON.stringify({ name: "rust-wrapper", version: "1.0.0" })
+    );
+    await write(
+      root,
+      "apps/web/package.json",
+      JSON.stringify({
+        name: "web",
+        version: "1.0.0",
+        dependencies: { "rust-wrapper": "*" }
+      })
+    );
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      const result = await workspace.affectedCandidates(["crates/core/src/changed.rs"]);
+      assert.equal(result.conservative, false);
+      assert.deepEqual(result.packages.map(p => p.name).sort(), ["core", "rust-app", "rust-wrapper", "web"]);
+    `
+    );
+  });
+
+  it("retains consumers when a co-located native manifest is removed", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    await write(
+      root,
+      "crates/app/package.json",
+      JSON.stringify({ name: "rust-wrapper", version: "1.0.0" })
+    );
+    await write(
+      root,
+      "apps/web/package.json",
+      JSON.stringify({ name: "web", dependencies: { "rust-wrapper": "*" } })
+    );
+    await rm(path.join(root, "crates/app/Cargo.toml"));
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      const result = await workspace.affectedCandidates(["crates/app/Cargo.toml"]);
+      assert.equal(result.conservative, true);
+      assert.deepEqual(result.packages, await workspace.findPackages());
+      assert.ok(result.packages.some(p => p.name === "web"));
+    `
+    );
+  });
+
+  it("matches global inputs inside packages without invalidating unrelated source edits", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    await write(
+      root,
+      "turbo.json",
+      JSON.stringify({
+        futureFlags: {
+          experimentalCargoWorkspaces: true,
+          experimentalPythonWorkspaces: true
+        },
+        globalDependencies: ["python/shared/**"],
+        tasks: {}
+      })
+    );
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      assert.equal(workspace.affectednessComplete, true);
+      assert.deepEqual((await workspace.affectedCandidates(["apps/web/a.js"])).packages.map(p => p.name), ["web"]);
+      assert.deepEqual(await workspace.affectedCandidates(["python/shared/deleted.py"]), { packages: await workspace.findPackages(), conservative: true });
+    `
+    );
+  });
+
+  it("resolves uv paths relative to their declaration owner and honors overrides", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    await write(
+      root,
+      "pyproject.toml",
+      '[tool.turbo]\nname = "python-aggregate"\n[tool.uv.workspace]\nmembers = ["python/*"]\n[tool.uv.sources]\nPy_Core = { path = "python/shared", editable = true }\n'
+    );
+    await write(
+      root,
+      "python/api/pyproject.toml",
+      '[project]\nname = "py-api"\nversion = "0.1.0"\n[dependency-groups]\ndev = ["Py.Core"]\n'
+    );
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      assert.equal(workspace.affectednessComplete, true);
+      assert.deepEqual((await workspace.affectedCandidates(["python/shared/a.py"])).packages.map(p => p.name).sort(), ["py-api", "py-core"]);
+    `
+    );
+    await write(
+      root,
+      "python/api/pyproject.toml",
+      '[project]\nname = "py-api"\nversion = "0.1.0"\ndependencies = ["Py.Core"]\n[tool.uv.sources]\nPy_Core = { index = "pypi" }\n'
+    );
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      assert.equal(workspace.affectednessComplete, true);
+      assert.deepEqual((await workspace.affectedCandidates(["python/shared/a.py"])).packages.map(p => p.name), ["py-core"]);
+    `
+    );
+  });
+
+  it("preserves cyclic Cargo development inputs without task-ordering claims", async (t) => {
+    const { dir, root } = await selectiveFixture(t);
+    await write(
+      root,
+      "crates/core/Cargo.toml",
+      '[package]\nname = "core"\nversion = "0.1.0"\n[dev-dependencies]\napp = { package = "rust-app", path = "../app" }\n'
+    );
+    await runIsolated(
+      dir,
+      root,
+      `
+      const workspace = await StaticWorkspace.find(root);
+      assert.equal(workspace.affectednessComplete, true);
+      assert.deepEqual((await workspace.affectedCandidates(["crates/app/a.rs"])).packages.map(p => p.name).sort(), ["core", "rust-app"]);
+    `
+    );
+  });
+
+  for (const [file, contents] of [
+    [
+      "python/api/pyproject.toml",
+      '[project]\nname = "py-api"\ndynamic = ["dependencies"]\n'
+    ],
+    [".cargo/config.toml", 'paths = ["vendor/override"]\n'],
+    ["crates/app/.cargo/config.toml", 'paths = ["vendor/override"]\n'],
+    ["uv.toml", 'override-dependencies = ["Py_Core @ file:///unresolved"]\n'],
+    [
+      "python/api/pyproject.toml",
+      '[project]\nname = "py-api"\ndependencies = ["external"]\n[tool.uv.sources]\nexternal = { path = "../../outside-workspace" }\n'
+    ]
+  ]) {
+    it(`reports unresolved static dependencies for ${file}: ${contents}`, async (t) => {
+      const { dir, root } = await selectiveFixture(t);
+      await write(root, file!, contents!);
+      await runIsolated(
+        dir,
+        root,
+        `
+        const workspace = await StaticWorkspace.find(root);
+        assert.equal(workspace.affectednessComplete, false);
+        const result = await workspace.affectedCandidates(["apps/web/a.js"]);
+        assert.equal(result.conservative, true);
+        assert.deepEqual(result.packages, await workspace.findPackages());
+      `
+      );
+    });
+  }
   for (const mode of ["absent", "empty", "trap"] as const) {
     it(
       `inventories all four toolchains with ${mode} PATH`,
@@ -354,9 +588,8 @@ describe("StaticWorkspace", () => {
         const workspace = await StaticWorkspace.find(root);
         assert.equal(workspace.dependencyGraphComplete, true);
         assert.deepEqual(workspace.unloadedToolchains, []);
-        for (const file of ["config/shared.json", "apps/web/deleted.js"]) {
-          assert.deepEqual(await workspace.affectedCandidates([file]), { packages: jsPackages, conservative: true });
-        }
+        assert.deepEqual(await workspace.affectedCandidates(["config/shared.json"]), { packages: jsPackages, conservative: true });
+        assert.deepEqual(await workspace.affectedCandidates(["apps/web/deleted.js"]), { packages: [jsPackages[0]], conservative: false });
         assert.deepEqual(await workspace.affectedCandidates([]), { packages: [], conservative: false });
       `
       );

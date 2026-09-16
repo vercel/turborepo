@@ -399,6 +399,39 @@ impl FilteringRelationships {
 pub struct AffectedRelationships(Arc<RelationshipIndex>);
 
 impl AffectedRelationships {
+    /// Extend only this affectedness query with conservative manifest inputs.
+    /// The authoritative relationship index and task ordering remain unchanged.
+    pub(crate) fn affected_by_with_inputs(
+        &self,
+        packages: &[PackageName],
+        inputs: &[(PackageName, PackageName)],
+    ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
+        let seeds = self.0.ids(packages)?;
+        let mut reverse = self
+            .0
+            .reverse_inputs
+            .iter()
+            .map(|edges| edges.to_vec())
+            .collect::<Vec<_>>();
+        for (source, target) in inputs {
+            reverse[self.0.id(target)?.index()].push(self.0.id(source)?);
+        }
+        let reverse = reverse
+            .into_iter()
+            .map(Vec::into_boxed_slice)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let members = closure_members(&reverse, &seeds);
+        if members
+            .iter()
+            .zip(self.0.is_root_input_dependency.iter())
+            .any(|(affected, root_input)| *affected && *root_input)
+        {
+            return Ok(self.0.names.to_vec());
+        }
+        Ok(self.0.names_from_members(&members))
+    }
+
     /// Returns changed seeds and all transitive input dependents.
     ///
     /// If any seed is a root internal input, every authoritative identity,
@@ -703,6 +736,52 @@ mod tests {
         let relationships =
             RelationshipKnowledge::build(&repository, groups).expect("relationships are valid");
         RelationshipProjections::build(&repository, &relationships)
+    }
+
+    #[test]
+    fn static_inputs_extend_affectedness_without_mutating_authoritative_projections() {
+        let projections = fixture(false);
+        let seeds = names(&["disconnected"]);
+        let ordering_before = projections
+            .ordering()
+            .direct_dependencies(&name("app"))
+            .unwrap()
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            projections
+                .affected()
+                .affected_by_with_inputs(&seeds, &[(name("app"), name("disconnected"))]),
+            Ok(names(&["app", "disconnected"]))
+        );
+        assert_eq!(projections.affected().affected_by(&seeds), Ok(seeds));
+        assert_eq!(
+            projections
+                .ordering()
+                .direct_dependencies(&name("app"))
+                .unwrap()
+                .cloned()
+                .collect::<Vec<_>>(),
+            ordering_before
+        );
+        assert!(
+            projections
+                .affected()
+                .affected_by_with_inputs(&[], &[(name("missing"), name("app"))])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn static_inputs_propagate_into_global_root_inputs() {
+        let projections = fixture(true);
+        assert_eq!(
+            projections.affected().affected_by_with_inputs(
+                &names(&["disconnected"]),
+                &[(name("root-lib"), name("disconnected"))]
+            ),
+            projections.affected().affected_by(&names(&["root-lib"]))
+        );
     }
 
     #[test]

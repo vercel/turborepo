@@ -198,7 +198,8 @@ pub struct Workspace {
     /// The package graph for the workspace. `None` when opened with
     /// `skipPackageGraph`.
     graph: Option<Arc<PackageGraph>>,
-    has_global_inputs: bool,
+    global_inputs: Vec<String>,
+    static_affectedness: Option<turborepo_repository::static_dependencies::StaticAffectedness>,
     /// Inputs for resolving the root lockfile without the package graph.
     /// Used for single-package repositories (whose core graph intentionally
     /// skips lockfile resolution) and for `skipPackageGraph` workspaces.

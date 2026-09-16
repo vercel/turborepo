@@ -2761,7 +2761,192 @@ fn package_scope_inventory(
     Ok(Some((members, aggregate)))
 }
 
+fn static_source_dependencies(
+    source: &toml::Value,
+    name: &str,
+    base: &AbsoluteSystemPath,
+    members: &HashMap<String, AbsoluteSystemPathBuf>,
+    dependencies: &mut HashSet<String>,
+) -> bool {
+    if let Some(sources) = source.as_array() {
+        let mut unresolved = false;
+        for source in sources {
+            unresolved |= static_source_dependencies(source, name, base, members, dependencies);
+        }
+        return unresolved;
+    }
+    if source.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+        if members.contains_key(name) {
+            dependencies.insert(name.to_string());
+            return false;
+        }
+        return true;
+    }
+    if let Some(path) = source.get("path").and_then(toml::Value::as_str) {
+        let path = AbsoluteSystemPathBuf::from_unknown(base, path);
+        if let Some((name, _)) = members
+            .iter()
+            .find(|(_, directory)| directory.as_std_path() == path.as_std_path())
+        {
+            dependencies.insert(name.clone());
+            return false;
+        }
+        return true;
+    }
+    !["git", "url", "index"]
+        .iter()
+        .any(|key| source.get(key).is_some())
+}
+
+fn static_package_dependencies(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Vec<crate::static_dependencies::StaticPackageDependencies>, Error> {
+    let workspace = discover_workspace_from_manifests(repo_root, false)?;
+    if workspace.packages.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root_path = repo_root.join_component(PYPROJECT_TOML);
+    let root = PyProjectManifest::load(&root_path)?
+        .ok_or_else(|| Error::MissingMemberName(root_path.to_string()))?;
+    let members = workspace
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.name.clone(),
+                package.manifest_path.parent().unwrap().to_owned(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let invalidation_paths = vec![root_path.clone(), repo_root.join_component(UV_LOCK)];
+    let mut result = Vec::new();
+    for package in workspace.packages {
+        let manifest = PyProjectManifest::load(&package.manifest_path)?
+            .ok_or_else(|| Error::MissingMemberName(package.manifest_path.to_string()))?;
+        let mut unresolved = false;
+        let configs = crate::static_dependencies::ancestor_configuration_paths(
+            repo_root,
+            &package.manifest_path,
+            &["uv.toml"],
+        );
+        let mut package_inputs = invalidation_paths.clone();
+        package_inputs.extend(configs.iter().cloned());
+        for path in [&root_path, &package.manifest_path].into_iter().chain(
+            configs
+                .iter()
+                .filter(|path| path.exists() || path.as_std_path().is_symlink()),
+        ) {
+            if path.as_std_path().is_symlink() {
+                unresolved = true;
+                continue;
+            }
+            let contents = path
+                .read_to_string()
+                .map_err(|source| Error::ManifestRead {
+                    path: path.to_string(),
+                    source,
+                })?;
+            let document: toml::Value =
+                toml::from_str(&contents).map_err(|source| Error::ManifestParse {
+                    path: path.to_string(),
+                    source: Box::new(source),
+                })?;
+            if path
+                .as_std_path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                == Some("uv.toml")
+            {
+                unresolved |= [
+                    "sources",
+                    "workspace",
+                    "override-dependencies",
+                    "dependency-metadata",
+                ]
+                .iter()
+                .any(|key| document.get(key).is_some());
+            }
+            unresolved |= document
+                .get("project")
+                .and_then(|project| project.get("dynamic"))
+                .and_then(toml::Value::as_array)
+                .is_some_and(|fields| {
+                    fields.iter().any(|field| {
+                        matches!(
+                            field.as_str(),
+                            Some("dependencies" | "optional-dependencies")
+                        )
+                    })
+                });
+            unresolved |= document
+                .get("tool")
+                .and_then(|tool| tool.get("uv"))
+                .is_some_and(|uv| {
+                    uv.get("override-dependencies").is_some()
+                        || uv.get("dependency-metadata").is_some()
+                });
+            unresolved |= document
+                .get("tool")
+                .and_then(|tool| tool.get("maturin"))
+                .and_then(|maturin| maturin.get("manifest-path"))
+                .is_some();
+        }
+        let mut dependencies = HashSet::new();
+        let declared = manifest
+            .dependencies_with_kind()
+            .map(|(dependency, _)| dependency)
+            .chain(
+                manifest
+                    .build_system
+                    .iter()
+                    .flat_map(|system| system.requires.iter().map(String::as_str)),
+            );
+        for dependency in declared {
+            let Some(name) = pep508_name(dependency).map(normalize_name) else {
+                unresolved = true;
+                continue;
+            };
+            let find_source = |manifest: &PyProjectManifest| {
+                manifest.uv().and_then(|uv| {
+                    uv.sources
+                        .iter()
+                        .find(|(key, _)| normalize_name(key) == name)
+                        .map(|(_, source)| source.clone())
+                })
+            };
+            let (source, base) = match find_source(&manifest) {
+                Some(source) => (Some(source), package.manifest_path.parent().unwrap()),
+                None => (find_source(&root), repo_root),
+            };
+            if let Some(source) = source {
+                unresolved |=
+                    static_source_dependencies(&source, &name, base, &members, &mut dependencies);
+            } else if dependency.contains("file:") {
+                unresolved = true;
+            }
+        }
+        let mut dependencies = dependencies.into_iter().collect::<Vec<_>>();
+        dependencies.sort();
+        result.push(crate::static_dependencies::StaticPackageDependencies {
+            package: package.name,
+            dependencies,
+            invalidation_paths: package_inputs,
+            invalidation_file_names: vec![PYPROJECT_TOML.to_string()],
+            unresolved,
+        });
+    }
+    Ok(result)
+}
+
 impl RepositoryContributor for UvContributor {
+    fn discover_static_dependencies(&self) -> toolchain::DiscoverStaticDependenciesFuture<'_> {
+        Box::pin(async move {
+            turborepo_rayon_compat::block_in_place(|| static_package_dependencies(&self.repo_root))
+                .map(Some)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+        })
+    }
+
     fn id(&self) -> ToolchainId {
         ToolchainId::PYTHON
     }
