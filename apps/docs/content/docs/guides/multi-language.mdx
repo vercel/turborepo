@@ -113,7 +113,7 @@ use (
 )
 ```
 
-The library and API use their Go module paths as stable Turborepo package identities:
+Declare the full Go module paths in `go.mod`. Turborepo derives the package names `lib` and `api` from these paths:
 
 ```text title="./packages/lib/go.mod"
 module example.com/acme/lib
@@ -173,16 +173,19 @@ Enable native Go workspace support in the root `turbo.json`:
 }
 ```
 
-Turborepo now discovers `web` from the package-manager workspace and `example.com/acme/api` and `example.com/acme/lib` from `go.work`. The Go modules do not need `package.json` files. A repository that contains only enabled native workspaces can also omit the root `package.json`; this mixed repository keeps one for its JavaScript workspace.
+Turborepo now discovers `web` from the package-manager workspace and `api` and `lib` from `go.work`. The Go modules do not need `package.json` files. A repository that contains only enabled native workspaces can also omit the root `package.json`; this mixed repository keeps one for its JavaScript workspace.
 
-Run JavaScript scripts and built-in native Go tasks together, or filter by a Go module path:
+Go package names use the last module-path component and preserve a trailing major-version suffix: `example.com/api` becomes `api`, while `example.com/api/v2` becomes `api/v2`. Names must be unique across the entire Package Graph: another Go module ending in `/api`, or a JavaScript package named `api`, would collide with this API. Full paths are not aliases, and package-name overrides are not supported. See [Go package names](/docs/guides/tools/go#package-names) for collision handling.
+
+Run JavaScript scripts and built-in native Go tasks together, or select a Go package by its derived name:
 
 ```bash title="Terminal"
 turbo run build
-turbo run test --filter=example.com/acme/api
-turbo run lint --filter=go-workspace
+turbo run test --filter=api
+turbo run api#test
+turbo run lint
 ```
 
-The API's `require` declaration creates the dependency on `example.com/acme/lib`, so `dependsOn: ["^build"]` orders their Go builds. The synthetic `go-workspace` package provides workspace-wide `test`, `lint`, and `format` tasks. See the [Go guide](/docs/guides/tools/go) for the complete native task and caching behavior.
+The API's `require example.com/acme/lib` declaration resolves the dependency on the package named `lib`, so `dependsOn: ["^build"]` orders their Go builds. Keep the full module paths in `go.mod` and Go imports; those paths remain dependency-resolution metadata rather than Turborepo graph identities. The synthetic `go-workspace` package depends on every Go member but does not provide built-in `test`, `lint`, or `format` tasks. Run those tasks without a filter to execute them in each member module. See the [Go guide](/docs/guides/tools/go) for the complete native task and caching behavior.
 
 For a language without native workspace support, add a `package.json` beside each independently cacheable project and invoke its toolchain from package scripts. Turborepo then uses the package-manager relationships rather than interpreting that language's dependency graph.

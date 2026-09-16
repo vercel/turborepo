@@ -19,10 +19,10 @@ use serde_json::{Value, json};
 // the legacy log layout, including a Go library with a package dependency.
 const PACKAGES: &[(&str, &str, &str)] = &[
     ("js-lib", "packages/lib", "javascript"),
-    ("example.com/lib", "packages/lib", "go"),
+    ("lib", "packages/lib", "go"),
     ("rust-lib", "packages/lib", "rust"),
     ("js-pkg", "packages/js-pkg", "standalone-js"),
-    ("example.com/api", "apps/api", "standalone-go"),
+    ("api", "apps/api", "standalone-go"),
 ];
 
 const COMMAND: &str = r#"

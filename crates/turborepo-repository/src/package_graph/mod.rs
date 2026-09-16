@@ -2325,7 +2325,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "a",
                     "dependencies": {
@@ -2335,7 +2335,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "b",
                     "dependencies": {
@@ -3068,7 +3068,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "foo",
                     "dependencies": {
@@ -3078,7 +3078,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "bar",
                     "dependencies": {
@@ -3088,7 +3088,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_c"),
+                root.join_components(&["package_c", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "baz",
                     "dependencies": {
@@ -3203,7 +3203,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "foo",
                     "dependencies": { "bar": "*" }
@@ -3211,7 +3211,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "bar",
                     "dependencies": { "baz": "*" }
@@ -3219,7 +3219,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_c"),
+                root.join_components(&["package_c", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "baz",
                     "dependencies": { "foo": "*" }
@@ -3259,7 +3259,7 @@ mod test {
             let mut map = HashMap::new();
             // Cycle 1: a -> b -> a
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "a",
                     "dependencies": { "b": "*" }
@@ -3267,7 +3267,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "b",
                     "dependencies": { "a": "*" }
@@ -3276,7 +3276,7 @@ mod test {
             );
             // Cycle 2: x -> y -> x
             map.insert(
-                root.join_component("package_x"),
+                root.join_components(&["package_x", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "x",
                     "dependencies": { "y": "*" }
@@ -3284,7 +3284,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_y"),
+                root.join_components(&["package_y", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "y",
                     "dependencies": { "x": "*" }
@@ -3398,7 +3398,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "a",
                     "dependencies": { "b": "*" }
@@ -3406,7 +3406,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "b",
                     "dependencies": { "c": "*", "d": "*" }
@@ -3414,7 +3414,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_c"),
+                root.join_components(&["package_c", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "c",
                     "dependencies": { "a": "*" }
@@ -3422,7 +3422,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_d"),
+                root.join_components(&["package_d", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "d",
                     "dependencies": { "c": "*" }

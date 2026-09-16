@@ -30,7 +30,8 @@ use std::collections::HashMap;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{
-    Error, GO_MOD, GO_WORK, GO_WORKSPACE_NAME, resolve_member_dir, validate_single_workspace,
+    Error, GO_MOD, GO_WORK, GO_WORKSPACE_NAME, package_name, resolve_member_dir,
+    validate_single_workspace,
 };
 use crate::toolchain::{DiscoveredPackageScope, DiscoveredPackageScopes, WorkspaceRoot};
 
@@ -88,7 +89,7 @@ fn collect_members(
 
         let parsed = parse_go_mod(&read_manifest(&manifest)?, &manifest)?;
         let module_path = required_module_path(&parsed, &manifest)?.to_string();
-        if module_path == GO_WORKSPACE_NAME {
+        if package_name(&module_path) == GO_WORKSPACE_NAME {
             return Err(Error::WorkspaceNameCollision {
                 name: GO_WORKSPACE_NAME.to_string(),
             });
@@ -119,9 +120,10 @@ fn collect_members(
 }
 
 /// Discover Go scopes without invoking the `go` command: one scope per
-/// `go.work` member — named by its `go.mod` module directive and pointing at
-/// that manifest — plus the `go-workspace` aggregate at the `go.work`
-/// manifest, and the workspace root the authoritative observation reports.
+/// `go.work` member — named by the shared module-path naming rule and pointing
+/// at its `go.mod` manifest — plus the `go-workspace` aggregate at the
+/// `go.work` manifest, and the workspace root the authoritative observation
+/// reports.
 ///
 /// Repositories without a `go.work` contribute no scopes and no root. The
 /// result carries no tasks, edges, contracts, external resolution, or prune
@@ -155,7 +157,12 @@ pub(super) fn discover_package_scopes(
 
     let mut scopes: Vec<DiscoveredPackageScope> = members
         .into_iter()
-        .map(|member| DiscoveredPackageScope::new(Some(member.module_path), member.manifest_path))
+        .map(|member| {
+            DiscoveredPackageScope::new(
+                Some(package_name(&member.module_path).to_string()),
+                member.manifest_path,
+            )
+        })
         .collect();
     // The workspace aggregate matches the authoritative observation: the same
     // reserved name, rooted at the `go.work` manifest.
@@ -667,11 +674,11 @@ mod tests {
             inventory,
             vec![
                 (
-                    Some("example.com/api".to_string()),
+                    Some("api".to_string()),
                     root.join_components(&["apps", "api", GO_MOD]).to_string()
                 ),
                 (
-                    Some("example.com/lib".to_string()),
+                    Some("lib".to_string()),
                     root.join_components(&["packages", "lib", GO_MOD])
                         .to_string()
                 ),
@@ -681,6 +688,63 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn inventory_preserves_versioned_names_and_full_module_paths_without_go() {
+        let (_tempdir, root) = temp_root();
+        let cases = [
+            ("apps/api", "example.com/api", "api"),
+            ("apps/api-v2", "example.com/team/api/v2", "api/v2"),
+            ("apps/api-v10", "example.com/team/api/v10", "api/v10"),
+            ("packages/yaml", "gopkg.in/yaml.v3", "yaml.v3"),
+        ];
+        let directories = cases
+            .iter()
+            .map(|(directory, _, _)| *directory)
+            .collect::<Vec<_>>();
+        write_work(&root, &directories);
+        for (directory, module_path, _) in cases {
+            write_member(&root, directory, module_path);
+        }
+
+        // Inventory membership retains Go's identity even though public scope names
+        // shorten.
+        let uses = directories
+            .iter()
+            .map(|directory| directory.to_string())
+            .collect::<Vec<_>>();
+        let members = collect_members(&root, &uses, None).unwrap();
+        assert_eq!(members.len(), cases.len());
+        for (member, (_, module_path, _)) in members.iter().zip(cases) {
+            assert_eq!(member.module_path, module_path);
+            let parsed = parse_go_mod(
+                &read_manifest(&member.manifest_path).unwrap(),
+                &member.manifest_path,
+            )
+            .unwrap();
+            assert_eq!(parsed.module_path.as_deref(), Some(module_path));
+        }
+
+        let scopes = discover_package_scopes(&root).unwrap();
+        assert_eq!(
+            scopes
+                .scopes()
+                .iter()
+                .map(|scope| scope.name())
+                .collect::<Vec<_>>(),
+            cases
+                .iter()
+                .map(|(_, _, name)| Some(*name))
+                .chain(std::iter::once(Some(GO_WORKSPACE_NAME)))
+                .collect::<Vec<_>>()
+        );
+        for (scope, member) in scopes.scopes().iter().zip(&members) {
+            assert_eq!(
+                scope.manifest_path().as_str(),
+                member.manifest_path.as_str()
+            );
+        }
     }
 
     #[test]
@@ -718,8 +782,8 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                Some("example.com/api".to_string()),
-                Some("example.com/lib".to_string()),
+                Some("api".to_string()),
+                Some("lib".to_string()),
                 Some(GO_WORKSPACE_NAME.to_string()),
             ]
         );
@@ -754,8 +818,8 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                Some("example.com/api".to_string()),
-                Some("example.com/lib".to_string()),
+                Some("api".to_string()),
+                Some("lib".to_string()),
                 Some(GO_WORKSPACE_NAME.to_string()),
             ]
         );
@@ -795,14 +859,19 @@ mod tests {
             Err(Error::VendoredModule { .. })
         ));
 
-        // Reserved aggregate name.
-        let (_tempdir, root) = temp_root();
-        write_work(&root, &["./module"]);
-        write_member(&root, "module", GO_WORKSPACE_NAME);
-        assert!(matches!(
-            discover_package_scopes(&root),
-            Err(Error::WorkspaceNameCollision { .. })
-        ));
+        // Both a bare and a derived package name can collide with the aggregate.
+        for module_path in [GO_WORKSPACE_NAME, "example.com/go-workspace"] {
+            let (_tempdir, root) = temp_root();
+            write_work(&root, &["./module"]);
+            write_member(&root, "module", module_path);
+            assert!(
+                matches!(
+                    discover_package_scopes(&root),
+                    Err(Error::WorkspaceNameCollision { name }) if name == GO_WORKSPACE_NAME
+                ),
+                "{module_path} must not claim the reserved aggregate name"
+            );
+        }
 
         // Root module definition collision.
         let (_tempdir, root) = temp_root();

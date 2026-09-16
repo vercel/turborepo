@@ -589,7 +589,7 @@ mod tests {
                 (ToolchainId::RUST, "Cargo.toml"),
             ],
             PackageJson {
-                dependencies: Some([("rust".to_string(), "*".to_string())].into()),
+                dependencies: Some([("aaa-js".to_string(), "*".to_string())].into()),
                 ..Default::default()
             },
         )
@@ -599,7 +599,7 @@ mod tests {
         assert_eq!(
             mapper.changed_packages([file].into(), LockfileContents::Unchanged)?,
             PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
-                root_internal_dep: PackageName::from("rust")
+                root_internal_dep: PackageName::from("aaa-js")
             })
         );
         Ok(())

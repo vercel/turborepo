@@ -1227,11 +1227,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                     );
                     for scope in scopes {
                         let identity = scope.name().map(str::to_string);
-                        // A default descriptor mirrors what full native
-                        // discovery contributes: the node is addressable by
-                        // name (so JavaScript declared dependencies naming
-                        // this scope classify as internal, exactly as under
-                        // eager discovery) while carrying no native facts.
+                        // A default descriptor makes the node addressable without
+                        // carrying native facts. JavaScript dependency lookup uses
+                        // manifest provenance, so native names cannot capture npm
+                        // dependencies before or after their owner is loaded.
                         if let Some(name) = identity.clone() {
                             inventory_descriptors.push((name.clone(), PackageJson::default()));
                             self.unloaded_scopes
@@ -1510,7 +1509,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         let path_index = WorkspacePathIndex::from_knowledge(knowledge);
         // Built once so alias dependency lookups borrow workspace entries
         // instead of allocating an owned `PackageName` per dependency query.
-        let name_index = WorkspaceNameIndex::from_workspaces(&self.assembler.package_jsons);
+        let name_index =
+            WorkspaceNameIndex::from_knowledge(knowledge, &self.assembler.package_jsons);
+        // Custom contributors may still opt into descriptor classification for
+        // non-package.json sources. Preserve that legacy name lookup without
+        // exposing native targets to real JavaScript dependency declarations.
+        let legacy_name_index = std::sync::OnceLock::new();
         // Compute once — for pnpm/Berry this reads a config file from disk.
         // Without hoisting, classifying each JavaScript descriptor would
         // redundantly read the same file. Cargo supplies classified internal
@@ -1555,6 +1559,17 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                                 .ok_or_else(|| Error::MissingDescriptor {
                                     name: identity.to_string(),
                                 })?;
+                            let source_name_index = if definition_path.as_path().file_name()
+                                == Some("package.json".as_ref())
+                            {
+                                &name_index
+                            } else {
+                                legacy_name_index.get_or_init(|| {
+                                    WorkspaceNameIndex::from_workspaces(
+                                        &self.assembler.package_jsons,
+                                    )
+                                })
+                            };
                             Relationships::classify(
                                 self.repo_root,
                                 definition_path,
@@ -1562,7 +1577,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                                 link_workspace_packages,
                                 entry.dependencies_with_kind(),
                                 &path_index,
-                                &name_index,
+                                source_name_index,
                                 catalogs.as_ref(),
                             )
                         }
@@ -2345,55 +2360,66 @@ mod test {
             ),
             ..Default::default()
         };
-        let legacy = custom_package(&root, "legacy-app", dependency_descriptor());
-        let native = custom_package(&root, "native-app", dependency_descriptor())
-            .with_native_relationships(Vec::new());
-        let library = custom_package(&root, "custom-lib", PackageJson::default());
-        let toolchain = PackageContributor {
-            id: ToolchainId::new("custom-relationships"),
-            root: root.clone(),
-            packages: vec![legacy, native, library],
-        };
+        // Legacy non-package.json descriptors keep their all-name target index,
+        // whether the target uses descriptor fallback (None) or native facts
+        // (Some([])).
+        for library_has_native_relationships in [false, true] {
+            let legacy = custom_package(&root, "legacy-app", dependency_descriptor());
+            let native = custom_package(&root, "native-app", dependency_descriptor())
+                .with_native_relationships(Vec::new());
+            let mut library = custom_package(&root, "custom-lib", PackageJson::default());
+            if library_has_native_relationships {
+                library = library.with_native_relationships(Vec::new());
+            }
+            let toolchain = PackageContributor {
+                id: ToolchainId::new("custom-relationships"),
+                root: root.clone(),
+                packages: vec![legacy, native, library],
+            };
 
-        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(toolchain))
-            .build()
-            .await
-            .unwrap();
+            let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+                .with_package_discovery(MockDiscovery)
+                .with_contributor(Arc::new(toolchain))
+                .build()
+                .await
+                .unwrap();
 
-        let library = PackageNode::Workspace(PackageName::from("custom-lib"));
-        assert!(
-            graph
-                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("legacy-app")))
-                .unwrap()
-                .contains(&library),
-            "None must preserve descriptor classification for custom toolchains"
-        );
-        let native_dependencies = graph
-            .immediate_dependencies(&PackageNode::Workspace(PackageName::from("native-app")))
-            .unwrap();
-        assert_eq!(native_dependencies.len(), 1);
-        assert!(native_dependencies.contains(&PackageNode::Root));
-        assert!(
-            graph
-                .relationship_knowledge
-                .groups()
-                .iter()
-                .find(|group| group.source() == "native-app")
-                .unwrap()
-                .relationships()
-                .is_empty()
-        );
-        let custom_context = graph
-            .package_task_context(&PackageName::from("legacy-app"))
-            .unwrap();
-        let custom_contract = custom_context.task_contract();
-        assert_eq!(custom_contract.toolchain(), None);
-        assert_eq!(
-            custom_contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
-            None
-        );
+            let library = PackageNode::Workspace(PackageName::from("custom-lib"));
+            assert!(
+                graph
+                    .immediate_dependencies(&PackageNode::Workspace(PackageName::from(
+                        "legacy-app"
+                    )))
+                    .unwrap()
+                    .contains(&library),
+                "None must preserve descriptor classification for custom toolchains, including a \
+                 target with native relationships: {library_has_native_relationships}"
+            );
+            let native_dependencies = graph
+                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("native-app")))
+                .unwrap();
+            assert_eq!(native_dependencies.len(), 1);
+            assert!(native_dependencies.contains(&PackageNode::Root));
+            assert!(
+                graph
+                    .relationship_knowledge
+                    .groups()
+                    .iter()
+                    .find(|group| group.source() == "native-app")
+                    .unwrap()
+                    .relationships()
+                    .is_empty()
+            );
+            let custom_context = graph
+                .package_task_context(&PackageName::from("legacy-app"))
+                .unwrap();
+            let custom_contract = custom_context.task_contract();
+            assert_eq!(custom_contract.toolchain(), None);
+            assert_eq!(
+                custom_contract.command_map_argv(&[("javascript".into(), vec!["node".into()])]),
+                None
+            );
+        }
     }
 
     #[tokio::test]

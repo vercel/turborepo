@@ -115,8 +115,8 @@ pub enum Error {
         other_manifest: String,
     },
     #[error(
-        "Go module identity {name:?} is reserved for the workspace aggregate. Rename the module \
-         before enabling experimental Go workspaces."
+        "Turborepo package name {name:?} is reserved for the Go workspace aggregate. Rename the \
+         Go module before enabling experimental Go workspaces."
     )]
     WorkspaceNameCollision { name: String },
     #[error(
@@ -210,6 +210,38 @@ pub struct GoModule {
     /// Module-root source files that must not be treated as generated binaries.
     /// None means discovery could not safely classify potential output names.
     pub root_source_inputs: Option<HashSet<String>>,
+}
+
+impl GoModule {
+    /// The unique Turborepo identity, distinct from Go's full module path.
+    fn package_name(&self) -> &str {
+        package_name(&self.module_path)
+    }
+}
+
+/// Derive a Turborepo name from a Go module path, retaining a trailing major
+/// version with its preceding component: `example.com/api/v2` becomes `api/v2`.
+/// This is the sole package identity, not an alias for the full module path.
+fn package_name(module_path: &str) -> &str {
+    let Some((prefix, last)) = module_path.rsplit_once('/') else {
+        return module_path;
+    };
+    if is_version_element(last) {
+        &module_path[prefix.rfind('/').map_or(0, |index| index + 1)..]
+    } else {
+        last
+    }
+}
+
+// Match cmd/go/internal/load's isVersionElement: N >= 2, no leading zero.
+// Do not parse N: Go imposes no integer limit.
+fn is_version_element(element: &str) -> bool {
+    element.strip_prefix('v').is_some_and(|version| {
+        !version.is_empty()
+            && version != "1"
+            && !version.starts_with('0')
+            && version.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 /// The result of Go workspace discovery.
@@ -822,7 +854,10 @@ fn relationships_from_mod_graph(
             relationships
                 .entry(from.to_string())
                 .or_default()
-                .push(Relationship::internal(internal, DependencyKind::Production));
+                .push(Relationship::internal(
+                    package_name(internal),
+                    DependencyKind::Production,
+                ));
         }
     }
     Ok(relationships)
@@ -1053,10 +1088,7 @@ fn external_resolutions(
                 identities.insert(identity);
             }
         }
-        resolutions.push(PackageResolution::new(
-            module.module_path.clone(),
-            identities,
-        ));
+        resolutions.push(PackageResolution::new(module.package_name(), identities));
     }
     aggregate.insert(toolchain.clone());
     resolutions.push(PackageResolution::new(GO_WORKSPACE_NAME, aggregate));
@@ -1117,7 +1149,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
                 required_module_path(&module_json, &member_dir.join_component(GO_MOD))?.to_string()
             }
         };
-        if module_path == GO_WORKSPACE_NAME {
+        if package_name(&module_path) == GO_WORKSPACE_NAME {
             return Err(Error::WorkspaceNameCollision {
                 name: GO_WORKSPACE_NAME.to_string(),
             });
@@ -1141,7 +1173,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             member_dir.join_component(GO_MOD).to_string(),
         );
         package_directories.insert(
-            module_path.clone(),
+            package_name(&module_path).to_string(),
             AnchoredSystemPathBuf::new(repo_root, &member_dir)?
                 .to_unix()
                 .to_string(),
@@ -1215,7 +1247,10 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             None
         };
         let (new_path, local_target) = match local {
-            Some((target, directory)) => (format!("./{directory}"), Some(target)),
+            Some((target, directory)) => (
+                format!("./{directory}"),
+                Some(package_name(&target).to_string()),
+            ),
             None => (new_path.to_string(), None),
         };
         prune_replacements.push(GoPruneReplacement {
@@ -1267,7 +1302,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
                     RelationshipTarget::UnresolvedExternal { .. } => None,
                 })
                 .collect();
-            (module.module_path.clone(), dependencies)
+            (module.package_name().to_string(), dependencies)
         })
         .collect();
     let prune = GoPruneKnowledge {
@@ -1328,17 +1363,10 @@ fn runnable_output_name(module: &GoModule) -> Option<String> {
     };
     let mut components = import_path.rsplit('/');
     let name = components.next()?;
-    // Match cmd/go/internal/load's exeFromImportPath and isVersionElement.
-    // Go skips exactly one trailing vN component (N >= 2, no leading zero),
-    // even for nested packages. Do not parse N: Go imposes no integer limit.
-    let is_version = name.strip_prefix('v').is_some_and(|version| {
-        !version.is_empty()
-            && version != "1"
-            && !version.starts_with('0')
-            && version.bytes().all(|byte| byte.is_ascii_digit())
-    });
+    // Match cmd/go/internal/load's exeFromImportPath: binary names skip one
+    // trailing major version, unlike Turborepo package names which retain it.
     Some(
-        if is_version {
+        if is_version_element(name) {
             components.next().unwrap_or(name)
         } else {
             name
@@ -1825,20 +1853,17 @@ fn package_from_module(
     cache_prefixes: &[String],
     go_flags: &str,
 ) -> DiscoveredPackage {
+    let name = module.package_name().to_string();
     let descriptor = PackageJson {
-        name: Some(turborepo_errors::Spanned::new(module.module_path.clone())),
+        name: Some(turborepo_errors::Spanned::new(name.clone())),
         ..Default::default()
     };
-    DiscoveredPackage::package(
-        Some(module.module_path.clone()),
-        descriptor,
-        module.manifest_path.clone(),
-    )
-    .with_native_relationships(module.relationships.clone())
-    .with_native_tasks(native_tasks_for_module(module))
-    .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
-        GoTaskContract::module(module, target_os, cache_prefixes).with_go_flags(go_flags),
-    ))
+    DiscoveredPackage::package(Some(name), descriptor, module.manifest_path.clone())
+        .with_native_relationships(module.relationships.clone())
+        .with_native_tasks(native_tasks_for_module(module))
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+            GoTaskContract::module(module, target_os, cache_prefixes).with_go_flags(go_flags),
+        ))
 }
 
 /// The Go repository contributor. Registered during graph construction when
@@ -1910,7 +1935,7 @@ impl RepositoryContributor for GoContributor {
             let mut module_names = workspace
                 .modules
                 .iter()
-                .map(|module| module.module_path.clone())
+                .map(|module| module.package_name().to_string())
                 .collect::<Vec<_>>();
             module_names.sort();
             let workspace_relationships = module_names
@@ -2027,6 +2052,42 @@ mod tests {
     }
 
     #[test]
+    fn package_names_preserve_valid_major_versions_and_final_components() {
+        for (module_path, expected) in [
+            ("api", "api"),
+            ("v2", "v2"),
+            ("my-api", "my-api"),
+            ("yaml.v3", "yaml.v3"),
+            ("example.com/api", "api"),
+            ("example.com/team/services/my-api", "my-api"),
+            ("example.com/team/api.client", "api.client"),
+            ("api/v2", "api/v2"),
+            ("api/v10", "api/v10"),
+            ("example.com/api/v2", "api/v2"),
+            ("example.com/team/api/v10", "api/v10"),
+            (
+                "example.com/team/api/v999999999999999999999999999999",
+                "api/v999999999999999999999999999999",
+            ),
+            ("example.com/api/v0", "v0"),
+            ("example.com/api/v1", "v1"),
+            ("example.com/api/v01", "v01"),
+            ("example.com/api/v02", "v02"),
+            ("example.com/api/v", "v"),
+            ("example.com/api/v2beta", "v2beta"),
+            ("example.com/api/v2.0", "v2.0"),
+            ("example.com/api/v-2", "v-2"),
+            ("example.com/api/v+2", "v+2"),
+            ("example.com/api/v２", "v２"),
+            ("example.com/api/V2", "V2"),
+            ("example.com/api/v2/client", "client"),
+            ("gopkg.in/yaml.v3", "yaml.v3"),
+        ] {
+            assert_eq!(package_name(module_path), expected, "{module_path}");
+        }
+    }
+
+    #[test]
     fn command_parse_diagnostic_hides_parser_details() {
         let _source =
             serde_json::from_str::<serde_json::Value>("{").expect_err("incomplete JSON must fail");
@@ -2108,7 +2169,7 @@ mod tests {
                 assert_eq!(api.relationships.len(), 1);
                 assert_eq!(
                     api.relationships[0].target(),
-                    &RelationshipTarget::Internal("example.com/lib".into())
+                    &RelationshipTarget::Internal("lib".into())
                 );
             } else {
                 assert!(api.relationships.is_empty());
@@ -2174,7 +2235,7 @@ mod tests {
         let toolchain = ExternalPackageIdentity::new("go", "go1.24");
         let resolutions = external_resolutions(graph, &modules, &listed, &toolchain).unwrap();
         assert_eq!(
-            resolution_keys(&resolutions, "example.com/app"),
+            resolution_keys(&resolutions, "app"),
             HashSet::from(["go", "example.net/dep", "example.net/leaf"])
         );
         let changed = external_resolutions(
@@ -2187,7 +2248,7 @@ mod tests {
             &toolchain,
         )
         .unwrap();
-        for package in ["example.com/app", "example.com/other", GO_WORKSPACE_NAME] {
+        for package in ["app", "other", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed, package).identities()
@@ -2310,7 +2371,12 @@ mod tests {
             (
                 "reserved",
                 "module go-workspace\n\ngo 1.22\n",
-                "reserved for the workspace aggregate",
+                "reserved for the Go workspace aggregate",
+            ),
+            (
+                "derived-reserved",
+                "module example.com/go-workspace\n\ngo 1.22\n",
+                "reserved for the Go workspace aggregate",
             ),
         ] {
             let tempdir = tempfile::tempdir().unwrap();
@@ -2402,7 +2468,7 @@ mod tests {
         assert_eq!(api.relationships.len(), 1);
         assert_eq!(
             api.relationships[0].target(),
-            &crate::relationships::RelationshipTarget::Internal("example.com/lib".to_string())
+            &crate::relationships::RelationshipTarget::Internal("lib".to_string())
         );
     }
 
@@ -2414,6 +2480,61 @@ mod tests {
         let relationships =
             relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
+        assert_eq!(
+            relationships["example.com/api"][0].target(),
+            &RelationshipTarget::Internal("lib".to_string())
+        );
+    }
+
+    #[test]
+    fn versioned_relationships_and_resolutions_use_derived_package_names() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/team/api/v2"),
+            resolution_module(&root, "example.com/team/lib/v10"),
+        ];
+        let graph = "example.com/team/api/v2 \
+                     example.com/team/lib/v10@v10.0.0\nexample.com/team/lib/v10 \
+                     example.net/dependency/v3@v3.0.0\n";
+        let module_paths = modules
+            .iter()
+            .map(|module| module.module_path.clone())
+            .collect();
+        let relationships =
+            relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
+        // Go graph lookup keys stay full paths; only Turborepo relationship targets
+        // shorten.
+        assert_eq!(
+            relationships["example.com/team/api/v2"][0].target(),
+            &RelationshipTarget::Internal("lib/v10".to_string())
+        );
+        let resolutions = external_resolutions(
+            graph,
+            &modules,
+            &[listed_module(
+                "example.net/dependency/v3",
+                "v3.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .unwrap();
+        assert_eq!(
+            resolutions
+                .iter()
+                .map(PackageResolution::package)
+                .collect::<HashSet<_>>(),
+            HashSet::from(["api/v2", "lib/v10", GO_WORKSPACE_NAME])
+        );
+        for name in ["api/v2", "lib/v10", GO_WORKSPACE_NAME] {
+            assert_eq!(
+                resolution_keys(&resolutions, name),
+                HashSet::from(["go", "example.net/dependency/v3"])
+            );
+        }
+        assert_eq!(modules[0].module_path, "example.com/team/api/v2");
+        assert_eq!(modules[1].module_path, "example.com/team/lib/v10");
     }
 
     #[test]
@@ -2423,21 +2544,18 @@ mod tests {
             go: "1.22".to_string(),
             toolchain: Some("go1.22.0".to_string()),
             package_directories: HashMap::from([
-                ("example.com/api".to_string(), "apps/api".to_string()),
-                ("example.com/lib".to_string(), "packages/lib".to_string()),
-                ("example.com/unused".to_string(), "tools/unused".to_string()),
+                ("api".to_string(), "apps/api".to_string()),
+                ("lib".to_string(), "packages/lib".to_string()),
+                ("unused".to_string(), "tools/unused".to_string()),
             ]),
-            relationships: HashMap::from([(
-                "example.com/api".to_string(),
-                vec!["example.com/lib".to_string()],
-            )]),
+            relationships: HashMap::from([("api".to_string(), vec!["lib".to_string()])]),
             replacements: vec![
                 GoPruneReplacement {
                     old_path: "example.net/local".to_string(),
                     old_version: None,
                     new_path: "./packages/lib".to_string(),
                     new_version: None,
-                    local_target: Some("example.com/lib".to_string()),
+                    local_target: Some("lib".to_string()),
                 },
                 GoPruneReplacement {
                     old_path: "example.net/remote".to_string(),
@@ -2451,16 +2569,16 @@ mod tests {
                     old_version: None,
                     new_path: "./tools/unused".to_string(),
                     new_version: None,
-                    local_target: Some("example.com/unused".to_string()),
+                    local_target: Some("unused".to_string()),
                 },
             ],
         };
 
         let plan = knowledge
-            .plan(&["example.com/api".to_string()])
+            .plan(&["api".to_string()])
             .unwrap()
             .expect("kept Go modules produce a plan");
-        assert_eq!(plan.extra_packages, ["example.com/lib"]);
+        assert_eq!(plan.extra_packages, ["lib"]);
         assert_eq!(
             plan.root_files,
             [(
@@ -2783,9 +2901,9 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.24"),
         )
         .expect("resolution succeeds");
-        let app = resolution_keys(&resolutions, "example.com/app");
-        let lib = resolution_keys(&resolutions, "example.com/lib");
-        let other = resolution_keys(&resolutions, "example.com/other");
+        let app = resolution_keys(&resolutions, "app");
+        let lib = resolution_keys(&resolutions, "lib");
+        let other = resolution_keys(&resolutions, "other");
         let aggregate = resolution_keys(&resolutions, GO_WORKSPACE_NAME);
 
         for closure in [&app, &lib, &other, &aggregate] {
@@ -2813,15 +2931,15 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.24"),
         )
         .expect("changed resolution succeeds");
-        for package in ["example.com/app", "example.com/lib", GO_WORKSPACE_NAME] {
+        for package in ["app", "lib", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed, package).identities()
             );
         }
         assert_eq!(
-            resolution_for(&resolutions, "example.com/other").identities(),
-            resolution_for(&changed, "example.com/other").identities()
+            resolution_for(&resolutions, "other").identities(),
+            resolution_for(&changed, "other").identities()
         );
 
         let changed_toolchain = external_resolutions(
@@ -2831,12 +2949,7 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.25"),
         )
         .expect("changed toolchain resolution succeeds");
-        for package in [
-            "example.com/app",
-            "example.com/lib",
-            "example.com/other",
-            GO_WORKSPACE_NAME,
-        ] {
+        for package in ["app", "lib", "other", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed_toolchain, package).identities(),
@@ -2904,7 +3017,7 @@ mod tests {
         )
         .expect("CRLF resolution succeeds");
 
-        let app = resolution_keys(&resolutions, "example.com/app");
+        let app = resolution_keys(&resolutions, "app");
         assert_eq!(app, HashSet::from(["go", "example.net/dependency"]));
     }
 
@@ -2974,7 +3087,7 @@ mod tests {
         };
         let context = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "apps/api",
             native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3117,7 +3230,7 @@ mod tests {
                 let contract = GoTaskContract::module(&module, target_os, &[]);
                 let package = task_context(
                     &root,
-                    &module.module_path,
+                    module.package_name(),
                     "checkout",
                     native_tasks_for_module(&module),
                     crate::package_graph::PackageTaskContextKind::Package,
@@ -3160,7 +3273,7 @@ mod tests {
         let contract = GoTaskContract::module(&module, "windows", &[]);
         let package = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "apps/api",
             native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3240,7 +3353,7 @@ mod tests {
                 .map(|(module, directory)| {
                     task_context(
                         &root,
-                        &module.module_path,
+                        module.package_name(),
                         directory,
                         native_tasks_for_module(module),
                         crate::package_graph::PackageTaskContextKind::Package,
@@ -3358,7 +3471,7 @@ mod tests {
         let contract = GoTaskContract::module(module, "linux", &[]);
         let package = task_context(
             root,
-            &module.module_path,
+            module.package_name(),
             "app",
             native_tasks_for_module(module),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3699,7 +3812,7 @@ mod tests {
         let contract = GoTaskContract::module(module, "linux", &[]);
         let package = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "apps/api",
             tasks,
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3775,7 +3888,7 @@ mod tests {
         let library_contract = GoTaskContract::module(&library, "linux", &cache_prefixes);
         let package = task_context(
             &root,
-            &executable.module_path,
+            executable.package_name(),
             "apps/api",
             native_tasks_for_module(&executable),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3784,7 +3897,7 @@ mod tests {
         assert!(package.task_contract().env_vars().contains(&"GOCACHE"));
         let dependency = task_context(
             &root,
-            &library.module_path,
+            library.package_name(),
             "packages/lib",
             native_tasks_for_module(&library),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3823,7 +3936,7 @@ mod tests {
 
         let library_context = task_context(
             &root,
-            &library.module_path,
+            library.package_name(),
             "packages/lib",
             native_tasks_for_module(&library),
             crate::package_graph::PackageTaskContextKind::Package,
@@ -3953,7 +4066,7 @@ mod tests {
         .with_go_flags(persisted_flags);
         let package = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "api",
             native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
