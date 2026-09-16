@@ -412,6 +412,39 @@ fn test_prune_docker() {
 }
 
 #[test]
+fn test_prune_docker_preserves_task_env_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap().replace(
+        r#""build": {"#,
+        r#""build": {
+      "envMode": "loose","#,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_turbo_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/full/turbo.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pruned_turbo_json["tasks"]["build"]["envMode"], "loose");
+}
+
+#[test]
 fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
