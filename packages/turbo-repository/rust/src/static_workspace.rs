@@ -70,6 +70,16 @@ impl StaticWorkspace {
         Ok(self.workspace.graph()?.unloaded_owners().is_empty())
     }
 
+    /// Whether declared local package inputs can be inferred without language
+    /// executables. This is independent of native task metadata completeness.
+    #[napi(getter)]
+    pub fn affectedness_complete(&self) -> bool {
+        self.workspace
+            .static_affectedness
+            .as_ref()
+            .is_some_and(|knowledge| knowledge.is_complete())
+    }
+
     /// Toolchains with inventoried scopes whose authoritative metadata is
     /// absent.
     #[napi(getter)]
@@ -123,12 +133,15 @@ impl StaticWorkspace {
     /// Returns candidates from workspace-relative changed paths, including
     /// deleted paths. Does not read Git history or execute subprocesses.
     ///
-    /// If any native metadata remains unloaded, every non-empty change returns
-    /// all real packages, including JavaScript dependents: unknown native edges
-    /// can connect otherwise unrelated scopes. Custom root global inputs and
-    /// package-topology edits also fall back to all packages. Otherwise this
-    /// uses JavaScript package change mapping plus transitive input dependents.
-    /// It does not analyze arbitrary task inputs or build-script file reads.
+    /// Cargo path dependencies and uv workspace/path sources contribute static
+    /// input relationships, including optional and conditional inputs. Source
+    /// changes select their owners and transitive dependents across ecosystems.
+    /// Native lockfile edits invalidate that workspace and its dependents.
+    /// Manifest edits fall back to all packages: removed scopes can erase
+    /// cross-language relationships. Unresolved static inputs, matching global
+    /// inputs, and JavaScript topology edits also fall back to all packages.
+    /// Native task metadata stays unloaded. This does not analyze arbitrary
+    /// build-script reads or external resolution.
     #[napi]
     pub async fn affected_candidates(
         &self,
@@ -142,8 +155,11 @@ impl StaticWorkspace {
             });
         }
         let graph = self.workspace.graph()?;
-        if !self.dependency_graph_complete()?
-            || self.workspace.has_global_inputs
+        if !self.affectedness_complete()
+            || turborepo_repository::static_dependencies::global_inputs_changed(
+                &self.workspace.global_inputs,
+                &files,
+            )
             || files.iter().any(|file| is_topology_change(file))
         {
             return Ok(StaticAffectedPackages {
@@ -151,19 +167,36 @@ impl StaticWorkspace {
                 conservative: true,
             });
         }
-        // Disabling lockfile optimization avoids any SCM subprocess. Lockfile
-        // changes retain the existing all-packages invalidation behavior.
-        let seeds = self
+        let knowledge = self
             .workspace
-            .affected_packages(files, None, Some(false))
-            .await?;
-        let seeds = seeds
-            .into_iter()
-            .map(|package| PackageName::Other(package.name))
-            .collect::<Vec<_>>();
-        let affected = graph
-            .affected_relationships()
-            .affected_by(&seeds)
+            .static_affectedness
+            .as_ref()
+            .ok_or_else(|| Error::from_reason("static dependency knowledge unavailable"))?;
+        let mut seeds = Vec::new();
+        let mut ordinary_files = Vec::new();
+        for file in files {
+            let path = AnchoredSystemPath::new(&file)
+                .map_err(|error| Error::from_reason(error.to_string()))?;
+            let native = knowledge.seeds_for_path(&graph.repo_root().resolve(path));
+            if native.is_empty() {
+                ordinary_files.push(file);
+            } else {
+                seeds.extend(native);
+            }
+        }
+        // Keep native workspace invalidations scoped; ordinary paths still use
+        // the shared package mapper, including its co-located ownership rules.
+        if !ordinary_files.is_empty() {
+            seeds.extend(
+                self.workspace
+                    .affected_packages(ordinary_files, None, Some(false))
+                    .await?
+                    .into_iter()
+                    .map(|package| PackageName::Other(package.name)),
+            );
+        }
+        let affected = knowledge
+            .affected_by(graph, &seeds)
             .map_err(|error| Error::from_reason(error.to_string()))?;
         let names = affected
             .into_iter()
@@ -240,6 +273,12 @@ fn normalize_paths(files: Vec<String>) -> Result<Vec<String>, Error> {
 
 fn is_topology_change(file: &str) -> bool {
     let path = std::path::Path::new(file);
+    if matches!(
+        path.file_name().and_then(|name| name.to_str()),
+        Some("Cargo.toml" | "pyproject.toml")
+    ) {
+        return true;
+    }
     path.parent()
         .is_some_and(|parent| !parent.as_os_str().is_empty())
         && matches!(

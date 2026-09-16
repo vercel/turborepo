@@ -47,6 +47,11 @@ export declare class StaticWorkspace {
    */
   get dependencyGraphComplete(): boolean;
   /**
+   * Whether declared local package inputs can be inferred without language
+   * executables. This is independent of native task metadata completeness.
+   */
+  get affectednessComplete(): boolean;
+  /**
    * Toolchains with inventoried scopes whose authoritative metadata is
    * absent.
    */
@@ -62,12 +67,15 @@ export declare class StaticWorkspace {
    * Returns candidates from workspace-relative changed paths, including
    * deleted paths. Does not read Git history or execute subprocesses.
    *
-   * If any native metadata remains unloaded, every non-empty change returns
-   * all real packages, including JavaScript dependents: unknown native edges
-   * can connect otherwise unrelated scopes. Custom root global inputs and
-   * package-topology edits also fall back to all packages. Otherwise this
-   * uses JavaScript package change mapping plus transitive input dependents.
-   * It does not analyze arbitrary task inputs or build-script file reads.
+   * Cargo path dependencies and uv workspace/path sources contribute static
+   * input relationships, including optional and conditional inputs. Source
+   * changes select their owners and transitive dependents across ecosystems.
+   * Native lockfile edits invalidate that workspace and its dependents.
+   * Manifest edits fall back to all packages: removed scopes can erase
+   * cross-language relationships. Unresolved static inputs, matching global
+   * inputs, and JavaScript topology edits also fall back to all packages.
+   * Native task metadata stays unloaded. This does not analyze arbitrary
+   * build-script reads or external resolution.
    */
   affectedCandidates(files: Array<string>): Promise<StaticAffectedPackages>;
 }

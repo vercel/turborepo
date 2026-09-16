@@ -419,6 +419,7 @@ impl Workspace {
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
         let mut lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
+        let mut static_affectedness = None;
         let package_graph = if mode == DiscoveryMode::SkipPackageGraph {
             None
         } else {
@@ -451,9 +452,8 @@ impl Workspace {
                 package_graph_builder = package_graph_builder.with_go();
             }
             Some(if mode == DiscoveryMode::Static {
-                // Discard the construction plan: static consumers can never load
-                // a contributor's toolchain-dependent metadata.
-                let (graph, _) = package_graph_builder.build_lazy().await?.into_parts();
+                let (graph, plan) = package_graph_builder.build_lazy().await?.into_parts();
+                static_affectedness = Some(plan.static_affectedness(&graph).await?);
                 graph
             } else {
                 Arc::new(package_graph_builder.build().await?)
@@ -468,7 +468,8 @@ impl Workspace {
                 version: package_manager_version,
             },
             graph: package_graph,
-            has_global_inputs: !turbo_json.global_deps.is_empty(),
+            global_inputs: turbo_json.global_deps,
+            static_affectedness,
             lockfile,
             lockfile_path,
             lockfile_format,
