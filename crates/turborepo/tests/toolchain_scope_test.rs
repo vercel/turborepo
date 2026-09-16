@@ -458,7 +458,7 @@ replace (
 /// `filter_using_tasks` toggles `futureFlags.filterUsingTasks`, which resolves
 /// `--filter` at the task level instead of the package level.
 /// `js_dev_depends_on_go_dev` adds a cross-language task dependency
-/// (`js-dev#dev` → `example.com/api#dev`) to `turbo.json`, pointing at the
+/// (`js-dev#dev` → `api#dev`) to `turbo.json`, pointing at the
 /// build-tag-dependent native `dev` task. The `dev` task is deliberately
 /// non-persistent so that dependency is legal configuration (persistent
 /// tasks cannot be depended on); every test using this fixture only
@@ -493,7 +493,7 @@ fn write_js_dev_go_platform_constrained_workspace(
         "dev": { "cache": false }
     });
     if js_dev_depends_on_go_dev {
-        tasks["js-dev#dev"] = serde_json::json!({ "dependsOn": ["example.com/api#dev"] });
+        tasks["js-dev#dev"] = serde_json::json!({ "dependsOn": ["api#dev"] });
     }
     let turbo_json = serde_json::json!({
         "$schema": "https://turborepo.dev/schema.json",
@@ -762,6 +762,153 @@ fn js_filter_never_invokes_native_toolchains() {
     spy.assert_no_invocations(&output, "JavaScript-only --filter");
 }
 
+/// A Go scope named `chalk` must not turn npm's `chalk: "*"` into a workspace
+/// dependency. Name overlap must neither load Go nor remove npm's resolution
+/// from the JavaScript task hash.
+#[cfg(unix)]
+#[test]
+fn external_npm_dependency_matching_go_name_stays_external() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    write_file(root, ".gitignore", ".turbo\nnode_modules\ndist\n");
+    write_file(
+        root,
+        "package.json",
+        r#"{
+          "name": "external-npm-with-go",
+          "private": true,
+          "packageManager": "npm@10.5.0",
+          "workspaces": ["packages/js-app", "packages/js-lib"]
+        }"#,
+    );
+    write_file(
+        root,
+        "turbo.json",
+        r#"{
+          "futureFlags": { "experimentalGoWorkspaces": true },
+          "tasks": { "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] } }
+        }"#,
+    );
+    write_js_sources(root);
+    let app_manifest_path = root.join("packages/js-app/package.json");
+    let mut app_manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&app_manifest_path).unwrap()).unwrap();
+    app_manifest["dependencies"]["chalk"] = serde_json::json!("*");
+    fs::write(
+        app_manifest_path,
+        serde_json::to_vec_pretty(&app_manifest).unwrap(),
+    )
+    .unwrap();
+    write_file(root, "go.work", "go 1.22\n\nuse ./tools/go-chalk\n");
+    write_file(
+        root,
+        "tools/go-chalk/go.mod",
+        "module example.com/other-chalk\n\ngo 1.22\n",
+    );
+    write_file(root, "tools/go-chalk/chalk.go", "package chalk\n");
+
+    // Hand-authored npm v3 lockfile: no installation or registry access is needed.
+    // The spy also blocks npm/node, proving discovery and hashing are
+    // subprocess-free.
+    let mut lockfile = serde_json::json!({
+        "name": "external-npm-with-go",
+        "lockfileVersion": 3,
+        "requires": true,
+        "packages": {
+            "": {
+                "name": "external-npm-with-go",
+                "workspaces": ["packages/js-app", "packages/js-lib"]
+            },
+            "packages/js-app": {
+                "version": "0.0.0",
+                "dependencies": { "js-lib": "0.0.0", "chalk": "*" }
+            },
+            "packages/js-lib": { "version": "0.0.0" },
+            "node_modules/js-app": { "resolved": "packages/js-app", "link": true },
+            "node_modules/js-lib": { "resolved": "packages/js-lib", "link": true },
+            "node_modules/chalk": {
+                "version": "5.3.0",
+                "resolved": "https://registry.npmjs.org/chalk/-/chalk-5.3.0.tgz"
+            }
+        }
+    });
+    let lockfile_path = root.join("package-lock.json");
+    fs::write(
+        &lockfile_path,
+        serde_json::to_vec_pretty(&lockfile).unwrap(),
+    )
+    .unwrap();
+    setup::setup_git(root).unwrap();
+    let spy = ToolchainSpy::new(&spy::all_tools());
+    let run = |context: &str| {
+        let output = spy_run(
+            root,
+            &["run", "build", "--filter=js-app", "--dry-run=json"],
+            &spy,
+        );
+        spy.assert_no_invocations(&output, context);
+        assert_success(&output, context);
+        let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_task_ids(
+            &summary,
+            &BTreeSet::from(["js-app#build".to_string(), "js-lib#build".to_string()]),
+            context,
+        );
+        assert_eq!(
+            dry_run_task(&summary, "js-app#build")["dependencies"],
+            serde_json::json!(["js-lib#build"]),
+            "{context}: npm chalk must not become an internal Go dependency"
+        );
+        summary
+    };
+    let baseline = run("npm chalk with a differently named Go scope");
+
+    // Only Go metadata changes: the npm dependency and its resolution stay
+    // identical.
+    write_file(
+        root,
+        "tools/go-chalk/go.mod",
+        "module example.com/chalk\n\ngo 1.22\n",
+    );
+    let overlapping = run("npm chalk with a Go scope also named chalk");
+    assert_eq!(
+        task_hash(&baseline, "js-app#build"),
+        task_hash(&overlapping, "js-app#build")
+    );
+    let external_hash = |summary: &serde_json::Value| {
+        dry_run_task(summary, "js-app#build")["hashOfExternalDependencies"]
+            .as_str()
+            .expect("JavaScript external dependency hash")
+            .to_string()
+    };
+    assert_eq!(external_hash(&baseline), external_hash(&overlapping));
+
+    // Only the external lockfile row changes; neither package.json nor Go changes.
+    lockfile["packages"]["node_modules/chalk"]["version"] = serde_json::json!("5.4.1");
+    lockfile["packages"]["node_modules/chalk"]["resolved"] =
+        serde_json::json!("https://registry.npmjs.org/chalk/-/chalk-5.4.1.tgz");
+    fs::write(
+        &lockfile_path,
+        serde_json::to_vec_pretty(&lockfile).unwrap(),
+    )
+    .unwrap();
+    let changed = run("updated npm chalk resolution with a Go scope also named chalk");
+    assert_ne!(
+        external_hash(&overlapping),
+        external_hash(&changed),
+        "npm resolution must still be hashed"
+    );
+    assert_ne!(
+        task_hash(&overlapping, "js-app#build"),
+        task_hash(&changed, "js-app#build")
+    );
+    assert_eq!(
+        task_hash(&overlapping, "js-lib#build"),
+        task_hash(&changed, "js-lib#build"),
+        "a lockfile change outside js-lib's dependency closure must not invalidate it"
+    );
+}
+
 /// A `package#task` CLI argument selects exactly the referenced package's
 /// task without any filter, so no native toolchain participates. This is the
 /// argument form, which needs no future flag; resolving `--filter` at the
@@ -1022,7 +1169,7 @@ fn excluding_every_go_scope_keeps_a_js_dev_run_native_free() {
 
     let (summary, output) = spy_dry_run(
         tempdir.path(),
-        &["dev", "--filter=!example.com/api", "--filter=!go-workspace"],
+        &["dev", "--filter=!api", "--filter=!go-workspace"],
         &spy,
     );
     let ids = task_ids(&summary);
@@ -1072,7 +1219,7 @@ fn selected_go_task_requires_a_usable_go_executable() {
 
     let output = spy_run(
         tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "build", "--filter=api", "--dry-run=json"],
         &spy,
     );
     let combined = combined_output(&output);
@@ -1106,7 +1253,7 @@ fn selected_python_task_invokes_uv() {
     spy.assert_invoked("uv", &output, "Python task selection");
 }
 
-/// An explicit cross-language `dependsOn` pulls `example.com/api#build` into
+/// An explicit cross-language `dependsOn` pulls `api#build` into
 /// a JavaScript-filtered run, so the Go owner is loaded even though
 /// `--filter` never mentioned it. Contrast with
 /// `js_filter_never_invokes_native_toolchains`.
@@ -1119,7 +1266,7 @@ fn cross_language_task_dependency_loads_the_native_owner() {
         serde_json::json!({
             "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
             "js-only": {},
-            "js-app#build": { "dependsOn": ["^build", "example.com/api#build"] }
+            "js-app#build": { "dependsOn": ["^build", "api#build"] }
         }),
     );
     let spy = ToolchainSpy::new(spy::GO);
@@ -1138,7 +1285,7 @@ fn cross_language_task_dependency_loads_the_native_owner() {
 }
 
 /// When Go is actually installed, the task closure is visible in the graph:
-/// the JavaScript filter still executes `example.com/api#build`.
+/// the JavaScript filter still executes `api#build`.
 #[cfg(unix)]
 #[test]
 fn cross_language_task_dependency_appears_in_the_selected_graph() {
@@ -1152,7 +1299,7 @@ fn cross_language_task_dependency_appears_in_the_selected_graph() {
         serde_json::json!({
             "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
             "js-only": {},
-            "js-app#build": { "dependsOn": ["^build", "example.com/api#build"] }
+            "js-app#build": { "dependsOn": ["^build", "api#build"] }
         }),
     );
 
@@ -1166,7 +1313,7 @@ fn cross_language_task_dependency_appears_in_the_selected_graph() {
     let combined = combined_output(&output);
     assert!(ids.contains("js-app#build"), "ids: {ids:?}\n{combined}");
     assert!(
-        ids.contains("example.com/api#build"),
+        ids.contains("api#build"),
         "explicit task dependency must join the JavaScript selection: {ids:?}\n{combined}"
     );
 }
@@ -1195,17 +1342,17 @@ fn constrained_go_module_build_selection_retains_the_real_command() {
 
     let output = common::run_turbo(
         tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "build", "--filter=api", "--dry-run=json"],
     );
     assert_success(&output, "explicit native build selection");
     let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let combined = combined_output(&output);
     assert!(
-        task_ids(&summary).contains("example.com/api#build"),
+        task_ids(&summary).contains("api#build"),
         "the native build task must be selected: {:?}\n{combined}",
         task_ids(&summary)
     );
-    let task = dry_run_task(&summary, "example.com/api#build");
+    let task = dry_run_task(&summary, "api#build");
     assert_eq!(
         task["command"], "go build ./...",
         "the library build must retain its real command shape\n{combined}"
@@ -1238,7 +1385,7 @@ fn constrained_go_module_dev_selection_resolves_build_tags_with_go() {
 
     let output = common::run_turbo(
         tempdir.path(),
-        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "dev", "--filter=api", "--dry-run=json"],
     );
     assert_success(
         &output,
@@ -1246,7 +1393,7 @@ fn constrained_go_module_dev_selection_resolves_build_tags_with_go() {
     );
     let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let combined = combined_output(&output);
-    let dev = dry_run_task(&summary, "example.com/api#dev");
+    let dev = dry_run_task(&summary, "api#dev");
     assert_eq!(
         dev["command"], "<NONEXISTENT>",
         "actual `go` must resolve the build tags: the constrained main never counts under default \
@@ -1270,7 +1417,7 @@ fn constrained_go_module_dev_selection_demands_a_usable_go_executable() {
 
     let output = spy_run(
         tempdir.path(),
-        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "dev", "--filter=api", "--dry-run=json"],
         &spy,
     );
     let combined = combined_output(&output);
@@ -1526,14 +1673,14 @@ fn unchanged_js_task_hash_is_stable_with_a_selected_go_owner() {
             "run",
             "build",
             "--filter=js-lib",
-            "--filter=example.com/api",
+            "--filter=api",
             "--dry-run=json",
         ],
     );
     assert_success(&with_go, "JS+Go dry run");
     let with_go: serde_json::Value = serde_json::from_slice(&with_go.stdout).unwrap();
     assert!(
-        task_ids(&with_go).contains("example.com/api#build"),
+        task_ids(&with_go).contains("api#build"),
         "the Go owner must be selected: {:?}",
         task_ids(&with_go)
     );

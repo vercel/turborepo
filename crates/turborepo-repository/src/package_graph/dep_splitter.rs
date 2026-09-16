@@ -48,10 +48,30 @@ impl<'a> WorkspacePathIndex<'a> {
 pub struct WorkspaceNameIndex<'a>(HashMap<&'a str, (&'a PackageName, &'a PackageJson)>);
 
 impl<'a> WorkspaceNameIndex<'a> {
+    /// Native package names must not capture npm dependencies with the same
+    /// name. Like the path index, only authored package.json scopes participate
+    /// in JavaScript dependency resolution.
+    pub(crate) fn from_knowledge(
+        knowledge: &RepositoryKnowledge,
+        workspaces: &'a HashMap<PackageName, PackageJson>,
+    ) -> Self {
+        Self::from_entries(
+            knowledge
+                .package_json_packages()
+                .filter_map(|(identity, _)| workspaces.get_key_value(&PackageName::from(identity))),
+        )
+    }
+
+    /// For callers whose manifests are already restricted to package.json, or
+    /// custom contributors using legacy non-package.json descriptor
+    /// classification.
     pub(crate) fn from_workspaces(workspaces: &'a HashMap<PackageName, PackageJson>) -> Self {
+        Self::from_entries(workspaces.iter())
+    }
+
+    fn from_entries(entries: impl Iterator<Item = (&'a PackageName, &'a PackageJson)>) -> Self {
         Self(
-            workspaces
-                .iter()
+            entries
                 .filter_map(|(name, package_json)| match name {
                     PackageName::Other(_) => Some((name.as_str(), (name, package_json))),
                     PackageName::Root => None,

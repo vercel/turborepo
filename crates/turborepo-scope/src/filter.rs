@@ -1974,7 +1974,6 @@ mod test {
             ("apps/shared/child", "child"),
             ("packages/unrelated", "unrelated"),
             ("packages/native-dep", "native-dep"),
-            ("packages/consumer", "consumer"),
         ] {
             let path = root.join_unix_path(
                 RelativeUnixPathBuf::new(format!("{directory}/package.json")).unwrap(),
@@ -1986,16 +1985,37 @@ mod test {
                     name: Some(Spanned::new(name.to_string())),
                     dependencies: match name {
                         "@repo/js" => Some([("unrelated".to_string(), "*".to_string())].into()),
-                        "consumer" => Some([("rust-pkg".to_string(), "*".to_string())].into()),
                         _ => None,
                     },
                     ..Default::default()
                 },
             );
         }
+        // Contribute the cross-language edge explicitly: an npm dependency
+        // declaration cannot resolve to a Cargo package just by sharing a name.
+        let consumer_relationships = native_packages
+            .iter()
+            .any(|(_, name, _)| *name == "rust-pkg")
+            .then(|| Relationship::internal("rust-pkg", DependencyKind::Production))
+            .into_iter()
+            .collect();
         let mut builder = PackageGraph::builder(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
-            .with_package_jsons(Some(package_jsons));
+            .with_package_jsons(Some(package_jsons))
+            .with_contributor(Arc::new(ColocatedContributor {
+                id: ToolchainId::new("test-consumer"),
+                output: DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("consumer".to_string()),
+                            PackageJson::default(),
+                            root.join_components(&["packages", "consumer", "package.json"]),
+                        )
+                        .with_native_relationships(consumer_relationships),
+                    ],
+                    vec![WorkspaceRoot::new("test-consumer", root.clone())],
+                ),
+            }));
         for (id, name, manifest) in native_packages {
             builder = builder.with_contributor(Arc::new(ColocatedContributor {
                 id: id.clone(),
