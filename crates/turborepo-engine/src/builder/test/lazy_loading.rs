@@ -20,6 +20,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
     package_json::PackageJson,
+    relationships::{DependencyKind, Relationship},
     toolchain::{
         DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
         DiscoveredPackageScope, DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor,
@@ -87,6 +88,63 @@ impl RepositoryContributor for LazyNativeContributor {
                     root.join_components(&["native", "manifest"]),
                 )],
                 vec![WorkspaceRoot::new("lazy-native", root)],
+            ))
+        })
+    }
+}
+
+/// A package.json scope with an explicitly contributed cross-language edge.
+/// Loading this contributor must not load the target's native task catalogue.
+struct DeclaredDependencyContributor {
+    repo_root: AbsoluteSystemPathBuf,
+    name: &'static str,
+}
+
+impl DeclaredDependencyContributor {
+    fn manifest_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root
+            .join_components(&["packages", self.name, "package.json"])
+    }
+}
+
+impl RepositoryContributor for DeclaredDependencyContributor {
+    fn id(&self) -> ToolchainId {
+        ToolchainId::new("declared-relationships")
+    }
+
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(async move {
+            Ok(DiscoveredPackages::new(
+                vec![
+                    DiscoveredPackage::package(
+                        Some(self.name.to_string()),
+                        PackageJson::default(),
+                        self.manifest_path(),
+                    )
+                    .with_native_relationships(vec![Relationship::internal(
+                        "native",
+                        DependencyKind::Production,
+                    )]),
+                ],
+                vec![WorkspaceRoot::new(
+                    "declared-relationships",
+                    self.repo_root.clone(),
+                )],
+            ))
+        })
+    }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            Ok(DiscoveredPackageScopes::new(
+                vec![DiscoveredPackageScope::new(
+                    Some(self.name.to_string()),
+                    self.manifest_path(),
+                )],
+                vec![WorkspaceRoot::new(
+                    "declared-relationships",
+                    self.repo_root.clone(),
+                )],
             ))
         })
     }
@@ -234,23 +292,31 @@ fn cross_package_task_dependency_demands_only_the_reached_owner() {
 fn topological_dependency_through_declared_native_dep_loads_real_metadata() {
     let repo = TempDir::new().unwrap();
     let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
-    // `web` declares a workspace dependency on the native scope: the edge
-    // exists in the inventory graph, and `^check` must follow it to real
-    // native metadata, never a guessed commandless task.
-    let web = web_package_json(&[("native", "workspace:*")]);
+    // `web` has an explicit cross-language relationship, not an npm dependency
+    // on a native manifest. Load that relationship while leaving the target's
+    // catalogue inventory-only; `^check` must demand the real native metadata.
     let runtime = current_thread_runtime();
     let contributor = LazyNativeContributor::new(&repo_root);
-    let (graph, mut plan) = runtime
+    let full_calls = contributor.full_calls.clone();
+    let (_graph, mut plan) = runtime
         .block_on(
             PackageGraph::builder(&repo_root, PackageJson::default())
                 .with_package_discovery(MockDiscovery)
                 .with_lockfile(Some(Box::new(MockLockfile)))
-                .with_package_jsons(Some(web_package_jsons(&repo_root, web)))
+                .with_package_jsons(Some(HashMap::new()))
+                .with_contributor(Arc::new(DeclaredDependencyContributor {
+                    repo_root: repo_root.clone(),
+                    name: "web",
+                }))
                 .with_contributor(Arc::new(contributor))
                 .build_lazy(),
         )
         .unwrap()
         .into_parts();
+    let graph = runtime
+        .block_on(plan.load(&HashSet::from([ToolchainId::new("declared-relationships")])))
+        .unwrap();
+    assert_eq!(full_calls.load(Ordering::SeqCst), 0);
 
     let loader = TestTurboJsonLoader::new(HashMap::from([
         (
@@ -537,29 +603,40 @@ fn root_internal_native_dependency_joins_the_closure_before_hashing() {
     let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
     let runtime = current_thread_runtime();
     let contributor = LazyNativeContributor::new(&repo_root);
+    let full_calls = contributor.full_calls.clone();
+    // Root npm dependencies target package.json scopes. An explicit relationship
+    // from that package can still put a native scope in the transitive closure.
     let root = PackageJson {
         dependencies: Some(
-            [("native", "workspace:*")]
+            [("bridge", "workspace:*")]
                 .into_iter()
                 .map(|(name, version)| (name.to_string(), version.to_string()))
                 .collect(),
         ),
         ..Default::default()
     };
-    let (graph, mut plan) = runtime
+    let (_graph, mut plan) = runtime
         .block_on(
             PackageGraph::builder(&repo_root, root)
                 .with_package_discovery(MockDiscovery)
                 .with_lockfile(Some(Box::new(MockLockfile)))
                 .with_package_jsons(Some(web_package_jsons(&repo_root, web_package_json(&[]))))
+                .with_contributor(Arc::new(DeclaredDependencyContributor {
+                    repo_root: repo_root.clone(),
+                    name: "bridge",
+                }))
                 .with_contributor(Arc::new(contributor))
                 .build_lazy(),
         )
         .unwrap()
         .into_parts();
+    let graph = runtime
+        .block_on(plan.load(&HashSet::from([ToolchainId::new("declared-relationships")])))
+        .unwrap();
+    assert_eq!(full_calls.load(Ordering::SeqCst), 0);
 
-    // The declared root dependency puts the inventory-only native scope in
-    // the closure whose directories the run hashes for every task.
+    // The root -> bridge -> native relationships put the inventory-only native
+    // scope in the closure whose directories the run hashes for every task.
     let closure = graph.root_internal_package_dependencies();
     assert!(
         closure
