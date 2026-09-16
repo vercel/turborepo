@@ -855,7 +855,7 @@ pub struct RawTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
 
     // Internal field - excluded from schema
-    #[serde(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     #[ts(skip)]
     pub env_mode: Option<Spanned<EnvMode>>,
