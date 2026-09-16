@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use napi::Status;
 use thiserror::Error;
@@ -289,10 +292,32 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscoveryMode {
+    Full,
+    SkipPackageGraph,
+    Static,
+}
+
 impl Workspace {
     pub(crate) async fn find_internal(
         path: Option<String>,
         skip_package_graph: bool,
+    ) -> Result<Self, Error> {
+        Self::find_with_mode(
+            path,
+            if skip_package_graph {
+                DiscoveryMode::SkipPackageGraph
+            } else {
+                DiscoveryMode::Full
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn find_with_mode(
+        path: Option<String>,
+        mode: DiscoveryMode,
     ) -> Result<Self, Error> {
         let reference_dir = match path {
             Some(path) => {
@@ -394,7 +419,7 @@ impl Workspace {
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
         let mut lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
-        let package_graph = if skip_package_graph {
+        let package_graph = if mode == DiscoveryMode::SkipPackageGraph {
             None
         } else {
             let mut package_graph_builder =
@@ -425,7 +450,14 @@ impl Workspace {
             if turbo_json.future_flags.experimental_go_workspaces {
                 package_graph_builder = package_graph_builder.with_go();
             }
-            Some(package_graph_builder.build().await?)
+            Some(if mode == DiscoveryMode::Static {
+                // Discard the construction plan: static consumers can never load
+                // a contributor's toolchain-dependent metadata.
+                let (graph, _) = package_graph_builder.build_lazy().await?.into_parts();
+                graph
+            } else {
+                Arc::new(package_graph_builder.build().await?)
+            })
         };
 
         Ok(Self {
@@ -436,6 +468,7 @@ impl Workspace {
                 version: package_manager_version,
             },
             graph: package_graph,
+            has_global_inputs: !turbo_json.global_deps.is_empty(),
             lockfile,
             lockfile_path,
             lockfile_format,
@@ -445,7 +478,7 @@ impl Workspace {
     /// The package graph, or an error when the workspace was opened with
     /// `skipPackageGraph`.
     pub(crate) fn graph(&self) -> Result<&PackageGraph, Error> {
-        self.graph.as_ref().ok_or(Error::PackageGraphSkipped)
+        self.graph.as_deref().ok_or(Error::PackageGraphSkipped)
     }
 
     pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
@@ -592,7 +625,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn package_listing_uses_manifest_capability_not_provenance() {
+    async fn package_listing_uses_scope_kind_not_provenance() {
         let temp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::new(temp.path().to_string_lossy().to_string()).unwrap();
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
@@ -607,8 +640,13 @@ mod tests {
             .unwrap();
 
         let packages = packages_from_graph(&graph).unwrap();
-        assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].name, "custom-package");
+        assert_eq!(
+            packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            ["custom-package", "native-package"]
+        );
         assert_eq!(
             graph.package_toolchain(&"custom-package".into()),
             Some(&ToolchainId::new("custom"))

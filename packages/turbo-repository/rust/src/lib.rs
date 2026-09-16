@@ -1,6 +1,9 @@
 #![allow(clippy::result_large_err)]
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use either::Either;
 use napi::Error;
@@ -19,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 mod internal;
+mod static_workspace;
 
 #[napi]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
@@ -193,7 +197,8 @@ pub struct Workspace {
     package_manager: PackageManager,
     /// The package graph for the workspace. `None` when opened with
     /// `skipPackageGraph`.
-    graph: Option<PackageGraph>,
+    graph: Option<Arc<PackageGraph>>,
+    has_global_inputs: bool,
     /// Inputs for resolving the root lockfile without the package graph.
     /// Used for single-package repositories (whose core graph intentionally
     /// skips lockfile resolution) and for `skipPackageGraph` workspaces.

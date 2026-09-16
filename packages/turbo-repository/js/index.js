@@ -122,6 +122,7 @@ const {
   PackageDetails,
   PackageManager,
   Workspace: NativeWorkspace,
+  StaticWorkspace,
   Package
 } = nativeBinding;
 
@@ -136,5 +137,6 @@ class Workspace extends NativeWorkspace {
 
 module.exports.PackageManager = PackageManager;
 module.exports.Workspace = Workspace;
+module.exports.StaticWorkspace = StaticWorkspace;
 module.exports.PackageDetails = PackageDetails;
 module.exports.Package = Package;

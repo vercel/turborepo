@@ -29,6 +29,49 @@ export declare class PackageManager {
   readonly version?: string;
 }
 
+/**
+ * Subprocess-free package inventory and conservative affectedness.
+ *
+ * This is deliberately separate from Workspace: native dependency edges and
+ * tasks are not loaded and cannot be requested through this object. It uses
+ * the same JavaScript workspace-root inference and toolchain feature flags as
+ * Workspace.find. The repository native addon is still required, but language
+ * toolchain executables (cargo, uv, go, etc.) are not.
+ */
+export declare class StaticWorkspace {
+  static find(path?: string | undefined | null): Promise<StaticWorkspace>;
+  get absolutePath(): string;
+  /**
+   * Whether package dependency relationships are fully loaded. This does
+   * not claim completeness of task-level inputs or execution contracts.
+   */
+  get dependencyGraphComplete(): boolean;
+  /**
+   * Toolchains with inventoried scopes whose authoritative metadata is
+   * absent.
+   */
+  get unloadedToolchains(): Array<string>;
+  /**
+   * Lists real packages, excluding root/aggregate execution scopes.
+   * Co-located packages remain distinct. Sorted by directory, toolchain,
+   * and name.
+   */
+  findPackages(): Promise<Array<StaticPackage>>;
+  workspaceRoots(): Array<StaticWorkspaceRoot>;
+  /**
+   * Returns candidates from workspace-relative changed paths, including
+   * deleted paths. Does not read Git history or execute subprocesses.
+   *
+   * If any native metadata remains unloaded, every non-empty change returns
+   * all real packages, including JavaScript dependents: unknown native edges
+   * can connect otherwise unrelated scopes. Custom root global inputs and
+   * package-topology edits also fall back to all packages. Otherwise this
+   * uses JavaScript package change mapping plus transitive input dependents.
+   * It does not analyze arbitrary task inputs or build-script file reads.
+   */
+  affectedCandidates(files: Array<string>): Promise<StaticAffectedPackages>;
+}
+
 export declare class Workspace {
   /** The absolute path to the workspace root. */
   readonly absolutePath: string;
@@ -184,6 +227,38 @@ export interface LockfilePackages {
   packageManager: string;
   /** Declared package-manager version, when available. */
   packageManagerVersion?: string;
+}
+
+/** Packages that may be affected, including transitive input dependents. */
+export interface StaticAffectedPackages {
+  packages: Array<StaticPackage>;
+  /**
+   * True when incomplete metadata, custom global inputs, or a topology
+   * change required returning all packages rather than a narrower closure.
+   */
+  conservative: boolean;
+}
+
+/**
+ * A real package identified from manifests without running a language
+ * toolchain. No dependency edges or task metadata are implied by this
+ * inventory entry.
+ */
+export interface StaticPackage {
+  name: string;
+  absolutePath: string;
+  relativePath: string;
+  /** Native manifest path, relative to the workspace root. */
+  manifestPath: string;
+  /** Language ecosystem, such as javascript, rust, python, or go. */
+  toolchain: string;
+}
+
+/** A contributed workspace root, separate from the inventory of real packages. */
+export interface StaticWorkspaceRoot {
+  toolchain: string;
+  kind: string;
+  relativePath: string;
 }
 
 /** Options for [`Workspace::find`]. */
