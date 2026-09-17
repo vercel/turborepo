@@ -339,8 +339,9 @@ fn assert_isolated_restoration_with_env(
     let output = run_cargo_build(tempdir.path(), second_args, second_env);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_command_success(&output, "cache restore");
+    // The configured library dependencies run uncached; the app must hit cache.
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("app:build: cache hit"),
         "expected cache hit: {stdout}"
     );
     assert!(second.exists(), "effective deliverable was not restored");
@@ -380,9 +381,15 @@ fn test_cargo_packages_in_task_graph() {
         app_build["logFile"].as_str().map(Path::new),
         Some(app_log.as_path())
     );
-    // Unfiltered builds select entrypoint crates; Cargo builds their library
-    // dependency closures without a redundant package-scoped process.
-    assert!(task("lib-a#build").is_none());
+    // Unfiltered builds select entrypoint crates, but the configured ^build
+    // dependency must still include the library task.
+    assert!(task("lib-a#build").is_some());
+    assert!(
+        app_build["dependencies"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("lib-a#build"))
+    );
     // JS packages coexist in the same graph.
     let js_build = task("js-pkg#build").expect("js-pkg#build in graph");
     assert!(
@@ -809,19 +816,19 @@ fn test_cargo_build_executes_caches_and_restores() {
         .join(if cfg!(windows) { "app.exe" } else { "app" });
     assert!(bin.exists(), "cargo build must produce the binary");
 
-    // Warm: everything from cache.
+    // Warm: the app comes from cache, while its library dependency runs uncached.
     let output = run_turbo(
         tempdir.path(),
         &["build", "--filter=app", "--log-order", "grouped"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
-        "second run should be fully cached: {stdout}"
+        stdout.contains("app:build: cache hit"),
+        "second app build should be cached: {stdout}"
     );
 
     // Deleting the deliverable and re-running restores it from cache
-    // without executing cargo.
+    // without executing the app's cargo build.
     fs::remove_file(&bin).unwrap();
     let output = run_turbo(
         tempdir.path(),
@@ -829,8 +836,8 @@ fn test_cargo_build_executes_caches_and_restores() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
-        "restore run should be fully cached: {stdout}"
+        stdout.contains("app:build: cache hit"),
+        "restored app build should be cached: {stdout}"
     );
     assert!(bin.exists(), "deliverable must be restored from cache");
 }
@@ -877,7 +884,7 @@ fn test_custom_profile_outputs_are_exact_and_restore() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_command_success(&output, "cache restore");
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("app:build: cache hit"),
         "expected cache hit: {stdout}"
     );
     assert!(custom.exists());
@@ -935,7 +942,7 @@ fn test_cargo_cli_target_overrides_environment_target() {
     fs::remove_file(&artifact).unwrap();
     let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
     assert_command_success(&output, "CLI target precedence restore");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
     assert!(artifact.exists(), "CLI target did not override environment");
 }
 
@@ -982,7 +989,7 @@ fn test_cargo_repository_config_target_directory_restores_exactly() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_command_success(&output, "cache restore");
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("app:build: cache hit"),
         "expected cache hit: {stdout}"
     );
     assert!(configured.exists());
@@ -1021,7 +1028,7 @@ fn test_cargo_target_directory_precedence_restores_only_effective_output() {
 
     let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
     assert_command_success(&output, "environment target-directory restore");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
     assert!(environment.exists());
     assert!(!config.exists() && !cli.exists());
     fs::remove_file(&environment).unwrap();
@@ -1032,7 +1039,7 @@ fn test_cargo_target_directory_precedence_restores_only_effective_output() {
         &[("CARGO_TARGET_DIR", "env-target")],
     );
     assert_command_success(&output, "CLI target-directory restore");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
     assert!(cli.exists());
     assert!(!config.exists() && !environment.exists());
 }
@@ -1714,6 +1721,178 @@ fn test_prune_produces_buildable_cargo_workspace() {
     );
 }
 
+/// Task-only edges can cross toolchains in both directions. The package
+/// projection is cyclic, but js-pkg#build -> app#build -> js-pkg#prepare is
+/// not.
+#[test]
+fn test_prune_task_aware_cross_toolchain_buildable_output() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        let tempdir = cargo_tempdir();
+        let dir = tempdir.path();
+        setup_cargo_monorepo(dir);
+        let mut config = json!({
+            "futureFlags": {"experimentalCargoWorkspaces": true},
+            "tasks": {
+                "build": {"dependsOn": ["^build"]},
+                "js-pkg#build": {"dependsOn": ["app#build"]},
+                "app#build": {"dependsOn": ["^build", "js-pkg#prepare"]},
+                "prepare": {}
+            }
+        });
+        if let Some(flag) = flag {
+            config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+        }
+        fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+        fs::write(
+            dir.join("packages/js-pkg/package.json"),
+            json!({
+                "name": "js-pkg", "version": "1.0.0",
+                "scripts": {"build": "echo js-pkg built", "prepare": "echo js-pkg prepared"}
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        // There is no package-manifest dependency between js-pkg and app.
+        for scope in ["js-pkg", "app"] {
+            let output = run_turbo(dir, &["prune", scope]);
+            assert_command_success(&output, "cross-toolchain prune");
+            let out = dir.join("out");
+            let task_aware = flag == Some(true);
+            assert_eq!(
+                out.join("crates/app/src/main.rs").exists(),
+                task_aware || scope == "app"
+            );
+            assert_eq!(
+                out.join("packages/js-pkg/package.json").exists(),
+                task_aware || scope == "js-pkg"
+            );
+            if task_aware {
+                assert!(out.join("crates/lib-a/src/lib.rs").exists());
+                assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
+                let build = cargo_command(&out)
+                    .args(["build", "--locked", "-p", "app"])
+                    .output()
+                    .expect("cargo build runs");
+                assert_command_success(&build, "task-aware pruned cargo build --locked");
+                // Resolve npm.cmd through PATHEXT on Windows.
+                let npm = which::which("npm").expect("npm is available on PATH");
+                let install = std::process::Command::new(npm)
+                    .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
+                    .current_dir(&out)
+                    .output()
+                    .expect("npm ci runs");
+                assert_command_success(&install, "task-aware pruned npm ci");
+                let build = run_turbo(&out, &["run", "build", "--filter=js-pkg"]);
+                assert_command_success(&build, "task-aware pruned cross-toolchain build");
+            }
+            fs::remove_dir_all(out).unwrap();
+        }
+    }
+}
+
+/// An aggregate has a task namespace even though its directory is not copied.
+/// Retaining it must preserve both configured tasks and native task overrides.
+#[test]
+fn test_prune_task_aware_cargo_aggregate_configuration() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = cargo_tempdir();
+            let dir = tempdir.path();
+            setup_cargo_monorepo(dir);
+            let mut config = json!({
+                "futureFlags": {"experimentalCargoWorkspaces": true},
+                "tasks": {
+                    "build": {},
+                    "js-pkg#build": {"dependsOn": ["acme#generate"]},
+                    "acme#generate": {"dependsOn": ["acme#check"]},
+                    "acme#check": {"cache": false, "env": ["AGGREGATE_CHECK"]}
+                }
+            });
+            if let Some(flag) = flag {
+                config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+            }
+            fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+            // Root workspace artifacts must come from the Cargo prune plan,
+            // not a recursive copy of the aggregate's directory.
+            fs::write(dir.join("unrelated-root-file"), "not a prune input").unwrap();
+
+            // No task names a member crate. Its retention (and thus a nonempty
+            // Cargo plan) must come from the aggregate's install closure, even
+            // in production mode.
+            let mut args = vec!["prune", "js-pkg", "--production"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert_command_success(&output, "prune aggregate task dependency");
+            let out = dir.join("out");
+            let (full, manifests) = if docker {
+                (out.join("full"), out.join("json"))
+            } else {
+                (out.clone(), out.clone())
+            };
+            let pruned: serde_json::Value =
+                serde_json::from_slice(&fs::read(full.join("turbo.json")).unwrap()).unwrap();
+            let task_aware = flag == Some(true);
+            for task in ["acme#generate", "acme#check"] {
+                if task_aware {
+                    assert_eq!(pruned["tasks"][task], config["tasks"][task], "lost {task}");
+                } else {
+                    assert!(
+                        pruned["tasks"].get(task).is_none(),
+                        "legacy prune kept {task}"
+                    );
+                }
+            }
+            assert!(!full.join("unrelated-root-file").exists());
+            assert_eq!(full.join("Cargo.toml").exists(), task_aware);
+            assert_eq!(manifests.join("Cargo.lock").exists(), task_aware);
+            if !task_aware {
+                continue;
+            }
+            for member in ["app", "lib-a", "lib-a-test-util"] {
+                let manifest = format!("crates/{member}/Cargo.toml");
+                assert!(full.join(&manifest).exists(), "missing {manifest}");
+                assert!(
+                    manifests.join(&manifest).exists(),
+                    "missing install {manifest}"
+                );
+            }
+            let manifest = fs::read_to_string(full.join("Cargo.toml")).unwrap();
+            assert!(manifest.contains("name = \"acme\""));
+            assert_eq!(
+                fs::read(full.join("Cargo.lock")).unwrap(),
+                fs::read(manifests.join("Cargo.lock")).unwrap()
+            );
+
+            let output = run_turbo(&full, &["run", "build", "--filter=js-pkg", "--dry=json"]);
+            assert_command_success(&output, "pruned aggregate task graph");
+            let dry: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let tasks = dry["tasks"].as_array().unwrap();
+            assert!(tasks.iter().any(|task| task["taskId"] == "acme#generate"));
+            let check = tasks
+                .iter()
+                .find(|task| task["taskId"] == "acme#check")
+                .unwrap();
+            assert_eq!(check["command"], "cargo check --workspace --locked");
+            assert_eq!(check["resolvedTaskDefinition"]["cache"], false);
+
+            let output = run_turbo(&full, &["run", "build", "--filter=js-pkg"]);
+            assert_command_success(&output, "pruned aggregate task execution");
+            let build = cargo_command(&full)
+                .args(["build", "--workspace", "--locked"])
+                .output()
+                .expect("cargo build runs");
+            assert_command_success(&build, "pruned aggregate workspace build");
+        }
+    }
+}
+
 /// Docker layout: the json layer carries everything needed to resolve
 /// dependencies (manifests + lockfile), the full layer carries sources.
 #[test]
@@ -2012,9 +2191,12 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
         json["packages"],
         serde_json::json!(["acme", "app", "lib-a"])
     );
-    // The unfiltered build delegates the dependency closure to the entrypoint's
-    // Cargo process instead of scheduling a redundant library build.
-    assert!(task("lib-a#build").is_none());
+    // Entrypoint selection must not discard the configured ^build dependency.
+    assert!(task("lib-a#build").is_some());
+    assert_eq!(
+        app_build["dependencies"],
+        serde_json::json!(["lib-a#build"])
+    );
 
     // The entrypoint's hash still covers its dependency crate's sources even
     // though there is no JavaScript global hash contribution.
@@ -2073,15 +2255,15 @@ fn test_pure_cargo_workspace_filtered_execution() {
         .join(if cfg!(windows) { "app.exe" } else { "app" });
     assert!(bin.exists(), "cargo build must produce the binary");
 
-    // Warm: fully cached.
+    // Warm: the app comes from cache, while its library dependency runs uncached.
     let output = run_turbo(
         tempdir.path(),
         &["run", "build", "--filter=app", "--log-order", "grouped"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
-        "second run should be fully cached: {stdout}"
+        stdout.contains("app:build: cache hit"),
+        "second app build should be cached: {stdout}"
     );
 
     // Deleting the deliverable and re-running restores it from cache.
@@ -2092,8 +2274,8 @@ fn test_pure_cargo_workspace_filtered_execution() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
-        "restore run should be fully cached: {stdout}"
+        stdout.contains("app:build: cache hit"),
+        "restored app build should be cached: {stdout}"
     );
     assert!(bin.exists(), "deliverable must be restored from cache");
 
@@ -2201,6 +2383,115 @@ fn test_cargo_verification_works_with_task_level_filters() {
         "base task must remain selectable: {task_ids:?}"
     );
     assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_cargo_verification_retains_excluded_with_sibling_after_task_filtering() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {
+    "app#test": {
+      "with": ["acme#test"]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"app#test"),
+        "expected app task: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"acme#test"),
+        "the excluded `with` sibling must be retained: {task_ids:?}"
+    );
+    assert!(
+        !task_ids.contains(&"lib-a#test"),
+        "unrelated excluded task must stay absent: {task_ids:?}"
+    );
+}
+
+#[test]
+fn test_cargo_verification_closes_dependencies_and_with_siblings_after_task_filtering() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {
+    "app#test": {
+      "dependsOn": ["lib-a#test"]
+    },
+    "lib-a#test": {
+      "dependsOn": ["acme#test"]
+    },
+    "acme#test": {
+      "with": ["acme#build"]
+    },
+    "acme#build": {}
+  }
+}"#,
+    )
+    .unwrap();
+
+    // Multiple requested tasks and package filters ensure the initial task filter
+    // includes the PreferredOnly Cargo tasks before entrypoint selection excludes
+    // them.
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "build",
+            "--filter=app",
+            "--filter=acme",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    for task_id in ["app#test", "lib-a#test", "acme#test", "acme#build"] {
+        assert!(
+            task_ids.contains(&task_id),
+            "dependency and `with` closure must retain {task_id}: {task_ids:?}"
+        );
+    }
+    assert!(
+        !task_ids.contains(&"lib-a#build"),
+        "unrelated excluded task must stay absent: {task_ids:?}"
+    );
 }
 
 #[test]
@@ -2414,7 +2705,13 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         );
     }
 
-    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
+    // The aggregate shares the repository directory with the root task
+    // namespace, so its log stays isolated even when it is the only selection.
+    for (task, subcommand, log_filename) in [
+        ("test", "test", "turbo-test-acme-c7aba2810dce6e39.log"),
+        ("check", "check", "turbo-check-acme-45f6384ef100a60b.log"),
+        ("lint", "clippy", "turbo-lint-acme-40a8d1eb4ccc4540.log"),
+    ] {
         let output = run_turbo(
             tempdir.path(),
             &["run", task, "--filter=acme", "--dry-run=json"],
@@ -2431,7 +2728,7 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
             format!("cargo {subcommand} --workspace --locked")
         );
         assert_eq!(definition["directory"], "");
-        let log_file = Path::new(".turbo").join(format!("turbo-{task}.log"));
+        let log_file = Path::new(".turbo").join(log_filename);
         assert_eq!(
             definition["logFile"].as_str().map(Path::new),
             Some(log_file.as_path())
@@ -2619,6 +2916,84 @@ fn test_ls_and_query_show_implicit_cargo_task_commands() {
     assert!(output.status.success(), "query failed: {output:?}");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     insta::assert_json_snapshot!("cargo_native_tasks_query", json["data"]["package"]["tasks"]);
+}
+
+#[test]
+fn test_query_affected_packages_task_inputs_cross_toolchain() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        let tempdir = cargo_tempdir();
+        let dir = tempdir.path();
+        setup_cargo_monorepo(dir);
+        // js-pkg has no manifest dependency on app, only an explicit task edge.
+        // app's unchanged Cargo prerequisites must not become affected owners.
+        let mut config = json!({
+            "futureFlags": {"experimentalCargoWorkspaces": true},
+            "tasks": {
+                "build": {"dependsOn": ["^build"]},
+                "js-pkg#build": {"dependsOn": ["app#build"]}
+            }
+        });
+        if let Some(flag) = flag {
+            config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+        }
+        fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+        let gitignore = fs::read_to_string(dir.join(".gitignore")).unwrap();
+        fs::write(
+            dir.join(".gitignore"),
+            format!("{gitignore}\n.test-home/\n"),
+        )
+        .unwrap();
+        let commit = std::process::Command::new("git")
+            .args([
+                "commit",
+                "-am",
+                "Configure cross-toolchain query",
+                "--quiet",
+            ])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert_command_success(&commit, "commit query configuration before source change");
+        fs::write(
+            dir.join("crates/app/src/main.rs"),
+            "fn main() { println!(\"changed\"); }\n",
+        )
+        .unwrap();
+        let diff = std::process::Command::new("git")
+            .args(["diff", "--name-only", "HEAD"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert_command_success(&diff, "check source-only query diff");
+        assert_eq!(
+            String::from_utf8_lossy(&diff.stdout).trim(),
+            "crates/app/src/main.rs"
+        );
+
+        let output = run_turbo(
+            dir,
+            &[
+                "query",
+                r#"{ affectedPackages(base: "HEAD") { length items { name } } }"#,
+            ],
+        );
+        assert_command_success(&output, "query cross-toolchain affected packages");
+        let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert!(result.get("errors").is_none(), "{result}");
+        // The Cargo workspace container is affected by its member's change.
+        let mut expected = vec![json!({"name": "acme"}), json!({"name": "app"})];
+        if flag == Some(true) {
+            expected.push(json!({"name": "js-pkg"}));
+        }
+        // Exact membership also excludes lib-a, lib-a-test-util, and the JS root.
+        assert_eq!(
+            result["data"]["affectedPackages"],
+            json!({"length": expected.len(), "items": expected}),
+            "affectedUsingTaskInputs={flag:?}"
+        );
+    }
 }
 
 #[test]

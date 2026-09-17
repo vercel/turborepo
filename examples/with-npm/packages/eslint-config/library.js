@@ -1,34 +1,13 @@
-const { resolve } = require("node:path");
+import eslint from "@eslint/js";
+import eslintConfigPrettier from "eslint-config-prettier";
+import turboConfig from "eslint-config-turbo/flat";
+import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "typescript-eslint";
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  env: {
-    node: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
-      },
-    },
-  },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    {
-      files: ["*.js?(x)", "*.ts?(x)"],
-    },
-  ],
-};
+export const libraryConfig = defineConfig(
+  eslint.configs.recommended,
+  tseslint.configs.recommended,
+  turboConfig,
+  eslintConfigPrettier,
+  globalIgnores(["dist/**"]),
+);

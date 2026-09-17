@@ -364,6 +364,22 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "environment",
+              "description": "Environment patterns after resolving task configuration inheritance.\nGlobal patterns are exposed separately by `globalEnvironment`.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Environment",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "experimentalCI",
               "description": "The fully resolved `experimentalCI` configuration for this task from\nturbo.json, including Package Configuration overrides. Either a\nboolean or an object with arbitrary keys. Null if the key is not set.",
               "args": [],
@@ -516,6 +532,22 @@ expression: query_output
                 "ofType": {
                   "kind": "SCALAR",
                   "name": "Int",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "withDependencies",
+              "description": "The collection and all its transitive dependencies, with each task once.\nIncludes non-executable task nodes and sorts by package name, then task\nname.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "RepositoryTasks",
                   "ofType": null
                 }
               },
@@ -900,6 +932,65 @@ expression: query_output
                   "kind": "SCALAR",
                   "name": "Int",
                   "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "Environment",
+          "description": "Configured environment patterns, without expanding names or reading values.",
+          "fields": [
+            {
+              "name": "env",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "passThroughEnv",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
                 }
               },
               "isDeprecated": false,
@@ -2249,6 +2340,22 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "globalEnvironment",
+              "description": "Configured global environment patterns, without expanding names or\nvalues.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Environment",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "package",
               "description": "Gets a single package by name",
               "args": [
@@ -2501,6 +2608,22 @@ expression: query_output
                 "kind": "SCALAR",
                 "name": "String",
                 "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "environment",
+              "description": "Environment patterns after resolving task configuration inheritance.\nGlobal patterns are exposed separately by `globalEnvironment`.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Environment",
+                  "ofType": null
+                }
               },
               "isDeprecated": false,
               "deprecationReason": null

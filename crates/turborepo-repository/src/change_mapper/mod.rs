@@ -259,22 +259,27 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         let mut changed_packages = HashMap::new();
         for file in files {
             match self.package_detector.detect_package(file) {
-                // Internal root dependency changed so global hash has changed
-                PackageMapping::Package((pkg, _)) if root_internal_deps.contains(&pkg) => {
-                    debug!(
-                        "{} changes root internal dependency: \"{}\"\nshortest path from root: \
-                         {:?}",
-                        file.to_string(),
-                        pkg.name,
-                        self.pkg_graph.root_internal_dependency_explanation(&pkg),
-                    );
-                    return PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
-                        root_internal_dep: pkg.name.clone(),
-                    });
-                }
-                PackageMapping::Package((pkg, reason)) => {
-                    debug!("{} changes \"{}\"", file.to_string(), pkg.name);
-                    changed_packages.insert(pkg, reason);
+                PackageMapping::Packages(packages) => {
+                    for (pkg, reason) in packages {
+                        // Any co-located owner may be a root dependency, which
+                        // changes the global hash and invalidates every package.
+                        if root_internal_deps.contains(&pkg) {
+                            debug!(
+                                "{} changes root internal dependency: \"{}\"\nshortest path from \
+                                 root: {:?}",
+                                file.to_string(),
+                                pkg.name,
+                                self.pkg_graph.root_internal_dependency_explanation(&pkg),
+                            );
+                            return PackageChanges::All(
+                                AllPackageChangeReason::RootInternalDepChanged {
+                                    root_internal_dep: pkg.name,
+                                },
+                            );
+                        }
+                        debug!("{} changes \"{}\"", file.to_string(), pkg.name);
+                        changed_packages.insert(pkg, reason);
+                    }
                 }
                 PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");
@@ -370,7 +375,7 @@ mod test {
 
     impl PackageChangeMapper for UnknownPackageMapper {
         fn detect_package(&self, _file: &AnchoredSystemPath) -> PackageMapping {
-            PackageMapping::Package((
+            PackageMapping::Packages(vec![(
                 WorkspacePackage {
                     name: PackageName::from("missing"),
                     path: AnchoredSystemPathBuf::from_raw("missing").unwrap(),
@@ -378,7 +383,7 @@ mod test {
                 PackageInclusionReason::FileChanged {
                     file: AnchoredSystemPathBuf::from_raw("missing/file.txt").unwrap(),
                 },
-            ))
+            )])
         }
     }
 

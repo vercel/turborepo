@@ -79,6 +79,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "NIX_*",
     // Command Prompt casing of env variables
     "APPDATA",
+    "LOCALAPPDATA",
     "PATH",
     "PROGRAMDATA",
     "SYSTEMROOT",

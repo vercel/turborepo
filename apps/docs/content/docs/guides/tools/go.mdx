@@ -53,34 +53,60 @@ use (
 )
 ```
 
-Each module path is its stable Turborepo package identity:
+## Package names
+
+Turborepo derives each Go package name from the last component of its `go.mod` module path, preserving a trailing major-version suffix:
+
+| Go module path | Turborepo package name |
+| --- | --- |
+| `example.com/api` | `api` |
+| `example.com/acme/api` | `api` |
+| `example.com/api/v2` | `api/v2` |
+
+Use the derived name in filters, task identifiers, and prune targets. For a module declared as `module example.com/api`:
 
 ```bash title="Terminal"
-turbo ls --filter=example.com/acme/api
-turbo run test --filter=example.com/acme/api
+turbo ls --filter=api
+turbo run test --filter=api
+turbo run api#test
 ```
 
-The synthetic `go-workspace` scope depends on every member and hosts workspace-wide verification. Module paths cannot use that reserved identity.
+For `module example.com/api/v2`, use `--filter=api/v2` or `api/v2#test`. The suffix is part of the package identity, so `api` and `api/v2` are distinct packages. Go uses `/vN` major-version suffixes starting at v2; v0 and v1 normally use the unversioned path. The `gopkg.in` spelling is preserved too: `gopkg.in/yaml.v3` becomes `yaml.v3`.
+
+Directory filters are unchanged: `--filter=./apps/api` selects by filesystem location, while `--filter=api` selects by name. A slash within a name, such as `api/v2`, does not make it a directory filter.
+
+Keep full module paths in `go.mod` declarations, `require` and `replace` directives, and Go imports. Turborepo retains those paths as dependency-resolution metadata; the derived package name does not change how Go resolves modules. Full module paths are not aliases for Turborepo package names, and package-name overrides are not supported.
+
+Package identities must be unique across the entire Package Graph, including packages from other languages. For example, `example.com/api` and `example.org/api` both derive `api` and cannot coexist as workspace members. A Go module named `api` also collides with a JavaScript package whose `package.json` name is `api`. Resolve collisions by changing the source package name or Go module path so that the derived names differ; changing only the module's domain or parent path does not help.
+
+The synthetic `go-workspace` scope depends on every member. That identity is reserved: a module such as `example.com/go-workspace` cannot derive the name `go-workspace`.
 
 ## Built-in tasks
 
-| Scope | Turbo task | Go command |
+| Scope | Turborepo task | Go command |
 | --- | --- | --- |
-| Any module | `turbo build` | `go build ./...` |
-| Module with exactly one `main` package | `turbo build` | `go build -o dist/<name> <import-path>` |
-| Module with exactly one `main` package | `turbo dev` | `go run <import-path>` |
-| Any module | `turbo test` | `go test ./...` |
-| Any module | `turbo lint` | `go vet ./...` |
-| Any module | `turbo format` | `go fmt ./...` |
-| `go-workspace` | `test`, `lint`, `format` | The same command with every member directory pattern |
+| Module with zero or multiple `main` packages | `turbo run build` | `go build ./...` |
+| Module with exactly one `main` package | `turbo run build` | `go build <target>` |
+| Module with exactly one `main` package | `turbo run dev` | `go run <target>` |
+| Any module | `turbo run test` | `go test ./...` |
+| Any module | `turbo run lint` | `go vet ./...` |
+| Any module | `turbo run format` | `go fmt ./...` |
 
-Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `dev`.
+Running `turbo run test`, `turbo run lint`, or `turbo run format` from the repository root runs the corresponding command in each member module. Filtered runs select the same per-module tasks, so local filtered `test` and `lint` runs share cache entries with unfiltered CI runs. There are no built-in `go-workspace#test`, `go-workspace#lint`, or `go-workspace#format` tasks; omit `--filter=go-workspace` to run verification across all modules.
+
+Formatting stays uncached and package-aware, leaving `testdata` and nested non-member modules untouched. `go fmt` does not support cross-module workspace patterns.
+
+For a module with exactly one runnable `main` package, Turborepo selects that package as `<target>` (`.` or a relative path such as `./cmd/server`) and runs the command from the module directory. Builds use [Go's default output behavior](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies): the binary is written directly into the module directory, not `dist/` or `bin/`. Its name is the last non-major-version component of the package import path, with `.exe` appended for Windows. For example, `go build ./cmd/server` produces `./server`, and a main package at the root of module `example.com/api/v2` produces `./api`. This binary filename is separate from the Turborepo package name, which remains `api/v2`.
+
+Go also reports its normal output-name conflicts. For example, a main package in `./server` cannot produce `./server` from the module directory because that source directory already exists. Use an explicit `-o` command override for these layouts.
+
+Turborepo does not guess when a module has zero or multiple runnable `main` packages. Those modules do not receive `dev`; their `build` runs `go build ./...` as a compilation check without producing deployable binaries. This decision is per module, not per `go.work`: multiple modules with one main package each can each produce a binary.
 
 Arguments after Turborepo's `--` are placed before package patterns for `build`, `test`, `lint`, and `format`. Arguments to `dev` follow the main import path and become program arguments.
 
 ```bash title="Terminal"
-turbo run test --filter=example.com/acme/api -- -run TestHTTP
-turbo run dev --filter=example.com/acme/api -- --port 8080
+turbo run test --filter=api -- -run TestHTTP
+turbo run dev --filter=api -- --port 8080
 ```
 
 ## Override or remove defaults
@@ -116,6 +142,23 @@ Enable `experimentalTaskCommand` to replace a command without a shell:
 }
 ```
 
+To preserve a custom binary path, enable `experimentalTaskCommand` in the root configuration as above, then replace the build command in the module's Package Configuration:
+
+```json title="./apps/api/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["go", "build", "-o", "bin/my-api", "."],
+      "inputs": ["$TURBO_DEFAULT$", "!bin/my-api"],
+      "outputs": ["bin/my-api"]
+    }
+  }
+}
+```
+
+`command` replaces the entire build command. `outputs` declares files to cache; it does not change Go's output path. Exclude custom generated binaries from `inputs` so they do not invalidate their own build cache.
+
 ## Hashing and caching
 
 Native task hashes include:
@@ -128,7 +171,7 @@ Native task hashes include:
 
 Checkout paths, `GOCACHE`, `GOMODCACHE`, credentials, proxy authentication, and telemetry settings are excluded. Go's mutable build and module caches remain Go's responsibility and are never Turborepo outputs.
 
-A module with one runnable main package gets one restorable `dist/<name>` binary. Library builds default to uncached because Go's internal build artifacts have no stable output for Turborepo to restore. `dev` and source-mutating `format` tasks are uncached. Build arguments disable automatic output caching because flags can relocate or reshape the binary.
+A module with one runnable main package gets one restorable `<name>` binary in the module directory (`<name>.exe` for Windows). Turborepo excludes generated binary paths for both Windows and non-Windows targets from automatic module and dependency source inputs, while preserving tracked files, Go source files, embedded inputs, and same-named directories. Automatic build caching is disabled when the inferred output may overlap source inputs or source classification is unavailable. Library and multi-main builds default to uncached because Go's internal build artifacts have no stable output for Turborepo to restore. `dev` and source-mutating `format` tasks are uncached. Build arguments disable automatic output caching because flags can relocate or reshape the binary.
 
 ## Affectedness and watch mode
 
@@ -139,7 +182,7 @@ Source changes affect their owning module and internal dependents. `go.mod` and 
 ## Prune
 
 ```bash title="Terminal"
-turbo prune example.com/acme/api
+turbo prune api
 ```
 
 The output keeps the selected module and required internal dependencies, rewrites `go.work` with deterministic explicit members, preserves `go`, `toolchain`, and applicable replacement directives, and copies `go.work.sum` plus each retained module directory.

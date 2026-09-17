@@ -168,6 +168,7 @@ impl Lockfile for Yarn1Lockfile {
         let name = entry
             .name
             .as_deref()
+            .or_else(|| npm_alias_target_from_key(&package.key))
             .or_else(|| package_name_from_key(&package.key))?;
         let version = &entry.version;
         Some(format!("{name}@{version}"))
@@ -252,6 +253,16 @@ fn package_name_from_key(key: &str) -> Option<&str> {
     Some(&key[..delimiter])
 }
 
+fn npm_alias_target_from_key(key: &str) -> Option<&str> {
+    // Yarn Classic does not persist a `name` field for npm aliases. Recover
+    // the actual package name from `alias@npm:package@version`. A regular
+    // `package@npm:version` descriptor has no second package name and falls
+    // through to `package_name_from_key`.
+    let descriptor = key.split(',').next()?.trim();
+    let target = descriptor.split_once("@npm:")?.1;
+    package_name_from_key(target)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -297,6 +308,36 @@ lodash@^4.17.21:
                 version: "1.2.3".to_string(),
             }),
             Some("@scope/pkg@1.2.3".to_string())
+        );
+    }
+
+    #[test]
+    fn test_human_name_uses_npm_alias_target() {
+        let lockfile = Yarn1Lockfile::from_str(
+            r#"# yarn lockfile v1
+
+"alias@npm:JSONStream@1.0.0":
+  version "1.0.0"
+
+"scoped-alias@npm:@scope/package@2.0.0":
+  version "2.0.0"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "alias@npm:JSONStream@1.0.0".to_string(),
+                version: "1.0.0".to_string(),
+            }),
+            Some("JSONStream@1.0.0".to_string())
+        );
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "scoped-alias@npm:@scope/package@2.0.0".to_string(),
+                version: "2.0.0".to_string(),
+            }),
+            Some("@scope/package@2.0.0".to_string())
         );
     }
 

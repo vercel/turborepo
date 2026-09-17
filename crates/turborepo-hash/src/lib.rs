@@ -77,6 +77,10 @@ pub struct TaskHashable<'a> {
     // Changing what a task runs must invalidate its cached results.
     pub command_override: &'a [String],
     pub command_opt_out: bool,
+
+    // The resolved `experimentalCI` configuration. Changing CI execution
+    // requirements must invalidate cached task results.
+    pub experimental_ci: Option<&'a turborepo_types::ExperimentalCIConfig>,
 }
 
 impl TaskHashable<'_> {
@@ -126,6 +130,7 @@ pub enum Error {
     Canonicalize(capnp::Error),
     ReadTaskOutputs(capnp::Error),
     SetTaskOutputs(capnp::Error),
+    SerializeExperimentalCi(serde_json::Error),
     Lockfile(turborepo_lockfile_hash::Error),
 }
 
@@ -142,6 +147,9 @@ impl fmt::Display for Error {
                 write!(f, "unable to read Cap'n Proto task outputs: {err}")
             }
             Self::SetTaskOutputs(err) => write!(f, "unable to set Cap'n Proto task outputs: {err}"),
+            Self::SerializeExperimentalCi(err) => {
+                write!(f, "unable to serialize experimentalCI configuration: {err}")
+            }
             Self::Lockfile(err) => write!(f, "unable to hash lockfile packages: {err}"),
         }
     }
@@ -154,6 +162,7 @@ impl std::error::Error for Error {
             | Self::Canonicalize(err)
             | Self::ReadTaskOutputs(err)
             | Self::SetTaskOutputs(err) => Some(err),
+            Self::SerializeExperimentalCi(err) => Some(err),
             Self::Lockfile(err) => Some(err),
         }
     }
@@ -393,6 +402,11 @@ impl HashableMessage for TaskHashable<'_> {
         if task_hashable.command_opt_out {
             builder.set_command_opt_out(true);
         }
+        if let Some(experimental_ci) = task_hashable.experimental_ci {
+            let experimental_ci =
+                serde_json::to_string(experimental_ci).map_err(Error::SerializeExperimentalCi)?;
+            builder.set_experimental_ci(experimental_ci);
+        }
 
         canonical_builder::<proto_capnp::task_hashable::Owned>(
             builder.total_size(),
@@ -501,7 +515,7 @@ mod test {
 
     use test_case::test_case;
     use turborepo_lockfiles::Package;
-    use turborepo_types::{EnvMode, TaskOutputs};
+    use turborepo_types::{EnvMode, ExperimentalCIConfig, TaskOutputs};
 
     use super::{
         FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, OidHash, TaskHashable,
@@ -528,9 +542,41 @@ mod test {
             env_mode: EnvMode::Loose,
             command_override: &[],
             command_opt_out: false,
+            experimental_ci: None,
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+    }
+
+    #[test]
+    fn experimental_ci_contributes_to_task_hash() {
+        let calculate = |experimental_ci: Option<&ExperimentalCIConfig>| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env: &[],
+                env_mode: EnvMode::Strict,
+                command_override: &[],
+                command_opt_out: false,
+                experimental_ci,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        let enabled = ExperimentalCIConfig::Enabled(true);
+        let disabled = ExperimentalCIConfig::Enabled(false);
+
+        assert_ne!(calculate(None), calculate(Some(&enabled)));
+        assert_ne!(calculate(Some(&enabled)), calculate(Some(&disabled)));
     }
 
     #[test]
@@ -557,6 +603,7 @@ mod test {
             env_mode: EnvMode::Strict,
             command_override: &[],
             command_opt_out: false,
+            experimental_ci: None,
         };
 
         let hash = task_hashable.hash();
@@ -583,6 +630,7 @@ mod test {
                 env_mode: EnvMode::Loose,
                 command_override: &[],
                 command_opt_out: false,
+                experimental_ci: None,
             }
             .calculate_task_hash()
             .unwrap()

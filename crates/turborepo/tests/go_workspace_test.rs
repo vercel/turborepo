@@ -142,12 +142,7 @@ fn assert_go_build_cache_result(
 ) {
     let output = run_turbo_with_env(
         dir,
-        &[
-            "run",
-            "build",
-            "--filter=example.com/api",
-            "--log-order=grouped",
-        ],
+        &["run", "build", "--filter=api", "--log-order=grouped"],
         environment,
     );
     assert_command_success(&output, context);
@@ -156,8 +151,10 @@ fn assert_go_build_cache_result(
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    // Library dependencies run uncached; check the executable's cache status.
+    let expected = format!("api:build: {expected}");
     assert!(
-        combined.contains(expected),
+        combined.contains(&expected),
         "{context} must report {expected:?}\noutput:\n{combined}"
     );
 }
@@ -531,6 +528,59 @@ fn package_task_names(dir: &Path, package: &str) -> Vec<String> {
 }
 
 #[test]
+fn test_go_build_dependencies_and_hash_do_not_depend_on_entrypoint() {
+    assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(false);
+}
+
+#[test]
+fn test_go_build_dependencies_and_hash_with_task_filtering() {
+    assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(true);
+}
+
+fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_using_tasks: bool) {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    for module in ["apps/api", "packages/lib"] {
+        assert!(!root.join(module).join("package.json").exists());
+    }
+    let config_path = root.join("turbo.json");
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["futureFlags"]["filterUsingTasks"] = serde_json::json!(filter_using_tasks);
+    config["tasks"]["typecheck"] = serde_json::json!({ "dependsOn": ["^build"] });
+    fs::write(&config_path, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+
+    let indirect = run_turbo(root, &["run", "typecheck", "--dry-run=json"]);
+    let indirect_api = dry_run_task(&indirect, "api#build");
+    let expected_dependencies = serde_json::json!(["lib#build"]);
+    assert_eq!(indirect_api["dependencies"], expected_dependencies);
+
+    for args in [
+        vec!["run", "build", "--dry-run=json"],
+        vec!["run", "build", "--only", "--dry-run=json"],
+        vec!["run", "build", "typecheck", "--dry-run=json"],
+        vec!["run", "api#build", "--dry-run=json"],
+        vec!["run", "build", "--filter=api", "--dry-run=json"],
+    ] {
+        let direct = run_turbo(root, &args);
+        let direct_api = dry_run_task(&direct, "api#build");
+        assert_eq!(
+            direct_api["dependencies"], expected_dependencies,
+            "{args:?}"
+        );
+        assert_eq!(
+            direct_api["resolvedTaskDefinition"], indirect_api["resolvedTaskDefinition"],
+            "{args:?}"
+        );
+        assert_eq!(direct_api["hash"], indirect_api["hash"], "{args:?}");
+    }
+}
+
+#[test]
 fn test_pure_go_workspace_lists_modules() {
     if !go_available() {
         return;
@@ -540,14 +590,8 @@ fn test_pure_go_workspace_lists_modules() {
     setup_go_pure_workspace(tempdir.path());
 
     let names = package_names(tempdir.path());
-    assert!(
-        names.contains(&"example.com/api".to_string()),
-        "names: {names:?}"
-    );
-    assert!(
-        names.contains(&"example.com/lib".to_string()),
-        "names: {names:?}"
-    );
+    assert!(names.contains(&"api".to_string()), "names: {names:?}");
+    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
 }
 
 #[test]
@@ -561,14 +605,58 @@ fn test_mixed_go_workspace_lists_js_and_go_packages() {
 
     let names = package_names(tempdir.path());
     assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
-    assert!(
-        names.contains(&"example.com/api".to_string()),
-        "names: {names:?}"
+    assert!(names.contains(&"api".to_string()), "names: {names:?}");
+    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
+}
+
+#[test]
+fn test_colocated_go_and_javascript_cwd_inference() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_go_monorepo(dir);
+    let shared = dir.join("packages/lib");
+    fs::write(
+        shared.join("package.json"),
+        r#"{"name":"@repo/lib","scripts":{"build":"echo javascript build"}}"#,
+    )
+    .unwrap();
+    let source_dir = shared.join("src");
+    fs::create_dir(&source_dir).unwrap();
+
+    let task_ids = |cwd: &Path, args: &[&str]| {
+        let output = run_turbo(cwd, args);
+        assert_command_success(&output, "co-located package scope inference");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        json["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|task| task["taskId"].as_str().unwrap().to_string())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let expected = ["@repo/lib#build".to_string(), "lib#build".to_string()]
+        .into_iter()
+        .collect();
+    assert_eq!(
+        task_ids(
+            dir,
+            &["run", "build", "--filter=./packages/lib", "--dry-run=json"],
+        ),
+        expected
     );
-    assert!(
-        names.contains(&"example.com/lib".to_string()),
-        "names: {names:?}"
-    );
+    for cwd in [&shared, &source_dir] {
+        assert_eq!(task_ids(cwd, &["run", "build", "--dry-run=json"]), expected);
+        assert_eq!(
+            task_ids(
+                cwd,
+                &["run", "build", "--filter=@repo/lib", "--dry-run=json"]
+            ),
+            ["@repo/lib#build".to_string()].into_iter().collect()
+        );
+    }
 }
 
 #[test]
@@ -589,7 +677,7 @@ fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     assert!(
         tempdir
             .path()
-            .join("apps/api/dist")
+            .join("apps/api")
             .join(if cfg!(windows) { "api.exe" } else { "api" })
             .exists(),
         "the Go module must produce its native executable"
@@ -599,7 +687,7 @@ fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     assert_command_success(&output, "warm mixed JavaScript and Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("js-pkg:build: cache hit") && stdout.contains("api:build: cache hit"),
         "equivalent mixed tasks must hit cache:\n{stdout}"
     );
 }
@@ -619,7 +707,7 @@ fn test_go_workspace_query_reports_internal_dependencies() {
         .expect("packages array");
     let api = packages
         .iter()
-        .find(|package| package["name"] == "example.com/api")
+        .find(|package| package["name"] == "api")
         .expect("api package");
     let dependencies: Vec<&str> = api["directDependencies"]["items"]
         .as_array()
@@ -627,7 +715,7 @@ fn test_go_workspace_query_reports_internal_dependencies() {
         .iter()
         .filter_map(|dependency| dependency["name"].as_str())
         .collect();
-    assert_eq!(dependencies, ["example.com/lib"]);
+    assert_eq!(dependencies, ["lib"]);
 }
 
 #[test]
@@ -659,7 +747,7 @@ fn test_go_prune_produces_minimal_valid_workspace() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "example.com/api", "--docker"]);
+    let output = run_turbo(tempdir.path(), &["prune", "api", "--docker"]);
     assert_command_success(&output, "Go prune");
     let out = tempdir.path().join("out");
     let full = out.join("full");
@@ -682,8 +770,14 @@ fn test_go_prune_produces_minimal_valid_workspace() {
         work_sum
     );
     for root in [&full, &json] {
-        assert!(root.join("apps/api/go.mod").exists());
-        assert!(root.join("packages/lib/go.mod").exists());
+        // Prune accepts the short package name, but must not rewrite Go paths.
+        for manifest in ["apps/api/go.mod", "packages/lib/go.mod"] {
+            assert_eq!(
+                fs::read(root.join(manifest)).unwrap(),
+                fs::read(tempdir.path().join(manifest)).unwrap(),
+                "pruned {manifest} must preserve module, require, and replace paths"
+            );
+        }
         assert!(root.join("packages/lib/go.sum").exists());
         assert!(!root.join("tools/unused").exists());
     }
@@ -702,19 +796,11 @@ fn test_go_prune_produces_minimal_valid_workspace() {
         );
     }
     for task in ["build", "test"] {
-        let output = run_turbo(
-            &full,
-            &[
-                "run",
-                task,
-                "--filter=example.com/api",
-                "--log-order=grouped",
-            ],
-        );
+        let output = run_turbo(&full, &["run", task, "--filter=api", "--log-order=grouped"]);
         assert_command_success(&output, &format!("pruned native Go {task} task"));
     }
     assert!(
-        full.join("apps/api/dist")
+        full.join("apps/api")
             .join(if cfg!(windows) { "api.exe" } else { "api" })
             .exists(),
         "the pruned native build must produce its executable"
@@ -722,7 +808,7 @@ fn test_go_prune_produces_minimal_valid_workspace() {
 }
 
 #[test]
-fn test_go_filter_by_module_path() {
+fn test_go_filter_by_package_name() {
     if !go_available() {
         return;
     }
@@ -730,10 +816,7 @@ fn test_go_filter_by_module_path() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["ls", "--output=json", "--filter=example.com/lib"],
-    );
+    let output = run_turbo(tempdir.path(), &["ls", "--output=json", "--filter=lib"]);
     assert_command_success(&output, "filtered ls");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("ls emits JSON");
     let names = json["packages"]["items"]
@@ -742,7 +825,154 @@ fn test_go_filter_by_module_path() {
         .iter()
         .map(|package| package["name"].as_str().expect("name").to_string())
         .collect::<Vec<_>>();
-    assert_eq!(names, vec!["example.com/lib".to_string()]);
+    assert_eq!(names, vec!["lib".to_string()]);
+}
+
+#[test]
+fn test_go_package_names_preserve_major_versions_without_aliases() {
+    if !go_available() {
+        return;
+    }
+
+    for suffix in ["", "/v2", "/v10"] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = tempdir.path();
+        setup_go_pure_workspace(root);
+        let name = format!("api{suffix}");
+        let module_path = format!("example.com/{name}");
+        fs::write(
+            root.join("apps/api/go.mod"),
+            format!(
+                "module {module_path}\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace \
+                 example.com/lib => ../../packages/lib\n"
+            ),
+        )
+        .unwrap();
+
+        let names = package_names(root);
+        assert!(names.contains(&name), "names: {names:?}");
+        assert!(names.contains(&"lib".to_string()), "names: {names:?}");
+        assert!(
+            !names.contains(&module_path),
+            "no full-path alias: {names:?}"
+        );
+        if !suffix.is_empty() {
+            assert!(
+                !names.contains(&"api".to_string()),
+                "no unversioned alias: {names:?}"
+            );
+            assert!(
+                !names.contains(&suffix.trim_start_matches('/').to_string()),
+                "the major version alone is not a package name: {names:?}"
+            );
+        }
+
+        let task_id = format!("{name}#build");
+        let filtered = run_turbo(
+            root,
+            &[
+                "run",
+                "build",
+                &format!("--filter={name}"),
+                "--dry-run=json",
+            ],
+        );
+        let task = dry_run_task(&filtered, &task_id);
+        assert_eq!(task["package"], name);
+        assert_eq!(task["dependencies"], serde_json::json!(["lib#build"]));
+        let explicit = run_turbo(root, &["run", &task_id, "--dry-run=json"]);
+        assert_eq!(task["hash"], dry_run_task(&explicit, &task_id)["hash"]);
+
+        // Full module paths are Go metadata, not alternate Turborepo selectors.
+        let mut aliases = vec![module_path.clone()];
+        if !suffix.is_empty() {
+            aliases.push("api".to_string());
+        }
+        for alias in aliases {
+            for args in [
+                vec![
+                    "run".to_string(),
+                    "build".to_string(),
+                    format!("--filter={alias}"),
+                    "--dry-run=json".to_string(),
+                ],
+                vec![
+                    "run".to_string(),
+                    format!("{alias}#build"),
+                    "--dry-run=json".to_string(),
+                ],
+            ] {
+                let args = args.iter().map(String::as_str).collect::<Vec<_>>();
+                let output = run_turbo(root, &args);
+                assert!(
+                    !output.status.success(),
+                    "{alias} must not select {name}: {}",
+                    common::combined_output(&output)
+                );
+            }
+        }
+
+        let output = run_go(&root.join("apps/api"), &["list", "-json", "."]);
+        assert_command_success(&output, "Go metadata after short-name task selection");
+        let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(metadata["Module"]["Path"], module_path);
+        assert!(
+            metadata["Imports"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("example.com/lib")),
+            "Go imports must retain full module paths: {metadata}"
+        );
+    }
+}
+
+#[test]
+fn test_go_packages_with_same_short_name_report_both_manifests() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    let other = root.join("tools/other-api");
+    fs::create_dir_all(&other).unwrap();
+    fs::write(other.join("go.mod"), "module example.net/api\n\ngo 1.22\n").unwrap();
+    fs::write(other.join("api.go"), "package api\n").unwrap();
+    fs::write(
+        root.join("go.work"),
+        "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n\t./tools/other-api\n)\n",
+    )
+    .unwrap();
+
+    // The distinct Go module paths must collide as Turborepo package names,
+    // even when a filter selects neither module or only one of their directories.
+    for filter in [
+        None,
+        Some("--filter=api"),
+        Some("--filter=lib"),
+        Some("--filter=./packages/lib"),
+        Some("--filter=./apps/api"),
+        Some("--filter=./tools/other-api"),
+        Some("--filter=example.com/api"),
+        Some("--filter=example.net/api"),
+    ] {
+        for mut args in [vec!["ls"], vec!["run", "build", "--dry-run=json"]] {
+            args.extend(filter);
+            let output = run_turbo(root, &args);
+            assert!(
+                !output.status.success(),
+                "duplicate package names must fail for {args:?}"
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+            assert!(
+                stderr.contains("Failed to add workspace \"api\"")
+                    && stderr.contains("apps/api/go.mod")
+                    && stderr.contains("tools/other-api/go.mod"),
+                "{args:?}: short-name collision must identify both Go manifests, not be hidden by \
+                 selection: {stderr}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -761,7 +991,7 @@ fn test_disabled_go_workspace_points_to_feature_flag() {
     );
     fs::write(&turbo_json, updated).unwrap();
 
-    let output = run_turbo(tempdir.path(), &["ls", "--filter=example.com/api"]);
+    let output = run_turbo(tempdir.path(), &["ls", "--filter=api"]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("experimentalGoWorkspaces"),
@@ -774,8 +1004,29 @@ fn test_enabled_go_workspace_reports_missing_go_executable() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
 
+    // `ls` is an unfiltered, repository-wide query: lazy native discovery
+    // may load every contributor for it. The Go scope inventory itself needs
+    // no `go` binary, but the loaded owner does, so a missing `go` fails the
+    // listing with the ordinary missing-toolchain diagnostic.
     let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
 
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Go is required for experimental Go workspaces")
+            && stderr.contains("Install Go 1.22 or newer")
+            && stderr.contains("PATH"),
+        "missing Go diagnostic must identify the requirement and remediation: {stderr}"
+    );
+    assert!(!stderr.contains("package manager"), "{stderr}");
+
+    // Selecting a Go task narrows the query to the Go scope, which loads the
+    // same owner; the diagnostic keeps its requirement and remediation.
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--filter=api", "--dry-run=json"],
+        &[("PATH", "")],
+    );
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -789,9 +1040,9 @@ fn test_enabled_go_workspace_reports_missing_go_executable() {
 
 #[test]
 fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
-    if !go_available() {
-        return;
-    }
+    // The scope inventory parses go.work in-process, so it detects the
+    // malformed directive before any `go` subprocess: with an empty PATH the
+    // diagnostic is identical, which proves no toolchain ran.
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
     fs::write(
@@ -800,14 +1051,21 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["ls"]);
+    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // Diagnostic renderers can wrap this sentence at different words and add a
-    // continuation gutter depending on paths and platform terminal widths.
+    // The inventory parser diagnoses the unknown directive itself — the file,
+    // the directive, the directives go.work supports, and the repair —
+    // without pretending any `go` command ran and without falling back to
+    // JavaScript discovery.
     let normalized_stderr = normalize_rendered_diagnostic(&stderr);
     assert!(
-        normalized_stderr.contains("`go work edit -json` failed")
+        normalized_stderr.contains("go.work at")
+            && normalized_stderr.contains("contains an unknown `unsupported` directive")
+            && normalized_stderr.contains(
+                "The go command supports only `go`, `toolchain`, `use`, `replace`, and `godebug` \
+                 directives in go.work."
+            )
             && normalized_stderr.contains(
                 "Repair the repository-root go.work with `go work edit` and `go work use`."
             ),
@@ -815,6 +1073,7 @@ fn test_invalid_go_workspace_reports_repair_without_javascript_fallback() {
     );
     assert!(!stderr.contains("package manager"), "{stderr}");
     assert!(!stderr.contains("failed to parse"), "{stderr}");
+    assert!(!stderr.contains("go work edit -json"), "{stderr}");
 }
 
 #[test]
@@ -826,21 +1085,98 @@ fn test_go_and_javascript_package_name_collision_is_actionable() {
     setup_go_monorepo(tempdir.path());
     fs::write(
         tempdir.path().join("apps/api/go.mod"),
-        "module js-pkg\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace example.com/lib => \
-         ../../packages/lib\n",
+        "module example.com/js-pkg\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace \
+         example.com/lib => ../../packages/lib\n",
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["ls"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
-    assert!(
-        stderr.contains("Failed to add workspace \"js-pkg\"")
-            && stderr.contains("apps/api/go.mod")
-            && stderr.contains("packages/js-pkg/package.json")
-            && stderr.contains("Rename one package or module"),
-        "cross-language identity collision must be actionable: {stderr}"
-    );
+    // A JS-only selection must not let lazy Go discovery hide a collision.
+    let unrelated = tempdir.path().join("packages/unrelated");
+    fs::create_dir_all(&unrelated).unwrap();
+    fs::write(
+        unrelated.join("package.json"),
+        r#"{"name":"unrelated","scripts":{"build":"echo unrelated"}}"#,
+    )
+    .unwrap();
+
+    for filter in [
+        None,
+        Some("--filter=js-pkg"),
+        Some("--filter=unrelated"),
+        Some("--filter=./packages/unrelated"),
+        Some("--filter=./packages/js-pkg"),
+        Some("--filter=./apps/api"),
+        Some("--filter=example.com/js-pkg"),
+    ] {
+        for mut args in [vec!["ls"], vec!["run", "build", "--dry-run=json"]] {
+            args.extend(filter);
+            let output = run_turbo(tempdir.path(), &args);
+            assert!(
+                !output.status.success(),
+                "cross-language package name collision must fail for {args:?}"
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+            assert!(
+                stderr.contains("Failed to add workspace \"js-pkg\"")
+                    && stderr.contains("apps/api/go.mod")
+                    && stderr.contains("packages/js-pkg/package.json")
+                    && stderr.contains("Rename one package or module"),
+                "{args:?}: cross-language identity collision must remain actionable under narrow \
+                 selection: {stderr}"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_versioned_go_name_does_not_collide_with_unversioned_javascript_name() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_monorepo(root);
+    fs::write(
+        root.join("apps/api/go.mod"),
+        "module example.com/js-pkg/v2\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace \
+         example.com/lib => ../../packages/lib\n",
+    )
+    .unwrap();
+
+    let names = package_names(root);
+    assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
+    assert!(names.contains(&"js-pkg/v2".to_string()), "names: {names:?}");
+    for (name, directory) in [("js-pkg", "packages/js-pkg"), ("js-pkg/v2", "apps/api")] {
+        let output = run_turbo(
+            root,
+            &[
+                "run",
+                "build",
+                &format!("--filter={name}"),
+                "--dry-run=json",
+            ],
+        );
+        let task = dry_run_task(&output, &format!("{name}#build"));
+        assert_eq!(task["package"], name);
+        assert_eq!(
+            Path::new(task["directory"].as_str().unwrap()),
+            Path::new(directory)
+        );
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let other = if name == "js-pkg" {
+            "js-pkg/v2"
+        } else {
+            "js-pkg"
+        };
+        assert!(
+            json["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|task| task["package"] != other),
+            "filtering {name} must not select {other}: {json}"
+        );
+    }
 }
 
 #[test]
@@ -878,46 +1214,79 @@ fn test_go_native_tasks_and_workspace_aggregate() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
-    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
-    let task = dry_run_task(&output, "go-workspace#test");
-    assert_eq!(task["command"], "go test ./apps/api/... ./packages/lib/...");
-    assert_eq!(task["directory"], "");
-
-    let output = run_turbo(tempdir.path(), &["run", "lint", "--dry-run=json"]);
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
-    assert_eq!(json["tasks"].as_array().map(Vec::len), Some(1));
-    let lint = dry_run_task(&output, "go-workspace#lint");
-    assert_eq!(lint["command"], "go vet ./apps/api/... ./packages/lib/...");
-    assert_eq!(lint["directory"], "");
-
-    let output = run_turbo(
+    let combined = run_turbo(
         tempdir.path(),
-        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+        &["run", "test", "lint", "format", "--dry-run=json"],
     );
-    let lint = dry_run_task(&output, "example.com/lib#lint");
-    assert_eq!(lint["command"], "go vet ./...");
+    assert_command_success(&combined, "combined Go verification dry run");
+    for (task_name, command) in [
+        ("test", "go test ./..."),
+        ("lint", "go vet ./..."),
+        ("format", "go fmt ./..."),
+    ] {
+        let output = run_turbo(tempdir.path(), &["run", task_name, "--dry-run=json"]);
+        assert_command_success(&output, "unfiltered Go verification dry run");
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("dry run emits JSON");
+        assert_eq!(json["tasks"].as_array().map(Vec::len), Some(2));
+        for (package, directory) in [("api", "apps/api"), ("lib", "packages/lib")] {
+            let task_id = format!("{package}#{task_name}");
+            let task = dry_run_task(&output, &task_id);
+            assert_eq!(task["command"], command);
+            assert_eq!(
+                Path::new(task["directory"].as_str().expect("task directory")),
+                Path::new(directory)
+            );
+            assert_eq!(
+                task["resolvedTaskDefinition"]["cache"],
+                task_name != "format"
+            );
+            assert!(task["hash"].as_str().is_some_and(|hash| !hash.is_empty()));
+            assert_eq!(task["hash"], dry_run_task(&combined, &task_id)["hash"]);
+
+            for filter in [
+                format!("--filter={package}"),
+                format!("--filter=./{directory}"),
+            ] {
+                let filtered = run_turbo(
+                    tempdir.path(),
+                    &["run", task_name, &filter, "--dry-run=json"],
+                );
+                let filtered_task = dry_run_task(&filtered, &task_id);
+                assert_eq!(
+                    task["hash"], filtered_task["hash"],
+                    "{task_id} with {filter}"
+                );
+                assert_eq!(task["command"], filtered_task["command"]);
+                assert_eq!(task["dependencies"], filtered_task["dependencies"]);
+            }
+        }
+    }
+    let workspace_tasks = package_task_names(tempdir.path(), "go-workspace");
+    assert!(
+        !workspace_tasks
+            .iter()
+            .any(|task| matches!(task.as_str(), "test" | "lint" | "format")),
+        "verification must only be registered on modules: {workspace_tasks:?}"
+    );
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
-    let build = dry_run_task(&output, "example.com/api#build");
+    let build = dry_run_task(&output, "api#build");
     let executable = if cfg!(windows) { "api.exe" } else { "api" };
-    let output_path = format!("dist/{executable}");
-    assert_eq!(build["command"], format!("go build -o {output_path} ."));
+    let output_path = executable;
+    assert_eq!(build["command"], "go build .");
     assert_eq!(build["resolvedTaskDefinition"]["cache"], true);
     assert!(
         build["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "build", "--filter=example.com/lib", "--dry-run=json"],
+        &["run", "build", "--filter=lib", "--dry-run=json"],
     );
-    let build = dry_run_task(&output, "example.com/lib#build");
+    let build = dry_run_task(&output, "lib#build");
     assert_eq!(build["command"], "go build ./...");
     assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
 
@@ -926,17 +1295,17 @@ fn test_go_native_tasks_and_workspace_aggregate() {
         &[
             "run",
             "dev",
-            "--filter=example.com/api",
+            "--filter=api",
             "--dry-run=json",
             "--",
             "--port",
             "3000",
         ],
     );
-    let dev = dry_run_task(&output, "example.com/api#dev");
+    let dev = dry_run_task(&output, "api#dev");
     assert_eq!(dev["command"], "go run .");
 
-    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    let tasks = package_task_names(tempdir.path(), "api");
     assert!(tasks.iter().any(|task| task == "dev"), "tasks: {tasks:?}");
     assert!(tasks.iter().any(|task| task == "lint"), "tasks: {tasks:?}");
     assert!(!tasks.iter().any(|task| task == "run"), "tasks: {tasks:?}");
@@ -944,7 +1313,7 @@ fn test_go_native_tasks_and_workspace_aggregate() {
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "run", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "run", "--filter=api", "--dry-run=json"],
     );
     assert!(!output.status.success(), "removed run task must fail");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -955,18 +1324,92 @@ fn test_go_native_tasks_and_workspace_aggregate() {
 }
 
 #[test]
+fn test_go_verification_reuses_cache_across_filtered_and_unfiltered_runs() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+    // Share Go's compiler cache across invocations, outside the task inputs.
+    let go_cache = tempfile::tempdir().unwrap();
+    let go_cache_path = go_cache.path().to_string_lossy();
+    let environment = [("GOCACHE", go_cache_path.as_ref())];
+
+    for task in ["test", "lint"] {
+        for (filter, expected) in [
+            (Some("--filter=./packages/lib"), vec![("lib", "cache miss")]),
+            (None, vec![("lib", "cache hit"), ("api", "cache miss")]),
+            (Some("--filter=./apps/api"), vec![("api", "cache hit")]),
+        ] {
+            let mut args = vec!["run", task, "--log-order=grouped"];
+            args.extend(filter);
+            let output = run_turbo_with_env(tempdir.path(), &args, &environment);
+            assert_command_success(&output, "Go verification cache reuse");
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            for (package, status) in expected {
+                let expected = format!("{package}:{task}: {status}");
+                assert!(
+                    combined.contains(&expected),
+                    "expected {expected:?}: {combined}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_go_verification_hash_changes_only_for_module_and_dependents() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_e2e_workspace(tempdir.path());
+    let args = ["run", "test", "lint", "--dry-run=json"];
+    let before = run_turbo(tempdir.path(), &args);
+    assert_command_success(&before, "original Go verification hashes");
+
+    fs::write(
+        tempdir.path().join("packages/lib/lib.go"),
+        "package lib\n\nfunc Greet() string { return \"changed\" }\n",
+    )
+    .unwrap();
+    let after = run_turbo(tempdir.path(), &args);
+    assert_command_success(&after, "changed Go verification hashes");
+    for task in ["test", "lint"] {
+        for package in ["lib", "api"] {
+            let task_id = format!("{package}#{task}");
+            assert_ne!(
+                dry_run_task(&before, &task_id)["hash"],
+                dry_run_task(&after, &task_id)["hash"],
+                "{task_id} must track changed module sources"
+            );
+        }
+        let task_id = format!("independent#{task}");
+        assert_eq!(
+            dry_run_task(&before, &task_id)["hash"],
+            dry_run_task(&after, &task_id)["hash"],
+            "{task_id} must not track unrelated modules"
+        );
+    }
+}
+
+#[test]
 fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
     if !go_available() {
         return;
     }
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
-    let original = task_hash(tempdir.path(), "example.com/api", "build");
+    let original = task_hash(tempdir.path(), "api", "build");
 
     fs::write(tempdir.path().join("unrelated.txt"), "unrelated\n").unwrap();
     assert_eq!(
         original,
-        task_hash(tempdir.path(), "example.com/api", "build"),
+        task_hash(tempdir.path(), "api", "build"),
         "repository-root siblings outside the module must not affect its hash"
     );
 
@@ -978,7 +1421,7 @@ fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
     .unwrap();
     assert_ne!(
         original,
-        task_hash(tempdir.path(), "example.com/api", "build"),
+        task_hash(tempdir.path(), "api", "build"),
         "module source changes must affect its task hash"
     );
 }
@@ -995,8 +1438,8 @@ fn test_go_hash_is_stable_across_equivalent_checkout_roots() {
     setup_go_e2e_workspace(second.path());
 
     assert_eq!(
-        task_hash(first.path(), "example.com/api", "build"),
-        task_hash(second.path(), "example.com/api", "build"),
+        task_hash(first.path(), "api", "build"),
+        task_hash(second.path(), "api", "build"),
         "equivalent checkouts with local replacements must produce the same Go task hash"
     );
 }
@@ -1039,14 +1482,14 @@ fn test_go_cache_invalidates_every_north_star_input() {
     let root = tempdir.path();
 
     assert_go_build_cache_result(root, &[], "cache miss", "cold Go build");
-    assert_go_build_cache_result(root, &[], "FULL TURBO", "unchanged Go build");
+    assert_go_build_cache_result(root, &[], "cache hit", "unchanged Go build");
 
     fs::write(
         root.join("tools/independent/independent.go"),
         "package independent\n\nconst Value = \"still-independent\"\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "FULL TURBO", "unrelated module source change");
+    assert_go_build_cache_result(root, &[], "cache hit", "unrelated module source change");
 
     fs::write(
         root.join("apps/api/main.go"),
@@ -1157,7 +1600,7 @@ fn test_go_resolution_sums_invalidate_dependent_task_hashes() {
     }
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
-    let package = "example.com/api";
+    let package = "api";
     let original = task_hash(tempdir.path(), package, "build");
     let empty_sum = "h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
 
@@ -1206,13 +1649,86 @@ fn test_affected_go_tasks_follow_internal_module_relationships() {
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("affected dry-run JSON");
     let tasks = json["tasks"].as_array().expect("affected tasks");
-    for package in ["example.com/lib", "example.com/api"] {
+    for package in ["lib", "api"] {
         let task_id = format!("{package}#build");
         assert!(
             tasks.iter().any(|task| task["taskId"] == task_id),
             "{task_id} must be affected: {tasks:?}"
         );
     }
+}
+
+#[test]
+fn test_affected_colocated_packages_include_both_dependency_chains() {
+    if !go_available() {
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_go_monorepo(dir);
+    fs::write(
+        dir.join("packages/lib/package.json"),
+        r#"{"name":"@repo/lib","scripts":{"build":"echo javascript build"}}"#,
+    )
+    .unwrap();
+    let consumer_path = dir.join("packages/js-pkg/package.json");
+    let mut consumer: serde_json::Value =
+        serde_json::from_slice(&fs::read(&consumer_path).unwrap()).unwrap();
+    consumer["dependencies"] = serde_json::json!({"@repo/lib": "*"});
+    fs::write(consumer_path, serde_json::to_vec(&consumer).unwrap()).unwrap();
+    fs::create_dir(dir.join("packages/unrelated")).unwrap();
+    fs::write(
+        dir.join("packages/unrelated/package.json"),
+        r#"{"name":"unrelated","scripts":{"build":"echo unrelated"}}"#,
+    )
+    .unwrap();
+    // Exercise package-based affectedness, not task-input matching, which can
+    // already match multiple tasks in one directory.
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{
+          "futureFlags": {
+            "experimentalGoWorkspaces": true,
+            "experimentalTaskCommand": true,
+            "affectedUsingTaskInputs": false,
+            "filterUsingTasks": false,
+            "watchUsingTaskInputs": false
+          },
+          "tasks": {"build": {"dependsOn": ["^build"]}}
+        }"#,
+    )
+    .unwrap();
+    common::git(dir, &["add", "."]);
+    common::git(
+        dir,
+        &[
+            "commit",
+            "-m",
+            "add colocated package and consumer",
+            "--quiet",
+        ],
+    );
+
+    let source = dir.join("packages/lib/lib.go");
+    let contents = fs::read_to_string(&source).unwrap();
+    fs::write(source, format!("{contents}\n// Source changed.\n")).unwrap();
+    let output = run_turbo_with_env(
+        dir,
+        &["run", "build", "--affected", "--dry=json"],
+        &[("TURBO_SCM_BASE", "HEAD")],
+    );
+    assert_command_success(&output, "co-located package-based affectedness");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let actual = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        actual,
+        ["@repo/lib#build", "js-pkg#build", "lib#build", "api#build"].into()
+    );
 }
 
 #[test]
@@ -1254,9 +1770,9 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
         &["commit", "-m", "add independent module", "--quiet"],
     );
 
-    let api_hash = task_hash(tempdir.path(), "example.com/api", "build");
-    let lib_hash = task_hash(tempdir.path(), "example.com/lib", "build");
-    let independent_hash = task_hash(tempdir.path(), "example.com/independent", "build");
+    let api_hash = task_hash(tempdir.path(), "api", "build");
+    let lib_hash = task_hash(tempdir.path(), "lib", "build");
+    let independent_hash = task_hash(tempdir.path(), "independent", "build");
     fs::write(
         independent.join("main.go"),
         "package independent\n\nconst Changed = true\n",
@@ -1276,22 +1792,24 @@ fn test_affected_go_tasks_do_not_cross_independent_modules() {
     let tasks = json["data"]["affectedTasks"]["items"]
         .as_array()
         .expect("affected tasks");
-    assert!(tasks.iter().any(|task| {
-        task["name"] == "build" && task["package"]["name"] == "example.com/independent"
-    }));
+    assert!(
+        tasks
+            .iter()
+            .any(|task| { task["name"] == "build" && task["package"]["name"] == "independent" })
+    );
     assert_ne!(
         independent_hash,
-        task_hash(tempdir.path(), "example.com/independent", "build"),
+        task_hash(tempdir.path(), "independent", "build"),
         "the changed module must be invalidated"
     );
     assert_eq!(
         api_hash,
-        task_hash(tempdir.path(), "example.com/api", "build"),
+        task_hash(tempdir.path(), "api", "build"),
         "an unrelated module must not invalidate the API"
     );
     assert_eq!(
         lib_hash,
-        task_hash(tempdir.path(), "example.com/lib", "build"),
+        task_hash(tempdir.path(), "lib", "build"),
         "an unrelated module must not invalidate the library"
     );
 }
@@ -1305,7 +1823,7 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
     let mut watch = GoWatchGuard::spawn(tempdir.path());
-    let api_binary = tempdir.path().join("apps/api/dist/api");
+    let api_binary = tempdir.path().join("apps/api/api");
     watch
         .wait_for_path(&api_binary, Duration::from_secs(30))
         .unwrap_or_else(|error| panic!("initial Go watch build failed: {error}"));
@@ -1343,7 +1861,7 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
         &["commit", "-m", "add worker module", "--quiet"],
     );
 
-    let worker_binary = worker.join("dist/worker");
+    let worker_binary = worker.join("worker");
     watch
         .wait_for_path(&worker_binary, Duration::from_secs(60))
         .unwrap_or_else(|error| panic!("Go watch workspace rediscovery failed: {error}"));
@@ -1375,16 +1893,16 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "lint", "--filter=example.com/lib", "--dry-run=json"],
+        &["run", "lint", "--filter=lib", "--dry-run=json"],
     );
-    let lint = dry_run_task(&output, "example.com/lib#lint");
+    let lint = dry_run_task(&output, "lib#lint");
     assert_eq!(lint["command"], "go version");
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "dev", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "dev", "--filter=api", "--dry-run=json"],
     );
-    let dev = dry_run_task(&output, "example.com/api#dev");
+    let dev = dry_run_task(&output, "api#dev");
     assert_eq!(dev["command"], "go env GOVERSION");
 
     fs::write(
@@ -1397,7 +1915,7 @@ fn test_go_native_tasks_are_overrideable_and_excludable() {
 }"#,
     )
     .unwrap();
-    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    let tasks = package_task_names(tempdir.path(), "api");
     assert!(tasks.iter().any(|task| task == "lint"), "tasks: {tasks:?}");
     assert!(!tasks.iter().any(|task| task == "vet"), "tasks: {tasks:?}");
     assert!(!tasks.iter().any(|task| task == "run"), "tasks: {tasks:?}");
@@ -1419,7 +1937,7 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
     assert!(
         unfiltered
             .path()
-            .join("apps/api/dist")
+            .join("apps/api")
             .join(if cfg!(windows) { "api.exe" } else { "api" })
             .exists(),
         "unfiltered native build must produce the runnable binary"
@@ -1427,16 +1945,12 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
 
     let filtered = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(filtered.path());
-    let build_args = [
-        "run",
-        "build",
-        "--filter=example.com/api",
-        "--log-order=grouped",
-    ];
-    let binary = filtered
-        .path()
-        .join("apps/api/dist")
-        .join(if cfg!(windows) { "api.exe" } else { "api" });
+    let build_args = ["run", "build", "--filter=api", "--log-order=grouped"];
+    let binary =
+        filtered
+            .path()
+            .join("apps/api")
+            .join(if cfg!(windows) { "api.exe" } else { "api" });
 
     let output = run_turbo(filtered.path(), &build_args);
     assert_command_success(&output, "cold filtered Go build");
@@ -1451,35 +1965,313 @@ fn test_native_go_tasks_execute_cache_restore_and_pass_through_args() {
     assert_command_success(&output, "warm filtered Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("api:build: cache hit"),
         "second build must hit cache: {stdout}"
     );
 
-    fs::remove_dir_all(binary.parent().expect("binary output directory")).unwrap();
+    fs::remove_file(&binary).unwrap();
     let output = run_turbo(filtered.path(), &build_args);
     assert_command_success(&output, "restored filtered Go build");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("FULL TURBO"),
+        stdout.contains("api:build: cache hit"),
         "restoration must come from cache: {stdout}"
     );
     assert!(binary.exists(), "cache hit must restore the binary");
 
     let output = run_turbo(
         filtered.path(),
-        &[
-            "run",
-            "dev",
-            "--filter=example.com/api",
-            "--",
-            "passed-to-go",
-        ],
+        &["run", "dev", "--filter=api", "--", "passed-to-go"],
     );
     assert_command_success(&output, "native Go dev with pass-through argument");
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("passed-to-go"),
         "go run must receive pass-through arguments: {output:?}"
     );
+}
+
+#[test]
+fn test_go_versioned_default_binaries_match_go_and_do_not_hash_into_dependents() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    // Neither the module directory nor the final v2 import-path component is
+    // the executable name. The library also has a sole nested main package.
+    fs::write(
+        root.join("apps/api/go.mod"),
+        "module example.com/service/v2\n\ngo 1.22\n\nrequire example.com/lib/v2 v2.0.0\n\nreplace \
+         example.com/lib/v2 => ../../packages/lib\n",
+    )
+    .unwrap();
+    let main = root.join("apps/api/main.go");
+    let source = fs::read_to_string(&main).unwrap();
+    fs::write(
+        main,
+        source.replace("example.com/lib", "example.com/lib/v2"),
+    )
+    .unwrap();
+    fs::write(
+        root.join("packages/lib/go.mod"),
+        "module example.com/lib/v2\n\ngo 1.22\n",
+    )
+    .unwrap();
+    let nested = root.join("packages/lib/cmd/worker/v2");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(nested.join("main.go"), "package main\n\nfunc main() {}\n").unwrap();
+
+    let cases = [
+        ("lib/v2#build", "packages/lib", "./cmd/worker/v2", "worker"),
+        ("service/v2#build", "apps/api", ".", "service"),
+    ];
+    let binaries = cases.map(|(_, directory, _, name)| {
+        root.join(directory)
+            .join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
+    });
+    let go_cache = tempfile::tempdir().unwrap();
+    let environment = [("GOCACHE", go_cache.path().to_str().unwrap())];
+    let dry_run = || {
+        let output = run_turbo_with_env(root, &["run", "build", "--dry-run=json"], &environment);
+        cases.map(|(task, _, _, _)| dry_run_task(&output, task))
+    };
+    let before = dry_run();
+    assert!(
+        before[1]["dependencies"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(cases[0].0))
+    );
+    for (index, (_, directory, target, name)) in cases.iter().enumerate() {
+        let task = &before[index];
+        assert_eq!(task["command"], format!("go build {target}"));
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], true);
+        assert_eq!(
+            task["resolvedTaskDefinition"]["outputs"],
+            serde_json::json!([format!("{name}{}", std::env::consts::EXE_SUFFIX)])
+        );
+        // Use Go itself as the oracle, without -o or changing into the target.
+        let output = run_go(&root.join(directory), &["build", target]);
+        assert_command_success(&output, "direct Go build with its default output name");
+        assert!(
+            binaries[index].is_file(),
+            "Go must create {:?}",
+            binaries[index]
+        );
+    }
+    let assert_hashes_unchanged = || {
+        let after = dry_run();
+        for (index, (task, _, _, _)) in cases.iter().enumerate() {
+            assert_eq!(
+                before[index]["hash"], after[index]["hash"],
+                "{task} must not hash generated binaries"
+            );
+        }
+    };
+    assert_hashes_unchanged();
+    for binary in &binaries {
+        fs::remove_file(binary).unwrap();
+    }
+
+    let mut cached_bytes = Vec::new();
+    for (stage, status) in [
+        ("cold", "cache miss"),
+        ("warm", "cache hit"),
+        ("restored", "cache hit"),
+    ] {
+        if stage == "restored" {
+            // Changing either output must not invalidate its own task or the
+            // downstream executable, including the dependency source closure.
+            for binary in &binaries {
+                fs::write(binary, "changed generated binary").unwrap();
+            }
+            assert_hashes_unchanged();
+            for binary in &binaries {
+                fs::remove_file(binary).unwrap();
+            }
+            assert_hashes_unchanged();
+        }
+        let output =
+            run_turbo_with_env(root, &["run", "build", "--log-order=grouped"], &environment);
+        assert_command_success(&output, &format!("{stage} versioned Go build"));
+        let combined = common::combined_output(&output);
+        for (task, _, _, _) in cases {
+            let expected = format!("{}:build: {status}", task.strip_suffix("#build").unwrap());
+            assert!(
+                combined.contains(&expected),
+                "expected {expected}: {combined}"
+            );
+        }
+        for (index, binary) in binaries.iter().enumerate() {
+            let contents =
+                fs::read(binary).expect("native binary must be present after every build");
+            if stage == "cold" {
+                cached_bytes.push(contents);
+            } else {
+                assert_eq!(
+                    contents, cached_bytes[index],
+                    "cached binary must be restored exactly"
+                );
+            }
+            let output = std::process::Command::new(binary).output().unwrap();
+            assert_command_success(&output, "execute native or restored Go binary");
+        }
+        assert_hashes_unchanged();
+    }
+
+    // Prove the dependency relationship is still hashed, rather than masking
+    // all changes in the module containing the generated worker binary.
+    fs::write(
+        root.join("packages/lib/lib.go"),
+        "package lib\n\nfunc Greet() { println(\"changed\") }\n",
+    )
+    .unwrap();
+    let changed = dry_run();
+    for (index, (task, _, _, _)) in cases.iter().enumerate() {
+        assert_ne!(
+            before[index]["hash"], changed[index]["hash"],
+            "library source changes must invalidate {task}"
+        );
+    }
+}
+
+#[test]
+fn test_go_explicit_build_command_preserves_authored_output_and_cache_restore() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    // Custom output names are not native binary exclusions. Declare the input
+    // exclusion as well so the authored binary cannot invalidate its own cache.
+    fs::write(
+        root.join("apps/api/turbo.json"),
+        r#"{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["go", "build", "-o", "bin/pigo-api", "."],
+      "inputs": ["$TURBO_DEFAULT$", "!bin/pigo-api"],
+      "outputs": ["bin/pigo-api"]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    let output = run_turbo(root, &["run", "build", "--filter=api", "--dry-run=json"]);
+    let task = dry_run_task(&output, "api#build");
+    assert_eq!(task["command"], "go build -o bin/pigo-api .");
+    // Authored outputs are merged with inferred metadata, but the explicit
+    // command must still write and restore the authored path, not the default.
+    assert!(
+        task["resolvedTaskDefinition"]["outputs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("bin/pigo-api"))
+    );
+    assert_eq!(task["resolvedTaskDefinition"]["cache"], true);
+
+    let binary = root.join("apps/api/bin/pigo-api");
+    let native_binary = root
+        .join("apps/api")
+        .join(format!("api{}", std::env::consts::EXE_SUFFIX));
+    let go_cache = tempfile::tempdir().unwrap();
+    let environment = [("GOCACHE", go_cache.path().to_str().unwrap())];
+    assert_go_build_cache_result(root, &environment, "cache miss", "cold authored Go build");
+    let contents = fs::read(&binary).expect("explicit -o must preserve bin/pigo-api verbatim");
+    assert_go_build_cache_result(root, &environment, "cache hit", "warm authored Go build");
+    fs::remove_file(&binary).unwrap();
+    assert_go_build_cache_result(
+        root,
+        &environment,
+        "cache hit",
+        "restored authored Go build",
+    );
+    assert_eq!(fs::read(&binary).unwrap(), contents);
+    assert!(
+        !native_binary.exists(),
+        "the native output must not shadow explicit -o"
+    );
+}
+
+#[test]
+fn test_go_format_runs_per_module_without_formatting_non_packages() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    let sources = [
+        (
+            "apps/api/format.go",
+            "package main\nfunc   formatMe( ){ }\n",
+            "package main\n\nfunc formatMe() {}\n",
+        ),
+        (
+            "packages/lib/format.go",
+            "package lib\nfunc   formatMe( ){ }\n",
+            "package lib\n\nfunc formatMe() {}\n",
+        ),
+    ];
+    let ignored_sources = [
+        "packages/lib/testdata/example/ignored.go",
+        "packages/lib/nested/ignored.go",
+    ];
+    let ignored_content = "package ignored\nfunc   untouched( ){ }\n";
+    for path in ignored_sources {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, ignored_content).unwrap();
+    }
+    fs::write(
+        root.join("packages/lib/nested/go.mod"),
+        "module example.com/nested\n\ngo 1.22\n",
+    )
+    .unwrap();
+    for (path, unformatted, _) in sources {
+        fs::write(root.join(path), unformatted).unwrap();
+    }
+
+    let output = run_turbo(root, &["run", "format", "--filter=lib"]);
+    assert_command_success(&output, "filtered native Go format");
+    assert_eq!(
+        fs::read_to_string(root.join(sources[0].0)).unwrap(),
+        sources[0].1
+    );
+    assert_eq!(
+        fs::read_to_string(root.join(sources[1].0)).unwrap(),
+        sources[1].2
+    );
+
+    // Restore identical inputs before each run: source-mutating tasks must not
+    // replay a cached success instead of formatting the files again.
+    for _ in 0..2 {
+        for (path, unformatted, _) in sources {
+            fs::write(root.join(path), unformatted).unwrap();
+        }
+        let output = run_turbo(root, &["run", "format"]);
+        assert_command_success(&output, "workspace-wide native Go format");
+        for (path, _, formatted) in sources {
+            assert_eq!(
+                fs::read_to_string(root.join(path)).unwrap(),
+                formatted,
+                "{path}"
+            );
+        }
+        for path in ignored_sources {
+            assert_eq!(
+                fs::read_to_string(root.join(path)).unwrap(),
+                ignored_content,
+                "format must leave non-package source untouched: {path}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -1492,10 +2284,7 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
     setup_go_pure_workspace(tempdir.path());
     let library = tempdir.path().join("packages/lib/lib.go");
     fs::write(&library, "package lib\nfunc   Greet( ){ }\n").unwrap();
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "format", "--filter=example.com/lib"],
-    );
+    let output = run_turbo(tempdir.path(), &["run", "format", "--filter=lib"]);
     assert_command_success(&output, "filtered native Go format");
     assert_eq!(
         fs::read_to_string(&library).unwrap(),
@@ -1516,17 +2305,18 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
 }"#,
     )
     .unwrap();
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=example.com/api"],
-    );
+    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=api"]);
     assert_command_success(&output, "authored Go build override");
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("go version go"),
         "the authored command must execute: {output:?}"
     );
     assert!(
-        !tempdir.path().join("apps/api/dist").exists(),
+        !tempdir
+            .path()
+            .join("apps/api")
+            .join(if cfg!(windows) { "api.exe" } else { "api" })
+            .exists(),
         "the native build must not shadow the authored command"
     );
 
@@ -1540,7 +2330,7 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
 }"#,
     )
     .unwrap();
-    let tasks = package_task_names(tempdir.path(), "example.com/api");
+    let tasks = package_task_names(tempdir.path(), "api");
     assert!(
         !tasks.iter().any(|task| task == "build"),
         "package task exclusion must remove the inherited command: {tasks:?}"
@@ -1552,7 +2342,7 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
          t.Fatal(\"intentional failure\") }\n",
     )
     .unwrap();
-    let output = run_turbo(tempdir.path(), &["run", "test", "--filter=example.com/lib"]);
+    let output = run_turbo(tempdir.path(), &["run", "test", "--filter=lib"]);
     assert!(
         !output.status.success(),
         "a failing Go test must fail the Turbo task"
@@ -1576,32 +2366,32 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
     let executable = if cfg!(windows) { "api.exe" } else { "api" };
-    let output_path = format!("dist/{executable}");
-    let build_command = format!("go build -o {output_path} .");
+    let output_path = executable;
+    let build_command = "go build .";
     let task_directory = Path::new("apps").join("api").to_string_lossy().into_owned();
 
     let output = run_turbo(
         tempdir.path(),
         &[
             "query",
-            "query { api: package(name: \"example.com/api\") { name path directDependencies { \
-             items { name } } tasks { items { name command directDependencies { items { fullName \
-             } } } } } aggregate: package(name: \"go-workspace\") { name path tasks { items { \
-             name command } } } }",
+            "query { api: package(name: \"api\") { name path directDependencies { items { name } \
+             } tasks { items { name command directDependencies { items { fullName } } } } } \
+             aggregate: package(name: \"go-workspace\") { name path tasks { items { name command \
+             } } } }",
         ],
     );
     assert_command_success(&output, "Go package and task query");
     let query: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("query emits JSON");
     let api = &query["data"]["api"];
-    assert_eq!(api["name"], "example.com/api");
+    assert_eq!(api["name"], "api");
     assert_eq!(api["path"], "apps/api");
     assert!(
         api["directDependencies"]["items"]
             .as_array()
             .is_some_and(|dependencies| dependencies
                 .iter()
-                .any(|dependency| dependency["name"] == "example.com/lib"))
+                .any(|dependency| dependency["name"] == "lib"))
     );
     let queried_build = api["tasks"]["items"]
         .as_array()
@@ -1613,27 +2403,35 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
             .as_array()
             .is_some_and(|dependencies| dependencies
                 .iter()
-                .any(|dependency| dependency["fullName"] == "example.com/lib#build"))
+                .any(|dependency| dependency["fullName"] == "lib#build"))
     );
 
     let aggregate = &query["data"]["aggregate"];
     assert_eq!(aggregate["name"], "go-workspace");
     assert_eq!(aggregate["path"], "");
-    assert!(
-        aggregate["tasks"]["items"]
-            .as_array()
-            .is_some_and(|tasks| tasks.iter().any(|task| {
-                task["name"] == "test"
-                    && task["command"] == "go test ./apps/api/... ./packages/lib/..."
-            }))
-    );
+    for (name, command) in [
+        ("test", "go test ./..."),
+        ("lint", "go vet ./..."),
+        ("format", "go fmt ./..."),
+    ] {
+        assert!(api["tasks"]["items"].as_array().is_some_and(|tasks| {
+            tasks
+                .iter()
+                .any(|task| task["name"] == name && task["command"] == command)
+        }));
+        assert!(
+            aggregate["tasks"]["items"]
+                .as_array()
+                .is_some_and(|tasks| tasks.iter().all(|task| task["name"] != name))
+        );
+    }
 
     let output = run_turbo(
         tempdir.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "build", "--filter=api", "--dry-run=json"],
     );
-    let dry_run = dry_run_task(&output, "example.com/api#build");
-    assert_eq!(dry_run["package"], "example.com/api");
+    let dry_run = dry_run_task(&output, "api#build");
+    assert_eq!(dry_run["package"], "api");
     assert_eq!(dry_run["directory"], task_directory);
     assert_eq!(dry_run["command"], build_command);
     assert!(
@@ -1644,7 +2442,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert!(
         dry_run["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
     assert!(
         dry_run["hashOfExternalDependencies"]
@@ -1668,13 +2466,9 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
             .expect("parse Go run summary");
     let summarized_build = summary["tasks"]
         .as_array()
-        .and_then(|tasks| {
-            tasks
-                .iter()
-                .find(|task| task["taskId"] == "example.com/api#build")
-        })
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "api#build"))
         .expect("summarized Go build task");
-    assert_eq!(summarized_build["package"], "example.com/api");
+    assert_eq!(summarized_build["package"], "api");
     assert_eq!(summarized_build["directory"], task_directory);
     assert_eq!(summarized_build["command"], build_command);
     assert!(
@@ -1685,7 +2479,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     assert!(
         summarized_build["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == &output_path))
+            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
     );
     assert!(
         summarized_build["hashOfExternalDependencies"]
@@ -1724,7 +2518,7 @@ fn test_mixed_repository_query_keeps_external_resolution_domains_separate() {
     };
 
     let go_dependents = dependents("go");
-    for package in ["example.com/api", "example.com/lib", "go-workspace"] {
+    for package in ["api", "lib", "go-workspace"] {
         assert!(
             go_dependents
                 .iter()
@@ -1755,9 +2549,9 @@ fn test_go_regression_profile_outputs_are_not_log_only_cache_hits() {
     let profile = outputs.path().join("coverage.out");
     let flag = format!("-coverprofile={}", profile.display());
     let cache_path = cache.path().to_str().unwrap();
-    // Cover both a module and the workspace aggregate, which derive their IO
-    // separately. The report deliberately lives outside default input globs.
-    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
+    // Cover both executable and library modules. The report deliberately lives
+    // outside default input globs.
+    for filter in ["--filter=api", "--filter=lib"] {
         let args = ["run", "test", filter, "--", &flag];
         for _ in 0..2 {
             let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
@@ -1803,7 +2597,7 @@ func TestMissingGoenv(t *testing.T) { t.Fatal("GOENV settings were dropped") }
     .unwrap();
     let output = run_turbo_with_env(
         root.path(),
-        &["run", "test", "--filter=example.com/api"],
+        &["run", "test", "--filter=api"],
         &[
             ("GOENV", goenv.to_str().unwrap()),
             ("GODEBUG", "panicnil=1"),
@@ -1832,7 +2626,7 @@ fn test_go_regression_native_output_and_test_argument_placement() {
         &[
             "run",
             "build",
-            "--filter=example.com/api",
+            "--filter=api",
             "--",
             "-o",
             binary.to_str().unwrap(),
@@ -1842,7 +2636,7 @@ fn test_go_regression_native_output_and_test_argument_placement() {
     assert_command_success(&output, "Go build with custom output");
     assert!(
         binary.exists(),
-        "the built-in -o must not override user arguments"
+        "the native build must honor the user's explicit -o"
     );
 
     let subpackage = root.path().join("apps/api/subpackage");
@@ -1858,12 +2652,11 @@ func TestCustom(t *testing.T) {
 "#,
     )
     .unwrap();
-    for filter in ["--filter=example.com/api", "--filter=go-workspace"] {
-        let output = run_turbo_with_env(
-            root.path(),
-            &["run", "test", filter, "--", "-args", "-custom=expected"],
-            &[("GOCACHE", cache_path)],
-        );
+    for filter in [Some("--filter=api"), None] {
+        let mut args = vec!["run", "test"];
+        args.extend(filter);
+        args.extend(["--", "-args", "-custom=expected"]);
+        let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
         assert_command_success(&output, "Go test with test-binary arguments");
         assert!(
             String::from_utf8_lossy(&output.stdout).contains("example.com/api/subpackage"),
@@ -1884,10 +2677,10 @@ fn test_go_regression_goflags_and_explicit_outputs_do_not_hide_untracked_inputs(
     fs::write(&goenv, "GOFLAGS=-buildmode=c-shared\n").unwrap();
     let output = run_turbo_with_env(
         root.path(),
-        &["run", "build", "--filter=example.com/api", "--dry-run=json"],
+        &["run", "build", "--filter=api", "--dry-run=json"],
         &[("GOENV", goenv.to_str().unwrap())],
     );
-    let build = dry_run_task(&output, "example.com/api#build");
+    let build = dry_run_task(&output, "api#build");
     assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
 
     fs::write(
@@ -1902,13 +2695,13 @@ fn test_go_regression_goflags_and_explicit_outputs_do_not_hide_untracked_inputs(
         &[
             "run",
             "build",
-            "--filter=example.com/api",
+            "--filter=api",
             "--dry-run=json",
             "--",
             "-overlay=elsewhere.json",
         ],
     );
-    let build = dry_run_task(&output, "example.com/api#build");
+    let build = dry_run_task(&output, "api#build");
     assert_eq!(
         build["resolvedTaskDefinition"]["cache"], false,
         "explicit outputs do not describe an overlay's untracked source inputs"

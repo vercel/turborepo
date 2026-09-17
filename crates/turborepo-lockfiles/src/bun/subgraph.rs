@@ -159,7 +159,8 @@ impl BunLockfile {
                 let name = &pkg[..at_pos];
 
                 if let Some(entry) = self.data.packages.get(name)
-                    && entry.ident.contains("@workspace:")
+                    && let Some(workspace_path) = PackageIdent::parse(&entry.ident).workspace_path()
+                    && pruned_data.workspaces.contains_key(workspace_path)
                 {
                     keys_to_include.insert(name.to_string());
                     // Continue to also find package entries with this ident
@@ -633,6 +634,12 @@ impl BunLockfile {
             self.workspace_required_patched_idents(&pruned_data.workspaces);
         self.restore_patched_hoisted_entries(&mut pruned_data, &required_patched_idents);
 
+        let pruned_workspace_names: HashSet<String> = pruned_data
+            .workspaces
+            .values()
+            .map(|workspace| workspace.name.clone())
+            .collect();
+
         loop {
             let top_level_pkg_names: HashSet<String> = pruned_data
                 .packages
@@ -658,6 +665,9 @@ impl BunLockfile {
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
             for key in &sorted_pkg_keys {
                 if let Some(parent) = PackageKey::parse(key).parent() {
+                    if pruned_workspace_names.contains(&parent) {
+                        continue;
+                    }
                     if (parent == "npm" || parent.starts_with("npm/"))
                         && pruned_data.packages.contains_key(&parent)
                     {

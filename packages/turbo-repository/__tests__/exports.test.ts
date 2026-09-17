@@ -4,10 +4,17 @@ import {
   Package,
   PackageDetails,
   PackageManager,
+  StaticWorkspace,
   Workspace
 } from "../js/dist/index.js";
 
-const nativeLibExports = [Package, PackageDetails, PackageManager, Workspace];
+const nativeLibExports = [
+  Package,
+  PackageDetails,
+  PackageManager,
+  StaticWorkspace,
+  Workspace
+];
 
 describe("exports", () => {
   for (const nativeExport of nativeLibExports) {

@@ -26,6 +26,7 @@ pub mod package_json;
 pub mod package_manager;
 pub mod prune_knowledge;
 pub mod relationships;
+pub mod static_dependencies;
 pub mod task_contracts;
 pub mod toolchain;
 pub mod uv;

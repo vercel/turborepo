@@ -315,6 +315,73 @@ mod test {
         handler.done().await;
     }
 
+    /// COUNTER-CHARACTERIZATION, not a correctness proof: pins how the worker
+    /// currently folds an ordered SIGINT-then-SIGTERM sequence into the
+    /// retained signal count while a shutdown guard is held. The count drops
+    /// signal type and source, so SIGINT+SIGTERM reaching the same threshold as
+    /// two SIGINTs is the observed behavior. This documents the input the
+    /// worker sees today; it does not assert that collapsing the two signals is
+    /// the desired OS signal policy.
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn test_followup_ordered_interrupt_then_terminate_is_retained() {
+        // Gate the second signal on the test observing the first so delivery
+        // order is explicit rather than scheduler-dependent.
+        let gate = Arc::new(Notify::new());
+        let stream_gate = gate.clone();
+        let handler = SignalHandler::new(stream::unfold(0u8, move |state| {
+            let gate = stream_gate.clone();
+            async move {
+                match state {
+                    0 => Some((Some(Signal::Interrupt), 1)),
+                    1 => {
+                        gate.notified().await;
+                        Some((Some(Signal::Terminate), 2))
+                    }
+                    _ => None,
+                }
+            }
+        }));
+        let subscriber = handler.subscribe().unwrap();
+        let guard = subscriber.listen().await.unwrap();
+        let mut signals = handler.subscribe_signals();
+
+        // Retain the first signal before allowing the second to be delivered.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if *signals.borrow_and_update() >= 1 {
+                    return;
+                }
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("the first SIGINT should be retained while a guard is held");
+
+        gate.notify_one();
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if *signals.borrow_and_update() >= 2 {
+                    return;
+                }
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("ordered SIGINT then SIGTERM should both be retained while a guard is held");
+
+        assert_eq!(
+            *signals.borrow_and_update(),
+            2,
+            "the retained count should be exactly the two delivered signals"
+        );
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
+
+        drop(guard);
+        handler.done().await;
+    }
+
     #[tokio::test]
     async fn test_subscribers_triggered_from_close() {
         let (_tx, rx) = oneshot::channel::<()>();

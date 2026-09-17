@@ -587,7 +587,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let env_vars =
             self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
 
-        let outputs = task_definition.hashable_outputs(task_id);
+        let outputs = task_definition.hashable_outputs(task_id, package_context.log_namespace());
         let task_dependency_hashes =
             self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
         let external_deps_hash: Option<&str> = if !is_monorepo {
@@ -639,6 +639,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 _ => &[],
             },
             command_opt_out: matches!(task_definition.command(), Some(TaskCommandOverride::OptOut)),
+            experimental_ci: task_definition.experimental_ci(),
         };
 
         let task_hash = task_hashable.calculate_task_hash()?;
@@ -1211,6 +1212,20 @@ mod test {
                 .with_external_resolution(resolution))
             })
         }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
+        }
     }
 
     async fn cargo_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
@@ -1286,6 +1301,27 @@ mod test {
                 PackageTaskEventBuilder::new(package.as_str(), "build"),
             )
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn scoped_log_paths_separate_equal_hash_inputs_and_invalidate_legacy_entries() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let unshared = javascript_graph(&root).await;
+        let legacy_hash = context_hash(&unshared, PackageName::Root, true);
+        let shared = cargo_graph(&root).await;
+        // Both contexts use the same directory, task name, empty file hash,
+        // definition, and global hash. Ignore external resolution here to prove
+        // that log identity alone distinguishes them.
+        let root_hash = context_hash(&shared, PackageName::Root, true);
+        let aggregate_hash = context_hash(&shared, PackageName::from("cargo-workspace"), true);
+        assert_ne!(root_hash, aggregate_hash);
+        assert_ne!(root_hash, legacy_hash);
+        assert_ne!(aggregate_hash, legacy_hash);
+        assert_eq!(
+            context_hash(&unshared, PackageName::Root, true),
+            legacy_hash
+        );
     }
 
     #[tokio::test]
@@ -1604,7 +1640,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, PackageName::Root, true),
-            "f296efc7e9b4061a",
+            "cfa6b9fc4e5d67b7",
             "pure Cargo root Turbo hash bytes changed"
         );
         assert_eq!(
@@ -1614,7 +1650,7 @@ mod test {
         );
         assert_eq!(
             context_hash(&cargo_graph, cargo_aggregate, true,),
-            "f296efc7e9b4061a",
+            "2fdfb72d5f32ff50",
             "Cargo aggregate hash bytes changed"
         );
     }
@@ -1649,7 +1685,9 @@ mod test {
         let cargo_cache = compute_external_deps_hashes(&cargo_graph).unwrap();
         let external_hash = "bef1fc07e0fccabe";
         let app_task_hash = "24cf5aae0bca8de3";
-        let workspace_task_hash = "7d86d24eb004e72c";
+        // The root and aggregate share a directory, so their log inclusions
+        // intentionally invalidate the old shared-path task hashes.
+        let workspace_task_hash = "97ed96a33f7e0058";
         assert_eq!(
             cargo_cache,
             HashMap::from([
@@ -1662,7 +1700,7 @@ mod test {
         for (graph, package, expected) in [
             (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
-            (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
+            (&cargo_graph, PackageName::Root, "399d7918d1a47930"),
         ] {
             assert_eq!(monorepo_context_hash(graph, package), expected);
         }

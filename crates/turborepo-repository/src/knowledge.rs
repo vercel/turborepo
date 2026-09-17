@@ -4,7 +4,10 @@
 //! Parsers contribute normalized facts here; descriptors remain transient
 //! inputs to repository construction.
 
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -194,6 +197,10 @@ pub(crate) struct RepositoryKnowledge {
     workspace_roots: Vec<WorkspaceRootKnowledge>,
     scopes: Vec<ScopeKnowledge>,
     scope_lookup: HashMap<String, usize>,
+    /// Directories shared by multiple task namespaces, including the root
+    /// namespace and aggregate scopes (but not the structural graph sentinel).
+    shared_directories: HashSet<AnchoredSystemPathBuf>,
+    shared_physical_directories: Arc<HashSet<std::path::PathBuf>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,6 +257,14 @@ impl RepositoryKnowledge {
 
     pub(crate) fn repository_directory(&self) -> &AnchoredSystemPath {
         &self.repository_directory
+    }
+
+    pub(crate) fn is_directory_shared(&self, directory: &AnchoredSystemPath) -> bool {
+        self.shared_directories.contains(directory)
+    }
+
+    pub(crate) fn shared_physical_directories(&self) -> &Arc<HashSet<std::path::PathBuf>> {
+        &self.shared_physical_directories
     }
 
     pub(crate) fn root_javascript_scope(&self) -> Option<&RootJavaScriptScope> {
@@ -404,6 +419,43 @@ impl RepositoryKnowledge {
             });
         }
 
+        // The root task namespace always exists, even without package.json.
+        // Count physical execution directories, not manifest targets: manifests
+        // themselves may be symlinks. Cache each lexical directory's resolution
+        // so co-located scopes do not repeat filesystem work.
+        let root_directory = AnchoredSystemPathBuf::default();
+        let physical_root =
+            physical_repository_root.unwrap_or_else(|| repository_root.as_std_path().to_owned());
+        let mut directory_paths = HashMap::from([(root_directory.clone(), physical_root.clone())]);
+        let mut directories = HashMap::from([(physical_root, vec![root_directory])]);
+        for scope in &scopes {
+            let physical_directory = directory_paths
+                .entry(scope.directory.clone())
+                .or_insert_with(|| {
+                    let directory = repository_root.resolve(&scope.directory);
+                    canonical_physical_path(directory.as_std_path())
+                        .unwrap_or_else(|| directory.as_std_path().to_owned())
+                });
+            directories
+                .entry(physical_directory.clone())
+                .or_default()
+                .push(scope.directory.clone());
+        }
+        // Build from the complete scope inventory, independent of loaded tasks
+        // or filters. Retain every lexical alias of each shared directory.
+        let shared_physical_directories = Arc::new(
+            directories
+                .iter()
+                .filter(|(_, scopes)| scopes.len() > 1)
+                .map(|(path, _)| path.clone())
+                .collect(),
+        );
+        let shared_directories = directories
+            .into_values()
+            .filter(|scopes| scopes.len() > 1)
+            .flatten()
+            .collect();
+
         Ok(Self {
             repository_root: repository_root.to_owned(),
             repository_directory: AnchoredSystemPathBuf::default(),
@@ -411,6 +463,8 @@ impl RepositoryKnowledge {
             workspace_roots,
             scopes,
             scope_lookup,
+            shared_directories,
+            shared_physical_directories,
         })
     }
 }

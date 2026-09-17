@@ -21,25 +21,25 @@ There are several Turborepo tasks already set up for you to use.
 #### Build the application
 
 ```
-pnpm turbo build
+npx turbo build
 ```
 
 #### Lint source code
 
 ```
-pnpm turbo lint
+npx turbo lint
 ```
 
 #### Type check source code
 
 ```
-pnpm turbo check-types
+npx turbo check-types
 ```
 
 #### Run the application's development server
 
 ```
-pnpm turbo dev
+npx turbo dev
 ```
 
 ## Useful Links

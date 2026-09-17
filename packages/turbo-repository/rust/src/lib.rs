@@ -1,6 +1,9 @@
 #![allow(clippy::result_large_err)]
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use either::Either;
 use napi::Error;
@@ -19,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 mod internal;
+mod static_workspace;
 
 #[napi]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
@@ -193,7 +197,9 @@ pub struct Workspace {
     package_manager: PackageManager,
     /// The package graph for the workspace. `None` when opened with
     /// `skipPackageGraph`.
-    graph: Option<PackageGraph>,
+    graph: Option<Arc<PackageGraph>>,
+    global_inputs: Vec<String>,
+    static_affectedness: Option<turborepo_repository::static_dependencies::StaticAffectedness>,
     /// Inputs for resolving the root lockfile without the package graph.
     /// Used for single-package repositories (whose core graph intentionally
     /// skips lockfile resolution) and for `skipPackageGraph` workspaces.
@@ -593,7 +599,12 @@ impl Workspace {
             turborepo_repository::change_mapper::PackageMapping::None => Err(Error::from_reason(
                 "iterated to the root of the workspace and found no package",
             )),
-            turborepo_repository::change_mapper::PackageMapping::Package((package, _reason)) => {
+            turborepo_repository::change_mapper::PackageMapping::Packages(packages) => {
+                // Preserve this singular API's historical name-based tie-break.
+                // The mapper sorts co-located owners; affected_packages keeps all of them.
+                let (package, _reason) = packages.first().ok_or_else(|| {
+                    Error::from_reason("iterated to the root of the workspace and found no package")
+                })?;
                 let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
                     Ok(path) => path,
                     Err(e) => return Err(Error::from_reason(e.to_string())),

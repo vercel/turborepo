@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use napi::Status;
 use thiserror::Error;
@@ -289,10 +292,32 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscoveryMode {
+    Full,
+    SkipPackageGraph,
+    Static,
+}
+
 impl Workspace {
     pub(crate) async fn find_internal(
         path: Option<String>,
         skip_package_graph: bool,
+    ) -> Result<Self, Error> {
+        Self::find_with_mode(
+            path,
+            if skip_package_graph {
+                DiscoveryMode::SkipPackageGraph
+            } else {
+                DiscoveryMode::Full
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn find_with_mode(
+        path: Option<String>,
+        mode: DiscoveryMode,
     ) -> Result<Self, Error> {
         let reference_dir = match path {
             Some(path) => {
@@ -394,7 +419,8 @@ impl Workspace {
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_manager_version = detect_package_manager_version(&root_package_json);
         let mut lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
-        let package_graph = if skip_package_graph {
+        let mut static_affectedness = None;
+        let package_graph = if mode == DiscoveryMode::SkipPackageGraph {
             None
         } else {
             let mut package_graph_builder =
@@ -425,7 +451,13 @@ impl Workspace {
             if turbo_json.future_flags.experimental_go_workspaces {
                 package_graph_builder = package_graph_builder.with_go();
             }
-            Some(package_graph_builder.build().await?)
+            Some(if mode == DiscoveryMode::Static {
+                let (graph, plan) = package_graph_builder.build_lazy().await?.into_parts();
+                static_affectedness = Some(plan.static_affectedness(&graph).await?);
+                graph
+            } else {
+                Arc::new(package_graph_builder.build().await?)
+            })
         };
 
         Ok(Self {
@@ -436,6 +468,8 @@ impl Workspace {
                 version: package_manager_version,
             },
             graph: package_graph,
+            global_inputs: turbo_json.global_deps,
+            static_affectedness,
             lockfile,
             lockfile_path,
             lockfile_format,
@@ -445,7 +479,7 @@ impl Workspace {
     /// The package graph, or an error when the workspace was opened with
     /// `skipPackageGraph`.
     pub(crate) fn graph(&self) -> Result<&PackageGraph, Error> {
-        self.graph.as_ref().ok_or(Error::PackageGraphSkipped)
+        self.graph.as_deref().ok_or(Error::PackageGraphSkipped)
     }
 
     pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
@@ -502,8 +536,9 @@ mod tests {
 
     use turborepo_errors::Spanned;
     use turborepo_repository::toolchain::{
-        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
-        ToolchainId, WorkspaceRoot,
+        DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, ToolchainId,
+        WorkspaceRoot,
     };
 
     use super::*;
@@ -538,6 +573,16 @@ mod tests {
                         ),
                     ],
                     vec![WorkspaceRoot::new("custom", self.root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
                 ))
             })
         }
@@ -581,7 +626,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn package_listing_uses_manifest_capability_not_provenance() {
+    async fn package_listing_uses_scope_kind_not_provenance() {
         let temp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::new(temp.path().to_string_lossy().to_string()).unwrap();
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
@@ -596,8 +641,13 @@ mod tests {
             .unwrap();
 
         let packages = packages_from_graph(&graph).unwrap();
-        assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].name, "custom-package");
+        assert_eq!(
+            packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            ["custom-package", "native-package"]
+        );
         assert_eq!(
             graph.package_toolchain(&"custom-package".into()),
             Some(&ToolchainId::new("custom"))
@@ -708,5 +758,61 @@ mod tests {
         ));
         let packages = workspace.lockfile_packages().await;
         assert!(packages.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_npm_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"npm@10.5.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"alias-test","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"alias-test","version":"1.0.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}},"node_modules/alias":{"name":"JSONStream","version":"1.0.0"}}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_yarn_classic_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"yarn@1.22.22","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("yarn.lock"),
+            r#"# yarn lockfile v1
+
+"alias@npm:JSONStream@1.0.0":
+  version "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
     }
 }

@@ -222,6 +222,15 @@ mod tests {
     )]
     #[test_case(
         PackageJson {
+                dependencies: deps(&[("@remix-run/react", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix)"
+    )]
+    #[test_case(
+        PackageJson {
                 dependencies: deps(&[("react-scripts", "*")]),
                 ..Default::default()
         },

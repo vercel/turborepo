@@ -28,7 +28,8 @@ mod test {
         })
         .unwrap();
 
-        let relative_outputs = task_defn.repo_relative_hashable_outputs(&task_id, workspace_dir);
+        let relative_outputs =
+            task_defn.repo_relative_hashable_outputs(&task_id, workspace_dir, None);
         let relative_prefix = match cfg!(windows) {
             true => "apps\\foo\\",
             false => "apps/foo/",
@@ -47,22 +48,25 @@ mod test {
 
     #[test]
     fn test_escape_log_file() {
-        let build_log = <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build");
+        let build_log =
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build", None);
         let build_expected =
             AnchoredSystemPathBuf::from_raw([".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR))
                 .unwrap();
         assert_eq!(build_log, build_expected);
 
         let build_log =
-            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod");
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod", None);
         let build_expected = AnchoredSystemPathBuf::from_raw(
             [".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
         )
         .unwrap();
         assert_eq!(build_log, build_expected);
 
-        let build_log =
-            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod:extra");
+        let build_log = <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file(
+            "build:prod:extra",
+            None,
+        );
         let build_expected = AnchoredSystemPathBuf::from_raw(
             [".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
         )

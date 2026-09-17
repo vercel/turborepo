@@ -5,10 +5,18 @@
 //! job is orchestration: decide *which* crates are in scope and *whether*
 //! anything changed, then hand the work to Cargo and get out of the way.
 //!
-//! Discovery shells out to `cargo metadata`, because Cargo is the only
+//! Full discovery shells out to `cargo metadata`, because Cargo is the only
 //! correct implementation of its own workspace-membership semantics (member
 //! globs, automatic path-dependency members, excludes, target-specific
-//! dependency tables, renames). Crates are classified into two shapes:
+//! dependency tables, renames). Lazy core discovery needs only scope
+//! identity — which crates, which manifests, the workspace aggregate, and
+//! the workspace root — so [`RepositoryContributor::discover_package_scopes`]
+//! parses the same manifests in-process, without invoking Cargo, rustc, or
+//! `which`. A separate static-dependency query exposes conservative local
+//! inputs for affectedness; it does not promote inventory to authoritative task
+//! knowledge. Tasks, contracts, external resolution, hashing, and prune remain
+//! full-discovery concerns. Crates are
+//! classified into two shapes:
 //!
 //! * **Entrypoints** — crates with `bin`/`cdylib`/`staticlib` targets: the
 //!   deliverables of the workspace.
@@ -51,7 +59,8 @@ use crate::{
     prune_knowledge::{PruneDomain, PrunePlan},
     relationships::Relationship,
     toolchain::{
-        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+        self, DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScope, DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor,
         ToolchainId, WorkspaceRoot,
     },
 };
@@ -74,8 +83,10 @@ pub enum Error {
     LockfileRead(#[source] io::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::CargoLockError),
-    #[error("failed to parse root Cargo.toml: {0}")]
+    #[error("failed to parse Cargo.toml: {0}")]
     ManifestParse(#[from] Box<toml_edit::TomlError>),
+    #[error("failed to discover Cargo workspace members: {0}")]
+    WorkspaceDiscovery(#[from] crate::workspaces::Error),
     #[error("root Cargo.toml has no [workspace] table")]
     NotAWorkspace,
     #[error(
@@ -1403,6 +1414,15 @@ impl CargoContributor {
             resolve_external_dependencies,
         })
     }
+
+    fn workspace_roots(&self) -> Vec<WorkspaceRoot> {
+        self.repo_root
+            .join_component(CARGO_TOML)
+            .exists()
+            .then(|| WorkspaceRoot::new("cargo", self.repo_root.clone()))
+            .into_iter()
+            .collect()
+    }
 }
 
 /// Project execution-only compiler-cache settings from Cargo task knowledge.
@@ -1562,7 +1582,140 @@ fn validate_contributor_metadata(
     }
 }
 
+/// The plain-data scope inventory behind lazy discovery: every workspace
+/// crate's name and manifest path, plus the workspace aggregate's name, or
+/// `None` when the workspace has no crates. Manifest parsing only — no
+/// Cargo, rustc, or `which` subprocess — and no facts beyond scope identity,
+/// which full discovery owns.
+type WorkspaceScopeInventory = (Vec<(String, AbsoluteSystemPathBuf)>, String);
+
+fn package_scope_inventory(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Option<WorkspaceScopeInventory>, Error> {
+    let workspace = discover_crates_from_manifests(repo_root)?;
+    if workspace.crates.is_empty() {
+        return Ok(None);
+    }
+    // Mirrors full discovery: a workspace with crates must be named so the
+    // aggregate scope has an identity.
+    let aggregate = workspace.name.ok_or(Error::MissingWorkspaceName)?;
+    let members = workspace
+        .crates
+        .into_iter()
+        .map(|cargo_crate| (cargo_crate.name, cargo_crate.manifest_path))
+        .collect();
+    Ok(Some((members, aggregate)))
+}
+
+fn static_cargo_configs(
+    repo_root: &AbsoluteSystemPath,
+    manifest: &AbsoluteSystemPath,
+) -> Vec<AbsoluteSystemPathBuf> {
+    let mut result = Vec::new();
+    let mut directory = manifest.parent();
+    while let Some(path) = directory {
+        if !repo_root.contains(path) {
+            break;
+        }
+        for file in [".cargo/config", ".cargo/config.toml"] {
+            result.push(AbsoluteSystemPathBuf::from_unknown(path, file));
+        }
+        directory = path.parent();
+    }
+    result
+}
+
+fn static_package_dependencies(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Vec<crate::static_dependencies::StaticPackageDependencies>, Error> {
+    let workspace = discover_crates_from_manifests(repo_root)?;
+    if workspace.crates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root = static_manifest_document(&repo_root.join_component(CARGO_TOML))?;
+    let inherited = static_workspace_dependency_paths(&root);
+    let mut unresolved = root.get("patch").is_some() || root.get("replace").is_some();
+    let mut invalidation_paths = Vec::new();
+    for path in [
+        CARGO_TOML,
+        CARGO_LOCK,
+        ".cargo/config",
+        ".cargo/config.toml",
+        "rust-toolchain",
+        "rust-toolchain.toml",
+    ] {
+        invalidation_paths.push(AbsoluteSystemPathBuf::from_unknown(repo_root, path));
+    }
+    let configs = workspace
+        .crates
+        .iter()
+        .flat_map(|package| static_cargo_configs(repo_root, &package.manifest_path))
+        .collect::<BTreeSet<_>>();
+    for path in configs {
+        if path.as_std_path().is_symlink() {
+            unresolved = true;
+            continue;
+        }
+        if path.exists() {
+            let config = static_manifest_document(&path)?;
+            unresolved |= ["paths", "source", "patch", "replace"]
+                .iter()
+                .any(|key| config.get(key).is_some());
+        }
+    }
+    let directories = workspace
+        .crates
+        .iter()
+        .filter_map(|package| package.manifest_path.parent())
+        .map(|path| path.as_std_path().to_path_buf())
+        .collect::<HashSet<_>>();
+    workspace
+        .crates
+        .into_iter()
+        .map(|package| {
+            let document = static_manifest_document(&package.manifest_path)?;
+            let mut package_inputs = invalidation_paths.clone();
+            package_inputs.extend(static_cargo_configs(repo_root, &package.manifest_path));
+            let unknown_path = static_manifest_dependencies(
+                &document,
+                &package.manifest_path,
+                repo_root,
+                &inherited,
+            )
+            .iter()
+            .filter_map(|dependency| dependency.path.as_deref())
+            .any(|path| {
+                metadata_path(path).is_none_or(|path| !directories.contains(path.as_std_path()))
+            });
+            Ok(crate::static_dependencies::StaticPackageDependencies {
+                package: package.name,
+                dependencies: package
+                    .relationships
+                    .iter()
+                    .filter_map(|relationship| match relationship.target() {
+                        crate::relationships::RelationshipTarget::Internal(name) => {
+                            Some(name.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+                invalidation_paths: package_inputs,
+                invalidation_file_names: vec![CARGO_TOML.to_string()],
+                unresolved: unresolved || unknown_path,
+            })
+        })
+        .collect()
+}
+
 impl RepositoryContributor for CargoContributor {
+    fn discover_static_dependencies(&self) -> toolchain::DiscoverStaticDependenciesFuture<'_> {
+        Box::pin(async move {
+            turborepo_rayon_compat::block_in_place(|| static_package_dependencies(&self.repo_root))
+                .map(Some)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+        })
+    }
+
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
     }
@@ -1812,6 +1965,36 @@ impl RepositoryContributor for CargoContributor {
                 .with_external_resolution(resolution)
                 .with_change_observation(change_observation)
                 .with_prune_domain(Arc::new(prune_domain)))
+        })
+    }
+
+    /// The cheap scope inventory for lazy discovery: every workspace crate's
+    /// name and manifest path, plus the workspace aggregate scope, without
+    /// invoking Cargo, rustc, `which`, or any other process. Scope identities
+    /// match [`RepositoryContributor::discover_packages`] exactly; facts
+    /// beyond identity — tasks, relationships, external resolution, hashing,
+    /// and prune — stay with full discovery, which remains authoritative.
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let inventory =
+                turborepo_rayon_compat::block_in_place(|| package_scope_inventory(&self.repo_root))
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let workspace_roots = self.workspace_roots();
+            let Some((members, aggregate)) = inventory else {
+                return Ok(DiscoveredPackageScopes::new(Vec::new(), workspace_roots));
+            };
+            let mut scopes = members
+                .into_iter()
+                .map(|(name, manifest_path)| DiscoveredPackageScope::new(Some(name), manifest_path))
+                .collect::<Vec<_>>();
+            scopes.push(
+                DiscoveredPackageScope::new(
+                    Some(aggregate),
+                    self.repo_root.join_component(CARGO_TOML),
+                )
+                .into_aggregate(),
+            );
+            Ok(DiscoveredPackageScopes::new(scopes, workspace_roots))
         })
     }
 }
@@ -2070,6 +2253,341 @@ fn cargo_config_influence(
         }
     }
     influence
+}
+
+/// A path-valued dependency declaration read directly from Cargo.toml.
+/// `path` retains its manifest spelling until it is resolved relative to the
+/// declaration's owner (or the workspace root for `workspace = true`).
+#[derive(Clone)]
+struct StaticPathDependency {
+    path: String,
+    optional: bool,
+}
+
+fn static_manifest_document(
+    manifest_path: &AbsoluteSystemPath,
+) -> Result<toml_edit::DocumentMut, Error> {
+    let contents = manifest_path
+        .read_to_string()
+        .map_err(Error::WorkspaceFileRead)?;
+    contents
+        .parse()
+        .map_err(|error| Error::ManifestParse(Box::new(error)))
+}
+
+fn static_string_array(table: &toml_edit::Table, key: &str) -> Vec<String> {
+    table
+        .get(key)
+        .and_then(toml_edit::Item::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml_edit::Value::as_str)
+        .map(str::to_string)
+        .collect()
+}
+
+fn static_path_dependency(item: &toml_edit::Item) -> Option<StaticPathDependency> {
+    Some(StaticPathDependency {
+        path: item.get("path")?.as_str()?.to_string(),
+        optional: item
+            .get("optional")
+            .and_then(toml_edit::Item::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// Collect the path-valued entries of `[workspace.dependencies]`, which Cargo
+/// accepts as either a table or an inline table (`dependencies = { ... }`
+/// inside `[workspace]`).
+fn static_workspace_dependency_paths(
+    document: &toml_edit::DocumentMut,
+) -> HashMap<String, StaticPathDependency> {
+    document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table_like)
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml_edit::Item::as_table_like)
+        .into_iter()
+        .flat_map(|table| table.iter())
+        .filter_map(|(name, item)| {
+            static_path_dependency(item).map(|path| (name.to_string(), path))
+        })
+        .collect()
+}
+
+fn static_workspace_metadata(document: &toml_edit::DocumentMut) -> serde_json::Value {
+    let mut metadata = serde_json::Map::new();
+    let name = document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|workspace| workspace.get("metadata"))
+        .and_then(toml_edit::Item::as_table)
+        .and_then(|metadata| metadata.get("name"));
+    if let Some(name) = name {
+        // `workspace_name` owns the public validation/error behavior. Preserve
+        // that it was present even when it was not a string.
+        metadata.insert(
+            "name".to_string(),
+            name.as_str()
+                .map(|name| serde_json::Value::String(name.to_string()))
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    serde_json::Value::Object(metadata)
+}
+
+/// Read one dependency table's entries. `TableLike` covers both the
+/// `[dependencies]` table form and the inline `dependencies = { ... }` form;
+/// iteration order is the manifest's own in both cases.
+fn static_add_dependency_table(
+    dependencies: &mut Vec<MetadataDependency>,
+    table: &dyn toml_edit::TableLike,
+    kind: Option<&str>,
+    manifest_directory: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+) {
+    for (name, item) in table.iter() {
+        let inherited = item
+            .get("workspace")
+            .and_then(toml_edit::Item::as_bool)
+            .unwrap_or(false);
+        let dependency = if inherited {
+            workspace_dependencies.get(name).cloned()
+        } else {
+            static_path_dependency(item)
+        };
+        let Some(dependency) = dependency else {
+            continue;
+        };
+        let base = if inherited {
+            repo_root
+        } else {
+            manifest_directory
+        };
+        let optional = dependency.optional
+            || item
+                .get("optional")
+                .and_then(toml_edit::Item::as_bool)
+                .unwrap_or(false);
+        dependencies.push(MetadataDependency {
+            path: Some(AbsoluteSystemPathBuf::from_unknown(base, dependency.path).to_string()),
+            kind: kind.map(str::to_string),
+            optional,
+        });
+    }
+}
+
+/// Parse path dependencies from all normal and target-conditional Cargo
+/// dependency tables. Cargo reports every conditional table in metadata; the
+/// graph constructor keeps their relationship kinds while Cargo decides which
+/// ones are active for a particular invocation. Every level — the root
+/// dependency tables, the `target` table, each selector's view, and the
+/// selector's dependency tables — may be spelled as a table or an inline
+/// table, so all of them are read through `TableLike`.
+fn static_manifest_dependencies(
+    document: &toml_edit::DocumentMut,
+    manifest_path: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+) -> Vec<MetadataDependency> {
+    let Some(manifest_directory) = manifest_path.parent() else {
+        return Vec::new();
+    };
+    let mut dependencies = Vec::new();
+    for (table_name, kind) in [
+        ("dependencies", None),
+        ("dev-dependencies", Some("dev")),
+        ("build-dependencies", Some("build")),
+    ] {
+        if let Some(table) = document
+            .get(table_name)
+            .and_then(toml_edit::Item::as_table_like)
+        {
+            static_add_dependency_table(
+                &mut dependencies,
+                table,
+                kind,
+                manifest_directory,
+                repo_root,
+                workspace_dependencies,
+            );
+        }
+    }
+    if let Some(targets) = document
+        .get("target")
+        .and_then(toml_edit::Item::as_table_like)
+    {
+        for (_, target) in targets.iter() {
+            let Some(target) = target.as_table_like() else {
+                continue;
+            };
+            for (table_name, kind) in [
+                ("dependencies", None),
+                ("dev-dependencies", Some("dev")),
+                ("build-dependencies", Some("build")),
+            ] {
+                if let Some(table) = target
+                    .get(table_name)
+                    .and_then(toml_edit::Item::as_table_like)
+                {
+                    static_add_dependency_table(
+                        &mut dependencies,
+                        table,
+                        kind,
+                        manifest_directory,
+                        repo_root,
+                        workspace_dependencies,
+                    );
+                }
+            }
+        }
+    }
+    dependencies
+}
+
+fn static_metadata_package(
+    manifest_path: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dependencies: &HashMap<String, StaticPathDependency>,
+) -> Result<Option<MetadataPackage>, Error> {
+    let document = static_manifest_document(manifest_path)?;
+    let Some(package) = document.get("package").and_then(toml_edit::Item::as_table) else {
+        return Ok(None);
+    };
+    let Some(name) = package
+        .get("name")
+        .and_then(toml_edit::Item::as_str)
+        .map(str::to_string)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(MetadataPackage {
+        // IDs only need to be unique and agree with `workspace_members` for
+        // `workspace_from_metadata`; manifest paths are stable without Cargo.
+        id: manifest_path.to_string(),
+        name: name.clone(),
+        source: None,
+        manifest_path: manifest_path.to_string(),
+        dependencies: static_manifest_dependencies(
+            &document,
+            manifest_path,
+            repo_root,
+            workspace_dependencies,
+        ),
+        // Targets — and the deliverables they imply — are full-discovery
+        // facts; the scope inventory never reads them.
+        targets: Vec::new(),
+    }))
+}
+
+fn static_path_is_automatic_member(
+    repo_root: &AbsoluteSystemPath,
+    directory: &AbsoluteSystemPath,
+    membership: &crate::workspaces::WorkspaceGlobs,
+) -> Result<bool, Error> {
+    if !repo_root.contains(directory) || !directory.join_component(CARGO_TOML).exists() {
+        return Ok(false);
+    }
+    membership
+        .target_is_workspace(repo_root, directory)
+        .map_err(Error::ResolutionPath)
+}
+
+/// Construct Cargo's scope identities from manifests without invoking Cargo.
+///
+/// This backs [`package_scope_inventory`] for lazy discovery, which needs
+/// only names, manifests, and the workspace aggregate. Membership mirrors
+/// what `cargo metadata` resolves — member globs, excludes, the root crate,
+/// and automatic path-dependency members (including workspace-inherited
+/// paths and target-conditional tables) — and validation runs through the
+/// same [`workspace_from_metadata`] path as native discovery. Everything
+/// else — targets, deliverables, lockfile, compiler, configuration — stays
+/// with full discovery, which remains authoritative.
+fn discover_crates_from_manifests(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<DiscoveredWorkspace, Error> {
+    let root_manifest_path = repo_root.join_component(CARGO_TOML);
+    if !root_manifest_path.exists() {
+        return Ok(DiscoveredWorkspace {
+            name: None,
+            crates: Vec::new(),
+            has_packages: false,
+            target_directory: None,
+        });
+    }
+
+    let root_document = static_manifest_document(&root_manifest_path)?;
+    let workspace = root_document
+        .get("workspace")
+        .and_then(toml_edit::Item::as_table);
+    let root_is_package = root_document
+        .get("package")
+        .and_then(toml_edit::Item::as_table)
+        .is_some();
+    if workspace.is_none() && !root_is_package {
+        return Err(Error::NotAWorkspace);
+    }
+
+    let workspace_dependencies = static_workspace_dependency_paths(&root_document);
+    let exclusions = workspace.map_or_else(Vec::new, |workspace| {
+        static_string_array(workspace, "exclude")
+    });
+    let automatic_members =
+        crate::workspaces::WorkspaceGlobs::new(vec!["**".to_string()], exclusions.clone())?;
+    let mut pending = Vec::new();
+    if let Some(workspace) = workspace {
+        let members = static_string_array(workspace, "members");
+        if !members.is_empty() {
+            let globs = crate::workspaces::WorkspaceGlobs::new(members, exclusions)?;
+            pending.extend(globs.get_manifests(repo_root, CARGO_TOML)?);
+        }
+    }
+    if root_is_package {
+        // Cargo makes a package in the workspace root a member even when it is
+        // not repeated in `[workspace].members`.
+        pending.push(root_manifest_path);
+    }
+
+    let mut seen = HashSet::new();
+    let mut packages = Vec::new();
+    let mut cursor = 0;
+    while cursor < pending.len() {
+        let manifest_path = pending[cursor].clone();
+        cursor += 1;
+        // Workspace globs and path dependencies can spell the same Windows
+        // path with different separators. Compare native paths so those
+        // representations resolve to one workspace member.
+        if !seen.insert(manifest_path.as_std_path().to_path_buf()) {
+            continue;
+        }
+        let Some(package) =
+            static_metadata_package(&manifest_path, repo_root, &workspace_dependencies)?
+        else {
+            continue;
+        };
+        for dependency in &package.dependencies {
+            let Some(directory) = dependency.path.as_deref().and_then(metadata_path) else {
+                continue;
+            };
+            if static_path_is_automatic_member(repo_root, &directory, &automatic_members)? {
+                pending.push(directory.join_component(CARGO_TOML));
+            }
+        }
+        packages.push(package);
+    }
+    packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
+    let workspace_members = packages.iter().map(|package| package.id.clone()).collect();
+    let metadata = Metadata {
+        packages,
+        workspace_members,
+        // The target directory is a full-discovery fact; the field is
+        // required by `workspace_from_metadata` but never read by the
+        // inventory.
+        target_directory: repo_root.join_component(TARGET_DIR).to_string(),
+        metadata: static_workspace_metadata(&root_document),
+    };
+    workspace_from_metadata(repo_root, &metadata)
 }
 
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
@@ -4509,5 +5027,557 @@ release: 1.96.0-nightly\n",
             .expect("library build derives IO");
         assert_eq!(io.package_default_inputs, Some(true));
         assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+    }
+
+    #[test]
+    fn static_manifest_discovery_expands_members_excludes_and_path_members() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["crates/*"]
+exclude = ["crates/excluded", "support/excluded"]
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        write(&root, &["src", "lib.rs"], "");
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+automatic = { path = "../../support/automatic" }
+"#,
+        );
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "automatic", CARGO_TOML],
+            r#"
+[package]
+name = "automatic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+transitive = { path = "../transitive" }
+excluded = { path = "../excluded" }
+"#,
+        );
+        write(&root, &["support", "automatic", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "transitive", CARGO_TOML],
+            "[package]\nname = \"transitive\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["support", "transitive", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["support", "excluded", CARGO_TOML],
+            "[package]\nname = \"excluded\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["support", "excluded", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["crates", "excluded", CARGO_TOML],
+            "[package]\nname = \"glob-excluded\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["crates", "excluded", "src", "lib.rs"], "");
+
+        let workspace = discover_crates_from_manifests(&root).unwrap();
+        assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+        assert!(workspace.has_packages);
+        let mut names = workspace
+            .crates
+            .iter()
+            .map(|cargo_crate| cargo_crate.name.as_str())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["app", "automatic", "root-package", "transitive"]);
+        assert!(
+            workspace
+                .crates
+                .iter()
+                .all(|cargo_crate| cargo_crate.name != "excluded"),
+            "an excluded automatic path dependency must not become a member"
+        );
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+        assert_eq!(
+            app.relationships,
+            [Relationship::internal(
+                "automatic",
+                DependencyKind::Production
+            )]
+        );
+        let automatic = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "automatic")
+            .unwrap();
+        assert_eq!(
+            automatic.relationships,
+            [Relationship::internal(
+                "transitive",
+                DependencyKind::Production
+            )]
+        );
+        assert!(
+            workspace
+                .crates
+                .iter()
+                .any(|cargo_crate| cargo_crate.manifest_path == root.join_component(CARGO_TOML))
+        );
+    }
+
+    #[test]
+    fn static_manifest_dependencies_use_workspace_paths_renames_and_target_kinds() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.dependencies]
+renamed = { package = "actual", path = "crates/actual" }
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+renamed = { workspace = true }
+
+[build-dependencies]
+build-dependency = { path = "../build-dependency" }
+
+[target.'cfg(unix)'.dependencies]
+target-production = { path = "../target-production" }
+target-optional = { path = "../target-optional", optional = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+target-development = { path = "../target-development" }
+"#,
+        );
+        for name in [
+            "actual",
+            "build-dependency",
+            "target-production",
+            "target-optional",
+            "target-development",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+
+        let workspace = discover_crates_from_manifests(&root).unwrap();
+        let app = workspace
+            .crates
+            .iter()
+            .find(|cargo_crate| cargo_crate.name == "app")
+            .unwrap();
+        assert_eq!(
+            app.relationships,
+            [
+                Relationship::internal("actual", DependencyKind::Production),
+                Relationship::internal("build-dependency", DependencyKind::Production),
+                Relationship::internal("target-development", DependencyKind::Development),
+                Relationship::internal("target-optional", DependencyKind::Optional),
+                Relationship::internal("target-production", DependencyKind::Production),
+            ]
+        );
+    }
+
+    /// Cargo accepts every dependency table in two spellings: a `[table]`
+    /// section or an inline `key = { ... }` table. Both spellings of the same
+    /// manifests must discover identically, and the expectations are pinned
+    /// explicitly so a regression that breaks both spellings equally cannot
+    /// pass the parity comparison silently.
+    #[test]
+    fn static_manifest_dependencies_match_inline_and_table_workspace_and_member_forms() {
+        let (_tmp, root) = tempdir_root();
+        let write_root_and_member = |root_manifest: &str, app_manifest: &str| {
+            write(&root, &[CARGO_TOML], root_manifest);
+            write(&root, &["crates", "app", CARGO_TOML], app_manifest);
+        };
+        write_root_and_member(
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.dependencies]
+renamed = { package = "actual", path = "crates/actual" }
+
+[workspace.metadata]
+name = "cargo-workspace"
+
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+root-normal = { path = "crates/root-normal" }
+
+[dev-dependencies]
+root-dev = { path = "crates/root-dev" }
+
+[build-dependencies]
+root-build = { path = "crates/root-build" }
+"#,
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+renamed = { workspace = true }
+app-normal = { path = "../app-normal" }
+
+[dev-dependencies]
+app-dev = { path = "../app-dev" }
+
+[build-dependencies]
+app-build = { path = "../app-build" }
+"#,
+        );
+        for name in [
+            "actual",
+            "app-build",
+            "app-dev",
+            "app-normal",
+            "root-build",
+            "root-dev",
+            "root-normal",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+
+        let assert_expected = |workspace: &DiscoveredWorkspace| {
+            assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+            assert!(workspace.has_packages);
+            let mut names = workspace
+                .crates
+                .iter()
+                .map(|cargo_crate| cargo_crate.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort();
+            assert_eq!(
+                names,
+                [
+                    "actual",
+                    "app",
+                    "app-build",
+                    "app-dev",
+                    "app-normal",
+                    "root-build",
+                    "root-dev",
+                    "root-normal",
+                    "root-package",
+                ]
+            );
+            let app = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "app")
+                .unwrap();
+            assert_eq!(
+                app.relationships,
+                [
+                    Relationship::internal("actual", DependencyKind::Production),
+                    Relationship::internal("app-build", DependencyKind::Production),
+                    Relationship::internal("app-dev", DependencyKind::Development),
+                    Relationship::internal("app-normal", DependencyKind::Production),
+                ]
+            );
+            let root_package = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "root-package")
+                .unwrap();
+            assert_eq!(
+                root_package.relationships,
+                [
+                    Relationship::internal("root-build", DependencyKind::Production),
+                    Relationship::internal("root-dev", DependencyKind::Development),
+                    Relationship::internal("root-normal", DependencyKind::Production),
+                ]
+            );
+        };
+
+        let table_form = discover_crates_from_manifests(&root).unwrap();
+        assert_expected(&table_form);
+
+        // Rewrite the same manifest paths with the inline spellings: the
+        // workspace dependency view, the root member's dependency tables, and
+        // the member's dependency tables all become inline tables.
+        write_root_and_member(
+            r#"
+dependencies = { root-normal = { path = "crates/root-normal" } }
+dev-dependencies = { root-dev = { path = "crates/root-dev" } }
+build-dependencies = { root-build = { path = "crates/root-build" } }
+
+[workspace]
+members = ["crates/app"]
+dependencies = { renamed = { package = "actual", path = "crates/actual" } }
+
+[workspace.metadata]
+name = "cargo-workspace"
+
+[package]
+name = "root-package"
+version = "0.1.0"
+edition = "2021"
+"#,
+            r#"
+dependencies = { renamed = { workspace = true }, app-normal = { path = "../app-normal" } }
+dev-dependencies = { app-dev = { path = "../app-dev" } }
+build-dependencies = { app-build = { path = "../app-build" } }
+
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+"#,
+        );
+        let inline_form = discover_crates_from_manifests(&root).unwrap();
+        assert_expected(&inline_form);
+
+        assert_eq!(inline_form.crates, table_form.crates);
+    }
+
+    /// The target-conditional tables nest three levels deep (`target`, each
+    /// selector, the selector's dependency tables), and every level accepts
+    /// the inline spelling. Both spellings must discover identically.
+    #[test]
+    fn static_manifest_dependencies_match_inline_and_table_target_forms() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            r#"
+[workspace]
+members = ["crates/app"]
+
+[workspace.metadata]
+name = "cargo-workspace"
+"#,
+        );
+        let write_app = |manifest: &str| {
+            write(&root, &["crates", "app", CARGO_TOML], manifest);
+        };
+        write_app(
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[target.'cfg(unix)'.dependencies]
+target-normal = { path = "../target-normal" }
+target-optional = { path = "../target-optional", optional = true }
+
+[target.'cfg(windows)'.dev-dependencies]
+target-dev = { path = "../target-dev" }
+
+[target.'cfg(windows)'.build-dependencies]
+target-build = { path = "../target-build" }
+"#,
+        );
+        for name in [
+            "target-build",
+            "target-dev",
+            "target-normal",
+            "target-optional",
+        ] {
+            write(
+                &root,
+                &["crates", name, CARGO_TOML],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+        let assert_expected = |workspace: &DiscoveredWorkspace| {
+            assert_eq!(workspace.name.as_deref(), Some("cargo-workspace"));
+            assert!(workspace.has_packages);
+            let mut names = workspace
+                .crates
+                .iter()
+                .map(|cargo_crate| cargo_crate.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort();
+            assert_eq!(
+                names,
+                [
+                    "app",
+                    "target-build",
+                    "target-dev",
+                    "target-normal",
+                    "target-optional"
+                ]
+            );
+            let app = workspace
+                .crates
+                .iter()
+                .find(|cargo_crate| cargo_crate.name == "app")
+                .unwrap();
+            assert_eq!(
+                app.relationships,
+                [
+                    Relationship::internal("target-build", DependencyKind::Production),
+                    Relationship::internal("target-dev", DependencyKind::Development),
+                    Relationship::internal("target-normal", DependencyKind::Production),
+                    Relationship::internal("target-optional", DependencyKind::Optional),
+                ]
+            );
+        };
+
+        let table_form = discover_crates_from_manifests(&root).unwrap();
+        assert_expected(&table_form);
+
+        // Inline tables cannot span lines in TOML, so the entire `target`
+        // nesting is a single key: the outer table, each selector's view, and
+        // the selector's dependency tables are all inline tables.
+        write_app(
+            r#"
+target = { 'cfg(unix)' = { dependencies = { target-normal = { path = "../target-normal" }, target-optional = { path = "../target-optional", optional = true } } }, 'cfg(windows)' = { dev-dependencies = { target-dev = { path = "../target-dev" } }, build-dependencies = { target-build = { path = "../target-build" } } } }
+
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+"#,
+        );
+        let inline_form = discover_crates_from_manifests(&root).unwrap();
+        assert_expected(&inline_form);
+
+        assert_eq!(inline_form.crates, table_form.crates);
+    }
+
+    /// The inventory reports scope identity only: member names, their
+    /// manifests, and the aggregate. Manifest parsing only — no Cargo, rustc,
+    /// or `which` subprocess.
+    #[test]
+    fn test_package_scope_inventory_reports_members_and_aggregate() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let (members, aggregate) = package_scope_inventory(&root)
+            .expect("the inventory must not require cargo or rustc")
+            .expect("a workspace with crates has an aggregate scope");
+        // The inventory's member order follows manifest paths, which is not a
+        // public invariant; compare the names as a sorted set.
+        let mut names = members
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["app", "lib-a", "lib-a-test-util"]);
+        assert_eq!(aggregate, "fixture-ws");
+        for (name, manifest_path) in &members {
+            assert_eq!(
+                manifest_path,
+                &root
+                    .join_components(&["crates", name.as_str()])
+                    .join_component(CARGO_TOML)
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_scope_inventory_without_manifest_is_empty() {
+        let (_tmp, root) = tempdir_root();
+
+        assert!(package_scope_inventory(&root).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_package_scope_inventory_requires_workspace_name() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &[CARGO_TOML],
+            "[workspace]\nmembers = [\"crates/app\"]\n",
+        );
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+
+        // Crates without a `[workspace.metadata]` name leave the aggregate
+        // scope unnamed; the inventory fails exactly like full discovery.
+        assert!(matches!(
+            package_scope_inventory(&root),
+            Err(Error::MissingWorkspaceName)
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_discover_package_scopes_reports_roots_and_aggregate() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let (scopes, workspace_roots) = CargoContributor::new(root.clone())
+            .discover_package_scopes()
+            .await
+            .expect("the inventory must not require cargo or rustc")
+            .into_parts();
+        assert_eq!(
+            workspace_roots,
+            vec![WorkspaceRoot::new("cargo", root.clone())]
+        );
+        // One scope per crate plus the workspace aggregate, which is anchored
+        // at the root manifest like full discovery's synthetic package.
+        assert_eq!(scopes.len(), 4);
+        let aggregate = scopes.last().unwrap();
+        assert_eq!(aggregate.name(), Some("fixture-ws"));
+        assert_eq!(
+            aggregate.manifest_path().as_str(),
+            root.join_component(CARGO_TOML).as_str()
+        );
+        assert!(matches!(
+            aggregate.scope_kind(),
+            toolchain::DiscoveredScopeKind::Aggregate
+        ));
     }
 }

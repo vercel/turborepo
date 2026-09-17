@@ -70,6 +70,49 @@ fn test_parser_exits_before_starting_worker_pools() {
 }
 
 #[test]
+fn test_leading_run_flags_execute_task() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "-F",
+            "my-app",
+            "build",
+            "--env-mode",
+            "loose",
+            "--output-logs=errors-only",
+            "--log-order=stream",
+        ],
+    );
+    let combined = common::combined_output(&output);
+    assert_eq!(output.status.code(), Some(0), "{combined}");
+    assert!(combined.contains("1 successful, 1 total"), "{combined}");
+}
+
+#[test]
+fn test_leading_run_flags_help() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let explicit = run_turbo(tempdir.path(), &["run", "--help"]);
+    assert!(explicit.status.success());
+    for args in [
+        vec!["-F", "web", "build", "--help"],
+        vec!["--filter=web", "build", "--help"],
+        vec!["--filter=web", "--help"],
+        vec!["--single-package", "-F", "web", "build", "--help"],
+    ] {
+        let output = run_turbo(tempdir.path(), &args);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{args:?}: {}",
+            common::combined_output(&output)
+        );
+        assert_eq!(output.stdout, explicit.stdout, "{args:?}");
+    }
+}
+
+#[test]
 fn test_short_v_flag_errors() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &["-v"]);

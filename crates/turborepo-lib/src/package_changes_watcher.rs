@@ -459,6 +459,11 @@ impl Subscriber {
         let builder = PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
             .with_single_package_mode(self.single_package)
             .with_allow_no_package_manager(self.allow_no_package_manager);
+        // The watcher bootstraps from a complete graph snapshot: its change
+        // classification needs every toolchain's authoritative change
+        // knowledge, so it conservatively discovers everything (the accepted
+        // whole-graph tradeoff of lazy native discovery). Runs narrow and
+        // load lazily for themselves.
         let Ok(pkg_dep_graph) = self.graph_features.configure(builder).build().await else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;
@@ -1826,6 +1831,24 @@ mod test {
         single_package: bool,
         allow_no_package_manager: bool,
     ) -> TestWatcherHandle {
+        create_test_watcher_with_graph_features(
+            repo_root,
+            single_package,
+            allow_no_package_manager,
+            RepositoryGraphFeatures {
+                cargo: false,
+                python: false,
+                go: false,
+            },
+        )
+    }
+
+    fn create_test_watcher_with_graph_features(
+        repo_root: &AbsoluteSystemPathBuf,
+        single_package: bool,
+        allow_no_package_manager: bool,
+        graph_features: RepositoryGraphFeatures,
+    ) -> TestWatcherHandle {
         let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
@@ -1852,11 +1875,7 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
-            RepositoryGraphFeatures {
-                cargo: false,
-                python: false,
-                go: false,
-            },
+            graph_features,
             FutureFlags::default(),
         );
 
@@ -2036,6 +2055,91 @@ mod test {
             "expected Package or Rediscover event, got: {:?}",
             events
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn watcher_emits_events_for_all_colocated_packages() {
+        let (_tmp, repo_root) = setup_git_repo();
+        repo_root.join_component("Cargo.toml").create_with_contents(
+            b"[workspace]\nmembers = [\"packages/a\"]\nresolver = \"2\"\n\n[workspace.metadata]\nname = \"native\"\n",
+        ).unwrap();
+        repo_root
+            .join_components(&["packages", "a", "Cargo.toml"])
+            .create_with_contents(
+                b"[package]\nname = \"native-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        let source = repo_root.join_components(&["packages", "a", "src", "lib.rs"]);
+        source.ensure_dir().unwrap();
+        source
+            .create_with_contents(b"pub const VALUE: u8 = 0;\n")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                b"version = 4\n\n[[package]]\nname = \"native-a\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+        for args in [
+            vec!["add", "."],
+            vec!["commit", "-m", "add colocated crate", "--quiet"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .args(args)
+                .current_dir(repo_root.as_std_path())
+                .status()
+                .unwrap()
+                .success());
+        }
+        let mut handle = create_test_watcher_with_graph_features(
+            &repo_root,
+            false,
+            false,
+            RepositoryGraphFeatures {
+                cargo: true,
+                python: false,
+                go: false,
+            },
+        );
+        // Use the original receiver so a fast startup cannot discard Rediscover.
+        let rx = &mut handle.watcher.package_change_events_rx;
+        // Startup rediscovery is emitted after the initial graph and per-package
+        // hash baselines are ready, so source edits below do not race initialization.
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(10)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        for value in [1, 2] {
+            source
+                .create_with_contents(format!("pub const VALUE: u8 = {value};\n"))
+                .unwrap();
+            let event = make_notify_event_from(&[&source]);
+            handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+            handle.file_events_tx.send(Ok(event)).unwrap();
+            let mut names = HashSet::new();
+            for _ in 0..2 {
+                let event = recv_event(rx, Duration::from_secs(5)).await;
+                let Some(PackageChangeEvent::Package { name, .. }) = event else {
+                    panic!("expected an individual package event, got {event:?}");
+                };
+                names.insert(name.to_string());
+            }
+            assert_eq!(
+                names,
+                HashSet::from(["a".to_string(), "native-a".to_string()])
+            );
+            assert!(
+                recv_event(rx, Duration::from_millis(250)).await.is_none(),
+                "unrelated packages must not receive events"
+            );
+        }
+
+        // Both identities must also retain their own unchanged-content baseline.
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(recv_event(rx, Duration::from_secs(1)).await.is_none());
     }
 
     #[tokio::test]

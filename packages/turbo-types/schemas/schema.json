@@ -151,7 +151,7 @@
       }
     },
     "globalPassThroughEnv": {
-      "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv",
+      "description": "An allowlist of environment variables that should be made available to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv",
       "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
@@ -291,7 +291,7 @@
       "type": "object",
       "properties": {
         "affectedUsingTaskInputs": {
-          "description": "Use task-level `inputs` globs to determine which tasks are affected by changed files when running with `--affected`. When enabled, only tasks whose declared inputs match the changed files are selected, rather than selecting all tasks in changed packages.",
+          "description": "Use task-level `inputs` globs to determine which tasks are affected by changed files when running with `--affected`. When enabled, only tasks whose declared inputs match the changed files are selected, rather than selecting all tasks in changed packages. `turbo query`'s `affectedPackages` reports the owners of affected tasks, including dependents connected only by explicit task dependencies. `turbo prune` retains task dependency owners and their package dependencies, including across enabled toolchains, in addition to its package-based closure.",
           "default": false,
           "type": "boolean"
         },
@@ -464,7 +464,7 @@
           ]
         },
         "passThroughEnv": {
-          "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key.",
+          "description": "An allowlist of environment variables that should be made available to all tasks, but should not contribute to the task's cache key.",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"

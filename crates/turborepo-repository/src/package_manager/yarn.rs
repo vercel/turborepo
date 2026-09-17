@@ -114,8 +114,6 @@ impl Iterator for YarnDetector<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use anyhow::Result;
     use serde_json::json;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
@@ -217,7 +215,7 @@ mod tests {
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<_, _>>()
+                .collect::<turborepo_lockfiles::BerryResolutionMap>()
             )
             .as_ref()
         );

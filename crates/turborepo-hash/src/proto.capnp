@@ -19,6 +19,8 @@ struct TaskHashable {
     commandOverride @12 :List(Text);
     # Distinguishes an opt-out (explicit no-op) from no override at all.
     commandOptOut @13 :Bool;
+    # The resolved `experimentalCI` value encoded as JSON when configured.
+    experimentalCi @14 :Text;
 
     enum EnvMode {
       loose @0;

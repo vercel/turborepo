@@ -2,6 +2,30 @@
 
 Full docs: https://turborepo.dev/docs/reference/configuration#tasks
 
+## command (Experimental)
+
+Native toolchain integrations provide fixed built-in task names, such as `build`, `test`, `lint`, `format`, and `dev`. The intended escape hatch for a different task name or a command override is the experimental `command` field. Enable `experimentalTaskCommand` in the root `turbo.json` before using it.
+
+For an unscoped root task, use a per-toolchain command map. Each value is an argument array that runs directly without a shell:
+
+```json
+{
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "test": {
+      "command": {
+        "go": ["go", "test", "-race", "./..."]
+      }
+    }
+  }
+}
+```
+
+The supported toolchain keys are `javascript`, `rust`, `python`, and `go` (`typescript` is an alias for `javascript`). Native Rust, Python, and Go keys also require their corresponding workspace Future Flag. The map form is only valid for unscoped tasks in the root configuration; for a package-scoped task or Package Configuration, set `command` directly to an argument array.
+
 ## dependsOn
 
 Controls task execution order.

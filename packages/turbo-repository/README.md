@@ -34,6 +34,17 @@ cargo build
 pnpm test
 ```
 
+With `js/dist` and the native addon already built, run only the static-discovery
+contract tests from this package directory (without rebuilding Rust):
+
+```sh
+node --import tsx --test __tests__/static-discovery.test.ts
+```
+
+These tests use temporary fixtures and isolated Node subprocesses with no language
+tools on `PATH`. POSIX-only executable traps also detect attempted tool invocations;
+those trap cases are skipped on Windows.
+
 ## Example Usage
 
 You can see examples in the `__tests__` directory, or see a simple script in `node scripts/test.mjs`.

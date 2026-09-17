@@ -1,12 +1,19 @@
 use std::sync::Arc;
 
-use async_graphql::{Json, Object};
+use async_graphql::{Json, Object, SimpleObject};
 use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskId;
 use turborepo_types::TaskCommandOverride;
 
 use crate::{package::Package, Array, Error, QueryRun};
+
+/// Configured environment patterns, without expanding names or reading values.
+#[derive(Default, SimpleObject)]
+pub struct Environment {
+    pub env: Vec<String>,
+    pub pass_through_env: Vec<String>,
+}
 
 pub struct RepositoryTask {
     pub name: String,
@@ -130,6 +137,21 @@ impl RepositoryTask {
     /// tasks and command overrides.
     async fn command(&self) -> Option<String> {
         self.resolved_command()
+    }
+
+    /// Environment patterns after resolving task configuration inheritance.
+    /// Global patterns are exposed separately by `globalEnvironment`.
+    async fn environment(&self) -> Environment {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .map(|definition| Environment {
+                env: definition.env.clone(),
+                pass_through_env: definition.pass_through_env.clone().unwrap_or_default(),
+            })
+            .unwrap_or_default()
     }
 
     /// The fully resolved `experimentalCI` configuration for this task from

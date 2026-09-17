@@ -74,6 +74,218 @@ fn prune_retained_packages(stdout: &str) -> Vec<String> {
     packages
 }
 
+/// An installable, registry-free workspace with task-only dependency owners.
+fn setup_task_aware_prune(dir: &Path, flag: Option<bool>) {
+    use serde_json::json;
+
+    let root = json!({
+        "name": "task-aware-prune",
+        "private": true,
+        "packageManager": "npm@10.5.0",
+        "workspaces": ["packages/*"],
+        "dependencies": {"root-dep": "*"}
+    });
+    let mut lock_packages = serde_json::Map::new();
+    lock_packages.insert(String::new(), root.clone());
+    fs::write(dir.join("package.json"), root.to_string()).unwrap();
+    for name in [
+        "web",
+        "install",
+        "dev-only",
+        "tool",
+        "leaf",
+        "tool-install",
+        "peer",
+        "optional-peer",
+        "final",
+        "root-dep",
+        "root-tool",
+        "unrelated",
+        "config",
+    ] {
+        let mut package = json!({
+            "name": name,
+            "version": "1.0.0",
+            "scripts": {"build": "echo built", "generate": "echo generated", "prepare": "echo prepared"}
+        });
+        if name == "web" {
+            package["dependencies"] = json!({"install": "*"});
+            package["devDependencies"] = json!({"dev-only": "*"});
+        } else if name == "tool" {
+            package["dependencies"] = json!({"tool-install": "*"});
+            package["peerDependencies"] = json!({"peer": "*", "optional-peer": "*"});
+            package["peerDependenciesMeta"] = json!({"optional-peer": {"optional": true}});
+        }
+        let path = format!("packages/{name}");
+        fs::create_dir_all(dir.join(&path)).unwrap();
+        fs::write(dir.join(&path).join("package.json"), package.to_string()).unwrap();
+        lock_packages.insert(path.clone(), package);
+        lock_packages.insert(
+            format!("node_modules/{name}"),
+            json!({"resolved": path, "link": true}),
+        );
+    }
+    fs::write(
+        dir.join("package-lock.json"),
+        json!({
+            "name": "task-aware-prune", "lockfileVersion": 3, "requires": true,
+            "packages": lock_packages
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let mut config = json!({"tasks": {
+        "build": {}, "generate": {}, "prepare": {},
+        "web#build": {"dependsOn": ["tool#generate"]},
+        "tool#generate": {"dependsOn": ["leaf#generate"]},
+        // A valid task DAG whose projection has a web -> tool -> leaf -> web cycle.
+        "leaf#generate": {"dependsOn": ["web#prepare"]},
+        "web#prepare": {"dependsOn": ["//#prepare"]},
+        "//#prepare": {"dependsOn": ["root-tool#generate"]},
+        "//#unrelated": {"dependsOn": ["missing#build"]},
+        "unrelated#build": {"dependsOn": ["missing#build"]}
+    }});
+    if let Some(flag) = flag {
+        config["futureFlags"] = json!({"affectedUsingTaskInputs": flag});
+    }
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    // This task is not reached by tool#generate. It becomes an entrypoint only
+    // after the install closure retains tool-install in a subsequent pass.
+    fs::write(
+        dir.join("packages/tool-install/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"extra": {"dependsOn": ["final#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/unrelated/turbo.json"), "not JSON").unwrap();
+    fs::write(dir.join(".gitignore"), "node_modules\nout\n").unwrap();
+    setup::setup_git(dir).unwrap();
+}
+
+#[test]
+fn test_prune_task_aware_flag_off_preserves_package_closure() {
+    for flag in [None, Some(false)] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_task_aware_prune(tempdir.path(), flag);
+        // Even invalid task configuration in the selected package must not
+        // change legacy prune's validation behavior.
+        fs::write(tempdir.path().join("packages/web/turbo.json"), "not JSON").unwrap();
+        for production in [false, true] {
+            let mut args = vec!["prune", "web"];
+            if production {
+                args.push("--production");
+            }
+            let output = run_turbo(tempdir.path(), &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+            let mut expected = vec!["install", "root-dep", "web"];
+            if !production {
+                expected.insert(0, "dev-only");
+            }
+            assert_eq!(
+                prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+                expected
+            );
+            fs::remove_dir_all(tempdir.path().join("out")).unwrap();
+        }
+    }
+}
+
+#[test]
+fn test_prune_task_aware_fixed_point() {
+    for production in [false, true] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            setup_task_aware_prune(tempdir.path(), Some(true));
+            let mut args = vec!["prune", "web"];
+            if production {
+                args.push("--production");
+            }
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(tempdir.path(), &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+            let mut expected = vec![
+                "final",
+                "install",
+                "leaf",
+                "peer",
+                "root-dep",
+                "root-tool",
+                "tool",
+                "tool-install",
+                "web",
+            ];
+            if !production {
+                expected.insert(0, "dev-only");
+            }
+            assert_eq!(
+                prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+                expected
+            );
+            let out = tempdir.path().join(if docker { "out/full" } else { "out" });
+            assert_eq!(ls_dir(&out.join("packages")), expected);
+            if docker {
+                assert_eq!(ls_dir(&tempdir.path().join("out/json/packages")), expected);
+            }
+            let output = run_turbo(&out, &["run", "build", "--filter=web", "--dry=json"]);
+            assert!(
+                output.status.success(),
+                "pruned task graph: {}",
+                combined_output(&output)
+            );
+        }
+    }
+}
+
+#[test]
+fn test_prune_task_aware_inherited_package_configuration() {
+    use serde_json::json;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_task_aware_prune(dir, Some(true));
+    // Override web#build with an inherited package configuration, including an
+    // array extension. The config owner has no manifest or task edge from web.
+    fs::write(
+        dir.join("packages/config/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"build": {"dependsOn": ["leaf#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/web/turbo.json"), json!({
+        "extends": ["//", "config"], "tasks": {"build": {"dependsOn": ["$TURBO_EXTENDS$", "final#generate"]}}
+    }).to_string()).unwrap();
+    let output = run_turbo(dir, &["prune", "web"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+    assert_eq!(
+        prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+        [
+            "config",
+            "dev-only",
+            "final",
+            "install",
+            "leaf",
+            "root-dep",
+            "root-tool",
+            "web"
+        ]
+    );
+    let output = run_turbo(
+        &dir.join("out"),
+        &["run", "build", "--filter=web", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "inherited pruned task graph: {}",
+        combined_output(&output)
+    );
+}
+
 #[test]
 fn test_prune_production_excludes_dev_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -197,6 +409,39 @@ fn test_prune_docker() {
         pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
         "patches/is-number@7.0.0.patch"
     );
+}
+
+#[test]
+fn test_prune_docker_preserves_task_env_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap().replace(
+        r#""build": {"#,
+        r#""build": {
+      "envMode": "loose","#,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_turbo_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/full/turbo.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pruned_turbo_json["tasks"]["build"]["envMode"], "loose");
 }
 
 #[test]

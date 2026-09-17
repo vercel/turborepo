@@ -29,6 +29,57 @@ export declare class PackageManager {
   readonly version?: string;
 }
 
+/**
+ * Subprocess-free package inventory and conservative affectedness.
+ *
+ * This is deliberately separate from Workspace: native dependency edges and
+ * tasks are not loaded and cannot be requested through this object. It uses
+ * the same JavaScript workspace-root inference and toolchain feature flags as
+ * Workspace.find. The repository native addon is still required, but language
+ * toolchain executables (cargo, uv, go, etc.) are not.
+ */
+export declare class StaticWorkspace {
+  static find(path?: string | undefined | null): Promise<StaticWorkspace>;
+  get absolutePath(): string;
+  /**
+   * Whether package dependency relationships are fully loaded. This does
+   * not claim completeness of task-level inputs or execution contracts.
+   */
+  get dependencyGraphComplete(): boolean;
+  /**
+   * Whether declared local package inputs can be inferred without language
+   * executables. This is independent of native task metadata completeness.
+   */
+  get affectednessComplete(): boolean;
+  /**
+   * Toolchains with inventoried scopes whose authoritative metadata is
+   * absent.
+   */
+  get unloadedToolchains(): Array<string>;
+  /**
+   * Lists real packages, excluding root/aggregate execution scopes.
+   * Co-located packages remain distinct. Sorted by directory, toolchain,
+   * and name.
+   */
+  findPackages(): Promise<Array<StaticPackage>>;
+  workspaceRoots(): Array<StaticWorkspaceRoot>;
+  /**
+   * Returns candidates from workspace-relative changed paths, including
+   * deleted paths. Does not read Git history or execute subprocesses.
+   *
+   * Cargo path dependencies and uv workspace/path sources contribute static
+   * input relationships, including optional and conditional inputs. Source
+   * changes select their owners and transitive dependents across ecosystems.
+   * Native lockfile edits invalidate that workspace and its dependents.
+   * Manifest edits fall back to all packages: removed scopes can erase
+   * cross-language relationships. Unresolved static inputs, matching global
+   * inputs, and JavaScript topology edits also fall back to all packages.
+   * Native task metadata stays unloaded. This does not analyze arbitrary
+   * build-script reads or external resolution.
+   */
+  affectedCandidates(files: Array<string>): Promise<StaticAffectedPackages>;
+}
+
 export declare class Workspace {
   /** The absolute path to the workspace root. */
   readonly absolutePath: string;
@@ -184,6 +235,38 @@ export interface LockfilePackages {
   packageManager: string;
   /** Declared package-manager version, when available. */
   packageManagerVersion?: string;
+}
+
+/** Packages that may be affected, including transitive input dependents. */
+export interface StaticAffectedPackages {
+  packages: Array<StaticPackage>;
+  /**
+   * True when incomplete metadata, custom global inputs, or a topology
+   * change required returning all packages rather than a narrower closure.
+   */
+  conservative: boolean;
+}
+
+/**
+ * A real package identified from manifests without running a language
+ * toolchain. No dependency edges or task metadata are implied by this
+ * inventory entry.
+ */
+export interface StaticPackage {
+  name: string;
+  absolutePath: string;
+  relativePath: string;
+  /** Native manifest path, relative to the workspace root. */
+  manifestPath: string;
+  /** Language ecosystem, such as javascript, rust, python, or go. */
+  toolchain: string;
+}
+
+/** A contributed workspace root, separate from the inventory of real packages. */
+export interface StaticWorkspaceRoot {
+  toolchain: string;
+  kind: string;
+  relativePath: string;
 }
 
 /** Options for [`Workspace::find`]. */

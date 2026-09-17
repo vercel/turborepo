@@ -57,7 +57,8 @@ use crate::{
     prune_knowledge::{PruneDomain, PrunePlan},
     relationships::{DependencyKind, Relationship},
     toolchain::{
-        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+        self, DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScope, DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor,
         ToolchainId, WorkspaceRoot,
     },
 };
@@ -298,16 +299,27 @@ impl PyProjectManifest {
         self.uv()?.workspace.as_ref()
     }
 
-    fn workspace_source_setting(&self, package: &str) -> Option<bool> {
-        self.uv()
-            .and_then(|uv| {
-                uv.sources
-                    .iter()
-                    .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
-            })
-            .and_then(toml::Value::as_table)
-            .and_then(|table| table.get("workspace"))
-            .and_then(toml::Value::as_bool)
+    /// The package's `[tool.uv.sources]` override, if any, as a three-state
+    /// fact: `Some(true)` targets the workspace, `Some(false)` is any other
+    /// override (index, git, url, path), and `None` means no override was
+    /// declared.
+    ///
+    /// The distinction matters: a member override such as
+    /// `lib = { index = "pypi" }` must not fall through to a root
+    /// `lib = { workspace = true }` and be misread as an internal edge.
+    fn source_override(&self, package: &str) -> Option<bool> {
+        let source = self.uv().and_then(|uv| {
+            uv.sources
+                .iter()
+                .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
+        })?;
+        Some(
+            source
+                .as_table()
+                .and_then(|table| table.get("workspace"))
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(false),
+        )
     }
 
     fn is_buildable(&self) -> bool {
@@ -702,7 +714,10 @@ impl QualityPlan {
 
 /// Extract and validate the user-declared workspace name from the
 /// `[tool.turbo]` table.
-fn workspace_name(manifest: &PyProjectManifest) -> Result<Option<String>, Error> {
+fn workspace_name(
+    manifest: &PyProjectManifest,
+    emit_warnings: bool,
+) -> Result<Option<String>, Error> {
     let Some(value) = manifest
         .tool
         .as_ref()
@@ -724,8 +739,10 @@ fn workspace_name(manifest: &PyProjectManifest) -> Result<Option<String>, Error>
         });
     }
     // Legal, but re-introduces exactly the toolchain-id/package-name
-    // confusion user-chosen names exist to remove.
-    if name == "python" || name == "javascript" || name == "rust" {
+    // confusion user-chosen names exist to remove. Gated on `emit_warnings`:
+    // the scope inventory stays silent because it only reports names, while
+    // full discovery owns the advice and emits it exactly once.
+    if emit_warnings && (name == "python" || name == "javascript" || name == "rust") {
         tracing::warn!(
             "the uv workspace is named {name:?}, which is also a toolchain id; consider a more \
              distinctive name"
@@ -782,14 +799,19 @@ pub struct DiscoveredWorkspace {
 /// Discover package membership and internal relationships without consulting
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
+///
+/// `emit_warnings` follows the caller: the lazy scope inventory passes `false`
+/// because it only reports names and full discovery owns every user-facing
+/// warning, while full discovery's manifest fallback passes `true`.
 fn discover_workspace_from_manifests(
     repo_root: &AbsoluteSystemPath,
+    emit_warnings: bool,
 ) -> Result<DiscoveredWorkspace, Error> {
     let root_manifest_path = repo_root.join_component(PYPROJECT_TOML);
     let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
         return Ok(empty_workspace(None));
     };
-    let name = workspace_name(&root_manifest)?;
+    let name = workspace_name(&root_manifest, emit_warnings)?;
     let Some(workspace) = root_manifest.workspace() else {
         return Ok(empty_workspace(name));
     };
@@ -831,8 +853,8 @@ fn discover_workspace_from_manifests(
                 .filter(|dependency| {
                     package_names.contains(dependency)
                         && manifest
-                            .workspace_source_setting(dependency)
-                            .or_else(|| root_manifest.workspace_source_setting(dependency))
+                            .source_override(dependency)
+                            .or_else(|| root_manifest.source_override(dependency))
                             .unwrap_or(false)
                 })
                 .collect();
@@ -892,7 +914,7 @@ fn discover_workspace_from_metadata(
             pytest: None,
         });
     };
-    let name = workspace_name(&root_manifest)?;
+    let name = workspace_name(&root_manifest, true)?;
     if !root_manifest.has_workspace() {
         tracing::warn!(
             "the root pyproject.toml has no [tool.uv.workspace] table; Turborepo's Python support \
@@ -2258,7 +2280,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
         return Ok(empty_workspace(None));
     };
-    let name = workspace_name(&root_manifest)?;
+    let name = workspace_name(&root_manifest, true)?;
     if !root_manifest.has_workspace() {
         return Ok(empty_workspace(name));
     }
@@ -2703,11 +2725,261 @@ impl UvContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
         Arc::new(Self { repo_root })
     }
+
+    fn workspace_roots(&self) -> Vec<WorkspaceRoot> {
+        self.repo_root
+            .join_component(PYPROJECT_TOML)
+            .exists()
+            .then(|| WorkspaceRoot::new("uv", self.repo_root.clone()))
+            .into_iter()
+            .collect()
+    }
+}
+
+/// The plain-data scope inventory behind lazy discovery: every workspace
+/// member's name and manifest path, plus the workspace aggregate's name, or
+/// `None` when the workspace has no members. Manifest parsing only — no `uv`,
+/// Python, or `which` subprocess — and no facts beyond scope identity, which
+/// full discovery owns.
+type WorkspaceScopeInventory = (Vec<(String, AbsoluteSystemPathBuf)>, String);
+
+fn package_scope_inventory(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Option<WorkspaceScopeInventory>, Error> {
+    let workspace = discover_workspace_from_manifests(repo_root, false)?;
+    if workspace.packages.is_empty() {
+        return Ok(None);
+    }
+    // Mirrors full discovery: a workspace with members must be named so the
+    // aggregate scope has an identity.
+    let aggregate = workspace.name.ok_or(Error::MissingWorkspaceName)?;
+    let members = workspace
+        .packages
+        .into_iter()
+        .map(|package| (package.name, package.manifest_path))
+        .collect();
+    Ok(Some((members, aggregate)))
+}
+
+fn static_source_dependencies(
+    source: &toml::Value,
+    name: &str,
+    base: &AbsoluteSystemPath,
+    members: &HashMap<String, AbsoluteSystemPathBuf>,
+    dependencies: &mut HashSet<String>,
+) -> bool {
+    if let Some(sources) = source.as_array() {
+        let mut unresolved = false;
+        for source in sources {
+            unresolved |= static_source_dependencies(source, name, base, members, dependencies);
+        }
+        return unresolved;
+    }
+    if source.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+        if members.contains_key(name) {
+            dependencies.insert(name.to_string());
+            return false;
+        }
+        return true;
+    }
+    if let Some(path) = source.get("path").and_then(toml::Value::as_str) {
+        let path = AbsoluteSystemPathBuf::from_unknown(base, path);
+        if let Some((name, _)) = members
+            .iter()
+            .find(|(_, directory)| directory.as_std_path() == path.as_std_path())
+        {
+            dependencies.insert(name.clone());
+            return false;
+        }
+        return true;
+    }
+    !["git", "url", "index"]
+        .iter()
+        .any(|key| source.get(key).is_some())
+}
+
+fn static_package_dependencies(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Vec<crate::static_dependencies::StaticPackageDependencies>, Error> {
+    let workspace = discover_workspace_from_manifests(repo_root, false)?;
+    if workspace.packages.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root_path = repo_root.join_component(PYPROJECT_TOML);
+    let root = PyProjectManifest::load(&root_path)?
+        .ok_or_else(|| Error::MissingMemberName(root_path.to_string()))?;
+    let members = workspace
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.name.clone(),
+                package.manifest_path.parent().unwrap().to_owned(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let invalidation_paths = vec![root_path.clone(), repo_root.join_component(UV_LOCK)];
+    let mut result = Vec::new();
+    for package in workspace.packages {
+        let manifest = PyProjectManifest::load(&package.manifest_path)?
+            .ok_or_else(|| Error::MissingMemberName(package.manifest_path.to_string()))?;
+        let mut unresolved = false;
+        let configs = crate::static_dependencies::ancestor_configuration_paths(
+            repo_root,
+            &package.manifest_path,
+            &["uv.toml"],
+        );
+        let mut package_inputs = invalidation_paths.clone();
+        package_inputs.extend(configs.iter().cloned());
+        for path in [&root_path, &package.manifest_path].into_iter().chain(
+            configs
+                .iter()
+                .filter(|path| path.exists() || path.as_std_path().is_symlink()),
+        ) {
+            if path.as_std_path().is_symlink() {
+                unresolved = true;
+                continue;
+            }
+            let contents = path
+                .read_to_string()
+                .map_err(|source| Error::ManifestRead {
+                    path: path.to_string(),
+                    source,
+                })?;
+            let document: toml::Value =
+                toml::from_str(&contents).map_err(|source| Error::ManifestParse {
+                    path: path.to_string(),
+                    source: Box::new(source),
+                })?;
+            if path
+                .as_std_path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                == Some("uv.toml")
+            {
+                unresolved |= [
+                    "sources",
+                    "workspace",
+                    "override-dependencies",
+                    "dependency-metadata",
+                ]
+                .iter()
+                .any(|key| document.get(key).is_some());
+            }
+            unresolved |= document
+                .get("project")
+                .and_then(|project| project.get("dynamic"))
+                .and_then(toml::Value::as_array)
+                .is_some_and(|fields| {
+                    fields.iter().any(|field| {
+                        matches!(
+                            field.as_str(),
+                            Some("dependencies" | "optional-dependencies")
+                        )
+                    })
+                });
+            unresolved |= document
+                .get("tool")
+                .and_then(|tool| tool.get("uv"))
+                .is_some_and(|uv| {
+                    uv.get("override-dependencies").is_some()
+                        || uv.get("dependency-metadata").is_some()
+                });
+            unresolved |= document
+                .get("tool")
+                .and_then(|tool| tool.get("maturin"))
+                .and_then(|maturin| maturin.get("manifest-path"))
+                .is_some();
+        }
+        let mut dependencies = HashSet::new();
+        let declared = manifest
+            .dependencies_with_kind()
+            .map(|(dependency, _)| dependency)
+            .chain(
+                manifest
+                    .build_system
+                    .iter()
+                    .flat_map(|system| system.requires.iter().map(String::as_str)),
+            );
+        for dependency in declared {
+            let Some(name) = pep508_name(dependency).map(normalize_name) else {
+                unresolved = true;
+                continue;
+            };
+            let find_source = |manifest: &PyProjectManifest| {
+                manifest.uv().and_then(|uv| {
+                    uv.sources
+                        .iter()
+                        .find(|(key, _)| normalize_name(key) == name)
+                        .map(|(_, source)| source.clone())
+                })
+            };
+            let (source, base) = match find_source(&manifest) {
+                Some(source) => (Some(source), package.manifest_path.parent().unwrap()),
+                None => (find_source(&root), repo_root),
+            };
+            if let Some(source) = source {
+                unresolved |=
+                    static_source_dependencies(&source, &name, base, &members, &mut dependencies);
+            } else if dependency.contains("file:") {
+                unresolved = true;
+            }
+        }
+        let mut dependencies = dependencies.into_iter().collect::<Vec<_>>();
+        dependencies.sort();
+        result.push(crate::static_dependencies::StaticPackageDependencies {
+            package: package.name,
+            dependencies,
+            invalidation_paths: package_inputs,
+            invalidation_file_names: vec![PYPROJECT_TOML.to_string()],
+            unresolved,
+        });
+    }
+    Ok(result)
 }
 
 impl RepositoryContributor for UvContributor {
+    fn discover_static_dependencies(&self) -> toolchain::DiscoverStaticDependenciesFuture<'_> {
+        Box::pin(async move {
+            turborepo_rayon_compat::block_in_place(|| static_package_dependencies(&self.repo_root))
+                .map(Some)
+                .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+        })
+    }
+
     fn id(&self) -> ToolchainId {
         ToolchainId::PYTHON
+    }
+
+    /// The cheap scope inventory for lazy discovery: every workspace member's
+    /// name and manifest path, plus the workspace aggregate scope, without
+    /// invoking `uv`, Python, `which`, or any other process. Scope identities
+    /// match [`RepositoryContributor::discover_packages`] exactly; facts
+    /// beyond identity — tasks, relationships, external resolution, hashing,
+    /// and prune — stay with full discovery, which remains authoritative
+    /// (including its manifest fallback when uv is unavailable).
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let inventory =
+                turborepo_rayon_compat::block_in_place(|| package_scope_inventory(&self.repo_root))
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+            let workspace_roots = self.workspace_roots();
+            let Some((members, aggregate)) = inventory else {
+                return Ok(DiscoveredPackageScopes::new(Vec::new(), workspace_roots));
+            };
+            let mut scopes = members
+                .into_iter()
+                .map(|(name, manifest_path)| DiscoveredPackageScope::new(Some(name), manifest_path))
+                .collect::<Vec<_>>();
+            scopes.push(
+                DiscoveredPackageScope::new(
+                    Some(aggregate),
+                    self.repo_root.join_component(PYPROJECT_TOML),
+                )
+                .into_aggregate(),
+            );
+            Ok(DiscoveredPackageScopes::new(scopes, workspace_roots))
+        })
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -2728,7 +3000,7 @@ impl RepositoryContributor for UvContributor {
                 }
                 Err(error) => {
                     let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
-                        discover_workspace_from_manifests(&self.repo_root)
+                        discover_workspace_from_manifests(&self.repo_root, true)
                     })
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
@@ -2754,13 +3026,7 @@ impl RepositoryContributor for UvContributor {
                     )
                 }
             };
-            let workspace_roots = self
-                .repo_root
-                .join_component(PYPROJECT_TOML)
-                .exists()
-                .then(|| WorkspaceRoot::new("uv", self.repo_root.clone()))
-                .into_iter()
-                .collect();
+            let workspace_roots = self.workspace_roots();
             let packages = workspace.packages;
             if packages.is_empty() {
                 return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
@@ -3540,7 +3806,7 @@ version = "0.1.0"
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
         write_workspace(&root);
-        let workspace = discover_workspace_from_manifests(&root).unwrap();
+        let workspace = discover_workspace_from_manifests(&root, true).unwrap();
         assert_eq!(
             workspace
                 .packages
@@ -3558,6 +3824,86 @@ version = "0.1.0"
                 .all(|relationship| relationship.declaration_name() == "py-lib"
                     && relationship.orders_tasks())
         );
+    }
+
+    #[test]
+    fn test_package_scope_inventory_reports_members_and_aggregate() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root);
+
+        // Manifest parsing only: no uv, Python, or which subprocess is needed.
+        let (members, aggregate) = package_scope_inventory(&root)
+            .expect("the inventory must not require uv or python")
+            .expect("a workspace with members has an aggregate scope");
+        let names = members
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["py-app", "py-lib"]);
+        assert_eq!(aggregate, "acme");
+        for (name, manifest_path) in &members {
+            assert_eq!(
+                manifest_path,
+                &root
+                    .join_components(&["packages", name.as_str()])
+                    .join_component(PYPROJECT_TOML)
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_scope_inventory_without_workspace_is_empty() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "solo"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        assert!(package_scope_inventory(&root).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_package_scope_inventory_requires_workspace_name() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "root-project"
+version = "0.1.0"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+"#,
+            )
+            .unwrap();
+        let package_dir = root.join_components(&["packages", "lib"]);
+        package_dir.create_dir_all().unwrap();
+        package_dir
+            .join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                r#"
+[project]
+name = "lib"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        // Members without a [tool.turbo] name leave the aggregate scope
+        // unnamed; the inventory fails exactly like full discovery.
+        assert!(matches!(
+            package_scope_inventory(&root),
+            Err(Error::MissingWorkspaceName)
+        ));
     }
 
     #[test]
@@ -4404,5 +4750,56 @@ local = { path = "packages/gone-dir" }
         let error =
             prune_root_manifest("[project]\nname = \"x\"\n", &[], &HashSet::new()).unwrap_err();
         assert!(matches!(error, Error::NotAWorkspace));
+    }
+
+    #[test]
+    fn test_non_workspace_member_source_override_is_not_internal() {
+        // A member override that points at a registry must win over a root
+        // `workspace = true`; otherwise `lib` would be misread as an internal
+        // edge and ordered/dependent on.
+        let member: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+name = "app"
+version = "0.1.0"
+dependencies = ["lib"]
+
+[tool.uv.sources]
+lib = { index = "pypi" }
+"#,
+        )
+        .unwrap();
+        let root: PyProjectManifest = toml::from_str(
+            r#"
+[project]
+name = "root-project"
+version = "0.1.0"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+lib = { workspace = true }
+"#,
+        )
+        .unwrap();
+        assert_eq!(member.source_override("lib"), Some(false));
+        assert_eq!(root.source_override("lib"), Some(true));
+        assert_eq!(member.source_override("absent"), None);
+
+        // The declared member override must not fall through to the root.
+        assert!(
+            !member
+                .source_override("lib")
+                .or_else(|| root.source_override("lib"))
+                .unwrap_or(false)
+        );
+        // Without a member override the root workspace setting still applies.
+        assert!(
+            member
+                .source_override("lib-root")
+                .or_else(|| root.source_override("lib"))
+                .unwrap_or(false)
+        );
     }
 }

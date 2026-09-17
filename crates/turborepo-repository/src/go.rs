@@ -21,6 +21,8 @@ use std::{
 use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
+mod scope_inventory;
+
 use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{
@@ -35,8 +37,9 @@ use crate::{
     relationships::{DependencyKind, Relationship, RelationshipTarget},
     task_contracts::DependencySourceInputs,
     toolchain::{
-        self, DerivedInputSafety, DerivedOutputs, DiscoverPackagesFuture, DiscoveredPackage,
-        DiscoveredPackages, RepositoryContributor, ToolchainId, WorkspaceRoot,
+        self, DerivedInputSafety, DerivedOutputs, DiscoverPackageScopesFuture,
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackageScopes, DiscoveredPackages,
+        RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 
@@ -48,7 +51,6 @@ pub const GO_MOD: &str = "go.mod";
 
 const GO_SUM: &str = "go.sum";
 const GO_WORK_SUM: &str = "go.work.sum";
-const GO_DIST_DIR: &str = "dist";
 
 /// Deterministic identity for the workspace-wide Go verification scope.
 pub const GO_WORKSPACE_NAME: &str = "go-workspace";
@@ -113,8 +115,8 @@ pub enum Error {
         other_manifest: String,
     },
     #[error(
-        "Go module identity {name:?} is reserved for the workspace aggregate. Rename the module \
-         before enabling experimental Go workspaces."
+        "Turborepo package name {name:?} is reserved for the Go workspace aggregate. Rename the \
+         Go module before enabling experimental Go workspaces."
     )]
     WorkspaceNameCollision { name: String },
     #[error(
@@ -173,6 +175,22 @@ pub enum Error {
         #[source]
         source: turbopath::PathError,
     },
+    #[error("failed to read {path}: {source}")]
+    ManifestRead {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("malformed go.work: {reason}. Repair the directive and run `go work sync`.")]
+    MalformedGoWork { reason: String },
+    #[error(
+        "go.work at {path} contains an unknown `{directive}` directive. The go command supports \
+         only `go`, `toolchain`, `use`, `replace`, and `godebug` directives in go.work. Repair \
+         the repository-root go.work with `go work edit` and `go work use`."
+    )]
+    UnknownGoWorkDirective { path: String, directive: String },
+    #[error("malformed go.mod at {path}: {reason}. Repair the directive and run `go mod tidy`.")]
+    MalformedGoMod { path: String, reason: String },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -186,9 +204,44 @@ pub struct GoModule {
     pub manifest_path: AbsoluteSystemPathBuf,
     /// Direct internal relationships to other workspace modules.
     pub relationships: Vec<Relationship>,
-    /// Package pattern for the sole `main` package used by the `dev` task, when
-    /// unambiguous.
+    /// Package pattern for the sole `main` package used by the `build` and
+    /// `dev` tasks, when unambiguous.
     pub runnable_target: Option<String>,
+    /// Module-root source files that must not be treated as generated binaries.
+    /// None means discovery could not safely classify potential output names.
+    pub root_source_inputs: Option<HashSet<String>>,
+}
+
+impl GoModule {
+    /// The unique Turborepo identity, distinct from Go's full module path.
+    fn package_name(&self) -> &str {
+        package_name(&self.module_path)
+    }
+}
+
+/// Derive a Turborepo name from a Go module path, retaining a trailing major
+/// version with its preceding component: `example.com/api/v2` becomes `api/v2`.
+/// This is the sole package identity, not an alias for the full module path.
+fn package_name(module_path: &str) -> &str {
+    let Some((prefix, last)) = module_path.rsplit_once('/') else {
+        return module_path;
+    };
+    if is_version_element(last) {
+        &module_path[prefix.rfind('/').map_or(0, |index| index + 1)..]
+    } else {
+        last
+    }
+}
+
+// Match cmd/go/internal/load's isVersionElement: N >= 2, no leading zero.
+// Do not parse N: Go imposes no integer limit.
+fn is_version_element(element: &str) -> bool {
+    element.strip_prefix('v').is_some_and(|version| {
+        !version.is_empty()
+            && version != "1"
+            && !version.starts_with('0')
+            && version.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 /// The result of Go workspace discovery.
@@ -254,6 +307,10 @@ struct GoListPackage {
     directory: String,
     #[serde(rename = "Name")]
     name: String,
+    // Keep Go's *Files and *EmbedPatterns families, including ignored sources
+    // and internal/external test inputs, without duplicating its file taxonomy.
+    #[serde(flatten)]
+    details: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -508,42 +565,122 @@ fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error
     })
 }
 
-fn runnable_target(module_dir: &AbsoluteSystemPath) -> Result<Option<String>, Error> {
+fn module_package_inputs(
+    module_dir: &AbsoluteSystemPath,
+) -> Result<(Option<String>, Option<HashSet<String>>), Error> {
     const COMMAND: &str = "go list -find -json ./...";
 
     let output = run_go(module_dir, &["list", "-find", "-json", "./..."], COMMAND)?;
-    // The native dev default is optional. If Go cannot classify every package
-    // without error, omit it rather than making workspace discovery fail.
+    // Native inference is optional. Unknown package/source classification must
+    // not cause us to exclude a potentially real input from task hashes.
     if !output.status.success() {
-        return Ok(None);
+        return Ok((None, None));
     }
 
     let packages =
         serde_json::Deserializer::from_slice(&output.stdout).into_iter::<GoListPackage>();
-    let mut runnable = None;
+    let mut runnable = Vec::new();
+    let mut root_source_inputs = Some(HashSet::new());
+    let mut saw_root_package = false;
     for package in packages {
         let package = package.map_err(|_source| Error::CommandParse {
             command: COMMAND,
             _source,
         })?;
-        if package.name != "main" {
-            continue;
-        }
         let Ok(relative) = Path::new(&package.directory).strip_prefix(module_dir.as_std_path())
         else {
-            return Ok(None);
+            return Ok((None, None));
         };
         let relative = relative.to_string_lossy().replace('\\', "/");
-        let target = if relative.is_empty() {
-            ".".to_string()
-        } else {
-            format!("./{relative}")
-        };
-        if runnable.replace(target).is_some() {
-            return Ok(None);
+        if relative.is_empty() {
+            saw_root_package = true;
+            for (key, value) in &package.details {
+                if !key.ends_with("Files") && !key.ends_with("EmbedPatterns") {
+                    continue;
+                }
+                let Some(values) = value.as_array() else {
+                    root_source_inputs = None;
+                    continue;
+                };
+                for value in values {
+                    let Some(value) = value.as_str() else {
+                        root_source_inputs = None;
+                        continue;
+                    };
+                    if key == "IgnoredGoFiles"
+                        && std::fs::read_to_string(module_dir.join_component(value).as_std_path())
+                            .map_or(true, |source| source.contains("//go:embed"))
+                    {
+                        // Task-level build tags can activate embeds that go list
+                        // did not resolve. Do not guess their potential matches.
+                        root_source_inputs = None;
+                    }
+                    let value = value.strip_prefix("all:").unwrap_or(value);
+                    if key.ends_with("EmbedPatterns")
+                        && !value.contains('/')
+                        && value.contains(['*', '?', '[', '\\'])
+                    {
+                        // Patterns may match a binary that does not exist yet.
+                        // Conservatively preserve both names instead of emulating
+                        // Go's pattern language or trusting only current matches.
+                        root_source_inputs = None;
+                    } else if let Some(inputs) = &mut root_source_inputs {
+                        inputs.insert(value.to_string());
+                    }
+                }
+            }
+        }
+        if package.name == "main" {
+            runnable.push(if relative.is_empty() {
+                ".".to_string()
+            } else {
+                format!("./{relative}")
+            });
         }
     }
-    Ok(runnable)
+    if !saw_root_package
+        && std::fs::read_dir(module_dir.as_std_path()).map_or(true, |mut entries| {
+            entries.any(|entry| {
+                entry.map_or(true, |entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "go")
+                })
+            })
+        })
+    {
+        // Go omits packages whose files are all excluded by build constraints.
+        // Task-level tags may activate their embeds; absence is not proof of
+        // an empty source set. Directory read errors must also fail closed.
+        root_source_inputs = None;
+    }
+    Ok((
+        (runnable.len() == 1).then(|| runnable.pop().unwrap()),
+        root_source_inputs,
+    ))
+}
+
+fn tracked_source_files(repo_root: &AbsoluteSystemPath) -> Option<HashSet<AbsoluteSystemPathBuf>> {
+    // One read-only index query for the entire workspace, never one per module.
+    // Index membership is stable across missing, restored, or mutated binaries.
+    // If Git/index knowledge is unavailable, retain all potential source inputs.
+    let output = Command::new("git")
+        .args(["ls-files", "--cached", "-z", "--"])
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let paths = String::from_utf8(output.stdout).ok()?;
+    Some(
+        paths
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(|path| AbsoluteSystemPathBuf::from_unknown(repo_root, path))
+            .collect(),
+    )
 }
 
 fn join_relative_path(
@@ -717,7 +854,10 @@ fn relationships_from_mod_graph(
             relationships
                 .entry(from.to_string())
                 .or_default()
-                .push(Relationship::internal(internal, DependencyKind::Production));
+                .push(Relationship::internal(
+                    package_name(internal),
+                    DependencyKind::Production,
+                ));
         }
     }
     Ok(relationships)
@@ -948,10 +1088,7 @@ fn external_resolutions(
                 identities.insert(identity);
             }
         }
-        resolutions.push(PackageResolution::new(
-            module.module_path.clone(),
-            identities,
-        ));
+        resolutions.push(PackageResolution::new(module.package_name(), identities));
     }
     aggregate.insert(toolchain.clone());
     resolutions.push(PackageResolution::new(GO_WORKSPACE_NAME, aggregate));
@@ -979,6 +1116,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         None
     };
 
+    let tracked_sources = tracked_source_files(repo_root);
     let mut modules = Vec::new();
     let mut identities: HashMap<String, String> = HashMap::new();
     let mut package_directories = HashMap::new();
@@ -1011,7 +1149,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
                 required_module_path(&module_json, &member_dir.join_component(GO_MOD))?.to_string()
             }
         };
-        if module_path == GO_WORKSPACE_NAME {
+        if package_name(&module_path) == GO_WORKSPACE_NAME {
             return Err(Error::WorkspaceNameCollision {
                 name: GO_WORKSPACE_NAME.to_string(),
             });
@@ -1035,19 +1173,35 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             member_dir.join_component(GO_MOD).to_string(),
         );
         package_directories.insert(
-            module_path.clone(),
+            package_name(&module_path).to_string(),
             AnchoredSystemPathBuf::new(repo_root, &member_dir)?
                 .to_unix()
                 .to_string(),
         );
         member_paths.insert(module_path.clone());
 
-        modules.push(GoModule {
+        let (runnable_target, root_source_inputs) = module_package_inputs(&member_dir)?;
+        let mut module = GoModule {
             module_path,
             manifest_path: member_dir.join_component(GO_MOD),
             relationships: Vec::new(),
-            runnable_target: runnable_target(&member_dir)?,
-        });
+            runnable_target,
+            root_source_inputs,
+        };
+        if let Some(tracked) = &tracked_sources {
+            if let Some(name) = runnable_output_name(&module)
+                && let Some(inputs) = &mut module.root_source_inputs
+            {
+                for name in [name.clone(), format!("{name}.exe")] {
+                    if tracked.contains(&member_dir.join_component(&name)) {
+                        inputs.insert(name);
+                    }
+                }
+            }
+        } else {
+            module.root_source_inputs = None;
+        }
+        modules.push(module);
     }
 
     // Go owns workspace precedence, version-specific replacements, and MVS.
@@ -1093,7 +1247,10 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
             None
         };
         let (new_path, local_target) = match local {
-            Some((target, directory)) => (format!("./{directory}"), Some(target)),
+            Some((target, directory)) => (
+                format!("./{directory}"),
+                Some(package_name(&target).to_string()),
+            ),
             None => (new_path.to_string(), None),
         };
         prune_replacements.push(GoPruneReplacement {
@@ -1145,7 +1302,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
                     RelationshipTarget::UnresolvedExternal { .. } => None,
                 })
                 .collect();
-            (module.module_path.clone(), dependencies)
+            (module.package_name().to_string(), dependencies)
         })
         .collect();
     let prune = GoPruneKnowledge {
@@ -1168,7 +1325,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
 fn go_command_task(
     name: &'static str,
     subcommand: &'static str,
-    mut targets: Vec<String>,
+    targets: Vec<String>,
     pass_through_placement: crate::native_tasks::PassThroughPlacement,
     cache: Option<bool>,
     entrypoint: crate::native_tasks::TaskEntrypoint,
@@ -1177,16 +1334,12 @@ fn go_command_task(
     use crate::native_tasks::{NativeCommandArguments, NativeCommandProgram, NativeTask};
 
     let display = format!("go {subcommand} {}", targets.join(" "));
-    let mut prefix = vec![subcommand.to_string()];
-    if subcommand == "build" && targets.first().is_some_and(|arg| arg == "-o") {
-        prefix.extend(targets.drain(..2));
-    }
     NativeTask::command_task(
         name,
         display,
         NativeCommandProgram::Tool("go".to_string()),
         NativeCommandArguments {
-            prefix,
+            prefix: vec![subcommand.to_string()],
             pass_through_placement,
             pass_through_separator: None,
             suffix: targets,
@@ -1203,49 +1356,47 @@ fn go_command_task(
 
 fn runnable_output_name(module: &GoModule) -> Option<String> {
     let target = module.runnable_target.as_deref()?;
-    if target == "." {
-        return module
-            .module_path
-            .rsplit('/')
-            .find(|component| !component.is_empty())
-            .map(str::to_string);
-    }
-    target
-        .trim_end_matches('/')
-        .rsplit('/')
-        .find(|component| !component.is_empty() && *component != ".")
-        .map(str::to_string)
+    let import_path = if target == "." {
+        module.module_path.clone()
+    } else {
+        format!("{}/{}", module.module_path, target.trim_start_matches("./"))
+    };
+    let mut components = import_path.rsplit('/');
+    let name = components.next()?;
+    // Match cmd/go/internal/load's exeFromImportPath: binary names skip one
+    // trailing major version, unlike Turborepo package names which retain it.
+    Some(
+        if is_version_element(name) {
+            components.next().unwrap_or(name)
+        } else {
+            name
+        }
+        .to_string(),
+    )
 }
 
 /// Build the conservative built-in task table for one Go module.
-pub fn native_tasks_for_module(
-    module: &GoModule,
-    target_os: &str,
-) -> Vec<crate::native_tasks::NativeTask> {
+pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::NativeTask> {
     let build_entrypoint = if module.runnable_target.is_some() {
         TaskEntrypoint::Preferred
     } else {
         TaskEntrypoint::Candidate
     };
-    let output_name = runnable_output_name(module);
-    let build_targets = match (&module.runnable_target, &output_name) {
-        (Some(target), Some(output_name)) => {
-            let extension = if target_os == "windows" { ".exe" } else { "" };
-            vec![
-                "-o".to_string(),
-                format!("{GO_DIST_DIR}/{output_name}{extension}"),
-                target.clone(),
-            ]
-        }
-        _ => vec!["./...".to_string()],
-    };
+    // Select the sole main explicitly: `go build ./...` writes a binary only
+    // when the selection contains exactly one package, not merely one main.
+    let build_targets = vec![
+        module
+            .runnable_target
+            .clone()
+            .unwrap_or_else(|| "./...".to_string()),
+    ];
     let mut tasks = vec![
         go_command_task(
             "build",
             "build",
             build_targets,
             PassThroughPlacement::BeforeSuffix,
-            output_name.is_none().then_some(false),
+            module.runnable_target.is_none().then_some(false),
             build_entrypoint,
             WorkingDirectoryPolicy::PackageDirectory,
         ),
@@ -1291,42 +1442,21 @@ pub fn native_tasks_for_module(
     tasks
 }
 
-/// Build workspace-wide verification tasks over explicit module patterns.
-pub fn native_tasks_for_workspace(
-    module_patterns: &[String],
-) -> Vec<crate::native_tasks::NativeTask> {
+/// Build the workspace's non-executing build contract.
+pub fn native_tasks_for_workspace() -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::NativeTask;
 
-    let mut module_patterns = module_patterns.to_vec();
-    module_patterns.sort();
-    module_patterns.dedup();
-    let mut tasks = [("test", "test"), ("lint", "vet"), ("format", "fmt")]
-        .into_iter()
-        .map(|(name, subcommand)| {
-            go_command_task(
-                name,
-                subcommand,
-                module_patterns.clone(),
-                if name == "test" {
-                    PassThroughPlacement::AfterSuffix
-                } else {
-                    PassThroughPlacement::BeforeSuffix
-                },
-                (name == "format").then_some(false),
-                TaskEntrypoint::PreferredOnly,
-                WorkingDirectoryPolicy::RepositoryRoot,
-            )
-        })
-        .collect::<Vec<_>>();
-    tasks.push(NativeTask::contract_task(
+    // Verification runs per module so filtered and unfiltered invocations select
+    // the same tasks and share cache entries. Formatting is also module-scoped:
+    // go fmt does not support cross-module workspace patterns.
+    vec![NativeTask::contract_task(
         "build",
         NativeTaskContract::new(
             toolchain::TaskDefaults::default(),
             Some(TaskEntrypoint::Excluded),
             false,
         ),
-    ));
-    tasks
+    )]
 }
 
 /// Effective `go env` values that alter compilation, package selection, tests,
@@ -1429,6 +1559,8 @@ enum GoContractKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoTaskContract {
     kind: GoContractKind,
+    source_input_exclusions: Vec<String>,
+    output_overlaps_source: bool,
     target_os: String,
     cache_prefixes: Vec<String>,
     go_flags: String,
@@ -1436,10 +1568,38 @@ pub struct GoTaskContract {
 
 impl GoTaskContract {
     fn module(module: &GoModule, target_os: &str, cache_prefixes: &[String]) -> Self {
+        let output_name = runnable_output_name(module);
+        let is_source = |name: &str| {
+            module
+                .root_source_inputs
+                .as_ref()
+                .is_none_or(|inputs| inputs.contains(name))
+        };
+        let output_overlaps_source = output_name.as_ref().is_some_and(|name| {
+            let extension = if target_os == "windows" { ".exe" } else { "" };
+            is_source(&format!("{name}{extension}"))
+        });
+        let source_input_exclusions = output_name
+            .iter()
+            .flat_map(|name| [name.clone(), format!("{name}.exe")])
+            // Only untracked, non-source output names are artifacts. Preserve
+            // sources even when absent, embedded, or themselves executables.
+            .filter(|name| !is_source(name))
+            // Never prune a same-named source directory either.
+            .filter(|name| {
+                !module
+                    .manifest_path
+                    .parent()
+                    .expect("Go manifest has a parent")
+                    .join_component(name)
+                    .as_std_path()
+                    .is_dir()
+            })
+            .collect();
         Self {
-            kind: GoContractKind::Module {
-                output_name: runnable_output_name(module),
-            },
+            kind: GoContractKind::Module { output_name },
+            source_input_exclusions,
+            output_overlaps_source,
             target_os: target_os.to_string(),
             cache_prefixes: cache_prefixes.to_vec(),
             go_flags: String::new(),
@@ -1449,6 +1609,8 @@ impl GoTaskContract {
     fn workspace(target_os: &str, cache_prefixes: &[String]) -> Self {
         Self {
             kind: GoContractKind::Workspace,
+            source_input_exclusions: Vec::new(),
+            output_overlaps_source: false,
             target_os: target_os.to_string(),
             cache_prefixes: cache_prefixes.to_vec(),
             go_flags: String::new(),
@@ -1458,6 +1620,10 @@ impl GoTaskContract {
     fn with_go_flags(mut self, go_flags: &str) -> Self {
         self.go_flags = go_flags.to_string();
         self
+    }
+
+    pub(crate) fn source_input_exclusions(&self) -> &[String] {
+        &self.source_input_exclusions
     }
 
     pub(crate) fn dependency_source_inputs(&self) -> DependencySourceInputs {
@@ -1506,7 +1672,11 @@ impl GoTaskContract {
             match &self.kind {
                 GoContractKind::Module { .. } => {
                     io.package_default_inputs = Some(true);
-                    io.input_globs.push(format!("!{GO_DIST_DIR}/**"));
+                    io.input_globs.extend(
+                        self.source_input_exclusions()
+                            .iter()
+                            .map(|name| format!("!{name}")),
+                    );
                 }
                 GoContractKind::Workspace => io.package_default_inputs = Some(false),
             }
@@ -1518,8 +1688,14 @@ impl GoTaskContract {
                             format!("{directory}/**"),
                             format!("!{directory}/.git/**"),
                             format!("!{directory}/.turbo/**"),
-                            format!("!{directory}/{GO_DIST_DIR}/**"),
                         ]);
+                        io.input_globs.extend(
+                            dependency
+                                .task_contract()
+                                .source_input_exclusions()
+                                .iter()
+                                .map(|name| format!("!{directory}/{name}")),
+                        );
                     }
                     DependencySourceInputs::Exclude => {}
                     DependencySourceInputs::Unknown => {
@@ -1543,9 +1719,7 @@ impl GoTaskContract {
                     } else {
                         ""
                     };
-                    DerivedOutputs::Resolved(vec![format!(
-                        "{GO_DIST_DIR}/{output_name}{extension}"
-                    )])
+                    DerivedOutputs::Resolved(vec![format!("{output_name}{extension}")])
                 }
                 GoContractKind::Module {
                     output_name: Some(_),
@@ -1563,6 +1737,13 @@ impl GoTaskContract {
                 }
                 GoContractKind::Workspace => DerivedOutputs::Resolved(Vec::new()),
             };
+        }
+        if task == "build" && self.output_overlaps_source {
+            // Restoring an inferred output must never overwrite a source input,
+            // even if the user explicitly declares that path as an output.
+            io.input_safety = DerivedInputSafety::Untracked;
+            io.outputs = DerivedOutputs::Unavailable;
+            io.cache_reason = Some("Go binary output may overlap a source input".to_string());
         }
         // Explicit arguments and GOFLAGS can redirect Go to files or module
         // selections outside the discovered workspace. Output declarations do
@@ -1672,20 +1853,17 @@ fn package_from_module(
     cache_prefixes: &[String],
     go_flags: &str,
 ) -> DiscoveredPackage {
+    let name = module.package_name().to_string();
     let descriptor = PackageJson {
-        name: Some(turborepo_errors::Spanned::new(module.module_path.clone())),
+        name: Some(turborepo_errors::Spanned::new(name.clone())),
         ..Default::default()
     };
-    DiscoveredPackage::package(
-        Some(module.module_path.clone()),
-        descriptor,
-        module.manifest_path.clone(),
-    )
-    .with_native_relationships(module.relationships.clone())
-    .with_native_tasks(native_tasks_for_module(module, target_os))
-    .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
-        GoTaskContract::module(module, target_os, cache_prefixes).with_go_flags(go_flags),
-    ))
+    DiscoveredPackage::package(Some(name), descriptor, module.manifest_path.clone())
+        .with_native_relationships(module.relationships.clone())
+        .with_native_tasks(native_tasks_for_module(module))
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+            GoTaskContract::module(module, target_os, cache_prefixes).with_go_flags(go_flags),
+        ))
 }
 
 /// The Go repository contributor. Registered during graph construction when
@@ -1697,6 +1875,24 @@ pub(crate) struct GoContributor {
 impl GoContributor {
     pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self { repo_root })
+    }
+
+    /// Cheap scope inventory without invoking `go` (see [`scope_inventory`]).
+    ///
+    /// Core's lazy discovery needs only the workspace's scope identities —
+    /// which Go modules exist, their manifests, the `go-workspace` aggregate,
+    /// and the workspace root — to route a selection, so unrelated selections
+    /// never spawn a `go` process. Identities match
+    /// [`Self::discover_packages`], which remains the single source of
+    /// tasks, edges, contracts, external resolution, and prune facts once a
+    /// selection actually needs Go.
+    async fn discover_package_scopes_inner(
+        &self,
+    ) -> Result<DiscoveredPackageScopes, toolchain::Error> {
+        turborepo_rayon_compat::block_in_place(|| {
+            scope_inventory::discover_package_scopes(&self.repo_root)
+        })
+        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
     }
 }
 
@@ -1736,22 +1932,10 @@ impl RepositoryContributor for GoContributor {
             })
             .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            let mut module_patterns = workspace
-                .modules
-                .iter()
-                .filter_map(|module| {
-                    let directory = module.manifest_path.parent()?;
-                    let directory =
-                        turbopath::AnchoredSystemPathBuf::new(&self.repo_root, directory).ok()?;
-                    Some(format!("./{}/...", directory.to_unix()))
-                })
-                .collect::<Vec<_>>();
-            module_patterns.sort();
-
             let mut module_names = workspace
                 .modules
                 .iter()
-                .map(|module| module.module_path.clone())
+                .map(|module| module.package_name().to_string())
                 .collect::<Vec<_>>();
             module_names.sort();
             let workspace_relationships = module_names
@@ -1782,7 +1966,7 @@ impl RepositoryContributor for GoContributor {
                     self.repo_root.join_component(GO_WORK),
                 )
                 .with_native_relationships(workspace_relationships)
-                .with_native_tasks(native_tasks_for_workspace(&module_patterns))
+                .with_native_tasks(native_tasks_for_workspace())
                 .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
                     GoTaskContract::workspace(&environment.target_os, &cache_prefixes)
                         .with_go_flags(
@@ -1851,6 +2035,10 @@ impl RepositoryContributor for GoContributor {
             })
         })
     }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(self.discover_package_scopes_inner())
+    }
 }
 
 #[cfg(test)]
@@ -1861,6 +2049,42 @@ mod tests {
 
     fn go_available() -> bool {
         which::which("go").is_ok()
+    }
+
+    #[test]
+    fn package_names_preserve_valid_major_versions_and_final_components() {
+        for (module_path, expected) in [
+            ("api", "api"),
+            ("v2", "v2"),
+            ("my-api", "my-api"),
+            ("yaml.v3", "yaml.v3"),
+            ("example.com/api", "api"),
+            ("example.com/team/services/my-api", "my-api"),
+            ("example.com/team/api.client", "api.client"),
+            ("api/v2", "api/v2"),
+            ("api/v10", "api/v10"),
+            ("example.com/api/v2", "api/v2"),
+            ("example.com/team/api/v10", "api/v10"),
+            (
+                "example.com/team/api/v999999999999999999999999999999",
+                "api/v999999999999999999999999999999",
+            ),
+            ("example.com/api/v0", "v0"),
+            ("example.com/api/v1", "v1"),
+            ("example.com/api/v01", "v01"),
+            ("example.com/api/v02", "v02"),
+            ("example.com/api/v", "v"),
+            ("example.com/api/v2beta", "v2beta"),
+            ("example.com/api/v2.0", "v2.0"),
+            ("example.com/api/v-2", "v-2"),
+            ("example.com/api/v+2", "v+2"),
+            ("example.com/api/v２", "v２"),
+            ("example.com/api/V2", "V2"),
+            ("example.com/api/v2/client", "client"),
+            ("gopkg.in/yaml.v3", "yaml.v3"),
+        ] {
+            assert_eq!(package_name(module_path), expected, "{module_path}");
+        }
     }
 
     #[test]
@@ -1945,7 +2169,7 @@ mod tests {
                 assert_eq!(api.relationships.len(), 1);
                 assert_eq!(
                     api.relationships[0].target(),
-                    &RelationshipTarget::Internal("example.com/lib".into())
+                    &RelationshipTarget::Internal("lib".into())
                 );
             } else {
                 assert!(api.relationships.is_empty());
@@ -2011,7 +2235,7 @@ mod tests {
         let toolchain = ExternalPackageIdentity::new("go", "go1.24");
         let resolutions = external_resolutions(graph, &modules, &listed, &toolchain).unwrap();
         assert_eq!(
-            resolution_keys(&resolutions, "example.com/app"),
+            resolution_keys(&resolutions, "app"),
             HashSet::from(["go", "example.net/dep", "example.net/leaf"])
         );
         let changed = external_resolutions(
@@ -2024,7 +2248,7 @@ mod tests {
             &toolchain,
         )
         .unwrap();
-        for package in ["example.com/app", "example.com/other", GO_WORKSPACE_NAME] {
+        for package in ["app", "other", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed, package).identities()
@@ -2147,7 +2371,12 @@ mod tests {
             (
                 "reserved",
                 "module go-workspace\n\ngo 1.22\n",
-                "reserved for the workspace aggregate",
+                "reserved for the Go workspace aggregate",
+            ),
+            (
+                "derived-reserved",
+                "module example.com/go-workspace\n\ngo 1.22\n",
+                "reserved for the Go workspace aggregate",
             ),
         ] {
             let tempdir = tempfile::tempdir().unwrap();
@@ -2239,7 +2468,7 @@ mod tests {
         assert_eq!(api.relationships.len(), 1);
         assert_eq!(
             api.relationships[0].target(),
-            &crate::relationships::RelationshipTarget::Internal("example.com/lib".to_string())
+            &crate::relationships::RelationshipTarget::Internal("lib".to_string())
         );
     }
 
@@ -2251,6 +2480,61 @@ mod tests {
         let relationships =
             relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
         assert_eq!(relationships["example.com/api"].len(), 1);
+        assert_eq!(
+            relationships["example.com/api"][0].target(),
+            &RelationshipTarget::Internal("lib".to_string())
+        );
+    }
+
+    #[test]
+    fn versioned_relationships_and_resolutions_use_derived_package_names() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/team/api/v2"),
+            resolution_module(&root, "example.com/team/lib/v10"),
+        ];
+        let graph = "example.com/team/api/v2 \
+                     example.com/team/lib/v10@v10.0.0\nexample.com/team/lib/v10 \
+                     example.net/dependency/v3@v3.0.0\n";
+        let module_paths = modules
+            .iter()
+            .map(|module| module.module_path.clone())
+            .collect();
+        let relationships =
+            relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
+        // Go graph lookup keys stay full paths; only Turborepo relationship targets
+        // shorten.
+        assert_eq!(
+            relationships["example.com/team/api/v2"][0].target(),
+            &RelationshipTarget::Internal("lib/v10".to_string())
+        );
+        let resolutions = external_resolutions(
+            graph,
+            &modules,
+            &[listed_module(
+                "example.net/dependency/v3",
+                "v3.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .unwrap();
+        assert_eq!(
+            resolutions
+                .iter()
+                .map(PackageResolution::package)
+                .collect::<HashSet<_>>(),
+            HashSet::from(["api/v2", "lib/v10", GO_WORKSPACE_NAME])
+        );
+        for name in ["api/v2", "lib/v10", GO_WORKSPACE_NAME] {
+            assert_eq!(
+                resolution_keys(&resolutions, name),
+                HashSet::from(["go", "example.net/dependency/v3"])
+            );
+        }
+        assert_eq!(modules[0].module_path, "example.com/team/api/v2");
+        assert_eq!(modules[1].module_path, "example.com/team/lib/v10");
     }
 
     #[test]
@@ -2260,21 +2544,18 @@ mod tests {
             go: "1.22".to_string(),
             toolchain: Some("go1.22.0".to_string()),
             package_directories: HashMap::from([
-                ("example.com/api".to_string(), "apps/api".to_string()),
-                ("example.com/lib".to_string(), "packages/lib".to_string()),
-                ("example.com/unused".to_string(), "tools/unused".to_string()),
+                ("api".to_string(), "apps/api".to_string()),
+                ("lib".to_string(), "packages/lib".to_string()),
+                ("unused".to_string(), "tools/unused".to_string()),
             ]),
-            relationships: HashMap::from([(
-                "example.com/api".to_string(),
-                vec!["example.com/lib".to_string()],
-            )]),
+            relationships: HashMap::from([("api".to_string(), vec!["lib".to_string()])]),
             replacements: vec![
                 GoPruneReplacement {
                     old_path: "example.net/local".to_string(),
                     old_version: None,
                     new_path: "./packages/lib".to_string(),
                     new_version: None,
-                    local_target: Some("example.com/lib".to_string()),
+                    local_target: Some("lib".to_string()),
                 },
                 GoPruneReplacement {
                     old_path: "example.net/remote".to_string(),
@@ -2288,16 +2569,16 @@ mod tests {
                     old_version: None,
                     new_path: "./tools/unused".to_string(),
                     new_version: None,
-                    local_target: Some("example.com/unused".to_string()),
+                    local_target: Some("unused".to_string()),
                 },
             ],
         };
 
         let plan = knowledge
-            .plan(&["example.com/api".to_string()])
+            .plan(&["api".to_string()])
             .unwrap()
             .expect("kept Go modules produce a plan");
-        assert_eq!(plan.extra_packages, ["example.com/lib"]);
+        assert_eq!(plan.extra_packages, ["lib"]);
         assert_eq!(
             plan.root_files,
             [(
@@ -2549,12 +2830,19 @@ mod tests {
             manifest_path: root.join_components(&[directory, GO_MOD]),
             relationships: Vec::new(),
             runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
         }
     }
 
     fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        // Canonicalized onto the path `go` reports: `go list -m all` emits
+        // canonical replacement directories, so a tempdir behind a symlink
+        // (for example `/var` -> `/private/var` on macOS) would otherwise
+        // look outside this repository to the authoritative resolver.
         AbsoluteSystemPathBuf::try_from(tempdir.path())
             .expect("temporary repository root is absolute")
+            .to_realpath()
+            .expect("temporary repository root canonicalizes")
     }
 
     fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
@@ -2613,9 +2901,9 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.24"),
         )
         .expect("resolution succeeds");
-        let app = resolution_keys(&resolutions, "example.com/app");
-        let lib = resolution_keys(&resolutions, "example.com/lib");
-        let other = resolution_keys(&resolutions, "example.com/other");
+        let app = resolution_keys(&resolutions, "app");
+        let lib = resolution_keys(&resolutions, "lib");
+        let other = resolution_keys(&resolutions, "other");
         let aggregate = resolution_keys(&resolutions, GO_WORKSPACE_NAME);
 
         for closure in [&app, &lib, &other, &aggregate] {
@@ -2643,15 +2931,15 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.24"),
         )
         .expect("changed resolution succeeds");
-        for package in ["example.com/app", "example.com/lib", GO_WORKSPACE_NAME] {
+        for package in ["app", "lib", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed, package).identities()
             );
         }
         assert_eq!(
-            resolution_for(&resolutions, "example.com/other").identities(),
-            resolution_for(&changed, "example.com/other").identities()
+            resolution_for(&resolutions, "other").identities(),
+            resolution_for(&changed, "other").identities()
         );
 
         let changed_toolchain = external_resolutions(
@@ -2661,12 +2949,7 @@ mod tests {
             &ExternalPackageIdentity::new("go", "go1.25"),
         )
         .expect("changed toolchain resolution succeeds");
-        for package in [
-            "example.com/app",
-            "example.com/lib",
-            "example.com/other",
-            GO_WORKSPACE_NAME,
-        ] {
+        for package in ["app", "lib", "other", GO_WORKSPACE_NAME] {
             assert_ne!(
                 resolution_for(&resolutions, package).identities(),
                 resolution_for(&changed_toolchain, package).identities(),
@@ -2734,7 +3017,7 @@ mod tests {
         )
         .expect("CRLF resolution succeeds");
 
-        let app = resolution_keys(&resolutions, "example.com/app");
+        let app = resolution_keys(&resolutions, "app");
         assert_eq!(app, HashSet::from(["go", "example.net/dependency"]));
     }
 
@@ -2800,12 +3083,13 @@ mod tests {
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: Some("./cmd/api".to_string()),
+            root_source_inputs: Some(HashSet::new()),
         };
         let context = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "apps/api",
-            native_tasks_for_module(&module, "linux"),
+            native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
                 &module,
@@ -2817,7 +3101,7 @@ mod tests {
         let build = resolve_go_cmd(&context, "build", Some(&["-race".to_string()]), None);
         assert_eq!(
             build.args,
-            ["build", "-o", "dist/api", "-race", "./cmd/api"].map(std::ffi::OsString::from)
+            ["build", "-race", "./cmd/api"].map(std::ffi::OsString::from)
         );
         let custom = resolve_go_cmd(
             &context,
@@ -2827,7 +3111,7 @@ mod tests {
         );
         assert_eq!(
             custom.args,
-            ["build", "-o", "dist/api", "-o", "custom", "./cmd/api"].map(std::ffi::OsString::from)
+            ["build", "-o", "custom", "./cmd/api"].map(std::ffi::OsString::from)
         );
         let test = resolve_go_cmd(
             &context,
@@ -2846,11 +3130,22 @@ mod tests {
             lint.args,
             ["vet", "-json", "./..."].map(std::ffi::OsString::from)
         );
+        let format = resolve_go_cmd(&context, "format", Some(&["-n".to_string()]), None);
+        assert_eq!(format.program, std::ffi::OsString::from("go"));
+        assert_eq!(
+            format.args,
+            ["fmt", "-n", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(format.cwd, root.join_components(&["apps", "api"]));
+        assert_eq!(task_cache(&context, "format"), Some(false));
         assert!(context.native_tasks().get("vet").is_none());
-        assert!(
-            !native_tasks_for_workspace(&["./apps/api/...".to_string()])
-                .iter()
-                .any(|task| task.name() == "vet")
+        let workspace_tasks = native_tasks_for_workspace();
+        assert_eq!(workspace_tasks.len(), 1);
+        assert_eq!(workspace_tasks[0].name(), "build");
+        assert!(!workspace_tasks[0].participates());
+        assert_eq!(
+            workspace_tasks[0].contract().entrypoint(),
+            Some(TaskEntrypoint::Excluded)
         );
         assert_eq!(
             context
@@ -2876,6 +3171,95 @@ mod tests {
     }
 
     #[test]
+    fn executable_names_match_go_import_path_rules() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let mut cases = vec![
+            ("example.com/api".to_string(), ".".to_string(), "api"),
+            ("v2".to_string(), ".".to_string(), "v2"),
+            (
+                "example.com/api/v2".to_string(),
+                "./cmd/server".to_string(),
+                "server",
+            ),
+            ("example.com/api".to_string(), "./v2".to_string(), "api"),
+            ("example.com/api/v2".to_string(), "./v3".to_string(), "v2"),
+            ("gopkg.in/api.v2".to_string(), ".".to_string(), "api.v2"),
+        ];
+        for (suffix, expected) in [
+            ("v2", "api"),
+            ("v10", "api"),
+            ("v999999999999999999999999999999", "api"),
+            ("v1", "v1"),
+            ("v0", "v0"),
+            ("v01", "v01"),
+            ("v02", "v02"),
+            ("v", "v"),
+            ("v2beta", "v2beta"),
+            ("v2.0", "v2.0"),
+            ("v-2", "v-2"),
+            ("v２", "v２"),
+            ("V2", "V2"),
+        ] {
+            cases.push((
+                format!("example.com/api/{suffix}"),
+                ".".to_string(),
+                expected,
+            ));
+            cases.push((
+                "example.com/module/v3".to_string(),
+                format!("./cmd/api/{suffix}"),
+                expected,
+            ));
+        }
+        for (module_path, target, expected) in cases {
+            let module = GoModule {
+                module_path,
+                // The checkout directory must not determine the executable name.
+                manifest_path: root.join_components(&["checkout", GO_MOD]),
+                relationships: Vec::new(),
+                runnable_target: Some(target.clone()),
+                root_source_inputs: Some(HashSet::new()),
+            };
+            assert_eq!(
+                runnable_output_name(&module).as_deref(),
+                Some(expected),
+                "{module:?}"
+            );
+            for (target_os, extension) in [("linux", ""), ("darwin", ""), ("windows", ".exe")] {
+                let contract = GoTaskContract::module(&module, target_os, &[]);
+                let package = task_context(
+                    &root,
+                    module.package_name(),
+                    "checkout",
+                    native_tasks_for_module(&module),
+                    crate::package_graph::PackageTaskContextKind::Package,
+                    crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+                );
+                let build = resolve_go_cmd(&package, "build", None, None);
+                assert_eq!(build.args, ["build", &target].map(std::ffi::OsString::from));
+                assert_eq!(build.cwd, root.join_component("checkout"));
+                let environment = toolchain::TaskIOEnvironment::default();
+                let context = toolchain::TaskIOContext {
+                    task_args: None,
+                    environment: &environment,
+                };
+                let io = contract
+                    .derived_task_io(&package, "build", "..", &[], true, &context)
+                    .unwrap();
+                assert_eq!(
+                    io.outputs,
+                    DerivedOutputs::Resolved(vec![format!("{expected}{extension}")]),
+                    "{module:?}, {target_os}"
+                );
+                for binary in [expected.to_string(), format!("{expected}.exe")] {
+                    assert!(io.input_globs.contains(&format!("!{binary}")));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn windows_module_executable_contract_uses_exe_suffix() {
         let tempdir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
@@ -2884,22 +3268,20 @@ mod tests {
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
         };
         let contract = GoTaskContract::module(&module, "windows", &[]);
         let package = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "apps/api",
-            native_tasks_for_module(&module, "windows"),
+            native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(contract.clone()),
         );
 
         let build = resolve_go_cmd(&package, "build", None, None);
-        assert_eq!(
-            build.args,
-            ["build", "-o", "dist/api.exe", "."].map(std::ffi::OsString::from)
-        );
+        assert_eq!(build.args, ["build", "."].map(std::ffi::OsString::from));
 
         let environment = toolchain::TaskIOEnvironment::default();
         let context = toolchain::TaskIOContext {
@@ -2911,8 +3293,485 @@ mod tests {
             .expect("Windows executable build derives IO");
         assert_eq!(
             io.outputs,
-            DerivedOutputs::Resolved(vec!["dist/api.exe".to_string()])
+            DerivedOutputs::Resolved(vec!["api.exe".to_string()])
         );
+    }
+
+    #[test]
+    fn automatic_inputs_exclude_own_and_transitive_binaries_without_pruning_sources() {
+        for directory_suffix in [None, Some(""), Some(".exe")] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            let mut modules = Vec::new();
+            for (directory, module_path, target, binary) in [
+                ("app", "example.com/api/v2", Some("."), Some("api")),
+                ("bridge", "example.com/bridge", None, None),
+                (
+                    "worker",
+                    "example.com/tools",
+                    Some("./cmd/worker/v3"),
+                    Some("worker"),
+                ),
+            ] {
+                let module_dir = root.join_component(directory);
+                module_dir.create_dir_all().unwrap();
+                module_dir
+                    .join_component("source.go")
+                    .create_with_contents("package main\n")
+                    .unwrap();
+                // dist is ordinary source input now, not an inferred output directory.
+                module_dir.join_component("dist").create_dir_all().unwrap();
+                module_dir
+                    .join_components(&["dist", "data.txt"])
+                    .create_with_contents("source data")
+                    .unwrap();
+                if let Some(binary) = binary {
+                    for suffix in ["", ".exe"] {
+                        let path = module_dir.join_component(&format!("{binary}{suffix}"));
+                        if directory_suffix == Some(suffix) {
+                            path.create_dir_all().unwrap();
+                            path.join_component("source.go")
+                                .create_with_contents("package source\n")
+                                .unwrap();
+                        } else {
+                            path.create_with_contents("built executable").unwrap();
+                        }
+                    }
+                }
+                modules.push(GoModule {
+                    module_path: module_path.to_string(),
+                    manifest_path: module_dir.join_component(GO_MOD),
+                    relationships: Vec::new(),
+                    runnable_target: target.map(str::to_string),
+                    root_source_inputs: Some(HashSet::new()),
+                });
+            }
+            let contract = GoTaskContract::module(&modules[0], "linux", &[]);
+            let mut packages = modules
+                .iter()
+                .zip(["app", "bridge", "worker"])
+                .map(|(module, directory)| {
+                    task_context(
+                        &root,
+                        module.package_name(),
+                        directory,
+                        native_tasks_for_module(module),
+                        crate::package_graph::PackageTaskContextKind::Package,
+                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                            module,
+                            "linux",
+                            &[],
+                        )),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let package = packages.remove(0);
+            // The caller supplies the full source dependency closure: app ->
+            // bridge (library) -> worker (sole main in a nested package).
+            let dependencies = packages;
+            let environment = toolchain::TaskIOEnvironment::default();
+            let context = toolchain::TaskIOContext {
+                task_args: None,
+                environment: &environment,
+            };
+            for task in ["build", "test", "lint", "format", "dev"] {
+                let io = contract
+                    .derived_task_io(&package, task, "..", &dependencies, true, &context)
+                    .unwrap();
+                assert_eq!(io.package_default_inputs, Some(true));
+                for (prefix, binary) in [("", "api"), ("../worker/", "worker")] {
+                    for suffix in ["", ".exe"] {
+                        assert_eq!(
+                            io.input_globs
+                                .contains(&format!("!{prefix}{binary}{suffix}")),
+                            directory_suffix != Some(suffix)
+                        );
+                    }
+                }
+                assert!(io.input_globs.contains(&"../bridge/**".to_string()));
+                assert!(io.input_globs.contains(&"../worker/**".to_string()));
+                assert!(!io.input_globs.iter().any(|glob| glob.contains("dist")));
+                let mut includes = vec!["**".parse::<globwalk::ValidatedGlob>().unwrap()];
+                let mut excludes = Vec::new();
+                for glob in &io.input_globs {
+                    if let Some(exclude) = glob.strip_prefix('!') {
+                        excludes.push(exclude.parse().unwrap());
+                    } else {
+                        includes.push(glob.parse().unwrap());
+                    }
+                }
+                let files = globwalk::globwalk(
+                    &root.join_component("app"),
+                    &includes,
+                    &excludes,
+                    globwalk::WalkType::Files,
+                )
+                .unwrap();
+                for directory in ["app", "bridge", "worker"] {
+                    assert!(files.contains(&root.join_components(&[directory, "source.go"])));
+                    assert!(
+                        files.contains(&root.join_components(&[directory, "dist", "data.txt"]))
+                    );
+                }
+                for (directory, binary) in [("app", "api"), ("worker", "worker")] {
+                    for suffix in ["", ".exe"] {
+                        let path = root.join_components(&[directory, &format!("{binary}{suffix}")]);
+                        if directory_suffix == Some(suffix) {
+                            assert!(files.contains(&path.join_component("source.go")));
+                        } else {
+                            assert!(!files.contains(&path));
+                        }
+                    }
+                }
+                let explicit_io = contract
+                    .derived_task_io(&package, task, "..", &dependencies, false, &context)
+                    .unwrap();
+                assert_eq!(explicit_io.package_default_inputs, None);
+                assert!(
+                    !explicit_io
+                        .input_globs
+                        .iter()
+                        .any(|glob| glob.starts_with('!'))
+                );
+            }
+        }
+    }
+
+    fn source_input_snapshot(
+        directory: &AbsoluteSystemPath,
+        io: &toolchain::DerivedTaskIO,
+    ) -> BTreeMap<AbsoluteSystemPathBuf, Vec<u8>> {
+        let mut includes = Vec::<globwalk::ValidatedGlob>::new();
+        if io.package_default_inputs == Some(true) {
+            includes.push("**".parse().unwrap());
+        }
+        let mut excludes = Vec::new();
+        for glob in &io.input_globs {
+            if let Some(exclude) = glob.strip_prefix('!') {
+                excludes.push(exclude.parse().unwrap());
+            } else {
+                includes.push(glob.parse().unwrap());
+            }
+        }
+        globwalk::globwalk(directory, &includes, &excludes, globwalk::WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| {
+                let contents = fs::read(path.as_std_path()).unwrap();
+                (path, contents)
+            })
+            .collect()
+    }
+
+    fn module_and_dependency_io(
+        root: &AbsoluteSystemPath,
+        module: &GoModule,
+        task: &str,
+    ) -> [toolchain::DerivedTaskIO; 2] {
+        let contract = GoTaskContract::module(module, "linux", &[]);
+        let package = task_context(
+            root,
+            module.package_name(),
+            "app",
+            native_tasks_for_module(module),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+        let aggregate_contract = GoTaskContract::workspace("linux", &[]);
+        let aggregate = task_context(
+            root,
+            GO_WORKSPACE_NAME,
+            "",
+            native_tasks_for_workspace(),
+            crate::package_graph::PackageTaskContextKind::Aggregate,
+            crate::task_contracts::ScopeTaskContract::go(aggregate_contract.clone()),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        [
+            contract
+                .derived_task_io(&package, task, "..", &[], true, &context)
+                .unwrap(),
+            aggregate_contract
+                .derived_task_io(&aggregate, task, "", &[package], true, &context)
+                .unwrap(),
+        ]
+    }
+
+    fn git_for_source_fixture(root: &AbsoluteSystemPath, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn embedded_binary_names_remain_own_and_dependency_source_inputs() {
+        if !go_available() {
+            return;
+        }
+        for (file, package, pattern, nested_main) in [
+            ("embed.go", "main", "api.exe", false),
+            ("embed_test.go", "main", "api.exe", false),
+            ("external_test.go", "main_test", "api.exe", false),
+            ("embed.go", "main", "all:api.exe", false),
+            ("embed_test.go", "main", "*.exe", false),
+            ("embed.go", "data", "api.exe", true),
+            ("tagged.go", "main", "api.exe", false),
+            // go list omits this entirely tagged root package. Its asset must
+            // still be hashed when task-level tags activate the root library.
+            ("tagged.go", "data", "api.exe", true),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = resolution_root(&tempdir);
+            write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+            let module_dir = root.join_component("app");
+            let main_dir = if nested_main {
+                module_dir.join_components(&["cmd", "api"])
+            } else {
+                module_dir.clone()
+            };
+            main_dir.create_dir_all().unwrap();
+            main_dir
+                .join_component("main.go")
+                .create_with_contents("package main\nfunc main() {}\n")
+                .unwrap();
+            if file == "tagged.go" && nested_main {
+                // A genuinely source-free root must retain artifact inference.
+                assert_eq!(
+                    module_package_inputs(&module_dir).unwrap().1,
+                    Some(HashSet::new())
+                );
+            }
+            let build_constraint = if file == "tagged.go" {
+                "//go:build alternate\n\n"
+            } else {
+                ""
+            };
+            module_dir
+                .join_component(file)
+                .create_with_contents(format!(
+                    "{build_constraint}package {package}\nimport _ \"embed\"\n//go:embed \
+                     {pattern}\nvar data string\n"
+                ))
+                .unwrap();
+            let asset = module_dir.join_component("api.exe");
+            asset.create_with_contents("embedded input before").unwrap();
+            let (runnable_target, root_source_inputs) = module_package_inputs(&module_dir).unwrap();
+            let module = GoModule {
+                module_path: "example.com/api/v2".to_string(),
+                manifest_path: module_dir.join_component(GO_MOD),
+                relationships: Vec::new(),
+                runnable_target,
+                root_source_inputs,
+            };
+            assert!(module.runnable_target.is_some());
+            if file == "tagged.go" && nested_main {
+                assert_eq!(module.runnable_target.as_deref(), Some("./cmd/api"));
+                assert!(module.root_source_inputs.is_none());
+            }
+            // On Windows the inferred output is this very source file, so
+            // restoring it would overwrite an input rather than an artifact.
+            assert!(GoTaskContract::module(&module, "windows", &[]).output_overlaps_source);
+            for task in ["build", "test"] {
+                let ios = module_and_dependency_io(&root, &module, task);
+                if task == "build" && module.root_source_inputs.is_some() {
+                    assert_eq!(
+                        ios[0].outputs,
+                        DerivedOutputs::Resolved(vec!["api".to_string()])
+                    );
+                }
+                for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+                    let before = source_input_snapshot(directory, io);
+                    assert!(before.contains_key(&asset), "{file}: {pattern}");
+                    asset.create_with_contents("embedded input after").unwrap();
+                    let after = source_input_snapshot(directory, io);
+                    assert_ne!(before, after, "embedded input contents must affect hashing");
+                    asset.create_with_contents("embedded input before").unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tracked_binary_names_remain_sources_even_when_missing_or_mutated() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        for name in ["api", "api.exe"] {
+            module_dir
+                .join_component(name)
+                .create_with_contents("checked-in source")
+                .unwrap();
+        }
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        git_for_source_fixture(&root, &["add", "app/api", "app/api.exe"]);
+        for contents in [None, Some("mutated source"), Some("restored source")] {
+            for name in ["api", "api.exe"] {
+                let path = module_dir.join_component(name);
+                if let Some(contents) = contents {
+                    path.create_with_contents(contents).unwrap();
+                } else {
+                    fs::remove_file(path.as_std_path()).unwrap();
+                }
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            let contract = GoTaskContract::module(module, "linux", &[]);
+            assert!(contract.source_input_exclusions().is_empty());
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+            assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+            for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+                let inputs = source_input_snapshot(directory, io);
+                for name in ["api", "api.exe"] {
+                    assert_eq!(
+                        inputs
+                            .get(&module_dir.join_component(name))
+                            .map(Vec::as_slice),
+                        contents.map(str::as_bytes)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn untracked_artifact_exclusions_are_stable_when_absent_warm_or_mutated() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        let mut cold = None;
+        for contents in [
+            None,
+            Some("built output"),
+            Some("deliberately corrupted output"),
+        ] {
+            if let Some(contents) = contents {
+                for name in ["api", "api.exe"] {
+                    module_dir
+                        .join_component(name)
+                        .create_with_contents(contents)
+                        .unwrap();
+                }
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(
+                ios[0].outputs,
+                DerivedOutputs::Resolved(vec!["api".to_string()])
+            );
+            let snapshots = [
+                source_input_snapshot(&module_dir, &ios[0]),
+                source_input_snapshot(&root, &ios[1]),
+            ];
+            if let Some(cold) = &cold {
+                assert_eq!(cold, &snapshots);
+            } else {
+                cold = Some(snapshots);
+            }
+        }
+    }
+
+    #[test]
+    fn unavailable_index_knowledge_does_not_exclude_potential_sources() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        module_dir
+            .join_component("api.exe")
+            .create_with_contents("unclassified source")
+            .unwrap();
+        assert!(tracked_source_files(&root).is_none());
+        let workspace = discover_workspace(&root).unwrap();
+        let module = &workspace.modules[0];
+        assert!(module.root_source_inputs.is_none());
+        let ios = module_and_dependency_io(&root, module, "build");
+        assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+        assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+        for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+            assert!(
+                source_input_snapshot(directory, io)
+                    .contains_key(&module_dir.join_component("api.exe"))
+            );
+        }
+    }
+
+    #[test]
+    fn embed_patterns_preserve_not_yet_created_binary_names() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents(
+                "package main\nimport _ \"embed\"\n//go:embed api*\nvar data string\nfunc main() \
+                 {}\n",
+            )
+            .unwrap();
+        module_dir
+            .join_component("api.txt")
+            .create_with_contents("source input")
+            .unwrap();
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        for warm in [false, true] {
+            if warm {
+                module_dir
+                    .join_component("api.exe")
+                    .create_with_contents("new matching input")
+                    .unwrap();
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            assert!(module.root_source_inputs.is_none());
+            assert!(
+                GoTaskContract::module(module, "linux", &[])
+                    .source_input_exclusions()
+                    .is_empty()
+            );
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+            assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+        }
     }
 
     #[test]
@@ -2922,7 +3781,7 @@ mod tests {
         }
 
         let tempdir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let root = resolution_root(&tempdir);
         write_workspace(&root, &[("apps/api", "example.com/api", "")]);
         for command in ["first", "second"] {
             join_relative_path(&root, &format!("apps/api/cmd/{command}"))
@@ -2938,7 +3797,7 @@ mod tests {
         let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
         let module = &workspace.modules[0];
         assert_eq!(module.runnable_target, None);
-        let tasks = native_tasks_for_module(module, "linux");
+        let tasks = native_tasks_for_module(module);
         assert!(!tasks.iter().any(|task| task.name() == "dev"));
         assert!(!tasks.iter().any(|task| task.name() == "run"));
         assert_eq!(
@@ -2949,6 +3808,60 @@ mod tests {
                 .contract()
                 .entrypoint(),
             Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        let contract = GoTaskContract::module(module, "linux", &[]);
+        let package = task_context(
+            &root,
+            module.package_name(),
+            "apps/api",
+            tasks,
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+        assert_eq!(
+            resolve_go_cmd(&package, "build", None, None).args,
+            ["build", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(task_cache(&package, "build"), Some(false));
+        assert!(contract.source_input_exclusions().is_empty());
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        assert_eq!(
+            contract
+                .derived_task_io(&package, "build", "../..", &[], true, &context)
+                .unwrap()
+                .outputs,
+            DerivedOutputs::Unavailable
+        );
+    }
+
+    #[test]
+    fn sole_main_target_is_selected_even_with_other_library_packages() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/app", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("lib.go")
+            .create_with_contents("package lib\n")
+            .unwrap();
+        module_dir
+            .join_components(&["cmd", "server", "v2"])
+            .create_dir_all()
+            .unwrap();
+        module_dir
+            .join_components(&["cmd", "server", "v2", "main.go"])
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        assert_eq!(
+            module_package_inputs(&module_dir).unwrap().0.as_deref(),
+            Some("./cmd/server/v2")
         );
     }
 
@@ -2961,30 +3874,32 @@ mod tests {
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
         };
         let library = GoModule {
             module_path: "example.com/lib".to_string(),
             manifest_path: root.join_components(&["packages", "lib", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
         };
         let cache_prefixes = vec![".cache/go-build".to_string(), ".cache/go-mod".to_string()];
         let executable_contract = GoTaskContract::module(&executable, "linux", &cache_prefixes);
         let library_contract = GoTaskContract::module(&library, "linux", &cache_prefixes);
         let package = task_context(
             &root,
-            &executable.module_path,
+            executable.package_name(),
             "apps/api",
-            native_tasks_for_module(&executable, "linux"),
+            native_tasks_for_module(&executable),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
         );
         assert!(package.task_contract().env_vars().contains(&"GOCACHE"));
         let dependency = task_context(
             &root,
-            &library.module_path,
+            library.package_name(),
             "packages/lib",
-            native_tasks_for_module(&library, "linux"),
+            native_tasks_for_module(&library),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
         );
@@ -3010,7 +3925,7 @@ mod tests {
         assert!(!executable_io.env.contains(&"GOPROXY".to_string()));
         assert_eq!(
             executable_io.outputs,
-            DerivedOutputs::Resolved(vec!["dist/api".to_string()])
+            DerivedOutputs::Resolved(vec!["api".to_string()])
         );
         assert!(
             executable_io
@@ -3021,9 +3936,9 @@ mod tests {
 
         let library_context = task_context(
             &root,
-            &library.module_path,
+            library.package_name(),
             "packages/lib",
-            native_tasks_for_module(&library, "linux"),
+            native_tasks_for_module(&library),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
         );
@@ -3032,16 +3947,19 @@ mod tests {
             .expect("library build derives IO");
         assert_eq!(library_io.outputs, DerivedOutputs::Unavailable);
         assert_eq!(task_cache(&library_context, "build"), Some(false));
+        assert_eq!(
+            resolve_go_cmd(&library_context, "build", None, None).args,
+            ["build", "./..."].map(std::ffi::OsString::from)
+        );
+        assert!(library_contract.source_input_exclusions().is_empty());
+        assert!(library_context.native_tasks().get("dev").is_none());
 
         let workspace_contract = GoTaskContract::workspace("linux", &cache_prefixes);
         let workspace = task_context(
             &root,
             GO_WORKSPACE_NAME,
             "",
-            native_tasks_for_workspace(&[
-                "./apps/api/...".to_string(),
-                "./packages/lib/...".to_string(),
-            ]),
+            native_tasks_for_workspace(),
             crate::package_graph::PackageTaskContextKind::Aggregate,
             crate::task_contracts::ScopeTaskContract::go(workspace_contract.clone()),
         );
@@ -3060,7 +3978,7 @@ mod tests {
             assert!(aggregate_io.input_globs.iter().any(|glob| glob == input));
         }
         assert_eq!(aggregate_io.outputs, DerivedOutputs::Resolved(Vec::new()));
-        assert_eq!(task_cache(&workspace, "lint"), None);
+        assert!(workspace.native_tasks().get("lint").is_none());
     }
 
     #[test]
@@ -3094,6 +4012,7 @@ mod tests {
             manifest_path: root.join_components(&["apps", "api", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
         };
 
         let observation =
@@ -3137,6 +4056,7 @@ mod tests {
             manifest_path: root.join_components(&["api", GO_MOD]),
             relationships: Vec::new(),
             runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
         };
         let contract = if workspace {
             GoTaskContract::workspace("linux", &[])
@@ -3146,9 +4066,9 @@ mod tests {
         .with_go_flags(persisted_flags);
         let package = task_context(
             &root,
-            &module.module_path,
+            module.package_name(),
             "api",
-            native_tasks_for_module(&module, "linux"),
+            native_tasks_for_module(&module),
             crate::package_graph::PackageTaskContextKind::Package,
             crate::task_contracts::ScopeTaskContract::go(contract.clone()),
         );

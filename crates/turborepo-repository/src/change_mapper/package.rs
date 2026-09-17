@@ -13,13 +13,12 @@ pub enum PackageMapping {
     All(AllPackageChangeReason),
     /// This change is meaningless, no packages have changed
     None,
-    /// This change has affected one package
-    Package((WorkspacePackage, PackageInclusionReason)),
+    /// This change has affected one or more packages.
+    Packages(Vec<(WorkspacePackage, PackageInclusionReason)>),
 }
 
-/// Maps a single file change to affected packages. This can be a single
-/// package (`Package`), none of the packages (`None`), or all of the packages
-/// (`All`).
+/// Maps a single file change to its affected packages (`Packages`), none of the
+/// packages (`None`), or all of the packages (`All`).
 pub trait PackageChangeMapper {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
 }
@@ -45,12 +44,11 @@ where
 /// packages. This is fine for builds, but less fine
 /// for situations like watch mode.
 pub struct DefaultPackageChangeMapper {
-    /// Deepest-package index: package directory → owning package name. Built
-    /// once per mapper so mapping F files over P packages is no longer
-    /// O(F × P) package visits; a lookup walks the file's ancestors instead.
-    /// When packages share a directory, the smallest name wins, matching the
-    /// previous scan's tie-breaking.
-    package_dirs: std::collections::HashMap<AnchoredSystemPathBuf, PackageName>,
+    /// Deepest-package index: package directory → all owning package names.
+    /// Built once per mapper so a lookup walks the file's ancestors rather
+    /// than scanning every package. Co-located owners are sorted by name for
+    /// deterministic iteration, not to choose one owner over another.
+    package_dirs: std::collections::HashMap<AnchoredSystemPathBuf, Vec<PackageName>>,
 }
 
 impl DefaultPackageChangeMapper {
@@ -67,15 +65,13 @@ impl DefaultPackageChangeMapper {
             if package_path.components().next().is_none() {
                 continue;
             }
-            let name = context.package().clone();
             package_dirs
                 .entry(package_path.to_owned())
-                .and_modify(|existing: &mut PackageName| {
-                    if name < *existing {
-                        *existing = name.clone();
-                    }
-                })
-                .or_insert(name);
+                .or_insert_with(Vec::new)
+                .push(context.package().clone());
+        }
+        for names in package_dirs.values_mut() {
+            names.sort();
         }
 
         Self { package_dirs }
@@ -87,19 +83,26 @@ impl PackageChangeMapper for DefaultPackageChangeMapper {
         // Walk the file path and its ancestors deepest-first; the first
         // indexed directory is the deepest package containing the file.
         // Including the path itself preserves matching when the changed path
-        // *is* a package directory. Packages sharing a directory were
-        // disambiguated at index build time.
+        // *is* a package directory. All owners at the first matching directory
+        // are affected; shallower packages must not claim the same change.
         for ancestor in file.ancestors() {
-            if let Some(name) = self.package_dirs.get(ancestor) {
-                return PackageMapping::Package((
-                    WorkspacePackage {
-                        name: name.clone(),
-                        path: ancestor.to_owned(),
-                    },
-                    PackageInclusionReason::FileChanged {
-                        file: file.to_owned(),
-                    },
-                ));
+            if let Some(names) = self.package_dirs.get(ancestor) {
+                return PackageMapping::Packages(
+                    names
+                        .iter()
+                        .map(|name| {
+                            (
+                                WorkspacePackage {
+                                    name: name.clone(),
+                                    path: ancestor.to_owned(),
+                                },
+                                PackageInclusionReason::FileChanged {
+                                    file: file.to_owned(),
+                                },
+                            )
+                        })
+                        .collect(),
+                );
             }
         }
 
@@ -133,13 +136,13 @@ impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile {
             .iter()
             .any(|pm| pm.lockfile_name() == path.as_str())
         {
-            PackageMapping::Package((
+            PackageMapping::Packages(vec![(
                 WorkspacePackage {
                     name: PackageName::Root,
                     path: AnchoredSystemPathBuf::from_raw("").unwrap(),
                 },
                 PackageInclusionReason::ConservativeRootLockfileChanged,
-            ))
+            )])
         } else {
             self.base.detect_package(path)
         }
@@ -195,12 +198,12 @@ impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
                         file: path.to_owned(),
                     })
                 } else {
-                    PackageMapping::Package((
+                    PackageMapping::Packages(vec![(
                         WorkspacePackage::root(),
                         PackageInclusionReason::FileChanged {
                             file: path.to_owned(),
                         },
-                    ))
+                    )])
                 }
             }
             result => result,
@@ -296,10 +299,13 @@ mod tests {
             ["packages", "parent", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
         )?;
 
-        let PackageMapping::Package((package, _)) =
+        let PackageMapping::Packages(packages) =
             DefaultPackageChangeMapper::new(&graph).detect_package(&file)
         else {
             panic!("expected a package mapping");
+        };
+        let [(package, _)] = packages.as_slice() else {
+            panic!("expected only the child package");
         };
         assert_eq!(package.name.as_ref(), "child");
         assert_eq!(package.path.to_unix().as_str(), "packages/parent/child");
@@ -404,11 +410,12 @@ mod tests {
         Ok(())
     }
 
-    /// Two packages sharing one directory must resolve deterministically to
-    /// the smallest package name, matching the previous linear scan's
-    /// tie-breaking.
-    #[tokio::test]
-    async fn equal_directory_packages_use_name_tiebreak() -> Result<(), anyhow::Error> {
+    async fn colocated_graph(
+        root: &AbsoluteSystemPath,
+        javascript_name: &str,
+        native_packages: &[(crate::toolchain::ToolchainId, &str)],
+        root_package_json: PackageJson,
+    ) -> Result<crate::package_graph::PackageGraph, anyhow::Error> {
         use std::sync::Arc;
 
         use crate::toolchain::{
@@ -416,62 +423,185 @@ mod tests {
             ToolchainId, WorkspaceRoot,
         };
 
-        let repo_root = tempdir()?;
-        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
-        let shared_manifest = root.join_components(&["packages", "shared", "package.json"]);
-        shared_manifest.ensure_dir()?;
-        shared_manifest.create_with_contents(r#"{"name":"zzz"}"#)?;
-
         struct SharedDirContributor {
             root: AbsoluteSystemPathBuf,
+            id: ToolchainId,
+            manifest: String,
         }
         impl RepositoryContributor for SharedDirContributor {
             fn id(&self) -> ToolchainId {
-                ToolchainId::new("custom")
+                self.id.clone()
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
                 Box::pin(async move {
                     Ok(DiscoveredPackages::new(
                         vec![
-                            // Same directory, declared larger-name-first to
-                            // prove the tie-break is name-based, not order-based.
                             DiscoveredPackage::package(
-                                Some("zzz".to_string()),
+                                Some(self.id.to_string()),
                                 PackageJson::default(),
                                 self.root
-                                    .join_components(&["packages", "shared", "package.json"]),
+                                    .join_components(&["packages", "shared", &self.manifest]),
                             ),
                             DiscoveredPackage::package(
-                                Some("aaa".to_string()),
+                                Some(format!("child-{}", self.id)),
                                 PackageJson::default(),
-                                self.root
-                                    .join_components(&["packages", "shared", "Cargo.toml"]),
+                                self.root.join_components(&[
+                                    "packages",
+                                    "shared",
+                                    "child",
+                                    &self.manifest,
+                                ]),
                             ),
                         ],
-                        vec![WorkspaceRoot::new("custom", self.root.clone())],
+                        vec![WorkspaceRoot::new(self.id.as_str(), self.root.clone())],
                     ))
+                })
+            }
+            fn discover_package_scopes(&self) -> crate::toolchain::DiscoverPackageScopesFuture<'_> {
+                Box::pin(async move {
+                    let output = self.discover_packages().await?;
+                    Ok(
+                        crate::toolchain::DiscoveredPackageScopes::from_full_observation(
+                            output.packages(),
+                            output.workspace_roots(),
+                        ),
+                    )
                 })
             }
         }
 
-        let graph = PackageGraphBuilder::new(root, PackageJson::default())
+        let mut manifests = std::collections::HashMap::new();
+        for (directory, name) in [
+            (vec!["packages"], "parent"),
+            (vec!["packages", "shared"], javascript_name),
+            (vec!["packages", "shared", "child"], "child-js"),
+            (vec!["packages", "unrelated"], "unrelated"),
+        ] {
+            let path = root
+                .join_components(&directory)
+                .join_component("package.json");
+            path.ensure_dir()?;
+            path.create_with_contents(format!(r#"{{"name":"{name}"}}"#))?;
+            manifests.insert(path.clone(), PackageJson::load(&path)?);
+        }
+        let mut builder = PackageGraphBuilder::new(root, root_package_json)
             .with_package_discovery(MockDiscovery)
-            .with_contributor(Arc::new(SharedDirContributor {
+            .with_package_jsons(Some(manifests));
+        for (id, manifest) in native_packages {
+            builder = builder.with_contributor(Arc::new(SharedDirContributor {
                 root: root.to_owned(),
-            }))
-            .build()
-            .await?;
+                id: id.clone(),
+                manifest: manifest.to_string(),
+            }));
+        }
+        Ok(builder.build().await?)
+    }
 
-        let file = AnchoredSystemPathBuf::from_raw(
-            ["packages", "shared", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
-        )?;
-        let PackageMapping::Package((package, _)) =
-            DefaultPackageChangeMapper::new(&graph).detect_package(&file)
-        else {
-            panic!("expected a package mapping");
-        };
-        assert_eq!(package.name.as_ref(), "aaa");
+    #[tokio::test]
+    async fn colocated_packages_all_own_changed_files() -> Result<(), anyhow::Error> {
+        use crate::toolchain::ToolchainId;
 
+        let go = (ToolchainId::GO, "go.mod");
+        let rust = (ToolchainId::RUST, "Cargo.toml");
+        for native in [
+            vec![go.clone()],
+            vec![go.clone(), rust.clone()],
+            vec![rust, go],
+        ] {
+            for javascript_name in ["aaa-js", "zzz-js"] {
+                let repo_root = tempdir()?;
+                let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+                let graph =
+                    colocated_graph(root, javascript_name, &native, PackageJson::default()).await?;
+                let detector =
+                    GlobalDepsPackageChangeMapper::new(&graph, std::iter::empty::<&str>())?;
+                let mapper = ChangeMapper::new(&graph, vec![], detector);
+                for relative in [
+                    "src/index.ts",
+                    "src/lib.go",
+                    "src/lib.rs",
+                    "deleted.txt",
+                    "",
+                ] {
+                    let directory = AnchoredSystemPathBuf::from_raw(
+                        ["packages", "shared"].join(std::path::MAIN_SEPARATOR_STR),
+                    )?;
+                    let file = directory.join(&AnchoredSystemPathBuf::from_raw(
+                        relative.replace('/', std::path::MAIN_SEPARATOR_STR),
+                    )?);
+                    let result = mapper
+                        .changed_packages([file.clone()].into(), LockfileContents::Unchanged)?;
+                    let PackageChanges::Some(packages) = result else {
+                        panic!("expected directly changed packages, got {result:?}");
+                    };
+                    let expected = std::iter::once(javascript_name.to_string())
+                        .chain(native.iter().map(|(id, _)| id.to_string()))
+                        .collect::<std::collections::BTreeSet<_>>();
+                    assert_eq!(
+                        packages
+                            .keys()
+                            .map(|pkg| pkg.name.to_string())
+                            .collect::<std::collections::BTreeSet<_>>(),
+                        expected
+                    );
+                    for (package, reason) in packages {
+                        assert_eq!(package.path, directory);
+                        assert_eq!(
+                            reason,
+                            PackageInclusionReason::FileChanged { file: file.clone() }
+                        );
+                    }
+                }
+                // Co-location does not let parents claim a deeper package's files.
+                let file = AnchoredSystemPathBuf::from_raw("packages/shared/child/src/file.txt")?;
+                let PackageChanges::Some(packages) =
+                    mapper.changed_packages([file].into(), LockfileContents::Unchanged)?
+                else {
+                    panic!("expected nested packages");
+                };
+                let expected = std::iter::once("child-js".to_string())
+                    .chain(native.iter().map(|(id, _)| format!("child-{id}")))
+                    .collect::<std::collections::BTreeSet<_>>();
+                assert_eq!(
+                    packages
+                        .keys()
+                        .map(|pkg| pkg.name.to_string())
+                        .collect::<std::collections::BTreeSet<_>>(),
+                    expected
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn colocated_root_dependency_still_invalidates_all_packages() -> Result<(), anyhow::Error>
+    {
+        use crate::{package_graph::PackageName, toolchain::ToolchainId};
+
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let graph = colocated_graph(
+            root,
+            "aaa-js",
+            &[
+                (ToolchainId::GO, "go.mod"),
+                (ToolchainId::RUST, "Cargo.toml"),
+            ],
+            PackageJson {
+                dependencies: Some([("aaa-js".to_string(), "*".to_string())].into()),
+                ..Default::default()
+            },
+        )
+        .await?;
+        let mapper = ChangeMapper::new(&graph, vec![], DefaultPackageChangeMapper::new(&graph));
+        let file = AnchoredSystemPathBuf::from_raw("packages/shared/src/file.txt")?;
+        assert_eq!(
+            mapper.changed_packages([file].into(), LockfileContents::Unchanged)?,
+            PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
+                root_internal_dep: PackageName::from("aaa-js")
+            })
+        );
         Ok(())
     }
 
@@ -513,10 +643,13 @@ mod tests {
         let dir_path = AnchoredSystemPathBuf::from_raw(
             ["packages", "lib-a"].join(std::path::MAIN_SEPARATOR_STR),
         )?;
-        let PackageMapping::Package((package, _)) =
+        let PackageMapping::Packages(packages) =
             DefaultPackageChangeMapper::new(&graph).detect_package(&dir_path)
         else {
             panic!("expected a package mapping for the package directory itself");
+        };
+        let [(package, _)] = packages.as_slice() else {
+            panic!("expected only lib-a");
         };
         assert_eq!(package.name.as_ref(), "lib-a");
 
