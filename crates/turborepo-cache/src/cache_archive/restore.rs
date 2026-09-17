@@ -995,16 +995,11 @@ mod tests {
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
-                #[cfg(unix)]
                 expected_output: Ok(into_anchored_system_path_vec(vec![
                     "folder",
                     "folder/symlink",
                     "folder/symlink/folder-sibling",
                 ])),
-                #[cfg(windows)]
-                expected_output: Err("IO error: The filename, directory name, or volume label \
-                                      syntax is incorrect. (os error 123)"
-                    .to_string()),
             },
             TestCase {
                 name: "pathological symlinks",
