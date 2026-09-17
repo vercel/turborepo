@@ -1270,8 +1270,8 @@ mod tests {
                         if test.name == "place file at dir location" {
                             assert!(
                                 actual_error.starts_with(expected_error),
-                                "test {:?}: expected error starting with {expected_error:?}, received \
-                                 {actual_error:?}",
+                                "test {:?}: expected error starting with {expected_error:?}, \
+                                 received {actual_error:?}",
                                 test.name
                             );
                             continue;
