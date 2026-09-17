@@ -70,7 +70,7 @@ impl<'a> CacheReader<'a> {
         let mut new_manifest = RestoreManifest::new();
         anchor.create_dir_all()?;
 
-        let dir_cache = CachedDirTree::new(anchor.to_owned());
+        let dir_cache = CachedDirTree::new(anchor.to_owned())?;
         let mut tr = tar::Archive::new(&mut self.reader);
 
         Self::restore_entries(
@@ -2354,6 +2354,49 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn test_archive_directory_symlink_is_traversable() -> Result<()> {
+        let archive = generate_raw_tar(&[
+            RawTarEntry::Directory {
+                path: "actual-dist",
+            },
+            RawTarEntry::Symlink {
+                link_path: "dist",
+                link_target: "actual-dist",
+            },
+            RawTarEntry::File {
+                path: "dist/index.js",
+                body: b"content".to_vec(),
+            },
+        ]);
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+        cache_reader.restore(anchor, None)?;
+
+        assert!(
+            anchor
+                .join_component("dist")
+                .symlink_metadata()?
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read(
+                anchor
+                    .join_component("dist")
+                    .join_component("index.js")
+                    .as_path()
+            )?,
+            b"content"
+        );
+
+        Ok(())
+    }
+
     // Regression tests for https://github.com/vercel/turborepo/issues/8476
     //
     // When a symlink exists on disk at a path where the tar expects a real
@@ -2363,6 +2406,138 @@ mod tests {
     #[cfg(unix)]
     mod pre_existing_symlink_tests {
         use super::*;
+
+        #[test]
+        fn test_nested_archive_symlinks_use_descriptor_resolved_locations() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "real" },
+                RawTarEntry::Directory { path: "other" },
+                RawTarEntry::Symlink {
+                    link_path: "a",
+                    link_target: "real",
+                },
+                RawTarEntry::Symlink {
+                    link_path: "a/b",
+                    link_target: "../other",
+                },
+                RawTarEntry::File {
+                    path: "a/b/file.txt",
+                    body: b"content".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            cache_reader.restore(anchor, None)?;
+
+            assert!(anchor.join_component("a").symlink_metadata()?.is_symlink());
+            assert!(
+                anchor
+                    .join_component("real")
+                    .join_component("b")
+                    .symlink_metadata()?
+                    .is_symlink()
+            );
+            assert_eq!(
+                fs::read(
+                    anchor
+                        .join_component("other")
+                        .join_component("file.txt")
+                        .as_path()
+                )?,
+                b"content"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_nested_archive_symlink_target_uses_physical_parent() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "p" },
+                RawTarEntry::Directory { path: "p/q" },
+                RawTarEntry::Directory { path: "p/q/y" },
+                RawTarEntry::Directory { path: "x" },
+                RawTarEntry::Directory { path: "y" },
+                RawTarEntry::Symlink {
+                    link_path: "p/q/a",
+                    link_target: "../../x",
+                },
+                RawTarEntry::Symlink {
+                    link_path: "p/q/a/b",
+                    link_target: "../y",
+                },
+                RawTarEntry::File {
+                    path: "p/q/a/b/file.txt",
+                    body: b"content".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            cache_reader.restore(anchor, None)?;
+
+            assert_eq!(
+                fs::read(
+                    anchor
+                        .join_component("y")
+                        .join_component("file.txt")
+                        .as_path()
+                )?,
+                b"content"
+            );
+            assert!(
+                !anchor
+                    .join_component("p")
+                    .join_component("q")
+                    .join_component("y")
+                    .join_component("file.txt")
+                    .try_exists()?
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_regular_entry_invalidates_restored_symlink() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "target" },
+                RawTarEntry::Symlink {
+                    link_path: "a",
+                    link_target: "target",
+                },
+                RawTarEntry::File {
+                    path: "a",
+                    body: b"regular".to_vec(),
+                },
+                RawTarEntry::File {
+                    path: "a/child.txt",
+                    body: b"must not be redirected".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            assert!(cache_reader.restore(anchor, None).is_err());
+            assert_eq!(fs::read(anchor.join_component("a").as_path())?, b"regular");
+            assert!(
+                !anchor
+                    .join_component("target")
+                    .join_component("child.txt")
+                    .try_exists()?
+            );
+
+            Ok(())
+        }
 
         #[test]
         fn test_pre_existing_symlink_does_not_overwrite_target() -> Result<()> {
