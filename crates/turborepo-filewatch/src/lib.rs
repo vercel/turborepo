@@ -43,13 +43,13 @@ use std::{
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use fsevent::FsEventWatcher;
-#[cfg(target_os = "macos")]
-use notify::PollWatcher;
 #[cfg(any(feature = "manual_recursive_watch", feature = "watch_ancestors"))]
 use notify::event::EventKind;
 #[cfg(not(target_os = "macos"))]
 use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
+#[cfg(target_os = "macos")]
+use scoped_poll::ScopedPoller;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, warn};
@@ -67,6 +67,8 @@ mod optional_watch;
 pub mod package_watcher;
 mod repository_ignore;
 mod scm_resource;
+#[cfg(target_os = "macos")]
+mod scoped_poll;
 
 pub use optional_watch::OptionalWatch;
 pub use repository_ignore::RepositoryIgnore;
@@ -76,7 +78,7 @@ type Backend = RecommendedWatcher;
 #[cfg(target_os = "macos")]
 enum Backend {
     Fsevents(FsEventWatcher),
-    Poll(PollWatcher),
+    Poll(ScopedPoller),
 }
 
 #[cfg(target_os = "macos")]
@@ -109,6 +111,8 @@ impl Backend {
 enum MacOsBackend {
     Fsevents,
     Poll,
+    #[cfg(test)]
+    Failed,
 }
 
 type EventResult = Result<Event, notify::Error>;
@@ -195,7 +199,7 @@ impl WatchInterest {
         }
     }
 
-    #[cfg(feature = "manual_recursive_watch")]
+    #[cfg(any(feature = "manual_recursive_watch", target_os = "macos"))]
     fn paths(&self) -> Vec<PathBuf> {
         self.0
             .lock()
@@ -304,7 +308,7 @@ impl SubscriptionRegistry {
         state.entries.clear();
     }
 
-    #[cfg(feature = "manual_recursive_watch")]
+    #[cfg(any(feature = "manual_recursive_watch", target_os = "macos"))]
     fn physical_paths(&self) -> Vec<PathBuf> {
         self.state
             .lock()
@@ -455,7 +459,8 @@ impl WatchEventSender {
                     .paths
                     .iter()
                     .any(|path| repository_ignore.should_refresh(path));
-                invalidates || (refresh && repository_ignore.refresh())
+                let refreshed = refresh && repository_ignore.refresh_paths(&event.paths);
+                invalidates || refreshed
             } else {
                 false
             };
@@ -578,6 +583,14 @@ pub struct FileSystemWatcher {
     source: WatchSource,
 }
 
+struct CancelScanOnDrop(RepositoryIgnore);
+
+impl Drop for CancelScanOnDrop {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+
 impl FileSystemWatcher {
     pub fn new_with_default_cookie_dir(root: &AbsoluteSystemPath) -> Result<Self, WatchError> {
         // We already store logs in .turbo and recommend it be gitignore'd.
@@ -602,7 +615,7 @@ impl FileSystemWatcher {
         let (ready_tx, ready_rx) = watch::channel(SourceState::Starting);
         let (watch_control_tx, watch_control_rx) = mpsc::unbounded_channel();
         let registry = Arc::new(SubscriptionRegistry::new(watch_control_tx));
-        let repository_ignore = RepositoryIgnore::new(root.as_std_path());
+        let repository_ignore = RepositoryIgnore::unloaded(root.as_std_path());
         let source_repository_ignore = repository_ignore.clone();
 
         tokio::task::spawn({
@@ -611,15 +624,23 @@ impl FileSystemWatcher {
             let registry = registry.clone();
             let repository_ignore = repository_ignore.clone();
             async move {
+                let _cancel = CancelScanOnDrop(repository_ignore.clone());
+                let mut exit_signal = exit_signal;
                 let mut watch_control_rx = watch_control_rx;
-                let startup = start_watcher(
+                let startup = tokio::select! {
+                    result = start_watcher(
                     &watch_root,
                     &cookie_dir,
                     &repository_ignore,
                     &registry,
                     &mut watch_control_rx,
-                )
-                .await;
+                    ) => result,
+                    _ = &mut exit_signal => {
+                        registry.close();
+                        let _ = ready_tx.send(SourceState::Closed);
+                        return;
+                    }
+                };
                 let StartedWatcher {
                     watcher,
                     watched: initial_watched,
@@ -710,6 +731,38 @@ async fn prepare_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), Watch
         .map_err(|error| WatchError::Setup(format!("cookie setup task failed: {error}")))?
 }
 
+fn startup_deadline() -> tokio::time::Instant {
+    let seconds = std::env::var("TURBO_WATCH_STARTUP_TIMEOUT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(120);
+    tokio::time::Instant::now() + Duration::from_secs(seconds)
+}
+
+async fn prepare_repository(
+    repository_ignore: &RepositoryIgnore,
+    deadline: tokio::time::Instant,
+) -> Result<(), WatchError> {
+    if deadline <= tokio::time::Instant::now() {
+        repository_ignore.cancel();
+        return Err(WatchError::Setup("repository scan timed out".into()));
+    }
+    let repository = repository_ignore.clone();
+    let mut task = tokio::task::spawn_blocking(move || repository.refresh());
+    match tokio::time::timeout_at(deadline, &mut task).await {
+        Ok(result) => result
+            .map(|_| ())
+            .map_err(|error| WatchError::Setup(error.to_string())),
+        Err(error) => {
+            repository_ignore.cancel();
+            let _ = task.await;
+            Err(WatchError::Setup(format!(
+                "repository scan timed out: {error}"
+            )))
+        }
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 async fn start_watcher(
     root: &AbsoluteSystemPath,
@@ -718,8 +771,11 @@ async fn start_watcher(
     registry: &Arc<SubscriptionRegistry>,
     watch_control_rx: &mut mpsc::UnboundedReceiver<WatcherControl>,
 ) -> Result<StartedWatcher, WatchError> {
+    let deadline = startup_deadline();
+    prepare_repository(repository_ignore, deadline).await?;
     prepare_cookie_dir(cookie_dir).await?;
     start_watcher_attempt(
+        deadline,
         root,
         cookie_dir,
         repository_ignore,
@@ -737,9 +793,34 @@ async fn start_watcher(
     registry: &Arc<SubscriptionRegistry>,
     watch_control_rx: &mut mpsc::UnboundedReceiver<WatcherControl>,
 ) -> Result<StartedWatcher, WatchError> {
+    let deadline = startup_deadline();
+    prepare_repository(repository_ignore, deadline).await?;
+    start_watcher_with_backend(
+        MacOsBackend::Fsevents,
+        deadline,
+        root,
+        cookie_dir,
+        repository_ignore,
+        registry,
+        watch_control_rx,
+    )
+    .await
+}
+
+#[cfg(target_os = "macos")]
+async fn start_watcher_with_backend(
+    native: MacOsBackend,
+    deadline: tokio::time::Instant,
+    root: &AbsoluteSystemPath,
+    cookie_dir: &AbsoluteSystemPath,
+    repository_ignore: &RepositoryIgnore,
+    registry: &Arc<SubscriptionRegistry>,
+    watch_control_rx: &mut mpsc::UnboundedReceiver<WatcherControl>,
+) -> Result<StartedWatcher, WatchError> {
     prepare_cookie_dir(cookie_dir).await?;
     let fsevents = match start_watcher_attempt(
-        MacOsBackend::Fsevents,
+        native,
+        deadline,
         root,
         cookie_dir,
         repository_ignore,
@@ -759,6 +840,7 @@ async fn start_watcher(
     prepare_cookie_dir(cookie_dir).await?;
     start_watcher_attempt(
         MacOsBackend::Poll,
+        deadline,
         root,
         cookie_dir,
         repository_ignore,
@@ -774,12 +856,21 @@ async fn start_watcher(
 
 async fn start_watcher_attempt(
     #[cfg(target_os = "macos")] backend: MacOsBackend,
+    deadline: tokio::time::Instant,
     root: &AbsoluteSystemPath,
     cookie_dir: &AbsoluteSystemPath,
     repository_ignore: &RepositoryIgnore,
     registry: &Arc<SubscriptionRegistry>,
     watch_control_rx: &mut mpsc::UnboundedReceiver<WatcherControl>,
 ) -> Result<StartedWatcher, WatchError> {
+    #[cfg(all(test, target_os = "macos"))]
+    if matches!(backend, MacOsBackend::Failed) {
+        return Err(notify::Error::generic("injected native subscription failure").into());
+    }
+    if deadline <= tokio::time::Instant::now() {
+        repository_ignore.cancel();
+        return Err(WatchError::Setup("file-watcher setup timed out".into()));
+    }
     let (send_file_events, mut recv_file_events) = mpsc::unbounded_channel();
     #[cfg(not(feature = "manual_recursive_watch"))]
     let backend_ready = Arc::new(AtomicBool::new(false));
@@ -793,10 +884,10 @@ async fn start_watcher_attempt(
     let task_backend_ready = backend_ready.clone();
     #[cfg(not(feature = "manual_recursive_watch"))]
     let task_ordered_driver_delivery = ordered_driver_delivery.clone();
-    #[cfg(not(feature = "manual_recursive_watch"))]
+    #[cfg(any(not(feature = "manual_recursive_watch"), target_os = "macos"))]
     let task_registry = registry.clone();
 
-    let task = tokio::task::spawn_blocking(move || {
+    let mut task = tokio::task::spawn_blocking(move || {
         run_watcher(
             #[cfg(target_os = "macos")]
             backend,
@@ -808,16 +899,34 @@ async fn start_watcher_attempt(
             task_backend_ready,
             #[cfg(not(feature = "manual_recursive_watch"))]
             task_ordered_driver_delivery,
-            #[cfg(not(feature = "manual_recursive_watch"))]
+            #[cfg(any(not(feature = "manual_recursive_watch"), target_os = "macos"))]
             task_registry,
         )
     });
-    let (mut watcher, watched) = task.await.map_err(|error| {
+    let completed = match tokio::time::timeout_at(deadline, &mut task).await {
+        Ok(result) => result,
+        Err(error) => {
+            repository_ignore.cancel();
+            let _ = task.await;
+            return Err(WatchError::Setup(format!(
+                "file-watcher setup timed out: {error}"
+            )));
+        }
+    };
+    let (mut watcher, watched) = completed.map_err(|error| {
         WatchError::Setup(format!("file-watcher startup task failed: {error}"))
     })??;
 
     debug!("waiting for initial filesystem cookie");
     let watched = wait_for_cookie(
+        #[cfg(target_os = "macos")]
+        if matches!(backend, MacOsBackend::Fsevents) {
+            deadline.min(tokio::time::Instant::now() + Duration::from_secs(2))
+        } else {
+            deadline
+        },
+        #[cfg(not(target_os = "macos"))]
+        deadline,
         &cookie_dir,
         root,
         &mut watcher,
@@ -1002,7 +1111,7 @@ async fn watch_events(
                             .iter()
                             .any(|path| repository_ignore.invalidates_consumers(path));
                         if repository_state_changed {
-                            git_control_changed |= repository_ignore.refresh();
+                            git_control_changed |= repository_ignore.refresh_paths(&event.paths);
                         }
                         // Note that we need to filter relevant events
                         // before doing manual recursive watching so that
@@ -1175,7 +1284,7 @@ fn route_non_mutating_backend_event(
                 .any(|path| repository_ignore.invalidates_consumers(path));
             if repository_state_changed {
                 let previous_controls = repository_ignore.control_paths();
-                git_control_changed |= repository_ignore.refresh();
+                git_control_changed |= repository_ignore.refresh_paths(&event.paths);
                 reconcile_control_watches(
                     watch_root.as_std_path(),
                     &previous_controls,
@@ -1409,6 +1518,9 @@ fn add_ordinary_watches(
         .collect();
     paths.sort_by_key(|path| path.components().count());
     for path in paths {
+        if repository_ignore.is_cancelled() {
+            return Err(WatchError::Setup("filesystem scan cancelled".into()));
+        }
         if !watched.insert(path.clone()) {
             continue;
         }
@@ -1435,10 +1547,14 @@ fn ordinary_watch_paths(
     let mut paths = HashSet::new();
     for entry in WalkDir::new(repo_root).into_iter().filter_entry(|entry| {
         let path = entry.path();
-        (subtree.starts_with(path) || path.starts_with(&subtree))
+        !repository_ignore.is_cancelled()
+            && (subtree.starts_with(path) || path.starts_with(&subtree))
             && !matches!(entry.file_name().to_str(), Some(".git" | "node_modules"))
             && (path == repo_root || repository_ignore.is_relevant(path, true))
     }) {
+        if repository_ignore.is_cancelled() {
+            return Err(WatchError::Setup("filesystem scan cancelled".into()));
+        }
         let entry = entry?;
         if entry.file_type().is_dir() {
             paths.insert(entry.into_path());
@@ -1645,12 +1761,20 @@ fn run_watcher(
     repository_ignore: &RepositoryIgnore,
     #[cfg(not(feature = "manual_recursive_watch"))] backend_ready: Arc<AtomicBool>,
     #[cfg(not(feature = "manual_recursive_watch"))] ordered_driver_delivery: Arc<AtomicBool>,
-    #[cfg(not(feature = "manual_recursive_watch"))] registry: Arc<SubscriptionRegistry>,
+    #[cfg(any(not(feature = "manual_recursive_watch"), target_os = "macos"))] registry: Arc<
+        SubscriptionRegistry,
+    >,
 ) -> Result<(Backend, HashSet<PathBuf>), WatchError> {
     #[cfg(feature = "manual_recursive_watch")]
     let mut watcher = make_watcher(
         #[cfg(target_os = "macos")]
         backend,
+        #[cfg(target_os = "macos")]
+        (
+            repository_ignore.clone(),
+            registry.clone(),
+            cookie_dir.as_std_path().to_path_buf(),
+        ),
         move |event| {
             let _ = sender.send(event);
         },
@@ -1660,9 +1784,17 @@ fn run_watcher(
         let watch_root = root.to_owned();
         let readiness_cookie = cookie_dir.join_component(".turbo-cookie");
         let repository_ignore = repository_ignore.clone();
+        #[cfg(target_os = "macos")]
+        let poll_context = (
+            repository_ignore.clone(),
+            registry.clone(),
+            cookie_dir.as_std_path().to_path_buf(),
+        );
         make_watcher(
             #[cfg(target_os = "macos")]
             backend,
+            #[cfg(target_os = "macos")]
+            poll_context,
             move |event| {
                 dispatch_non_mutating_backend_event(
                     &backend_ready,
@@ -1901,19 +2033,22 @@ fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Er
 #[cfg(target_os = "macos")]
 fn make_watcher<F: EventHandler>(
     backend: MacOsBackend,
+    poll_context: (RepositoryIgnore, Arc<SubscriptionRegistry>, PathBuf),
     event_handler: F,
 ) -> Result<Backend, notify::Error> {
     match backend {
+        #[cfg(test)]
+        MacOsBackend::Failed => Err(notify::Error::generic(
+            "injected native subscription failure",
+        )),
         MacOsBackend::Fsevents => {
             FsEventWatcher::new(event_handler, notify::Config::default()).map(Backend::Fsevents)
         }
-        MacOsBackend::Poll => PollWatcher::new(
+        MacOsBackend::Poll => ScopedPoller::new(
             event_handler,
-            notify::Config::default()
-                .with_poll_interval(Duration::from_millis(100))
-                // notify 6 stores mtimes at whole-second precision. Content hashes
-                // prevent polling from missing rapid edits within the same second.
-                .with_compare_contents(true),
+            poll_context.0,
+            poll_context.1,
+            poll_context.2,
         )
         .map(Backend::Poll),
     }
@@ -1922,7 +2057,9 @@ fn make_watcher<F: EventHandler>(
 /// wait_for_cookie performs a roundtrip through the filewatching mechanism.
 /// This ensures that we are ready to receive *new* filesystem events, rather
 /// than receiving events from existing state, which some backends can do.
+#[allow(clippy::too_many_arguments)]
 async fn wait_for_cookie(
+    deadline: tokio::time::Instant,
     cookie_dir: &AbsoluteSystemPath,
     _watch_root: &AbsoluteSystemPath,
     _watcher: &mut Backend,
@@ -1938,7 +2075,6 @@ async fn wait_for_cookie(
     cookie_path
         .create_with_contents("cookie")
         .map_err(|e| WatchError::Setup(format!("failed to write cookie to {cookie_path}: {e}")))?;
-    let deadline = tokio::time::Instant::now() + Duration::from_millis(2000);
     loop {
         let event = tokio::select! {
             biased;
@@ -2062,6 +2198,14 @@ mod test {
             let mut watcher = super::make_watcher(
                 #[cfg(target_os = "macos")]
                 super::MacOsBackend::Poll,
+                #[cfg(target_os = "macos")]
+                (
+                    repository_ignore.clone(),
+                    std::sync::Arc::new(super::SubscriptionRegistry::new(
+                        tokio::sync::mpsc::unbounded_channel().0,
+                    )),
+                    cookie_dir.as_std_path().to_path_buf(),
+                ),
                 |_: notify::Result<Event>| {},
             )
             .unwrap();
@@ -2297,6 +2441,57 @@ mod test {
         assert!(error.contains("polling cause"));
     }
 
+    #[tokio::test]
+    async fn expired_deadline_cancels_repository_scanning() {
+        let (root, _temp) = temp_dir();
+        let model = super::RepositoryIgnore::unloaded(root.as_std_path());
+        let result = super::prepare_repository(&model, tokio::time::Instant::now()).await;
+        assert!(result.unwrap_err().to_string().contains("scan timed out"));
+        assert!(model.is_cancelled());
+        assert!(model.control_paths().is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn injected_native_failure_falls_back_and_preserves_timeout_cause() {
+        for expired in [false, true] {
+            let (root, _temp) = temp_dir();
+            let root = root.to_realpath().unwrap();
+            let cookie = root.join_components(&[".turbo", "cookies"]);
+            let model = super::RepositoryIgnore::new(root.as_std_path());
+            let (control, mut receiver) = mpsc::unbounded_channel();
+            let registry = Arc::new(super::SubscriptionRegistry::new(control));
+            let deadline = tokio::time::Instant::now()
+                + if expired {
+                    Duration::ZERO
+                } else {
+                    Duration::from_secs(5)
+                };
+            let result = super::start_watcher_with_backend(
+                super::MacOsBackend::Failed,
+                deadline,
+                &root,
+                &cookie,
+                &model,
+                &registry,
+                &mut receiver,
+            )
+            .await;
+            match result {
+                Ok(started) => {
+                    assert!(!expired);
+                    assert!(started.watcher.is_polling());
+                }
+                Err(error) => {
+                    assert!(expired);
+                    let message = error.to_string();
+                    assert!(message.contains("injected native subscription failure"));
+                    assert!(message.contains("timed out"));
+                }
+            }
+        }
+    }
+
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn forced_poll_backend_starts_and_observes_changes() {
@@ -2309,6 +2504,7 @@ mod test {
         super::prepare_cookie_dir(&cookie_dir).await.unwrap();
         let _started = super::start_watcher_attempt(
             super::MacOsBackend::Poll,
+            super::startup_deadline(),
             &repo_root,
             &cookie_dir,
             &repository_ignore,

@@ -5,7 +5,10 @@ use std::{
     fs,
     path::{Component, Path, PathBuf},
     process::Command,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use ignore::{Match, gitignore::Gitignore};
@@ -21,16 +24,23 @@ pub struct RepositoryIgnore {
     match_root: Arc<PathBuf>,
     state: Arc<RwLock<RepositoryState>>,
     refresh_lock: Arc<Mutex<()>>,
+    pending_refresh: Arc<Mutex<Option<bool>>>,
+    last_refresh: Arc<AtomicBool>,
+    cancelled: Arc<AtomicBool>,
 }
 
+#[derive(Clone)]
 struct RepositoryState {
     snapshot: Snapshot,
     control_paths: HashSet<PathBuf>,
     derived_controls: HashSet<PathBuf>,
+    index: Option<PathBuf>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Snapshot {
+    #[cfg(test)]
+    scanned_directories: HashSet<PathBuf>,
     worktree_root: PathBuf,
     matchers: HashMap<PathBuf, Arc<Gitignore>>,
     info_exclude: Option<Arc<Gitignore>>,
@@ -53,15 +63,37 @@ struct GitContext {
 
 impl RepositoryIgnore {
     pub fn new(root: &Path) -> Self {
+        let model = Self::unloaded(root);
+        model.refresh();
+        model
+    }
+
+    pub(super) fn unloaded(root: &Path) -> Self {
         let root = Arc::new(normalize_lexically(root));
         let match_root = Arc::new(normalize_path(&root));
-        let state = RepositoryState::load(&match_root);
+        let state = RepositoryState {
+            snapshot: Snapshot::default(),
+            control_paths: HashSet::new(),
+            derived_controls: HashSet::new(),
+            index: None,
+        };
         Self {
             root,
             match_root,
             state: Arc::new(RwLock::new(state)),
             refresh_lock: Arc::new(Mutex::new(())),
+            pending_refresh: Arc::new(Mutex::new(None)),
+            last_refresh: Arc::new(AtomicBool::new(false)),
+            cancelled: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub(super) fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    pub(super) fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
     }
 
     pub fn root(&self) -> &Path {
@@ -75,15 +107,81 @@ impl RepositoryIgnore {
     /// sources or worktree root, or a tracked path whose ignore relevance
     /// flipped.
     pub fn refresh(&self) -> bool {
-        self.refresh_with(|| RepositoryState::load(&self.match_root))
+        self.refresh_selected(true)
     }
 
+    pub fn refresh_paths(&self, paths: &[PathBuf]) -> bool {
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let index_only = state.index.as_ref().is_some_and(|index| {
+            !paths.is_empty()
+                && paths
+                    .iter()
+                    .all(|path| normalize_event_path(&self.root, &self.match_root, path) == *index)
+        });
+        drop(state);
+        self.refresh_selected(!index_only)
+    }
+
+    fn refresh_selected(&self, full: bool) -> bool {
+        {
+            let mut pending = self
+                .pending_refresh
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *pending = Some(pending.unwrap_or(false) || full);
+        }
+        let _refresh = self
+            .refresh_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let full = self
+            .pending_refresh
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        let Some(full) = full else {
+            return self.last_refresh.load(Ordering::Acquire);
+        };
+        if self.is_cancelled() {
+            return false;
+        }
+        let replacement = if full {
+            RepositoryState::load(&self.match_root, &self.cancelled)
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut replacement = state.clone();
+            drop(state);
+            replacement.snapshot.tracked.clear();
+            replacement.snapshot.tracked_ancestors.clear();
+            replacement
+                .snapshot
+                .load_tracked(&self.match_root, &self.cancelled);
+            replacement
+        };
+        if self.is_cancelled() {
+            return false;
+        }
+        let result = self.replace(replacement);
+        self.last_refresh.store(result, Ordering::Release);
+        result
+    }
+
+    #[cfg(test)]
     fn refresh_with(&self, load: impl FnOnce() -> RepositoryState) -> bool {
         let _refresh = self
             .refresh_lock
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let replacement = load();
+        self.replace(load())
+    }
+
+    fn replace(&self, replacement: RepositoryState) -> bool {
         let mut state = self
             .state
             .write()
@@ -212,14 +310,15 @@ impl RepositoryIgnore {
 }
 
 impl RepositoryState {
-    fn load(root: &Path) -> Self {
+    fn load(root: &Path, cancelled: &AtomicBool) -> Self {
         // Re-discovering the context makes an explicit refresh observe changes
         // to core.excludesFile and core.worktree.
         let context = GitContext::discover(root);
         Self {
-            snapshot: Snapshot::load(root, &context),
+            snapshot: Snapshot::load(root, &context, cancelled),
             control_paths: context.control_paths(root),
             derived_controls: context.derived_controls(),
+            index: context.index,
         }
     }
 }
@@ -299,17 +398,17 @@ fn paths_share_device(left: &Path, right: &Path) -> bool {
 }
 
 impl Snapshot {
-    fn load(root: &Path, context: &GitContext) -> Self {
+    fn load(root: &Path, context: &GitContext, cancelled: &AtomicBool) -> Self {
         let mut snapshot = Self {
             worktree_root: context.worktree_root.clone(),
             ..Self::default()
         };
-        snapshot.load_matchers(root, context);
-        snapshot.load_tracked(root);
+        snapshot.load_matchers(root, context, cancelled);
+        snapshot.load_tracked(root, cancelled);
         snapshot
     }
 
-    fn load_matchers(&mut self, root: &Path, context: &GitContext) {
+    fn load_matchers(&mut self, root: &Path, context: &GitContext, cancelled: &AtomicBool) {
         let mut loaded = HashSet::new();
 
         // Git consults every .gitignore from the worktree root down to the
@@ -320,25 +419,6 @@ impl Snapshot {
             self.add_directory_matcher(&path, &mut loaded);
         }
 
-        // Discover all descendants without applying ignore/ripgrep pruning.
-        // Whether a discovered file is reachable is handled by ancestor checks
-        // in is_relevant, matching Git's ignored-directory rule.
-        let mut walk = ignore::WalkBuilder::new(root);
-        walk.hidden(false)
-            .parents(false)
-            .require_git(false)
-            .ignore(false)
-            .git_ignore(false)
-            .git_exclude(false)
-            .git_global(false)
-            .filter_entry(|entry| entry.file_name() != ".git");
-        for entry in walk.build().filter_map(Result::ok).filter(|entry| {
-            entry.file_type().is_some_and(|kind| kind.is_file())
-                && entry.file_name() == ".gitignore"
-        }) {
-            self.add_directory_matcher(entry.path(), &mut loaded);
-        }
-
         self.info_exclude = context
             .info_exclude
             .as_deref()
@@ -347,6 +427,32 @@ impl Snapshot {
             .global_exclude
             .as_deref()
             .and_then(|path| build_matcher(&context.worktree_root, path));
+
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            if cancelled.load(Ordering::Acquire) {
+                return;
+            }
+            let relative = directory.strip_prefix(root).unwrap_or(&directory);
+            if self.path_is_ignored(root, relative, true) {
+                continue;
+            }
+            self.add_directory_matcher(&directory.join(".gitignore"), &mut loaded);
+            #[cfg(test)]
+            self.scanned_directories.insert(directory.clone());
+            let Ok(entries) = fs::read_dir(&directory) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                if cancelled.load(Ordering::Acquire) {
+                    return;
+                }
+                if entry.file_name() != ".git" && entry.file_type().is_ok_and(|kind| kind.is_dir())
+                {
+                    pending.push(entry.path());
+                }
+            }
+        }
     }
 
     fn add_directory_matcher(&mut self, path: &Path, loaded: &mut HashSet<PathBuf>) {
@@ -362,7 +468,10 @@ impl Snapshot {
         }
     }
 
-    fn load_tracked(&mut self, root: &Path) {
+    fn load_tracked(&mut self, root: &Path, cancelled: &AtomicBool) {
+        if cancelled.load(Ordering::Acquire) {
+            return;
+        }
         let output = Command::new("git")
             .arg("-C")
             .arg(&self.worktree_root)
@@ -379,6 +488,9 @@ impl Snapshot {
             .split(|byte| *byte == 0)
             .filter(|raw| !raw.is_empty())
         {
+            if cancelled.load(Ordering::Acquire) {
+                return;
+            }
             let absolute = normalize_lexically(&self.worktree_root.join(bytes_to_path(raw)));
             let Ok(path) = absolute.strip_prefix(root) else {
                 continue;
@@ -792,6 +904,7 @@ mod tests {
                 snapshot: Snapshot::default(),
                 control_paths: HashSet::from([control.clone()]),
                 derived_controls: HashSet::from([control]),
+                index: None,
             }
         }
 
@@ -832,6 +945,64 @@ mod tests {
             normalize_lexically(Path::new("../../repo/./file")),
             Path::new("../../repo/file")
         );
+    }
+
+    #[test]
+    fn index_refresh_reuses_matchers_and_keeps_forced_tracked_descendants() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        git(&root, &["init", "-q"]);
+        fs::write(root.join(".gitignore"), "ignored/\n").unwrap();
+        fs::create_dir(root.join("ignored")).unwrap();
+        fs::write(root.join("ignored/tracked.txt"), "tracked").unwrap();
+        let model = RepositoryIgnore::new(&root);
+        let matcher = model.state.read().unwrap().snapshot.matchers[&root].clone();
+        git(&root, &["add", "-f", "ignored/tracked.txt"]);
+        assert!(model.refresh_paths(&[root.join(".git/index")]));
+        let state = model.state.read().unwrap();
+        assert!(std::sync::Arc::ptr_eq(
+            &matcher,
+            &state.snapshot.matchers[&root]
+        ));
+        drop(state);
+        assert!(model.is_relevant(&root.join("ignored"), true));
+        assert!(model.is_relevant(&root.join("ignored/tracked.txt"), false));
+        assert!(!model.is_relevant(&root.join("ignored/untracked.txt"), false));
+    }
+
+    #[test]
+    fn ignored_descendant_matchers_are_not_discovered() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        git(&root, &["init", "-q"]);
+        fs::write(root.join(".gitignore"), "ignored/\n").unwrap();
+        for index in 0..1000 {
+            let directory = root.join(format!("ignored/{index}/deep"));
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join(".gitignore"), "*.tmp\n").unwrap();
+        }
+        let model = RepositoryIgnore::new(&root);
+        assert_eq!(model.state.read().unwrap().snapshot.matchers.len(), 1);
+        assert_eq!(
+            model.state.read().unwrap().snapshot.scanned_directories,
+            HashSet::from([root.clone()])
+        );
+        fs::write(root.join(".gitignore"), "").unwrap();
+        model.refresh();
+        assert_eq!(model.state.read().unwrap().snapshot.matchers.len(), 1000);
+    }
+
+    #[test]
+    fn cancelled_refresh_keeps_the_previous_snapshot() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join(".gitignore"), "before\n").unwrap();
+        let model = RepositoryIgnore::new(root);
+        model.cancel();
+        fs::write(root.join(".gitignore"), "after\n").unwrap();
+        assert!(!model.refresh());
+        assert!(!model.is_relevant(&root.join("before"), false));
+        assert!(model.is_relevant(&root.join("after"), false));
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

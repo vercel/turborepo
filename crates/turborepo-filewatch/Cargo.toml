@@ -22,6 +22,7 @@ turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
 turborepo-scm = { workspace = true }
 walkdir = "2.3.3"
 wax = { workspace = true }
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 [target."cfg(target_os=\"macos\")".dependencies.fsevent-sys]
 optional = true
