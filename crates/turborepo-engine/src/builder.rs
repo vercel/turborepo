@@ -717,9 +717,15 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         graph::validate_graph(engine.task_graph_mut())?;
 
         let engine = engine.seal();
-        validate_dependency_outputs_inputs(&engine)?;
         let owners: HashSet<ToolchainId> =
             unloaded.iter().map(|(_, owner)| owner.clone()).collect();
+        // Task edges into inventory-only scopes are intentionally absent until
+        // their owners are loaded. Validate dependency-output selectors only
+        // once the graph is complete; the run builder rebuilds after satisfying
+        // these demands.
+        if owners.is_empty() {
+            validate_dependency_outputs_inputs(&engine)?;
+        }
         Ok(BuiltWithDemands {
             engine,
             owners,

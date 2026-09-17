@@ -218,6 +218,31 @@ fn cross_dep_loader() -> TestTurboJsonLoader {
     ]))
 }
 
+fn cross_dep_with_dependency_outputs_loader() -> TestTurboJsonLoader {
+    TestTurboJsonLoader::new(HashMap::from([
+        (
+            PackageName::Root,
+            turbo_json(json!({ "tasks": { "build": {} } })),
+        ),
+        (
+            PackageName::from("web"),
+            turbo_json(json!({
+                "extends": ["//"],
+                "tasks": {
+                    "build": {
+                        "dependsOn": ["native#check"],
+                        "inputs": [{
+                            "mode": "dependencyOutputs",
+                            "from": ["native#check"],
+                            "globs": []
+                        }]
+                    }
+                }
+            })),
+        ),
+    ]))
+}
+
 fn plain_loader() -> TestTurboJsonLoader {
     TestTurboJsonLoader::new(HashMap::from([
         (
@@ -286,6 +311,21 @@ fn cross_package_task_dependency_demands_only_the_reached_owner() {
             .task_definition(&TaskId::new("web", "build"))
             .is_some()
     );
+}
+
+#[test]
+fn dependency_outputs_validation_waits_for_demanded_task_owner() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let contributor = Arc::new(LazyNativeContributor::new(&repo_root));
+    let package_graph = inventory_graph(&repo_root, web_package_json(&[]), contributor);
+
+    let loader = cross_dep_with_dependency_outputs_loader();
+    let (_engine, demands) = web_build_builder(&repo_root, &package_graph, &loader, "build")
+        .build_with_unloaded_demands()
+        .unwrap();
+
+    assert_eq!(demands, HashSet::from([ToolchainId::new("lazy-native")]));
 }
 
 #[test]
