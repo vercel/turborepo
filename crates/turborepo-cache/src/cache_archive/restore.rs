@@ -969,7 +969,7 @@ mod tests {
                     },
                     TarFile::Symlink {
                         link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
-                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("..").unwrap(),
                     },
                     TarFile::File {
                         path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
@@ -983,7 +983,7 @@ mod tests {
                     },
                     TarFile::Symlink {
                         link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
-                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("..").unwrap(),
                     },
                     TarFile::File {
                         path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
