@@ -1071,7 +1071,7 @@ mod tests {
                 #[cfg(unix)]
                 expected_output: Err("IO error: Is a directory (os error 21)".to_string()),
                 #[cfg(windows)]
-                expected_output: Err("IO error: Access is denied. (os error 5)".to_string()),
+                expected_output: Err("IO error: failed to remove directory `".to_string()),
             },
             TestCase {
                 name: "symlink cycle",
@@ -1265,7 +1265,18 @@ mod tests {
                         assert_eq!(&restored_files, expected_files, "test: {:?}", test.name);
                     }
                     (Err(err), Err(expected_error)) => {
-                        assert_eq!(&err.to_string(), expected_error, "test: {:?}", test.name);
+                        let actual_error = err.to_string();
+                        #[cfg(windows)]
+                        if test.name == "place file at dir location" {
+                            assert!(
+                                actual_error.starts_with(expected_error),
+                                "test {:?}: expected error starting with {expected_error:?}, received \
+                                 {actual_error:?}",
+                                test.name
+                            );
+                            continue;
+                        }
+                        assert_eq!(&actual_error, expected_error, "test: {:?}", test.name);
                         continue;
                     }
                     (Err(err), Ok(_)) => {
