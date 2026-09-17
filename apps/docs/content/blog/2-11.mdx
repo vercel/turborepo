@@ -22,7 +22,7 @@ import MilestonesImageLight from "../../public/images/blog/turbo-2-11/milestones
 
 <Authors authors={["anthonyshew"]} />
 
-Turborepo 2.11 adds native support for more languages, faster startup, and more control over your deployments:
+Turborepo 2.11 adds native support for more languages, faster startup, improved JavaScript ecosystem compatibility and more control over your deployments:
 
 - [**Native support for Rust, Python, and Go (Experimental)**](#native-support-for-rust-python-and-go-experimental): One Task Graph, every language toolchain
 - [**Faster Time to First Task**](#up-to-4x-faster-startup): Up to 4x faster startup than Turborepo 2.9
@@ -174,7 +174,7 @@ Share your feedback in [GitHub Discussions](https://github.com/vercel/turborepo/
 
 ## Up to 4x faster startup
 
-Time to First Task is the time between when you invoke turbo run and when your first task starts running. In Turborepo 2.9, we [improved Time To First Task by up to 96%](/blog/2-9#time-to-first-task-improved-up-to-96).
+Time to First Task is the time between when you invoke `turbo run` and when your first task starts running. In Turborepo 2.9, we [improved Time To First Task by up to 96%](/blog/2-9#time-to-first-task-improved-up-to-96).
 
 In 2.11, Time to First Task is up to 4x faster than 2.9.
 
@@ -493,7 +493,7 @@ Stacked on top of the Turborepo 2.9 gains, the largest repository we benchmarked
 
 ## `devEngines.packageManager` support
 
-Starting with this release, Turborepo respects this `devEngines.packageManager` field in the repository's root `package.json`.
+Starting with this release, Turborepo respects the `devEngines.packageManager` field in the repository's root `package.json`.
 
 For JavaScript toolchains, the `devEngines.packageManager` field is the modern way to declare the package manager expected by your repository:
 
@@ -508,7 +508,7 @@ For JavaScript toolchains, the `devEngines.packageManager` field is the modern w
 }
 ```
 
-In a future major version of Turborepo, the top-level `packageManager` will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository by removing the top-level `packageManager` field and replacing it with `devEngines.packageManager`.
+In a future major version of Turborepo, the top-level `packageManager` field will stop being supported to align with the current and future direction of the JavaScript ecosystem. We encourage migrating your repository by removing the top-level `packageManager` field and replacing it with `devEngines.packageManager`.
 
 [Read the package manager documentation](/docs/support-policy#package-managers) to learn more.
 
@@ -552,7 +552,7 @@ Declare nub in your root `package.json`:
 </Tab>
 </Tabs>
 
-To try nub or aube, quickly create a monorepo with `create-turbo`:
+To try nub or aube, create a monorepo with `create-turbo`:
 
 ```sh title="Terminal"
 # nub
@@ -564,7 +564,7 @@ aubx create-turbo -m aube
 
 ## Production pruning
 
-When preparing a deployment from a monorepo, it can be tricky to right-size your Docker images. Turborepo's `prune` command is meant to solve this problem, trimming your monorepo down to only the code that is needed for the application to deploy and run successfully.
+When preparing a deployment from a monorepo, it can be tricky to right-size your Docker images. Turborepo's `prune` command solves this problem, trimming your monorepo to only the code that is needed for the application to deploy and run successfully.
 
 Until today, Turborepo would include workspace packages referenced through both dependencies and development dependencies while calculating the pruning dependency closure. While this is a safe default, removing development-only workspace packages from the production image can optimize further.
 
@@ -790,8 +790,9 @@ This works across all natively supported languages, including the Experimental o
 
   </Accordion>
 
-  <Accordion title="Fixes (194)">
+  <Accordion title="Fixes (195)">
 
+    - fix: Defer dependency output validation for lazy scopes ([#14097](https://github.com/vercel/turborepo/pull/14097))
     - fix: Harden cache archive restoration ([#14095](https://github.com/vercel/turborepo/pull/14095))
     - fix: Preserve task env mode when pruning ([#14087](https://github.com/vercel/turborepo/pull/14087))
     - fix: Follow Go default binary output paths ([#14079](https://github.com/vercel/turborepo/pull/14079))
@@ -1034,8 +1035,35 @@ This works across all natively supported languages, including the Experimental o
 
   </Accordion>
 
-  <Accordion title="Examples (1)">
+  <Accordion title="Examples (28)">
 
+    - chore: Update with-npm example ([#14083](https://github.com/vercel/turborepo/pull/14083))
+    - chore: Update with-nestjs example ([#14064](https://github.com/vercel/turborepo/pull/14064))
+    - chore: Update with-mcp-servers example ([#14049](https://github.com/vercel/turborepo/pull/14049))
+    - chore: Update with-docker example ([#14035](https://github.com/vercel/turborepo/pull/14035))
+    - chore: Update with-biome example ([#13983](https://github.com/vercel/turborepo/pull/13983))
+    - chore: Update with-angular example ([#13951](https://github.com/vercel/turborepo/pull/13951))
+    - chore: Update kitchen-sink example ([#13945](https://github.com/vercel/turborepo/pull/13945))
+    - chore: Update basic example ([#13922](https://github.com/vercel/turborepo/pull/13922))
+    - chore: Update with-vue-nuxt example ([#13901](https://github.com/vercel/turborepo/pull/13901))
+    - chore: Update with-vite-react example ([#13880](https://github.com/vercel/turborepo/pull/13880))
+    - chore: Update with-vite example ([#13866](https://github.com/vercel/turborepo/pull/13866))
+    - chore: Update basic example ([#13824](https://github.com/vercel/turborepo/pull/13824))
+    - chore: Update non-monorepo example ([#13808](https://github.com/vercel/turborepo/pull/13808))
+    - chore: Update with-solid example ([#13797](https://github.com/vercel/turborepo/pull/13797))
+    - chore: Update with-shell-commands example ([#13791](https://github.com/vercel/turborepo/pull/13791))
+    - chore: Update with-rsbuild-module-federation example ([#13786](https://github.com/vercel/turborepo/pull/13786))
+    - chore: Update with-svelte example ([#13118](https://github.com/vercel/turborepo/pull/13118))
+    - chore: Update with-ultracite example ([#13772](https://github.com/vercel/turborepo/pull/13772))
+    - chore: Update with-tailwind example ([#13762](https://github.com/vercel/turborepo/pull/13762))
+    - chore: Update with-solid example ([#13752](https://github.com/vercel/turborepo/pull/13752))
+    - chore: Update with-rsbuild example ([#13730](https://github.com/vercel/turborepo/pull/13730))
+    - chore: Update non-monorepo example ([#13727](https://github.com/vercel/turborepo/pull/13727))
+    - chore: Update with-rollup example ([#13718](https://github.com/vercel/turborepo/pull/13718))
+    - chore: Update Next.js to 16.3.0 ([#13659](https://github.com/vercel/turborepo/pull/13659))
+    - refactor: Move repository tasks into `turbo` configuration ([#13504](https://github.com/vercel/turborepo/pull/13504))
+    - chore: Fix typos in with-solid example and globwatch comment ([#13416](https://github.com/vercel/turborepo/pull/13416))
+    - chore: Update vitest example to vitest 4 and use native test merging ([#13202](https://github.com/vercel/turborepo/pull/13202))
     - examples: add with-mcp-servers ([#12997](https://github.com/vercel/turborepo/pull/12997))
 
   </Accordion>
