@@ -205,7 +205,7 @@ fn restore_entry<T: Read>(
 mod tests {
     use std::{fs, fs::File, io::empty, path::Path};
 
-    use anyhow::Result;
+    use anyhow::{Context, Result};
     use tar::Header;
     use tempfile::{TempDir, tempdir};
     use test_case::test_case;
@@ -1231,42 +1231,54 @@ mod tests {
             for test in &tests {
                 debug!("test: {}", test.name);
                 let input_dir = tempdir()?;
-                let archive_path = generate_tar(&input_dir, &test.input_files)?;
+                let archive_path =
+                    generate_tar(&input_dir, &test.input_files).with_context(|| {
+                        format!("failed to generate archive for test: {}", test.name)
+                    })?;
                 let output_dir = tempdir()?;
                 let output_dir_path = output_dir.path().to_string_lossy();
                 let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
                 let archive_path = if is_compressed {
-                    compress_tar(&archive_path)?
+                    compress_tar(&archive_path).with_context(|| {
+                        format!("failed to compress archive for test: {}", test.name)
+                    })?
                 } else {
                     archive_path
                 };
 
-                let mut cache_reader = CacheReader::open(&archive_path)?;
+                let mut cache_reader = CacheReader::open(&archive_path)
+                    .with_context(|| format!("failed to open archive for test: {}", test.name))?;
 
                 match (
                     cache_reader.restore(anchor, None).map(|(f, _)| f),
                     &test.expected_output,
                 ) {
                     (Ok(restored_files), Err(expected_error)) => {
-                        panic!("expected error: {expected_error:?}, received {restored_files:?}");
+                        panic!(
+                            "test {:?} expected error: {expected_error:?}, received \
+                             {restored_files:?}",
+                            test.name
+                        );
                     }
                     (Ok(restored_files), Ok(expected_files)) => {
-                        assert_eq!(&restored_files, expected_files);
+                        assert_eq!(&restored_files, expected_files, "test: {:?}", test.name);
                     }
                     (Err(err), Err(expected_error)) => {
-                        assert_eq!(&err.to_string(), expected_error);
+                        assert_eq!(&err.to_string(), expected_error, "test: {:?}", test.name);
                         continue;
                     }
                     (Err(err), Ok(_)) => {
-                        panic!("unexpected error: {err:?}");
+                        panic!("test {:?} returned an unexpected error: {err:?}", test.name);
                     }
                 };
 
                 let expected_files = &test.expected_files;
 
                 for expected_file in expected_files {
-                    assert_file_exists(anchor, expected_file)?;
+                    assert_file_exists(anchor, expected_file).with_context(|| {
+                        format!("failed to verify restored file for test: {}", test.name)
+                    })?;
                 }
             }
         }
