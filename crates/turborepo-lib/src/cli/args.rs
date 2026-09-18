@@ -902,6 +902,7 @@ impl Args {
         use std::collections::HashSet;
 
         let repeatable = [
+            "--args",
             "--experimental-otel-header",
             "--experimental-otel-resource",
             "--filter",
