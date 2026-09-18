@@ -69,12 +69,6 @@ function cliFiles({
     };
   });
   files.push({
-    path: "skills/turborepo/SKILL.md",
-    status: "modified",
-    baseContent: `---\nmetadata:\n  version: ${baseVersion}\n---\nhttps://turborepo.dev/schema.json\n`,
-    headContent: `---\nmetadata:\n  version: ${version}\n---\nhttps://v${version.replace(/[.+]/g, "-")}.turborepo.dev/schema.json\n`,
-  });
-  files.push({
     path: "version.txt",
     status: "modified",
     baseContent: `${baseVersion}\ncanary\n`,
@@ -206,19 +200,22 @@ test("rejects missing, extra, and non-modified CLI files", () => {
   );
 });
 
-test("rejects unrelated skill documentation edits", () => {
-  const files = cliFiles();
-  const skill = files.find(
-    ({ path }) => path === "skills/turborepo/SKILL.md",
-  );
-  skill.headContent += "malicious instructions\n";
+test("rejects skill documentation edits in release PRs", () => {
   assert.throws(
     () =>
       validateReleaseFiles({
         release: { type: "cli", version: "2.10.7-canary.2" },
-        files,
+        files: [
+          ...cliFiles(),
+          {
+            path: "skills/turborepo/SKILL.md",
+            status: "modified",
+            baseContent: "old skill\n",
+            headContent: "new skill\n",
+          },
+        ],
       }),
-    /not generated/,
+    /unexpected file skills\/turborepo\/SKILL\.md/,
   );
 });
 

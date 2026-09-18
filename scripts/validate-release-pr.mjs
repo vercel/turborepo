@@ -45,9 +45,6 @@ const LIBRARY_NATIVE_PACKAGES = [
 ];
 
 const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?$/;
-const SKILL_PATH_PATTERN = /^skills\/turborepo\/.*\.md$/;
-const SCHEMA_PATTERN =
-  /https:\/\/(?:v[\w-]+\.)?turborepo\.(?:dev|com)\/schema(?:\.v2)?\.json|https:\/\/turbo\.build\/schema(?:\.v2)?\.json/g;
 
 export function classifyRelease({ headRef, title }) {
   const cliMatch = /^staging-(.+)$/.exec(headRef);
@@ -171,22 +168,6 @@ function validateVersionFile(content, version) {
   }
 }
 
-function validateSkillFile({ path, baseContent, headContent, version }) {
-  let expected = baseContent;
-  if (path === "skills/turborepo/SKILL.md") {
-    expected = expected.replace(
-      /^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,
-      `$1${version}$2`,
-    );
-  }
-
-  const schemaUrl = `https://v${version.replace(/[.+]/g, "-")}.turborepo.dev/schema.json`;
-  expected = expected.replace(SCHEMA_PATTERN, schemaUrl);
-  if (expected === baseContent || headContent !== expected) {
-    throw new Error(`${path} contains changes not generated for ${version}`);
-  }
-}
-
 export function validateReleaseFiles({ release, files }) {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   if (filesByPath.size !== files.length) {
@@ -229,10 +210,6 @@ export function validateReleaseFiles({ release, files }) {
   if (!filesByPath.has("version.txt")) {
     throw new Error("CLI release is missing version.txt");
   }
-  if (!filesByPath.has("skills/turborepo/SKILL.md")) {
-    throw new Error("CLI release is missing skills/turborepo/SKILL.md");
-  }
-
   for (const file of files) {
     if (CLI_PACKAGE_PATHS.includes(file.path)) {
       validatePackageJson({
@@ -247,8 +224,6 @@ export function validateReleaseFiles({ release, files }) {
       });
     } else if (file.path === "version.txt") {
       validateVersionFile(file.headContent, release.version);
-    } else if (SKILL_PATH_PATTERN.test(file.path)) {
-      validateSkillFile({ ...file, version: release.version });
     } else {
       throw new Error(`CLI release contains unexpected file ${file.path}`);
     }

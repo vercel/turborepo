@@ -11,11 +11,13 @@
   },
   "files": [
     "bin",
+    "docs",
     "schema.json"
   ],
   "main": "./bin/turbo",
   "scripts": {
-    "postversion": "node bump-version.js"
+    "postversion": "node bump-version.js",
+    "prepack": "node copy-docs.js"
   },
   "optionalDependencies": {
     "@turbo/darwin-64": "2.11.1",

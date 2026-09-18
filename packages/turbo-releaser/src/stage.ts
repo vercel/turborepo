@@ -1,6 +1,6 @@
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { releasePackages } from "./config";
 import { getVersionInfo } from "./version";
 
@@ -85,48 +85,10 @@ export async function prepareStage({
     );
   }
 
-  await updateSkillFiles(path.join(root, "skills", "turborepo"), version);
   dependencies.run("git", ["checkout", "-b", branch], {
     cwd: root,
     stdio: "inherit"
   });
 
   return { branch, version };
-}
-
-async function updateSkillFiles(skillRoot: string, version: string) {
-  const skillPath = path.join(skillRoot, "SKILL.md");
-  const skill = await readFile(skillPath, "utf8");
-  await writeFile(
-    skillPath,
-    skill.replace(
-      /^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,
-      `$1${version}$2`
-    )
-  );
-
-  const schemaUrl = `https://v${version.replace(/[.+]/g, "-")}.turborepo.dev/schema.json`;
-  const schemaPattern =
-    /https:\/\/(?:v[\w-]+\.)?turborepo\.(?:dev|com)\/schema(?:\.v2)?\.json|https:\/\/turbo\.build\/schema(?:\.v2)?\.json/g;
-
-  for (const file of await markdownFiles(skillRoot)) {
-    const contents = await readFile(file, "utf8");
-    const updated = contents.replace(schemaPattern, schemaUrl);
-    if (updated !== contents) {
-      await writeFile(file, updated);
-    }
-  }
-}
-
-async function markdownFiles(directory: string): Promise<Array<string>> {
-  const files: Array<string> = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await markdownFiles(entryPath)));
-    } else if (entry.name.endsWith(".md")) {
-      files.push(entryPath);
-    }
-  }
-  return files;
 }
