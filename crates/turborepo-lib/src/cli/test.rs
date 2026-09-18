@@ -1375,6 +1375,21 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
+        parse_args(["turbo", "prune", "--scope", "foo", "--scope", "bar",]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: Some(vec!["foo".to_string(), "bar".to_string()]),
+                scope_arg: None,
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
         parse_args(["turbo", "prune", "foo", "bar"]).unwrap(),
         Args {
             command: Some(Command::Prune {

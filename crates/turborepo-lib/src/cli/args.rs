@@ -907,6 +907,7 @@ impl Args {
             "--filter",
             "--global-deps",
             "--packages",
+            "--scope",
             "--tasks",
         ];
         let mut seen = HashSet::new();
