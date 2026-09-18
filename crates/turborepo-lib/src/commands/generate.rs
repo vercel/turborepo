@@ -3,6 +3,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+use semver::Version;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::AbsoluteSystemPath;
@@ -79,6 +80,17 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
     }
 }
 
+fn allow_pnpm_esbuild(package_manager_command: &mut PackageManagerCommand, version: &str) {
+    let supports_allow_build =
+        Version::parse(version.trim()).is_ok_and(|version| version.major >= 10);
+
+    if supports_allow_build {
+        package_manager_command
+            .args
+            .insert(0, "--allow-build=esbuild".to_string());
+    }
+}
+
 fn call_turbo_gen(
     repo_root: &AbsoluteSystemPath,
     command: &str,
@@ -86,7 +98,7 @@ fn call_turbo_gen(
     raw_args: &str,
 ) -> Result<i32, Error> {
     let package_manager = package_manager_for_generate(repo_root);
-    let package_manager_command = turbo_gen_command(&package_manager, tag);
+    let mut package_manager_command = turbo_gen_command(&package_manager, tag);
 
     debug!(
         "Running @turbo/gen@{} with package manager `{}` command `{}` and args {:?}",
@@ -101,6 +113,19 @@ fn call_turbo_gen(
             source,
         }
     })?;
+    if matches!(
+        package_manager,
+        PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+    ) {
+        if let Ok(output) = Command::new(&command_path).arg("--version").output() {
+            if output.status.success() {
+                allow_pnpm_esbuild(
+                    &mut package_manager_command,
+                    String::from_utf8_lossy(&output.stdout).as_ref(),
+                );
+            }
+        }
+    }
     let mut package_manager_process = Command::new(command_path);
     package_manager_process
         .args(package_manager_command.args)
@@ -154,6 +179,34 @@ mod tests {
                 executable: "pnpm",
                 args: vec!["dlx".to_string(), "@turbo/gen@1.2.3".to_string()],
             }
+        );
+    }
+
+    #[test]
+    fn allows_esbuild_for_modern_pnpm_dlx() {
+        let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
+
+        allow_pnpm_esbuild(&mut command, "12.0.0\n");
+
+        assert_eq!(
+            command.args,
+            vec![
+                "--allow-build=esbuild".to_string(),
+                "dlx".to_string(),
+                "@turbo/gen@1.2.3".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn does_not_pass_allow_build_to_legacy_pnpm() {
+        let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
+
+        allow_pnpm_esbuild(&mut command, "9.15.9");
+
+        assert_eq!(
+            command.args,
+            vec!["dlx".to_string(), "@turbo/gen@1.2.3".to_string()]
         );
     }
 
