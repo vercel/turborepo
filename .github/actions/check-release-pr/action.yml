@@ -5,7 +5,7 @@ description: |
   updates and can skip full test suites.
 
   This action also validates that release PRs only modify known release
-  package manifests, version.txt, and generated Turborepo skill files.
+  package manifests and version.txt.
 
 outputs:
   is-release-pr:
@@ -67,7 +67,7 @@ runs:
         echo "$CHANGED_FILES"
 
         # Validate each file matches expected release patterns
-        ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
+        ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json)$"
 
         INVALID_FILES=""
         while IFS= read -r file; do
@@ -79,7 +79,7 @@ runs:
         if [[ -n "$INVALID_FILES" ]]; then
           echo "::error::Release PR contains unexpected files that are not generated release updates:"
           echo "$INVALID_FILES"
-          echo "::error::Release PRs should only modify known release package manifests, version.txt, or generated Turborepo skill files"
+          echo "::error::Release PRs should only modify known release package manifests or version.txt"
           exit 1
         fi
 
