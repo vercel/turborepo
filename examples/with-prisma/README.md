@@ -1,199 +1,83 @@
 # Turborepo + Prisma ORM starter
 
-This is a example designed to help you quickly set up a Turborepo monorepo with a Next.js app and Prisma ORM. This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
+This example helps you quickly set up a Turborepo monorepo with a Next.js app and Prisma ORM. It is community maintained. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## What's inside?
 
-This turborepo includes the following packages/apps:
-
-### Apps and packages
+This Turborepo includes the following packages and apps:
 
 - `web`: a [Next.js](https://nextjs.org/) app
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/database`: [Prisma ORM](https://prisma.io/) to manage & access your database
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- `@repo/eslint-config`: shared ESLint flat configurations
+- `@repo/database`: [Prisma ORM](https://prisma.io/) for database access
+- `@repo/typescript-config`: shared `tsconfig.json` files
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-- [Prisma ORM](https://prisma.io/) for accessing the database
-- [Docker Compose](https://docs.docker.com/compose/) for a local MySQL database
+The example also uses TypeScript, Prettier, PostgreSQL, and Docker Compose.
 
 ## Getting started
 
-Follow these steps to set up and run your Turborepo project with Prisma ORM:
-
-### 1. Create a Turborepo project
-
-Start by creating a new Turborepo project using the following command:
+### 1. Create the project
 
 ```sh
-npx create-turbo@latest -e with-prisma
+pnpm dlx create-turbo@latest -e with-prisma
+cd my-turborepo
 ```
 
-Choose your desired package manager when prompted and a name for the app (e.g., `my-turborepo`). This will scaffold a new Turborepo project with Prisma ORM included and dependencies installed.
+### 2. Start PostgreSQL
 
-Navigate to your project directory:
-
-```bash
-cd ./my-turborepo
-```
-
-### 2. Setup a local database with Docker Compose
-
-We use [Prisma ORM](https://prisma.io/) to manage and access our database. As such you will need a database for this project, either locally or hosted in the cloud.
-
-To make this process easier, a [`docker-compose.yml` file](./docker-compose.yml) is included to setup a PostgreSQL server locally with a new database named `turborepo`:
-
-Start the PostgreSQL database using Docker Compose:
+The included [`docker-compose.yml`](./docker-compose.yml) starts a local PostgreSQL server with a database named `turborepo`:
 
 ```sh
-docker-compose up -d
+docker compose up -d
 ```
 
-To change the default database name, update the `POSTGRES_DB` environment variable in the [`docker-compose.yml` file](/docker-compose.yml).
+To change the database name, update `POSTGRES_DB` in [`docker-compose.yml`](./docker-compose.yml).
 
-### 3. Setup environment variables
+### 3. Configure environment variables
 
-Once the database is ready, copy the `.env.example` file to the [`/packages/database`](./packages/database/) and [`/apps/web`](./apps/web/) directories as `.env`:
+Copy the example environment file into the database package and web app:
 
-```bash
-cp .env.example ./packages/database/.env
-cp .env.example ./apps/web/.env
+```sh
+cp .env.example packages/database/.env
+cp .env.example apps/web/.env
 ```
 
-This ensures Prisma has access to the `DATABASE_URL` environment variable, which is required to connect to your database.
+Update `DATABASE_URL` in those files if you changed the database name or use a hosted database.
 
-If you added a custom database name, or use a cloud based database, you will need to update the `DATABASE_URL` in your `.env` accordingly.
+### 4. Create the database schema
 
-### 4. Migrate your database
+Emit the Prisma ORM contract, then initialize an empty database:
 
-Once your database is running, you’ll need to create and apply migrations to set up the necessary tables. Run the database migration command:
-
-```bash
-# Using npm
-npm run db:migrate:dev
+```sh
+pnpm generate
+pnpm --filter @repo/database exec prisma db init
 ```
 
-<details>
+After editing the contract, apply development changes with `pnpm db:push`. Use `pnpm --filter @repo/database exec prisma migration plan` to create a migration and `pnpm db:migrate:deploy` to apply committed migrations.
 
-<summary>Expand for <code>yarn</code>, <code>pnpm</code> or <code>bun</code></summary>
+### 5. Seed the database
 
-```bash
-# Using yarn
-yarn run db:migrate:dev
+Edit [`packages/database/src/seed.ts`](./packages/database/src/seed.ts), then run:
 
-# Using pnpm
-pnpm run db:migrate:dev
-
-# Using bun
-bun run db:migrate:dev
+```sh
+pnpm db:seed
 ```
 
-</details>
+### 6. Build and run the application
 
-You’ll be prompted to name the migration. Once you provide a name, Prisma will create and apply the migration to your database.
-
-> Note: The `db:migrate:dev` script (located in [packages/database/package.json](/packages/database/package.json)) uses [Prisma Migrate](https://www.prisma.io/migrate) under the hood.
-
-For production environments, always push schema changes to your database using the [`prisma migrate deploy` command](https://www.prisma.io/docs/orm/prisma-client/deployment/deploy-database-changes-with-prisma-migrate). You can find an example `db:migrate:deploy` script in the [`package.json` file](/packages/database/package.json) of the `database` package.
-
-### 5. Seed your database
-
-To populate your database with initial or fake data, use [Prisma's seeding functionality](https://www.prisma.io/docs/guides/database/seed-database).
-
-Update the seed script located at [`packages/database/src/seed.ts`](/packages/database/src/seed.ts) to include any additional data that you want to seed. Once edited, run the seed command:
-
-```bash
-# Using npm
-npm run db:seed
+```sh
+pnpm build
+pnpm dev
 ```
 
-<details>
+Open `http://localhost:3000` in your browser.
 
-<summary>Expand for <code>yarn</code>, <code>pnpm</code> or <code>bun</code></summary>
+For a detailed walkthrough, see the [Prisma ORM documentation](https://www.prisma.io/docs/orm).
 
-```bash
-# Using yarn
-yarn run db:seed
-
-# Using pnpm
-pnpm run db:seed
-
-# Using bun
-bun run db:seed
-```
-
-</details>
-
-### 6. Build your application
-
-To build all apps and packages in the monorepo, run:
-
-```bash
-# Using npm
-npm run build
-```
-
-<details>
-
-<summary>Expand for <code>yarn</code>, <code>pnpm</code> or <code>bun</code></summary>
-
-```bash
-# Using yarn
-yarn run build
-
-# Using pnpm
-pnpm run build
-
-# Using bun
-bun run build
-```
-
-</details>
-
-### 7. Start the application
-
-Finally, start your application with:
-
-```bash
-yarn run dev
-```
-
-<details>
-
-<summary>Expand for <code>yarn</code>, <code>pnpm</code> or <code>bun</code></summary>
-
-```bash
-# Using yarn
-yarn run dev
-
-# Using pnpm
-pnpm run dev
-
-# Using bun
-bun run dev
-```
-
-</details>
-
-Your app will be running at `http://localhost:3000`. Open it in your browser to see it in action!
-
-You can also read the official [detailed step-by-step guide from Prisma ORM](https://pris.ly/guide/turborepo?utm_campaign=turborepo-example) to build a project from scratch using Turborepo and Prisma ORM.
-
-## Useful Links
-
-Learn more about the power of Turborepo:
+## Useful links
 
 - [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
 - [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
 - [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
 - [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- [Configuration options](https://turborepo.dev/docs/reference/configuration)
+- [CLI usage](https://turborepo.dev/docs/reference/command-line-reference)

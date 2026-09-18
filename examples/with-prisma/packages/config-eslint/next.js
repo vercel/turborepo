@@ -1,34 +1,25 @@
-const { resolve } = require("node:path");
+const nextPlugin = require("@next/eslint-plugin-next");
+const prettierConfig = require("eslint-config-prettier");
+const turboConfigModule = require("eslint-config-turbo/flat");
+const tseslint = require("typescript-eslint");
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const turboConfig = turboConfigModule.default ?? turboConfigModule;
 
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: [
-    "eslint:recommended",
-    "prettier",
-    require.resolve("@vercel/style-guide/eslint/next"),
-    "turbo",
-  ],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  env: {
-    node: true,
-  },
-  plugins: ["only-warn"],
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
-      },
+/** @type {import("eslint").Linter.Config[]} */
+module.exports = [
+  ...tseslint.configs.recommended,
+  {
+    plugins: {
+      "@next/next": nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs["core-web-vitals"].rules,
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-  ],
-  overrides: [{ files: ["*.js?(x)", "*.ts?(x)"] }],
-};
+  ...turboConfig,
+  prettierConfig,
+  {
+    ignores: [".eslintrc.js", ".next/**", "next-env.d.ts", "node_modules/**"],
+  },
+];
