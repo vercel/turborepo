@@ -7,8 +7,9 @@ use pretty_assertions::assert_eq;
 use turborepo_types::LogOrder;
 
 use crate::cli::{
-    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GraphOutput, LogOrderArg,
-    LogPrefixArg, NonEmptyPath, OutputLogsModeArg, RunArgs,
+    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
+    RunArgs,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -1375,6 +1376,21 @@ fn test_parse_prune() {
     );
 
     assert_eq!(
+        parse_args(["turbo", "prune", "--scope", "foo", "--scope", "bar",]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: Some(vec!["foo".to_string(), "bar".to_string()]),
+                scope_arg: None,
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
         parse_args(["turbo", "prune", "foo", "bar"]).unwrap(),
         Args {
             command: Some(Command::Prune {
@@ -1659,6 +1675,51 @@ fn test_parse_gen() {
                     "my-second-arg".to_string()
                 ],
                 command: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "gen", "--args", "first", "--args", "second",]).unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: None,
+                generator_name: None,
+                config: None,
+                root: None,
+                args: vec!["first".to_string(), "second".to_string()],
+                command: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "gen",
+            "run",
+            "my-generator",
+            "--args",
+            "first",
+            "--args",
+            "second",
+        ])
+        .unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: None,
+                generator_name: None,
+                config: None,
+                root: None,
+                args: vec![],
+                command: Some(GenerateCommand::Run(GeneratorCustomArgs {
+                    generator_name: Some("my-generator".to_string()),
+                    config: None,
+                    root: None,
+                    args: vec!["first".to_string(), "second".to_string()],
+                })),
             }),
             ..Args::default()
         }
