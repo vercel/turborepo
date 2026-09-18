@@ -81,8 +81,11 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
 }
 
 fn allow_pnpm_esbuild(package_manager_command: &mut PackageManagerCommand, version: &str) {
-    let supports_allow_build =
-        Version::parse(version.trim()).is_ok_and(|version| version.major >= 10);
+    // The `--allow-build` flag was introduced in pnpm v10.2.0. Passing it to
+    // earlier versions (including 10.0.x and 10.1.x) causes pnpm to error out
+    // with "Unknown option: 'allow-build'".
+    let supports_allow_build = Version::parse(version.trim())
+        .is_ok_and(|version| version.major > 10 || (version.major == 10 && version.minor >= 2));
 
     if supports_allow_build {
         package_manager_command
@@ -207,6 +210,37 @@ mod tests {
         assert_eq!(
             command.args,
             vec!["dlx".to_string(), "@turbo/gen@1.2.3".to_string()]
+        );
+    }
+
+    #[test]
+    fn does_not_pass_allow_build_to_pnpm_before_10_2() {
+        for version in ["10.0.0", "10.1.5"] {
+            let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
+
+            allow_pnpm_esbuild(&mut command, version);
+
+            assert_eq!(
+                command.args,
+                vec!["dlx".to_string(), "@turbo/gen@1.2.3".to_string()],
+                "pnpm {version} should not receive --allow-build"
+            );
+        }
+    }
+
+    #[test]
+    fn passes_allow_build_to_pnpm_10_2() {
+        let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
+
+        allow_pnpm_esbuild(&mut command, "10.2.0");
+
+        assert_eq!(
+            command.args,
+            vec![
+                "--allow-build=esbuild".to_string(),
+                "dlx".to_string(),
+                "@turbo/gen@1.2.3".to_string(),
+            ]
         );
     }
 
