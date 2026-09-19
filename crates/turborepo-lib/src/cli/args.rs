@@ -1059,6 +1059,21 @@ pub enum Command {
         #[usage(long)]
         no_open: bool,
     },
+    /// Run a command with the repository's toolchain from `.turbo/tools` on
+    /// PATH
+    ///
+    /// The command inherits the same environment turbo gives its tasks, so
+    /// `turbo exec -- uv sync` or `turbo exec -- cargo build` always use the
+    /// tools installed by `turbo setup` regardless of what your shell has on
+    /// PATH. Put `--` before the command so its own flags are not parsed by
+    /// turbo.
+    Exec {
+        /// The command to run (when it needs no flags of its own)
+        command: Vec<String>,
+        /// The command and its arguments, after `--`
+        #[usage(double_dash = "required", hide = true)]
+        pass_through: Vec<String>,
+    },
     /// Search the Turborepo documentation
     Docs {
         /// The search query

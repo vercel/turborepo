@@ -187,6 +187,41 @@ fn test_setup_installs_package_manager_and_tasks_use_it() {
         "{stdout}"
     );
 
+    // `turbo exec` runs arbitrary commands with the same toolchain, from the
+    // invocation directory, and forwards the exit code.
+    let output = run_turbo(tempdir.path(), &["exec", "--", "npm", "run", "anything"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(stdout.contains("fake npm run anything"), "{stdout}");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "exec",
+            "--",
+            "sh",
+            "-c",
+            "printf %s \"$PATH\" && pwd && exit 7",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(7), "exit code is forwarded");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with(tools.join("bin").to_str().unwrap()),
+        "PATH must start with the managed bin dir: {stdout}"
+    );
+    let app_dir = tempdir.path().join("apps").join("my-app");
+    let output = run_turbo(&app_dir, &["exec", "--", "pwd"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.trim().ends_with("my-app"),
+        "exec runs where turbo was invoked: {stdout}"
+    );
+
+    let output = run_turbo(tempdir.path(), &["exec"]);
+    assert!(!output.status.success(), "exec without a command fails");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No command given"));
+
     // Tasks resolve the package manager from .turbo/tools/bin even though the
     // caller's PATH never changed: the fake npm prints instead of building.
     let output = run_turbo(

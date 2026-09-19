@@ -60,6 +60,11 @@ pub const BIN_DIR: &str = "bin";
 /// Name of the manifest file inside the tools directory.
 pub const MANIFEST_FILE: &str = "manifest.json";
 
+/// Environment variable [`activate`] sets to the tools directory it applied,
+/// so later code (and child processes) can tell which repository's tools are
+/// active without repeating the search.
+pub const TOOLS_ROOT_ENV: &str = "TURBO_TOOLS_ROOT";
+
 /// The repository-scoped tools directory: `<repo root>/.turbo/tools`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolsDir {
@@ -142,7 +147,22 @@ impl ToolsDir {
             let value = self.resolve_relative(relative);
             env.push((key.to_string(), OsString::from(value.as_str())));
         }
+        env.push((
+            TOOLS_ROOT_ENV.to_string(),
+            OsString::from(self.root.as_str()),
+        ));
         Some(env)
+    }
+
+    /// The tools directory of the nearest repository at or above `start`
+    /// that has one installed. Used when repository inference has nothing to
+    /// anchor on (no root `package.json`), so the invocation directory may be
+    /// deep inside a Cargo, uv, or Go workspace.
+    pub fn find_nearest(start: &AbsoluteSystemPath) -> Option<Self> {
+        start
+            .ancestors()
+            .map(Self::new)
+            .find(|tools| tools.bin_dir().exists())
     }
 }
 
@@ -167,7 +187,18 @@ fn prepend_path(bin_dir: &std::path::Path, current: Option<&OsStr>) -> Option<Os
 /// environment exist; the shim calls it immediately after repository
 /// inference for exactly that reason.
 pub fn activate(repo_root: &AbsoluteSystemPath) -> bool {
-    let tools = ToolsDir::new(repo_root);
+    apply(&ToolsDir::new(repo_root))
+}
+
+/// Like [`activate`], but for the nearest repository at or above `start`
+/// with installed tools. Returns the repository root that was activated.
+pub fn activate_nearest(start: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    let tools = ToolsDir::find_nearest(start)?;
+    let repo_root = tools.root().parent()?.parent()?.to_owned();
+    apply(&tools).then_some(repo_root)
+}
+
+fn apply(tools: &ToolsDir) -> bool {
     let Some(env) = tools.activation_env(env::var_os("PATH").as_deref()) else {
         return false;
     };
@@ -238,5 +269,21 @@ mod tests {
             env[1].1,
             OsString::from(tools.root().join_components(&["rust", "rustup"]).as_str())
         );
+        assert_eq!(env[2].0, TOOLS_ROOT_ENV);
+        assert_eq!(env[2].1, OsString::from(tools.root().as_str()));
+    }
+
+    #[test]
+    fn find_nearest_walks_up_to_an_installed_tools_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let nested = root.join_components(&["crates", "a", "src"]);
+        nested.create_dir_all().unwrap();
+        assert!(ToolsDir::find_nearest(&nested).is_none());
+
+        ToolsDir::new(&root).bin_dir().create_dir_all().unwrap();
+        let found = ToolsDir::find_nearest(&nested).unwrap();
+        assert_eq!(found, ToolsDir::new(&root));
+        assert_eq!(ToolsDir::find_nearest(&root).unwrap(), ToolsDir::new(&root));
     }
 }

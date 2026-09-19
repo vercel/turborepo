@@ -6,6 +6,7 @@ type: reference
 summary: Reference for the `turbo setup` command that installs the toolchain your repository declares into `.turbo/tools`.
 related:
   - /docs/reference/run
+  - /docs/reference/exec
   - /docs/guides/multi-language
   - /docs/reference/system-environment-variables
 ---
@@ -59,7 +60,14 @@ Whenever `turbo` starts inside a repository that has a `.turbo/tools/bin` direct
 
 The shims are self-contained: `cargo`, `rustc` and the other rustup proxies export `RUSTUP_HOME`, and `uv` exports `UV_PYTHON_INSTALL_DIR`, so they resolve the repository-scoped toolchain from any shell too.
 
-Your interactive shell is not modified. To use the installed tools directly, add `.turbo/tools/bin` to your `PATH`.
+Your interactive shell is not modified. To run a one-off command with the same toolchain tasks get, use [`turbo exec`](/docs/reference/exec):
+
+```bash title="Terminal"
+turbo exec -- uv sync
+turbo exec -- cargo clippy --workspace
+```
+
+To use the installed tools directly, add `.turbo/tools/bin` to your `PATH`.
 
 ## Flags
 
@@ -99,4 +107,4 @@ Downloads come from each tool's upstream by default. Override them for mirrored 
 - `packageManager` values that point at a URL, and package managers other than npm, pnpm, yarn, and bun, are reported as unsupported.
 - Rust toolchains declared with a custom `path` in `rust-toolchain.toml` cannot be installed.
 - Installing Python requires `uv`: declare a uv version so `turbo setup` installs it first, or have `uv` on `PATH`.
-- In a repository without a root `package.json` (a pure Cargo, uv, or Go workspace), turbo uses the directory it is invoked from as the repository root, so run `turbo setup` and `turbo run` from that root.
+- In a repository without a root `package.json` (a pure Cargo, uv, or Go workspace), run `turbo setup` and `turbo run` from the repository root. `turbo exec` and PATH activation still find `.turbo/tools` from any subdirectory.

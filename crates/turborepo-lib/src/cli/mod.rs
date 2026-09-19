@@ -16,8 +16,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, setup, telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, info, link, login,
+        logout, ls, prune, query, run, setup, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -481,6 +481,22 @@ async fn run_main(
 
             info::run(base).await;
             Ok(0)
+        }
+        Command::Exec {
+            command,
+            pass_through,
+        } => {
+            let event = CommandEventBuilder::new("exec").with_parent(&root_telemetry);
+            event.track_call();
+            let mut full_command = command.clone();
+            full_command.extend(pass_through.iter().cloned());
+            let exit_code = exec::run(
+                &repo_root,
+                cli_args.cwd.as_deref(),
+                color_config,
+                &full_command,
+            )?;
+            Ok(exit_code)
         }
         Command::Setup { check, force } => {
             let event = CommandEventBuilder::new("setup").with_parent(&root_telemetry);

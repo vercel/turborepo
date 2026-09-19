@@ -264,9 +264,12 @@ where
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
             // Without a package.json to anchor inference (a pure Cargo, uv,
-            // or Go workspace) the CLI treats the invocation directory as the
-            // repository root, so look for managed tools there too.
-            activate_repository_tools(&args.cwd);
+            // or Go workspace) there is no repository root to consult, so
+            // walk up from the invocation directory to the nearest
+            // `.turbo/tools` instead.
+            if let Some(root) = turborepo_tools::activate_nearest(&args.cwd) {
+                debug!("Activated repository tools from {}", root);
+            }
             run_cli(runtime, None, color_config)
         }
     }
