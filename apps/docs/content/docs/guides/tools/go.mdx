@@ -39,7 +39,7 @@ Set the Future Flag in the root `turbo.json`:
 
 The repository root must contain:
 
-- Go 1.22 or newer available as `go` on `PATH`
+- Go 1.22 or newer available as `go` on `PATH`. [`turbo setup`](/docs/reference/setup) installs the release named by the `toolchain` or `go` directive into the repository when it is missing
 - A `go.work` whose `use` directives identify at least one module inside the repository
 - A `go.mod` with a module path in every member
 - Current `go.sum` and `go.work.sum` files when the resolved graph requires them

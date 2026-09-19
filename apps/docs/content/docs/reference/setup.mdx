@@ -1,0 +1,110 @@
+---
+title: setup
+description: API reference for the `turbo setup` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo setup` command that installs the toolchain your repository declares into `.turbo/tools`.
+related:
+  - /docs/reference/run
+  - /docs/reference/exec
+  - /docs/guides/multi-language
+  - /docs/reference/system-environment-variables
+---
+
+Install the toolchain your repository declares into `.turbo/tools`, scoped to the repository rather than the machine.
+
+```bash title="Terminal"
+turbo setup
+```
+
+A fresh clone often fails at the first `turbo run` because the right package manager, Node.js, Rust, Python, or Go isn't on `PATH`. `turbo setup` reads the versions your repository already pins, downloads each one into `.turbo/tools`, and `turbo` prepends `.turbo/tools/bin` to `PATH` for every task it runs. Nothing is installed globally, and nothing outside the repository is modified.
+
+## What gets installed
+
+`turbo setup` introduces no new configuration. It reads the files each ecosystem already uses to declare its toolchain:
+
+| Tool                 | Read from                                                                                              | Installed from                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| npm, pnpm, yarn, bun | `packageManager` or `devEngines.packageManager` in the root `package.json`                             | npm registry (bun: GitHub releases)    |
+| Node.js              | `devEngines.runtime` in `package.json`, `.nvmrc`, `.node-version`, or `engines.node` in `package.json` | nodejs.org                             |
+| Rust                 | `rust-toolchain.toml` (`channel`, `components`, `targets`, `profile`) or `rust-toolchain`             | rustup, with a repository-scoped `RUSTUP_HOME` |
+| uv                   | `[tool.uv] required-version` in `pyproject.toml`, or `required-version` in `uv.toml`                   | GitHub releases                        |
+| Python               | `.python-version`                                                                                      | `uv python install`                    |
+| Go                   | `toolchain` or `go` directive in `go.work`, then `go.mod`                                              | go.dev                                 |
+
+Exact versions are installed as written. Ranges (`engines.node: ">=20"`, `devEngines.packageManager.version: "^10"`, `go 1.22`) resolve to the newest matching release at install time. Node.js aliases such as `lts/*` are supported.
+
+Corepack-style hashes in `packageManager` (for example `pnpm@9.1.0+sha512.…`) are verified against the downloaded tarball. Every other download is verified against the checksums its upstream publishes.
+
+If the repository declares nothing that `turbo setup` can install, the command fails with a message listing the files it looks at.
+
+## Layout
+
+```text
+.turbo/tools/
+├── manifest.json     # What is installed and which env each tool needs
+├── bin/              # Shims turbo prepends to PATH
+├── node/22.1.0/
+├── pnpm/9.1.0/
+├── go/1.22.5/
+├── uv/0.5.1/
+├── rust/             # RUSTUP_HOME and CARGO_HOME for the pinned channel
+└── python/           # UV_PYTHON_INSTALL_DIR for uv-managed interpreters
+```
+
+`.turbo` is added to `.gitignore` when it isn't ignored already.
+
+## How tasks find the tools
+
+Whenever `turbo` starts inside a repository that has a `.turbo/tools/bin` directory, it prepends that directory to its own `PATH` and exports the environment recorded in the manifest (`RUSTUP_HOME`, `UV_PYTHON_INSTALL_DIR`). Every task inherits that environment in both [Strict and Loose environment modes](/docs/reference/run#--env-mode-option), and turbo's own toolchain probes (package manager, `cargo`, `uv`, `go`) resolve the same binaries.
+
+The shims are self-contained: `cargo`, `rustc` and the other rustup proxies export `RUSTUP_HOME`, and `uv` exports `UV_PYTHON_INSTALL_DIR`, so they resolve the repository-scoped toolchain from any shell too.
+
+Your interactive shell is not modified. To run a one-off command with the same toolchain tasks get, use [`turbo exec`](/docs/reference/exec):
+
+```bash title="Terminal"
+turbo exec -- uv sync
+turbo exec -- cargo clippy --workspace
+```
+
+To use the installed tools directly, add `.turbo/tools/bin` to your `PATH`.
+
+## Flags
+
+### `--check`
+
+Report which declared tools are missing or outdated without installing anything. Exits with code `1` when anything needs installing, which makes it useful as a CI guard.
+
+```bash title="Terminal"
+turbo setup --check
+```
+
+### `--force`
+
+Reinstall every declared tool even when it is already present at the resolved version.
+
+```bash title="Terminal"
+turbo setup --force
+```
+
+## Mirrors
+
+Downloads come from each tool's upstream by default. Override them for mirrored or air-gapped environments:
+
+| Environment variable                                                                           | Default                                               |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [`TURBO_TOOLS_NODE_MIRROR`](/docs/reference/system-environment-variables#turbo_tools_node_mirror)     | `https://nodejs.org/dist`                             |
+| [`TURBO_TOOLS_NPM_REGISTRY`](/docs/reference/system-environment-variables#turbo_tools_npm_registry)   | `https://registry.npmjs.org` (falls back to `npm_config_registry`) |
+| [`TURBO_TOOLS_BUN_MIRROR`](/docs/reference/system-environment-variables#turbo_tools_bun_mirror)       | `https://github.com/oven-sh/bun/releases/download`    |
+| `RUSTUP_UPDATE_ROOT`                                                                           | `https://static.rust-lang.org/rustup`                 |
+| [`TURBO_TOOLS_UV_MIRROR`](/docs/reference/system-environment-variables#turbo_tools_uv_mirror)         | `https://github.com/astral-sh/uv/releases/download`   |
+| [`TURBO_TOOLS_PYPI_URL`](/docs/reference/system-environment-variables#turbo_tools_pypi_url)           | `https://pypi.org/pypi`                               |
+| [`TURBO_TOOLS_GO_MIRROR`](/docs/reference/system-environment-variables#turbo_tools_go_mirror)         | `https://go.dev/dl`                                   |
+
+## Limitations
+
+- Linux (x64, arm64 with glibc), macOS (x64, arm64), and Windows (x64, arm64) are supported.
+- `packageManager` values that point at a URL, and package managers other than npm, pnpm, yarn, and bun, are reported as unsupported.
+- Rust toolchains declared with a custom `path` in `rust-toolchain.toml` cannot be installed.
+- Installing Python requires `uv`: declare a uv version so `turbo setup` installs it first, or have `uv` on `PATH`.
+- In a repository without a root `package.json` (a pure Cargo, uv, or Go workspace), run `turbo setup` and `turbo run` from the repository root. `turbo exec` and PATH activation still find `.turbo/tools` from any subdirectory.

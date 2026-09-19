@@ -44,6 +44,10 @@ pub struct ExecContextFactory<'a> {
     #[allow(dead_code)]
     engine: &'a Arc<Engine>,
     command_factory: CommandFactory<'a>,
+    /// Runtime environment recorded by `turbo setup` for the tools it
+    /// installed under `.turbo/tools` (e.g. `RUSTUP_HOME`). Applied to every
+    /// task so strict env mode cannot strip it.
+    managed_tools_env: Vec<(String, String)>,
 }
 
 impl<'a> ExecContextFactory<'a> {
@@ -80,12 +84,23 @@ impl<'a> ExecContextFactory<'a> {
         }
         command_factory.add_provider(pkg_graph_provider);
 
+        let managed_tools_env = turborepo_tools::ToolsDir::new(visitor.repo_root)
+            .activation_env(None)
+            .unwrap_or_default()
+            .into_iter()
+            // PATH is a builtin pass-through and already carries the shims
+            // directory from activation at startup.
+            .filter(|(key, _)| key != "PATH")
+            .map(|(key, value)| (key, value.to_string_lossy().into_owned()))
+            .collect();
+
         Ok(Self {
             visitor,
             errors,
             manager,
             engine,
             command_factory,
+            managed_tools_env,
         })
     }
 
@@ -157,6 +172,12 @@ impl<'a> ExecContextFactory<'a> {
         task_hash: &str,
         task_access: &TaskAccess,
     ) {
+        // Tools installed by `turbo setup` need their runtime env in both
+        // strict and loose mode; strict mode would otherwise drop it.
+        for (key, value) in &self.managed_tools_env {
+            execution_env.insert(key.clone(), value.clone());
+        }
+
         // Always last to make sure it overwrites any user configured env var.
         execution_env.insert("TURBO_HASH".to_owned(), task_hash.to_owned());
 

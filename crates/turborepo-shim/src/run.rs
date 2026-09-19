@@ -244,6 +244,7 @@ where
             }
         };
         debug!("Repository Root: {}", repo_state.root);
+        activate_repository_tools(&repo_state.root);
         return run_cli(runtime, Some(repo_state), color_config);
     }
 
@@ -254,6 +255,7 @@ where
     match repo_result {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
+            activate_repository_tools(&repo_state.root);
             run_correct_turbo(runtime, repo_state, args, color_config)
         }
         Err(err) => {
@@ -261,6 +263,13 @@ where
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
+            // Without a package.json to anchor inference (a pure Cargo, uv,
+            // or Go workspace) there is no repository root to consult, so
+            // walk up from the invocation directory to the nearest
+            // `.turbo/tools` instead.
+            if let Some(root) = turborepo_tools::activate_nearest(&args.cwd) {
+                debug!("Activated repository tools from {}", root);
+            }
             run_cli(runtime, None, color_config)
         }
     }
@@ -554,6 +563,18 @@ where
     });
 
     ShimResult::Ok(exit_code)
+}
+
+/// Makes tools installed by `turbo setup` (under `.turbo/tools`) visible to
+/// this process and everything it spawns: the local turbo we hand off to,
+/// every `which` lookup and toolchain probe, and every task process.
+///
+/// This runs before any async runtime exists, which is what makes mutating
+/// the process environment sound here.
+fn activate_repository_tools(repo_root: &AbsoluteSystemPathBuf) {
+    if turborepo_tools::activate(repo_root) {
+        debug!("Activated repository tools from {}", repo_root);
+    }
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,

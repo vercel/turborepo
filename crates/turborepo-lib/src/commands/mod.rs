@@ -22,6 +22,7 @@ pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod devtools;
 pub(crate) mod docs;
+pub(crate) mod exec;
 pub(crate) mod generate;
 pub(crate) mod get_mfe_port;
 pub(crate) mod info;
@@ -32,6 +33,7 @@ pub(crate) mod ls;
 pub(crate) mod prune;
 pub(crate) mod query;
 pub(crate) mod run;
+pub(crate) mod setup;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 

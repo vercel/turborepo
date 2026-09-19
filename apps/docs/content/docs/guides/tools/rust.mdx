@@ -40,7 +40,7 @@ Set the Future Flag in the root `turbo.json`:
 
 To work with Rust, the repository root must contain:
 
-- `cargo` and `rustc` available on `PATH`
+- `cargo` and `rustc` available on `PATH`, or a `rust-toolchain.toml` so [`turbo setup`](/docs/reference/setup) can install them into the repository
 - A root `Cargo.toml` containing a [virtual Cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html#cargo-workspaces)
 - A valid `[workspace.metadata].name` for identity in Turborepo's graph
 - A root `Cargo.lock`

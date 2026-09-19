@@ -1059,6 +1059,21 @@ pub enum Command {
         #[usage(long)]
         no_open: bool,
     },
+    /// Run a command with the repository's toolchain from `.turbo/tools` on
+    /// PATH
+    ///
+    /// The command inherits the same environment turbo gives its tasks, so
+    /// `turbo exec -- uv sync` or `turbo exec -- cargo build` always use the
+    /// tools installed by `turbo setup` regardless of what your shell has on
+    /// PATH. Put `--` before the command so its own flags are not parsed by
+    /// turbo.
+    Exec {
+        /// The command to run (when it needs no flags of its own)
+        command: Vec<String>,
+        /// The command and its arguments, after `--`
+        #[usage(double_dash = "required", hide = true)]
+        pass_through: Vec<String>,
+    },
     /// Search the Turborepo documentation
     Docs {
         /// The search query
@@ -1155,6 +1170,23 @@ pub enum Command {
     },
     /// Print debugging information
     Info,
+    /// Install the toolchain your repository declares into `.turbo/tools`
+    ///
+    /// Reads the package manager and Node.js version from package.json
+    /// (`packageManager`, `devEngines`, `engines.node`), `.nvmrc` or
+    /// `.node-version`, the Rust channel from rust-toolchain.toml, `uv` and
+    /// Python from pyproject.toml and `.python-version`, and Go from go.work
+    /// or go.mod, then downloads each into the repository so `turbo run`
+    /// never depends on globally installed tools.
+    Setup {
+        /// Only report what is missing or outdated; exit non-zero if anything
+        /// needs installing
+        #[usage(long)]
+        check: bool,
+        /// Reinstall every declared tool even when it is already present
+        #[usage(long)]
+        force: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
         /// DEPRECATED: Use positional arguments instead

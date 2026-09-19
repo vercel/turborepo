@@ -22,12 +22,15 @@ build-target = "0.4.0"
 assert_cmd = { workspace = true }
 camino = { workspace = true }
 dunce = { workspace = true }
+flate2 = "1.1"
+httpmock = { workspace = true }
 insta = { version = "1.40.0", features = ["json", "filters", "redactions"] }
 itertools = { workspace = true }
 nix = { workspace = true, features = ["signal"] }
 portable-pty = "0.9.0"
 pretty_assertions = { workspace = true }
 serde_json = { workspace = true }
+tar = "0.4.45"
 tempfile = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }

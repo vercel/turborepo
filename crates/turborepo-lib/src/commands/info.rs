@@ -18,6 +18,21 @@ fn is_wsl() -> bool {
     Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
 }
 
+/// Summarizes what `turbo setup` has installed, e.g. `node 22.1.0, pnpm 9.1.0`.
+fn managed_tools(base: &CommandBase) -> String {
+    let tools = turborepo_tools::ToolsDir::new(&base.repo_root);
+    match tools.read_manifest() {
+        Ok(manifest) if !manifest.tools.is_empty() => manifest
+            .tools
+            .iter()
+            .map(|(name, installed)| format!("{name} {}", installed.version))
+            .collect::<Vec<_>>()
+            .join(", "),
+        Ok(_) => "None (run `turbo setup`)".to_owned(),
+        Err(err) => format!("Error reading manifest: {err}"),
+    }
+}
+
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
     let daemon_status = match DaemonConnector::new(false, false, &base.repo_root, None) {
@@ -46,6 +61,7 @@ pub async fn run(base: CommandBase) {
     println!("   Path to executable: {exe_path}");
     println!("   Daemon status: {daemon_status}");
     println!("   Package manager: {package_manager}");
+    println!("   Managed tools (.turbo/tools): {}", managed_tools(&base));
     println!();
 
     println!("Platform:");

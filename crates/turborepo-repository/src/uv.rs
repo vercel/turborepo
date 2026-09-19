@@ -2166,7 +2166,12 @@ fn identity_stdout(mut command: Command, probe: &str) -> Result<String, String> 
 /// command tasks stay uncached until both identities can be proven.
 fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIdentity, String> {
     let uv = which::which("uv").map_err(|error| format!("unable to find uv: {error}"))?;
-    if uv.starts_with(repo_root.as_std_path()) {
+    // A uv inside the repository is normally a workspace artifact rather than
+    // a toolchain, so it cannot serve as a stable identity. The exception is
+    // the repository-scoped install `turbo setup` manages under
+    // `.turbo/tools`, which is exactly the pinned frontend we want to hash.
+    let managed_tools_dir = repo_root.join_components(&[".turbo", "tools"]);
+    if uv.starts_with(repo_root.as_std_path()) && !uv.starts_with(managed_tools_dir.as_std_path()) {
         return Err("the uv executable is inside the repository".to_string());
     }
     let mut uv_version = Command::new(&uv);

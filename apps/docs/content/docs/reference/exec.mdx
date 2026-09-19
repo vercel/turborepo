@@ -1,0 +1,46 @@
+---
+title: exec
+description: API reference for the `turbo exec` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo exec` command that runs a command with the repository's managed toolchain on PATH.
+related:
+  - /docs/reference/setup
+  - /docs/reference/run
+---
+
+Run a command with the toolchain [`turbo setup`](/docs/reference/setup) installed into `.turbo/tools` on `PATH`.
+
+```bash title="Terminal"
+turbo exec -- <command> [args...]
+```
+
+The command gets exactly the environment turbo gives its tasks: `.turbo/tools/bin` is first on `PATH`, and the runtime variables recorded by `turbo setup` (`RUSTUP_HOME`, `UV_PYTHON_INSTALL_DIR`) are set. That makes `turbo exec` the spelling that is always correct in scripts, documentation, and CI, no matter what the caller's shell has on `PATH`.
+
+```bash title="Terminal"
+turbo exec -- uv sync
+turbo exec -- pnpm install --frozen-lockfile
+turbo exec -- cargo clippy --workspace
+turbo exec -- go test ./...
+```
+
+## Behavior
+
+- **Working directory.** The command runs where you invoked `turbo`, not at the repository root, so `turbo exec -- uv sync` inside a package acts on that package. Use [`--cwd`](/docs/reference/options-overview) to run it elsewhere.
+- **Exit code.** `turbo exec` exits with the command's exit code. On Unix, a command terminated by a signal exits with `128 + signal`.
+- **Signals.** `Ctrl+C` is forwarded to the command so it can shut down cleanly.
+- **Nothing installed.** If the repository has no `.turbo/tools`, the command still runs with your current `PATH` and turbo prints a warning pointing at `turbo setup`.
+
+## Passing flags
+
+Put `--` before the command. Everything after it goes to the command untouched, including flags that would otherwise be parsed by turbo:
+
+```bash title="Terminal"
+turbo exec -- node --version
+```
+
+Without `--`, only the command and plain arguments are accepted:
+
+```bash title="Terminal"
+turbo exec node index.js
+```
