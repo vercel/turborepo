@@ -31,6 +31,45 @@ pub fn link_binary(
     }
 }
 
+/// Creates `bin_dir/<name>` that exports `env` and then runs `target`, so
+/// tools that locate their data through the environment (rustup's
+/// `RUSTUP_HOME`, uv's `UV_PYTHON_INSTALL_DIR`) find the repository-scoped
+/// install even when invoked from a plain shell rather than through turbo.
+pub fn env_wrapper(
+    bin_dir: &AbsoluteSystemPath,
+    name: &str,
+    target: &AbsoluteSystemPath,
+    env: &[(&str, &str)],
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    bin_dir
+        .create_dir_all()
+        .map_err(|source| Error::io(bin_dir.as_str(), source))?;
+    if cfg!(windows) {
+        let shim = bin_dir.join_component(&format!("{name}.cmd"));
+        let mut contents = String::from("@echo off\r\n");
+        for (key, value) in env {
+            contents.push_str(&format!("set \"{key}={value}\"\r\n"));
+        }
+        contents.push_str(&format!("\"{}\" %*\r\n", target.as_str()));
+        write_cmd(&shim, &contents)?;
+        Ok(shim)
+    } else {
+        let shim = bin_dir.join_component(name);
+        remove_existing(&shim)?;
+        let mut contents = String::from("#!/bin/sh\n");
+        for (key, value) in env {
+            contents.push_str(&format!("export {key}=\"{value}\"\n"));
+        }
+        contents.push_str(&format!("exec \"{}\" \"$@\"\n", target.as_str()));
+        shim.create_with_contents(contents)
+            .map_err(|source| Error::io(shim.as_str(), source))?;
+        #[cfg(unix)]
+        shim.set_mode(0o755)
+            .map_err(|source| Error::io(shim.as_str(), source))?;
+        Ok(shim)
+    }
+}
+
 /// Creates `bin_dir/<name>` that runs `script` under whichever `node` is on
 /// `PATH` at invocation time (which is turbo's managed Node.js when one is
 /// installed, and otherwise the system one — the same contract Corepack
@@ -130,6 +169,21 @@ mod tests {
         remove(&bin, "tool").unwrap();
         assert!(!exists(&bin, "tool"));
         remove(&bin, "tool").unwrap();
+    }
+
+    #[test]
+    fn env_wrapper_exports_before_exec() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let bin = root.join_component("bin");
+        let target = root.join_components(&["rust", "cargo", "bin", "cargo"]);
+        let shim = env_wrapper(&bin, "cargo", &target, &[("RUSTUP_HOME", "/repo/rustup")]).unwrap();
+        let contents = shim.read_to_string().unwrap();
+        assert!(contents.contains("RUSTUP_HOME"));
+        assert!(contents.contains("/repo/rustup"));
+        let env_line = contents.find("RUSTUP_HOME").unwrap();
+        let exec_line = contents.find(target.as_str()).unwrap();
+        assert!(env_line < exec_line, "env must be exported before exec");
     }
 
     #[test]

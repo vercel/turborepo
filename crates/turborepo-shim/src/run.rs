@@ -263,6 +263,10 @@ where
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
+            // Without a package.json to anchor inference (a pure Cargo, uv,
+            // or Go workspace) the CLI treats the invocation directory as the
+            // repository root, so look for managed tools there too.
+            activate_repository_tools(&args.cwd);
             run_cli(runtime, None, color_config)
         }
     }

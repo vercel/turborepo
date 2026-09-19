@@ -88,16 +88,23 @@ pub(crate) async fn install_uv(
     ctx.download_and_extract(&url, Some(&checksum), kind, &dest, strip)
         .await?;
 
-    let bins = ctx.link_bins(&[
-        (
-            "uv".to_string(),
-            dest.join_component(&ctx.platform.exe("uv")),
-        ),
-        (
-            "uvx".to_string(),
-            dest.join_component(&ctx.platform.exe("uvx")),
-        ),
-    ])?;
+    // Point uv at the repository-scoped interpreter directory from the shim
+    // itself, so `uv run` in a plain shell finds the same Python that tasks
+    // under turbo do (and `uv python install` lands in the repository).
+    let python_dir = python_install_dir(ctx);
+    let bins = ctx.link_bins_with_env(
+        &[
+            (
+                "uv".to_string(),
+                dest.join_component(&ctx.platform.exe("uv")),
+            ),
+            (
+                "uvx".to_string(),
+                dest.join_component(&ctx.platform.exe("uvx")),
+            ),
+        ],
+        &[(UV_PYTHON_INSTALL_DIR_ENV, python_dir.as_str())],
+    )?;
     ctx.installed_tool(version, source, &dest, bins, BTreeMap::new())
 }
 
@@ -123,7 +130,7 @@ pub(crate) async fn install_python(
                 .into(),
         })?;
 
-    let install_dir = ctx.tools.root().join_component(PYTHON);
+    let install_dir = python_install_dir(ctx);
     install_dir
         .create_dir_all()
         .map_err(|source| Error::io(install_dir.as_str(), source))?;
@@ -148,6 +155,11 @@ pub(crate) async fn install_python(
     )]
     .into();
     ctx.installed_tool(request, source, &install_dir, Vec::new(), env)
+}
+
+/// `.turbo/tools/python`, shared by the uv shims and the Python installer.
+fn python_install_dir(ctx: &InstallContext<'_>) -> AbsoluteSystemPathBuf {
+    ctx.tools.root().join_component(PYTHON)
 }
 
 fn managed_uv(ctx: &InstallContext<'_>, manifest: &Manifest) -> Option<AbsoluteSystemPathBuf> {

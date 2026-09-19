@@ -237,6 +237,22 @@ impl InstallContext<'_> {
         Ok(names)
     }
 
+    /// Like [`Self::link_bins`], but each shim exports `env` before running
+    /// its target so the tool works outside of turbo as well.
+    pub(crate) fn link_bins_with_env(
+        &self,
+        bins: &[(String, AbsoluteSystemPathBuf)],
+        env: &[(&str, &str)],
+    ) -> Result<Vec<String>, Error> {
+        let bin_dir = self.tools.bin_dir();
+        let mut names = Vec::new();
+        for (name, target) in bins {
+            shim::env_wrapper(&bin_dir, name, target, env)?;
+            names.push(name.clone());
+        }
+        Ok(names)
+    }
+
     pub(crate) fn installed_tool(
         &self,
         version: &str,

@@ -90,7 +90,11 @@ pub(crate) async fn install(
     )
     .await?;
 
-    let bins = link_proxies(ctx, &dirs.cargo_home.join_component("bin"))?;
+    let bins = link_proxies(
+        ctx,
+        &dirs.cargo_home.join_component("bin"),
+        &[(RUSTUP_HOME_ENV, dirs.rustup_home.as_str())],
+    )?;
     let runtime_env: BTreeMap<String, String> = [(
         RUSTUP_HOME_ENV.to_string(),
         ctx.tools.relative_of(&dirs.rustup_home)?,
@@ -136,10 +140,13 @@ async fn bootstrap_rustup(
 }
 
 /// Links every proxy rustup created (`cargo`, `rustc`, `rustup`, `rustfmt`,
-/// `cargo-clippy`, …) into the shared bin directory.
+/// `cargo-clippy`, …) into the shared bin directory. Each shim exports
+/// `RUSTUP_HOME` so the proxies resolve the repository-scoped toolchain from
+/// any shell, not only from tasks turbo runs.
 fn link_proxies(
     ctx: &InstallContext<'_>,
     proxy_dir: &AbsoluteSystemPath,
+    env: &[(&str, &str)],
 ) -> Result<Vec<String>, Error> {
     let entries = std::fs::read_dir(proxy_dir.as_std_path())
         .map_err(|source| Error::io(proxy_dir.as_str(), source))?;
@@ -155,5 +162,5 @@ fn link_proxies(
         bins.push((name.to_string(), target));
     }
     bins.sort();
-    ctx.link_bins(&bins)
+    ctx.link_bins_with_env(&bins, env)
 }

@@ -26,7 +26,7 @@ A fresh clone often fails at the first `turbo run` because the right package man
 | -------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | npm, pnpm, yarn, bun | `packageManager` or `devEngines.packageManager` in the root `package.json`                             | npm registry (bun: GitHub releases)    |
 | Node.js              | `devEngines.runtime` in `package.json`, `.nvmrc`, `.node-version`, or `engines.node` in `package.json` | nodejs.org                             |
-| Rust                 | `rust-toolchain.toml` (`channel`, `components`, `targets`, `profile`) or `rust-toolchain`             | rustup, with a repository-scoped home  |
+| Rust                 | `rust-toolchain.toml` (`channel`, `components`, `targets`, `profile`) or `rust-toolchain`             | rustup, with a repository-scoped `RUSTUP_HOME` |
 | uv                   | `[tool.uv] required-version` in `pyproject.toml`, or `required-version` in `uv.toml`                   | GitHub releases                        |
 | Python               | `.python-version`                                                                                      | `uv python install`                    |
 | Go                   | `toolchain` or `go` directive in `go.work`, then `go.mod`                                              | go.dev                                 |
@@ -56,6 +56,8 @@ If the repository declares nothing that `turbo setup` can install, the command f
 ## How tasks find the tools
 
 Whenever `turbo` starts inside a repository that has a `.turbo/tools/bin` directory, it prepends that directory to its own `PATH` and exports the environment recorded in the manifest (`RUSTUP_HOME`, `UV_PYTHON_INSTALL_DIR`). Every task inherits that environment in both [Strict and Loose environment modes](/docs/reference/run#--env-mode-option), and turbo's own toolchain probes (package manager, `cargo`, `uv`, `go`) resolve the same binaries.
+
+The shims are self-contained: `cargo`, `rustc` and the other rustup proxies export `RUSTUP_HOME`, and `uv` exports `UV_PYTHON_INSTALL_DIR`, so they resolve the repository-scoped toolchain from any shell too.
 
 Your interactive shell is not modified. To use the installed tools directly, add `.turbo/tools/bin` to your `PATH`.
 
@@ -97,3 +99,4 @@ Downloads come from each tool's upstream by default. Override them for mirrored 
 - `packageManager` values that point at a URL, and package managers other than npm, pnpm, yarn, and bun, are reported as unsupported.
 - Rust toolchains declared with a custom `path` in `rust-toolchain.toml` cannot be installed.
 - Installing Python requires `uv`: declare a uv version so `turbo setup` installs it first, or have `uv` on `PATH`.
+- In a repository without a root `package.json` (a pure Cargo, uv, or Go workspace), turbo uses the directory it is invoked from as the repository root, so run `turbo setup` and `turbo run` from that root.
