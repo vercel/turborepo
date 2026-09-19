@@ -1,0 +1,44 @@
+[package]
+name = "turborepo-tools"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Repository-scoped toolchain installation for `turbo setup`"
+
+[lints]
+workspace = true
+
+[dependencies]
+turbopath = { workspace = true }
+turborepo-api-client = { workspace = true }
+turborepo-repository = { workspace = true }
+
+base64 = "0.22"
+camino = { workspace = true }
+flate2 = "1.1"
+futures = { workspace = true }
+hex = { workspace = true }
+node-semver = "2.2.0"
+reqwest = { workspace = true, default-features = false, features = [
+  "json",
+  "stream",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = "0.4.45"
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "process", "rt", "macros"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+which = { workspace = true }
+# Upstream zips (bun, Windows builds of Node.js, Go, and uv) are deflate-only.
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+httpmock = { workspace = true }
+pretty_assertions = { workspace = true }
+test-case = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

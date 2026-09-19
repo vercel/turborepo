@@ -338,6 +338,64 @@ System environment variables are always overridden by flag values provided direc
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
+    <tr id="turbo_tools_bun_mirror">
+      <td>
+        <code>TURBO_TOOLS_BUN_MIRROR</code>
+      </td>
+      <td>
+        Base URL <a href="/docs/reference/setup"><code>turbo setup</code></a> downloads
+        bun releases from. Defaults to{" "}
+        <code>https://github.com/oven-sh/bun/releases/download</code>.
+      </td>
+    </tr>
+    <tr id="turbo_tools_go_mirror">
+      <td>
+        <code>TURBO_TOOLS_GO_MIRROR</code>
+      </td>
+      <td>
+        Base URL <a href="/docs/reference/setup"><code>turbo setup</code></a> downloads
+        Go releases from. Defaults to <code>https://go.dev/dl</code>.
+      </td>
+    </tr>
+    <tr id="turbo_tools_node_mirror">
+      <td>
+        <code>TURBO_TOOLS_NODE_MIRROR</code>
+      </td>
+      <td>
+        Base URL <a href="/docs/reference/setup"><code>turbo setup</code></a> downloads
+        Node.js releases from. Defaults to <code>https://nodejs.org/dist</code>.
+      </td>
+    </tr>
+    <tr id="turbo_tools_npm_registry">
+      <td>
+        <code>TURBO_TOOLS_NPM_REGISTRY</code>
+      </td>
+      <td>
+        Registry <a href="/docs/reference/setup"><code>turbo setup</code></a> downloads
+        npm, pnpm, and yarn from and resolves bun versions against. Defaults to{" "}
+        <code>npm_config_registry</code> when set, otherwise{" "}
+        <code>https://registry.npmjs.org</code>.
+      </td>
+    </tr>
+    <tr id="turbo_tools_pypi_url">
+      <td>
+        <code>TURBO_TOOLS_PYPI_URL</code>
+      </td>
+      <td>
+        PyPI JSON API root <a href="/docs/reference/setup"><code>turbo setup</code></a>
+        uses to resolve uv version ranges. Defaults to <code>https://pypi.org/pypi</code>.
+      </td>
+    </tr>
+    <tr id="turbo_tools_uv_mirror">
+      <td>
+        <code>TURBO_TOOLS_UV_MIRROR</code>
+      </td>
+      <td>
+        Base URL <a href="/docs/reference/setup"><code>turbo setup</code></a> downloads
+        uv releases from. Defaults to{" "}
+        <code>https://github.com/astral-sh/uv/releases/download</code>.
+      </td>
+    </tr>
     <tr id="turbo_ui">
       <td>
         <code>TURBO_UI</code>

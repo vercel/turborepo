@@ -17,7 +17,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, telemetry, unlink, CommandBase,
+        ls, prune, query, run, setup, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -481,6 +481,16 @@ async fn run_main(
 
             info::run(base).await;
             Ok(0)
+        }
+        Command::Setup { check, force } => {
+            let event = CommandEventBuilder::new("setup").with_parent(&root_telemetry);
+            event.track_call();
+            let check = *check;
+            let force = *force;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            let exit_code = setup::run(base, check, force, event).await?;
+            Ok(exit_code)
         }
         Command::Telemetry { command } => {
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);

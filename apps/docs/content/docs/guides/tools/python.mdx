@@ -40,7 +40,7 @@ Set the Future Flag in the root `turbo.json`:
 
 To work with Python, the repository root must contain:
 
-- `uv` available on `PATH`
+- `uv` available on `PATH`, or a `[tool.uv] required-version` in `pyproject.toml` so [`turbo setup`](/docs/reference/setup) can install it into the repository
 - A root `pyproject.toml` containing a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
 - A valid `[tool.turbo].name` for identity in Turborepo's graph
 - A root `uv.lock`. Turborepo never creates or updates it; run `uv lock` to refresh it.

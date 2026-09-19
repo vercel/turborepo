@@ -9,7 +9,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
+    commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, setup, CommandBase},
     run,
     run::{builder::RunBuilder, watch},
 };
@@ -56,6 +56,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Prune(#[from] prune::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Setup(#[from] setup::Error),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]

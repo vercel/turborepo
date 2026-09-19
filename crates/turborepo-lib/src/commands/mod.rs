@@ -32,6 +32,7 @@ pub(crate) mod ls;
 pub(crate) mod prune;
 pub(crate) mod query;
 pub(crate) mod run;
+pub(crate) mod setup;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
