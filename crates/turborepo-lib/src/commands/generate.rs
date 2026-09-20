@@ -7,14 +7,12 @@ use semver::Version;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::AbsoluteSystemPath;
+use turborepo_process::spawn_child;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use which::which;
 
-use crate::{
-    child::spawn_child,
-    cli::{GenerateCommand, GeneratorCustomArgs},
-};
+use crate::cli::{GenerateCommand, GeneratorCustomArgs};
 
 #[derive(Debug, Error)]
 pub enum Error {

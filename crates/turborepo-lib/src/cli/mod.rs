@@ -51,21 +51,21 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 /// Returns a scaled thread count for rayon's global pool based on
 /// available CPU cores, capped at
-/// [`crate::rayon_compat::MAX_RAYON_THREADS`].
+/// [`turborepo_rayon_compat::MAX_RAYON_THREADS`].
 ///
 /// See [`init_rayon_pool`] and <https://github.com/vercel/turborepo/issues/12251>
 fn rayon_pool_size() -> usize {
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
-    crate::rayon_compat::scale_thread_count(cpus)
+    turborepo_rayon_compat::scale_thread_count(cpus)
 }
 
 /// Explicitly initialize rayon's global thread pool early so we control
 /// its size and initialization timing.
 ///
 /// If `RAYON_NUM_THREADS` is set, its value is still clamped to
-/// [`crate::rayon_compat::MAX_RAYON_THREADS`] to prevent the known
+/// [`turborepo_rayon_compat::MAX_RAYON_THREADS`] to prevent the known
 /// deadlock on high-core-count machines.
 fn init_rayon_pool() {
     let pool_size = match std::env::var("RAYON_NUM_THREADS")
@@ -73,12 +73,12 @@ fn init_rayon_pool() {
         .and_then(|v| v.parse().ok())
     {
         Some(user_val) => {
-            let clamped = crate::rayon_compat::scale_thread_count(user_val);
+            let clamped = turborepo_rayon_compat::scale_thread_count(user_val);
             if clamped < user_val {
                 tracing::debug!(
                     requested = user_val,
                     clamped,
-                    max = crate::rayon_compat::MAX_RAYON_THREADS,
+                    max = turborepo_rayon_compat::MAX_RAYON_THREADS,
                     "RAYON_NUM_THREADS exceeds safe limit, clamping"
                 );
             }

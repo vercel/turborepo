@@ -62,7 +62,7 @@ impl MicrofrontendsConfigs {
         // Probing every package directory for a config is two file reads per
         // package; do them in parallel. Package order is preserved (rayon's
         // indexed collect), so downstream config processing is unaffected.
-        let loaded: Vec<LoadedConfig> = crate::rayon_compat::block_in_place(|| {
+        let loaded: Vec<LoadedConfig> = turborepo_rayon_compat::block_in_place(|| {
             use rayon::prelude::*;
             packages
                 .into_par_iter()
