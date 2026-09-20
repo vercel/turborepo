@@ -25,6 +25,7 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
+use turborepo_task_access::TaskAccess;
 use turborepo_task_executor::{
     command_invokes_turbo, InternalError as TaskInternalError, TaskOutput,
 };
@@ -43,7 +44,7 @@ use crate::{
     engine::{Engine, ExecutionOptions, TaskNode},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    run::{task_access::TaskAccess, RunCache},
+    run::RunCache,
     task_hash::TaskHasher,
 };
 

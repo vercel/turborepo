@@ -9,6 +9,7 @@ use console::StyledObject;
 use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollectorWrapper};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::ProcessManager;
+use turborepo_task_access::TaskAccess;
 use turborepo_task_executor::{DryRunExecutor, TaskExecutor};
 use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
@@ -17,10 +18,7 @@ use super::{
     command::{CommandFactory, MicroFrontendProxyProvider, ToolchainCommandProvider},
     Visitor,
 };
-use crate::{
-    engine::Engine,
-    run::{task_access::TaskAccess, TaskCache},
-};
+use crate::{engine::Engine, run::TaskCache};
 
 /// Type alias for the concrete TaskExecutor used in turborepo-lib.
 pub type ExecContext = TaskExecutor<

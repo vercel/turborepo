@@ -53,16 +53,15 @@ struct TaskEntrypointSelection {
     orchestration: HashMap<String, HashSet<TaskId<'static>>>,
 }
 
+use turborepo_task_access::TaskAccess;
+
 use crate::{
     commands::CommandBase,
     engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     repository_graph::RepositoryGraphFeatures,
-    run::{
-        scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
-        Run, RunCache,
-    },
+    run::{scope, Error, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunCache},
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
