@@ -49,9 +49,9 @@ impl LoaderError {
 
 /// Trait for types that can update/enrich a TurboJson after loading.
 ///
-/// This allows external code (like MicrofrontendsConfigs in turborepo-lib) to
-/// modify TurboJson structures without requiring this crate to depend on those
-/// types directly.
+/// This allows external code (like MicrofrontendsConfigs in
+/// turborepo-microfrontends-config) to modify TurboJson structures without
+/// requiring this crate to depend on those types directly.
 ///
 /// # Type Parameters
 /// * `E` - The error type that the updater can produce. This allows different
