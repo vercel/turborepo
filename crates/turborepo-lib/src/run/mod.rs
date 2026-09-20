@@ -1051,7 +1051,7 @@ impl Run {
         let mut external_deps_hashes = None;
 
         let _hash_scope_span = tracing::info_span!("hash_scope").entered();
-        crate::rayon_compat::block_in_place(|| {
+        turborepo_rayon_compat::block_in_place(|| {
             rayon::scope(|s| {
                 s.spawn(|_| {
                     let _span = tracing::info_span!("calculate_file_hashes_task").entered();
@@ -1383,7 +1383,7 @@ impl turborepo_engine::ChildSpawner for SharedChildSpawner {
     type Child = SharedChildWrapper;
 
     fn spawn(&self, command: Command) -> Result<Self::Child, io::Error> {
-        crate::spawn_child(command).map(SharedChildWrapper)
+        turborepo_process::spawn_child(command).map(SharedChildWrapper)
     }
 }
 

@@ -1289,7 +1289,7 @@ impl RunBuilder {
             // consult the filtered packages and the dependency closure their
             // `^task` edges follow, so narrow runs skip preloading unrelated
             // packages and let the engine load anything else lazily.
-            crate::rayon_compat::block_in_place(|| {
+            turborepo_rayon_compat::block_in_place(|| {
                 let _span = tracing::info_span!("turbo_json_preload").entered();
                 if needs_all_packages {
                     turbo_json_loader.preload_all();

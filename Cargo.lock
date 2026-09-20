@@ -8308,7 +8308,6 @@ dependencies = [
  "chrono",
  "console 0.16.2",
  "convert_case 0.6.0",
- "ctrlc",
  "dhat",
  "dialoguer",
  "dirs-next",
@@ -8575,11 +8574,13 @@ name = "turborepo-process"
 version = "0.1.0"
 dependencies = [
  "console 0.16.2",
+ "ctrlc",
  "futures",
  "itertools 0.14.0",
  "libc",
  "nix 0.26.2",
  "portable-pty",
+ "shared_child",
  "sysinfo",
  "test-case",
  "tokio",

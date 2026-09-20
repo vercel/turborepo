@@ -6,7 +6,6 @@
 #![allow(clippy::result_large_err)]
 #![allow(dead_code)]
 
-mod child;
 mod cli;
 mod commands;
 mod config;
@@ -20,7 +19,6 @@ mod microfrontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
-mod rayon_compat;
 mod repository_graph;
 mod run;
 mod shim;
@@ -36,7 +34,7 @@ pub use turborepo_daemon::{
 };
 pub use turborepo_query_api::QueryServer;
 
-pub use crate::{child::spawn_child, cli::Args, panic_handler::panic_handler};
+pub use crate::{cli::Args, panic_handler::panic_handler};
 
 #[cfg(feature = "heap-dhat")]
 pub fn finish_heap_profile() {

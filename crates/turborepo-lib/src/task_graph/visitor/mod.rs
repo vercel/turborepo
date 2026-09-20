@@ -241,7 +241,7 @@ impl<'a> Visitor<'a> {
             // them here if not.
             match external_deps_hashes {
                 Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
-                None => crate::rayon_compat::block_in_place(|| {
+                None => turborepo_rayon_compat::block_in_place(|| {
                     task_hasher.precompute_external_deps_hashes(&package_graph)
                 })?,
             }
@@ -680,7 +680,7 @@ impl<'a> Visitor<'a> {
         // task's dependency hashes are available before it is hashed.
         // This replaces the per-task serial hashing that was inside the
         // dispatch loop.
-        let mut precomputed = crate::rayon_compat::block_in_place(|| {
+        let mut precomputed = turborepo_rayon_compat::block_in_place(|| {
             let _span = tracing::info_span!("precompute_task_hashes").entered();
             self.precompute_task_hashes(&engine, telemetry)
         })?;

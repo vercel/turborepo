@@ -154,7 +154,7 @@ struct TurboChildSpawner;
 
 impl ChildSpawner for TurboChildSpawner {
     fn spawn(&self, command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-        crate::spawn_child(command)
+        turborepo_process::spawn_child(command)
     }
 }
 
