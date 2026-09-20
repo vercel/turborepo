@@ -3,11 +3,15 @@ use std::collections::HashMap;
 use dialoguer::{Confirm, Input};
 use miette::{Report, SourceSpan};
 use turbopath::AbsoluteSystemPath;
+use turborepo_boundaries::{BoundariesChecker, BoundariesContext};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD_GREEN};
 
-use crate::{cli, cli::BoundariesIgnore, commands::CommandBase, run::builder::RunBuilder};
+use crate::{
+    boundaries::RunTurboJsonProvider, cli, cli::BoundariesIgnore, commands::CommandBase,
+    run::builder::RunBuilder,
+};
 
 pub async fn run(
     base: CommandBase,
@@ -23,7 +27,20 @@ pub async fn run(
         .build(&handler, telemetry)
         .await?;
 
-    let result = run.check_boundaries(true)?;
+    let turbo_json_provider = RunTurboJsonProvider::new(run.turbo_json_loader());
+    let root_boundaries_config = run
+        .root_turbo_json()
+        .boundaries
+        .as_ref()
+        .map(|spanned| spanned.as_inner());
+    let ctx = BoundariesContext {
+        repo_root: run.repo_root(),
+        pkg_dep_graph: run.pkg_dep_graph(),
+        turbo_json_provider: &turbo_json_provider,
+        root_boundaries_config,
+        filtered_pkgs: run.filtered_pkgs(),
+    };
+    let result = BoundariesChecker::check_boundaries(&ctx, true)?;
 
     if let Some(ignore) = ignore {
         let mut patches: HashMap<&AbsoluteSystemPath, Vec<(SourceSpan, String)>> = HashMap::new();
@@ -80,7 +97,7 @@ pub async fn run(
                 color!(run.color_config(), BOLD_GREEN, "patching"),
                 short_path
             );
-            run.patch_file(path, file_patches)?;
+            BoundariesChecker::patch_file(path, file_patches)?;
         }
     } else {
         result.emit(run.color_config());

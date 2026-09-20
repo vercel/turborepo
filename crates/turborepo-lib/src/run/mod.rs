@@ -1489,7 +1489,23 @@ impl turborepo_query_api::QueryRun for Run {
                 + '_,
         >,
     > {
-        Box::pin(std::future::ready(self.check_boundaries(show_progress)))
+        let turbo_json_provider =
+            crate::boundaries::RunTurboJsonProvider::new(self.turbo_json_loader());
+        let root_boundaries_config = self
+            .root_turbo_json()
+            .boundaries
+            .as_ref()
+            .map(|spanned| spanned.as_inner());
+        let ctx = turborepo_boundaries::BoundariesContext {
+            repo_root: self.repo_root(),
+            pkg_dep_graph: self.pkg_dep_graph(),
+            turbo_json_provider: &turbo_json_provider,
+            root_boundaries_config,
+            filtered_pkgs: self.filtered_pkgs(),
+        };
+        Box::pin(std::future::ready(
+            turborepo_boundaries::BoundariesChecker::check_boundaries(&ctx, show_progress),
+        ))
     }
 }
 
