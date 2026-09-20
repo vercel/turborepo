@@ -7,11 +7,8 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli,
-    config::{
-        resolve_configuration_from_args, resolve_turbo_config_path, ConfigurationOptions,
-        Error as ConfigError,
-    },
+    cli::{self, resolve_configuration_from_args},
+    config::{resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError},
     opts::Opts,
     Args,
 };

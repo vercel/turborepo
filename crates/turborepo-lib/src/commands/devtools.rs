@@ -6,7 +6,11 @@
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_devtools::{find_available_port, DevtoolsServer};
 
-use crate::{cli, config::resolve_configuration_from_args, devtools::ProperTaskGraphBuilder, Args};
+use crate::{
+    cli::{self, resolve_configuration_from_args},
+    devtools::ProperTaskGraphBuilder,
+    Args,
+};
 
 // In production, use the hosted devtools UI
 // For local development, set TURBO_DEVTOOLS_LOCAL=1 to use localhost:3000
