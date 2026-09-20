@@ -26,7 +26,7 @@ use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln
 
 use crate::{
     GlobalHashSummary, SCMState, TaskTracker,
-    execution::{ExecutionSummary, ExecutionTracker, IncrementalCacheSummary, TaskState},
+    execution::{ExecutionSummary, ExecutionTracker, TaskState},
     observability::Handle as ObservabilityHandle,
     task::{SinglePackageTaskSummary, TaskSummary},
     task_factory::TaskSummaryFactory,
@@ -235,7 +235,6 @@ impl RunTracker {
         scm: &SCM,
         is_watch: bool,
         external_deps_hashes: Option<&HashMap<String, String>>,
-        incremental_cache: Option<IncrementalCacheSummary>,
     ) -> Result<(), Error>
     where
         E: EngineInfo + Sync,
@@ -275,7 +274,7 @@ impl RunTracker {
                 );
 
                 let path = repo_root.join_components(&[".turbo", "runs", "dummy.json"]);
-                execution.print(ui, path, failed_tasks.iter().collect(), incremental_cache);
+                execution.print(ui, path, failed_tasks.iter().collect());
             }
 
             return Ok(());
@@ -308,14 +307,7 @@ impl RunTracker {
             .await?;
 
         run_summary
-            .finish(
-                end_time,
-                exit_code,
-                pkg_dep_graph,
-                ui,
-                is_watch,
-                incremental_cache,
-            )
+            .finish(end_time, exit_code, pkg_dep_graph, ui, is_watch)
             .await
     }
 
@@ -406,7 +398,6 @@ impl<'a> RunSummary<'a> {
         pkg_dep_graph: &PackageGraph,
         ui: ColorConfig,
         is_watch: bool,
-        incremental_cache: Option<IncrementalCacheSummary>,
     ) -> Result<(), Error> {
         // Handle observability shutdown before the dry run check to ensure graceful
         // cleanup even when metrics are not being emitted.
@@ -437,7 +428,7 @@ impl<'a> RunSummary<'a> {
         if !is_watch && let Some(execution) = &self.execution {
             let path = self.get_path();
             let failed_tasks = self.get_failed_tasks();
-            execution.print(ui, path, failed_tasks, incremental_cache);
+            execution.print(ui, path, failed_tasks);
         }
 
         Ok(())

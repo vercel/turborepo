@@ -1644,7 +1644,6 @@ impl RunBuilder {
                 repo_root: self.repo_root,
                 opts: Arc::new(self.opts),
                 api_auth: self.api_auth,
-                api_client,
                 env_at_execution_start,
                 filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
                 pkg_dep_graph,

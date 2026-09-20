@@ -827,14 +827,6 @@ impl CargoTaskContract {
         }
     }
 
-    pub(crate) fn compile_cache_env(
-        &self,
-        endpoint: &toolchain::CompileCacheEndpoint,
-        task_env: &std::collections::HashMap<String, String>,
-    ) -> Vec<(String, String)> {
-        cargo_compile_cache_env(endpoint, task_env)
-    }
-
     pub(crate) fn derived_task_io(
         &self,
         package: &crate::package_graph::PackageTaskContext<'_>,
@@ -1423,45 +1415,6 @@ impl CargoContributor {
             .into_iter()
             .collect()
     }
-}
-
-/// Project execution-only compiler-cache settings from Cargo task knowledge.
-/// User-managed wrappers and sccache settings remain authoritative.
-fn cargo_compile_cache_env(
-    endpoint: &toolchain::CompileCacheEndpoint,
-    task_env: &std::collections::HashMap<String, String>,
-) -> Vec<(String, String)> {
-    if task_env.contains_key("RUSTC_WRAPPER")
-        || task_env.keys().any(|key| key.starts_with("SCCACHE_"))
-    {
-        return Vec::new();
-    }
-    let ambient_incremental = task_env.get("CARGO_INCREMENTAL").map(String::as_str);
-    if ambient_incremental.is_some_and(|value| value != "0") {
-        return Vec::new();
-    }
-
-    let mut vars = vec![
-        ("RUSTC_WRAPPER".to_string(), endpoint.wrapper.clone()),
-        (
-            toolchain::COMPILE_CACHE_WRAPPER_ENV.to_string(),
-            "1".to_string(),
-        ),
-        ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
-        ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
-        (
-            "SCCACHE_SERVER_PORT".to_string(),
-            endpoint.server_port.to_string(),
-        ),
-        (
-            "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
-            "1".to_string(),
-        ),
-    ];
-    if ambient_incremental.is_none() {
-        vars.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
-    }
-    vars
 }
 
 /// Let Cargo remove feature-dead entries after the reachability-based lockfile
@@ -4192,99 +4145,6 @@ release: 1.96.0-nightly\n",
         );
     }
 
-    #[test]
-    fn test_compile_cache_env_routes_rustc_through_sccache() {
-        let endpoint = toolchain::CompileCacheEndpoint {
-            url: "http://127.0.0.1:42123".to_string(),
-            token: "proxy-token".to_string(),
-            wrapper: "/path/to/turbo".to_string(),
-            server_port: 46123,
-        };
-        assert_eq!(
-            cargo_compile_cache_env(&endpoint, &std::collections::HashMap::new()),
-            vec![
-                ("RUSTC_WRAPPER".to_string(), "/path/to/turbo".to_string()),
-                ("TURBO_SCCACHE_WRAPPER".to_string(), "1".to_string()),
-                (
-                    "SCCACHE_WEBDAV_ENDPOINT".to_string(),
-                    "http://127.0.0.1:42123".to_string()
-                ),
-                (
-                    "SCCACHE_WEBDAV_TOKEN".to_string(),
-                    "proxy-token".to_string()
-                ),
-                ("SCCACHE_SERVER_PORT".to_string(), "46123".to_string()),
-                (
-                    "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
-                    "1".to_string()
-                ),
-                ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
-            ]
-        );
-        // The injected wrapper key must be a hashed env var so a
-        // user-supplied wrapper invalidates task results (the injected one
-        // is execution-only and deliberately does not).
-        assert!(HASHED_ENV_VARS.contains(&"RUSTC_WRAPPER"));
-    }
-
-    #[test]
-    fn test_compile_cache_env_stands_down_for_competing_configuration() {
-        let endpoint = toolchain::CompileCacheEndpoint {
-            url: "http://127.0.0.1:42123".to_string(),
-            token: "proxy-token".to_string(),
-            wrapper: "/path/to/turbo".to_string(),
-            server_port: 46123,
-        };
-
-        // A user-supplied wrapper wins; injecting SCCACHE_* on top of it
-        // could hijack its backend, so nothing is injected.
-        let env = std::collections::HashMap::from([(
-            "RUSTC_WRAPPER".to_string(),
-            "/home/user/bin/my-wrapper".to_string(),
-        )]);
-        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
-
-        // Any SCCACHE_* variable signals a user-managed sccache setup.
-        let env = std::collections::HashMap::from([(
-            "SCCACHE_GHA_ENABLED".to_string(),
-            "true".to_string(),
-        )]);
-        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
-    }
-
-    #[test]
-    fn test_compile_cache_env_tolerates_ambient_cargo_incremental() {
-        // CI images commonly export CARGO_INCREMENTAL=0 (this repository's
-        // own setup-environment action does). That is ambient hygiene, not
-        // a competing compiler cache: the injection proceeds and the
-        // explicit value is left alone.
-        let endpoint = toolchain::CompileCacheEndpoint {
-            url: "http://127.0.0.1:42123".to_string(),
-            token: "proxy-token".to_string(),
-            wrapper: "/path/to/turbo".to_string(),
-            server_port: 46123,
-        };
-        let env =
-            std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "0".to_string())]);
-
-        let vars = cargo_compile_cache_env(&endpoint, &env);
-        assert!(
-            vars.iter().any(|(key, _)| key == "RUSTC_WRAPPER"),
-            "injection must proceed despite ambient CARGO_INCREMENTAL=0"
-        );
-        assert!(
-            !vars.iter().any(|(key, _)| key == "CARGO_INCREMENTAL"),
-            "an explicit CARGO_INCREMENTAL must not be overridden"
-        );
-
-        // Any other explicit value means incremental compilation was
-        // deliberately requested — incompatible with sccache, whose wrapper
-        // hard-exits on CARGO_INCREMENTAL=1. Stand down entirely.
-        let env =
-            std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "1".to_string())]);
-        assert!(cargo_compile_cache_env(&endpoint, &env).is_empty());
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_falls_back_without_lockfile() {
         let (_tmp, root) = tempdir_root();
@@ -4393,24 +4253,6 @@ release: 1.96.0-nightly\n",
         let app = &packages[0];
         assert!(app.descriptor.dependencies.is_none());
         assert!(app.descriptor.dev_dependencies.is_none());
-        let compile_cache_env = app
-            .task_contract
-            .as_ref()
-            .expect("Cargo discovery contributes a task contract")
-            .compile_cache_env(
-                &toolchain::CompileCacheEndpoint {
-                    url: "http://127.0.0.1:42123".to_string(),
-                    token: "proxy-token".to_string(),
-                    wrapper: "/path/to/turbo".to_string(),
-                    server_port: 46123,
-                },
-                &std::collections::HashMap::new(),
-            );
-        assert!(
-            compile_cache_env
-                .iter()
-                .any(|(key, _)| key == "RUSTC_WRAPPER")
-        );
         assert_eq!(
             app.native_relationships.as_deref(),
             Some(&[Relationship::internal("lib-a", DependencyKind::Production)][..])

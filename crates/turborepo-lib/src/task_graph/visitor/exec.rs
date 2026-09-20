@@ -67,7 +67,6 @@ impl<'a> ExecContextFactory<'a> {
             &visitor.package_graph,
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,
-            visitor.compile_cache_endpoint.as_ref(),
             command_overrides,
         );
         let mut command_factory = CommandFactory::new();

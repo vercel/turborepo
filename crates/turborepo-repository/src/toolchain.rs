@@ -594,29 +594,6 @@ pub type DiscoverStaticDependenciesFuture<'a> = Pin<
     >,
 >;
 
-/// A Turborepo-served compile cache endpoint, as plain data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompileCacheEndpoint {
-    /// HTTP endpoint of the local compile-cache proxy.
-    pub url: String,
-    /// Bearer token the proxy requires.
-    pub token: String,
-    /// Absolute path to the compiler-wrapper executable — the running
-    /// `turbo` binary itself, which embeds sccache and dispatches wrapper
-    /// invocations to it (see [`COMPILE_CACHE_WRAPPER_ENV`]).
-    pub wrapper: String,
-    /// Port for the compile cache's background server, stable per
-    /// repository. Isolates turbo's server from any user- or image-managed
-    /// sccache server on the global default port, whose storage
-    /// configuration would otherwise capture turbo's wrapper traffic.
-    pub server_port: u16,
-}
-
-/// Environment variable marking task processes whose `RUSTC_WRAPPER` is the
-/// turbo binary itself. The turbo entrypoint dispatches invocations carrying
-/// this marker to the embedded sccache instead of the normal CLI.
-pub const COMPILE_CACHE_WRAPPER_ENV: &str = "TURBO_SCCACHE_WRAPPER";
-
 /// Watch classification projected from immutable change knowledge.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WatchSpec {
