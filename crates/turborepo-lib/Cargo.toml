@@ -27,8 +27,8 @@ serial_test = "3.0"
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-tracing.workspace = true
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+tracing.workspace = true
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
@@ -80,8 +80,8 @@ tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tonic = { version = "0.14", features = ["transport"] }
 
-tracing.workspace = true
 tracing-appender = "0.2.2"
+tracing.workspace = true
 url = { workspace = true }
 usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 
