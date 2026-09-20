@@ -8,72 +8,15 @@ mod loader;
 // Re-export types from turborepo-turbo-json that are used within turborepo-lib.
 // Note: This module is private to turborepo-lib, so we only re-export what's
 // needed internally.
-pub use turborepo_turbo_json::{
-    FutureFlags, Pipeline, RawRootTurboJson, RawTaskDefinition, RawTurboJson, TurboJson,
-};
+pub use turborepo_turbo_json::{FutureFlags, RawRootTurboJson, RawTurboJson, TurboJson};
 
 // Re-export the parser module for types like parser::Error
 pub mod parser {
     pub use turborepo_turbo_json::parser::BiomeParseError as Error;
 }
 
-// Loader code stays in turborepo-lib (depends on MFE, task_access)
-use std::collections::HashMap;
-
+// Loader code stays in turborepo-lib (depends on MFE).
 pub use loader::{TurboJsonReader, UnifiedTurboJsonLoader};
-use turborepo_errors::Spanned;
-use turborepo_task_id::TaskName;
-use turborepo_unescape::UnescapedString;
-
-use crate::run::task_access::TaskAccessTraceFile;
-
-/// Extension trait for RawTurboJson with turborepo-lib specific functionality
-pub trait RawTurboJsonExt {
-    /// Create a RawTurboJson from a task access trace
-    fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
-        -> Option<RawTurboJson>;
-}
-
-impl RawTurboJsonExt for RawTurboJson {
-    fn from_task_access_trace(
-        trace: &HashMap<String, TaskAccessTraceFile>,
-    ) -> Option<RawTurboJson> {
-        if trace.is_empty() {
-            return None;
-        }
-
-        let mut pipeline = Pipeline::default();
-
-        for (task_name, trace_file) in trace {
-            let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
-                .outputs
-                .iter()
-                .map(|output| Spanned::new(output.clone()))
-                .collect();
-            let task_definition = RawTaskDefinition {
-                outputs: Some(spanned_outputs),
-                env: Some(
-                    trace_file
-                        .accessed
-                        .env_var_keys
-                        .iter()
-                        .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
-                        .collect(),
-                ),
-                ..Default::default()
-            };
-
-            let name = TaskName::from(task_name.as_str());
-            let root_task = name.into_root_task();
-            pipeline.insert(root_task, Spanned::new(task_definition.clone()));
-        }
-
-        Some(RawTurboJson {
-            tasks: Some(pipeline),
-            ..RawTurboJson::default()
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -84,10 +27,8 @@ mod tests {
     use turbopath::RelativeUnixPath;
     use turborepo_engine::TaskDefinitionFromProcessed;
     use turborepo_errors::{json::deserialize_from_json_str, Spanned};
-    use turborepo_turbo_json::raw::RawTaskInput;
+    use turborepo_turbo_json::{raw::RawTaskInput, RawTaskDefinition};
     use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
-
-    use super::RawTaskDefinition;
 
     fn raw_input(value: &str) -> RawTaskInput {
         RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))

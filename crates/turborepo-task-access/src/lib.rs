@@ -9,15 +9,15 @@ use serde::Deserialize;
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
+use turborepo_errors::Spanned;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_repository::native_tasks::ScopeNativeTasks;
+use turborepo_run_cache::ConfigCache;
 use turborepo_scm::SCM;
 use turborepo_task_executor::TaskAccessProvider;
-use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
+use turborepo_task_id::TaskName;
+use turborepo_turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, TASK_ACCESS_CONFIG_PATH};
 use turborepo_unescape::UnescapedString;
-
-use super::ConfigCache;
-use crate::turbo_json::{RawTurboJson, RawTurboJsonExt};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
@@ -50,6 +50,53 @@ pub struct TaskAccessTraceAccess {
 pub struct TaskAccessTraceFile {
     pub accessed: TaskAccessTraceAccess,
     pub outputs: Vec<UnescapedString>,
+}
+
+/// Extension trait for creating a `turbo.json` from task access traces.
+pub trait RawTurboJsonExt {
+    fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
+    -> Option<RawTurboJson>;
+}
+
+impl RawTurboJsonExt for RawTurboJson {
+    fn from_task_access_trace(
+        trace: &HashMap<String, TaskAccessTraceFile>,
+    ) -> Option<RawTurboJson> {
+        if trace.is_empty() {
+            return None;
+        }
+
+        let mut pipeline = Pipeline::default();
+
+        for (task_name, trace_file) in trace {
+            let outputs = trace_file
+                .outputs
+                .iter()
+                .cloned()
+                .map(Spanned::new)
+                .collect();
+            let env = trace_file
+                .accessed
+                .env_var_keys
+                .iter()
+                .cloned()
+                .map(Spanned::new)
+                .collect();
+            let task_definition = RawTaskDefinition {
+                outputs: Some(outputs),
+                env: Some(env),
+                ..Default::default()
+            };
+
+            let root_task = TaskName::from(task_name.as_str()).into_root_task();
+            pipeline.insert(root_task, Spanned::new(task_definition));
+        }
+
+        Some(RawTurboJson {
+            tasks: Some(pipeline),
+            ..RawTurboJson::default()
+        })
+    }
 }
 
 pub fn trace_file_path(
@@ -355,7 +402,7 @@ mod tests {
 
     use tempfile::tempdir;
     use turborepo_errors::Spanned;
-    use turborepo_repository::native_tasks::{observation_from_scripts, ScopeNativeTasks};
+    use turborepo_repository::native_tasks::{ScopeNativeTasks, observation_from_scripts};
 
     use super::*;
 
@@ -399,6 +446,37 @@ mod tests {
             &repo_root,
             &root_tasks("next build")
         ));
+    }
+
+    #[test]
+    fn creates_turbo_json_from_task_access_trace() {
+        assert!(RawTurboJson::from_task_access_trace(&HashMap::new()).is_none());
+
+        let trace = HashMap::from([(
+            "build".to_string(),
+            TaskAccessTraceFile {
+                accessed: TaskAccessTraceAccess {
+                    network: false,
+                    file_paths: Vec::new(),
+                    env_var_keys: vec!["NODE_ENV".into()],
+                },
+                outputs: vec!["dist/**".into()],
+            },
+        )]);
+        let config = RawTurboJson::from_task_access_trace(&trace).unwrap();
+        let tasks = config.tasks.unwrap();
+        let build = tasks
+            .get(&TaskName::from("build").into_root_task())
+            .unwrap();
+
+        assert_eq!(
+            build.outputs.as_ref().unwrap()[0].as_inner().as_str(),
+            "dist/**"
+        );
+        assert_eq!(
+            build.env.as_ref().unwrap()[0].as_inner().as_str(),
+            "NODE_ENV"
+        );
     }
 
     #[test]

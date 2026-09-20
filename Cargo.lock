@@ -8396,6 +8396,7 @@ dependencies = [
  "turborepo-scope",
  "turborepo-shim",
  "turborepo-signals",
+ "turborepo-task-access",
  "turborepo-task-executor",
  "turborepo-task-filter",
  "turborepo-task-hash",
@@ -8868,6 +8869,29 @@ dependencies = [
  "libc",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-access"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-errors",
+ "turborepo-gitignore",
+ "turborepo-log",
+ "turborepo-repository",
+ "turborepo-run-cache",
+ "turborepo-scm",
+ "turborepo-task-executor",
+ "turborepo-task-id",
+ "turborepo-turbo-json",
+ "turborepo-unescape",
 ]
 
 [[package]]
