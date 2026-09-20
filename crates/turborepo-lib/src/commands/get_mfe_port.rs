@@ -151,7 +151,7 @@ mod tests {
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::{config::TurborepoConfigBuilder, opts::Opts, Args};
+    use crate::{config::TurborepoConfigBuilder, opts::Opts};
 
     fn setup_test_repo(tmp: &TempDir) -> AbsoluteSystemPathBuf {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap();
@@ -191,9 +191,9 @@ mod tests {
         repo_root: AbsoluteSystemPathBuf,
         cargo_enabled: bool,
     ) -> CommandBase {
-        let args = Args::default();
         let config = TurborepoConfigBuilder::new(&repo_root).build().unwrap();
-        let mut opts = Opts::new(&repo_root, &args, config).unwrap();
+        let mut opts =
+            Opts::new(&repo_root, &Default::default(), &Default::default(), config).unwrap();
         opts.future_flags.experimental_cargo_workspaces = cargo_enabled;
 
         CommandBase::from_opts(opts, repo_root, "test-version", ColorConfig::new(false))

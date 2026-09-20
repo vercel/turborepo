@@ -51,7 +51,8 @@ impl ProperTaskGraphBuilder {
                 root_turbo_json_path, self.repo_root
             )));
         }
-        Opts::new(&self.repo_root, &self.args, config)
+        let (run_selector, execution_selector) = self.args.selectors();
+        Opts::new(&self.repo_root, &run_selector, &execution_selector, config)
             .map_err(|error| TaskGraphError::BuildError(error.to_string()))
     }
 
