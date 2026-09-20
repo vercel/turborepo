@@ -3,9 +3,9 @@
 use std::{cell::RefCell, collections::HashSet};
 
 use turborepo_engine::{BuilderError, EngineBuilder, TurboJsonLoader};
-use turborepo_microfrontends_config::{TurboJsonReader, UnifiedTurboJsonLoader};
+use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PruneDependencyMode};
-use turborepo_turbo_json::TurboJson;
+use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use super::{CommandBase, Error};
 use crate::engine::EngineTurboJsonLoader;

@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_repository::package_graph::PackageName;
-pub use turborepo_turbo_json::TurboJsonReader;
-use turborepo_turbo_json::{LoaderError, NoOpUpdater, TurboJson, TurboJsonLoader};
+use turborepo_turbo_json::{LoaderError, NoOpUpdater, TurboJson, TurboJsonLoader, TurboJsonReader};
 
 use crate::MicrofrontendsConfigs;
 

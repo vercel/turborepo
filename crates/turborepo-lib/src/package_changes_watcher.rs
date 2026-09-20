@@ -20,7 +20,7 @@ use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     RepositoryIgnore, WatchScope, WatchSource,
 };
-use turborepo_microfrontends_config::{TurboJsonReader, UnifiedTurboJsonLoader};
+use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::{
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
@@ -29,7 +29,7 @@ use turborepo_repository::{
     toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
-use turborepo_turbo_json::{FutureFlags, TurboJson};
+use turborepo_turbo_json::{FutureFlags, TurboJson, TurboJsonReader};
 
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},

@@ -53,11 +53,9 @@ struct TaskEntrypointSelection {
     orchestration: HashMap<String, HashSet<TaskId<'static>>>,
 }
 
-use turborepo_microfrontends_config::{
-    MicrofrontendsConfigs, TurboJsonReader, UnifiedTurboJsonLoader,
-};
+use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_task_access::TaskAccess;
-use turborepo_turbo_json::TurboJson;
+use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
     commands::CommandBase,

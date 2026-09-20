@@ -6,7 +6,7 @@ mod loader;
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-pub use loader::{TurboJsonReader, UnifiedTurboJsonLoader};
+pub use loader::UnifiedTurboJsonLoader;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
