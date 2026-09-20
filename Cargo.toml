@@ -88,13 +88,6 @@ turborepo-query = { path = "crates/turborepo-query" }
 turborepo-query-api = { path = "crates/turborepo-query-api" }
 turborepo-profile-md = { path = "crates/turborepo-profile-md" }
 turborepo-repository = { path = "crates/turborepo-repository" }
-turborepo-sccache-proxy = { path = "crates/turborepo-sccache-proxy" }
-# Vercel fork of mozilla/sccache (v0.16.0 + the `main_from_args` embedding
-# entrypoint from the `vercel/main-from-args` branch). Public, so anonymous
-# builds fetch it; the rev is pinned for reproducibility.
-sccache = { git = "https://github.com/vercel/sccache", rev = "52bfcd03ee7fa94059d0af593d466a464254307e", default-features = false, features = [
-  "webdav",
-] }
 turborepo-task-id = { path = "crates/turborepo-task-id" }
 turborepo-types = { path = "crates/turborepo-types" }
 turborepo-ui = { path = "crates/turborepo-ui" }

@@ -22,10 +22,7 @@ use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
-use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
-    toolchain::CompileCacheEndpoint,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_executor::{
@@ -71,10 +68,6 @@ pub struct Visitor<'a> {
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
-    /// The compile cache proxy endpoint for this run, when one is being
-    /// served (`futureFlags.experimentalCargoSccache`). Toolchains translate
-    /// task-contract knowledge projects it into execution-only task env vars.
-    compile_cache_endpoint: Option<CompileCacheEndpoint>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -230,7 +223,6 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
         external_deps_hashes: Option<HashMap<String, String>>,
-        compile_cache_endpoint: Option<CompileCacheEndpoint>,
     ) -> Result<Self, Error> {
         let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
@@ -298,7 +290,6 @@ impl<'a> Visitor<'a> {
             is_watch,
             warnings: Default::default(),
             micro_frontends_configs,
-            compile_cache_endpoint,
         })
     }
 
@@ -1084,7 +1075,6 @@ impl<'a> Visitor<'a> {
         env_at_execution_start: &EnvironmentVariableMap,
         scm: &SCM,
         pkg_inference_root: Option<&AnchoredSystemPath>,
-        incremental_cache: Option<turborepo_run_summary::IncrementalCacheSummary>,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
@@ -1138,7 +1128,6 @@ impl<'a> Visitor<'a> {
                 scm,
                 is_watch,
                 Some(task_hasher.external_deps_hash_cache()),
-                incremental_cache,
             )
             .await?)
     }

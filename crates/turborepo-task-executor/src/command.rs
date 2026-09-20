@@ -12,7 +12,6 @@ use turborepo_process::Command;
 use turborepo_repository::{
     native_tasks::NativeCommandProgram,
     package_graph::{PackageGraph, PackageName, PackageTaskContext},
-    toolchain::CompileCacheEndpoint,
 };
 use turborepo_task_id::TaskId;
 use turborepo_types::{TaskArgs, TaskCommandOverride};
@@ -162,9 +161,6 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
-    /// A Turborepo-served compile cache endpoint, when one is running for this
-    /// run. Immutable task contracts determine whether and how to use it.
-    compile_cache: Option<&'a CompileCacheEndpoint>,
     /// Resolved `command` overrides by task, from the engine's task
     /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
@@ -184,14 +180,12 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
-        compile_cache: Option<&'a CompileCacheEndpoint>,
         command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     ) -> Self {
         Self {
             package_graph,
             task_args,
             mfe_configs,
-            compile_cache,
             command_overrides,
             package_manager_binary: std::sync::OnceLock::new(),
             cargo_binary: std::sync::OnceLock::new(),
@@ -245,10 +239,6 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
                 task_id: task_id.clone().into_owned(),
             })
     }
-}
-
-fn should_inject_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
-    command_override.is_none()
 }
 
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
@@ -355,22 +345,6 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             && let Some(port) = mfe_configs.dev_task_port(task_id)
         {
             cmd.env("TURBO_MFE_PORT", port.to_string());
-        }
-
-        // Compile-cache injection is execution-only: it deliberately does not
-        // participate in the task hash represented by this contract.
-        if should_inject_compile_cache(command_override)
-            && let Some(endpoint) = self.compile_cache
-        {
-            let vars = package_context
-                .task_contract()
-                .compile_cache_env(endpoint, environment);
-            if vars.is_empty() {
-                debug!("no compile cache env to inject for {task_id}");
-            }
-            for (key, value) in vars {
-                cmd.env(key, value);
-            }
         }
 
         // We always open stdin and the visitor will close it depending on task
@@ -652,17 +626,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn command_override_suppresses_compile_cache() {
-        assert!(should_inject_compile_cache(None));
-        assert!(!should_inject_compile_cache(Some(
-            &TaskCommandOverride::Argv(vec!["node".to_string()])
-        )));
-        assert!(!should_inject_compile_cache(Some(
-            &TaskCommandOverride::OptOut
-        )));
-    }
-
     #[tokio::test]
     async fn command_override_does_not_resolve_package_manager_binary() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
@@ -682,7 +645,6 @@ mod tests {
         let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
             &package_graph,
             TaskArgs::new(&[], &[]),
-            None,
             None,
             HashMap::from([(
                 task_id.clone(),
@@ -714,7 +676,6 @@ mod tests {
         let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
             &graph,
             TaskArgs::new(&[], &[]),
-            None,
             None,
             HashMap::from([(
                 task_id.clone(),

@@ -25,7 +25,7 @@ use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
@@ -116,10 +116,6 @@ pub struct Run {
     repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
     api_auth: Option<APIAuth>,
-    /// Kept for run-scoped services that talk to the Remote Cache outside
-    /// the task-cache pipeline (the sccache compile-cache proxy). `None`
-    /// when the run has no reason to initialize an HTTP client.
-    api_client: Option<APIClient>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
@@ -974,118 +970,6 @@ impl Run {
         });
     }
 
-    /// Start the sccache compile-cache proxy when
-    /// `futureFlags.experimentalCargoSccache` asks for it and the run can
-    /// support it. Every unmet precondition disables the proxy softly (the
-    /// compile cache is an optimization; a run without it is just slower),
-    /// with a log line naming the reason.
-    ///
-    /// Returns the endpoint to hand to toolchains plus the server's
-    /// shutdown handle.
-    async fn start_sccache_proxy_if_needed(
-        &self,
-    ) -> Option<(
-        turborepo_repository::toolchain::CompileCacheEndpoint,
-        tokio::sync::broadcast::Sender<()>,
-        std::sync::Arc<turborepo_sccache_proxy::IncrementalCacheStats>,
-    )> {
-        if !self.opts.future_flags.experimental_cargo_sccache {
-            return None;
-        }
-        if !builder::cargo_enabled(&self.opts.future_flags) {
-            warn!(
-                "experimentalCargoSccache requires experimentalCargoWorkspaces; compile cache \
-                 disabled"
-            );
-            return None;
-        }
-        // CI-only: sccache pays off in cold environments, while local
-        // development is already served by cargo's incremental compilation
-        // and a warm target directory — which the injected
-        // `CARGO_INCREMENTAL=0` would actively degrade. The flag is
-        // repo-level configuration, so without this gate, enabling it for
-        // CI would slow down every contributor's inner loop.
-        if !turborepo_ci::is_ci() {
-            debug!("sccache compile cache disabled: not running in CI");
-            return None;
-        }
-        // The compile cache *is* the remote cache; gate on the resolved
-        // runtime status, not just configuration. `Disabled` covers config
-        // (e.g. `TURBO_CACHE=local:rw` in PR CI, where credentials are
-        // placeholders); `Unavailable` covers what the preflight learned at
-        // run start (bad credentials, unreachable API, team over limit).
-        // Handing sccache a backend the run already knows is doomed would
-        // make its server refuse to start — its storage self-check failure
-        // is fatal — and every wrapper invocation error out.
-        // (`SCCACHE_IGNORE_SERVER_IO_ERROR` is the second layer of that
-        // defense, for failures that appear mid-run.)
-        if !matches!(self.remote_cache_status, RemoteCacheStatus::Enabled) {
-            debug!("sccache compile cache disabled: remote cache is not available for this run");
-            return None;
-        }
-        let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {
-            debug!("sccache compile cache disabled: Remote Cache is not configured");
-            return None;
-        };
-        // The compiler wrapper is this very binary: turbo embeds sccache
-        // and dispatches wrapper invocations to it, so nothing needs to be
-        // installed. Cargo needs the wrapper as an executable path.
-        let wrapper = match std::env::current_exe() {
-            Ok(path) => match path.into_os_string().into_string() {
-                Ok(path) => path,
-                Err(_) => {
-                    warn!("compile cache disabled: turbo's path is not valid UTF-8");
-                    return None;
-                }
-            },
-            Err(err) => {
-                warn!("compile cache disabled: cannot determine turbo's path: {err}");
-                return None;
-            }
-        };
-
-        let token_path = self
-            .repo_root
-            .join_components(&[".turbo", "sccache-proxy-token"]);
-        let token = match turborepo_sccache_proxy::load_or_create_token(&token_path) {
-            Ok(token) => token,
-            Err(err) => {
-                warn!("compile cache disabled: {err}");
-                return None;
-            }
-        };
-
-        // The port must be stable across runs: the sccache background
-        // server captures the endpoint at startup and outlives this run.
-        let port = turborepo_sccache_proxy::derive_port(&self.repo_root);
-        let server =
-            match turborepo_sccache_proxy::SccacheProxyServer::bind(port, client, auth, &token)
-                .await
-            {
-                Ok(server) => server,
-                Err(err) => {
-                    warn!("compile cache disabled: {err}");
-                    return None;
-                }
-            };
-
-        let endpoint = turborepo_repository::toolchain::CompileCacheEndpoint {
-            url: server.endpoint(),
-            token,
-            wrapper,
-            server_port: turborepo_sccache_proxy::derive_server_port(&self.repo_root),
-        };
-        let shutdown = server.shutdown_handle();
-        let stats = server.stats();
-        info!("sccache compile cache proxy listening on {}", endpoint.url);
-        tokio::spawn(async move {
-            if let Err(err) = server.run().await {
-                error!("sccache compile cache proxy error: {err}");
-            }
-        });
-        Some((endpoint, shutdown, stats))
-    }
-
     async fn cleanup_proxy(
         &self,
         proxy_shutdown: Option<(
@@ -1303,13 +1187,6 @@ impl Run {
 
         drop(_setup_span);
 
-        let sccache_proxy = self.start_sccache_proxy_if_needed().await;
-        let (compile_cache_endpoint, sccache_shutdown, incremental_cache_stats) =
-            match sccache_proxy {
-                Some((endpoint, shutdown, stats)) => (Some(endpoint), Some(shutdown), Some(stats)),
-                None => (None, None, None),
-            };
-
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
             self.run_cache.clone(),
@@ -1330,7 +1207,6 @@ impl Run {
             is_watch,
             self.micro_frontend_configs.as_ref(),
             external_deps_hashes,
-            compile_cache_endpoint,
         )
         .await?;
 
@@ -1364,13 +1240,6 @@ impl Run {
 
         self.cleanup_proxy(proxy_shutdown).await;
 
-        // Fire-and-forget: the proxy drains in-flight requests on its own,
-        // and trailing writes from the persistent sccache server after this
-        // point fail softly on its side (storage errors are cache misses).
-        if let Some(shutdown) = sccache_shutdown {
-            let _ = shutdown.send(());
-        }
-
         // When a proxy is present, the signal handler only stops processes on OS
         // signal. For normal completion without user interruption, we need an
         // explicit stop here.
@@ -1382,18 +1251,6 @@ impl Run {
             self.processes.stop().await;
         }
 
-        // Snapshot the incremental-cache traffic now that every task (and
-        // its tools) has finished. `None` when the proxy never started —
-        // the summary line only appears for runs that attempted
-        // incremental caching.
-        let incremental_cache = incremental_cache_stats.map(|stats| {
-            let snapshot = stats.snapshot();
-            turborepo_run_summary::IncrementalCacheSummary {
-                hits: snapshot.hits,
-                misses: snapshot.misses,
-            }
-        });
-
         visitor
             .finish(
                 exit_code,
@@ -1403,7 +1260,6 @@ impl Run {
                 &self.env_at_execution_start,
                 &self.scm,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
-                incremental_cache,
             )
             .await?;
 
