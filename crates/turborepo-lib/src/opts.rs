@@ -5,16 +5,14 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_turbo_json::FutureFlags;
 use turborepo_types::{
     APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix,
     OutputLogsMode, RepoOpts, ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo,
     ScopeOpts, TaskArgs, TuiOpts, UIMode,
 };
 
-use crate::{
-    config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
-    turbo_json::FutureFlags,
-};
+use crate::config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE};
 
 pub(crate) const DEFAULT_CACHE_WORKERS: u32 = 10;
 

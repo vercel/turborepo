@@ -1,27 +1,10 @@
-//! TurboJson loading - re-exports from turborepo-turbo-json and MFE integration
-//!
-//! This module provides the TurboJsonLoader integration with
-//! MicrofrontendsConfigs and a unified loader type that can handle both MFE and
-//! non-MFE cases.
-
 use std::collections::HashMap;
 
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_engine::BuilderError;
 use turborepo_repository::package_graph::PackageName;
-// Re-export TurboJsonLoader and related types from turborepo-turbo-json
-pub use turborepo_turbo_json::{LoaderError, NoOpUpdater, TurboJsonLoader, TurboJsonReader};
+use turborepo_turbo_json::{LoaderError, NoOpUpdater, TurboJson, TurboJsonLoader, TurboJsonReader};
 
-use super::TurboJson;
-use crate::{config::Error, microfrontends::MicrofrontendsConfigs};
-
-/// Convert LoaderError to config::Error
-fn loader_error_to_config_error(err: LoaderError) -> Error {
-    match err {
-        LoaderError::TurboJson(e) => Error::TurboJsonError(e),
-        LoaderError::InvalidTurboJsonLoad(pkg) => Error::InvalidTurboJsonLoad(pkg),
-    }
-}
+use crate::MicrofrontendsConfigs;
 
 /// A unified TurboJson loader that can handle both MFE and non-MFE cases.
 ///
@@ -125,10 +108,10 @@ impl UnifiedTurboJsonLoader {
     }
 
     /// Load a turbo.json for a given package
-    pub fn load(&self, package: &PackageName) -> Result<&TurboJson, Error> {
+    pub fn load(&self, package: &PackageName) -> Result<&TurboJson, LoaderError> {
         match self {
-            Self::Standard(loader) => loader.load(package).map_err(loader_error_to_config_error),
-            Self::WithMfe(loader) => loader.load(package).map_err(loader_error_to_config_error),
+            Self::Standard(loader) => loader.load(package),
+            Self::WithMfe(loader) => loader.load(package),
         }
     }
 
@@ -153,25 +136,15 @@ impl UnifiedTurboJsonLoader {
     }
 }
 
-// Implement the TurboJsonLoader trait from turborepo-engine for
-// UnifiedTurboJsonLoader
-impl turborepo_engine::TurboJsonLoader for UnifiedTurboJsonLoader {
-    fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError> {
-        UnifiedTurboJsonLoader::load(self, package).map_err(BuilderError::from)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::HashSet;
 
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
-    use turborepo_engine::TaskDefinitionFromProcessed;
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
     use turborepo_task_id::TaskName;
     use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
-    use turborepo_types::TaskDefinition;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
@@ -179,27 +152,27 @@ mod test {
     #[test_case(
         Some(r#"{ "tasks": {"//#build": {"env": ["SPECIAL_VAR"]}} }"#),
         Some(r#"{ "tasks": {"build": {"env": ["EXPLICIT_VAR"]}} }"#),
-        TaskDefinition { env: vec!["EXPLICIT_VAR".to_string()], .. Default::default() }
+        Some("EXPLICIT_VAR"),
+        None
     ; "both present")]
     #[test_case(
         None,
         Some(r#"{ "tasks": {"build": {"env": ["EXPLICIT_VAR"]}} }"#),
-        TaskDefinition { env: vec!["EXPLICIT_VAR".to_string()], .. Default::default() }
+        Some("EXPLICIT_VAR"),
+        None
     ; "no trace")]
     #[test_case(
         Some(r#"{ "tasks": {"//#build": {"env": ["SPECIAL_VAR"]}} }"#),
         None,
-        TaskDefinition { env: vec!["SPECIAL_VAR".to_string()], .. Default::default() }
+        Some("SPECIAL_VAR"),
+        None
     ; "no turbo.json")]
-    #[test_case(
-        None,
-        None,
-        TaskDefinition { cache: false, .. Default::default() }
-    ; "both missing")]
+    #[test_case(None, None, None, Some(false); "both missing")]
     fn test_task_access_loading(
         trace_contents: Option<&str>,
         turbo_json_content: Option<&str>,
-        expected_root_build: TaskDefinition,
+        expected_env: Option<&str>,
+        expected_cache: Option<bool>,
     ) {
         let root_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
@@ -226,10 +199,15 @@ mod test {
             .expect("root build should always exist")
             .as_inner();
 
+        let actual_env = root_build.env.as_ref().map(|env| {
+            env.iter()
+                .map(|value| value.as_inner().to_string())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(actual_env, expected_env.map(|env| vec![env.to_owned()]));
         assert_eq!(
-            expected_root_build,
-            TaskDefinition::from_raw(root_build.clone(), RelativeUnixPath::new(".").unwrap())
-                .unwrap()
+            root_build.cache.as_ref().map(|cache| *cache.as_inner()),
+            expected_cache
         );
     }
 
@@ -300,12 +278,13 @@ mod test {
                         Some(false)
                     );
                     if task_name == "dev" {
-                        assert!(def
-                            .with
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") }));
+                        assert!(
+                            def.with
+                                .as_ref()
+                                .unwrap()
+                                .iter()
+                                .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") })
+                        );
                     }
                 } else {
                     panic!("didn't find {task_name}");
@@ -321,12 +300,13 @@ mod test {
                         def.cache.as_ref().map(|cache| *cache.as_inner()),
                         Some(false)
                     );
-                    assert!(def
-                        .with
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") }));
+                    assert!(
+                        def.with
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") })
+                    );
                 } else {
                     panic!("didn't find {task_name}");
                 }

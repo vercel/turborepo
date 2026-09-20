@@ -1,48 +1,26 @@
-//! turbo.json configuration
-//!
-//! Re-exports from turborepo-turbo-json crate with loader code for
-//! turborepo-lib specific functionality (MFE, task_access).
+use anyhow::Result;
+use biome_json_parser::JsonParserOptions;
+use pretty_assertions::assert_eq;
+use test_case::test_case;
+use turbopath::RelativeUnixPath;
+use turborepo_engine::TaskDefinitionFromProcessed;
+use turborepo_errors::{json::deserialize_from_json_str, Spanned};
+use turborepo_turbo_json::{raw::RawTaskInput, RawTaskDefinition};
+use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
 
-mod loader;
-
-// Re-export types from turborepo-turbo-json that are used within turborepo-lib.
-// Note: This module is private to turborepo-lib, so we only re-export what's
-// needed internally.
-pub use turborepo_turbo_json::{FutureFlags, RawRootTurboJson, RawTurboJson, TurboJson};
-
-// Re-export the parser module for types like parser::Error
-pub mod parser {
-    pub use turborepo_turbo_json::parser::BiomeParseError as Error;
+fn raw_input(value: &str) -> RawTaskInput {
+    RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))
 }
 
-// Loader code stays in turborepo-lib (depends on MFE).
-pub use loader::{TurboJsonReader, UnifiedTurboJsonLoader};
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-    use biome_json_parser::JsonParserOptions;
-    use pretty_assertions::assert_eq;
-    use test_case::test_case;
-    use turbopath::RelativeUnixPath;
-    use turborepo_engine::TaskDefinitionFromProcessed;
-    use turborepo_errors::{json::deserialize_from_json_str, Spanned};
-    use turborepo_turbo_json::{raw::RawTaskInput, RawTaskDefinition};
-    use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
-
-    fn raw_input(value: &str) -> RawTaskInput {
-        RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))
-    }
-
-    // This test must stay in turborepo-lib because it uses TaskDefinition::from_raw
-    // which requires turborepo-engine (and turborepo-turbo-json cannot depend on
-    // turborepo-engine due to the reverse dependency).
-    #[test_case(
+// This test must stay in turborepo-lib because it uses TaskDefinition::from_raw
+// which requires turborepo-engine (and turborepo-turbo-json cannot depend on
+// turborepo-engine due to the reverse dependency).
+#[test_case(
         "{}",
         RawTaskDefinition::default(),
         TaskDefinition::default()
     ; "empty task definition")]
-    #[test_case(
+#[test_case(
         r#"{ "persistent": false }"#,
         RawTaskDefinition {
             persistent: Some(Spanned::new(false).with_range(16..21)),
@@ -51,7 +29,7 @@ mod tests {
         TaskDefinition::default()
     ; "just persistent"
     )]
-    #[test_case(
+#[test_case(
         r#"{
           "dependsOn": ["cli#build"],
           "env": ["OS"],
@@ -104,7 +82,7 @@ mod tests {
         }
       ; "full"
     )]
-    #[test_case(
+#[test_case(
         r#"{
               "dependsOn": ["cli#build"],
               "env": ["OS"],
@@ -156,7 +134,7 @@ mod tests {
         }
       ; "full (windows)"
     )]
-    #[test_case(
+#[test_case(
         r#"{
             "inputs": ["$TURBO_ROOT$/config.txt"],
             "outputs": ["$TURBO_ROOT$/coverage/**", "!$TURBO_ROOT$/coverage/index.html"]
@@ -179,7 +157,7 @@ mod tests {
         }
     ; "turbo root"
     )]
-    #[test_case(
+#[test_case(
         r#"{
             "with": ["proxy"]
         }"#,
@@ -195,23 +173,22 @@ mod tests {
         }
     ; "with task"
     )]
-    fn test_deserialize_task_definition(
-        task_definition_content: &str,
-        expected_raw_task_definition: RawTaskDefinition,
-        expected_task_definition: TaskDefinition,
-    ) -> Result<()> {
-        let (deserialized, _) = deserialize_from_json_str(
-            task_definition_content,
-            JsonParserOptions::default().with_allow_comments(),
-            "turbo.json",
-        );
-        let raw_task_definition: RawTaskDefinition = deserialized.unwrap();
-        assert_eq!(raw_task_definition, expected_raw_task_definition);
+fn test_deserialize_task_definition(
+    task_definition_content: &str,
+    expected_raw_task_definition: RawTaskDefinition,
+    expected_task_definition: TaskDefinition,
+) -> Result<()> {
+    let (deserialized, _) = deserialize_from_json_str(
+        task_definition_content,
+        JsonParserOptions::default().with_allow_comments(),
+        "turbo.json",
+    );
+    let raw_task_definition: RawTaskDefinition = deserialized.unwrap();
+    assert_eq!(raw_task_definition, expected_raw_task_definition);
 
-        let task_definition =
-            TaskDefinition::from_raw(raw_task_definition, RelativeUnixPath::new("../..").unwrap())?;
-        assert_eq!(task_definition, expected_task_definition);
+    let task_definition =
+        TaskDefinition::from_raw(raw_task_definition, RelativeUnixPath::new("../..").unwrap())?;
+    assert_eq!(task_definition, expected_task_definition);
 
-        Ok(())
-    }
+    Ok(())
 }

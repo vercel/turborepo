@@ -1,5 +1,6 @@
+use turborepo_microfrontends_config::MicrofrontendsConfigs;
+
 use super::Error;
-use crate::microfrontends::MicrofrontendsConfigs;
 
 // Re-export CommandFactory from turborepo-task-executor with our Error type
 pub type CommandFactory<'a> = turborepo_task_executor::CommandFactory<'a, Error>;

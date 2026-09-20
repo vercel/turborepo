@@ -8,9 +8,8 @@ use std::collections::HashMap;
 use turborepo_boundaries::TurboJsonProvider;
 pub use turborepo_boundaries::{BoundariesConfig, Error};
 use turborepo_errors::Spanned;
+use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::package_graph::PackageName;
-
-use crate::turbo_json::UnifiedTurboJsonLoader;
 
 pub struct RunTurboJsonProvider<'a> {
     turbo_json_loader: &'a UnifiedTurboJsonLoader,

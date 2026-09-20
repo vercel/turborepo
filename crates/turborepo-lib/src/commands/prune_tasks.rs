@@ -3,10 +3,12 @@
 use std::{cell::RefCell, collections::HashSet};
 
 use turborepo_engine::{BuilderError, EngineBuilder, TurboJsonLoader};
+use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PruneDependencyMode};
+use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use super::{CommandBase, Error};
-use crate::turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader};
+use crate::engine::EngineTurboJsonLoader;
 
 /// Remember configuration owners consulted by the engine as well as task
 /// owners: a package configuration can extend another package without depending
@@ -19,7 +21,8 @@ struct PruneLoader {
 
 impl TurboJsonLoader for PruneLoader {
     fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError> {
-        let config = TurboJsonLoader::load(&self.loader, package)?;
+        let engine_loader = EngineTurboJsonLoader::new(&self.loader);
+        let config = engine_loader.load(package)?;
         self.config_owners.borrow_mut().insert(package.clone());
         Ok(config)
     }

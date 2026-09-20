@@ -21,6 +21,7 @@ use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
+use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
@@ -42,7 +43,6 @@ use wax::Program;
 
 use crate::{
     engine::{Engine, ExecutionOptions, TaskNode},
-    microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     run::RunCache,
     task_hash::TaskHasher,

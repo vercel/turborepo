@@ -1,1 +1,0 @@
-pub use turborepo_microfrontends_config::MicrofrontendsConfigs;

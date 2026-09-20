@@ -2,12 +2,12 @@ use camino::Utf8Path;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::package_graph::PackageGraph;
+use turborepo_turbo_json::RawTurboJson;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{
     cli::{self, resolve_configuration_from_args},
     repository_graph::RepositoryGraphFeatures,
-    turbo_json::RawTurboJson,
     Args,
 };
 

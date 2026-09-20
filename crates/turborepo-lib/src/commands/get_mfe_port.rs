@@ -3,11 +3,12 @@ use std::io;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_microfrontends::TurborepoMfeConfig;
+use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_repository::package_graph::{
     PackageGraph, PackageGraphNodeKind, PackageName, PackageNode,
 };
 
-use crate::{commands::CommandBase, microfrontends::MicrofrontendsConfigs};
+use crate::commands::CommandBase;
 
 #[derive(Debug, Error)]
 pub enum Error {

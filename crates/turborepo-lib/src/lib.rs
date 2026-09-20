@@ -15,7 +15,6 @@ mod engine;
 mod heap_profile;
 
 mod boundaries;
-mod microfrontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
@@ -24,7 +23,6 @@ mod run;
 mod shim;
 mod task_graph;
 mod task_hash;
-mod turbo_json;
 
 // Re-export daemon types from the new crate location
 pub use turborepo_daemon::{
