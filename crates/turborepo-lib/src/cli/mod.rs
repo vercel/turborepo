@@ -11,6 +11,7 @@ use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder},
     init_telemetry, TelemetryHandle,
 };
+use turborepo_tracing::{inject_trace_metadata, TurboSubscriber};
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
@@ -21,7 +22,6 @@ use crate::{
     },
     get_version,
     run::watch::WatchClient,
-    tracing::TurboSubscriber,
 };
 
 mod args;
@@ -774,8 +774,7 @@ fn finalize_chrome_profile(logger: &TurboSubscriber, version: &str) {
 
     let _ = logger.flush_chrome_tracing();
 
-    if let Err(e) = crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
-    {
+    if let Err(e) = inject_trace_metadata(std::path::Path::new(&file_path), version) {
         warn!("Failed to inject trace metadata: {e}");
     }
 

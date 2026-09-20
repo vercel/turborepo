@@ -7,12 +7,11 @@ use turborepo_daemon::{
     clean_daemon, follow_daemon_logs, serve, CloseReason, DaemonError, DaemonLifecycleCommand,
     DaemonLifecycleOutput, Paths,
 };
+use turborepo_tracing::TurboSubscriber;
 use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
 
 use super::CommandBase;
-use crate::{
-    cli::DaemonCommand, package_changes_watcher::PackageChangesWatcher, tracing::TurboSubscriber,
-};
+use crate::{cli::DaemonCommand, package_changes_watcher::PackageChangesWatcher};
 
 const DAEMON_NOT_RUNNING_MESSAGE: &str =
     "daemon is not running, run `turbo daemon start` to start it";

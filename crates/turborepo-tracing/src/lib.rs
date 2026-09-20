@@ -1,3 +1,5 @@
+//! Tracing subscriber configuration and terminal log formatting for Turborepo.
+
 use std::{
     io::{self, Write},
     marker::PhantomData,
@@ -7,25 +9,24 @@ use std::{
 
 use chrono::Local;
 use owo_colors::{
-    colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
+    colors::{Black, Default, Red, Yellow},
 };
-use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
+use tracing::{Event, Level, Subscriber, field::Visit, metadata::LevelFilter, trace};
 use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
 pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
+    EnvFilter, Layer, Registry,
     filter::Filtered,
     fmt::{
-        self,
+        self, FmtContext, FormatEvent, FormatFields, MakeWriter,
         format::{DefaultFields, Writer},
-        FmtContext, FormatEvent, FormatFields, MakeWriter,
     },
     layer,
     prelude::*,
     registry::LookupSpan,
     reload::{self, Handle},
-    EnvFilter, Layer, Registry,
 };
 use turborepo_ui::ColorConfig;
 
@@ -203,11 +204,6 @@ type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdErrLogLayered>;
 /// A logger that converts events to chrome tracing format and writes them
 /// to a file. It is applied on top of the `DaemonLogLayered` layer.
 type ChromeLog = ChromeLayer<DaemonLogLayered>;
-/// This layer can be reloaded. `None` means the layer is disabled.
-type ChromeReload = reload::Layer<Option<ChromeLog>, DaemonLogLayered>;
-/// When the `ChromeLogFiltered` is applied to the `DaemonLogLayered`, we get a
-/// `ChromeLogLayered`, which forms the base for the next layer.
-type ChromeLogLayered = layer::Layered<ChromeReload, DaemonLogLayered>;
 
 /// Builds the `EnvFilter` used by the stderr and daemon log layers.
 ///

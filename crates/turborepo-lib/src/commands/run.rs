@@ -6,10 +6,11 @@ use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_tracing::TurboSubscriber;
 use turborepo_types::DryRunMode;
 use turborepo_ui::{sender::UISender, LogSinks};
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
+use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome<T> {

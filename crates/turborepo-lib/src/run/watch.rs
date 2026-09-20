@@ -26,6 +26,7 @@ use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
 use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
 use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_tracing::TurboSubscriber;
 use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{
@@ -285,7 +286,7 @@ impl WatchClient {
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
         query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
-        subscriber: &crate::tracing::TurboSubscriber,
+        subscriber: &TurboSubscriber,
         verbosity: u8,
     ) -> Result<Self, Error> {
         let signal = get_signal()?;

@@ -8327,11 +8327,9 @@ dependencies = [
  "merge",
  "miette",
  "notify",
- "owo-colors 3.5.0",
  "petgraph 0.8.3",
  "pidlock",
  "port_scanner",
- "pprof",
  "pretty_assertions",
  "prost 0.14.3",
  "radix_trie",
@@ -8358,8 +8356,6 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-appender",
- "tracing-chrome",
- "tracing-subscriber",
  "tracing-test",
  "turbo-updater",
  "turbopath",
@@ -8405,6 +8401,7 @@ dependencies = [
  "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
+ "turborepo-tracing",
  "turborepo-turbo-json",
  "turborepo-types",
  "turborepo-ui",
@@ -8974,6 +8971,21 @@ dependencies = [
  "turborepo-vercel-api-mock",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "turborepo-tracing"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "owo-colors 3.5.0",
+ "pprof",
+ "tempfile",
+ "tracing",
+ "tracing-appender",
+ "tracing-chrome",
+ "tracing-subscriber",
+ "turborepo-ui",
 ]
 
 [[package]]
