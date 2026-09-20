@@ -6,9 +6,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 use turborepo_types::{
-    APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, RepoOpts,
-    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, TaskArgs, TuiOpts,
-    UIMode,
+    APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix,
+    OutputLogsMode, RepoOpts, ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo,
+    ScopeOpts, TaskArgs, TuiOpts, UIMode,
 };
 
 use crate::{
@@ -17,6 +17,51 @@ use crate::{
     turbo_json::FutureFlags,
     Args,
 };
+
+pub(crate) const DEFAULT_CACHE_WORKERS: u32 = 10;
+
+/// Parser-agnostic run options consumed while resolving [`Opts`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RunSelector {
+    pub(crate) graph: Option<String>,
+    pub(crate) parallel: bool,
+    pub(crate) profile: Option<String>,
+    pub(crate) dry_run: Option<DryRunMode>,
+    pub(crate) no_cache: bool,
+    pub(crate) cache_workers: u32,
+}
+
+impl Default for RunSelector {
+    fn default() -> Self {
+        Self {
+            graph: None,
+            parallel: false,
+            profile: None,
+            dry_run: None,
+            no_cache: false,
+            cache_workers: DEFAULT_CACHE_WORKERS,
+        }
+    }
+}
+
+/// Parser-agnostic execution options consumed while resolving [`Opts`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ExecutionSelector {
+    pub(crate) output_logs: Option<OutputLogsMode>,
+    pub(crate) log_prefix: LogPrefix,
+    pub(crate) json: bool,
+    pub(crate) log_file: Option<Option<String>>,
+    pub(crate) tasks: Vec<String>,
+    pub(crate) framework_inference: Option<bool>,
+    pub(crate) continue_execution: ContinueMode,
+    pub(crate) pass_through_args: Vec<String>,
+    pub(crate) only: bool,
+    pub(crate) single_package: bool,
+    pub(crate) affected: bool,
+    pub(crate) global_deps: Vec<String>,
+    pub(crate) pkg_inference_root: Option<String>,
+    pub(crate) filter: Vec<String>,
+}
 
 /// Why remote caching was disabled by local configuration.
 /// Determined during opts resolution — no network call required.

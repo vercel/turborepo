@@ -21,9 +21,11 @@ use turborepo_types::{
 use usage::{Args as UsageArgs, Cli, Subcommands, ValueEnum};
 
 use super::{exit_with_heap_profile, observability};
-use crate::{commands::prune, get_version};
-
-const DEFAULT_NUM_WORKERS: u32 = 10;
+use crate::{
+    commands::prune,
+    get_version,
+    opts::{ExecutionSelector, RunSelector, DEFAULT_CACHE_WORKERS},
+};
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
@@ -966,6 +968,56 @@ impl Args {
         }
     }
 
+    /// Normalize command-specific arguments into parser-agnostic selectors.
+    ///
+    /// Call this after runtime CLI normalization has applied repository mode
+    /// and package inference to the parsed arguments.
+    pub(crate) fn selectors(&self) -> (RunSelector, ExecutionSelector) {
+        let default_execution_selector = ExecutionSelector {
+            single_package: self.single_package,
+            ..Default::default()
+        };
+
+        match &self.command {
+            Some(Command::Run {
+                run_args,
+                execution_args,
+            }) => (run_args.into(), execution_args.into()),
+            Some(Command::Watch { execution_args, .. }) => {
+                (RunSelector::default(), execution_args.into())
+            }
+            Some(Command::Ls {
+                affected, filter, ..
+            }) => (
+                RunSelector::default(),
+                ExecutionSelector {
+                    filter: filter.clone(),
+                    affected: *affected,
+                    ..Default::default()
+                },
+            ),
+            Some(Command::Boundaries { filter, .. }) => (
+                RunSelector::default(),
+                ExecutionSelector {
+                    filter: filter.clone(),
+                    ..Default::default()
+                },
+            ),
+            Some(Command::Query {
+                subcommand: Some(QuerySubcommand::Ls(ls_args)),
+                ..
+            }) => (
+                RunSelector::default(),
+                ExecutionSelector {
+                    filter: ls_args.filter.clone(),
+                    affected: ls_args.affected,
+                    ..Default::default()
+                },
+            ),
+            _ => (RunSelector::default(), default_execution_selector),
+        }
+    }
+
     /// Fetch the run args supplied to the command
     pub fn run_args(&self) -> Option<&RunArgs> {
         match &self.command {
@@ -1426,6 +1478,27 @@ pub struct ExecutionArgs {
     pub pass_through_args: Vec<String>,
 }
 
+impl From<&ExecutionArgs> for ExecutionSelector {
+    fn from(args: &ExecutionArgs) -> Self {
+        Self {
+            output_logs: args.output_logs.map(Into::into),
+            log_prefix: args.log_prefix.into(),
+            json: args.json,
+            log_file: args.log_file.clone(),
+            tasks: args.tasks.clone(),
+            framework_inference: args.framework_inference,
+            continue_execution: args.continue_execution.into(),
+            pass_through_args: args.pass_through_args.clone(),
+            only: args.only,
+            single_package: args.single_package,
+            affected: args.affected,
+            global_deps: args.global_deps.clone(),
+            pkg_inference_root: args.pkg_inference_root.clone(),
+            filter: args.filter.clone(),
+        }
+    }
+}
+
 impl ExecutionArgs {
     fn track(&self, telemetry: &CommandEventBuilder) {
         // default to false
@@ -1512,7 +1585,7 @@ pub struct RunArgs {
     pub no_cache: bool,
 
     /// Set the number of concurrent cache operations (default 10)
-    #[usage(long, default_value_t = DEFAULT_NUM_WORKERS, default = "10")]
+    #[usage(long, default_value_t = DEFAULT_CACHE_WORKERS, default = "10")]
     pub cache_workers: u32,
     #[usage(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing = "text")]
     pub dry_run: Option<DryRunModeArg>,
@@ -1560,7 +1633,7 @@ impl Default for RunArgs {
             remote_only: None,
             cache: None,
             force: None,
-            cache_workers: DEFAULT_NUM_WORKERS,
+            cache_workers: DEFAULT_CACHE_WORKERS,
             dry_run: None,
             graph: None,
             no_cache: false,
@@ -1571,6 +1644,19 @@ impl Default for RunArgs {
             remote_cache_read_only: None,
             summarize: None,
             parallel: false,
+        }
+    }
+}
+
+impl From<&RunArgs> for RunSelector {
+    fn from(args: &RunArgs) -> Self {
+        Self {
+            graph: args.graph.as_deref().map(ToOwned::to_owned),
+            parallel: args.parallel,
+            profile: args.profile.clone(),
+            dry_run: args.dry_run.map(Into::into),
+            no_cache: args.no_cache,
+            cache_workers: args.cache_workers,
         }
     }
 }
@@ -1647,7 +1733,7 @@ impl RunArgs {
             telemetry.track_arg_value("dry-run", dry_run, EventType::NonSensitive);
         }
 
-        if self.cache_workers != DEFAULT_NUM_WORKERS {
+        if self.cache_workers != DEFAULT_CACHE_WORKERS {
             telemetry.track_arg_value("cache-workers", self.cache_workers, EventType::NonSensitive);
         }
 

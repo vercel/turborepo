@@ -4,12 +4,15 @@ use camino::Utf8PathBuf;
 use insta::assert_snapshot;
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
-use turborepo_types::LogOrder;
+use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
-use crate::cli::{
-    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
-    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
-    RunArgs,
+use crate::{
+    cli::{
+        ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+        GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath,
+        OutputLogsModeArg, RunArgs,
+    },
+    opts::{ExecutionSelector, RunSelector},
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -26,6 +29,134 @@ fn get_subcommand(name: &str) -> &'static usage::Command<'static> {
         .iter()
         .find(|command| command.name == name)
         .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
+}
+
+#[test]
+fn selectors_convert_run_command_arguments() {
+    let run_args = RunArgs {
+        graph: Some(GraphOutput("graph.svg".into())),
+        parallel: true,
+        profile: Some("profile.json".into()),
+        dry_run: Some(DryRunModeArg::Json),
+        no_cache: true,
+        cache_workers: 20,
+        ..Default::default()
+    };
+    let execution_args = ExecutionArgs {
+        output_logs: Some(OutputLogsModeArg::ErrorsOnly),
+        log_prefix: LogPrefixArg::None,
+        json: true,
+        log_file: Some(Some("turbo.log".into())),
+        tasks: vec!["build".into()],
+        framework_inference: Some(false),
+        continue_execution: ContinueModeArg::Always,
+        pass_through_args: vec!["--watch".into()],
+        only: true,
+        single_package: true,
+        affected: true,
+        global_deps: vec![".env".into()],
+        pkg_inference_root: Some("apps/web".into()),
+        filter: vec!["web".into()],
+        ..Default::default()
+    };
+    let args = Args {
+        command: Some(Command::Run {
+            run_args,
+            execution_args,
+        }),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector {
+                graph: Some("graph.svg".into()),
+                parallel: true,
+                profile: Some("profile.json".into()),
+                dry_run: Some(DryRunMode::Json),
+                no_cache: true,
+                cache_workers: 20,
+            },
+            ExecutionSelector {
+                output_logs: Some(OutputLogsMode::ErrorsOnly),
+                log_prefix: LogPrefix::None,
+                json: true,
+                log_file: Some(Some("turbo.log".into())),
+                tasks: vec!["build".into()],
+                framework_inference: Some(false),
+                continue_execution: ContinueMode::Always,
+                pass_through_args: vec!["--watch".into()],
+                only: true,
+                single_package: true,
+                affected: true,
+                global_deps: vec![".env".into()],
+                pkg_inference_root: Some("apps/web".into()),
+                filter: vec!["web".into()],
+            },
+        )
+    );
+}
+
+#[test]
+fn selectors_normalize_watch_command() {
+    let args = parse_args(["turbo", "watch", "build", "--filter", "web"]).unwrap();
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector::default(),
+            ExecutionSelector {
+                tasks: vec!["build".into()],
+                framework_inference: Some(true),
+                filter: vec!["web".into()],
+                ..Default::default()
+            }
+        )
+    );
+}
+
+#[test_case::test_case(&["turbo", "ls", "--affected", "--filter", "web"] ; "ls")]
+#[test_case::test_case(&["turbo", "boundaries", "--filter", "web"] ; "boundaries")]
+#[test_case::test_case(&["turbo", "query", "ls", "--affected", "--filter", "web"] ; "query ls")]
+fn selectors_normalize_non_execution_commands(argv: &[&str]) {
+    let args = parse_args(argv).unwrap();
+    let (run_selector, execution_selector) = args.selectors();
+
+    assert_eq!(run_selector, RunSelector::default());
+    assert_eq!(execution_selector.filter, ["web"]);
+    assert_eq!(
+        execution_selector.affected,
+        !matches!(args.command, Some(Command::Boundaries { .. }))
+    );
+    assert_eq!(
+        execution_selector,
+        ExecutionSelector {
+            filter: vec!["web".into()],
+            affected: execution_selector.affected,
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
+fn selectors_preserve_root_single_package_for_other_commands() {
+    let args = Args {
+        single_package: true,
+        command: Some(Command::Bin),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector::default(),
+            ExecutionSelector {
+                single_package: true,
+                ..Default::default()
+            }
+        )
+    );
 }
 
 #[test_case::test_case("", None ; "root")]
