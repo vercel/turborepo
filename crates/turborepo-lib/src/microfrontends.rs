@@ -509,9 +509,12 @@ impl PackageGraphResult {
             // applications hosted in other repositories. A differing package
             // name, however, comes from an explicit `packageName` mapping and
             // is expected to identify a local workspace package.
-            referenced_packages.extend(info.tasks.iter().filter_map(|(task, application)| {
-                (task.package() != application).then(|| task.package().to_string())
-            }));
+            referenced_packages.extend(
+                info.tasks
+                    .iter()
+                    .filter(|&(task, application)| task.package() != application)
+                    .map(|(task, _)| task.package().to_string()),
+            );
 
             configs.insert(package_name.to_string(), info);
         }
