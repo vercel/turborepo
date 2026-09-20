@@ -5,8 +5,8 @@
 
 use std::collections::HashMap;
 
-pub use turborepo_boundaries::{BoundariesConfig, Error};
 use turborepo_boundaries::TurboJsonProvider;
+pub use turborepo_boundaries::{BoundariesConfig, Error};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
 
