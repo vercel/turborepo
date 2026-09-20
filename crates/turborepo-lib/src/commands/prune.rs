@@ -544,8 +544,9 @@ impl<'a> Prune<'a> {
             return Err(Error::NoWorkspaceSpecified);
         }
 
-        let features =
-            crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+        let features = turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
+            &base.opts().future_flags,
+        );
         let root_package_json = features.load_root_package_json(&base.repo_root)?;
 
         let graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)

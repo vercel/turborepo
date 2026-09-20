@@ -7,14 +7,14 @@ use turborepo_repository::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct RepositoryGraphFeatures {
+pub struct RepositoryGraphFeatures {
     pub(crate) cargo: bool,
     pub(crate) python: bool,
     pub(crate) go: bool,
 }
 
 impl RepositoryGraphFeatures {
-    pub(crate) fn new(future_flags: &turborepo_turbo_json::FutureFlags) -> Self {
+    pub fn new(future_flags: &turborepo_turbo_json::FutureFlags) -> Self {
         Self {
             cargo: future_flags.experimental_cargo_workspaces,
             python: future_flags.experimental_python_workspaces,
@@ -22,19 +22,19 @@ impl RepositoryGraphFeatures {
         }
     }
 
-    pub(crate) fn cargo_enabled(self) -> bool {
+    pub fn cargo_enabled(self) -> bool {
         self.cargo
     }
 
-    pub(crate) fn python_enabled(self) -> bool {
+    pub fn python_enabled(self) -> bool {
         self.python
     }
 
-    pub(crate) fn go_enabled(self) -> bool {
+    pub fn go_enabled(self) -> bool {
         self.go
     }
 
-    pub(crate) fn load_root_package_json(
+    pub fn load_root_package_json(
         self,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Option<PackageJson>, package_json::Error> {
@@ -61,7 +61,7 @@ impl RepositoryGraphFeatures {
         }
     }
 
-    pub(crate) fn configure<'a, T>(
+    pub fn configure<'a, T>(
         self,
         mut builder: PackageGraphBuilder<'a, T>,
     ) -> PackageGraphBuilder<'a, T> {

@@ -8325,13 +8325,11 @@ dependencies = [
  "libc",
  "merge",
  "miette",
- "notify",
  "petgraph 0.8.3",
  "pidlock",
  "port_scanner",
  "pretty_assertions",
  "prost 0.14.3",
- "radix_trie",
  "rand 0.9.3",
  "rayon",
  "regex",
@@ -8386,6 +8384,7 @@ dependencies = [
  "turborepo-microfrontends-config",
  "turborepo-microfrontends-proxy",
  "turborepo-otel",
+ "turborepo-package-watcher",
  "turborepo-process",
  "turborepo-profile-md",
  "turborepo-query-api",
@@ -8591,6 +8590,26 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
+]
+
+[[package]]
+name = "turborepo-package-watcher"
+version = "0.1.0"
+dependencies = [
+ "ignore",
+ "notify",
+ "radix_trie",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-config",
+ "turborepo-daemon",
+ "turborepo-filewatch",
+ "turborepo-microfrontends-config",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-turbo-json",
 ]
 
 [[package]]

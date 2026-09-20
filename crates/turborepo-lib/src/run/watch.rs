@@ -20,6 +20,7 @@ use turborepo_filewatch::{
     cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
     package_watcher::PackageWatcher, FileSystemWatcher,
 };
+use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
@@ -34,7 +35,6 @@ use crate::{
     config::resolve_turbo_config_path,
     engine::{EngineExt, TaskNode},
     get_version, opts,
-    package_changes_watcher::PackageChangesWatcher,
     run::{self, builder::RunBuilder, Run},
 };
 
@@ -340,7 +340,9 @@ impl WatchClient {
         ));
         // The watcher builds its own graph and must enable the same ecosystems.
         let graph_features =
-            crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+            turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
+                &base.opts().future_flags,
+            );
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
@@ -461,8 +463,9 @@ impl WatchClient {
         const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
         // Shared with the package-changes subscriber's inner wait so the inner
         // timeout is never shorter than this outer cap.
-        let startup_cap =
-            Duration::from_secs(crate::package_changes_watcher::startup_timeout_secs());
+        let startup_cap = Duration::from_secs(
+            turborepo_package_watcher::package_changes_watcher::startup_timeout_secs(),
+        );
         let started = std::time::Instant::now();
         let mut warned = false;
         let initial_event = loop {

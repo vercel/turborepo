@@ -7,11 +7,12 @@ use turborepo_daemon::{
     clean_daemon, follow_daemon_logs, serve, CloseReason, DaemonError, DaemonLifecycleCommand,
     DaemonLifecycleOutput, Paths,
 };
+use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_tracing::TurboSubscriber;
 use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
 
 use super::CommandBase;
-use crate::{cli::DaemonCommand, package_changes_watcher::PackageChangesWatcher};
+use crate::cli::DaemonCommand;
 
 const DAEMON_NOT_RUNNING_MESSAGE: &str =
     "daemon is not running, run `turbo daemon start` to start it";
@@ -194,7 +195,9 @@ pub async fn daemon_server(
         allow_no_package_manager,
         {
             let graph_features =
-                crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+                turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
+                    &base.opts().future_flags,
+                );
             let future_flags = base.opts().future_flags;
             move |args| {
                 PackageChangesWatcher::new(

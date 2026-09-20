@@ -27,8 +27,8 @@ serial_test = "3.0"
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
@@ -58,11 +58,9 @@ itertools = { workspace = true }
 libc = "0.2.140"
 merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-notify = { workspace = true }
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.14"
-radix_trie = { workspace = true }
 rand = { workspace = true }
 rayon = "1.7.0"
 regex.workspace = true
@@ -82,8 +80,8 @@ tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tonic = { version = "0.14", features = ["transport"] }
 
-tracing-appender = "0.2.2"
 tracing.workspace = true
+tracing-appender = "0.2.2"
 url = { workspace = true }
 usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 
@@ -117,6 +115,7 @@ turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-config = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
 turborepo-otel = { workspace = true }
+turborepo-package-watcher = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
 turborepo-query-api = { workspace = true }

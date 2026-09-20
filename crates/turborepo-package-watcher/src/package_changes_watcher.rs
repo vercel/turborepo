@@ -3,22 +3,23 @@ use std::{
     collections::{HashMap, HashSet},
     ops::DerefMut,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
-use tokio::sync::{broadcast, oneshot, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, oneshot, watch};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_config::{CONFIG_FILE, CONFIG_FILE_JSONC, resolve_turbo_config_path};
 use turborepo_daemon::{
     PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait,
     RepositoryDiscoveryError,
 };
 use turborepo_filewatch::{
-    hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     RepositoryIgnore, WatchScope, WatchSource,
+    hash_watcher::{HashSpec, HashWatcher, InputGlobs},
 };
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::{
@@ -31,10 +32,7 @@ use turborepo_repository::{
 use turborepo_scm::GitHashes;
 use turborepo_turbo_json::{FutureFlags, TurboJson, TurboJsonReader};
 
-use crate::{
-    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
-    repository_graph::RepositoryGraphFeatures,
-};
+use crate::repository_graph::RepositoryGraphFeatures;
 
 /// Watches for changes to a package's files and directories.
 pub struct PackageChangesWatcher {
@@ -58,7 +56,7 @@ const DEFAULT_STARTUP_TIMEOUT_SECS: u64 = 120;
 /// subscriber and the watch client so the inner wait can never be shorter than
 /// the outer one — otherwise the subscriber would give up before the client's
 /// retry loop could report why.
-pub(crate) fn startup_timeout_secs() -> u64 {
+pub fn startup_timeout_secs() -> u64 {
     std::env::var("TURBO_WATCH_STARTUP_TIMEOUT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -908,7 +906,7 @@ mod test {
     use tokio::sync::{broadcast, watch};
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_filewatch::{
-        hash_watcher::HashWatcher, NotifyError, OptionalWatch, WatchEventSender, WatchSource,
+        NotifyError, OptionalWatch, WatchEventSender, WatchSource, hash_watcher::HashWatcher,
     };
     use turborepo_repository::{
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
@@ -920,9 +918,9 @@ mod test {
     use turborepo_turbo_json::FutureFlags;
 
     use super::{
-        ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
-        is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
-        PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
+        CONFIG_FILE, ChangedFiles, FileChangeAction, PackageChangeEvent, PackageChangesWatcher,
+        PackageHashBaseline, RepositoryIgnore, Subscriber, ancestors_is_ignored, baseline_matches,
+        classify_changed_files, hash_scopes, is_in_git_folder,
     };
     use crate::repository_graph::RepositoryGraphFeatures;
 
@@ -1168,13 +1166,15 @@ mod test {
             .join_component("package.json")
             .create_with_contents(b"{")
             .unwrap();
-        assert!(RepositoryGraphFeatures {
-            cargo: true,
-            python: false,
-            go: false,
-        }
-        .load_root_package_json(&repo_root)
-        .is_err());
+        assert!(
+            RepositoryGraphFeatures {
+                cargo: true,
+                python: false,
+                go: false,
+            }
+            .load_root_package_json(&repo_root)
+            .is_err()
+        );
         assert!(initialize_test_state(&repo_root, true).await.is_none());
 
         repo_root.join_component("package.json").remove().unwrap();
@@ -1238,14 +1238,18 @@ mod test {
             .await
             .expect("single-package JavaScript graph initializes");
         let active_spec = state.pkg_dep_graph.active_watch_spec();
-        assert!(!active_spec
-            .definition_file_names
-            .iter()
-            .any(|name| name == "Cargo.toml"));
-        assert!(!active_spec
-            .ignore_prefixes
-            .iter()
-            .any(|prefix| prefix == "target"));
+        assert!(
+            !active_spec
+                .definition_file_names
+                .iter()
+                .any(|name| name == "Cargo.toml")
+        );
+        assert!(
+            !active_spec
+                .ignore_prefixes
+                .iter()
+                .any(|prefix| prefix == "target")
+        );
         assert_eq!(active_spec, WatchSpec::default());
         assert_eq!(
             *subscriber
@@ -2086,12 +2090,14 @@ mod test {
             vec!["add", "."],
             vec!["commit", "-m", "add colocated crate", "--quiet"],
         ] {
-            assert!(std::process::Command::new("git")
-                .args(args)
-                .current_dir(repo_root.as_std_path())
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("git")
+                    .args(args)
+                    .current_dir(repo_root.as_std_path())
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         let mut handle = create_test_watcher_with_graph_features(
             &repo_root,
