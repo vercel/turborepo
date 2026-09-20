@@ -1,3 +1,8 @@
+mod loader;
+#[cfg(test)]
+mod task_definition_test;
+
+pub(crate) use loader::EngineTurboJsonLoader;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
 // Building state is used for engine construction

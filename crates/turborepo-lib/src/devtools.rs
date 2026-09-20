@@ -16,7 +16,7 @@ use turborepo_task_id::TaskName;
 
 use crate::{
     commands::CommandBase,
-    engine::{EngineBuilder, TaskNode as EngineTaskNode},
+    engine::{EngineBuilder, EngineTurboJsonLoader, TaskNode as EngineTaskNode},
     opts::Opts,
     repository_graph::RepositoryGraphFeatures,
     turbo_json::{TurboJsonReader, UnifiedTurboJsonLoader},
@@ -145,10 +145,11 @@ impl ProperTaskGraphBuilder {
 
         // Build engine with all tasks
         // We use `add_all_tasks` to get the complete task graph for visualization
+        let engine_loader = EngineTurboJsonLoader::new(&loader);
         let engine = EngineBuilder::new(
             &self.repo_root,
             pkg_graph,
-            &loader,
+            &engine_loader,
             opts.run_opts.single_package,
         )
         .with_workspaces(workspaces)

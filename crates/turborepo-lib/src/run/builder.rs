@@ -57,7 +57,7 @@ use turborepo_task_access::TaskAccess;
 
 use crate::{
     commands::CommandBase,
-    engine::{task_has_command, Engine, EngineBuilder, EngineExt},
+    engine::{task_has_command, Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     repository_graph::RepositoryGraphFeatures,
@@ -1116,7 +1116,10 @@ impl RunBuilder {
 
         let root_turbo_json = {
             let _span = tracing::info_span!("root_turbo_json_load").entered();
-            turbo_json_loader.load(&PackageName::Root)?.clone()
+            turbo_json_loader
+                .load(&PackageName::Root)
+                .map_err(crate::config::Error::from)?
+                .clone()
         };
 
         let env_at_execution_start = {
@@ -1183,6 +1186,7 @@ impl RunBuilder {
         // the loop terminates; the final selection below runs exactly once,
         // on the settled graph and engine — no frozen task set, no post-hoc
         // reconciliation.
+        let engine_loader = EngineTurboJsonLoader::new(&turbo_json_loader);
         let mut engine;
         let mut filtered_pkgs;
         let mut filter_mode;
@@ -1331,7 +1335,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 engine_pkgs,
                 &entrypoint_exclusions,
-                &turbo_json_loader,
+                &engine_loader,
                 &env_at_execution_start,
             )?;
             engine = built_engine;
@@ -1358,7 +1362,7 @@ impl RunBuilder {
                     &root_turbo_json,
                     engine_pkgs,
                     &entrypoint_exclusions,
-                    &turbo_json_loader,
+                    &engine_loader,
                     &env_at_execution_start,
                 )?;
                 engine = rebuilt_engine;
