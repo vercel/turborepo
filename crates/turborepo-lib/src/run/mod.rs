@@ -30,7 +30,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
-pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
+pub use turborepo_run_cache::{RunCache, TaskCache};
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
