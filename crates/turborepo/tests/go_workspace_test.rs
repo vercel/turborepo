@@ -1480,16 +1480,23 @@ fn test_go_cache_invalidates_every_north_star_input() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_e2e_workspace(tempdir.path());
     let root = tempdir.path();
+    let go_cache = tempfile::tempdir().expect("failed to create shared Go cache tempdir");
+    let go_cache = go_cache.path().to_str().unwrap();
+    let assert_cache_result = |environment: &[(&str, &str)], expected, context| {
+        let mut environment = environment.to_vec();
+        environment.push(("GOCACHE", go_cache));
+        assert_go_build_cache_result(root, &environment, expected, context);
+    };
 
-    assert_go_build_cache_result(root, &[], "cache miss", "cold Go build");
-    assert_go_build_cache_result(root, &[], "cache hit", "unchanged Go build");
+    assert_cache_result(&[], "cache miss", "cold Go build");
+    assert_cache_result(&[], "cache hit", "unchanged Go build");
 
     fs::write(
         root.join("tools/independent/independent.go"),
         "package independent\n\nconst Value = \"still-independent\"\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache hit", "unrelated module source change");
+    assert_cache_result(&[], "cache hit", "unrelated module source change");
 
     fs::write(
         root.join("apps/api/main.go"),
@@ -1508,21 +1515,21 @@ func main() {
 "#,
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache miss", "module source change");
+    assert_cache_result(&[], "cache miss", "module source change");
 
     fs::write(
         root.join("packages/lib/lib.go"),
         "package lib\n\nfunc Value() string { return \"dependency-changed\" }\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache miss", "internal dependency change");
+    assert_cache_result(&[], "cache miss", "internal dependency change");
 
     fs::write(
         root.join("third_party/message/message.go"),
         "package message\n\nfunc Value() string { return \"replacement-changed\" }\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache miss", "local replacement change");
+    assert_cache_result(&[], "cache miss", "local replacement change");
 
     fs::write(
         root.join("apps/api/go.mod"),
@@ -1544,15 +1551,14 @@ replace example.net/message => ../../third_party/message
 "#,
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache miss", "module graph change");
+    assert_cache_result(&[], "cache miss", "module graph change");
 
     fs::write(
         root.join("tools/independent/independent.go"),
         "package independent\n\nconst Value = \"now-dependent\"\n",
     )
     .unwrap();
-    assert_go_build_cache_result(
-        root,
+    assert_cache_result(
         &[],
         "cache miss",
         "newly connected dependency source change",
@@ -1563,13 +1569,12 @@ replace example.net/message => ../../third_party/message
         "example.org/checksum-only v1.0.1/go.mod h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n",
     )
     .unwrap();
-    assert_go_build_cache_result(root, &[], "cache miss", "external checksum change");
+    assert_cache_result(&[], "cache miss", "external checksum change");
 
     #[cfg(unix)]
     {
         let path = go_version_shim_path(root);
-        assert_go_build_cache_result(
-            root,
+        assert_cache_result(
             &[("PATH", &path)],
             "cache miss",
             "Go compiler version change",
@@ -1579,14 +1584,12 @@ replace example.net/message => ../../third_party/message
     let go_arch = run_go(root, &["env", "GOARCH"]);
     assert_command_success(&go_arch, "read host Go architecture");
     let target_arch = alternate_go_arch(String::from_utf8_lossy(&go_arch.stdout).trim());
-    assert_go_build_cache_result(
-        root,
+    assert_cache_result(
         &[("GOARCH", target_arch)],
         "cache miss",
         "Go target architecture change",
     );
-    assert_go_build_cache_result(
-        root,
+    assert_cache_result(
         &[("GOFLAGS", "-tags=turbo_cache_invalidation")],
         "cache miss",
         "relevant Go build environment change",
