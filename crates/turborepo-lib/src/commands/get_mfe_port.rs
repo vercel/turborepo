@@ -49,7 +49,9 @@ async fn get_port_for_current_package(base: &CommandBase) -> Result<u16, Error> 
 
 async fn build_package_graph(base: &CommandBase) -> Result<PackageGraph, Error> {
     let repo_root = &base.repo_root;
-    let features = crate::repository_graph::RepositoryGraphFeatures::new(&base.opts().future_flags);
+    let features = turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
+        &base.opts().future_flags,
+    );
     let root_package_json = features.load_root_package_json(repo_root)?;
 
     let builder = PackageGraph::builder_optional(repo_root, root_package_json)

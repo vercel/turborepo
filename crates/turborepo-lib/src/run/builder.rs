@@ -54,6 +54,7 @@ struct TaskEntrypointSelection {
 }
 
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
+use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_task_access::TaskAccess;
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
@@ -61,7 +62,6 @@ use crate::{
     commands::CommandBase,
     engine::{task_has_command, Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader},
     opts::Opts,
-    repository_graph::RepositoryGraphFeatures,
     run::{scope, Error, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunCache},
 };
 

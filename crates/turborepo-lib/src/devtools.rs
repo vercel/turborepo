@@ -12,6 +12,7 @@ use turborepo_devtools::{
     TaskGraphError, TaskNode,
 };
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
+use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_repository::package_graph::{PackageGraph, PackageGraphBuilder, PackageName};
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::TurboJsonReader;
@@ -20,7 +21,6 @@ use crate::{
     commands::CommandBase,
     engine::{EngineBuilder, EngineTurboJsonLoader, TaskNode as EngineTaskNode},
     opts::Opts,
-    repository_graph::RepositoryGraphFeatures,
     Args,
 };
 

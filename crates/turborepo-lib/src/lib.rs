@@ -16,9 +16,7 @@ mod heap_profile;
 
 mod boundaries;
 mod opts;
-mod package_changes_watcher;
 mod panic_handler;
-mod repository_graph;
 mod run;
 mod shim;
 mod task_graph;
