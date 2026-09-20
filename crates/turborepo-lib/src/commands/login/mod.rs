@@ -193,14 +193,13 @@ mod tests {
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::{config::TurborepoConfigBuilder, opts::Opts, Args};
+    use crate::{config::TurborepoConfigBuilder, opts::Opts};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn create_command_base(repo_root: AbsoluteSystemPathBuf) -> CommandBase {
-        let args = Args::default();
         let config = TurborepoConfigBuilder::new(&repo_root).build().unwrap();
-        let opts = Opts::new(&repo_root, &args, config).unwrap();
+        let opts = Opts::new(&repo_root, &Default::default(), &Default::default(), config).unwrap();
 
         CommandBase::from_opts(opts, repo_root, "test-version", ColorConfig::new(false))
     }

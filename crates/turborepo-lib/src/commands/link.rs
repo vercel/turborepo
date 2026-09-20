@@ -437,7 +437,6 @@ mod test {
         commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
         opts::Opts,
-        Args,
     };
 
     #[tokio::test]
@@ -485,7 +484,7 @@ mod test {
             .build()?;
 
         let mut base = CommandBase::from_opts(
-            Opts::new(&repo_root, &Args::default(), config)?,
+            Opts::new(&repo_root, &Default::default(), &Default::default(), config)?,
             repo_root.clone(),
             "1.0.0",
             ColorConfig::new(false),

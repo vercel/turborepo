@@ -12,10 +12,8 @@ use turborepo_types::{
 };
 
 use crate::{
-    cli::{Command, ExecutionArgs, QuerySubcommand, RunArgs},
     config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
     turbo_json::FutureFlags,
-    Args,
 };
 
 pub(crate) const DEFAULT_CACHE_WORKERS: u32 = 10;
@@ -188,7 +186,8 @@ impl Opts {
 impl Opts {
     pub fn new(
         repo_root: &AbsoluteSystemPath,
-        args: &Args,
+        run_selector: &RunSelector,
+        execution_selector: &ExecutionSelector,
         config: ConfigurationOptions,
     ) -> Result<Self, Error> {
         let team_id = config.team_id();
@@ -200,52 +199,6 @@ impl Opts {
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
-        let default_execution_args = ExecutionArgs {
-            single_package: args.single_package,
-            ..Default::default()
-        };
-        let (execution_args, run_args): (ExecutionArgs, RunArgs) = match &args.command {
-            Some(Command::Run {
-                run_args,
-                execution_args,
-            }) => (execution_args.clone(), run_args.clone()),
-            Some(Command::Watch { execution_args, .. }) => {
-                (execution_args.clone(), RunArgs::default())
-            }
-            Some(Command::Ls {
-                affected, filter, ..
-            }) => {
-                let execution_args = ExecutionArgs {
-                    filter: filter.clone(),
-                    affected: *affected,
-                    ..Default::default()
-                };
-
-                (execution_args, RunArgs::default())
-            }
-            Some(Command::Boundaries { filter, .. }) => {
-                let execution_args = ExecutionArgs {
-                    filter: filter.clone(),
-                    ..Default::default()
-                };
-
-                (execution_args, RunArgs::default())
-            }
-            Some(Command::Query {
-                subcommand: Some(QuerySubcommand::Ls(ls_args)),
-                ..
-            }) => {
-                let execution_args = ExecutionArgs {
-                    filter: ls_args.filter.clone(),
-                    affected: ls_args.affected,
-                    ..Default::default()
-                };
-
-                (execution_args, RunArgs::default())
-            }
-            _ => (default_execution_args, RunArgs::default()),
-        };
-
         // Resolve cache directory once to avoid duplicate git process spawning.
         // This is used by both RunOpts and CacheOpts.
         let cache_dir_result = config.resolve_cache_dir(repo_root);
@@ -256,8 +209,8 @@ impl Opts {
 
         let inputs = OptsInputs {
             repo_root,
-            run_args: &run_args,
-            execution_args: &execution_args,
+            run_selector,
+            execution_selector,
             config: &config,
             api_auth: &api_auth,
             cache_dir_result: &cache_dir_result,
@@ -302,11 +255,11 @@ impl Opts {
             None
         };
 
-        let json = execution_args.json;
+        let json = execution_selector.json;
 
         let log_file_path = resolve_log_file_path(
             repo_root,
-            execution_args.log_file.as_ref(),
+            execution_selector.log_file.as_ref(),
             inputs.config.log_file(),
         );
 
@@ -415,8 +368,8 @@ fn default_log_file_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBu
 #[derive(Debug, Clone, Copy)]
 struct OptsInputs<'a> {
     repo_root: &'a AbsoluteSystemPath,
-    run_args: &'a RunArgs,
-    execution_args: &'a ExecutionArgs,
+    run_selector: &'a RunSelector,
+    execution_selector: &'a ExecutionSelector,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
     /// Pre-computed cache directory result to avoid duplicate git process
@@ -428,7 +381,7 @@ struct OptsInputs<'a> {
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            task_output_logs_override: inputs.execution_args.output_logs.map(Into::into),
+            task_output_logs_override: inputs.execution_selector.output_logs,
             errors_only_show_hash: inputs.config.future_flags().errors_only_show_hash,
         }
     }
@@ -497,7 +450,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
 
-        let graph = inputs.run_args.graph.as_deref().map(|file| match file {
+        let graph = inputs.run_selector.graph.as_deref().map(|file| match file {
             "" => GraphOpts::Stdout,
             f => GraphOpts::File(f.to_string()),
         });
@@ -506,8 +459,8 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
                 true,
                 ResolvedLogOrder::Grouped,
-                match inputs.execution_args.log_prefix {
-                    crate::cli::LogPrefixArg::Task => ResolvedLogPrefix::Task,
+                match inputs.execution_selector.log_prefix {
+                    LogPrefix::Task => ResolvedLogPrefix::Task,
                     _ => ResolvedLogPrefix::None,
                 },
             ),
@@ -516,45 +469,48 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             LogOrder::Auto | LogOrder::Stream => (
                 false,
                 ResolvedLogOrder::Stream,
-                LogPrefix::from(inputs.execution_args.log_prefix).into(),
+                inputs.execution_selector.log_prefix.into(),
             ),
             LogOrder::Grouped => (
                 false,
                 ResolvedLogOrder::Grouped,
-                LogPrefix::from(inputs.execution_args.log_prefix).into(),
+                inputs.execution_selector.log_prefix.into(),
             ),
         };
 
         // --json forces stream order — no grouping.
-        let log_order = if inputs.execution_args.json {
+        let log_order = if inputs.execution_selector.json {
             ResolvedLogOrder::Stream
         } else {
             log_order
         };
 
         Ok(Self {
-            tasks: inputs.execution_args.tasks.clone(),
+            tasks: inputs.execution_selector.tasks.clone(),
             log_prefix,
             log_order,
             summarize: inputs.config.run_summary(),
-            framework_inference: inputs.execution_args.framework_inference.unwrap_or(true),
+            framework_inference: inputs
+                .execution_selector
+                .framework_inference
+                .unwrap_or(true),
             concurrency,
-            parallel: inputs.run_args.parallel,
-            profile: inputs.run_args.profile.clone(),
-            continue_on_error: inputs.execution_args.continue_execution.into(),
-            pass_through_args: inputs.execution_args.pass_through_args.clone(),
-            only: inputs.execution_args.only,
+            parallel: inputs.run_selector.parallel,
+            profile: inputs.run_selector.profile.clone(),
+            continue_on_error: inputs.execution_selector.continue_execution,
+            pass_through_args: inputs.execution_selector.pass_through_args.clone(),
+            only: inputs.execution_selector.only,
             daemon: inputs.config.daemon(),
-            single_package: inputs.execution_args.single_package,
+            single_package: inputs.execution_selector.single_package,
             graph,
-            dry_run: inputs.run_args.dry_run.map(Into::into),
+            dry_run: inputs.run_selector.dry_run,
             env_mode: inputs.config.env_mode(),
             // Use pre-computed cache directory to avoid duplicate git process spawning
             cache_dir: inputs.cache_dir_result.path.clone(),
             is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
             // --json disables the TUI and forces stream mode.
-            ui_mode: if inputs.execution_args.json {
+            ui_mode: if inputs.execution_selector.json {
                 UIMode::Stream
             } else {
                 inputs.config.ui()
@@ -587,13 +543,13 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
 /// type.
 fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
     let pkg_inference_root = inputs
-        .execution_args
+        .execution_selector
         .pkg_inference_root
         .as_ref()
         .map(AnchoredSystemPathBuf::from_raw)
         .transpose()?;
 
-    let affected_range = inputs.execution_args.affected.then(|| {
+    let affected_range = inputs.execution_selector.affected.then(|| {
         let scm_base = inputs.config.scm_base();
         let scm_head = inputs.config.scm_head();
         (
@@ -603,10 +559,10 @@ fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
     });
 
     Ok(ScopeOpts {
-        global_deps: inputs.execution_args.global_deps.clone(),
+        global_deps: inputs.execution_selector.global_deps.clone(),
         pkg_inference_root,
         affected_range,
-        filter_patterns: inputs.execution_args.filter.clone(),
+        filter_patterns: inputs.execution_selector.filter.clone(),
     })
 }
 
@@ -645,7 +601,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
         let cache = inputs.config.cache();
         let has_old_cache_config = inputs.config.remote_only()
-            || inputs.run_args.no_cache
+            || inputs.run_selector.no_cache
             || inputs.config.remote_cache_read_only();
 
         if has_old_cache_config && cache.is_some() {
@@ -665,7 +621,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             cache.remote.read = false;
         }
 
-        if inputs.run_args.no_cache {
+        if inputs.run_selector.no_cache {
             cache.local.write = false;
             cache.remote.write = false;
         }
@@ -716,7 +672,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             // Use pre-computed cache directory to avoid duplicate git process spawning
             cache_dir: inputs.cache_dir_result.path.clone(),
             cache,
-            workers: inputs.run_args.cache_workers,
+            workers: inputs.run_selector.cache_workers,
             remote_cache_opts,
             cache_max_age,
             cache_max_size,
@@ -789,7 +745,6 @@ impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
 
 #[cfg(test)]
 mod test {
-    use itertools::Itertools;
     use serde_json::json;
     use tempfile::TempDir;
     use test_case::test_case;
@@ -799,15 +754,13 @@ mod test {
     use turborepo_types::{
         ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
     };
-    use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts};
+    use super::{
+        APIClientOpts, ExecutionSelector, Opts, RepoOpts, RunCacheOpts, RunOpts, RunSelector,
+    };
     use crate::{
-        cli::{Command, RunArgs},
-        commands::CommandBase,
-        config::{ConfigurationOptions, CONFIG_FILE},
-        opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        Args,
+        config::{resolve_configuration_with_overrides, ConfigurationOptions, CONFIG_FILE},
+        opts::{ScopeOpts, TuiOpts},
     };
 
     #[derive(Default)]
@@ -826,15 +779,17 @@ mod test {
     fn devtools_preserves_global_single_package_option() {
         let tempdir = TempDir::new().expect("create temporary repository");
         let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).expect("absolute path");
-        let args = Args::parse_args(
-            ["turbo", "--single-package", "devtools", "--no-open"]
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+        let execution_selector = ExecutionSelector {
+            single_package: true,
+            ..Default::default()
+        };
+        let opts = Opts::new(
+            &repo_root,
+            &RunSelector::default(),
+            &execution_selector,
+            ConfigurationOptions::default(),
         )
-        .expect("parse devtools arguments");
-        let opts = Opts::new(&repo_root, &args, ConfigurationOptions::default())
-            .expect("resolve devtools options");
+        .expect("resolve devtools options");
 
         assert!(opts.run_opts.single_package);
     }
@@ -1010,83 +965,76 @@ mod test {
         assert_eq!(synthesized, expected);
     }
 
-    #[test_case(
-         RunArgs {
-             no_cache: true,
-             ..Default::default()
-         }, "no-cache"
-     ; "no-cache" )]
-    #[test_case(
-         RunArgs {
-             force: Some(Some(true)),
-             ..Default::default()
-         }, "force"
-     ; "force")]
-    #[test_case(
-        RunArgs{
-             remote_only: Some(Some(true)),
-             ..Default::default()
-            }, "remote-only"
-    )]
-    #[test_case(
-        RunArgs{
-             remote_cache_read_only: Some(Some(true)),
-             ..Default::default()
-            }, "remote-cache-read-only"
-    )]
-    #[test_case(
-        RunArgs{
-             no_cache: true,
-             cache: Some("remote:w,local:rw".to_string()),
-             ..Default::default()
-            }, "no-cache_remote_w,local_rw"
-    )]
-    #[test_case(
-        RunArgs{
-             remote_only: Some(Some(true)),
-             cache: Some("remote:r,local:rw".to_string()),
-             ..Default::default()
-            }, "remote-only_remote_r,local_rw"
-    )]
-    #[test_case(
-        RunArgs{
-             force: Some(Some(true)),
-             cache: Some("remote:r,local:r".to_string()),
-             ..Default::default()
-            }, "force_remote_r,local_r"
-    )]
-    #[test_case(
-        RunArgs{
-              remote_cache_read_only: Some(Some(true)),
-              cache: Some("remote:rw,local:r".to_string()),
-              ..Default::default()
-            }, "remote-cache-read-only_remote_rw,local_r"
-    )]
-    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
-        with_clean_turbo_env(|| {
-            let args = Args {
-                command: Some(Command::Run {
-                    execution_args: Default::default(),
-                    run_args,
-                }),
-                // set token and team to simulate a logged in/linked user
-                token: Some("token".to_string()),
-                team: Some("team".to_string()),
-                ..Default::default()
-            };
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    enum CacheTestError {
+        Opts(super::Error),
+    }
 
-            let cache_config = CommandBase::new(
-                args,
-                AbsoluteSystemPathBuf::default(),
-                "1.0.0",
-                ColorConfig::new(true),
-            )
-            .map(|base| base.opts().cache_opts.cache);
+    #[derive(Default)]
+    struct CacheTestOpts {
+        no_cache: bool,
+        force: Option<bool>,
+        remote_only: Option<bool>,
+        remote_cache_read_only: Option<bool>,
+        cache: Option<&'static str>,
+    }
 
-            insta::assert_debug_snapshot!(name, cache_config);
+    #[test_case(CacheTestOpts { no_cache: true, ..Default::default() }, "no-cache"; "no-cache")]
+    #[test_case(CacheTestOpts { force: Some(true), ..Default::default() }, "force"; "force")]
+    #[test_case(CacheTestOpts { remote_only: Some(true), ..Default::default() }, "remote-only")]
+    #[test_case(CacheTestOpts { remote_cache_read_only: Some(true), ..Default::default() }, "remote-cache-read-only")]
+    #[test_case(CacheTestOpts {
+        no_cache: true,
+        cache: Some("remote:w,local:rw"),
+        ..Default::default()
+    }, "no-cache_remote_w,local_rw")]
+    #[test_case(CacheTestOpts {
+        remote_only: Some(true),
+        cache: Some("remote:r,local:rw"),
+        ..Default::default()
+    }, "remote-only_remote_r,local_rw")]
+    #[test_case(CacheTestOpts {
+        force: Some(true),
+        cache: Some("remote:r,local:r"),
+        ..Default::default()
+    }, "force_remote_r,local_r")]
+    #[test_case(CacheTestOpts {
+        remote_cache_read_only: Some(true),
+        cache: Some("remote:rw,local:r"),
+        ..Default::default()
+    }, "remote-cache-read-only_remote_rw,local_r")]
+    fn test_resolve_cache_config(
+        test_opts: CacheTestOpts,
+        name: &str,
+    ) -> Result<(), anyhow::Error> {
+        let run_selector = RunSelector {
+            no_cache: test_opts.no_cache,
+            ..Default::default()
+        };
+        let config = ConfigurationOptions {
+            force: test_opts.force,
+            remote_only: test_opts.remote_only,
+            remote_cache_read_only: test_opts.remote_cache_read_only,
+            cache: test_opts.cache.map(str::parse).transpose()?,
+            // Set token and team to simulate a logged in/linked user.
+            token: Some("token".to_string()),
+            team_slug: Some("team".to_string()),
+            ..Default::default()
+        };
 
-            Ok(())
-        })
+        let cache_config = Opts::new(
+            &AbsoluteSystemPathBuf::default(),
+            &run_selector,
+            &ExecutionSelector::default(),
+            config,
+        )
+        .map(|opts| opts.cache_opts.cache)
+        .map_err(CacheTestError::Opts);
+
+        insta::assert_debug_snapshot!(name, cache_config);
+
+        Ok(())
     }
 
     /// Config resolution reads the real process environment, and the
@@ -1127,22 +1075,24 @@ mod test {
                 }))?,
             )?;
 
-            let args = Args {
-                command: Some(Command::Run {
-                    execution_args: Default::default(),
-                    run_args: RunArgs {
-                        force: Some(Some(true)),
-                        ..Default::default()
-                    },
-                }),
-                // set token and team to simulate a logged in/linked user
-                token: Some("token".to_string()),
-                team: Some("team".to_string()),
-                ..Default::default()
-            };
-
-            let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
-            let actual = base.opts().cache_opts.cache;
+            let config = resolve_configuration_with_overrides(
+                &repo_root,
+                ConfigurationOptions {
+                    force: Some(true),
+                    // Set token and team to simulate a logged in/linked user.
+                    token: Some("token".to_string()),
+                    team_slug: Some("team".to_string()),
+                    ..Default::default()
+                },
+            )?;
+            let actual = Opts::new(
+                &repo_root,
+                &RunSelector::default(),
+                &ExecutionSelector::default(),
+                config,
+            )?
+            .cache_opts
+            .cache;
 
             assert_eq!(
                 actual,
@@ -1163,32 +1113,38 @@ mod test {
     }
 
     #[test_case(
-        vec!["turbo", "watch", "build"];
+        ExecutionSelector { tasks: vec!["build".into()], ..Default::default() },
+        "turbo_watch_build";
         "watch"
     )]
     #[test_case(
-        vec!["turbo", "run", "build"];
+        ExecutionSelector { tasks: vec!["build".into()], ..Default::default() },
+        "turbo_run_build";
         "run"
     )]
     #[test_case(
-        vec!["turbo", "ls", "--filter", "foo"];
+        ExecutionSelector { filter: vec!["foo".into()], ..Default::default() },
+        "turbo_ls_--filter_foo";
         "ls"
     )]
     #[test_case(
-        vec!["turbo", "boundaries", "--filter", "foo"];
+        ExecutionSelector { filter: vec!["foo".into()], ..Default::default() },
+        "turbo_boundaries_--filter_foo";
         "boundaries"
     )]
-    fn test_derive_opts_from_args(args_str: Vec<&str>) -> Result<(), anyhow::Error> {
-        let args = Args::parse_args(args_str.iter().map(Into::into).collect())
-            .map_err(anyhow::Error::msg)?;
+    fn test_derive_opts_from_selectors(
+        execution_selector: ExecutionSelector,
+        snapshot_name: &str,
+    ) -> Result<(), anyhow::Error> {
         let opts = Opts::new(
             &AbsoluteSystemPathBuf::default(),
-            &args,
+            &RunSelector::default(),
+            &execution_selector,
             ConfigurationOptions::default(),
         )?;
 
         insta::assert_json_snapshot!(
-            args_str.iter().join("_"),
+            snapshot_name,
             json!({ "tasks": opts.run_opts.tasks, "filter_patterns": opts.scope_opts.filter_patterns  })
         );
 

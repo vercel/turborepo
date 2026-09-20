@@ -49,7 +49,8 @@ impl CommandBase {
         color_config: ColorConfig,
     ) -> Result<Self, cli::Error> {
         let config = Self::load_config(&repo_root, &args)?;
-        let opts = Opts::new(&repo_root, &args, config)?;
+        let (run_selector, execution_selector) = args.selectors();
+        let opts = Opts::new(&repo_root, &run_selector, &execution_selector, config)?;
 
         Ok(Self {
             repo_root,
