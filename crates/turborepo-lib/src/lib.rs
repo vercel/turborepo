@@ -27,7 +27,6 @@ mod shim;
 mod task_change_detector;
 mod task_graph;
 mod task_hash;
-mod tracing;
 mod turbo_json;
 
 // Re-export daemon types from the new crate location

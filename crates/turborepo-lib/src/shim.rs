@@ -14,9 +14,10 @@ use turborepo_shim::{
     ChildSpawner, ConfigProvider, ShimArgs, ShimConfigurationOptions, ShimResult, ShimRuntime,
     TurboRunner, VersionProvider,
 };
+use turborepo_tracing::TurboSubscriber;
 use turborepo_ui::ColorConfig;
 
-use crate::{cli, get_version, tracing::TurboSubscriber};
+use crate::{cli, get_version};
 
 /// Errors that can occur during shim execution.
 #[derive(Debug, Error, Diagnostic)]

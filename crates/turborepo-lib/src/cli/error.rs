@@ -30,7 +30,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
-    ChromeTracing(#[from] crate::tracing::Error),
+    ChromeTracing(#[from] turborepo_tracing::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildPackageGraph(#[from] package_graph::builder::Error),
