@@ -25,6 +25,7 @@ use crate::{
 };
 
 mod args;
+mod configuration;
 mod error;
 mod observability;
 #[cfg(test)]
@@ -37,6 +38,7 @@ pub use args::{
     GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
     QuerySubcommand, RunArgs, TelemetryCommand, Verbosity,
 };
+pub(crate) use configuration::resolve_configuration_from_args;
 
 fn exit_with_heap_profile(code: i32) -> ! {
     #[cfg(feature = "heap-dhat")]

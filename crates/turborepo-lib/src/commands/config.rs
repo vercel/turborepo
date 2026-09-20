@@ -5,8 +5,10 @@ use turborepo_repository::package_graph::PackageGraph;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{
-    cli, config::resolve_configuration_from_args, repository_graph::RepositoryGraphFeatures,
-    turbo_json::RawTurboJson, Args,
+    cli::{self, resolve_configuration_from_args},
+    repository_graph::RepositoryGraphFeatures,
+    turbo_json::RawTurboJson,
+    Args,
 };
 
 #[derive(Debug, Serialize)]
