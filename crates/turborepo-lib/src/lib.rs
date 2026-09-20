@@ -22,7 +22,6 @@ mod panic_handler;
 mod repository_graph;
 mod run;
 mod shim;
-mod task_change_detector;
 mod task_graph;
 mod task_hash;
 mod turbo_json;

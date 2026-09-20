@@ -14,7 +14,7 @@ use turborepo_repository::package_graph::PackageGraph;
 use turborepo_task_id::TaskId;
 use wax::Program;
 
-use crate::engine::Engine;
+use crate::Engine;
 
 /// Result of resolving which tasks are affected by file changes in watch mode
 /// with `watchUsingTaskInputs`.
@@ -162,10 +162,10 @@ fn is_global_change(
             return true;
         }
 
-        if let Some(ref matcher) = global_deps_matcher {
-            if matcher.is_match(file_str) {
-                return true;
-            }
+        if let Some(ref matcher) = global_deps_matcher
+            && matcher.is_match(file_str)
+        {
+            return true;
         }
     }
 
@@ -188,7 +188,7 @@ mod tests {
     use turborepo_types::{TaskDefinition, TaskInputs};
 
     use super::*;
-    use crate::engine::Building;
+    use crate::Building;
 
     struct MockDiscovery;
 

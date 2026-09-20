@@ -20,11 +20,11 @@ use std::collections::{HashMap, HashSet};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
-use turborepo_scope::{target_selector::GitRange, TargetSelector};
+use turborepo_scope::{TargetSelector, target_selector::GitRange};
 use turborepo_task_id::TaskId;
 use wax::Program;
 
-use crate::engine::{task_has_command, Engine, TaskNode};
+use crate::{Engine, TaskNode, task_has_command};
 
 /// Resolves an `--affected` range to the set of task IDs that are affected
 /// (changed + dependents). Used by the builder to compute an intersection
@@ -36,7 +36,7 @@ pub fn resolve_affected_tasks(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
-) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
+) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     let selector = TargetSelector {
         git_range: Some(GitRange {
             from_ref: affected_range.0.clone(),
@@ -59,7 +59,7 @@ pub fn resolve_affected_tasks(
     )
 }
 
-pub(crate) struct TaskFilterConstraints<'a> {
+pub struct TaskFilterConstraints<'a> {
     pub affected: Option<&'a HashSet<TaskId<'static>>>,
     pub always_include: &'a HashSet<TaskId<'static>>,
     pub entrypoints: Option<&'a HashSet<TaskId<'static>>>,
@@ -81,7 +81,7 @@ pub fn filter_engine_to_tasks(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
-) -> Result<Engine, crate::run::error::Error> {
+) -> Result<Engine, crate::Error> {
     let always_include = HashSet::new();
     let excluded_entrypoints = HashSet::new();
     filter_engine_to_tasks_with_inclusions(
@@ -101,7 +101,7 @@ pub fn filter_engine_to_tasks(
     )
 }
 
-pub(crate) fn filter_engine_to_tasks_with_inclusions(
+pub fn filter_engine_to_tasks_with_inclusions(
     engine: Engine,
     selectors: &[TargetSelector],
     constraints: TaskFilterConstraints<'_>,
@@ -109,7 +109,7 @@ pub(crate) fn filter_engine_to_tasks_with_inclusions(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
-) -> Result<Engine, crate::run::error::Error> {
+) -> Result<Engine, crate::Error> {
     let (include, exclude): (Vec<_>, Vec<_>) = selectors.iter().partition(|s| !s.exclude);
 
     let mut included_tasks: HashSet<TaskId<'static>> = HashSet::new();
@@ -193,7 +193,7 @@ fn resolve_selector_to_tasks(
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
-) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
+) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     if selector.match_dependencies {
         return resolve_match_dependencies(
             engine,
@@ -258,7 +258,7 @@ fn resolve_base_tasks(
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
-) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
+) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     let tasks_from_packages = resolve_name_and_dir(engine, selector, pkg_dep_graph);
     let tasks_from_git_range =
         resolve_git_range(engine, selector, pkg_dep_graph, scm, repo_root, global_deps)?;
@@ -329,11 +329,11 @@ fn find_matching_packages(
     }
 
     // Name pattern matching
-    if !selector.name_pattern.is_empty() {
-        if let Ok(matcher) = turborepo_scope::simple_glob::SimpleGlob::new(&selector.name_pattern) {
-            use turborepo_scope::simple_glob::Match;
-            packages.retain(|name| matcher.is_match(name.as_ref()));
-        }
+    if !selector.name_pattern.is_empty()
+        && let Ok(matcher) = turborepo_scope::simple_glob::SimpleGlob::new(&selector.name_pattern)
+    {
+        use turborepo_scope::simple_glob::Match;
+        packages.retain(|name| matcher.is_match(name.as_ref()));
     }
 
     packages
@@ -348,7 +348,7 @@ fn resolve_git_range(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
-) -> Result<Option<HashSet<TaskId<'static>>>, crate::run::error::Error> {
+) -> Result<Option<HashSet<TaskId<'static>>>, crate::Error> {
     let git_range = match &selector.git_range {
         Some(range) => range,
         None => return Ok(None),
@@ -389,7 +389,7 @@ fn resolve_match_dependencies(
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
-) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
+) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     let git_range = match &selector.git_range {
         Some(range) => range,
         None => return Ok(HashSet::new()),
@@ -433,10 +433,8 @@ fn get_changed_files(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     git_range: &GitRange,
-) -> Result<
-    Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
-    crate::run::error::Error,
-> {
+) -> Result<Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>, crate::Error>
+{
     let result = scm.changed_files(
         repo_root,
         git_range.from_ref.as_deref(),
@@ -458,7 +456,7 @@ fn get_changed_files(
 /// When `retain_filtered_tasks` prunes the engine via forward DFS, edge-less
 /// `with` siblings are unreachable and get dropped. This function closes that
 /// gap by expanding the retained set before pruning.
-pub(crate) fn expand_with_siblings(
+pub fn expand_with_siblings(
     engine: &Engine,
     tasks: HashSet<TaskId<'static>>,
 ) -> HashSet<TaskId<'static>> {
@@ -496,7 +494,7 @@ pub(crate) fn expand_with_siblings(
     result
 }
 
-pub(crate) fn retain_strict_task_graph(
+pub fn retain_strict_task_graph(
     engine: Engine,
     pkg_dep_graph: &PackageGraph,
     selected: HashSet<TaskId<'static>>,
@@ -629,7 +627,7 @@ mod tests {
     use turborepo_task_id::TaskId;
     use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskInputs};
 
-    use crate::engine::{Building, Engine};
+    use crate::{Building, Engine};
 
     struct MockDiscovery;
 
