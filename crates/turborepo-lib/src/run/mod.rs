@@ -4,7 +4,6 @@ pub mod builder;
 mod error;
 pub(crate) mod scope;
 pub mod task_access;
-pub(crate) mod task_filter;
 pub mod watch;
 
 use std::{

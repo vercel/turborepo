@@ -1428,7 +1428,7 @@ impl RunBuilder {
 
             let affected_constraint =
                 if let Some(affected_range) = &self.opts.scope_opts.affected_range {
-                    Some(super::task_filter::resolve_affected_tasks(
+                    Some(turborepo_task_filter::resolve_affected_tasks(
                         &engine,
                         affected_range,
                         &pkg_dep_graph,
@@ -1451,10 +1451,10 @@ impl RunBuilder {
                         .map(TaskId::into_owned)
                 })
                 .collect();
-            engine = super::task_filter::filter_engine_to_tasks_with_inclusions(
+            engine = turborepo_task_filter::filter_engine_to_tasks_with_inclusions(
                 engine,
                 &selectors,
-                super::task_filter::TaskFilterConstraints {
+                turborepo_task_filter::TaskFilterConstraints {
                     affected: affected_constraint.as_ref(),
                     always_include: &package_tasks,
                     entrypoints: task_entrypoints
@@ -1502,7 +1502,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &unqualified_entrypoint_packages,
             );
-            engine = super::task_filter::retain_strict_task_graph(
+            engine = turborepo_task_filter::retain_strict_task_graph(
                 engine,
                 &pkg_dep_graph,
                 task_entrypoints.selected,
@@ -1701,7 +1701,7 @@ impl RunBuilder {
         match maybe_changed_files {
             Ok(changed_files) => {
                 let total_tasks = engine.task_ids().count();
-                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                let affected_tasks = turborepo_task_filter::affected_task_ids(
                     &engine,
                     pkg_dep_graph,
                     &changed_files,
@@ -1728,7 +1728,7 @@ impl RunBuilder {
                     .map(|task| PackageName::from(task.package()))
                     .collect();
                 let affected_entrypoints =
-                    super::task_filter::expand_with_siblings(&engine, affected_entrypoints);
+                    turborepo_task_filter::expand_with_siblings(&engine, affected_entrypoints);
                 Ok((
                     engine.retain_filtered_tasks(&affected_entrypoints),
                     Some(selected_packages),
@@ -1750,7 +1750,8 @@ impl RunBuilder {
                     return Ok((engine, None));
                 };
                 let scoped_tasks = engine.task_ids_for_packages(package_scope);
-                let scoped_tasks = super::task_filter::expand_with_siblings(&engine, scoped_tasks);
+                let scoped_tasks =
+                    turborepo_task_filter::expand_with_siblings(&engine, scoped_tasks);
                 Ok((engine.retain_filtered_tasks(&scoped_tasks), None))
             }
         }
@@ -1917,7 +1918,7 @@ impl RunBuilder {
             .collect();
         loop {
             let previous_len = retained_tasks.len();
-            retained_tasks = super::task_filter::expand_with_siblings(&engine, retained_tasks);
+            retained_tasks = turborepo_task_filter::expand_with_siblings(&engine, retained_tasks);
             let dependencies = engine.collect_task_dependencies(&retained_tasks);
             retained_tasks.extend(dependencies);
             if retained_tasks.len() == previous_len {
@@ -1997,7 +1998,7 @@ impl RunBuilder {
         // the file).
         let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
             if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                let filter = turborepo_task_filter::resolve_watch_task_filter(
                     &engine,
                     pkg_dep_graph,
                     &self.repo_root,

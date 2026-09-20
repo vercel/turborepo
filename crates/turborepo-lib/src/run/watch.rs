@@ -715,7 +715,7 @@ impl WatchClient {
 
         let (task_ids, impacted_packages) =
             if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                let filter = turborepo_task_filter::resolve_watch_task_filter(
                     engine,
                     self.run.pkg_dep_graph(),
                     self.run.repo_root(),
