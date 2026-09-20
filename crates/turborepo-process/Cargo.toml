@@ -9,8 +9,8 @@ test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 
 [dependencies]
-ctrlc = { version = "3.4.0", features = ["termination"] }
 console = { workspace = true }
+ctrlc = { version = "3.4.0", features = ["termination"] }
 futures = { workspace = true }
 itertools = { workspace = true }
 libc = "0.2.140"
