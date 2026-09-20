@@ -7,7 +7,7 @@ use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PruneDependencyMode};
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
-use super::{CommandBase, Error};
+use super::{Error, PruneInput};
 use crate::engine::EngineTurboJsonLoader;
 
 /// Remember configuration owners consulted by the engine as well as task
@@ -29,16 +29,16 @@ impl TurboJsonLoader for PruneLoader {
 }
 
 pub(super) fn retain_task_dependencies(
-    base: &CommandBase,
+    input: &PruneInput,
     package_graph: &PackageGraph,
     mut retained: Vec<PackageName>,
     production: bool,
 ) -> Result<Vec<PackageName>, Error> {
-    let future_flags = base.opts().future_flags;
+    let future_flags = input.future_flags;
     let loader = PruneLoader {
         loader: UnifiedTurboJsonLoader::workspace(
-            TurboJsonReader::new(base.repo_root.clone()).with_future_flags(future_flags),
-            base.opts().repo_opts.root_turbo_json_path.clone(),
+            TurboJsonReader::new(input.repo_root.clone()).with_future_flags(future_flags),
+            input.root_turbo_json_path.clone(),
             package_graph.package_scope_directories(),
         ),
         config_owners: RefCell::new(HashSet::new()),
@@ -60,7 +60,7 @@ pub(super) fn retain_task_dependencies(
             .filter(|package| !matches!(package, PackageName::Root))
             .cloned()
             .collect();
-        let engine = EngineBuilder::new(&base.repo_root, package_graph, &loader, false)
+        let engine = EngineBuilder::new(&input.repo_root, package_graph, &loader, false)
             .with_future_flags(future_flags)
             .with_workspaces(workspaces)
             .add_all_tasks()

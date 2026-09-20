@@ -22,8 +22,8 @@ use turborepo_repository::{
     task_contracts::PrunePackageMode,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_turbo_json::{RawRootTurboJson, RawTurboJson};
-use turborepo_ui::BOLD;
+use turborepo_turbo_json::{FutureFlags, RawRootTurboJson, RawTurboJson};
+use turborepo_ui::{BOLD, ColorConfig};
 
 use super::CommandBase;
 use crate::config::{CONFIG_FILE, CONFIG_FILE_JSONC};
@@ -155,7 +155,44 @@ fn turbo_jsonc() -> &'static AnchoredSystemPath {
     PATH.get_or_init(|| anchored_path(CONFIG_FILE_JSONC))
 }
 
-#[allow(clippy::expect_used)]
+#[derive(Debug, Clone)]
+pub struct PruneInput {
+    pub repo_root: AbsoluteSystemPathBuf,
+    pub color_config: ColorConfig,
+    pub scope: Vec<String>,
+    pub docker: bool,
+    pub production: bool,
+    pub output_dir: String,
+    pub use_gitignore: bool,
+    pub allow_missing_package_manager: bool,
+    pub future_flags: FutureFlags,
+    pub root_turbo_json_path: AbsoluteSystemPathBuf,
+}
+
+impl PruneInput {
+    fn new(
+        base: &CommandBase,
+        scope: &[String],
+        docker: bool,
+        production: bool,
+        output_dir: &str,
+        use_gitignore: bool,
+    ) -> Self {
+        Self {
+            repo_root: base.repo_root.clone(),
+            color_config: base.color_config,
+            scope: scope.to_vec(),
+            docker,
+            production,
+            output_dir: output_dir.to_owned(),
+            use_gitignore,
+            allow_missing_package_manager: base.opts().repo_opts.allow_no_package_manager,
+            future_flags: base.opts().future_flags,
+            root_turbo_json_path: base.opts().repo_opts.root_turbo_json_path.clone(),
+        }
+    }
+}
+
 pub async fn prune(
     base: &CommandBase,
     scope: &[String],
@@ -165,25 +202,26 @@ pub async fn prune(
     use_gitignore: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    telemetry.track_arg_usage("docker", docker);
-    telemetry.track_arg_usage("production", production);
-    telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
+    let input = PruneInput::new(base, scope, docker, production, output_dir, use_gitignore);
+    prune_with_input(input, telemetry).await
+}
 
-    let prune = Prune::new(
-        base,
-        scope,
-        docker,
-        production,
-        output_dir,
-        use_gitignore,
-        telemetry,
-    )
-    .await?;
+#[allow(clippy::expect_used)]
+async fn prune_with_input(input: PruneInput, telemetry: CommandEventBuilder) -> Result<(), Error> {
+    telemetry.track_arg_usage("docker", input.docker);
+    telemetry.track_arg_usage("production", input.production);
+    telemetry.track_arg_usage("out-dir", input.output_dir != DEFAULT_OUTPUT_DIR);
+
+    let prune = Prune::new(&input, telemetry).await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
-        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
+        input
+            .color_config
+            .apply(BOLD.apply_to(input.scope.join(", "))),
+        input
+            .color_config
+            .apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
@@ -200,12 +238,12 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let mut workspaces = prune.internal_dependencies()?;
-    if base.opts().future_flags.affected_using_task_inputs {
+    if input.future_flags.affected_using_task_inputs {
         workspaces = prune_tasks::retain_task_dependencies(
-            base,
+            &input,
             &prune.package_graph,
             workspaces,
-            production,
+            input.production,
         )?;
     }
     prune.plan_package_copies(&workspaces)?;
@@ -285,7 +323,7 @@ pub async fn prune(
                 if context.kind() == PackageTaskContextKind::Aggregate
                     || context.directory().components().next().is_none()
                 {
-                    if base.opts().future_flags.affected_using_task_inputs {
+                    if input.future_flags.affected_using_task_inputs {
                         // No directory copy does not mean no task namespace:
                         // preserve configured tasks and native task overrides.
                         // The aggregate's install closure retains its members,
@@ -525,47 +563,39 @@ impl<'a> Prune<'a> {
             .ok_or_else(|| Error::MissingPackageDefinition(context.package().clone()))
     }
 
-    async fn new(
-        base: &CommandBase,
-        scope: &'a [String],
-        docker: bool,
-        production: bool,
-        output_dir: &str,
-        use_gitignore: bool,
-        telemetry: CommandEventBuilder,
-    ) -> Result<Self, Error> {
-        let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
+    async fn new(input: &'a PruneInput, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         telemetry.track_arg_usage(
             "dangerously-allow-missing-package-manager",
-            allow_missing_package_manager,
+            input.allow_missing_package_manager,
         );
 
-        if scope.is_empty() {
+        if input.scope.is_empty() {
             return Err(Error::NoWorkspaceSpecified);
         }
 
         let features = turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
-            &base.opts().future_flags,
+            &input.future_flags,
         );
-        let root_package_json = features.load_root_package_json(&base.repo_root)?;
+        let root_package_json = features.load_root_package_json(&input.repo_root)?;
 
-        let graph_builder = PackageGraph::builder_optional(&base.repo_root, root_package_json)
-            .with_allow_no_package_manager(allow_missing_package_manager);
+        let graph_builder = PackageGraph::builder_optional(&input.repo_root, root_package_json)
+            .with_allow_no_package_manager(input.allow_missing_package_manager);
         let package_graph = features.configure(graph_builder).build().await?;
 
-        let out_directory = AbsoluteSystemPathBuf::from_unknown(&base.repo_root, output_dir);
+        let out_directory =
+            AbsoluteSystemPathBuf::from_unknown(&input.repo_root, &input.output_dir);
 
-        let full_directory = match docker {
+        let full_directory = match input.docker {
             true => out_directory.join_component("full"),
             false => out_directory.clone(),
         };
 
-        trace!("scope: {}", scope.join(", "));
-        trace!("docker: {}", docker);
-        trace!("production: {}", production);
+        trace!("scope: {}", input.scope.join(", "));
+        trace!("docker: {}", input.docker);
+        trace!("production: {}", input.production);
         trace!("out directory: {}", &out_directory);
 
-        for target in scope {
+        for target in &input.scope {
             let workspace = PackageName::Other(target.clone());
             let Some(context) = package_graph.package_task_context(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
@@ -607,25 +637,25 @@ impl<'a> Prune<'a> {
         let uses_per_workspace_lockfiles = package_graph
             .package_manager()
             .is_some_and(|pm| pm.is_pnpm_family())
-            && NpmRc::from_file(&base.repo_root)
+            && NpmRc::from_file(&input.repo_root)
                 .unwrap_or_default()
                 .shared_workspace_lockfile
                 == Some(false);
 
         full_directory.create_dir_all()?;
-        if docker {
+        if input.docker {
             out_directory.join_component("json").create_dir_all()?;
         }
 
         Ok(Self {
             package_graph,
-            root: base.repo_root.clone(),
+            root: input.repo_root.clone(),
             out_directory,
             full_directory,
-            docker,
-            production,
-            scope,
-            use_gitignore,
+            docker: input.docker,
+            production: input.production,
+            scope: &input.scope,
+            use_gitignore: input.use_gitignore,
             uses_per_workspace_lockfiles,
             copy_plan: OnceLock::new(),
         })
