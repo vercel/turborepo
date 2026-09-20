@@ -1,4 +1,3 @@
 {
-  "installCommand": "bash ../../scripts/vercel-install.sh examples-agent",
-  "buildCommand": "cd ../.. && pnpm -w exec turbo run build --filter={apps/factory}..."
+  "installCommand": "pnpm install --filter=examples-agent... --frozen-lockfile"
 }
