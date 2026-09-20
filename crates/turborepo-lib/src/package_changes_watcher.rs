@@ -20,6 +20,7 @@ use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     RepositoryIgnore, WatchScope, WatchSource,
 };
+use turborepo_microfrontends_config::{TurboJsonReader, UnifiedTurboJsonLoader};
 use turborepo_repository::{
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
@@ -28,11 +29,11 @@ use turborepo_repository::{
     toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
+use turborepo_turbo_json::{FutureFlags, TurboJson};
 
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
     repository_graph::RepositoryGraphFeatures,
-    turbo_json::{FutureFlags, TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
 /// Watches for changes to a package's files and directories.
@@ -916,13 +917,14 @@ mod test {
         toolchain::WatchSpec,
     };
     use turborepo_scm::{GitHashes, SCM};
+    use turborepo_turbo_json::FutureFlags;
 
     use super::{
         ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
         is_in_git_folder, ChangedFiles, FileChangeAction, PackageChangeEvent,
         PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore, Subscriber, CONFIG_FILE,
     };
-    use crate::{repository_graph::RepositoryGraphFeatures, turbo_json::FutureFlags};
+    use crate::repository_graph::RepositoryGraphFeatures;
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf::try_from(s).unwrap()

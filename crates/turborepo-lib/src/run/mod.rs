@@ -26,6 +26,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
@@ -39,16 +40,15 @@ use turborepo_task_hash::{
     global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
+use turborepo_turbo_json::TurboJson;
 use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
 
 pub use crate::run::error::Error;
 use crate::{
     engine::{Engine, EngineExt},
-    microfrontends::MicrofrontendsConfigs,
     opts::{Opts, RemoteCacheDisabledReason},
     task_graph::Visitor,
-    turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
 
 /// Live status of the remote cache, determined by a preflight API check

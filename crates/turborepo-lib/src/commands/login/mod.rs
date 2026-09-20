@@ -28,7 +28,7 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
-    TurboJsonParse(#[from] crate::turbo_json::parser::Error),
+    TurboJsonParse(#[from] turborepo_turbo_json::parser::BiomeParseError),
 }
 
 pub async fn login(

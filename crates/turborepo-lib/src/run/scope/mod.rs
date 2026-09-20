@@ -12,9 +12,8 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_scope::filter::ResolutionError;
+use turborepo_turbo_json::TurboJson;
 use turborepo_types::{FilterMode, ScopeOpts};
-
-use crate::turbo_json::TurboJson;
 
 /// Resolve which packages should be included in the run based on scope options.
 ///

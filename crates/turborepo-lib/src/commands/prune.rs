@@ -22,13 +22,11 @@ use turborepo_repository::{
     task_contracts::PrunePackageMode,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_turbo_json::{RawRootTurboJson, RawTurboJson};
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::{
-    config::{CONFIG_FILE, CONFIG_FILE_JSONC},
-    turbo_json::{RawRootTurboJson, RawTurboJson},
-};
+use crate::config::{CONFIG_FILE, CONFIG_FILE_JSONC};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
@@ -44,7 +42,7 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    TurboJsonParser(#[from] crate::turbo_json::parser::Error),
+    TurboJsonParser(#[from] turborepo_turbo_json::parser::BiomeParseError),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]

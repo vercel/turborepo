@@ -3,13 +3,12 @@
 use std::{cell::RefCell, collections::HashSet};
 
 use turborepo_engine::{BuilderError, EngineBuilder, TurboJsonLoader};
+use turborepo_microfrontends_config::{TurboJsonReader, UnifiedTurboJsonLoader};
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PruneDependencyMode};
+use turborepo_turbo_json::TurboJson;
 
 use super::{CommandBase, Error};
-use crate::{
-    engine::EngineTurboJsonLoader,
-    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
-};
+use crate::engine::EngineTurboJsonLoader;
 
 /// Remember configuration owners consulted by the engine as well as task
 /// owners: a package configuration can extend another package without depending
