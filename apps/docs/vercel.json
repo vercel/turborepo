@@ -1,3 +1,3 @@
 {
-  "installCommand": "pnpm install --filter=docs... --frozen-lockfile"
+  "installCommand": "pnpm install --filter=docs... --frozen-lockfile && pnpm -w add -D turbo@canary --config.minimum-release-age=0"
 }

@@ -1,4 +1,4 @@
 {
-  "installCommand": "pnpm install --filter=examples-agent... --frozen-lockfile",
-  "buildCommand": "pnpm build"
+  "installCommand": "pnpm install --filter=examples-agent... --frozen-lockfile && pnpm -w add -D turbo@canary --config.minimum-release-age=0",
+  "buildCommand": "cd ../.. && pnpm -w exec turbo run build --filter={apps/factory}..."
 }
