@@ -23,7 +23,7 @@ use turborepo_repository::{
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_turbo_json::{FutureFlags, RawRootTurboJson, RawTurboJson};
-use turborepo_ui::{BOLD, ColorConfig};
+use turborepo_ui::{ColorConfig, BOLD};
 
 use super::CommandBase;
 use crate::config::{CONFIG_FILE, CONFIG_FILE_JSONC};
