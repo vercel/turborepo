@@ -11,6 +11,7 @@ default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 heap-dhat = ["dep:dhat"]
+pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -59,13 +60,8 @@ libc = "0.2.140"
 merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 notify = { workspace = true }
-owo-colors = { workspace = true }
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-pprof = { version = "0.15.0", features = [
-  "prost-codec",
-  "frame-pointer",
-], optional = true }
 prost = "0.14"
 radix_trie = { workspace = true }
 rand = { workspace = true }
@@ -88,8 +84,6 @@ tokio-stream = { version = "0.1.12", features = ["net"] }
 tonic = { version = "0.14", features = ["transport"] }
 
 tracing-appender = "0.2.2"
-tracing-chrome = "0.7.1"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true }
 usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
@@ -138,6 +132,7 @@ turborepo-task-executor = { workspace = true }
 turborepo-task-hash = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-tracing = { workspace = true }
 turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true, features = ["tui"] }
