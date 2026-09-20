@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -7,7 +7,7 @@
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {
-      "outputs": []
+      "dependsOn": ["^lint"]
     },
     "dev": {
       "cache": false,
