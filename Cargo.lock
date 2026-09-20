@@ -8397,6 +8397,7 @@ dependencies = [
  "turborepo-shim",
  "turborepo-signals",
  "turborepo-task-executor",
+ "turborepo-task-filter",
  "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
@@ -8899,6 +8900,24 @@ dependencies = [
  "turborepo-types",
  "turborepo-ui",
  "which",
+]
+
+[[package]]
+name = "turborepo-task-filter"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-engine",
+ "turborepo-errors",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-scope",
+ "turborepo-task-id",
+ "turborepo-types",
+ "wax",
 ]
 
 [[package]]

@@ -1,0 +1,26 @@
+[package]
+name = "turborepo-task-filter"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Task-level filtering and affected detection for Turborepo"
+
+[lints]
+workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-scope = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-types = { workspace = true }
+wax = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
+turborepo-errors = { workspace = true }
+turborepo-repository = { workspace = true, features = ["test-util"] }
