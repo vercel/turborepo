@@ -19,7 +19,6 @@ pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;
-use clap::ValueEnum;
 use globwalk::{GlobError, ValidatedGlob};
 use schemars::JsonSchema;
 pub use secret::SecretString;
@@ -47,7 +46,6 @@ use turborepo_task_id::{TaskId, TaskName};
     Default,
     PartialEq,
     Serialize,
-    ValueEnum,
     Deserialize,
     Eq,
     Deserializable,
@@ -97,9 +95,7 @@ pub enum StopExecution {
 /// - `none`: Hides all task output
 ///
 /// Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
-#[derive(
-    Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize, JsonSchema, TS,
-)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserializable, Serialize, JsonSchema, TS)]
 #[schemars(rename = "OutputLogs")]
 #[ts(export, rename = "OutputLogs")]
 pub enum OutputLogsMode {
@@ -138,7 +134,7 @@ impl fmt::Display for OutputLogsMode {
 /// Controls the format of dry run output:
 /// - `Text`: Human-readable text output
 /// - `Json`: Machine-readable JSON output
-#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum DryRunMode {
     Text,
     Json,
@@ -166,7 +162,6 @@ impl fmt::Display for DryRunMode {
     Deserializable,
     PartialEq,
     Eq,
-    ValueEnum,
     JsonSchema,
     TS,
 )]
@@ -184,7 +179,6 @@ pub enum UIMode {
     /// time.
     #[serde(rename = "stream-with-experimental-timestamps")]
     #[schemars(rename = "stream-with-experimental-timestamps")]
-    #[value(name = "stream-with-experimental-timestamps")]
     StreamWithTimestamps,
 }
 
@@ -210,7 +204,7 @@ impl UIMode {
 /// - `Auto`: System decides based on context
 /// - `Stream`: Logs are streamed as they arrive
 /// - `Grouped`: Logs are grouped by task
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, Deserialize, Eq)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
     #[default]
@@ -245,7 +239,7 @@ impl LogOrder {
 /// - `Never`: Stop on first failure
 /// - `DependenciesSuccessful`: Continue if dependencies succeeded
 /// - `Always`: Always continue regardless of failures
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContinueMode {
     #[default]
@@ -270,7 +264,7 @@ impl fmt::Display for ContinueMode {
 /// - `Auto`: System decides based on context
 /// - `None`: No prefix
 /// - `Task`: Prefix with task name
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub enum LogPrefix {
     #[serde(rename = "auto")]
     #[default]
