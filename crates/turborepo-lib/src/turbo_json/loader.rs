@@ -10,27 +10,10 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_engine::BuilderError;
 use turborepo_repository::package_graph::PackageName;
 // Re-export TurboJsonLoader and related types from turborepo-turbo-json
-pub use turborepo_turbo_json::{
-    LoaderError, NoOpUpdater, TurboJsonLoader, TurboJsonReader, TurboJsonUpdater,
-};
+pub use turborepo_turbo_json::{LoaderError, NoOpUpdater, TurboJsonLoader, TurboJsonReader};
 
 use super::TurboJson;
 use crate::{config::Error, microfrontends::MicrofrontendsConfigs};
-
-/// Implement TurboJsonUpdater for MicrofrontendsConfigs
-impl TurboJsonUpdater for MicrofrontendsConfigs {
-    type Error = Error;
-
-    fn update_turbo_json(
-        &self,
-        package_name: &PackageName,
-        turbo_json: Result<TurboJson, LoaderError>,
-    ) -> Result<TurboJson, Self::Error> {
-        // Convert LoaderError to config::Error for compatibility
-        let turbo_json = turbo_json.map_err(loader_error_to_config_error);
-        MicrofrontendsConfigs::update_turbo_json(self, package_name, turbo_json)
-    }
-}
 
 /// Convert LoaderError to config::Error
 fn loader_error_to_config_error(err: LoaderError) -> Error {
@@ -145,7 +128,7 @@ impl UnifiedTurboJsonLoader {
     pub fn load(&self, package: &PackageName) -> Result<&TurboJson, Error> {
         match self {
             Self::Standard(loader) => loader.load(package).map_err(loader_error_to_config_error),
-            Self::WithMfe(loader) => loader.load(package),
+            Self::WithMfe(loader) => loader.load(package).map_err(loader_error_to_config_error),
         }
     }
 

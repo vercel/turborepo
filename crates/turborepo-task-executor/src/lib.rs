@@ -73,10 +73,10 @@ pub struct ExecutorConfig {
 ///
 /// This trait abstracts the microfrontends configuration to allow the executor
 /// to work with MFE features without depending on the full
-/// MicrofrontendsConfigs implementation in turborepo-lib.
+/// MicrofrontendsConfigs implementation in turborepo-microfrontends-config.
 ///
 /// # Implementors
-/// - `MicrofrontendsConfigs` in turborepo-lib
+/// - `MicrofrontendsConfigs` in turborepo-microfrontends-config
 pub trait MfeConfigProvider: Send + Sync {
     /// Returns true if the task has an associated microfrontends proxy
     fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool;

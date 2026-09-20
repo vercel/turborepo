@@ -1,0 +1,26 @@
+[package]
+name = "turborepo-microfrontends-config"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Microfrontends configuration discovery and turbo.json integration for Turborepo"
+
+[lints]
+workspace = true
+
+[dependencies]
+itertools = { workspace = true }
+rayon = "1.7.0"
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-microfrontends = { workspace = true }
+turborepo-rayon-compat = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-task-executor = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-turbo-json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

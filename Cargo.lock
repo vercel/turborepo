@@ -8383,6 +8383,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-log",
  "turborepo-microfrontends",
+ "turborepo-microfrontends-config",
  "turborepo-microfrontends-proxy",
  "turborepo-otel",
  "turborepo-process",
@@ -8513,6 +8514,25 @@ dependencies = [
  "thiserror 2.0.18",
  "turbopath",
  "turborepo-errors",
+]
+
+[[package]]
+name = "turborepo-microfrontends-config"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.14.0",
+ "rayon",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-microfrontends",
+ "turborepo-rayon-compat",
+ "turborepo-repository",
+ "turborepo-task-executor",
+ "turborepo-task-id",
+ "turborepo-turbo-json",
 ]
 
 [[package]]
