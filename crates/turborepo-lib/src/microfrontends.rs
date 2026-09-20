@@ -156,9 +156,9 @@ impl MicrofrontendsConfigs {
 
         if !missing_applications.is_empty() {
             warn!(
-                "Unable to find packages referenced in 'microfrontends.json' in workspace. Local \
-                 proxy will not route to the following applications if they are running locally: \
-                 {}",
+                "Unable to find packages referenced by 'packageName' in 'microfrontends.json' in \
+                 workspace. Local proxy will not route to the following applications if they are \
+                 running locally: {}",
                 missing_applications.join(", ")
             );
         }
@@ -504,8 +504,14 @@ impl PackageGraphResult {
                 .copied()
                 .unwrap_or(false);
             info.use_turborepo_proxy = mfe_package.is_none() && !pkg_has_mfe_dep;
-            referenced_packages.insert(package_name.to_string());
-            referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
+            // Application names do not have to correspond to packages in this workspace.
+            // This is common in polyrepo configurations where routes point at
+            // applications hosted in other repositories. A differing package
+            // name, however, comes from an explicit `packageName` mapping and
+            // is expected to identify a local workspace package.
+            referenced_packages.extend(info.tasks.iter().filter_map(|(task, application)| {
+                (task.package() != application).then(|| task.package().to_string())
+            }));
 
             configs.insert(package_name.to_string(), info);
         }
@@ -931,16 +937,19 @@ mod test {
     }
 
     #[test]
-    fn test_missing_packages() {
+    fn test_only_missing_explicit_package_names_are_reported() {
         let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
-                    "docs": {
+                    "external-docs": {
                         "development": {
                             "local": 3000
                         },
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
+                    },
+                    "marketing-project": {
+                        "packageName": "marketing"
                     }
                 }
             }))
@@ -954,9 +963,9 @@ mod test {
             HashMap::new(),
         )
         .unwrap();
-        assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
+        assert_eq!(missing_result.missing_applications, vec!["marketing"]);
         let found_result = PackageGraphResult::new(
-            HashSet::from_iter(["docs", "web"].iter().copied()),
+            HashSet::from_iter(["marketing"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
             HashMap::new(),
         )
