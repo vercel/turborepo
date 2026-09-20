@@ -222,7 +222,13 @@ async fn concurrent_scoped_logs_save_restore_and_replay_independently() {
             assert_eq!(notes.exists(), broad_outputs);
         }
 
-        // Shared-cache concurrent restoration must also preserve every identity.
+        // Concurrent restore only when the archives have disjoint outputs. With
+        // broad outputs, every archive also contains the same user-owned
+        // notes.log; racing restoration of overlapping user outputs is outside
+        // scoped-log isolation and is not portable to Windows.
+        if broad_outputs {
+            continue;
+        }
         std::fs::remove_dir_all(log_dir.as_std_path()).unwrap();
         let mut restorations = tokio::task::JoinSet::new();
         for (index, mut task) in tasks.into_iter().enumerate() {
