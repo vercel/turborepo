@@ -16,16 +16,17 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::{sync::mpsc, task::JoinError};
 use tracing::{debug, Instrument, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
+use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
+use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
-use turborepo_scm::{RepoGitIndex, SCM};
+use turborepo_scm::RepoGitIndex;
 use turborepo_task_access::TaskAccess;
 use turborepo_task_executor::{
     command_invokes_turbo, InternalError as TaskInternalError, TaskOutput,
@@ -38,7 +39,7 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
-use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
+use turborepo_ui::{sender::UISender, ColorSelector};
 use wax::Program;
 
 use crate::{
@@ -55,16 +56,13 @@ pub struct Visitor<'a> {
     global_env_mode: EnvMode,
     grouping_layer: Arc<GroupingLayer>,
     manager: ProcessManager,
+    repo: &'a RepoContext,
     run_opts: &'a RunOpts,
-    package_graph: Arc<PackageGraph>,
-    repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
     task_hasher: TaskHasher<'a>,
-    scm: &'a SCM,
     repo_index: Option<&'a RepoGitIndex>,
-    color_config: ColorConfig,
     is_watch: bool,
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
@@ -205,7 +203,7 @@ impl<'a> Visitor<'a> {
     // together
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        package_graph: Arc<PackageGraph>,
+        repo: &'a RepoContext,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
         task_access: &'a TaskAccess,
@@ -213,10 +211,7 @@ impl<'a> Visitor<'a> {
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
-        color_config: ColorConfig,
         manager: ProcessManager,
-        repo_root: &'a AbsoluteSystemPath,
-        scm: &'a SCM,
         repo_index: Option<&'a RepoGitIndex>,
         global_env: EnvironmentVariableMap,
         global_env_patterns: &'a [String],
@@ -232,7 +227,7 @@ impl<'a> Visitor<'a> {
                 run_opts,
                 env_at_execution_start,
                 global_hash,
-                repo_root,
+                &repo.repo_root,
                 global_env,
                 global_env_patterns,
             );
@@ -243,7 +238,7 @@ impl<'a> Visitor<'a> {
             match external_deps_hashes {
                 Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
                 None => turborepo_rayon_compat::block_in_place(|| {
-                    task_hasher.precompute_external_deps_hashes(&package_graph)
+                    task_hasher.precompute_external_deps_hashes(&repo.pkg_dep_graph)
                 })?,
             }
 
@@ -277,16 +272,13 @@ impl<'a> Visitor<'a> {
             global_env_mode: run_opts.env_mode,
             grouping_layer,
             manager,
+            repo,
             run_opts,
-            package_graph,
-            repo_root,
             run_cache,
             run_tracker,
             task_access,
             task_hasher,
-            scm,
             repo_index,
-            color_config,
             ui_sender,
             is_watch,
             warnings: Default::default(),
@@ -306,7 +298,8 @@ impl<'a> Visitor<'a> {
     ) -> Result<PrecomputedTask, Error> {
         let package_name = PackageName::from(task_id.package());
         let package_context = self
-            .package_graph
+            .repo
+            .pkg_dep_graph
             .package_task_context(&package_name)
             .ok_or_else(|| Error::MissingPackage {
                 package_name: package_name.clone(),
@@ -374,7 +367,10 @@ impl<'a> Visitor<'a> {
         for producer_task_id in selected_tasks {
             selected_any = true;
             let producer_package = PackageName::from(producer_task_id.package());
-            let Some(producer_context) = self.package_graph.package_task_context(&producer_package)
+            let Some(producer_context) = self
+                .repo
+                .pkg_dep_graph
+                .package_task_context(&producer_package)
             else {
                 return Err(Error::MissingPackage {
                     package_name: producer_package,
@@ -402,8 +398,8 @@ impl<'a> Visitor<'a> {
 
             let output_hashes = if dependency_outputs.globs.is_empty() {
                 turborepo_task_hash::file_hashes_for_inputs(
-                    self.scm,
-                    self.repo_root,
+                    &self.repo.scm,
+                    &self.repo.repo_root,
                     producer_directory,
                     &declared_output_globs,
                     false,
@@ -413,8 +409,8 @@ impl<'a> Visitor<'a> {
                 )?
             } else {
                 let requested_hashes = turborepo_task_hash::file_hashes_for_inputs(
-                    self.scm,
-                    self.repo_root,
+                    &self.repo.scm,
+                    &self.repo.repo_root,
                     producer_directory,
                     &dependency_outputs.globs,
                     false,
@@ -427,12 +423,15 @@ impl<'a> Visitor<'a> {
 
             for (path, hash) in output_hashes.0.iter() {
                 let full_output_path = self
+                    .repo
                     .repo_root
                     .resolve(producer_directory)
                     .join_unix_path(path);
-                let repo_relative_path =
-                    AnchoredSystemPathBuf::relative_path_between(self.repo_root, &full_output_path)
-                        .to_unix();
+                let repo_relative_path = AnchoredSystemPathBuf::relative_path_between(
+                    &self.repo.repo_root,
+                    &full_output_path,
+                )
+                .to_unix();
                 combined.insert(repo_relative_path, *hash);
             }
         }
@@ -627,7 +626,8 @@ impl<'a> Visitor<'a> {
                     if self.dry {
                         let package_name = PackageName::from(task_id.package());
                         let package_context = self
-                            .package_graph
+                            .repo
+                            .pkg_dep_graph
                             .package_task_context(&package_name)
                             .ok_or_else(|| Error::MissingPackage {
                                 package_name,
@@ -719,7 +719,7 @@ impl<'a> Visitor<'a> {
             let crate::engine::Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
-            let Some(package_context) = self.package_graph.package_task_context(&package_name)
+            let Some(package_context) = self.repo.pkg_dep_graph.package_task_context(&package_name)
             else {
                 dispatch_error = Some(Error::MissingPackage {
                     package_name: package_name.clone(),
@@ -815,8 +815,8 @@ impl<'a> Visitor<'a> {
                                 &package_context,
                                 &dependency_set,
                                 task_hash_telemetry,
-                                self.scm,
-                                self.repo_root,
+                                &self.repo.scm,
+                                &self.repo.repo_root,
                                 // Deferred inputs are hashed after dependencies run. Read them
                                 // from disk instead of consulting the run-start repo index.
                                 None,
@@ -1064,7 +1064,6 @@ impl<'a> Visitor<'a> {
         global_hash_inputs,
         engine,
         env_at_execution_start,
-        scm,
     ))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn finish(
@@ -1074,19 +1073,17 @@ impl<'a> Visitor<'a> {
         global_hash_inputs: GlobalHashableInputs<'_>,
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
-        scm: &SCM,
         pkg_inference_root: Option<&AnchoredSystemPath>,
     ) -> Result<(), Error> {
         let Self {
-            package_graph,
-            color_config: ui,
+            repo,
             run_opts,
-            repo_root,
             global_env_mode,
             task_hasher,
             is_watch,
             ..
         } = self;
+        let ui = repo.color_config;
 
         let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
 
@@ -1099,13 +1096,13 @@ impl<'a> Visitor<'a> {
                 )
                 .emit();
 
-                PlatformEnv::output_header(global_env_mode == EnvMode::Strict, self.color_config);
+                PlatformEnv::output_header(global_env_mode == EnvMode::Strict, ui);
 
                 for warning in warnings.iter() {
                     PlatformEnv::output_for_task(
                         warning.missing_platform_env().to_owned(),
                         warning.task_id(),
-                        self.color_config,
+                        ui,
                     )
                 }
             }
@@ -1115,9 +1112,9 @@ impl<'a> Visitor<'a> {
             .run_tracker
             .finish(
                 exit_code,
-                &package_graph,
+                &repo.pkg_dep_graph,
                 ui,
-                repo_root,
+                &repo.repo_root,
                 pkg_inference_root,
                 run_opts,
                 packages,
@@ -1126,7 +1123,7 @@ impl<'a> Visitor<'a> {
                 engine,
                 &task_hasher.task_hash_tracker(),
                 env_at_execution_start,
-                scm,
+                &repo.scm,
                 is_watch,
                 Some(task_hasher.external_deps_hash_cache()),
             )
