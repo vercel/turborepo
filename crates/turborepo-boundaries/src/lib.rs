@@ -274,6 +274,8 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error(transparent)]
     GlobWalk(#[from] globwalk::WalkError),
+    #[error("failed to apply gitignore rules: {0}")]
+    GitIgnore(#[from] ignore::Error),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error("failed to write to file: {0}")]
@@ -699,7 +701,7 @@ impl BoundariesChecker {
             .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
             .unwrap_or_default();
 
-        let files = {
+        let mut files = {
             let _span = info_span!("globwalk", package = %package_name).entered();
             let include_patterns: [ValidatedGlob; 8] = [
                 "**/*.js".parse()?,
@@ -722,6 +724,28 @@ impl BoundariesChecker {
                 Settings::default().ignore_nested_packages(),
             )?
         };
+
+        if !files.is_empty() {
+            let unignored_files = ignore::WalkBuilder::new(package_root.as_std_path())
+                .hidden(false)
+                .ignore(false)
+                .git_ignore(true)
+                .git_exclude(true)
+                .git_global(true)
+                .parents(true)
+                .require_git(false)
+                .follow_links(false)
+                .build()
+                .filter_map(|entry| match entry {
+                    Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
+                        Some(Ok(entry.into_path()))
+                    }
+                    Ok(_) => None,
+                    Err(error) => Some(Err(error)),
+                })
+                .collect::<Result<HashSet<_>, ignore::Error>>()?;
+            files.retain(|file| unignored_files.contains(file.as_std_path()));
+        }
 
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
@@ -1196,6 +1220,53 @@ mod tests {
             "local imports should not produce diagnostics, got: {:?}",
             result.diagnostics.len()
         );
+    }
+
+    #[test]
+    fn check_boundaries_ignores_gitignored_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("app".into());
+        let package_directory = repo_root.join_components(&["packages", "app"]);
+
+        package_directory.create_dir_all().unwrap();
+        package_directory
+            .join_component("dist")
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("dist/\n")
+            .unwrap();
+        package_directory
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"app"}"#)
+            .unwrap();
+        package_directory
+            .join_component("index.ts")
+            .create_with_contents("export {};\n")
+            .unwrap();
+        package_directory
+            .join_components(&["dist", "bundle.js"])
+            .create_with_contents("import 'undeclared-dependency';\n")
+            .unwrap();
+
+        let graph = MockGraph::new(vec![package_name.clone()]);
+        let filtered = HashSet::from([package_name]);
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.files_checked, 1);
+        assert!(result.diagnostics.is_empty());
     }
 
     #[test]
