@@ -107,100 +107,118 @@ pub async fn run(
         run_builder = run_builder.with_query_server(qs);
     }
 
-    let run_fut = async {
-        let (run, analytics_handle) = {
-            let (run, analytics_handle) = run_builder.build(&handler, telemetry).await?;
-            (Arc::new(run), analytics_handle)
-        };
-
-        let json_mode = run.opts().json;
-
-        // JSON and other machine-readable modes own stdout.
-        if run.opts().run_opts.graph.is_some()
-            || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
-            || json_mode
-        {
-            sinks.suppress_stdout();
-        }
-
-        // In --json mode, disable the TerminalSink entirely before the
-        // prelude so nothing leaks to the terminal. The StructuredLogSink
-        // captures everything via the Logger.
-        if json_mode {
-            sinks.terminal.disable();
-        }
-
-        // Emit the prelude while TerminalSink is still active so it
-        // lands in the main terminal buffer (survives TUI alternate-
-        // screen). TuiSink buffers these events and flushes on connect().
-        run.emit_run_prelude_logs();
-
-        if !json_mode {
-            sinks.disable_for_tui();
-        }
-
-        let (sender, handle) = {
-            let _span = tracing::info_span!("start_ui").entered();
-            // The TUI needs a handle to the terminal sink so it can re-enable
-            // streamed output when the user toggles out of the alternate
-            // screen, and its watchdog restores streamed output if the
-            // render thread exits mid-run.
-            run.start_ui(sinks.terminal.clone())?.unzip()
-        };
-
-        if let Some(UISender::Tui(ref tui_sender)) = sender {
-            sinks.tui.connect(tui_sender.clone());
-            if let Some(path) = subscriber.stderr_redirect_path() {
-                turborepo_log::info(
-                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Tracing),
-                    format!("Verbose logs redirected to {path}"),
-                )
-                .emit();
-            } else {
-                subscriber.suppress_stderr();
-            }
-        } else if !json_mode {
-            // Only re-enable the TerminalSink when NOT in --json mode.
-            // In --json mode it stays disabled — all output goes through
-            // the StructuredLogSink.
-            sinks.enable_for_stream();
-            if subscriber.stderr_redirect_path().is_some() {
-                subscriber.restore_stderr();
-            }
-        }
-
-        let result = run.run(sender.clone(), false).await;
-
-        if let Some(analytics_handle) = analytics_handle {
-            analytics_handle.close_with_timeout().await;
-        }
-
-        if let Some(UISender::Tui(sender)) = sender {
-            sender.stop().await;
-        }
-
-        // Wait for TUI cleanup (terminal restoration, task persistence)
-        // before printing anything else; render errors are logged by the
-        // watchdog inside `start_ui`.
-        if let Some(handle) = handle {
-            handle.await.ok();
-        }
-
-        if let Some(path) = subscriber.stderr_redirect_path() {
-            subscriber.restore_stderr();
-            println!("Verbose logs written to {path}");
-        }
-        result
-    };
-
-    let result = match wait_for_run_cleanup_on_signal(&handler, run_fut).await {
-        RunOutcome::Completed(result) | RunOutcome::Interrupted(result) => result,
-    };
+    let result = execute_run(run_builder, &handler, telemetry, sinks, subscriber).await;
 
     {
         let _span = tracing::info_span!("log_flush").entered();
         turborepo_log::flush();
     }
+    result
+}
+
+async fn execute_run(
+    run_builder: RunBuilder,
+    handler: &SignalHandler,
+    telemetry: CommandEventBuilder,
+    mut sinks: LogSinks,
+    subscriber: &TurboSubscriber,
+) -> Result<i32, run::Error> {
+    let run_fut = run_with_ui(run_builder, handler, telemetry, &mut sinks, subscriber);
+
+    match wait_for_run_cleanup_on_signal(handler, run_fut).await {
+        RunOutcome::Completed(result) | RunOutcome::Interrupted(result) => result,
+    }
+}
+
+async fn run_with_ui(
+    run_builder: RunBuilder,
+    handler: &SignalHandler,
+    telemetry: CommandEventBuilder,
+    sinks: &mut LogSinks,
+    subscriber: &TurboSubscriber,
+) -> Result<i32, run::Error> {
+    let (run, analytics_handle) = {
+        let (run, analytics_handle) = run_builder.build(handler, telemetry).await?;
+        (Arc::new(run), analytics_handle)
+    };
+
+    let json_mode = run.opts().json;
+
+    // JSON and other machine-readable modes own stdout.
+    if run.opts().run_opts.graph.is_some()
+        || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
+        || json_mode
+    {
+        sinks.suppress_stdout();
+    }
+
+    // In --json mode, disable the TerminalSink before the prelude so nothing
+    // leaks to the terminal. The StructuredLogSink captures everything via the
+    // Logger.
+    if json_mode {
+        sinks.terminal.disable();
+    }
+
+    // Emit the prelude while TerminalSink is still active so it lands in the
+    // main terminal buffer (survives TUI alternate-screen). TuiSink buffers
+    // these events and flushes on connect().
+    run.emit_run_prelude_logs();
+
+    if !json_mode {
+        sinks.disable_for_tui();
+    }
+
+    let (sender, handle) = {
+        let _span = tracing::info_span!("start_ui").entered();
+        // The TUI needs a handle to the terminal sink so it can re-enable
+        // streamed output when the user toggles out of the alternate screen,
+        // and its watchdog restores streamed output if the render thread exits
+        // mid-run.
+        run.start_ui(sinks.terminal.clone())?.unzip()
+    };
+
+    if let Some(UISender::Tui(ref tui_sender)) = sender {
+        sinks.tui.connect(tui_sender.clone());
+        if let Some(path) = subscriber.stderr_redirect_path() {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Tracing),
+                format!("Verbose logs redirected to {path}"),
+            )
+            .emit();
+        } else {
+            subscriber.suppress_stderr();
+        }
+    } else if !json_mode {
+        // Only re-enable the TerminalSink when NOT in --json mode. In --json
+        // mode it stays disabled — all output goes through StructuredLogSink.
+        sinks.enable_for_stream();
+        if subscriber.stderr_redirect_path().is_some() {
+            subscriber.restore_stderr();
+        }
+    }
+
+    let result = run.run(sender.clone(), false).await;
+
+    if let Some(analytics_handle) = analytics_handle {
+        analytics_handle.close_with_timeout().await;
+    }
+
+    if let Some(UISender::Tui(sender)) = sender {
+        sender.stop().await;
+    }
+
+    // Wait for TUI cleanup (terminal restoration, task persistence) before
+    // printing anything else; render errors are logged by the watchdog inside
+    // `start_ui`.
+    if let Some(handle) = handle {
+        handle.await.ok();
+    }
+
+    if let Some(path) = subscriber.stderr_redirect_path() {
+        subscriber.restore_stderr();
+        println!("Verbose logs written to {path}");
+    }
+
     result
 }
 
