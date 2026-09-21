@@ -14,7 +14,7 @@ User runs `turbo`
         └── If not found: run current binary directly
 ```
 
-Uses trait-based dependency injection (`TurboRunner`) to avoid circular dependencies with `turborepo-lib`.
+Uses trait-based dependency injection (`TurboRunner`) to avoid circular dependencies with `turborepo-cli`.
 
 Key components:
 - `ShimArgs` - Parsed arguments needed for shim decisions

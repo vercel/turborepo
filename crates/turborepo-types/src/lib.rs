@@ -434,7 +434,7 @@ impl ScopeOpts {
 /// so the caller can decide whether to inject root tasks without
 /// re-parsing raw filter strings.
 ///
-/// See `RunBuilder::calculate_filtered_packages` in `turborepo-lib` for
+/// See `RunBuilder::calculate_filtered_packages` in `turborepo-run` for
 /// how these variants control root task injection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterMode {
@@ -1382,7 +1382,7 @@ pub trait EngineInfo {
 /// without depending on the full opts implementation.
 ///
 /// # Implementors
-/// - `RunOpts` from `turborepo-lib`
+/// - `RunOpts` from `turborepo-run-opts`
 pub trait RunOptsInfo {
     /// Returns the dry run mode if running in dry mode, None otherwise
     fn dry_run(&self) -> Option<DryRunMode>;
@@ -1515,7 +1515,7 @@ impl TaskDefinitionHashInfo for TaskDefinition {
 /// This allows task_hash to be decoupled from the full RunOpts type.
 ///
 /// # Implementors
-/// - `RunOpts` from `turborepo-lib`
+/// - `RunOpts` from `turborepo-run-opts`
 pub trait RunOptsHashInfo {
     /// Whether to infer the framework for each workspace
     fn framework_inference(&self) -> bool;
@@ -1532,7 +1532,7 @@ pub trait RunOptsHashInfo {
 /// hashes.
 ///
 /// # Implementors
-/// - `GlobalHashableInputs` from `turborepo-lib`
+/// - `GlobalHashableInputs` from `turborepo-task-hash`
 pub trait GlobalHashInputs {
     /// Returns the root cache key (currently always a constant magic string)
     fn root_key(&self) -> &str;

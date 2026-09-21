@@ -5,7 +5,7 @@
 //! - Change detection (--affected)
 //! - Glob matching
 //!
-//! Extracted from turborepo-lib to reduce coupling.
+//! Extracted from the former monolithic CLI crate to reduce coupling.
 
 #![deny(clippy::all)]
 #![cfg_attr(not(test), deny(clippy::expect_used, clippy::unwrap_used))]

@@ -838,7 +838,7 @@ mod tests {
         );
     }
 
-    // Tests moved from turborepo-lib/turbo_json/mod.rs during consolidation
+    // Tests moved from the former monolithic CLI crate during consolidation
 
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
