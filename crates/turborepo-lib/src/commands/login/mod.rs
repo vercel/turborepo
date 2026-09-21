@@ -190,10 +190,11 @@ mod tests {
 
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_run_opts::Opts;
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::{config::TurborepoConfigBuilder, opts::Opts};
+    use crate::config::TurborepoConfigBuilder;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 

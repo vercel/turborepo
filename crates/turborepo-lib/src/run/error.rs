@@ -3,12 +3,13 @@ use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
+use turborepo_run_opts::Error as OptsError;
 use turborepo_scope::filter::ResolutionError;
 use turborepo_task_graph::VisitorError;
 use turborepo_task_hash::{global_hash, Error as TaskHashError};
 use turborepo_ui::tui;
 
-use crate::{config, engine, engine::ValidateError, opts};
+use crate::{config, engine, engine::ValidateError};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -22,7 +23,7 @@ pub enum Error {
     #[error(transparent)]
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]
-    Opts(#[from] opts::Error),
+    Opts(#[from] OptsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),

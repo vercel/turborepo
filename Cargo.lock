@@ -8390,6 +8390,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-context",
+ "turborepo-run-opts",
  "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-scope",
@@ -8809,6 +8810,32 @@ dependencies = [
  "turborepo-scm",
  "turborepo-turbo-json",
  "turborepo-ui",
+]
+
+[[package]]
+name = "turborepo-run-opts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "insta",
+ "serde",
+ "serde_json",
+ "temp-env",
+ "tempfile",
+ "test-case",
+ "thiserror 2.0.18",
+ "tracing",
+ "turbopath",
+ "turborepo-api-client",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-config",
+ "turborepo-task-executor",
+ "turborepo-task-graph",
+ "turborepo-task-id",
+ "turborepo-turbo-json",
+ "turborepo-types",
 ]
 
 [[package]]

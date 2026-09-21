@@ -1,23 +1,8 @@
 //! Task hashing module - delegates to turborepo-task-hash crate.
 //!
-//! This module provides trait implementations for turborepo-lib types.
+//! This module provides task hashing types specialized for turborepo-lib.
 
-use crate::opts::RunOpts;
-
-// Implement RunOptsHashInfo for RunOpts
-impl turborepo_types::RunOptsHashInfo for RunOpts {
-    fn framework_inference(&self) -> bool {
-        self.framework_inference
-    }
-
-    fn single_package(&self) -> bool {
-        self.single_package
-    }
-
-    fn pass_through_args(&self) -> &[String] {
-        &self.pass_through_args
-    }
-}
+use turborepo_run_opts::RunOpts;
 
 /// Type alias for TaskHasher specialized with RunOpts
 pub type TaskHasher<'a> = turborepo_task_hash::TaskHasher<'a, RunOpts>;

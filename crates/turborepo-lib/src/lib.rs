@@ -15,7 +15,6 @@ mod engine;
 mod heap_profile;
 
 mod boundaries;
-mod opts;
 mod panic_handler;
 mod run;
 mod shim;

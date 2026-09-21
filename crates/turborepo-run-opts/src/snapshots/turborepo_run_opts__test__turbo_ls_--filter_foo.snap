@@ -1,10 +1,10 @@
 ---
-source: crates/turborepo-lib/src/opts.rs
+source: crates/turborepo-run-opts/src/lib.rs
 expression: "json!({\n    \"tasks\": opts.run_opts.tasks, \"filter_patterns\":\n    opts.scope_opts.filter_patterns\n})"
 ---
 {
-  "tasks": [
-    "build"
-  ],
-  "filter_patterns": []
+  "tasks": [],
+  "filter_patterns": [
+    "foo"
+  ]
 }

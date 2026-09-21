@@ -32,6 +32,7 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
+use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
@@ -46,11 +47,8 @@ use turborepo_turbo_json::TurboJson;
 use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
 
+use crate::engine::{Engine, EngineExt};
 pub use crate::run::error::Error;
-use crate::{
-    engine::{Engine, EngineExt},
-    opts::{Opts, RemoteCacheDisabledReason},
-};
 
 /// Live status of the remote cache, determined by a preflight API check
 /// that runs concurrently with graph building.
@@ -1514,13 +1512,13 @@ fn emit_graphviz_warning() -> Result<(), io::Error> {
 mod tests {
     use std::{future::pending, time::Duration};
 
+    use turborepo_run_opts::RemoteCacheDisabledReason;
     use turborepo_signals::ShutdownReason;
 
     use super::{
         remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
         RemoteCacheUnavailableReason, Run,
     };
-    use crate::opts::RemoteCacheDisabledReason;
 
     #[test]
     fn remote_cache_status_messages_match_prelude_contract() {
