@@ -1,14 +1,14 @@
 #![allow(clippy::result_large_err)]
 //! Interface types for the turborepo query layer.
 //!
-//! This crate defines the traits that bridge `turborepo-lib` (the run
+//! This crate defines the traits that bridge `turborepo-run` (the run
 //! orchestrator) and `turborepo-query` (the GraphQL implementation).
-//! By placing the interface here, `turborepo-lib` and `turborepo-query`
+//! By placing the interface here, `turborepo-run` and `turborepo-query`
 //! can compile in parallel — neither depends on the other.
 //!
 //! ```text
 //! turborepo (binary)
-//!   ├── turborepo-lib ──────► turborepo-query-api (traits)
+//!   ├── turborepo-lib ──────► turborepo-run ──► turborepo-query-api (traits)
 //!   └── turborepo-query ────► turborepo-query-api (traits)
 //! ```
 //!
@@ -19,7 +19,7 @@
 //! interface crate because `QueryRun` methods expose types from crates
 //! like `turborepo-repository` and `turborepo-engine`. The benefit is
 //! still realized because the heavy async-graphql/axum/oxc stack in
-//! `turborepo-query` doesn't need to compile for `turborepo-lib`.
+//! `turborepo-query` doesn't need to compile for `turborepo-run`.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -47,7 +47,7 @@ pub type BoundariesFuture<'a> = Pin<
 /// The interface that the query layer requires from a "run" context.
 ///
 /// Decouples the GraphQL query layer from the concrete `Run` type in
-/// turborepo-lib, allowing the heavy async-graphql/axum/oxc dependencies
+/// turborepo-run, allowing the heavy async-graphql/axum/oxc dependencies
 /// to compile in a separate crate.
 pub trait QueryRun: Send + Sync + 'static {
     fn version(&self) -> &'static str;
@@ -121,10 +121,10 @@ pub const SCHEMA_QUERY: &str = include_str!("schema_query.graphql");
 
 /// Abstraction over the query execution layer.
 ///
-/// `turborepo-lib` uses this trait to dispatch query operations without
+/// `turborepo-run` uses this trait to dispatch query operations without
 /// depending on `turborepo-query` directly. The concrete implementation
-/// lives in the binary crate, which depends on both `turborepo-lib` and
-/// `turborepo-query`.
+/// lives in the binary crate, which depends on `turborepo-lib`,
+/// `turborepo-run`, and `turborepo-query`.
 pub trait QueryServer: Send + Sync {
     /// Execute a single GraphQL query and return the result as JSON.
     ///

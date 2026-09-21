@@ -86,6 +86,16 @@ impl CommandBase {
         &self.opts
     }
 
+    pub fn run_builder_input(&self) -> Result<turborepo_run::RunBuilderInput, ConfigError> {
+        Ok(turborepo_run::RunBuilderInput {
+            repo_root: self.repo_root.clone(),
+            color_config: self.color_config,
+            opts: self.opts.clone(),
+            version: self.version,
+            api_auth: self.api_auth()?,
+        })
+    }
+
     // Getting all of the paths.
     fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         let config_dir = config_dir()?.ok_or(ConfigError::NoGlobalConfigPath)?;

@@ -13,6 +13,7 @@ use turborepo_telemetry::{
 };
 use turborepo_tracing::{inject_trace_metadata, TurboSubscriber};
 use turborepo_ui::{ColorConfig, GREY};
+use turborepo_watch::WatchClient;
 
 use crate::{
     cli::error::print_potential_tasks,
@@ -21,7 +22,6 @@ use crate::{
         ls, prune, query, run, telemetry, unlink, CommandBase,
     },
     get_version,
-    run::watch::WatchClient,
 };
 
 mod args;
@@ -692,7 +692,7 @@ async fn run_main(
 
             let verbosity: u8 = cli_args.verbosity.into();
             let mut client = WatchClient::new(
-                base,
+                base.run_builder_input()?,
                 *experimental_write_cache,
                 event,
                 query_server.clone(),
@@ -702,7 +702,7 @@ async fn run_main(
             .await?;
             match client.start().await {
                 Ok(()) => {}
-                Err(crate::run::watch::Error::SignalInterrupt) => {
+                Err(turborepo_watch::Error::SignalInterrupt) => {
                     // Normal shutdown via Ctrl+C — not an error.
                 }
                 Err(e) => {

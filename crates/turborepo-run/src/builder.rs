@@ -10,7 +10,7 @@ use tracing::Instrument;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };
-use turborepo_analytics::{start_analytics, AnalyticsHandle};
+use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
@@ -27,15 +27,15 @@ use turborepo_run_context::RepoContext;
 use turborepo_run_opts::Opts;
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_scope::{filter::ResolutionError, TargetSelector};
+use turborepo_scope::{TargetSelector, filter::ResolutionError};
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
+    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder, TrackedErrors,
 };
 use turborepo_types::{FilterMode, TaskDefinitionHashInfo, TaskInputs, UIMode};
 use turborepo_ui::ColorConfig;
@@ -116,12 +116,10 @@ use turborepo_task_access::TaskAccess;
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
-    commands::CommandBase,
-    engine::{task_has_command, Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader},
-    run::{
-        scope, Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run,
-        RunCache,
-    },
+    Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunBuilderInput,
+    RunCache,
+    engine::{Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader, task_has_command},
+    scope,
 };
 
 fn project_task_io_environment(
@@ -191,26 +189,26 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     #[tracing::instrument(skip_all)]
-    pub fn new(base: CommandBase, http_client: Option<SharedHttpClient>) -> Result<Self, Error> {
+    pub fn new(
+        input: RunBuilderInput,
+        http_client: Option<SharedHttpClient>,
+    ) -> Result<Self, Error> {
         let http_client = http_client.unwrap_or_default();
-        let opts = base.opts();
-        let api_auth = base.api_auth()?;
-
-        let version = base.version();
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
             std::io::stdout().is_terminal() &&
             // - if we're on windows, we're using the UI
-            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
+            (!cfg!(windows) || matches!(input.opts.run_opts.ui_mode, UIMode::Tui)),
         );
 
-        let CommandBase {
+        let RunBuilderInput {
             repo_root,
             color_config: ui,
             opts,
-            ..
-        } = base;
+            version,
+            api_auth,
+        } = input;
 
         Ok(Self {
             processes,
@@ -1022,16 +1020,16 @@ impl RunBuilder {
         // the repository's task set from every scope's native catalogue, and
         // an inventory scope would capture an empty (guessed) catalogue.
         let selectors = Self::parse_filter_selectors(&self.opts.scope_opts.filter_patterns);
-        if let Some(plan) = lazy_plan.as_mut() {
-            if self.requires_complete_graph_snapshot(
+        if let Some(plan) = lazy_plan.as_mut()
+            && self.requires_complete_graph_snapshot(
                 selectors.as_deref(),
                 micro_frontend_configs.as_ref(),
-            ) {
-                let owners: HashSet<ToolchainId> =
-                    pkg_dep_graph.unloaded_owners().into_iter().collect();
-                if !owners.is_empty() {
-                    pkg_dep_graph = Arc::new(plan.load(&owners).await?);
-                }
+            )
+        {
+            let owners: HashSet<ToolchainId> =
+                pkg_dep_graph.unloaded_owners().into_iter().collect();
+            if !owners.is_empty() {
+                pkg_dep_graph = Arc::new(plan.load(&owners).await?);
             }
         }
 
@@ -1124,7 +1122,7 @@ impl RunBuilder {
             let _span = tracing::info_span!("root_turbo_json_load").entered();
             turbo_json_loader
                 .load(&PackageName::Root)
-                .map_err(crate::config::Error::from)?
+                .map_err(turborepo_config::Error::from)?
                 .clone()
         };
 
@@ -1595,15 +1593,16 @@ impl RunBuilder {
         ));
 
         // futureFlags are hard gates: reject observability config when disabled.
-        if let Some(obs_opts) = &self.opts.experimental_observability {
-            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
-                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
-                    message: "experimentalObservability.otel is configured but \
-                              futureFlags.experimentalObservability is not enabled in turbo.json."
-                        .to_string(),
-                }
-                .into());
+        if let Some(obs_opts) = &self.opts.experimental_observability
+            && obs_opts.otel.is_some()
+            && !self.opts.future_flags.experimental_observability
+        {
+            return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                message: "experimentalObservability.otel is configured but \
+                          futureFlags.experimentalObservability is not enabled in turbo.json."
+                    .to_string(),
             }
+            .into());
         }
 
         let observability_handle = self
@@ -2193,10 +2192,8 @@ impl RunBuilder {
 
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
-        if !watch_task_filtered {
-            if let Some(entrypoint_packages) = &self.entrypoint_packages {
-                engine = engine.create_engine_for_subgraph(entrypoint_packages);
-            }
+        if !watch_task_filtered && let Some(entrypoint_packages) = &self.entrypoint_packages {
+            engine = engine.create_engine_for_subgraph(entrypoint_packages);
         }
 
         Ok((engine, unloaded_demands))

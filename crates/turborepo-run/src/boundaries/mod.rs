@@ -1,6 +1,6 @@
 //! Package boundaries checking for turborepo.
 //!
-//! This module provides integration between turborepo-lib and the
+//! This module provides integration between turborepo-run and the
 //! turborepo-boundaries crate, implementing the necessary traits.
 
 use std::collections::HashMap;

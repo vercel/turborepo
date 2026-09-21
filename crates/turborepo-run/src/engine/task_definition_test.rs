@@ -4,15 +4,15 @@ use pretty_assertions::assert_eq;
 use test_case::test_case;
 use turbopath::RelativeUnixPath;
 use turborepo_engine::TaskDefinitionFromProcessed;
-use turborepo_errors::{json::deserialize_from_json_str, Spanned};
-use turborepo_turbo_json::{raw::RawTaskInput, RawTaskDefinition};
+use turborepo_errors::{Spanned, json::deserialize_from_json_str};
+use turborepo_turbo_json::{RawTaskDefinition, raw::RawTaskInput};
 use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
 
 fn raw_input(value: &str) -> RawTaskInput {
     RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))
 }
 
-// This test must stay in turborepo-lib because it uses TaskDefinition::from_raw
+// This test stays with turborepo-run because it uses TaskDefinition::from_raw
 // which requires turborepo-engine (and turborepo-turbo-json cannot depend on
 // turborepo-engine due to the reverse dependency).
 #[test_case(

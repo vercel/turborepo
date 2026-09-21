@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use std::{
     collections::HashSet,
     env,
@@ -10,34 +12,30 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{broadcast, Notify},
+    sync::{Notify, broadcast},
     task::JoinHandle,
 };
 use tracing::{debug, instrument, trace};
 use turbopath::AnchoredSystemPathBuf;
+use turborepo_config::resolve_turbo_config_path;
 use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
+use turborepo_engine::TaskNode;
 use turborepo_filewatch::{
-    cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
-    package_watcher::PackageWatcher, FileSystemWatcher,
+    FileSystemWatcher, cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
+    package_watcher::PackageWatcher,
 };
 use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_run as run;
+use turborepo_run::{EngineExt, Run, RunBuilderInput, builder::RunBuilder};
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_run_opts::Error as OptsError;
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
-use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
+use turborepo_signals::{ShutdownReason, SignalHandler, SubscriberGuard, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_tracing::TurboSubscriber;
-use turborepo_ui::{sender::UISender, LogSinks};
-
-use crate::{
-    commands::CommandBase,
-    config::resolve_turbo_config_path,
-    engine::{EngineExt, TaskNode},
-    get_version,
-    run::{self, builder::RunBuilder, Run},
-};
+use turborepo_ui::{LogSinks, sender::UISender};
 
 #[derive(Debug)]
 enum ChangedPackages {
@@ -77,11 +75,11 @@ impl ChangedPackages {
 
 /// In-process file watching infrastructure that replaces the daemon.
 /// All components are standalone structs from `turborepo-filewatch`
-/// and `turborepo-lib` — no gRPC or IPC involved.
+/// and `turborepo-watch` — no gRPC or IPC involved.
 struct FileWatching {
     // Kept alive so the OS-level watcher keeps running.
     _watcher: Arc<FileSystemWatcher>,
-    glob_watcher: Arc<GlobWatcher>,
+    _glob_watcher: Arc<GlobWatcher>,
     // Kept alive so its background tasks continue providing package
     // discovery data to the HashWatcher.
     _package_watcher: Arc<PackageWatcher>,
@@ -155,7 +153,7 @@ pub struct WatchClient {
     // Subscribed eagerly (before building the Run) so we don't miss the
     // initial Rediscover event from the PackageChangesWatcher.
     package_change_events: broadcast::Receiver<PackageChangeEvent>,
-    base: CommandBase,
+    base: RunBuilderInput,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
     shutdown_guard: Option<SubscriberGuard>,
@@ -276,14 +274,14 @@ pub enum Error {
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
     #[error("Invalid config: {0}")]
-    Config(#[from] crate::config::Error),
+    Config(#[from] turborepo_config::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 impl WatchClient {
     pub async fn new(
-        base: CommandBase,
+        base: RunBuilderInput,
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
         query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
@@ -328,7 +326,7 @@ impl WatchClient {
                 base.repo_root.clone(),
                 source.clone(),
                 cookie_writer,
-                base.opts().repo_opts.allow_no_package_manager,
+                base.opts.repo_opts.allow_no_package_manager,
             )
             .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
         );
@@ -342,17 +340,17 @@ impl WatchClient {
         // The watcher builds its own graph and must enable the same ecosystems.
         let graph_features =
             turborepo_package_watcher::repository_graph::RepositoryGraphFeatures::new(
-                &base.opts().future_flags,
+                &base.opts.future_flags,
             );
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
             hash_watcher.clone(),
             custom_turbo_json_path,
-            base.opts().run_opts.single_package,
-            base.opts().repo_opts.allow_no_package_manager,
+            base.opts.run_opts.single_package,
+            base.opts.repo_opts.allow_no_package_manager,
             graph_features,
-            base.opts().future_flags,
+            base.opts.future_flags,
         );
 
         // Subscribe before building the Run so we don't miss the initial
@@ -361,7 +359,7 @@ impl WatchClient {
 
         let watching = FileWatching {
             _watcher: watcher,
-            glob_watcher: glob_watcher.clone(),
+            _glob_watcher: glob_watcher.clone(),
             _package_watcher: package_watcher,
             _package_changes_watcher: package_changes_watcher,
             hash_watcher,
@@ -388,10 +386,10 @@ impl WatchClient {
             unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
         }
 
-        if verbosity > 0 {
-            if let Ok(path) = subscriber.redirect_stderr_to_file(base.repo_root.as_std_path()) {
-                tracing::debug!("Verbose tracing redirected to {path}");
-            }
+        if verbosity > 0
+            && let Ok(path) = subscriber.redirect_stderr_to_file(base.repo_root.as_std_path())
+        {
+            tracing::debug!("Verbose tracing redirected to {path}");
         }
 
         let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
@@ -473,10 +471,10 @@ impl WatchClient {
             match tokio::time::timeout(STARTUP_ATTEMPT, events.recv()).await {
                 Ok(Ok(event)) => break event,
                 Ok(Err(broadcast::error::RecvError::Closed)) => {
-                    return Err(Error::PackageChangeClosed)
+                    return Err(Error::PackageChangeClosed);
                 }
                 Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-                    return Err(Error::PackageChangeLagged)
+                    return Err(Error::PackageChangeLagged);
                 }
                 Err(_) => {
                     if started.elapsed() >= startup_cap {
@@ -624,8 +622,8 @@ impl WatchClient {
                     // Already rediscovering everything, ignore
                 }
                 ChangedPackages::Some {
-                    ref mut packages,
-                    ref mut changed_files,
+                    packages,
+                    changed_files,
                 } => {
                     packages.insert(name);
                     changed_files.extend(files.iter().cloned());
@@ -643,10 +641,8 @@ impl WatchClient {
         let force_shutdown_timeout = Run::force_shutdown_timeout();
         let graceful_shutdown = self.handler.shutdown_reason() == Some(ShutdownReason::Signal);
         if graceful_shutdown {
-            Run::emit_shutdown_started_once(
-                self.run.shutdown_started_emitted.as_ref(),
-                force_shutdown_timeout,
-            );
+            self.run
+                .emit_shutdown_started_once_for_run(force_shutdown_timeout);
         }
 
         let mut stoppers = std::mem::take(&mut self.background_stoppers);
@@ -801,18 +797,19 @@ impl WatchClient {
                 packages,
                 changed_files,
             } => {
-                let mut opts = self.base.opts().clone();
+                let mut opts = self.base.opts.clone();
                 if !self.experimental_write_cache {
                     opts.cache_opts.cache.remote.write = false;
                     opts.cache_opts.cache.remote.read = false;
                 }
 
-                let new_base = CommandBase::from_opts(
+                let new_base = RunBuilderInput {
                     opts,
-                    self.base.repo_root.clone(),
-                    get_version(),
-                    self.base.color_config,
-                );
+                    repo_root: self.base.repo_root.clone(),
+                    version: self.base.version,
+                    color_config: self.base.color_config,
+                    api_auth: self.base.api_auth.clone(),
+                };
 
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
@@ -862,7 +859,7 @@ impl WatchClient {
                     self.shared_pkg_graph = Some(run.pkg_dep_graph_handle());
                 }
 
-                let task_names = run.engine.tasks_with_command(run.pkg_dep_graph());
+                let task_names = run.engine().tasks_with_command(run.pkg_dep_graph());
                 if task_names.is_empty() {
                     tracing::debug!("no executable tasks after filtering, skipping run");
                     return Ok(RunHandle {
@@ -871,10 +868,10 @@ impl WatchClient {
                     });
                 }
 
-                if let Some(sender) = &self.ui_sender {
-                    if let Err(err) = sender.restart_tasks(task_names) {
-                        tracing::warn!("failed to notify UI of restarted tasks: {err}");
-                    }
+                if let Some(sender) = &self.ui_sender
+                    && let Err(err) = sender.restart_tasks(task_names)
+                {
+                    tracing::warn!("failed to notify UI of restarted tasks: {err}");
                 }
 
                 let ui_sender = self.ui_sender.clone();
@@ -884,18 +881,19 @@ impl WatchClient {
                 })
             }
             ChangedPackages::All => {
-                let mut opts = self.base.opts().clone();
+                let mut opts = self.base.opts.clone();
                 if !self.experimental_write_cache {
                     opts.cache_opts.cache.remote.write = false;
                     opts.cache_opts.cache.remote.read = false;
                 }
 
-                let base = CommandBase::from_opts(
+                let base = RunBuilderInput {
                     opts,
-                    self.base.repo_root.clone(),
-                    get_version(),
-                    self.base.color_config,
-                );
+                    repo_root: self.base.repo_root.clone(),
+                    version: self.base.version,
+                    color_config: self.base.color_config,
+                    api_auth: self.base.api_auth.clone(),
+                };
 
                 let mut run_builder = RunBuilder::new(base.clone(), None)?
                     .with_output_watcher(self.output_watcher.clone());
@@ -911,7 +909,10 @@ impl WatchClient {
                 self.watched_packages = self.run.get_relevant_packages();
 
                 if let Some(sender) = &self.ui_sender {
-                    let task_names = self.run.engine.tasks_with_command(self.run.pkg_dep_graph());
+                    let task_names = self
+                        .run
+                        .engine()
+                        .tasks_with_command(self.run.pkg_dep_graph());
                     if let Err(err) = sender.update_tasks(task_names) {
                         tracing::warn!("failed to notify UI of updated tasks: {err}");
                     }
@@ -939,7 +940,7 @@ mod test {
     use turborepo_daemon::PackageChangeEvent;
     use turborepo_repository::{package_graph::PackageName, toolchain::WatchSpec};
 
-    use super::{package_graph_invalidated, ChangedPackages, WatchClient};
+    use super::{ChangedPackages, WatchClient, package_graph_invalidated};
 
     fn make_package_changed(name: &str) -> PackageChangeEvent {
         PackageChangeEvent::Package {
@@ -1081,11 +1082,13 @@ mod test {
     fn changed_packages_some_with_items_is_not_empty() {
         let mut packages = HashSet::new();
         packages.insert(PackageName::from("a"));
-        assert!(!ChangedPackages::Some {
-            packages,
-            changed_files: HashSet::new(),
-        }
-        .is_empty());
+        assert!(
+            !ChangedPackages::Some {
+                packages,
+                changed_files: HashSet::new(),
+            }
+            .is_empty()
+        );
     }
 
     #[test]

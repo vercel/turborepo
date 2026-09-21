@@ -277,10 +277,10 @@ mod tests {
     fn basic_analysis() {
         let json = r#"[
             {"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{"name":"main"}},
-            {"ph":"b","pid":1,"ts":0.0,"name":"run","cat":"turborepo_lib::run","tid":0,"id":1,".file":"src/run.rs",".line":10},
+            {"ph":"b","pid":1,"ts":0.0,"name":"run","cat":"turborepo_run","tid":0,"id":1,".file":"src/run.rs",".line":10},
             {"ph":"b","pid":1,"ts":100.0,"name":"hash","cat":"turborepo_task_hash","tid":0,"id":2,".file":"src/hash.rs",".line":20},
             {"ph":"e","pid":1,"ts":300.0,"name":"hash","cat":"turborepo_task_hash","tid":0,"id":2},
-            {"ph":"e","pid":1,"ts":500.0,"name":"run","cat":"turborepo_lib::run","tid":0,"id":1}
+            {"ph":"e","pid":1,"ts":500.0,"name":"run","cat":"turborepo_run","tid":0,"id":1}
         ]"#;
 
         let events = parse_trace(json).unwrap();

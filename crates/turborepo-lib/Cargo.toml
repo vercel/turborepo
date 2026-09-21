@@ -8,8 +8,18 @@ license = "MIT"
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
 default = ["rustls-tls"]
-native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
-rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+native-tls = [
+  "turborepo-api-client/native-tls",
+  "turbo-updater/native-tls",
+  "turborepo-run/native-tls",
+  "turborepo-watch/native-tls",
+]
+rustls-tls = [
+  "turborepo-api-client/rustls-tls",
+  "turbo-updater/rustls-tls",
+  "turborepo-run/rustls-tls",
+  "turborepo-watch/rustls-tls",
+]
 heap-dhat = ["dep:dhat"]
 pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -39,7 +49,6 @@ workspace = true
 
 [dependencies]
 camino = "1.1.4"
-chrono = { workspace = true, features = ["serde"] }
 console = { workspace = true }
 dhat = { workspace = true, optional = true }
 dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
@@ -48,7 +57,6 @@ either = { workspace = true }
 futures = { workspace = true }
 go-parse-duration = "0.1.1"
 human-panic = "1.2.1"
-human_format = "1.1.0"
 humantime = "2.1.0"
 ignore = "0.4.24"
 indicatif = { workspace = true }
@@ -56,7 +64,6 @@ itertools = { workspace = true }
 libc = "0.2.140"
 merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.14"
 rand = { workspace = true }
@@ -86,30 +93,22 @@ usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ai-agents = { workspace = true }
-turborepo-analytics = { path = "../turborepo-analytics" }
 turborepo-api-client = { workspace = true }
 turborepo-auth = { path = "../turborepo-auth" }
 turborepo-boundaries = { workspace = true }
-turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-config = { path = "../turborepo-config" }
 turborepo-daemon = { workspace = true }
 turborepo-devtools = { path = "../turborepo-devtools" }
 turborepo-dirs = { path = "../turborepo-dirs" }
-turborepo-engine = { path = "../turborepo-engine" }
-turborepo-env = { workspace = true }
-turborepo-errors = { workspace = true }
-turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-fixed-map = { workspace = true }
 turborepo-frameworks = { workspace = true }
 turborepo-gitignore = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
-turborepo-hash = { workspace = true }
 turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-log = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-config = { workspace = true }
-turborepo-microfrontends-proxy = { workspace = true }
 turborepo-otel = { workspace = true }
 turborepo-package-watcher = { workspace = true }
 turborepo-process = { workspace = true }
@@ -118,19 +117,11 @@ turborepo-prune = { workspace = true }
 turborepo-query-api = { workspace = true }
 turborepo-rayon-compat = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-run-cache = { path = "../turborepo-run-cache" }
-turborepo-run-context = { workspace = true }
+turborepo-run = { workspace = true, default-features = false }
 turborepo-run-opts = { workspace = true }
-turborepo-run-summary = { workspace = true }
-turborepo-scm = { workspace = true }
-turborepo-scope = { path = "../turborepo-scope" }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
-turborepo-task-access = { workspace = true }
 turborepo-task-executor = { workspace = true }
-turborepo-task-filter = { workspace = true }
-turborepo-task-graph = { workspace = true }
-turborepo-task-hash = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-tracing = { workspace = true }
@@ -139,6 +130,7 @@ turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true, features = ["tui"] }
 turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
+turborepo-watch = { workspace = true }
 unrs_resolver = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
