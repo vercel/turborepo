@@ -421,9 +421,9 @@ jobs:
           - name: macos
             runner: macos-latest
         node-version:
-          - 20
           - 22
           - 24
+          - 26
     permissions:
       contents: read
       # For the OIDC token exchanged for a Remote Cache access token.
