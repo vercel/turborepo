@@ -89,6 +89,26 @@ struct ExecutionContext {
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
 }
 
+type RemoteCachePreflight =
+    tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>;
+
+struct RunServicesInput<'a> {
+    preflight_handle: Option<RemoteCachePreflight>,
+    async_cache: AsyncCache,
+    scm_state: LazyScmState,
+    scm_state_task: Option<tokio::task::JoinHandle<Option<String>>>,
+    scm: &'a SCM,
+    repo_index: &'a PendingRepoIndex,
+    analytics_handle: Option<AnalyticsHandle>,
+}
+
+struct RunServices {
+    run_cache: Arc<RunCache>,
+    remote_cache_status: RemoteCacheStatus,
+    observability_handle: Option<observability::Handle>,
+    analytics_handle: Option<AnalyticsHandle>,
+}
+
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_task_access::TaskAccess;
@@ -1552,6 +1572,100 @@ impl RunBuilder {
         })
     }
 
+    async fn build_run_services(&self, input: RunServicesInput<'_>) -> Result<RunServices, Error> {
+        let RunServicesInput {
+            preflight_handle,
+            async_cache,
+            scm_state,
+            scm_state_task,
+            scm,
+            repo_index,
+            analytics_handle,
+        } = input;
+        let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
+
+        let run_cache = Arc::new(RunCache::new(
+            async_cache,
+            &self.repo_root,
+            self.opts.runcache_opts,
+            &self.opts.cache_opts,
+            self.output_watcher.clone(),
+            self.color_config,
+            self.opts.run_opts.dry_run.is_some(),
+        ));
+
+        // futureFlags are hard gates: reject observability config when disabled.
+        if let Some(obs_opts) = &self.opts.experimental_observability {
+            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
+                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                    message: "experimentalObservability.otel is configured but \
+                              futureFlags.experimentalObservability is not enabled in turbo.json."
+                        .to_string(),
+                }
+                .into());
+            }
+        }
+
+        let observability_handle = self
+            .opts
+            .experimental_observability
+            .as_ref()
+            .and_then(|opts| {
+                let token = opts.otel.as_ref().and_then(|otel| {
+                    if !otel.use_remote_cache_token.unwrap_or(false) {
+                        return None;
+                    }
+                    let endpoint = otel.endpoint.as_deref().unwrap_or("");
+                    let api_url = &self.opts.api_client_opts.api_url;
+                    if !origins_match(endpoint, api_url) {
+                        tracing::warn!(
+                            "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
+                             does not match the API URL ({api_url}). Skipping cache token \
+                             injection to prevent sending credentials to an unrelated endpoint."
+                        );
+                        return None;
+                    }
+                    self.api_auth.as_ref().map(|auth| auth.token.expose())
+                });
+                observability::Handle::try_init(opts, token)
+            });
+        if let Some(scm_state_task) = scm_state_task {
+            let scm_state = scm_state.clone();
+            let scm = scm.clone();
+            let repo_index = repo_index.clone();
+            tokio::spawn(
+                async move {
+                    let sha = scm_state_task.await.ok().flatten();
+                    let repo_index = repo_index.get().await;
+                    let dirty_hash =
+                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
+                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
+                            None => scm.get_dirty_hash(),
+                        })
+                        .await
+                        .ok()
+                        .flatten();
+                    let state = if sha.is_some() || dirty_hash.is_some() {
+                        Some(CacheScmState { sha, dirty_hash })
+                    } else {
+                        None
+                    };
+                    scm_state.resolve(state);
+                }
+                .instrument(tracing::info_span!("capture_scm_state")),
+            );
+        } else {
+            scm_state.resolve(None);
+        }
+
+        Ok(RunServices {
+            run_cache,
+            remote_cache_status,
+            observability_handle,
+            analytics_handle,
+        })
+    }
+
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
         self,
@@ -1669,81 +1783,22 @@ impl RunBuilder {
             })
             .await?;
 
-        let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
-
-        let run_cache = Arc::new(RunCache::new(
-            async_cache,
-            &self.repo_root,
-            self.opts.runcache_opts,
-            &self.opts.cache_opts,
-            self.output_watcher,
-            self.color_config,
-            self.opts.run_opts.dry_run.is_some(),
-        ));
-
-        // futureFlags are hard gates: reject observability config when disabled.
-        if let Some(obs_opts) = &self.opts.experimental_observability {
-            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
-                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
-                    message: "experimentalObservability.otel is configured but \
-                              futureFlags.experimentalObservability is not enabled in turbo.json."
-                        .to_string(),
-                }
-                .into());
-            }
-        }
-
-        let observability_handle = self
-            .opts
-            .experimental_observability
-            .as_ref()
-            .and_then(|opts| {
-                let token = opts.otel.as_ref().and_then(|otel| {
-                    if !otel.use_remote_cache_token.unwrap_or(false) {
-                        return None;
-                    }
-                    let endpoint = otel.endpoint.as_deref().unwrap_or("");
-                    let api_url = &self.opts.api_client_opts.api_url;
-                    if !origins_match(endpoint, api_url) {
-                        tracing::warn!(
-                            "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
-                             does not match the API URL ({api_url}). Skipping cache token \
-                             injection to prevent sending credentials to an unrelated endpoint."
-                        );
-                        return None;
-                    }
-                    self.api_auth.as_ref().map(|auth| auth.token.expose())
-                });
-                observability::Handle::try_init(opts, token)
-            });
-        if let Some(scm_state_task) = scm_state_task {
-            let scm_state = scm_state.clone();
-            let scm = scm.clone();
-            let repo_index = repo_index.clone();
-            tokio::spawn(
-                async move {
-                    let sha = scm_state_task.await.ok().flatten();
-                    let repo_index = repo_index.get().await;
-                    let dirty_hash =
-                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
-                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
-                            None => scm.get_dirty_hash(),
-                        })
-                        .await
-                        .ok()
-                        .flatten();
-                    let state = if sha.is_some() || dirty_hash.is_some() {
-                        Some(CacheScmState { sha, dirty_hash })
-                    } else {
-                        None
-                    };
-                    scm_state.resolve(state);
-                }
-                .instrument(tracing::info_span!("capture_scm_state")),
-            );
-        } else {
-            scm_state.resolve(None);
-        }
+        let RunServices {
+            run_cache,
+            remote_cache_status,
+            observability_handle,
+            analytics_handle,
+        } = self
+            .build_run_services(RunServicesInput {
+                preflight_handle,
+                async_cache,
+                scm_state,
+                scm_state_task,
+                scm: &scm,
+                repo_index: &repo_index,
+                analytics_handle,
+            })
+            .await?;
 
         let repo = Arc::new(RepoContext {
             repo_root: self.repo_root,
