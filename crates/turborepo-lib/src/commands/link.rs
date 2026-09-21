@@ -430,13 +430,13 @@ mod test {
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_run_opts::Opts;
     use turborepo_ui::ColorConfig;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
-        opts::Opts,
     };
 
     #[tokio::test]

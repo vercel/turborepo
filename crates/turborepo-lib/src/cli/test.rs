@@ -4,15 +4,13 @@ use camino::Utf8PathBuf;
 use insta::assert_snapshot;
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
+use turborepo_run_opts::{ExecutionSelector, RunSelector};
 use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
-use crate::{
-    cli::{
-        ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
-        GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath,
-        OutputLogsModeArg, RunArgs,
-    },
-    opts::{ExecutionSelector, RunSelector},
+use crate::cli::{
+    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
+    RunArgs,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>

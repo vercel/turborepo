@@ -23,6 +23,7 @@ use turborepo_filewatch::{
 use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
+use turborepo_run_opts::Error as OptsError;
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
 use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
@@ -34,7 +35,7 @@ use crate::{
     commands::CommandBase,
     config::resolve_turbo_config_path,
     engine::{EngineExt, TaskNode},
-    get_version, opts,
+    get_version,
     run::{self, builder::RunBuilder, Run},
 };
 
@@ -248,7 +249,7 @@ pub enum Error {
     #[error("`--since` is not supported in Watch Mode.")]
     SinceNotSupported,
     #[error(transparent)]
-    Opts(#[from] opts::Error),
+    Opts(#[from] OptsError),
     #[error("Invalid filter pattern")]
     InvalidSelector(#[from] InvalidSelectorError),
     #[error("Filter cannot contain a git range in Watch Mode.")]

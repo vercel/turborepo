@@ -24,6 +24,7 @@ use turborepo_repository::{
     toolchain::ToolchainId,
 };
 use turborepo_run_context::RepoContext;
+use turborepo_run_opts::Opts;
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_scope::{filter::ResolutionError, TargetSelector};
@@ -117,7 +118,6 @@ use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 use crate::{
     commands::CommandBase,
     engine::{task_has_command, Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader},
-    opts::Opts,
     run::{
         scope, Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run,
         RunCache,

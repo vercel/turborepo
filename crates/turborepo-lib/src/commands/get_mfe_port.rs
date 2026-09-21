@@ -151,10 +151,11 @@ fn get_port_from_graph(
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use turborepo_run_opts::Opts;
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::{config::TurborepoConfigBuilder, opts::Opts};
+    use crate::config::TurborepoConfigBuilder;
 
     fn setup_test_repo(tmp: &TempDir) -> AbsoluteSystemPathBuf {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap();

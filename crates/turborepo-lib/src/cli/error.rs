@@ -76,7 +76,7 @@ pub enum Error {
     #[error("Devtools error: {0}")]
     Devtools(Box<turborepo_devtools::ServerError>),
     #[error(transparent)]
-    Opts(#[from] crate::opts::Error),
+    Opts(#[from] turborepo_run_opts::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]

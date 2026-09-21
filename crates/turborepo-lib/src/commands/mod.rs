@@ -4,12 +4,12 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 use turborepo_dirs::config_dir;
+use turborepo_run_opts::Opts;
 use turborepo_ui::ColorConfig;
 
 use crate::{
     cli::{self, resolve_configuration_from_args},
     config::{resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError},
-    opts::Opts,
     Args,
 };
 

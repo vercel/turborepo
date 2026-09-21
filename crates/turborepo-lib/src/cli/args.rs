@@ -11,6 +11,7 @@ use miette::{Diagnostic, Report, SourceSpan};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{error, log::warn};
+use turborepo_run_opts::{ExecutionSelector, RunSelector, DEFAULT_CACHE_WORKERS};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventType},
     track_usage,
@@ -21,11 +22,7 @@ use turborepo_types::{
 use usage::{Args as UsageArgs, Cli, Subcommands, ValueEnum};
 
 use super::{exit_with_heap_profile, observability};
-use crate::{
-    commands::prune,
-    get_version,
-    opts::{ExecutionSelector, RunSelector, DEFAULT_CACHE_WORKERS},
-};
+use crate::{commands::prune, get_version};
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 

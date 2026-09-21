@@ -2,7 +2,7 @@
 //!
 //! This module provides task hashing types specialized for turborepo-lib.
 
-use crate::opts::RunOpts;
+use turborepo_run_opts::RunOpts;
 
 /// Type alias for TaskHasher specialized with RunOpts
 pub type TaskHasher<'a> = turborepo_task_hash::TaskHasher<'a, RunOpts>;
