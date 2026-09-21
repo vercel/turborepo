@@ -463,7 +463,7 @@ impl Run {
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
-        self.repo.turbo_json_loader()
+        &self.repo.turbo_json_loader
     }
 
     pub fn opts(&self) -> &Opts {
@@ -471,15 +471,15 @@ impl Run {
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
-        self.repo.repo_root()
+        &self.repo.repo_root
     }
 
     pub fn scm(&self) -> &SCM {
-        self.repo.scm()
+        &self.repo.scm
     }
 
     pub fn root_turbo_json(&self) -> &TurboJson {
-        self.repo.root_turbo_json()
+        &self.repo.root_turbo_json
     }
 
     // Produces the transitive closure of the filtered packages,
@@ -527,14 +527,14 @@ impl Run {
     }
 
     pub fn pkg_dep_graph(&self) -> &PackageGraph {
-        self.repo.pkg_dep_graph()
+        &self.repo.pkg_dep_graph
     }
 
     /// The package graph as a shared handle so watch-mode partial reruns can
     /// reuse it when no graph-defining file (manifests, lockfile, workspace
     /// configuration) changed between runs.
     pub(crate) fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
-        self.repo.pkg_dep_graph_handle()
+        self.repo.pkg_dep_graph.clone()
     }
 
     pub fn engine(&self) -> &Engine {
@@ -546,7 +546,7 @@ impl Run {
     }
 
     pub fn color_config(&self) -> ColorConfig {
-        self.repo.color_config()
+        self.repo.color_config
     }
 
     pub fn has_tui(&self) -> bool {
@@ -1173,7 +1173,7 @@ impl Run {
         let run_tracker = RunTracker::new(
             self.start_at,
             self.opts.synthesize_command(),
-            self.repo.version(),
+            self.repo.version,
             Vendor::get_user(),
             self.observability_handle.clone(),
         );
@@ -1397,7 +1397,7 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
 
 impl turborepo_query_api::QueryRun for Run {
     fn version(&self) -> &'static str {
-        self.repo.version()
+        self.repo.version
     }
 
     fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {

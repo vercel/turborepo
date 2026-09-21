@@ -9,6 +9,7 @@ description = "Shared repository context for Turborepo runs"
 workspace = true
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
 turbopath = { workspace = true }
 turborepo-microfrontends-config = { workspace = true }
 turborepo-repository = { workspace = true }

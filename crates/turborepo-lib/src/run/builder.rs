@@ -1637,15 +1637,15 @@ impl RunBuilder {
             scm_state.resolve(None);
         }
 
-        let repo = Arc::new(RepoContext::new(
-            self.repo_root,
-            self.color_config,
-            self.version,
+        let repo = Arc::new(RepoContext {
+            repo_root: self.repo_root,
+            color_config: self.color_config,
+            version: self.version,
             scm,
             pkg_dep_graph,
             turbo_json_loader,
             root_turbo_json,
-        ));
+        });
 
         Ok((
             Run {
