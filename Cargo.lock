@@ -8390,6 +8390,7 @@ dependencies = [
  "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-run-cache",
+ "turborepo-run-context",
  "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-scope",
@@ -8795,6 +8796,18 @@ dependencies = [
  "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-types",
+ "turborepo-ui",
+]
+
+[[package]]
+name = "turborepo-run-context"
+version = "0.1.0"
+dependencies = [
+ "turbopath",
+ "turborepo-microfrontends-config",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-turbo-json",
  "turborepo-ui",
 ]
 

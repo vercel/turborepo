@@ -1,0 +1,17 @@
+[package]
+name = "turborepo-run-context"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Shared repository context for Turborepo runs"
+
+[lints]
+workspace = true
+
+[dependencies]
+turbopath = { workspace = true }
+turborepo-microfrontends-config = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-turbo-json = { workspace = true }
+turborepo-ui = { workspace = true }

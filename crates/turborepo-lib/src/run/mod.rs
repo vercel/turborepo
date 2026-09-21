@@ -22,7 +22,7 @@ use itertools::Itertools;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -31,6 +31,7 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{RunCache, TaskCache};
+use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
@@ -106,20 +107,14 @@ impl PendingRepoIndex {
 
 #[derive(Clone)]
 pub struct Run {
-    version: &'static str,
-    color_config: ColorConfig,
+    repo: Arc<RepoContext>,
     start_at: DateTime<Local>,
     processes: ProcessManager,
     run_telemetry: GenericEventBuilder,
-    repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
-    pkg_dep_graph: Arc<PackageGraph>,
-    turbo_json_loader: UnifiedTurboJsonLoader,
-    root_turbo_json: TurboJson,
-    scm: SCM,
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
     remote_cache_status: RemoteCacheStatus,
@@ -468,7 +463,7 @@ impl Run {
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
-        &self.turbo_json_loader
+        self.repo.turbo_json_loader()
     }
 
     pub fn opts(&self) -> &Opts {
@@ -476,15 +471,15 @@ impl Run {
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
-        &self.repo_root
+        self.repo.repo_root()
     }
 
     pub fn scm(&self) -> &SCM {
-        &self.scm
+        self.repo.scm()
     }
 
     pub fn root_turbo_json(&self) -> &TurboJson {
-        &self.root_turbo_json
+        self.repo.root_turbo_json()
     }
 
     // Produces the transitive closure of the filtered packages,
@@ -496,7 +491,7 @@ impl Run {
             .iter()
             .map(|pkg| PackageNode::Workspace(pkg.clone()))
             .collect();
-        self.pkg_dep_graph
+        self.pkg_dep_graph()
             .transitive_closure(&packages)
             .into_iter()
             .filter_map(|node| match node {
@@ -510,7 +505,7 @@ impl Run {
     // Used to print a list of potential tasks to run. Obeys the `--filter` flag
     pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
         let mut tasks = BTreeMap::new();
-        for context in self.pkg_dep_graph.package_task_contexts() {
+        for context in self.pkg_dep_graph().package_task_contexts() {
             let name = context.package();
             if !self.filtered_pkgs.contains(name) {
                 continue;
@@ -532,14 +527,14 @@ impl Run {
     }
 
     pub fn pkg_dep_graph(&self) -> &PackageGraph {
-        &self.pkg_dep_graph
+        self.repo.pkg_dep_graph()
     }
 
     /// The package graph as a shared handle so watch-mode partial reruns can
     /// reuse it when no graph-defining file (manifests, lockfile, workspace
     /// configuration) changed between runs.
     pub(crate) fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
-        self.pkg_dep_graph.clone()
+        self.repo.pkg_dep_graph_handle()
     }
 
     pub fn engine(&self) -> &Engine {
@@ -551,7 +546,7 @@ impl Run {
     }
 
     pub fn color_config(&self) -> ColorConfig {
-        self.color_config
+        self.repo.color_config()
     }
 
     pub fn has_tui(&self) -> bool {
@@ -579,16 +574,16 @@ impl Run {
             return Ok(None);
         }
 
-        let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
+        let task_names = self.engine.tasks_with_command(self.pkg_dep_graph());
         // If there aren't any tasks to run, then shouldn't start the UI
         if task_names.is_empty() {
             return Ok(None);
         }
 
         let (sender, receiver) = TuiSender::new();
-        let color_config = self.color_config;
+        let color_config = self.color_config();
         let scrollback_len = self.opts.tui_opts.scrollback_length;
-        let repo_root = self.repo_root.clone();
+        let repo_root = self.repo_root().to_owned();
         let signal_handler = self.signal_handler.clone();
         let interrupt = Arc::new(move || signal_handler.notify_signal());
         let handle = tui::spawn_run_app(
@@ -684,7 +679,7 @@ impl Run {
             ));
         };
 
-        let full_path = self.repo_root.join_unix_path(config_path);
+        let full_path = self.repo_root().join_unix_path(config_path);
         let contents = std::fs::read_to_string(&full_path).map_err(|e| {
             Error::Proxy(format!("Failed to read microfrontends config file: {}", e))
         })?;
@@ -1021,7 +1016,7 @@ impl Run {
         };
         let repo_index = repo_index_arc.as_ref().as_ref();
 
-        self.pkg_dep_graph
+        self.pkg_dep_graph()
             .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
 
@@ -1037,7 +1032,7 @@ impl Run {
         // These are completely independent and dominate the pre-execution phase.
         // Running them in parallel can significantly reduce wall-clock time.
         let internal_dep_paths = is_monorepo.then(|| {
-            self.pkg_dep_graph
+            self.pkg_dep_graph()
                 .root_internal_package_dependencies_paths()
         });
 
@@ -1057,11 +1052,11 @@ impl Run {
                         || self.opts.run_opts.summarize
                         || self.observability_handle.is_some();
                     file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
-                        &self.scm,
+                        self.scm(),
                         self.engine.tasks(),
-                        &self.pkg_dep_graph,
+                        self.pkg_dep_graph(),
                         self.engine.task_definitions(),
-                        &self.repo_root,
+                        self.repo_root(),
                         &self.run_telemetry,
                         repo_index,
                         needs_expanded,
@@ -1073,8 +1068,8 @@ impl Run {
                         internal_dep_paths
                             .map(|dep_paths| {
                                 get_internal_deps_hash(
-                                    &self.scm,
-                                    &self.repo_root,
+                                    self.scm(),
+                                    self.repo_root(),
                                     dep_paths,
                                     repo_index,
                                 )
@@ -1086,20 +1081,20 @@ impl Run {
                     let _span =
                         tracing::info_span!("collect_global_file_hash_inputs_task").entered();
                     let resolution_file_fallback = self
-                        .pkg_dep_graph
+                        .pkg_dep_graph()
                         .external_resolution_fallback_inputs()
                         .unwrap_or_default();
-                    let root_engines = self.pkg_dep_graph.root_engines();
+                    let root_engines = self.pkg_dep_graph().root_engines();
                     let root_engines = (!root_engines.is_empty()).then_some(root_engines);
                     global_file_result = Some(collect_global_file_hash_inputs(
                         root_engines,
-                        &self.repo_root,
-                        self.pkg_dep_graph.package_manager(),
+                        self.repo_root(),
+                        self.pkg_dep_graph().package_manager(),
                         &resolution_file_fallback,
-                        self.root_turbo_json.global_deps_for_hash(),
+                        self.root_turbo_json().global_deps_for_hash(),
                         &self.env_at_execution_start,
-                        &self.root_turbo_json.global_env,
-                        &self.scm,
+                        &self.root_turbo_json().global_env,
+                        self.scm(),
                     ));
                 });
                 if is_monorepo {
@@ -1107,7 +1102,7 @@ impl Run {
                         let _span =
                             tracing::info_span!("compute_external_deps_hashes_task").entered();
                         external_deps_hashes =
-                            Some(compute_external_deps_hashes(&self.pkg_dep_graph));
+                            Some(compute_external_deps_hashes(self.pkg_dep_graph()));
                     });
                 }
             });
@@ -1145,7 +1140,7 @@ impl Run {
                 // Remove the passthroughs from hash consideration if we're explicitly loose.
                 None
             }
-            EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
+            EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
         };
 
         let global_hash_inputs = GlobalHashableInputs {
@@ -1154,7 +1149,7 @@ impl Run {
             root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
             root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
             engines: global_file_inputs.engines,
-            env: &self.root_turbo_json.global_env,
+            env: &self.root_turbo_json().global_env,
             resolved_env_vars: Some(global_file_inputs.global_hashable_env_vars),
             pass_through_env,
             env_mode,
@@ -1178,7 +1173,7 @@ impl Run {
         let run_tracker = RunTracker::new(
             self.start_at,
             self.opts.synthesize_command(),
-            self.version,
+            self.repo.version(),
             Vendor::get_user(),
             self.observability_handle.clone(),
         );
@@ -1186,7 +1181,7 @@ impl Run {
         drop(_setup_span);
 
         let mut visitor = Visitor::new(
-            self.pkg_dep_graph.clone(),
+            self.pkg_dep_graph_handle(),
             self.run_cache.clone(),
             run_tracker,
             &self.task_access,
@@ -1194,13 +1189,13 @@ impl Run {
             package_inputs_hashes,
             &self.env_at_execution_start,
             &global_hash,
-            self.color_config,
+            self.color_config(),
             self.processes.clone(),
-            &self.repo_root,
-            &self.scm,
+            self.repo_root(),
+            self.scm(),
             repo_index,
             global_env,
-            &self.root_turbo_json.global_env,
+            &self.root_turbo_json().global_env,
             ui_sender,
             is_watch,
             self.micro_frontend_configs.as_ref(),
@@ -1256,7 +1251,7 @@ impl Run {
                 global_hash_inputs,
                 &self.engine,
                 &self.env_at_execution_start,
-                &self.scm,
+                self.scm(),
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;
@@ -1288,7 +1283,7 @@ impl Run {
                 graph_opts,
                 &self.engine,
                 self.opts.run_opts.single_package,
-                &self.repo_root,
+                self.repo_root(),
                 &spawner,
                 Some(graphviz_warning),
                 Some(&|filename: &AbsoluteSystemPath| {
@@ -1402,15 +1397,15 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
 
 impl turborepo_query_api::QueryRun for Run {
     fn version(&self) -> &'static str {
-        self.version
+        self.repo.version()
     }
 
     fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
-        &self.repo_root
+        self.repo_root()
     }
 
     fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph {
-        &self.pkg_dep_graph
+        self.pkg_dep_graph()
     }
 
     fn engine(
@@ -1420,11 +1415,11 @@ impl turborepo_query_api::QueryRun for Run {
     }
 
     fn scm(&self) -> &turborepo_scm::SCM {
-        &self.scm
+        self.scm()
     }
 
     fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson {
-        &self.root_turbo_json
+        self.root_turbo_json()
     }
 
     fn calculate_affected_packages(
@@ -1441,11 +1436,11 @@ impl turborepo_query_api::QueryRun for Run {
         let mut opts = self.opts.as_ref().clone();
         opts.scope_opts.affected_range = Some((base, head));
         builder::RunBuilder::calculate_filtered_packages(
-            &self.repo_root,
+            self.repo_root(),
             &opts,
-            &self.pkg_dep_graph,
-            &self.scm,
-            &self.root_turbo_json,
+            self.pkg_dep_graph(),
+            self.scm(),
+            self.root_turbo_json(),
         )
         .map(|(packages, _, _)| packages)
         .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
@@ -1460,8 +1455,8 @@ impl turborepo_query_api::QueryRun for Run {
         turborepo_query_api::AffectedPackagesError,
     > {
         match self
-            .scm
-            .changed_files(&self.repo_root, base, head, true, true, true)
+            .scm()
+            .changed_files(self.repo_root(), base, head, true, true, true)
             .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
         {
             Ok(files) => Ok(files),
