@@ -22,7 +22,7 @@ mod test {
     use insta::assert_snapshot;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_env::EnvironmentVariableMap;
-    use turborepo_microfrontends::{TurborepoMfeConfig as Config, MICROFRONTENDS_PACKAGE};
+    use turborepo_microfrontends::{MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as Config};
     use turborepo_process::Command;
     use turborepo_repository::{
         package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,

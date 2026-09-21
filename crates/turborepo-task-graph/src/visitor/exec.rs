@@ -7,20 +7,21 @@ use std::sync::{Arc, Mutex};
 
 use console::StyledObject;
 use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollectorWrapper};
-use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
 use turborepo_process::ProcessManager;
+use turborepo_run_cache::TaskCache;
 use turborepo_task_access::TaskAccess;
 use turborepo_task_executor::{DryRunExecutor, TaskExecutor};
 use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
 
 use super::{
-    command::{CommandFactory, MicroFrontendProxyProvider, ToolchainCommandProvider},
     Visitor,
+    command::{CommandFactory, MicroFrontendProxyProvider, ToolchainCommandProvider},
 };
-use crate::{engine::Engine, run::TaskCache};
+use crate::{Engine, TaskGraphRunOpts};
 
-/// Type alias for the concrete TaskExecutor used in turborepo-lib.
+/// Type alias for the concrete TaskExecutor used by task graph execution.
 pub type ExecContext = TaskExecutor<
     TaskHashTracker,
     TaskErrorCollectorWrapper,
@@ -28,15 +29,15 @@ pub type ExecContext = TaskExecutor<
     TaskAccess,
 >;
 
-/// Type alias for the concrete DryRunExecutor used in turborepo-lib.
+/// Type alias for the concrete DryRunExecutor used by task graph execution.
 pub type DryRunExecContext = DryRunExecutor<TaskHashTracker>;
 
 /// Factory for creating task execution contexts.
 ///
 /// This struct wraps the visitor and provides methods to create TaskExecutor
 /// and DryRunExecutor instances.
-pub struct ExecContextFactory<'a> {
-    visitor: &'a Visitor<'a>,
+pub struct ExecContextFactory<'a, R: TaskGraphRunOpts> {
+    visitor: &'a Visitor<'a, R>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     manager: ProcessManager,
     #[allow(dead_code)]
@@ -44,9 +45,9 @@ pub struct ExecContextFactory<'a> {
     command_factory: CommandFactory<'a>,
 }
 
-impl<'a> ExecContextFactory<'a> {
+impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
     pub fn new(
-        visitor: &'a Visitor<'a>,
+        visitor: &'a Visitor<'a, R>,
         errors: Arc<Mutex<Vec<TaskError>>>,
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
@@ -113,10 +114,10 @@ impl<'a> ExecContextFactory<'a> {
             execution_env,
             manager: self.manager.clone(),
             takes_input,
-            continue_on_error: self.visitor.run_opts.continue_on_error,
-            ui_mode: self.visitor.run_opts.ui_mode,
+            continue_on_error: self.visitor.run_opts.continue_on_error(),
+            ui_mode: self.visitor.run_opts.ui_mode(),
             color_config: self.visitor.repo.color_config,
-            is_github_actions: self.visitor.run_opts.is_github_actions,
+            is_github_actions: self.visitor.run_opts.is_github_actions(),
             pretty_prefix,
             task_cache,
             hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
@@ -158,7 +159,7 @@ impl<'a> ExecContextFactory<'a> {
         execution_env.insert("TURBO_HASH".to_owned(), task_hash.to_owned());
 
         // Allow downstream tools to detect if the task is being ran with TUI
-        if self.visitor.run_opts.ui_mode.use_tui() {
+        if self.visitor.run_opts.ui_mode().use_tui() {
             execution_env.insert("TURBO_IS_TUI".to_owned(), "true".to_owned());
         }
 

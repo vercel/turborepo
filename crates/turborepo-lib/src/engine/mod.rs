@@ -11,9 +11,7 @@ pub use turborepo_engine::Building;
 // Re-export builder types from turborepo-engine
 pub use turborepo_engine::{BuilderError, EngineBuilder};
 // Re-export core types from turborepo-engine
-pub use turborepo_engine::{
-    Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
-};
+pub use turborepo_engine::{Built, TaskDefinitionInfo, TaskNode};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::TaskId;
 use turborepo_types::{TaskDefinition, UIMode};

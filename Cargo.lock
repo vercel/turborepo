@@ -8308,7 +8308,6 @@ dependencies = [
  "camino",
  "chrono",
  "console 0.16.2",
- "convert_case 0.6.0",
  "dhat",
  "dialoguer",
  "dirs-next",
@@ -8399,6 +8398,7 @@ dependencies = [
  "turborepo-task-access",
  "turborepo-task-executor",
  "turborepo-task-filter",
+ "turborepo-task-graph",
  "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
@@ -8412,7 +8412,6 @@ dependencies = [
  "unrs_resolver",
  "url",
  "usage-rs",
- "wax",
  "webbrowser",
  "which",
 ]
@@ -9021,6 +9020,49 @@ dependencies = [
  "turborepo-task-id",
  "turborepo-types",
  "wax",
+]
+
+[[package]]
+name = "turborepo-task-graph"
+version = "0.1.0"
+dependencies = [
+ "console 0.16.2",
+ "convert_case 0.6.0",
+ "futures",
+ "insta",
+ "itertools 0.14.0",
+ "miette",
+ "petgraph 0.8.3",
+ "pretty_assertions",
+ "rayon",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-engine",
+ "turborepo-env",
+ "turborepo-errors",
+ "turborepo-hash",
+ "turborepo-log",
+ "turborepo-microfrontends",
+ "turborepo-microfrontends-config",
+ "turborepo-process",
+ "turborepo-rayon-compat",
+ "turborepo-repository",
+ "turborepo-run-cache",
+ "turborepo-run-context",
+ "turborepo-run-summary",
+ "turborepo-scm",
+ "turborepo-task-access",
+ "turborepo-task-executor",
+ "turborepo-task-hash",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
+ "turborepo-ui",
+ "wax",
+ "which",
 ]
 
 [[package]]

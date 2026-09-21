@@ -417,6 +417,44 @@ impl RunOpts {
     }
 }
 
+impl turborepo_task_graph::TaskGraphRunOpts for RunOpts {
+    fn task_args(&self) -> TaskArgs<'_> {
+        self.task_args()
+    }
+
+    fn concurrency(&self) -> u32 {
+        self.concurrency
+    }
+
+    fn env_mode(&self) -> EnvMode {
+        self.env_mode
+    }
+
+    fn continue_on_error(&self) -> ContinueMode {
+        self.continue_on_error
+    }
+
+    fn log_order(&self) -> ResolvedLogOrder {
+        self.log_order
+    }
+
+    fn log_prefix(&self) -> ResolvedLogPrefix {
+        self.log_prefix
+    }
+
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn is_github_actions(&self) -> bool {
+        self.is_github_actions
+    }
+
+    fn ui_mode(&self) -> UIMode {
+        self.ui_mode
+    }
+}
+
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         let root_turbo_json_path = inputs
