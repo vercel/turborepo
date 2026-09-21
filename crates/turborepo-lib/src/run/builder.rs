@@ -67,6 +67,28 @@ struct RepoDiscovery {
     untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
 }
 
+struct ExecutionContextInput<'a> {
+    root_package_json: Option<package_json::PackageJson>,
+    is_single_package: bool,
+    pkg_dep_graph: Arc<PackageGraph>,
+    lazy_plan: Option<LazyPlan<CachingPackageDiscovery<LocalPackageDiscovery>>>,
+    scm: &'a SCM,
+    micro_frontend_configs: Option<MicrofrontendsConfigs>,
+    untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
+    async_cache: AsyncCache,
+}
+
+struct ExecutionContext {
+    pkg_dep_graph: Arc<PackageGraph>,
+    turbo_json_loader: UnifiedTurboJsonLoader,
+    root_turbo_json: TurboJson,
+    task_access: TaskAccess,
+    env_at_execution_start: EnvironmentVariableMap,
+    filtered_pkgs: HashSet<PackageName>,
+    engine: Arc<Engine>,
+    micro_frontend_configs: Option<MicrofrontendsConfigs>,
+}
+
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_task_access::TaskAccess;
@@ -957,101 +979,20 @@ impl RunBuilder {
         })
     }
 
-    #[tracing::instrument(skip(self, signal_handler))]
-    pub async fn build(
-        self,
-        signal_handler: &SignalHandler,
-        telemetry: CommandEventBuilder,
-    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
-        tracing::trace!(
-            platform = %TurboState::platform_name(),
-            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
-            turbo_version = %TurboState::version(),
-            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
-            "performing run on {:?}",
-            TurboState::platform_name(),
-        );
-        let start_at = Local::now();
-
-        let RepoDiscovery {
-            run_telemetry,
-            is_single_package,
+    async fn build_execution_context(
+        &self,
+        input: ExecutionContextInput<'_>,
+    ) -> Result<ExecutionContext, Error> {
+        let ExecutionContextInput {
             root_package_json,
+            is_single_package,
             mut pkg_dep_graph,
             mut lazy_plan,
             scm,
             micro_frontend_configs,
-            repo_index,
             untracked_scan_scope_tx,
-        } = self.discover_repo(&telemetry).await?;
-
-        // SCM-independent work runs while the background scm_task continues.
-        // The await is deferred until just before the first SCM consumer,
-        // letting API client resolution, cache init, turbo.json loading,
-        // validation, env inference, and turbo.json preloading overlap with
-        // tracked git-index construction.
-
-        let api_client = if self.should_initialize_http_client() {
-            let _span = tracing::info_span!("resolve_api_client").entered();
-            let http_client = self.http_client.get_or_init().await?;
-            Some(self.api_client_from_http(http_client))
-        } else {
-            None
-        };
-
-        let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
-            if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
-                let token = auth.token.clone();
-                let team_id = auth.team_id.clone();
-                let team_slug = auth.team_slug.clone();
-                Some(tokio::spawn(
-                    async move {
-                        client
-                            .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
-                            .await
-                    }
-                    .instrument(tracing::info_span!("remote_cache_preflight")),
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let (analytics_sender, analytics_handle) = self
-            .api_auth
-            .as_ref()
-            .filter(|auth| auth.is_linked())
-            .and_then(|auth| {
-                api_client
-                    .clone()
-                    .map(|api_client| start_analytics(auth.clone(), api_client))
-            })
-            .unzip();
-
-        let scm_state = LazyScmState::new();
-        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
-            let scm = scm.clone();
-            let repo_root = self.repo_root.clone();
-            tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("capture_scm_sha").entered();
-                scm.get_current_sha(&repo_root).ok()
-            })
-        });
-
-        let async_cache = {
-            let _span = tracing::info_span!("async_cache_new").entered();
-            AsyncCache::new(
-                &self.opts.cache_opts,
-                &self.repo_root,
-                api_client.clone(),
-                self.api_auth.clone(),
-                analytics_sender,
-                scm_state.clone(),
-            )?
-        };
-
+            async_cache,
+        } = input;
         // Graph-dependent queries (dependency/dependent expansion, git
         // ranges), affectedness, watch reruns, whole-graph engines, and the
         // no-turbo-json inference loader cannot narrow against an inventory:
@@ -1205,7 +1146,7 @@ impl RunBuilder {
             let ta = TaskAccess::new(
                 self.repo_root.clone(),
                 async_cache.clone(),
-                &scm,
+                scm,
                 task_access_enabled,
             );
             ta.restore_config().await;
@@ -1246,7 +1187,7 @@ impl RunBuilder {
                     &self.repo_root,
                     package_resolution_opts,
                     &pkg_dep_graph,
-                    &scm,
+                    scm,
                     &root_turbo_json,
                 )?
             };
@@ -1480,7 +1421,7 @@ impl RunBuilder {
                         &engine,
                         affected_range,
                         &pkg_dep_graph,
-                        &scm,
+                        scm,
                         &self.repo_root,
                         &root_turbo_json.global_deps,
                     )?)
@@ -1516,7 +1457,7 @@ impl RunBuilder {
                         .map(|selection| &selection.orchestration),
                 },
                 &pkg_dep_graph,
-                &scm,
+                scm,
                 &self.repo_root,
                 &root_turbo_json.global_deps,
             )?;
@@ -1528,7 +1469,7 @@ impl RunBuilder {
                 engine,
                 &pkg_dep_graph,
                 &root_turbo_json,
-                &scm,
+                scm,
                 task_level_affected_package_scope.as_ref(),
             )?;
             engine = affected_engine;
@@ -1598,6 +1539,135 @@ impl RunBuilder {
                 )
                 .map_err(Error::EngineValidation)?;
         }
+
+        Ok(ExecutionContext {
+            pkg_dep_graph,
+            turbo_json_loader,
+            root_turbo_json,
+            task_access,
+            env_at_execution_start,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+            engine: Arc::new(engine),
+            micro_frontend_configs,
+        })
+    }
+
+    #[tracing::instrument(skip(self, signal_handler))]
+    pub async fn build(
+        self,
+        signal_handler: &SignalHandler,
+        telemetry: CommandEventBuilder,
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
+        tracing::trace!(
+            platform = %TurboState::platform_name(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
+            turbo_version = %TurboState::version(),
+            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
+            "performing run on {:?}",
+            TurboState::platform_name(),
+        );
+        let start_at = Local::now();
+
+        let RepoDiscovery {
+            run_telemetry,
+            is_single_package,
+            root_package_json,
+            pkg_dep_graph,
+            lazy_plan,
+            scm,
+            micro_frontend_configs,
+            repo_index,
+            untracked_scan_scope_tx,
+        } = self.discover_repo(&telemetry).await?;
+
+        // SCM-independent work runs while the background scm_task continues.
+        // The await is deferred until just before the first SCM consumer,
+        // letting API client resolution, cache init, turbo.json loading,
+        // validation, env inference, and turbo.json preloading overlap with
+        // tracked git-index construction.
+
+        let api_client = if self.should_initialize_http_client() {
+            let _span = tracing::info_span!("resolve_api_client").entered();
+            let http_client = self.http_client.get_or_init().await?;
+            Some(self.api_client_from_http(http_client))
+        } else {
+            None
+        };
+
+        let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
+            if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
+                let token = auth.token.clone();
+                let team_id = auth.team_id.clone();
+                let team_slug = auth.team_slug.clone();
+                Some(tokio::spawn(
+                    async move {
+                        client
+                            .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                            .await
+                    }
+                    .instrument(tracing::info_span!("remote_cache_preflight")),
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let (analytics_sender, analytics_handle) = self
+            .api_auth
+            .as_ref()
+            .filter(|auth| auth.is_linked())
+            .and_then(|auth| {
+                api_client
+                    .clone()
+                    .map(|api_client| start_analytics(auth.clone(), api_client))
+            })
+            .unzip();
+
+        let scm_state = LazyScmState::new();
+        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
+            let scm = scm.clone();
+            let repo_root = self.repo_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("capture_scm_sha").entered();
+                scm.get_current_sha(&repo_root).ok()
+            })
+        });
+
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            AsyncCache::new(
+                &self.opts.cache_opts,
+                &self.repo_root,
+                api_client.clone(),
+                self.api_auth.clone(),
+                analytics_sender,
+                scm_state.clone(),
+            )?
+        };
+
+        let ExecutionContext {
+            pkg_dep_graph,
+            turbo_json_loader,
+            root_turbo_json,
+            task_access,
+            env_at_execution_start,
+            filtered_pkgs,
+            engine,
+            micro_frontend_configs,
+        } = self
+            .build_execution_context(ExecutionContextInput {
+                root_package_json,
+                is_single_package,
+                pkg_dep_graph,
+                lazy_plan,
+                scm: &scm,
+                micro_frontend_configs,
+                untracked_scan_scope_tx,
+                async_cache: async_cache.clone(),
+            })
+            .await?;
 
         let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
 
@@ -1695,8 +1765,8 @@ impl RunBuilder {
                 opts: Arc::new(self.opts),
                 api_auth: self.api_auth,
                 env_at_execution_start,
-                filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-                engine: Arc::new(engine),
+                filtered_pkgs,
+                engine,
                 run_cache,
                 signal_handler: signal_handler.clone(),
                 remote_cache_status,
