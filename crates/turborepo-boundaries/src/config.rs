@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
@@ -48,7 +48,7 @@ pub struct BoundariesConfig {
 }
 
 /// A map of tag names to their boundary rules.
-pub type RulesMap = HashMap<String, Spanned<Rule>>;
+pub type RulesMap = BTreeMap<String, Spanned<Rule>>;
 
 /// Boundary rules for a tag.
 ///
