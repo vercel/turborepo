@@ -253,14 +253,13 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         };
 
         // Set up correct size for underlying pty (requires .await, so outside span)
-        if let Some(app) = ui_sender.as_ref() {
-            if let Some(pane_size) = app
+        if let Some(app) = ui_sender.as_ref()
+            && let Some(pane_size) = app
                 .pane_size()
                 .instrument(tracing::debug_span!("configure_pane_size"))
                 .await
-            {
-                manager.set_pty_size(pane_size.rows, pane_size.cols);
-            }
+        {
+            manager.set_pty_size(pane_size.rows, pane_size.cols);
         }
 
         Ok(Self {
@@ -726,34 +725,30 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             };
             // Recursive turbo detection uses catalog authored display/source
             // facts, not a live PackageJson::scripts read.
-            if info.package() == ROOT_PKG_NAME {
-                if let Some(native_task) = package_context.native_tasks().get(info.task()) {
-                    if let Some(cmd) = native_task.display().or_else(|| {
-                        native_task
-                            .script()
-                            .map(|script| script.as_inner().as_str())
-                    }) {
-                        if command_invokes_turbo(cmd) {
-                            let package_task_event =
-                                PackageTaskEventBuilder::new(info.package(), info.task())
-                                    .with_parent(telemetry);
-                            package_task_event.track_error(TrackedErrors::RecursiveError);
-                            let (span, text) = native_task
-                                .script()
-                                .map(|script| script.span_and_text("package.json"))
-                                .unwrap_or((None, NamedSource::new("", String::new())));
+            if info.package() == ROOT_PKG_NAME
+                && let Some(native_task) = package_context.native_tasks().get(info.task())
+                && let Some(cmd) = native_task.display().or_else(|| {
+                    native_task
+                        .script()
+                        .map(|script| script.as_inner().as_str())
+                })
+                && command_invokes_turbo(cmd)
+            {
+                let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task())
+                    .with_parent(telemetry);
+                package_task_event.track_error(TrackedErrors::RecursiveError);
+                let (span, text) = native_task
+                    .script()
+                    .map(|script| script.span_and_text("package.json"))
+                    .unwrap_or((None, NamedSource::new("", String::new())));
 
-                            dispatch_error =
-                                Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                                    task_name: info.to_string(),
-                                    command: cmd.to_string(),
-                                    span,
-                                    text,
-                                })));
-                            break;
-                        }
-                    }
-                }
+                dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                    task_name: info.to_string(),
+                    command: cmd.to_string(),
+                    span,
+                    text,
+                })));
+                break;
             }
 
             let Some(task_definition) = engine.task_definition(&info) else {
@@ -1085,23 +1080,23 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
 
         // output any warnings that we collected while running tasks
-        if let Ok(warnings) = self.warnings.lock() {
-            if !warnings.is_empty() {
-                turborepo_log::warn(
-                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                    "finished with warnings",
+        if let Ok(warnings) = self.warnings.lock()
+            && !warnings.is_empty()
+        {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                "finished with warnings",
+            )
+            .emit();
+
+            PlatformEnv::output_header(global_env_mode == EnvMode::Strict, ui);
+
+            for warning in warnings.iter() {
+                PlatformEnv::output_for_task(
+                    warning.missing_platform_env().to_owned(),
+                    warning.task_id(),
+                    ui,
                 )
-                .emit();
-
-                PlatformEnv::output_header(global_env_mode == EnvMode::Strict, ui);
-
-                for warning in warnings.iter() {
-                    PlatformEnv::output_for_task(
-                        warning.missing_platform_env().to_owned(),
-                        warning.task_id(),
-                        ui,
-                    )
-                }
             }
         }
 
