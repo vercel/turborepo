@@ -19,7 +19,6 @@ mod opts;
 mod panic_handler;
 mod run;
 mod shim;
-mod task_graph;
 mod task_hash;
 
 // Re-export daemon types from the new crate location

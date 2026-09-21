@@ -11,58 +11,55 @@ use std::{
 
 use convert_case::{Case, Casing};
 use exec::ExecContextFactory;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::{sync::mpsc, task::JoinError};
-use tracing::{debug, Instrument, Span};
+use tracing::{Instrument, Span, debug};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_engine::{TaskError, TaskWarning};
-use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_engine::{ExecuteError, ExecutionOptions, Message, TaskError, TaskNode, TaskWarning};
+use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
 use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
+use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::RepoGitIndex;
 use turborepo_task_access::TaskAccess;
 use turborepo_task_executor::{
-    command_invokes_turbo, InternalError as TaskInternalError, TaskOutput,
+    InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
     Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
+    TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
-    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
+    EventBuilder, TrackedErrors, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
-use turborepo_ui::{sender::UISender, ColorSelector};
+use turborepo_ui::{ColorSelector, sender::UISender};
 use wax::Program;
 
-use crate::{
-    engine::{Engine, ExecutionOptions, TaskNode},
-    opts::RunOpts,
-    run::RunCache,
-    task_hash::TaskHasher,
-};
+use crate::{Engine, TaskGraphRunOpts};
 
 // This holds the whole world
-pub struct Visitor<'a> {
+pub struct Visitor<'a, R: TaskGraphRunOpts> {
     color_cache: ColorSelector,
     dry: bool,
     global_env_mode: EnvMode,
     grouping_layer: Arc<GroupingLayer>,
     manager: ProcessManager,
     repo: &'a RepoContext,
-    run_opts: &'a RunOpts,
+    run_opts: &'a R,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
-    task_hasher: TaskHasher<'a>,
-    repo_index: Option<&'a RepoGitIndex>,
+    task_hasher: TaskHasher<'a, R>,
+    _repo_index: Option<&'a RepoGitIndex>,
     is_watch: bool,
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
@@ -116,7 +113,7 @@ pub enum Error {
     #[error("Could not find definition for task")]
     MissingDefinition,
     #[error("Error while executing engine: {0}")]
-    Engine(#[from] crate::engine::ExecuteError),
+    Engine(#[from] ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] TaskHashError),
     #[error(transparent)]
@@ -197,7 +194,7 @@ fn write_join_error(f: &mut fmt::Formatter<'_>, context: &str, err: &JoinError) 
     }
 }
 
-impl<'a> Visitor<'a> {
+impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
     // together
@@ -207,7 +204,7 @@ impl<'a> Visitor<'a> {
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
         task_access: &'a TaskAccess,
-        run_opts: &'a RunOpts,
+        run_opts: &'a R,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
@@ -244,7 +241,7 @@ impl<'a> Visitor<'a> {
 
             let color_cache = ColorSelector::default();
 
-            let grouping_mode = match run_opts.log_order {
+            let grouping_mode = match run_opts.log_order() {
                 ResolvedLogOrder::Stream => GroupingMode::Passthrough,
                 ResolvedLogOrder::Grouped => GroupingMode::Grouped,
             };
@@ -256,20 +253,19 @@ impl<'a> Visitor<'a> {
         };
 
         // Set up correct size for underlying pty (requires .await, so outside span)
-        if let Some(app) = ui_sender.as_ref() {
-            if let Some(pane_size) = app
+        if let Some(app) = ui_sender.as_ref()
+            && let Some(pane_size) = app
                 .pane_size()
                 .instrument(tracing::debug_span!("configure_pane_size"))
                 .await
-            {
-                manager.set_pty_size(pane_size.rows, pane_size.cols);
-            }
+        {
+            manager.set_pty_size(pane_size.rows, pane_size.cols);
         }
 
         Ok(Self {
             color_cache,
             dry: false,
-            global_env_mode: run_opts.env_mode,
+            global_env_mode: run_opts.env_mode(),
             grouping_layer,
             manager,
             repo,
@@ -278,7 +274,7 @@ impl<'a> Visitor<'a> {
             run_tracker,
             task_access,
             task_hasher,
-            repo_index,
+            _repo_index: repo_index,
             ui_sender,
             is_watch,
             warnings: Default::default(),
@@ -686,7 +682,7 @@ impl<'a> Visitor<'a> {
             self.precompute_task_hashes(&engine, telemetry)
         })?;
 
-        let concurrency = self.run_opts.concurrency as usize;
+        let concurrency = self.run_opts.concurrency() as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
 
         let engine_handle = {
@@ -716,7 +712,7 @@ impl<'a> Visitor<'a> {
             };
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
             let _enter = span.enter();
-            let crate::engine::Message { info, callback } = message;
+            let Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
             let Some(package_context) = self.repo.pkg_dep_graph.package_task_context(&package_name)
@@ -729,34 +725,30 @@ impl<'a> Visitor<'a> {
             };
             // Recursive turbo detection uses catalog authored display/source
             // facts, not a live PackageJson::scripts read.
-            if info.package() == ROOT_PKG_NAME {
-                if let Some(native_task) = package_context.native_tasks().get(info.task()) {
-                    if let Some(cmd) = native_task.display().or_else(|| {
-                        native_task
-                            .script()
-                            .map(|script| script.as_inner().as_str())
-                    }) {
-                        if command_invokes_turbo(cmd) {
-                            let package_task_event =
-                                PackageTaskEventBuilder::new(info.package(), info.task())
-                                    .with_parent(telemetry);
-                            package_task_event.track_error(TrackedErrors::RecursiveError);
-                            let (span, text) = native_task
-                                .script()
-                                .map(|script| script.span_and_text("package.json"))
-                                .unwrap_or((None, NamedSource::new("", String::new())));
+            if info.package() == ROOT_PKG_NAME
+                && let Some(native_task) = package_context.native_tasks().get(info.task())
+                && let Some(cmd) = native_task.display().or_else(|| {
+                    native_task
+                        .script()
+                        .map(|script| script.as_inner().as_str())
+                })
+                && command_invokes_turbo(cmd)
+            {
+                let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task())
+                    .with_parent(telemetry);
+                package_task_event.track_error(TrackedErrors::RecursiveError);
+                let (span, text) = native_task
+                    .script()
+                    .map(|script| script.span_and_text("package.json"))
+                    .unwrap_or((None, NamedSource::new("", String::new())));
 
-                            dispatch_error =
-                                Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                                    task_name: info.to_string(),
-                                    command: cmd.to_string(),
-                                    span,
-                                    text,
-                                })));
-                            break;
-                        }
-                    }
-                }
+                dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                    task_name: info.to_string(),
+                    command: cmd.to_string(),
+                    span,
+                    text,
+                })));
+                break;
             }
 
             let Some(task_definition) = engine.task_definition(&info) else {
@@ -936,7 +928,7 @@ impl<'a> Visitor<'a> {
                     let task_prefix = self.prefix(&info);
                     // The display label always includes the task name for
                     // CI group markers, even when log_prefix is None.
-                    let display_label = if self.run_opts.single_package {
+                    let display_label = if TaskGraphRunOpts::single_package(self.run_opts) {
                         info.task().to_string()
                     } else {
                         format!("{}:{}", info.package(), info.task())
@@ -1066,7 +1058,7 @@ impl<'a> Visitor<'a> {
         env_at_execution_start,
     ))]
     #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn finish(
+    pub async fn finish(
         self,
         exit_code: i32,
         packages: &HashSet<PackageName>,
@@ -1088,23 +1080,23 @@ impl<'a> Visitor<'a> {
         let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
 
         // output any warnings that we collected while running tasks
-        if let Ok(warnings) = self.warnings.lock() {
-            if !warnings.is_empty() {
-                turborepo_log::warn(
-                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                    "finished with warnings",
+        if let Ok(warnings) = self.warnings.lock()
+            && !warnings.is_empty()
+        {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                "finished with warnings",
+            )
+            .emit();
+
+            PlatformEnv::output_header(global_env_mode == EnvMode::Strict, ui);
+
+            for warning in warnings.iter() {
+                PlatformEnv::output_for_task(
+                    warning.missing_platform_env().to_owned(),
+                    warning.task_id(),
+                    ui,
                 )
-                .emit();
-
-                PlatformEnv::output_header(global_env_mode == EnvMode::Strict, ui);
-
-                for warning in warnings.iter() {
-                    PlatformEnv::output_for_task(
-                        warning.missing_platform_env().to_owned(),
-                        warning.task_id(),
-                        ui,
-                    )
-                }
             }
         }
 
@@ -1131,8 +1123,10 @@ impl<'a> Visitor<'a> {
     }
 
     pub(crate) fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
-        match self.run_opts.log_prefix {
-            ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
+        match self.run_opts.log_prefix() {
+            ResolvedLogPrefix::Task if TaskGraphRunOpts::single_package(self.run_opts) => {
+                task_id.task().into()
+            }
             ResolvedLogPrefix::Task => format!("{}:{}", task_id.package(), task_id.task()).into(),
             ResolvedLogPrefix::None => "".into(),
         }
@@ -1140,7 +1134,7 @@ impl<'a> Visitor<'a> {
 
     // Task ID as displayed in error messages
     pub(crate) fn display_task_id(&self, task_id: &TaskId) -> String {
-        match self.run_opts.single_package {
+        match TaskGraphRunOpts::single_package(self.run_opts) {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }

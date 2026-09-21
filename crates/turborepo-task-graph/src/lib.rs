@@ -1,6 +1,29 @@
 mod visitor;
 
+use turborepo_types::{
+    ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, RunOptsHashInfo, RunOptsInfo,
+    TaskArgs, TaskDefinition, UIMode,
+};
 pub use visitor::{Error as VisitorError, Visitor};
+
+type Engine = turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition>;
+
+/// Run options consumed while executing a task graph.
+///
+/// Keeping this interface in the task-graph crate lets CLI-specific option
+/// types provide execution settings without introducing a dependency on the CLI
+/// crate.
+pub trait TaskGraphRunOpts: RunOptsHashInfo + RunOptsInfo + Sync {
+    fn task_args(&self) -> TaskArgs<'_>;
+    fn concurrency(&self) -> u32;
+    fn env_mode(&self) -> EnvMode;
+    fn continue_on_error(&self) -> ContinueMode;
+    fn log_order(&self) -> ResolvedLogOrder;
+    fn log_prefix(&self) -> ResolvedLogPrefix;
+    fn single_package(&self) -> bool;
+    fn is_github_actions(&self) -> bool;
+    fn ui_mode(&self) -> UIMode;
+}
 
 #[cfg(test)]
 mod test {
