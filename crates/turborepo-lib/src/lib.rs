@@ -1,4 +1,3 @@
-#![recursion_limit = "256"]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
