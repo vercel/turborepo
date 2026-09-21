@@ -5,6 +5,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_config::{CONFIG_FILE, CacheDirResult, ConfigurationOptions};
 use turborepo_turbo_json::FutureFlags;
 use turborepo_types::{
     APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix,
@@ -12,19 +13,17 @@ use turborepo_types::{
     ScopeOpts, TaskArgs, TuiOpts, UIMode,
 };
 
-use crate::config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE};
-
-pub(crate) const DEFAULT_CACHE_WORKERS: u32 = 10;
+pub const DEFAULT_CACHE_WORKERS: u32 = 10;
 
 /// Parser-agnostic run options consumed while resolving [`Opts`].
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RunSelector {
-    pub(crate) graph: Option<String>,
-    pub(crate) parallel: bool,
-    pub(crate) profile: Option<String>,
-    pub(crate) dry_run: Option<DryRunMode>,
-    pub(crate) no_cache: bool,
-    pub(crate) cache_workers: u32,
+pub struct RunSelector {
+    pub graph: Option<String>,
+    pub parallel: bool,
+    pub profile: Option<String>,
+    pub dry_run: Option<DryRunMode>,
+    pub no_cache: bool,
+    pub cache_workers: u32,
 }
 
 impl Default for RunSelector {
@@ -42,21 +41,21 @@ impl Default for RunSelector {
 
 /// Parser-agnostic execution options consumed while resolving [`Opts`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ExecutionSelector {
-    pub(crate) output_logs: Option<OutputLogsMode>,
-    pub(crate) log_prefix: LogPrefix,
-    pub(crate) json: bool,
-    pub(crate) log_file: Option<Option<String>>,
-    pub(crate) tasks: Vec<String>,
-    pub(crate) framework_inference: Option<bool>,
-    pub(crate) continue_execution: ContinueMode,
-    pub(crate) pass_through_args: Vec<String>,
-    pub(crate) only: bool,
-    pub(crate) single_package: bool,
-    pub(crate) affected: bool,
-    pub(crate) global_deps: Vec<String>,
-    pub(crate) pkg_inference_root: Option<String>,
-    pub(crate) filter: Vec<String>,
+pub struct ExecutionSelector {
+    pub output_logs: Option<OutputLogsMode>,
+    pub log_prefix: LogPrefix,
+    pub json: bool,
+    pub log_file: Option<Option<String>>,
+    pub tasks: Vec<String>,
+    pub framework_inference: Option<bool>,
+    pub continue_execution: ContinueMode,
+    pub pass_through_args: Vec<String>,
+    pub only: bool,
+    pub single_package: bool,
+    pub affected: bool,
+    pub global_deps: Vec<String>,
+    pub pkg_inference_root: Option<String>,
+    pub filter: Vec<String>,
 }
 
 /// Why remote caching was disabled by local configuration.
@@ -106,7 +105,7 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
-    Config(#[from] crate::config::Error),
+    Config(#[from] turborepo_config::Error),
 }
 
 /// The fully resolved options for Turborepo. This is the combination of config,
@@ -122,7 +121,7 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
-    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
+    pub experimental_observability: Option<turborepo_config::ExperimentalObservabilityOptions>,
     /// Pre-resolved git root from worktree detection, if available.
     /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
     pub git_root: Option<AbsoluteSystemPathBuf>,
@@ -286,7 +285,7 @@ impl Opts {
 fn resolve_log_file_path(
     repo_root: &AbsoluteSystemPath,
     cli_flag: Option<&Option<String>>,
-    config_value: Option<&crate::config::LogFileConfig>,
+    config_value: Option<&turborepo_config::LogFileConfig>,
 ) -> Option<AbsoluteSystemPathBuf> {
     // CLI: --log-file (present with no value → default, with value → custom)
     if let Some(maybe_path) = cli_flag {
@@ -298,8 +297,8 @@ fn resolve_log_file_path(
 
     // turbo.json / env var (merged by the config layer)
     match config_value {
-        Some(crate::config::LogFileConfig::Enabled) => Some(default_log_file_path(repo_root)),
-        Some(crate::config::LogFileConfig::Path(path)) => {
+        Some(turborepo_config::LogFileConfig::Enabled) => Some(default_log_file_path(repo_root)),
+        Some(turborepo_config::LogFileConfig::Path(path)) => {
             Some(resolve_path_relative_to_root(repo_root, path))
         }
         None => None,
@@ -387,23 +386,23 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct RunOpts {
-    pub(crate) tasks: Vec<String>,
-    pub(crate) concurrency: u32,
-    pub(crate) parallel: bool,
-    pub(crate) env_mode: EnvMode,
-    pub(crate) cache_dir: Utf8PathBuf,
+    pub tasks: Vec<String>,
+    pub concurrency: u32,
+    pub parallel: bool,
+    pub env_mode: EnvMode,
+    pub cache_dir: Utf8PathBuf,
     /// Whether using shared cache from main worktree (for user messaging).
-    pub(crate) is_shared_worktree_cache: bool,
+    pub is_shared_worktree_cache: bool,
     // Whether or not to infer the framework for each workspace.
-    pub(crate) framework_inference: bool,
+    pub framework_inference: bool,
     pub profile: Option<String>,
-    pub(crate) continue_on_error: ContinueMode,
-    pub(crate) pass_through_args: Vec<String>,
-    pub(crate) only: bool,
-    pub(crate) dry_run: Option<DryRunMode>,
+    pub continue_on_error: ContinueMode,
+    pub pass_through_args: Vec<String>,
+    pub only: bool,
+    pub dry_run: Option<DryRunMode>,
     pub graph: Option<GraphOpts>,
-    pub(crate) daemon: Option<bool>,
-    pub(crate) single_package: bool,
+    pub daemon: Option<bool>,
+    pub single_package: bool,
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
     pub summarize: bool,
@@ -727,6 +726,20 @@ impl RunOpts {
 }
 
 // Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
+impl turborepo_types::RunOptsHashInfo for RunOpts {
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn pass_through_args(&self) -> &[String] {
+        &self.pass_through_args
+    }
+}
+
 impl RunOptsInfo for RunOpts {
     fn dry_run(&self) -> Option<DryRunMode> {
         self.dry_run
@@ -786,6 +799,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
+    use turborepo_config::{CONFIG_FILE, ConfigurationOptions, TurborepoConfigBuilder};
     use turborepo_task_id::TaskId;
     use turborepo_types::{
         ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
@@ -793,10 +807,7 @@ mod test {
 
     use super::{
         APIClientOpts, ExecutionSelector, Opts, RepoOpts, RunCacheOpts, RunOpts, RunSelector,
-    };
-    use crate::{
-        config::{resolve_configuration_with_overrides, ConfigurationOptions, CONFIG_FILE},
-        opts::{ScopeOpts, TuiOpts},
+        ScopeOpts, TuiOpts,
     };
 
     #[derive(Default)]
@@ -1111,16 +1122,15 @@ mod test {
                 }))?,
             )?;
 
-            let config = resolve_configuration_with_overrides(
-                &repo_root,
-                ConfigurationOptions {
+            let config = TurborepoConfigBuilder::new(&repo_root)
+                .with_override_config(ConfigurationOptions {
                     force: Some(true),
                     // Set token and team to simulate a logged in/linked user.
                     token: Some("token".to_string()),
                     team_slug: Some("team".to_string()),
                     ..Default::default()
-                },
-            )?;
+                })
+                .build()?;
             let actual = Opts::new(
                 &repo_root,
                 &RunSelector::default(),

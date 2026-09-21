@@ -1,12 +1,12 @@
 ---
-source: crates/turborepo-lib/src/opts.rs
+source: crates/turborepo-run-opts/src/lib.rs
 expression: cache_config
 ---
 Ok(
     CacheConfig {
         local: CacheActions {
             read: true,
-            write: true,
+            write: false,
         },
         remote: CacheActions {
             read: true,
