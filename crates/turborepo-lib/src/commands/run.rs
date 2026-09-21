@@ -4,13 +4,14 @@ use tracing::Instrument;
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
+use turborepo_run::{self as run, builder::RunBuilder};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_tracing::TurboSubscriber;
 use turborepo_types::DryRunMode;
 use turborepo_ui::{sender::UISender, LogSinks};
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder};
+use crate::commands::CommandBase;
 
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome<T> {
@@ -100,7 +101,7 @@ pub async fn run(
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
-        RunBuilder::new(base, Some(http_client))?
+        RunBuilder::new(base.run_builder_input()?, Some(http_client))?
     };
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);

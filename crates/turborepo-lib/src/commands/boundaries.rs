@@ -4,14 +4,12 @@ use dialoguer::{Confirm, Input};
 use miette::{Report, SourceSpan};
 use turbopath::AbsoluteSystemPath;
 use turborepo_boundaries::{BoundariesChecker, BoundariesContext};
+use turborepo_run::{boundaries::RunTurboJsonProvider, builder::RunBuilder};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD_GREEN};
 
-use crate::{
-    boundaries::RunTurboJsonProvider, cli, cli::BoundariesIgnore, commands::CommandBase,
-    run::builder::RunBuilder,
-};
+use crate::{cli, cli::BoundariesIgnore, commands::CommandBase};
 
 pub async fn run(
     base: CommandBase,
@@ -22,7 +20,7 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let (run, _analytics) = RunBuilder::new(base, None)?
+    let (run, _analytics) = RunBuilder::new(base.run_builder_input()?, None)?
         .do_not_validate_engine()
         .build(&handler, telemetry)
         .await?;

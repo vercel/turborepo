@@ -5,13 +5,13 @@ use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_query_api::{QueryRun, QueryServer};
+use turborepo_run::builder::RunBuilder;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
     cli::{self, AffectedArgs, QuerySubcommand},
     commands::{ls, CommandBase},
-    run::builder::RunBuilder,
 };
 
 #[derive(Debug, Diagnostic, Error)]
@@ -237,7 +237,7 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base, None)?
+    let run_builder = RunBuilder::new(base.run_builder_input()?, None)?
         .add_all_tasks()
         .do_not_validate_engine();
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;

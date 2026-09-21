@@ -2,7 +2,7 @@ mod loader;
 #[cfg(test)]
 mod task_definition_test;
 
-pub(crate) use loader::EngineTurboJsonLoader;
+pub use loader::EngineTurboJsonLoader;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
 // Building state is used for engine construction
@@ -59,7 +59,7 @@ pub enum ValidateError {
 }
 
 /// Extension trait for Engine<Built, TaskDefinition> that provides
-/// turborepo-lib specific functionality.
+/// run-specific functionality.
 pub trait EngineExt {
     /// Return all tasks that have a command to be run
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String>;

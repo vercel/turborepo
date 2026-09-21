@@ -1,9 +1,11 @@
+#![allow(clippy::result_large_err)]
 #![allow(dead_code)]
 
+pub mod boundaries;
 pub mod builder;
+mod engine;
 mod error;
 pub(crate) mod scope;
-pub mod watch;
 
 use std::{
     collections::{BTreeMap, HashSet},
@@ -11,8 +13,8 @@ use std::{
     io::{self, IsTerminal, Write},
     process::Command,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -22,8 +24,19 @@ use itertools::Itertools;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIAuth;
+
+#[derive(Clone)]
+pub struct RunBuilderInput {
+    pub repo_root: AbsoluteSystemPathBuf,
+    pub color_config: ColorConfig,
+    pub opts: Opts,
+    pub version: &'static str,
+    pub api_auth: Option<APIAuth>,
+}
+
+pub use engine::{EngineBuilder, EngineExt, EngineTurboJsonLoader, TaskNode, ValidateError};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
@@ -39,16 +52,16 @@ use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
 use turborepo_task_graph::Visitor;
 use turborepo_task_hash::{
-    collect_global_file_hash_inputs, compute_external_deps_hashes, get_internal_deps_hash,
-    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
+    GlobalHashableInputs, PackageInputsHashes, collect_global_file_hash_inputs,
+    compute_external_deps_hashes, get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_turbo_json::TurboJson;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
+use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui, tui::TuiSender};
 
-use crate::engine::{Engine, EngineExt};
-pub use crate::run::error::Error;
+use crate::engine::Engine;
+pub use crate::error::Error;
 
 /// Live status of the remote cache, determined by a preflight API check
 /// that runs concurrently with graph building.
@@ -213,7 +226,7 @@ impl Run {
         LIGHT_GREY.apply_to(message).to_string()
     }
 
-    fn force_shutdown_timeout() -> Option<Duration> {
+    pub fn force_shutdown_timeout() -> Option<Duration> {
         (!std::io::stdin().is_terminal()).then_some(Duration::from_secs(10))
     }
 
@@ -235,6 +248,13 @@ impl Run {
         {
             Self::emit_shutdown_started(force_shutdown_timeout);
         }
+    }
+
+    pub fn emit_shutdown_started_once_for_run(&self, force_shutdown_timeout: Option<Duration>) {
+        Self::emit_shutdown_started_once(
+            self.shutdown_started_emitted.as_ref(),
+            force_shutdown_timeout,
+        );
     }
 
     fn emit_shutdown_status(task_names: &[String]) {
@@ -531,7 +551,7 @@ impl Run {
     /// The package graph as a shared handle so watch-mode partial reruns can
     /// reuse it when no graph-defining file (manifests, lockfile, workspace
     /// configuration) changed between runs.
-    pub(crate) fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
+    pub fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
         self.repo.pkg_dep_graph.clone()
     }
 
@@ -1516,8 +1536,8 @@ mod tests {
     use turborepo_signals::ShutdownReason;
 
     use super::{
-        remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
-        RemoteCacheUnavailableReason, Run,
+        CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus, RemoteCacheUnavailableReason,
+        Run, remote_cache_status_message,
     };
 
     #[test]

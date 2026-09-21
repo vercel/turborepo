@@ -10,15 +10,11 @@ mod cli;
 mod commands;
 mod config;
 pub mod devtools;
-mod engine;
 #[cfg(feature = "heap-dhat")]
 mod heap_profile;
 
-mod boundaries;
 mod panic_handler;
-mod run;
 mod shim;
-mod task_hash;
 
 // Re-export daemon types from the new crate location
 pub use turborepo_daemon::{

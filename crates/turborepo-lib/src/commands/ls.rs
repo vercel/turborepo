@@ -11,11 +11,12 @@ use serde::Serialize;
 use thiserror::Error;
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_repository::package_graph::PackageName;
+use turborepo_run::builder::RunBuilder;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
-use crate::{cli, cli::OutputFormat, commands::CommandBase, run::builder::RunBuilder};
+use crate::{cli, cli::OutputFormat, commands::CommandBase};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -100,7 +101,8 @@ pub async fn run(
     // Plain listings and package details only query workspace relationships.
     let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
         || !base.opts.scope_opts.filter_patterns.is_empty();
-    let run_builder = RunBuilder::new(base, None)?.skip_repo_index_and_scm_state();
+    let run_builder =
+        RunBuilder::new(base.run_builder_input()?, None)?.skip_repo_index_and_scm_state();
     // Package details include tasks, so build the complete engine just as the
     // general-purpose query command does. A repository-only listing does not
     // need to pay that cost.

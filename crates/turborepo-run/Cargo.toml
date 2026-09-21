@@ -1,0 +1,78 @@
+[package]
+name = "turborepo-run"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[features]
+default = ["rustls-tls"]
+native-tls = ["turborepo-api-client/native-tls", "turborepo-cache/native-tls"]
+rustls-tls = ["turborepo-api-client/rustls-tls", "turborepo-cache/rustls-tls"]
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+futures = { workspace = true }
+human_format = "1.1.0"
+itertools = { workspace = true }
+miette = { workspace = true }
+petgraph = { workspace = true }
+rayon = "1.7.0"
+reqwest = { workspace = true, default-features = false, features = ["json"] }
+shared_child = "1.0.0"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full", "time"] }
+tracing = { workspace = true }
+url = { workspace = true }
+turbopath = { workspace = true }
+turborepo-ai-agents = { workspace = true }
+turborepo-analytics = { workspace = true }
+turborepo-api-client = { workspace = true }
+turborepo-boundaries = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-ci = { workspace = true }
+turborepo-config = { workspace = true }
+turborepo-daemon = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-env = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-log = { workspace = true }
+turborepo-microfrontends = { workspace = true }
+turborepo-microfrontends-config = { workspace = true }
+turborepo-microfrontends-proxy = { workspace = true }
+turborepo-package-watcher = { workspace = true }
+turborepo-process = { workspace = true }
+turborepo-query-api = { workspace = true }
+turborepo-rayon-compat = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-run-cache = { workspace = true }
+turborepo-run-context = { workspace = true }
+turborepo-run-opts = { workspace = true }
+turborepo-run-summary = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-scope = { workspace = true }
+turborepo-shim = { workspace = true }
+turborepo-signals = { workspace = true }
+turborepo-task-access = { workspace = true }
+turborepo-task-filter = { workspace = true }
+turborepo-task-graph = { workspace = true }
+turborepo-task-hash = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-telemetry = { workspace = true }
+turborepo-turbo-json = { workspace = true }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true, features = ["tui"] }
+turborepo-vercel-api = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+biome_json_parser = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }
+turborepo-hash = { workspace = true }
+turborepo-unescape = { workspace = true }

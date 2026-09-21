@@ -4,15 +4,13 @@ use thiserror::Error;
 use turborepo_daemon::DaemonError;
 use turborepo_json_rewrite::RewriteError;
 use turborepo_repository::package_graph;
+use turborepo_run::{self as run, builder::RunBuilder};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
+use turborepo_watch as watch;
 
-use crate::{
-    commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
-    run,
-    run::{builder::RunBuilder, watch},
-};
+use crate::commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -23,7 +21,7 @@ pub enum Error {
     #[error("{0}")]
     Bin(#[from] bin::Error),
     #[error(transparent)]
-    Boundaries(#[from] crate::boundaries::Error),
+    Boundaries(#[from] turborepo_boundaries::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -95,7 +93,7 @@ pub async fn print_potential_tasks(
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base, None)?;
+    let run_builder = RunBuilder::new(base.run_builder_input()?, None)?;
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 

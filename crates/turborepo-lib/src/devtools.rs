@@ -14,15 +14,12 @@ use turborepo_devtools::{
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_repository::package_graph::{PackageGraph, PackageGraphBuilder, PackageName};
+use turborepo_run::{EngineBuilder, EngineTurboJsonLoader, TaskNode as EngineTaskNode};
 use turborepo_run_opts::Opts;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::TurboJsonReader;
 
-use crate::{
-    commands::CommandBase,
-    engine::{EngineBuilder, EngineTurboJsonLoader, TaskNode as EngineTaskNode},
-    Args,
-};
+use crate::{commands::CommandBase, Args};
 
 /// Task graph builder that uses the proper `EngineBuilder` logic.
 ///

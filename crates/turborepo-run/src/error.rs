@@ -6,10 +6,10 @@ use turborepo_repository::package_graph;
 use turborepo_run_opts::Error as OptsError;
 use turborepo_scope::filter::ResolutionError;
 use turborepo_task_graph::VisitorError;
-use turborepo_task_hash::{global_hash, Error as TaskHashError};
+use turborepo_task_hash::{Error as TaskHashError, global_hash};
 use turborepo_ui::tui;
 
-use crate::{config, engine, engine::ValidateError};
+use crate::{engine, engine::ValidateError};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -32,7 +32,7 @@ pub enum Error {
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Config(#[from] config::Error),
+    Config(#[from] turborepo_config::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
