@@ -105,10 +105,9 @@ jobs:
           - name: macos
             runner: macos-latest
         node-version:
-          - 18
-          - 20
           - 22
           - 24
+          - 26
     env:
       TURBO_CACHE: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'remote:rw' || 'local:rw' }}
 
