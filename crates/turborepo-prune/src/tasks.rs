@@ -8,7 +8,6 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PruneDepend
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use super::{Error, PruneInput};
-use crate::engine::EngineTurboJsonLoader;
 
 /// Remember configuration owners consulted by the engine as well as task
 /// owners: a package configuration can extend another package without depending
@@ -21,8 +20,10 @@ struct PruneLoader {
 
 impl TurboJsonLoader for PruneLoader {
     fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError> {
-        let engine_loader = EngineTurboJsonLoader::new(&self.loader);
-        let config = engine_loader.load(package)?;
+        let config = self
+            .loader
+            .load(package)
+            .map_err(|error| BuilderError::from(turborepo_config::Error::from(error)))?;
         self.config_owners.borrow_mut().insert(package.clone());
         Ok(config)
     }

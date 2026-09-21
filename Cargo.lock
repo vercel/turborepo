@@ -8314,7 +8314,6 @@ dependencies = [
  "dirs-next",
  "either",
  "futures",
- "globwalk",
  "go-parse-duration",
  "human-panic",
  "human_format",
@@ -8374,12 +8373,10 @@ dependencies = [
  "turborepo-filewatch",
  "turborepo-fixed-map",
  "turborepo-frameworks",
- "turborepo-fs",
  "turborepo-gitignore",
  "turborepo-graph-utils",
  "turborepo-hash",
  "turborepo-json-rewrite",
- "turborepo-lockfiles",
  "turborepo-log",
  "turborepo-microfrontends",
  "turborepo-microfrontends-config",
@@ -8650,11 +8647,25 @@ dependencies = [
 name = "turborepo-prune"
 version = "0.1.0"
 dependencies = [
+ "globwalk",
+ "miette",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "turbopath",
+ "turborepo-config",
+ "turborepo-engine",
+ "turborepo-errors",
+ "turborepo-fs",
  "turborepo-lockfiles",
+ "turborepo-microfrontends-config",
+ "turborepo-package-watcher",
  "turborepo-repository",
+ "turborepo-telemetry",
+ "turborepo-turbo-json",
+ "turborepo-ui",
 ]
 
 [[package]]
