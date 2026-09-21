@@ -89,30 +89,29 @@ fn compile_patterns(
     let mut has_traversal_globs = false;
 
     for glob_str in globs {
-        if let Some(stripped) = glob_str.strip_prefix('!') {
-            if stripped.starts_with("../") {
-                has_traversal_globs = true;
-            }
-            exclusions.push(
-                wax::Glob::new(stripped)
-                    .map_err(|error| InvalidTaskInputGlob {
-                        glob: glob_str.clone(),
-                        error: Box::new(error),
-                    })?
-                    .into_owned(),
-            );
+        let (is_exclusion, pattern) = glob_str
+            .strip_prefix('!')
+            .map_or((false, glob_str.as_str()), |pattern| (true, pattern));
+        // Changed files are matched as package-relative paths without a leading
+        // `./`. Normalize task inputs to the same representation used by the
+        // task hasher, including `$TURBO_ROOT$` inputs for root tasks.
+        let pattern = pattern.strip_prefix("./").unwrap_or(pattern);
+
+        if pattern.starts_with("../") {
+            has_traversal_globs = true;
+        }
+
+        let glob = wax::Glob::new(pattern)
+            .map_err(|error| InvalidTaskInputGlob {
+                glob: glob_str.clone(),
+                error: Box::new(error),
+            })?
+            .into_owned();
+
+        if is_exclusion {
+            exclusions.push(glob);
         } else {
-            if glob_str.starts_with("../") {
-                has_traversal_globs = true;
-            }
-            inclusions.push(
-                wax::Glob::new(glob_str)
-                    .map_err(|error| InvalidTaskInputGlob {
-                        glob: glob_str.clone(),
-                        error: Box::new(error),
-                    })?
-                    .into_owned(),
-            );
+            inclusions.push(glob);
         }
     }
 
@@ -319,6 +318,48 @@ mod tests {
             "packages/lib-a",
             &TaskInputs {
                 globs: vec!["src/**/*.ts".to_string()],
+                default: false,
+                ..Default::default()
+            },
+            false,
+        );
+    }
+
+    #[test]
+    fn dot_slash_glob_matches_package_file() {
+        assert_match(
+            "packages/lib-a/src/index.ts",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["./src/**/*.ts".to_string()],
+                default: false,
+                ..Default::default()
+            },
+            true,
+        );
+    }
+
+    #[test]
+    fn dot_slash_glob_matches_root_package_file() {
+        assert_match(
+            "infra/config.txt",
+            "",
+            &TaskInputs {
+                globs: vec!["./infra/**".to_string()],
+                default: false,
+                ..Default::default()
+            },
+            true,
+        );
+    }
+
+    #[test]
+    fn dot_slash_exclusion_glob_is_respected() {
+        assert_match(
+            "packages/lib-a/src/generated.ts",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["src/**/*.ts".to_string(), "!./src/generated.ts".to_string()],
                 default: false,
                 ..Default::default()
             },
@@ -545,6 +586,19 @@ mod tests {
             "packages/lib-a/src/generated/client.ts",
             "packages/lib-a",
             &inputs,
+            true,
+        );
+    }
+
+    #[test]
+    fn dot_slash_jit_glob_matches_package_file() {
+        assert_match(
+            "packages/lib-a/src/generated/client.ts",
+            "packages/lib-a",
+            &TaskInputs {
+                jit_globs: vec!["./src/generated/**".to_string()],
+                ..Default::default()
+            },
             true,
         );
     }
