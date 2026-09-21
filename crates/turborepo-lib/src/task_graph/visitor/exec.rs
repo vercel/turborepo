@@ -62,7 +62,7 @@ impl<'a> ExecContextFactory<'a> {
             })
             .collect();
         let pkg_graph_provider = ToolchainCommandProvider::new(
-            &visitor.package_graph,
+            &visitor.repo.pkg_dep_graph,
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,
             command_overrides,
@@ -70,7 +70,7 @@ impl<'a> ExecContextFactory<'a> {
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
             command_factory.add_provider(MicroFrontendProxyProvider::new(
-                visitor.package_graph.as_ref(),
+                visitor.repo.pkg_dep_graph.as_ref(),
                 engine.task_ids(),
                 micro_frontends_configs,
             ));
@@ -115,7 +115,7 @@ impl<'a> ExecContextFactory<'a> {
             takes_input,
             continue_on_error: self.visitor.run_opts.continue_on_error,
             ui_mode: self.visitor.run_opts.ui_mode,
-            color_config: self.visitor.color_config,
+            color_config: self.visitor.repo.color_config,
             is_github_actions: self.visitor.run_opts.is_github_actions,
             pretty_prefix,
             task_cache,

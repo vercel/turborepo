@@ -1181,7 +1181,7 @@ impl Run {
         drop(_setup_span);
 
         let mut visitor = Visitor::new(
-            self.pkg_dep_graph_handle(),
+            self.repo.as_ref(),
             self.run_cache.clone(),
             run_tracker,
             &self.task_access,
@@ -1189,10 +1189,7 @@ impl Run {
             package_inputs_hashes,
             &self.env_at_execution_start,
             &global_hash,
-            self.color_config(),
             self.processes.clone(),
-            self.repo_root(),
-            self.scm(),
             repo_index,
             global_env,
             &self.root_turbo_json().global_env,
@@ -1251,7 +1248,6 @@ impl Run {
                 global_hash_inputs,
                 &self.engine,
                 &self.env_at_execution_start,
-                self.scm(),
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;
