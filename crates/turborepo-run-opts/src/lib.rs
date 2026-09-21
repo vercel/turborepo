@@ -1,3 +1,7 @@
+// Configuration errors retain structured context that is useful for CLI
+// diagnostics.
+#![allow(clippy::result_large_err)]
+
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
