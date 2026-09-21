@@ -10,9 +10,23 @@ use std::collections::{BTreeSet, HashSet};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use super::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error while pruning JavaScript artifacts: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("JSON error while pruning JavaScript artifacts: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("Path error while pruning JavaScript artifacts: {0}")]
+    Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::Error),
+    #[error(
+        "Invalid patched dependency path `{0}`: path escapes the repository or output directory"
+    )]
+    InvalidPatchPath(RelativeUnixPathBuf),
+}
 
-pub(crate) fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
     if version == "*" {
         return Some(name);
     }
@@ -23,7 +37,7 @@ pub(crate) fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -
     }
 }
 
-pub(crate) fn prune_package_json_dev_dependencies(
+pub fn prune_package_json_dev_dependencies(
     package_json: &mut serde_json::Value,
     excluded_workspaces: &HashSet<String>,
 ) -> bool {
@@ -44,10 +58,8 @@ pub(crate) fn prune_package_json_dev_dependencies(
     });
     let changed = dev_dependencies.len() != original_len;
     let remove_dev_dependencies = dev_dependencies.is_empty();
-    if remove_dev_dependencies {
-        if let Some(package_json) = package_json.as_object_mut() {
-            package_json.remove("devDependencies");
-        }
+    if remove_dev_dependencies && let Some(package_json) = package_json.as_object_mut() {
+        package_json.remove("devDependencies");
     }
     changed
 }
@@ -162,7 +174,7 @@ pub(crate) fn package_json_patch_paths(
     patches
 }
 
-pub(crate) fn bin_paths(package_json: &PackageJson) -> Vec<&str> {
+pub fn bin_paths(package_json: &PackageJson) -> Vec<&str> {
     match package_json.other.get("bin") {
         Some(serde_json::Value::String(path)) => vec![path.as_str()],
         Some(serde_json::Value::Object(entries)) => entries
@@ -204,7 +216,7 @@ pub(crate) fn merge_preserving_key_order(
 /// Closure selection and filesystem layout remain in `commands/prune.rs`;
 /// this struct carries only the facts needed to rewrite JS lockfiles,
 /// root manifests, patches, and workspace patch tables.
-pub(crate) struct JavaScriptPruneRenderInput<'a> {
+pub struct JavaScriptPruneRenderInput<'a> {
     pub package_manager: &'a PackageManager,
     pub root_package_json: &'a PackageJson,
     pub original_lockfile: &'a dyn turborepo_lockfiles::Lockfile,
@@ -218,7 +230,7 @@ pub(crate) struct JavaScriptPruneRenderInput<'a> {
 
 /// How the pruned lockfile should be materialized by layout code.
 #[derive(Debug)]
-pub(crate) enum JavaScriptPruneLockfileArtifact {
+pub enum JavaScriptPruneLockfileArtifact {
     /// Copy the original root lockfile as-is (per-workspace lockfile mode).
     CopyOriginalRoot,
     /// Write these encoded bytes as the pruned root lockfile.
@@ -226,14 +238,14 @@ pub(crate) enum JavaScriptPruneLockfileArtifact {
 }
 
 #[derive(Debug)]
-pub(crate) struct JavaScriptPruneFileArtifact {
+pub struct JavaScriptPruneFileArtifact {
     pub path: &'static str,
     pub contents: String,
 }
 
 /// Outputs of the JavaScript prune rendering step.
 #[derive(Debug)]
-pub(crate) struct JavaScriptPruneRenderResult {
+pub struct JavaScriptPruneRenderResult {
     pub lockfile_name: &'static str,
     pub lockfile: JavaScriptPruneLockfileArtifact,
     /// `None` means copy the original root package.json unchanged.
@@ -246,7 +258,7 @@ pub(crate) struct JavaScriptPruneRenderResult {
 ///
 /// Performs no filesystem writes other than reads already implied by patch
 /// path collection helpers.
-pub(crate) fn render_javascript_prune(
+pub fn render_javascript_prune(
     input: JavaScriptPruneRenderInput<'_>,
 ) -> Result<JavaScriptPruneRenderResult, Error> {
     let subgraph = input
@@ -329,4 +341,108 @@ pub(crate) fn render_javascript_prune(
         pruned_patches,
         workspace_config,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use turborepo_repository::package_json::PackageJson;
+
+    use super::{bin_paths, merge_preserving_key_order, prune_package_json_workspaces};
+
+    #[test]
+    fn bin_paths_reads_string_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": "cli.js"
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["cli.js"]);
+    }
+
+    #[test]
+    fn bin_paths_reads_object_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": {
+                "one": "bin/one.js",
+                "two": "bin/two.js"
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["bin/one.js", "bin/two.js"]);
+    }
+
+    #[test]
+    fn merge_preserves_key_order() {
+        let original: serde_json::Value = serde_json::from_str(
+            r#"{"z_last": 1, "a_first": 2, "m_middle": {"nested_z": true, "nested_a": false}}"#,
+        )
+        .unwrap();
+        let pruned =
+            json!({"a_first": 2, "m_middle": {"nested_a": false, "nested_z": true}, "z_last": 1});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["z_last", "a_first", "m_middle"]);
+
+        let nested_keys: Vec<_> = merged["m_middle"].as_object().unwrap().keys().collect();
+        assert_eq!(nested_keys, vec!["nested_z", "nested_a"]);
+    }
+
+    #[test]
+    fn merge_drops_removed_keys() {
+        let original: serde_json::Value =
+            serde_json::from_str(r#"{"keep": 1, "drop": 2, "also_keep": 3}"#).unwrap();
+        let pruned = json!({"keep": 1, "also_keep": 3});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["keep", "also_keep"]);
+    }
+
+    #[test]
+    fn merge_appends_new_keys() {
+        let original: serde_json::Value = serde_json::from_str(r#"{"existing": 1}"#).unwrap();
+        let pruned = json!({"existing": 1, "new_key": 2});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["existing", "new_key"]);
+    }
+
+    #[test]
+    fn prune_workspaces_replaces_top_level_workspace_list() {
+        let mut package_json = json!({
+            "name": "repo",
+            "workspaces": ["app", "scripts", "packages/*"]
+        });
+
+        prune_package_json_workspaces(&mut package_json, &["app".into(), "packages/ui".into()]);
+
+        assert_eq!(package_json["workspaces"], json!(["app", "packages/ui"]));
+    }
+
+    #[test]
+    fn prune_workspaces_preserves_nested_workspace_metadata() {
+        let mut package_json = json!({
+            "name": "repo",
+            "workspaces": {
+                "packages": ["app", "scripts", "packages/*"],
+                "catalog": {
+                    "react": "latest"
+                }
+            }
+        });
+
+        prune_package_json_workspaces(&mut package_json, &["app".into()]);
+
+        assert_eq!(package_json["workspaces"]["packages"], json!(["app"]));
+        assert_eq!(
+            package_json["workspaces"]["catalog"],
+            json!({"react": "latest"})
+        );
+    }
 }

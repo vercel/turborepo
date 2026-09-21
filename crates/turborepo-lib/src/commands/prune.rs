@@ -53,6 +53,8 @@ pub enum Error {
     ),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
+    #[error(transparent)]
+    JavaScriptPrune(#[from] turborepo_prune::Error),
     #[error("`turbo` does not support workspaces at file system root.")]
     WorkspaceAtFilesystemRoot,
     #[error("At least one target must be specified.")]
@@ -124,9 +126,7 @@ static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<C
 #[path = "prune_tasks.rs"]
 mod prune_tasks;
 
-#[path = "prune_js.rs"]
-mod prune_js;
-use prune_js::{
+use turborepo_prune::{
     bin_paths, prune_package_json_dev_dependencies, render_javascript_prune,
     JavaScriptPruneLockfileArtifact, JavaScriptPruneRenderInput, JavaScriptPruneRenderResult,
 };
@@ -1256,9 +1256,6 @@ impl<'a> Prune<'a> {
     }
 }
 
-/// Merge `pruned` values into `original`, preserving the key ordering from
-/// `original`. Keys present in `original` but absent from `pruned` are dropped.
-/// Keys present in `pruned` but absent from `original` are appended.
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1279,9 +1276,7 @@ mod tests {
     };
 
     use super::{
-        bin_paths, finalized_path_is_contained,
-        prune_js::{merge_preserving_key_order, prune_package_json_workspaces},
-        sync_prune_finalize_files, Error, Prune, ADDITIONAL_FILES,
+        finalized_path_is_contained, sync_prune_finalize_files, Error, Prune, ADDITIONAL_FILES,
     };
 
     struct MockDiscovery;
@@ -1395,102 +1390,6 @@ mod tests {
         ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
             self.discover_packages().await
         }
-    }
-
-    #[test]
-    fn bin_paths_reads_string_bin() {
-        let package_json = PackageJson::from_value(json!({
-            "name": "bin-package",
-            "bin": "cli.js"
-        }))
-        .unwrap();
-
-        assert_eq!(bin_paths(&package_json), vec!["cli.js"]);
-    }
-
-    #[test]
-    fn bin_paths_reads_object_bin() {
-        let package_json = PackageJson::from_value(json!({
-            "name": "bin-package",
-            "bin": {
-                "one": "bin/one.js",
-                "two": "bin/two.js"
-            }
-        }))
-        .unwrap();
-
-        assert_eq!(bin_paths(&package_json), vec!["bin/one.js", "bin/two.js"]);
-    }
-
-    #[test]
-    fn merge_preserves_key_order() {
-        let original: serde_json::Value = serde_json::from_str(
-            r#"{"z_last": 1, "a_first": 2, "m_middle": {"nested_z": true, "nested_a": false}}"#,
-        )
-        .unwrap();
-        let pruned =
-            json!({"a_first": 2, "m_middle": {"nested_a": false, "nested_z": true}, "z_last": 1});
-
-        let merged = merge_preserving_key_order(&original, &pruned);
-        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["z_last", "a_first", "m_middle"]);
-
-        let nested_keys: Vec<_> = merged["m_middle"].as_object().unwrap().keys().collect();
-        assert_eq!(nested_keys, vec!["nested_z", "nested_a"]);
-    }
-
-    #[test]
-    fn merge_drops_removed_keys() {
-        let original: serde_json::Value =
-            serde_json::from_str(r#"{"keep": 1, "drop": 2, "also_keep": 3}"#).unwrap();
-        let pruned = json!({"keep": 1, "also_keep": 3});
-
-        let merged = merge_preserving_key_order(&original, &pruned);
-        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["keep", "also_keep"]);
-    }
-
-    #[test]
-    fn merge_appends_new_keys() {
-        let original: serde_json::Value = serde_json::from_str(r#"{"existing": 1}"#).unwrap();
-        let pruned = json!({"existing": 1, "new_key": 2});
-
-        let merged = merge_preserving_key_order(&original, &pruned);
-        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["existing", "new_key"]);
-    }
-
-    #[test]
-    fn prune_workspaces_replaces_top_level_workspace_list() {
-        let mut package_json = json!({
-            "name": "repo",
-            "workspaces": ["app", "scripts", "packages/*"]
-        });
-
-        prune_package_json_workspaces(&mut package_json, &["app".into(), "packages/ui".into()]);
-
-        assert_eq!(package_json["workspaces"], json!(["app", "packages/ui"]));
-    }
-
-    #[test]
-    fn prune_workspaces_preserves_nested_workspace_metadata() {
-        let mut package_json = json!({
-            "name": "repo",
-            "workspaces": {
-                "packages": ["app", "scripts", "packages/*"],
-                "catalog": {
-                    "react": "latest"
-                }
-            }
-        });
-
-        prune_package_json_workspaces(&mut package_json, &["app".into()]);
-
-        assert_eq!(package_json["workspaces"]["packages"], json!(["app"]));
-        assert_eq!(
-            package_json["workspaces"]["catalog"],
-            json!({"react": "latest"})
-        );
     }
 
     #[tokio::test]
