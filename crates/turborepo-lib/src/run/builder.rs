@@ -10,7 +10,7 @@ use tracing::Instrument;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };
-use turborepo_analytics::{start_analytics, AnalyticsHandle};
+use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
@@ -18,22 +18,23 @@ use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
-    package_graph::{PackageGraph, PackageName, TaskEntrypointPreference},
+    discovery::{CachingPackageDiscovery, LocalPackageDiscovery},
+    package_graph::{LazyPlan, PackageGraph, PackageName, TaskEntrypointPreference},
     package_json,
     toolchain::ToolchainId,
 };
 use turborepo_run_context::RepoContext;
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_scope::{filter::ResolutionError, TargetSelector};
+use turborepo_scope::{TargetSelector, filter::ResolutionError};
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
+    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder, TrackedErrors,
 };
 use turborepo_types::{FilterMode, TaskDefinitionHashInfo, TaskInputs, UIMode};
 use turborepo_ui::ColorConfig;
@@ -54,6 +55,18 @@ struct TaskEntrypointSelection {
     orchestration: HashMap<String, HashSet<TaskId<'static>>>,
 }
 
+struct RepoDiscovery {
+    run_telemetry: GenericEventBuilder,
+    is_single_package: bool,
+    root_package_json: Option<package_json::PackageJson>,
+    pkg_dep_graph: Arc<PackageGraph>,
+    lazy_plan: Option<LazyPlan<CachingPackageDiscovery<LocalPackageDiscovery>>>,
+    scm: SCM,
+    micro_frontend_configs: Option<MicrofrontendsConfigs>,
+    repo_index: PendingRepoIndex,
+    untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
+}
+
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_task_access::TaskAccess;
@@ -61,9 +74,12 @@ use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
     commands::CommandBase,
-    engine::{task_has_command, Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader},
+    engine::{Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader, task_has_command},
     opts::Opts,
-    run::{scope, Error, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunCache},
+    run::{
+        Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunCache,
+        scope,
+    },
 };
 
 fn project_task_io_environment(
@@ -689,22 +705,7 @@ impl RunBuilder {
         seen.into_iter().collect()
     }
 
-    #[tracing::instrument(skip(self, signal_handler))]
-    pub async fn build(
-        self,
-        signal_handler: &SignalHandler,
-        telemetry: CommandEventBuilder,
-    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
-        tracing::trace!(
-            platform = %TurboState::platform_name(),
-            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
-            turbo_version = %TurboState::version(),
-            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
-            "performing run on {:?}",
-            TurboState::platform_name(),
-        );
-        let start_at = Local::now();
-
+    async fn discover_repo(&self, telemetry: &CommandEventBuilder) -> Result<RepoDiscovery, Error> {
         // SCM detection, the tracked repo index, and untracked-file discovery
         // all run on one background task, overlapping package graph and
         // engine construction. The SCM handle is sent back as soon as it
@@ -802,9 +803,9 @@ impl RunBuilder {
         // one without native support keeps the original hard error.
         let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
         let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
-        let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
+        let run_telemetry = GenericEventBuilder::new().with_parent(telemetry);
         let repo_telemetry =
-            RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
+            RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(telemetry);
 
         // Pulled from initAnalyticsClient in run.go
         let is_linked = turborepo_api_client::is_linked(&self.api_auth);
@@ -859,7 +860,7 @@ impl RunBuilder {
             self.shared_pkg_graph.clone()
         };
         let mut lazy_plan = None;
-        let mut pkg_dep_graph: Arc<PackageGraph> = match shared_pkg_graph {
+        let pkg_dep_graph: Arc<PackageGraph> = match shared_pkg_graph {
             Some(graph) => {
                 tracing::debug!("reusing package graph from previous run");
                 graph
@@ -940,6 +941,49 @@ impl RunBuilder {
                 }
             }
         };
+
+        let repo_index = PendingRepoIndex::new(repo_index_task);
+
+        Ok(RepoDiscovery {
+            run_telemetry,
+            is_single_package,
+            root_package_json,
+            pkg_dep_graph,
+            lazy_plan,
+            scm,
+            micro_frontend_configs,
+            repo_index,
+            untracked_scan_scope_tx,
+        })
+    }
+
+    #[tracing::instrument(skip(self, signal_handler))]
+    pub async fn build(
+        self,
+        signal_handler: &SignalHandler,
+        telemetry: CommandEventBuilder,
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
+        tracing::trace!(
+            platform = %TurboState::platform_name(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
+            turbo_version = %TurboState::version(),
+            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
+            "performing run on {:?}",
+            TurboState::platform_name(),
+        );
+        let start_at = Local::now();
+
+        let RepoDiscovery {
+            run_telemetry,
+            is_single_package,
+            root_package_json,
+            mut pkg_dep_graph,
+            mut lazy_plan,
+            scm,
+            micro_frontend_configs,
+            repo_index,
+            untracked_scan_scope_tx,
+        } = self.discover_repo(&telemetry).await?;
 
         // SCM-independent work runs while the background scm_task continues.
         // The await is deferred until just before the first SCM consumer,
@@ -1602,12 +1646,6 @@ impl RunBuilder {
                 });
                 observability::Handle::try_init(opts, token)
             });
-        // The untracked-file scan keeps running in the background;
-        // `execute_visitor` awaits it right before file hashing. Deferring
-        // the barrier lets everything between `Run` construction and
-        // hashing overlap the scan.
-        let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
-
         if let Some(scm_state_task) = scm_state_task {
             let scm_state = scm_state.clone();
             let scm = scm.clone();
