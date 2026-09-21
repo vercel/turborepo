@@ -914,6 +914,27 @@ mod tests {
         insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
     }
 
+    #[test]
+    fn test_boundaries_tags_serialize_deterministically() {
+        let (deserialized, _) = deserialize_from_json_str(
+            r#"{
+                "tags": {
+                    "gamma": {},
+                    "alpha": {},
+                    "beta": {}
+                }
+            }"#,
+            JsonParserOptions::default(),
+            "turbo.json",
+        );
+        let boundaries_config: BoundariesConfig = deserialized.unwrap();
+
+        assert_eq!(
+            serde_json::to_string(&boundaries_config).unwrap(),
+            r#"{"tags":{"alpha":{},"beta":{},"gamma":{}}}"#
+        );
+    }
+
     #[test_case("[]", TaskOutputs::default() ; "empty")]
     #[test_case(r#"["target/**"]"#, TaskOutputs { inclusions: vec!["target/**".to_string()], exclusions: vec![] })]
     #[test_case(
