@@ -36,6 +36,7 @@ use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
+use turborepo_task_graph::Visitor;
 use turborepo_task_hash::{
     collect_global_file_hash_inputs, compute_external_deps_hashes, get_internal_deps_hash,
     global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
@@ -49,7 +50,6 @@ pub use crate::run::error::Error;
 use crate::{
     engine::{Engine, EngineExt},
     opts::{Opts, RemoteCacheDisabledReason},
-    task_graph::Visitor,
 };
 
 /// Live status of the remote cache, determined by a preflight API check

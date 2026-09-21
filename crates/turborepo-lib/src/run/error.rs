@@ -4,10 +4,11 @@ use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
 use turborepo_scope::filter::ResolutionError;
+use turborepo_task_graph::VisitorError;
 use turborepo_task_hash::{global_hash, Error as TaskHashError};
 use turborepo_ui::tui;
 
-use crate::{config, engine, engine::ValidateError, opts, task_graph};
+use crate::{config, engine, engine::ValidateError, opts};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -48,7 +49,7 @@ pub enum Error {
     TaskHash(#[from] TaskHashError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Visitor(#[from] task_graph::VisitorError),
+    Visitor(#[from] VisitorError),
     #[error(transparent)]
     SignalHandler(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
