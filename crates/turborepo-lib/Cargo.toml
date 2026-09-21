@@ -8,8 +8,18 @@ license = "MIT"
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
 default = ["rustls-tls"]
-native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls", "turborepo-run/native-tls", "turborepo-watch/native-tls"]
-rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls", "turborepo-run/rustls-tls", "turborepo-watch/rustls-tls"]
+native-tls = [
+  "turborepo-api-client/native-tls",
+  "turbo-updater/native-tls",
+  "turborepo-run/native-tls",
+  "turborepo-watch/native-tls",
+]
+rustls-tls = [
+  "turborepo-api-client/rustls-tls",
+  "turbo-updater/rustls-tls",
+  "turborepo-run/rustls-tls",
+  "turborepo-watch/rustls-tls",
+]
 heap-dhat = ["dep:dhat"]
 pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
