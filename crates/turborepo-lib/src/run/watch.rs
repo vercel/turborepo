@@ -861,7 +861,7 @@ impl WatchClient {
                     self.shared_pkg_graph = Some(run.pkg_dep_graph_handle());
                 }
 
-                let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
+                let task_names = run.engine.tasks_with_command(run.pkg_dep_graph());
                 if task_names.is_empty() {
                     tracing::debug!("no executable tasks after filtering, skipping run");
                     return Ok(RunHandle {
@@ -910,7 +910,7 @@ impl WatchClient {
                 self.watched_packages = self.run.get_relevant_packages();
 
                 if let Some(sender) = &self.ui_sender {
-                    let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
+                    let task_names = self.run.engine.tasks_with_command(self.run.pkg_dep_graph());
                     if let Err(err) = sender.update_tasks(task_names) {
                         tracing::warn!("failed to notify UI of updated tasks: {err}");
                     }

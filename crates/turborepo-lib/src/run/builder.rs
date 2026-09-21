@@ -22,6 +22,7 @@ use turborepo_repository::{
     package_json,
     toolchain::ToolchainId,
 };
+use turborepo_run_context::RepoContext;
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_scope::{filter::ResolutionError, TargetSelector};
@@ -1636,23 +1637,27 @@ impl RunBuilder {
             scm_state.resolve(None);
         }
 
+        let repo = Arc::new(RepoContext {
+            repo_root: self.repo_root,
+            color_config: self.color_config,
+            version: self.version,
+            scm,
+            pkg_dep_graph,
+            turbo_json_loader,
+            root_turbo_json,
+        });
+
         Ok((
             Run {
-                version: self.version,
-                color_config: self.color_config,
+                repo,
                 start_at,
                 processes: self.processes,
                 run_telemetry,
                 task_access,
-                repo_root: self.repo_root,
                 opts: Arc::new(self.opts),
                 api_auth: self.api_auth,
                 env_at_execution_start,
                 filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-                pkg_dep_graph,
-                turbo_json_loader,
-                root_turbo_json,
-                scm,
                 engine: Arc::new(engine),
                 run_cache,
                 signal_handler: signal_handler.clone(),
