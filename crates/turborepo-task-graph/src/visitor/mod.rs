@@ -940,6 +940,17 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                         .logger()
                         .register_task(&task_id_str, &task_prefix);
                     let parent_span = Span::current();
+                    let with_tasks = task_definition
+                        .with
+                        .iter()
+                        .flatten()
+                        .map(|task| {
+                            task.task_id()
+                                .unwrap_or_else(|| TaskId::new(info.package(), task.task()))
+                                .into_owned()
+                        })
+                        .collect::<Vec<_>>();
+                    let manager = self.manager.clone();
 
                     if self.is_watch && task_definition.persistent {
                         // In watch mode, persistent tasks are "fire-and-forget":
@@ -958,7 +969,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                         let bg_tracker = TaskTracker::noop(info.into_owned());
                         let (bg_callback, _) = tokio::sync::oneshot::channel();
                         tokio::spawn(async move {
-                            exec_context
+                            let result = exec_context
                                 .execute(
                                     parent_span.id(),
                                     bg_tracker,
@@ -967,12 +978,14 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     bg_callback,
                                     &execution_telemetry,
                                 )
-                                .await
+                                .await;
+                            manager.stop_tasks(&with_tasks).await;
+                            result
                         });
                     } else {
                         let tracker = self.run_tracker.track_task(info.into_owned());
                         tasks.push(tokio::spawn(async move {
-                            exec_context
+                            let result = exec_context
                                 .execute(
                                     parent_span.id(),
                                     tracker,
@@ -981,7 +994,9 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     callback,
                                     &execution_telemetry,
                                 )
-                                .await
+                                .await;
+                            manager.stop_tasks(&with_tasks).await;
+                            result
                         }));
                     }
                 }
