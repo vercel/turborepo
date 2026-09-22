@@ -16,6 +16,27 @@ pub fn manifest_dir() -> PathBuf {
     }
 }
 
+/// Keep native toolchain caches outside fixture workspaces and their task
+/// inputs. Nextest starts a separate process for each test, so a process-local
+/// TempDir would still force every test to recompile. These caches live under
+/// Cargo's target directory and can be removed with the build artifacts.
+pub fn integration_toolchain_cache_dir(name: &str) -> PathBuf {
+    let workspace = manifest_dir().join("../..");
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                workspace.join(path)
+            }
+        })
+        .unwrap_or_else(|| workspace.join("target"));
+    let cache = target.join("integration-toolchain-caches").join(name);
+    fs::create_dir_all(&cache).expect("create integration toolchain cache directory");
+    cache
+}
+
 /// Insta filters that normalize non-deterministic parts of turbo's stdout:
 /// - Path separators (backslash → forward slash for Windows)
 /// - Timing lines (e.g. "Time:    1.234s" → "Time:    [TIME]")

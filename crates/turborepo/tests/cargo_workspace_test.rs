@@ -10,7 +10,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::OnceLock};
 
 use common::setup;
 
@@ -71,11 +71,23 @@ fn cargo_tempdir() -> tempfile::TempDir {
     tempdir
 }
 
-fn isolated_cargo_environment(dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+fn shared_cargo_home() -> &'static Path {
+    static HOME: OnceLock<std::path::PathBuf> = OnceLock::new();
+    HOME.get_or_init(|| common::integration_toolchain_cache_dir("cargo-home"))
+        .as_path()
+}
+
+/// A fresh Cargo home for tests that intentionally exercise cold or custom
+/// config.
+fn cold_cargo_home() -> tempfile::TempDir {
+    tempfile::tempdir().expect("failed to create cold Cargo home")
+}
+
+fn cargo_environment(dir: &Path) -> (std::path::PathBuf, &'static Path) {
+    // HOME stays per fixture so neither user config nor fixture files are shared.
     let home = dir.join(".test-home");
-    let cargo_home = home.join(".cargo");
-    fs::create_dir_all(&cargo_home).unwrap();
-    (home, cargo_home)
+    fs::create_dir_all(&home).unwrap();
+    (home, shared_cargo_home())
 }
 
 fn active_rustup_toolchain() -> Option<String> {
@@ -105,7 +117,7 @@ fn rustup_home() -> Option<std::path::PathBuf> {
 }
 
 fn cargo_command(dir: &Path) -> std::process::Command {
-    let (home, cargo_home) = isolated_cargo_environment(dir);
+    let (home, cargo_home) = cargo_environment(dir);
     let mut command = std::process::Command::new("cargo");
     for name in ambient_cargo_layout_env_keys() {
         command.env_remove(name);
@@ -121,6 +133,35 @@ fn cargo_command(dir: &Path) -> std::process::Command {
     command
 }
 
+#[test]
+fn test_cargo_home_is_shared_without_sharing_fixture_home_or_target() {
+    let first = cargo_tempdir();
+    let second = cargo_tempdir();
+    let first_command = cargo_command(first.path());
+    let second_command = cargo_command(second.path());
+    let env = |command: &std::process::Command, key: &str| {
+        command
+            .get_envs()
+            .find(|(name, _)| name == &std::ffi::OsStr::new(key))
+            .and_then(|(_, value)| value.map(std::ffi::OsStr::to_os_string))
+    };
+    let cargo_home = shared_cargo_home().as_os_str().to_os_string();
+    assert_eq!(env(&first_command, "CARGO_HOME"), Some(cargo_home.clone()));
+    assert_eq!(env(&second_command, "CARGO_HOME"), Some(cargo_home));
+    assert_ne!(env(&first_command, "HOME"), env(&second_command, "HOME"));
+    assert_ne!(
+        env(&first_command, "USERPROFILE"),
+        env(&second_command, "USERPROFILE")
+    );
+    assert!(!shared_cargo_home().starts_with(first.path()));
+    assert!(!shared_cargo_home().starts_with(second.path()));
+    assert!(!shared_cargo_home().join("config.toml").exists());
+    assert!(env(&first_command, "CARGO_TARGET_DIR").is_none());
+    assert!(env(&second_command, "CARGO_BUILD_TARGET_DIR").is_none());
+    let cold = cold_cargo_home();
+    assert_ne!(cold.path(), shared_cargo_home());
+}
+
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     run_turbo_with_env(dir, args, &[])
 }
@@ -130,7 +171,7 @@ fn run_turbo_with_env(
     args: &[&str],
     environment: &[(&str, &str)],
 ) -> std::process::Output {
-    let (home, cargo_home) = isolated_cargo_environment(dir);
+    let (home, cargo_home) = cargo_environment(dir);
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let mut command = common::turbo_command(dir);
     for name in ambient_cargo_layout_env_keys() {
@@ -139,7 +180,7 @@ fn run_turbo_with_env(
     command
         .env("HOME", &home)
         .env("USERPROFILE", &home)
-        .env("CARGO_HOME", &cargo_home)
+        .env("CARGO_HOME", cargo_home)
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
     if let Some(rustup_home) = rustup_home() {
         command.env("RUSTUP_HOME", rustup_home);
@@ -210,9 +251,8 @@ name = "rust-workspace"
 }"#,
     )
     .unwrap();
-    let output = std::process::Command::new("cargo")
+    let output = cargo_command(dir)
         .arg("generate-lockfile")
-        .current_dir(dir)
         .output()
         .unwrap();
     assert_command_success(&output, "generate root package lockfile");
@@ -590,15 +630,13 @@ fn test_cargo_location_environment_hashes_effective_semantics() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
-    let first_home = tempdir.path().join("cargo-home-a");
-    let second_home = tempdir.path().join("cargo-home-b");
-    fs::create_dir_all(&first_home).unwrap();
-    fs::create_dir_all(&second_home).unwrap();
-    let first_home = first_home.to_string_lossy();
-    let second_home = second_home.to_string_lossy();
+    let first_home = cold_cargo_home();
+    let second_home = cold_cargo_home();
+    let first_home_path = first_home.path().to_string_lossy();
+    let second_home_path = second_home.path().to_string_lossy();
     assert_eq!(
-        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &first_home)]),
-        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &second_home)]),
+        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &first_home_path)]),
+        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &second_home_path)]),
         "empty Cargo homes must not fragment task hashes by absolute path"
     );
 
@@ -1071,17 +1109,20 @@ fn test_external_cargo_home_config_is_uncached_in_strict_mode() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     configure_build_without_outputs(tempdir.path());
-    let cargo_home = tempdir.path().join("external-cargo-home");
-    fs::create_dir_all(&cargo_home).unwrap();
+    let cargo_home = cold_cargo_home();
     fs::write(
-        cargo_home.join("config.toml"),
+        cargo_home.path().join("config.toml"),
         "[build]\ntarget-dir = \"cargo-home-target\"\n",
     )
     .unwrap();
-    let cargo_home = cargo_home.to_string_lossy();
+    let cargo_home_path = cargo_home.path().to_string_lossy();
 
     for _ in 0..2 {
-        let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+        let output = run_cargo_build(
+            tempdir.path(),
+            &[],
+            &[("CARGO_HOME", cargo_home_path.as_ref())],
+        );
         assert!(output.status.success(), "build failed: {output:?}");
         assert!(
             String::from_utf8_lossy(&output.stdout).contains("cache bypass"),
@@ -1116,17 +1157,22 @@ fn test_untracked_config_respects_only_explicit_cache_authority() {
             ),
         )
         .unwrap();
-        let cargo_home = tempdir.path().join("external-cargo-home");
-        fs::create_dir_all(&cargo_home).unwrap();
-        fs::write(cargo_home.join("config.toml"), "[net]\nretry = 2\n").unwrap();
-        let cargo_home = cargo_home.to_string_lossy();
+        let cargo_home = cold_cargo_home();
+        fs::write(cargo_home.path().join("config.toml"), "[net]\nretry = 2\n").unwrap();
+        let cargo_home_path = cargo_home.path().to_string_lossy();
 
-        let task =
-            cargo_build_definition(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+        let task = cargo_build_definition(
+            tempdir.path(),
+            &[],
+            &[("CARGO_HOME", cargo_home_path.as_ref())],
+        );
         assert_eq!(task["resolvedTaskDefinition"]["cache"], expected_cache);
         for run in 0..2 {
-            let output =
-                run_cargo_build(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+            let output = run_cargo_build(
+                tempdir.path(),
+                &[],
+                &[("CARGO_HOME", cargo_home_path.as_ref())],
+            );
             assert!(output.status.success(), "build failed: {output:?}");
             let stdout = String::from_utf8_lossy(&output.stdout);
             if expected_cache && run == 1 {
