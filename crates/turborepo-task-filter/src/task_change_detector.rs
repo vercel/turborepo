@@ -10,9 +10,8 @@
 use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use turborepo_repository::package_graph::PackageGraph;
+use turborepo_repository::{global_deps::GlobalDepsMatcher, package_graph::PackageGraph};
 use turborepo_task_id::TaskId;
-use wax::Program;
 
 use crate::Engine;
 
@@ -141,21 +140,16 @@ fn is_global_change(
     pkg_dep_graph: &PackageGraph,
 ) -> bool {
     let lockfile_name = pkg_dep_graph.package_manager().map(|pm| pm.lockfile_name());
-    let global_globs: Vec<_> = global_deps
-        .iter()
-        .filter_map(|g| match wax::Glob::new(g) {
-            Ok(glob) => Some(glob),
-            Err(e) => {
-                tracing::warn!(
-                    glob = %g,
-                    error = %e,
-                    "invalid globalDependency glob; ignoring for affected detection"
-                );
-                None
-            }
-        })
-        .collect();
-    let global_deps_matcher = wax::any(global_globs).ok();
+    let global_deps_matcher = GlobalDepsMatcher::new_ignoring_invalid(
+        global_deps.iter().map(String::as_str),
+        |glob, error| {
+            tracing::warn!(
+                %glob,
+                %error,
+                "invalid globalDependency glob; ignoring for affected detection"
+            );
+        },
+    );
     // The global hash walks these directories wholesale, so a prefix match
     // covers exactly the files that feed `hashOfInternalDependencies`,
     // nested packages included.
@@ -172,8 +166,10 @@ fn is_global_change(
             return true;
         }
 
-        if let Some(ref matcher) = global_deps_matcher
-            && matcher.is_match(file_str)
+        // A matcher compilation failure is conservative: select all tasks.
+        if global_deps_matcher
+            .as_ref()
+            .map_or(true, |matcher| matcher.is_match(file_str))
         {
             return true;
         }
@@ -357,6 +353,27 @@ mod tests {
         );
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn negated_global_deps_do_not_affect_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+        let global_deps = vec!["ci/**".to_string(), "!ci/test/**".to_string()];
+
+        for file in ["ci/test/plan.test.ts", "docs/notes.md"] {
+            let result = affected_task_ids(&engine, &pkg_graph, &changed(&[file]), &global_deps);
+            assert!(
+                result.is_empty(),
+                "{file} should not affect tasks: {result:?}"
+            );
+        }
+        let result =
+            affected_task_ids(&engine, &pkg_graph, &changed(&["ci/plan.ts"]), &global_deps);
+        assert_eq!(result, HashSet::from([a_build]));
     }
 
     #[tokio::test]

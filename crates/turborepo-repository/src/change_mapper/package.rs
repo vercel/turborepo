@@ -1,9 +1,10 @@
 use thiserror::Error;
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
-use wax::{BuildError, Program};
+use wax::BuildError;
 
 use crate::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
+    global_deps::GlobalDepsMatcher,
     package_graph::{PackageGraph, PackageName, PackageTaskContextKind, WorkspacePackage},
     package_manager::PackageManager,
 };
@@ -165,16 +166,16 @@ pub enum Error {
 /// we can check against that and avoid invalidating in unnecessary cases.
 pub struct GlobalDepsPackageChangeMapper<'a> {
     base: DefaultPackageChangeMapperWithLockfile,
-    global_deps_matcher: wax::Any<'a>,
+    global_deps_matcher: GlobalDepsMatcher<'a>,
 }
 
 impl<'a> GlobalDepsPackageChangeMapper<'a> {
-    pub fn new<S: wax::Pattern<'a>, I: Iterator<Item = S>>(
+    pub fn new(
         pkg_dep_graph: &'a PackageGraph,
-        global_deps: I,
+        global_deps: impl Iterator<Item = &'a str>,
     ) -> Result<Self, Error> {
         let base = DefaultPackageChangeMapperWithLockfile::new(pkg_dep_graph);
-        let global_deps_matcher = wax::any(global_deps)?;
+        let global_deps_matcher = GlobalDepsMatcher::new(global_deps)?;
 
         Ok(Self {
             base,
@@ -787,6 +788,38 @@ mod tests {
                 file: AnchoredSystemPathBuf::from_raw("turbo.json")?,
             })
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn negated_global_deps_do_not_affect_all_packages() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        let detector =
+            GlobalDepsPackageChangeMapper::new(&pkg_graph, ["ci/**", "!ci/test/**"].into_iter())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        for (file, expected) in [
+            ("ci/test/plan.test.ts", false),
+            ("ci/plan.ts", true),
+            ("docs/notes.md", false),
+        ] {
+            let result = change_mapper.changed_packages(
+                [AnchoredSystemPathBuf::from_raw(file)?]
+                    .into_iter()
+                    .collect(),
+                LockfileContents::Unchanged,
+            )?;
+            assert_eq!(matches!(result, PackageChanges::All(_)), expected, "{file}");
+        }
 
         Ok(())
     }

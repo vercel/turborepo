@@ -16,6 +16,7 @@ pub mod change_knowledge;
 pub mod change_mapper;
 pub mod discovery;
 pub mod external_resolution;
+pub mod global_deps;
 pub mod go;
 pub mod inference;
 mod knowledge;
