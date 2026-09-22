@@ -121,7 +121,16 @@ fn setup_global_inputs_fixture(dir: &Path, turbo_json: &str) {
     setup::setup_integration_test(dir, "global_inputs", "npm@10.5.0", false).unwrap();
     fs::write(dir.join("turbo.json"), turbo_json).unwrap();
     git(dir, &["add", "."]);
-    git(dir, &["commit", "-m", "set turbo config", "--quiet"]);
+    git(
+        dir,
+        &[
+            "commit",
+            "-m",
+            "set turbo config",
+            "--quiet",
+            "--allow-empty",
+        ],
+    );
 }
 
 fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {

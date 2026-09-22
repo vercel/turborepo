@@ -101,7 +101,7 @@ describe("managers", () => {
         interactive,
         dry
       }) => {
-        const { root, readJson, readYaml } = useFixture({
+        const { root, readJson, readYaml, readYamlOptional } = useFixture({
           fixture: `./${fixtureManager}/${fixtureType}`
         });
         const project = await MANAGERS[fixtureManager].read({
@@ -163,9 +163,9 @@ describe("managers", () => {
             if (fixtureManager === "pnpm") {
               expect(project.paths.workspaceConfig).toBeDefined();
               if (project.paths.workspaceConfig) {
-                const workspaceConfig = readYaml<{ packages: Array<string> }>(
-                  project.paths.workspaceConfig
-                );
+                const workspaceConfig = readYamlOptional<{
+                  packages: Array<string>;
+                }>(project.paths.workspaceConfig);
                 expect(workspaceConfig).toBeUndefined();
               }
             }
