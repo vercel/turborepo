@@ -4,8 +4,8 @@
 //!
 //! The core matching logic lives in `turborepo_engine::affected` and is
 //! shared with `turbo query { affectedTasks }`. This module adds the
-//! global-change fast path (root config files, lockfile, global deps)
-//! before delegating to the shared function.
+//! global-change fast path (root config files, lockfile, global deps, root
+//! internal dependencies) before delegating to the shared function.
 
 use std::collections::HashSet;
 
@@ -91,7 +91,8 @@ const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
 /// # Global changes
 ///
 /// If any changed file is a global dependency (root config files, lockfile,
-/// or user-configured `globalDependencies`), all tasks are returned.
+/// user-configured `globalDependencies`, or a package the root package
+/// depends on), all tasks are returned.
 ///
 /// # Error handling
 ///
@@ -129,6 +130,11 @@ pub fn affected_task_ids(
 /// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`
 /// - The package manager's lockfile
 /// - Files matching user-configured `globalDependencies` globs
+/// - Files inside a package the root package depends on, directly or
+///   transitively. Those files feed `hashOfInternalDependencies`, which is part
+///   of the global hash, so they change every task's hash. This mirrors
+///   `AllPackageChangeReason::RootInternalDepChanged` in the package-level
+///   change mapper.
 fn is_global_change(
     changed_files: &HashSet<AnchoredSystemPathBuf>,
     global_deps: &[String],
@@ -150,6 +156,10 @@ fn is_global_change(
         })
         .collect();
     let global_deps_matcher = wax::any(global_globs).ok();
+    // The global hash walks these directories wholesale, so a prefix match
+    // covers exactly the files that feed `hashOfInternalDependencies`,
+    // nested packages included.
+    let root_internal_dep_dirs = pkg_dep_graph.root_internal_package_dependencies_paths();
 
     for file in changed_files {
         let file_str = file.as_str();
@@ -164,6 +174,13 @@ fn is_global_change(
 
         if let Some(ref matcher) = global_deps_matcher
             && matcher.is_match(file_str)
+        {
+            return true;
+        }
+
+        if root_internal_dep_dirs
+            .iter()
+            .any(|dir| file.as_path().starts_with(dir.as_path()))
         {
             return true;
         }
@@ -210,6 +227,14 @@ mod tests {
     }
 
     async fn make_pkg_graph(repo_root: &AbsoluteSystemPath, packages: &[&str]) -> PackageGraph {
+        make_pkg_graph_with_root(repo_root, packages, PackageJson::default()).await
+    }
+
+    async fn make_pkg_graph_with_root(
+        repo_root: &AbsoluteSystemPath,
+        packages: &[&str],
+        root_package_json: PackageJson,
+    ) -> PackageGraph {
         let mut pkgs = HashMap::new();
         for name in packages {
             let path = repo_root.join_components(&["packages", name, "package.json"]);
@@ -219,7 +244,7 @@ mod tests {
             };
             pkgs.insert(path, pkg);
         }
-        PackageGraph::builder(repo_root, PackageJson::default())
+        PackageGraph::builder(repo_root, root_package_json)
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(pkgs))
             .build()
@@ -367,6 +392,55 @@ mod tests {
         );
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
+    }
+
+    /// A change inside a package the root depends on goes into
+    /// `hashOfInternalDependencies`, so it changes every task's hash.
+    /// Task-level affected detection has to treat it as a global change, the
+    /// way `ChangeMapper` does with `RootInternalDepChanged`.
+    #[tokio::test]
+    async fn root_internal_dependency_change_returns_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let root_package_json = PackageJson {
+            dependencies: Some([("lib-a".to_string(), "workspace:*".to_string())].into()),
+            ..Default::default()
+        };
+        // `lib-ab` shares a name prefix with the root dependency `lib-a`.
+        let pkg_graph =
+            make_pkg_graph_with_root(root, &["lib-a", "lib-ab"], root_package_json).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let ab_build = TaskId::new("lib-ab", "build");
+        let engine = make_engine(
+            &[
+                (a_build.clone(), default_def()),
+                (ab_build.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids(
+            &engine,
+            &pkg_graph,
+            &changed(&["packages/lib-a/src/x.txt"]),
+            &[],
+        );
+        assert_eq!(
+            result,
+            HashSet::from([a_build, ab_build.clone()]),
+            "a root internal dependency change affects every task"
+        );
+
+        // A package the root does not depend on stays local, even when its
+        // directory shares a name prefix with the root dependency.
+        let result = affected_task_ids(
+            &engine,
+            &pkg_graph,
+            &changed(&["packages/lib-ab/src/x.txt"]),
+            &[],
+        );
+        assert_eq!(result, HashSet::from([ab_build]));
     }
 
     #[tokio::test]
