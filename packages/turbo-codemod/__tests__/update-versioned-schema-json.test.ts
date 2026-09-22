@@ -21,7 +21,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -57,7 +57,7 @@ describe("update-versioned-schema-json", () => {
       }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-10-3.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -85,7 +85,7 @@ describe("update-versioned-schema-json", () => {
       }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5-canary-13.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -113,7 +113,7 @@ describe("update-versioned-schema-json", () => {
       }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-8-0-beta-1.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -136,7 +136,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -159,7 +159,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.4" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -182,7 +182,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -205,7 +205,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.8.0" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-8-0.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -233,7 +233,7 @@ describe("update-versioned-schema-json", () => {
       }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-9-4-canary-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -256,7 +256,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.v1.json",
       tasks: {
         build: {
@@ -279,7 +279,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -302,7 +302,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -325,7 +325,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -348,7 +348,7 @@ describe("update-versioned-schema-json", () => {
       options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -371,7 +371,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     // Root turbo.json should be updated
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -381,7 +381,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     // Workspace turbo.json files should also be updated
-    expect(JSON.parse(read("apps/web/turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("apps/web/turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
@@ -391,7 +391,7 @@ describe("update-versioned-schema-json", () => {
       }
     });
 
-    expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("apps/docs/turbo.json"))).toStrictEqual({
       $schema: "https://v2-7-5.turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {

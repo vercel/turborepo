@@ -97,15 +97,43 @@ pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) 
     cmd.output().expect("failed to execute turbo")
 }
 
-/// Run a git command silently in the given directory.
+/// Run a git command in the given directory, failing with its output on error.
 pub fn git(dir: &Path, args: &[&str]) {
-    std::process::Command::new("git")
+    let output = std::process::Command::new("git")
         .args(args)
         .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .expect("git command failed");
+        .output()
+        .expect("failed to execute git command");
+    assert!(
+        output.status.success(),
+        "git {} failed in {} with status {}\nstdout:\n{}\nstderr:\n{}",
+        args.join(" "),
+        dir.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Commit staged changes, or do nothing when the index matches `HEAD`.
+pub fn git_commit_staged_if_changed(dir: &Path, message: &str) {
+    let output = std::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(dir)
+        .output()
+        .expect("failed to inspect staged git changes");
+
+    match output.status.code() {
+        Some(0) => {}
+        Some(1) => git(dir, &["commit", "-m", message, "--quiet"]),
+        _ => panic!(
+            "git diff --cached --quiet failed in {} with status {}\nstdout:\n{}\nstderr:\n{}",
+            dir.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        ),
+    }
 }
 
 /// Combine stdout and stderr into a single string.
@@ -388,7 +416,7 @@ pub fn setup_fixture(
 /// resolution requires `node_modules`.
 #[macro_export]
 macro_rules! check_json_output {
-    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
             $crate::common::setup_fixture($fixture, $package_manager, tempdir.path(), $install)?;
@@ -406,8 +434,17 @@ macro_rules! check_json_output {
 
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
-
-                println!("stderr: {}", stderr);
+                let expected_status = 0 $(+ $status)?;
+                assert_eq!(
+                    output.status.code(),
+                    Some(expected_status),
+                    "turbo {} returned status {}; expected {}\nstdout:\n{}\nstderr:\n{}",
+                    $command,
+                    output.status,
+                    expected_status,
+                    stdout,
+                    stderr,
+                );
 
                 let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
                 let test_name = format!(
@@ -426,10 +463,10 @@ macro_rules! check_json_output {
             )*
         }
     };
-    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
-        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
+        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*] $(; $status)?,)*)
     };
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
-        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
+        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*] $(; $status)?,)*)
     }
 }

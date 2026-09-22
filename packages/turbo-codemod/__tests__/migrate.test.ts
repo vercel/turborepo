@@ -46,7 +46,7 @@ describe("migrate", () => {
   });
 
   it("migrates from 1.0.0 to 1.7.0", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
@@ -132,7 +132,7 @@ describe("migrate", () => {
   });
 
   it("migrates from 1.0.0 to 1.2.0 (dry run)", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
@@ -172,7 +172,7 @@ describe("migrate", () => {
       );
 
     const packageJson = readJson("package.json");
-    const turboJson = readJson("turbo.json");
+    const turboJson = readJsonOptional("turbo.json");
 
     await migrate(root, {
       force: false,
@@ -183,7 +183,7 @@ describe("migrate", () => {
 
     // make sure nothing changed
     expect(readJson("package.json")).toStrictEqual(packageJson);
-    expect(readJson("turbo.json")).toStrictEqual(turboJson);
+    expect(readJsonOptional("turbo.json")).toStrictEqual(turboJson);
 
     // verify mocks were called
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe("migrate", () => {
   });
 
   it("next version can be passed as an option", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
@@ -290,7 +290,7 @@ describe("migrate", () => {
   });
 
   it("current version can be passed as an option", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
@@ -491,7 +491,7 @@ describe("migrate", () => {
   });
 
   it("installs the correct turbo version", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
@@ -650,13 +650,13 @@ describe("migrate", () => {
   });
 
   it("fails gracefully when the correct upgrade command cannot be found", async () => {
-    const { root, readJson } = useFixture({
+    const { root, readJson, readJsonOptional } = useFixture({
       fixture: "old-turbo"
     });
 
     const packageManager = "pnpm";
     const packageJson = readJson("package.json");
-    const turboJson = readJson("turbo.json");
+    const turboJson = readJsonOptional("turbo.json");
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -691,7 +691,7 @@ describe("migrate", () => {
     });
 
     expect(readJson("package.json")).toStrictEqual(packageJson);
-    expect(readJson("turbo.json")).toStrictEqual(turboJson);
+    expect(readJsonOptional("turbo.json")).toStrictEqual(turboJson);
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
 

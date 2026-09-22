@@ -10,7 +10,7 @@ describe("stabilize-ui", () => {
 
   it("adds no config where there was none", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-config"
     });
 
@@ -20,7 +20,7 @@ describe("stabilize-ui", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -43,7 +43,7 @@ describe("stabilize-ui", () => {
 
   it("removes config if it was already enabled", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "enabled"
     });
 
@@ -53,7 +53,7 @@ describe("stabilize-ui", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -76,7 +76,7 @@ describe("stabilize-ui", () => {
 
   it("renames config if disabled", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "disabled"
     });
 
@@ -86,7 +86,7 @@ describe("stabilize-ui", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
@@ -110,11 +110,11 @@ describe("stabilize-ui", () => {
 
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-turbo-json"
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // run the transformer
     const result = transformer({
@@ -122,7 +122,7 @@ describe("stabilize-ui", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
       /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/

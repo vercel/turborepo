@@ -100,7 +100,12 @@ impl HTTPCache {
     /// Attempts to refresh the auth token when a cache operation encounters a
     /// 403 forbidden error. Returns true if the token was successfully
     /// refreshed, false otherwise.
-    async fn try_refresh_token(&self) -> bool {
+    async fn try_refresh_token<F, Fut, E>(&self, recover: F) -> bool
+    where
+        F: FnOnce(SecretString) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
         let current_token = match self.api_auth.lock() {
             Ok(auth) => auth.token.clone(),
             Err(_) => {
@@ -109,9 +114,8 @@ impl HTTPCache {
             }
         };
 
-        match turborepo_auth::recover_token_after_forbidden(&current_token).await {
+        match recover(current_token).await {
             Ok(Some(new_token)) => {
-                // Update the API auth with the new token
                 if let Ok(mut auth) = self.api_auth.lock() {
                     if replace_api_auth_token(&mut auth, new_token) {
                         debug!("Successfully recovered auth token for cache operations");
@@ -147,18 +151,34 @@ impl HTTPCache {
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
     {
-        // Try the operation with the current token
+        self.execute_with_token_refresh_and_recovery(hash, operation, |current_token| async move {
+            turborepo_auth::recover_token_after_forbidden(&current_token).await
+        })
+        .await
+    }
+
+    async fn execute_with_token_refresh_and_recovery<T, F, Fut, R, RecoveryFut, E>(
+        &self,
+        hash: &str,
+        operation: F,
+        recover: R,
+    ) -> Result<T, CacheError>
+    where
+        F: Fn(APIAuth) -> Fut,
+        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
+        R: FnOnce(SecretString) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
         let api_auth = self
             .api_auth
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
-        match operation(api_auth.clone()).await {
+        match operation(api_auth).await {
             Ok(result) => Ok(result),
             Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
-                // Try to refresh the token
-                if self.try_refresh_token().await {
-                    // Retry the operation with the refreshed token
+                if self.try_refresh_token(recover).await {
                     let refreshed_auth = self
                         .api_auth
                         .lock()
@@ -168,7 +188,6 @@ impl HTTPCache {
                         .await
                         .map_err(|err| Self::convert_api_error(hash, err))
                 } else {
-                    // Token refresh failed, return the original error
                     Err(CacheError::ForbiddenRemoteCacheWrite)
                 }
             }
@@ -527,6 +546,42 @@ mod test {
         http::{APIAuth, HTTPCache},
         test_cases::{TestCase, get_test_cases, validate_analytics},
     };
+
+    fn cache_with_token(token: &str) -> HTTPCache {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new(token.to_string()),
+            team_slug: None,
+        };
+
+        HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap()
+    }
 
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
@@ -904,117 +959,87 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_token_refresh_on_403() {
-        // This test verifies that the HTTPCache can handle token refresh when
-        // encountering 403 errors. Note: This is an integration test that would
-        // need a mock server setup to fully verify the token refresh flow, but
-        // the logic structure is tested through the build validation.
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+    async fn test_token_refresh_on_403_retries_with_recovered_token() {
+        let cache = cache_with_token("expired-token");
+        let attempted_tokens = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let operation_tokens = attempted_tokens.clone();
 
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-            cache_max_age: None,
-            cache_max_size: None,
-        };
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                move |auth| {
+                    let operation_tokens = operation_tokens.clone();
+                    async move {
+                        operation_tokens
+                            .lock()
+                            .unwrap()
+                            .push(auth.token.expose().to_string());
+                        if auth.token.expose() == "expired-token" {
+                            Err(turborepo_api_client::Error::UnknownStatus {
+                                code: "forbidden".into(),
+                                message: "expired".into(),
+                                backtrace: Backtrace::capture(),
+                            })
+                        } else {
+                            Ok("retried")
+                        }
+                    }
+                },
+                |current_token| async move {
+                    assert_eq!(current_token.expose(), "expired-token");
+                    Ok::<_, ()>(Some(SecretString::new("refreshed-token".to_string())))
+                },
+            )
+            .await
+            .unwrap();
 
-        let api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: SecretString::new("expired-token".to_string()),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            api_auth,
-            None,
-            LazyScmState::resolved(None),
-        )
-        .unwrap();
-
-        // Verify that the cache has the token refresh capability
-        // The actual token refresh would be tested in integration tests with a proper
-        // mock server. The vca_ prefix check is now handled in the auth layer.
-        // The result depends on whether there are any tokens available in the system
-        //
-        // The result can be true or false depending on system state, but the method
-        // should not panic. The test will fail if it does.
-        cache.try_refresh_token().await;
+        assert_eq!(result, "retried");
+        assert_eq!(
+            *attempted_tokens.lock().unwrap(),
+            ["expired-token", "refreshed-token"]
+        );
+        assert_eq!(
+            cache.api_auth.lock().unwrap().token.expose(),
+            "refreshed-token"
+        );
     }
 
     #[tokio::test]
-    async fn test_cache_token_update_after_refresh() {
-        // Test that the cache properly updates its internal token after a successful
-        // refresh
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+    async fn test_token_refresh_on_403_does_not_retry_without_replacement() {
+        let cache = cache_with_token("expired-token");
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let operation_attempts = attempts.clone();
 
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-            cache_max_age: None,
-            cache_max_size: None,
-        };
+        let error = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                move |_| {
+                    operation_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async {
+                        Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                            code: "forbidden".into(),
+                            message: "expired".into(),
+                            backtrace: Backtrace::capture(),
+                        })
+                    }
+                },
+                |current_token| async move {
+                    assert_eq!(current_token.expose(), "expired-token");
+                    Ok::<_, ()>(None)
+                },
+            )
+            .await
+            .unwrap_err();
 
-        let initial_api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: SecretString::new("initial-token".to_string()),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            initial_api_auth,
-            None,
-            LazyScmState::resolved(None),
-        )
-        .unwrap();
-
-        // Verify initial token
-        let initial_auth = cache.api_auth.lock().unwrap().clone();
-        assert_eq!(initial_auth.token.expose(), "initial-token");
-
-        // Test the token recovery mechanism (without actual HTTP call)
-        // In a real scenario, try_refresh_token would call
-        // turborepo_auth::recover_token_after_forbidden and update the internal
-        // token if successful.
-        let refresh_result = cache.try_refresh_token().await;
-
-        // The result depends on system state - could be true or false
-        let final_auth = cache.api_auth.lock().unwrap().clone();
-
-        if refresh_result {
-            // If refresh succeeded, token should have been updated
-            assert_ne!(final_auth.token.expose(), "initial-token");
-        } else {
-            // If refresh failed, token should remain unchanged
-            assert_eq!(final_auth.token.expose(), "initial-token");
-        }
+        assert!(matches!(
+            error,
+            crate::CacheError::ForbiddenRemoteCacheWrite
+        ));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(
+            cache.api_auth.lock().unwrap().token.expose(),
+            "expired-token"
+        );
     }
 
     #[test]
