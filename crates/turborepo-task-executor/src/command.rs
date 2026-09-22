@@ -38,7 +38,7 @@ fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
 /// - `ToolchainCommandProvider` (resolves commands from the package's immutable
 ///   native-task catalog: package.json scripts for JavaScript, Cargo verbs for
 ///   Rust)
-/// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
+/// - `MicroFrontendProxyProvider` in this crate (starts MFE proxy)
 pub trait CommandProvider<E> {
     /// Create a command for the given task.
     ///

@@ -17,7 +17,7 @@
 //! to `endpoint`: once an endpoint is set by a source, credentials from
 //! lower-priority sources are discarded. See `ExperimentalOtelOptions::merge`.
 
-// Match the lint settings from turborepo-lib
+// Match the lint settings from turborepo-cli
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::result_large_err)]
 

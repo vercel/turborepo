@@ -1146,9 +1146,9 @@ impl RawTurboJson {
         this
     }
 
-    // NOTE: This method depends on turborepo-lib types (TaskAccessTraceFile)
-    // and has been commented out for now. It will be re-enabled when the
-    // dependency structure is resolved.
+    // NOTE: This method depends on turborepo-task-access types
+    // (`TaskAccessTraceFile`) and has been commented out for now. It will be
+    // re-enabled when the dependency structure is resolved.
     //
     // pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
     // -> Option<Self> {     if trace.is_empty() {
