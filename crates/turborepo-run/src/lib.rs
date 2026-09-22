@@ -3,9 +3,11 @@
 
 pub mod boundaries;
 pub mod builder;
-mod engine;
+pub mod engine_loader;
 mod error;
 pub(crate) mod scope;
+#[cfg(test)]
+mod task_definition_test;
 
 use std::{
     collections::{BTreeMap, HashSet},
@@ -36,8 +38,8 @@ pub struct RunBuilderInput {
     pub api_auth: Option<APIAuth>,
 }
 
-pub use engine::{EngineBuilder, EngineTurboJsonLoader, TaskNode, ValidateError};
 use turborepo_ci::Vendor;
+use turborepo_engine::{Built, Engine};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_microfrontends_proxy::ProxyServer;
@@ -57,10 +59,9 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_turbo_json::TurboJson;
-use turborepo_types::{EnvMode, UIMode};
+use turborepo_types::{EnvMode, TaskDefinition, UIMode};
 use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui, tui::TuiSender};
 
-use crate::engine::Engine;
 pub use crate::error::Error;
 
 /// Live status of the remote cache, determined by a preflight API check
@@ -129,7 +130,7 @@ pub struct Run {
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
     remote_cache_status: RemoteCacheStatus,
-    engine: Arc<Engine>,
+    engine: Arc<Engine<Built, TaskDefinition>>,
     task_access: TaskAccess,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: PendingRepoIndex,
@@ -555,7 +556,7 @@ impl Run {
         self.repo.pkg_dep_graph.clone()
     }
 
-    pub fn engine(&self) -> &Engine {
+    pub fn engine(&self) -> &Engine<Built, TaskDefinition> {
         &self.engine
     }
 
