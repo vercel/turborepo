@@ -1,28 +1,10 @@
-mod loader;
-#[cfg(test)]
-mod task_definition_test;
-
-pub use loader::EngineTurboJsonLoader;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
-// Building state is used for engine construction
-#[cfg(test)]
-pub use turborepo_engine::Building;
-// Re-export builder types from turborepo-engine
-pub use turborepo_engine::{BuilderError, EngineBuilder};
-// Re-export core types from turborepo-engine
-pub use turborepo_engine::{Built, TaskDefinitionInfo, TaskNode};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::TaskId;
-use turborepo_types::{TaskDefinition, UIMode};
+use turborepo_types::{TaskCommandOverride, TaskDefinition, UIMode};
 
-/// Type alias for Engine specialized with TaskDefinition.
-/// This allows existing code to continue using `Engine` without type
-/// parameters.
-pub type Engine<S = Built> = turborepo_engine::Engine<S, TaskDefinition>;
-
-// Note: TaskDefinitionInfo is now implemented for TaskDefinition
-// directly in turborepo-engine crate.
+use crate::{Built, Engine, TaskNode};
 
 #[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {
@@ -58,24 +40,9 @@ pub enum ValidateError {
     InteractiveNeedsUI { task: String },
 }
 
-/// Extension trait for Engine<Built, TaskDefinition> that provides
-/// run-specific functionality.
-pub trait EngineExt {
-    /// Return all tasks that have a command to be run
-    fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String>;
-
-    /// Validate the engine against a package graph
-    fn validate(
-        &self,
-        package_graph: &PackageGraph,
-        concurrency: u32,
-        ui_mode: UIMode,
-        will_execute_tasks: bool,
-    ) -> Result<(), Vec<ValidateError>>;
-}
-
-pub(crate) fn task_has_command(
-    engine: &Engine<Built>,
+/// Returns whether a task resolves to a runnable command.
+pub fn task_has_command(
+    engine: &Engine<Built, TaskDefinition>,
     package_graph: &PackageGraph,
     task: &TaskId<'static>,
 ) -> bool {
@@ -87,18 +54,20 @@ pub(crate) fn task_has_command(
     else {
         return false;
     };
+
     match engine
         .task_definition(task)
         .and_then(|definition| definition.command.as_ref())
     {
-        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
-        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        Some(TaskCommandOverride::Argv(_)) => true,
+        Some(TaskCommandOverride::OptOut) => false,
         None => context.native_tasks().defines(task.task()),
     }
 }
 
-pub(crate) fn task_participates(
-    engine: &Engine<Built>,
+/// Returns whether a task participates in its package's native task catalog.
+pub fn task_participates(
+    engine: &Engine<Built, TaskDefinition>,
     package_graph: &PackageGraph,
     task: &TaskId<'static>,
 ) -> bool {
@@ -106,18 +75,20 @@ pub(crate) fn task_participates(
     else {
         return false;
     };
+
     match engine
         .task_definition(task)
         .and_then(|definition| definition.command.as_ref())
     {
-        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
-        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        Some(TaskCommandOverride::Argv(_)) => true,
+        Some(TaskCommandOverride::OptOut) => false,
         None => context.native_tasks().participates(task.task()),
     }
 }
 
-impl EngineExt for Engine<Built> {
-    fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
+impl Engine<Built, TaskDefinition> {
+    /// Returns all tasks that have a command to run.
+    pub fn tasks_with_command(&self, package_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
             .filter_map(|node| match node {
                 TaskNode::Root => None,
@@ -129,14 +100,15 @@ impl EngineExt for Engine<Built> {
                 // resolved `command` override is authoritative in both
                 // directions: an argv executes even where the catalog defines
                 // nothing, and an opt-out never executes even where it does.
-                task_has_command(self, pkg_graph, task)
+                task_has_command(self, package_graph, task)
             })
             .map(ToString::to_string)
             .collect()
     }
 
+    /// Validates the engine against a package graph and execution settings.
     #[allow(clippy::expect_used)]
-    fn validate(
+    pub fn validate(
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
@@ -249,7 +221,10 @@ impl EngineExt for Engine<Built> {
 }
 
 // Validates that UI is setup if any interactive tasks will be executed
-fn validate_interactive(engine: &Engine<Built>, ui_mode: UIMode) -> Vec<ValidateError> {
+fn validate_interactive(
+    engine: &Engine<Built, TaskDefinition>,
+    ui_mode: UIMode,
+) -> Vec<ValidateError> {
     // If experimental_ui is being used, then we don't need check for interactive
     // tasks
     if matches!(ui_mode, UIMode::Tui) {
@@ -272,18 +247,20 @@ fn validate_interactive(engine: &Engine<Built>, ui_mode: UIMode) -> Vec<Validate
 
 #[cfg(test)]
 mod test {
-
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::BTreeMap;
 
     use turbopath::AbsoluteSystemPath;
     use turborepo_errors::Spanned;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
+        package_graph::PackageGraph,
         package_json::PackageJson,
     };
-    use turborepo_task_id::{TaskId, TaskName};
 
     use super::*;
+    use crate::Building;
+
+    type TaskDefinitionEngine<S = Built> = Engine<S, TaskDefinition>;
 
     struct DummyDiscovery(turbopath::AbsoluteSystemPathBuf);
 
@@ -376,7 +353,7 @@ mod test {
             )
             .unwrap();
 
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
         for (package, task) in [
             // JS package with a build script (DummyDiscovery gives "a" one).
             ("a", "build"),
@@ -410,6 +387,49 @@ mod test {
     }
 
     #[tokio::test]
+    async fn command_overrides_are_authoritative() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
+
+        let argv = TaskId::new("c", "custom");
+        let opt_out = TaskId::new("a", "build");
+        let native = TaskId::new("a", "dev");
+        for (task, command) in [
+            (
+                argv.clone(),
+                Some(TaskCommandOverride::Argv(vec!["custom".to_string()])),
+            ),
+            (opt_out.clone(), Some(TaskCommandOverride::OptOut)),
+            (native.clone(), None),
+        ] {
+            engine.get_index(&task);
+            engine.add_definition(
+                task,
+                TaskDefinition {
+                    command,
+                    ..Default::default()
+                },
+            );
+        }
+        let engine = engine.seal();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(DummyDiscovery(
+                turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(task_has_command(&engine, &graph, &argv));
+        assert!(task_participates(&engine, &graph, &argv));
+        assert!(!task_has_command(&engine, &graph, &opt_out));
+        assert!(!task_participates(&engine, &graph, &opt_out));
+        assert!(task_has_command(&engine, &graph, &native));
+        assert!(task_participates(&engine, &graph, &native));
+    }
+
+    #[tokio::test]
     async fn issue_4291() {
         // we had an issue where our engine validation would reject running persistent
         // tasks if the number of _total packages_ exceeded the concurrency limit,
@@ -419,7 +439,7 @@ mod test {
 
         let tmp = tempfile::TempDir::with_prefix("issue_4291").unwrap();
 
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
 
         // add two packages with a persistent build task
         for package in ["a", "b"] {
@@ -472,7 +492,7 @@ mod test {
     async fn test_interactive_validation() {
         let tmp = tempfile::TempDir::new().unwrap();
 
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
 
         // add two packages with a persistent build task
         for package in ["a", "b"] {
@@ -508,7 +528,7 @@ mod test {
     async fn test_dry_run_skips_concurrency_validation() {
         let tmp = tempfile::TempDir::new().unwrap();
 
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
 
         // add two packages with a persistent build task
         for package in ["a", "b"] {
@@ -542,7 +562,7 @@ mod test {
     #[tokio::test]
     async fn validation_rejects_dependency_on_persistent_task() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
 
         let build = TaskId::new("a", "build");
         let dev = TaskId::new("a", "dev");
@@ -585,7 +605,7 @@ mod test {
     #[tokio::test]
     async fn validation_allows_dependency_on_persistent_task_without_script() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let mut engine: Engine<Building> = Engine::new();
+        let mut engine: TaskDefinitionEngine<Building> = Engine::new();
 
         let build = TaskId::new("a", "build");
         let dev = TaskId::new("c", "dev");
@@ -615,253 +635,5 @@ mod test {
         .unwrap();
 
         engine.validate(&graph, 10, UIMode::Stream, true).unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_get_subgraph_for_package() {
-        // Verifies that we can prune the `Engine` to include only the persistent tasks
-        // or only the non-persistent tasks.
-
-        let mut engine: Engine<Building> = Engine::new();
-
-        // Add two tasks in package `a`
-        let a_build_task_id = TaskId::new("a", "build");
-        let a_dev_task_id = TaskId::new("a", "dev");
-
-        let a_build_idx = engine.get_index(&a_build_task_id);
-        engine.add_definition(a_build_task_id.clone(), TaskDefinition::default());
-
-        engine.get_index(&a_dev_task_id);
-        engine.add_definition(a_dev_task_id.clone(), TaskDefinition::default());
-
-        // Add two tasks in package `b` where the `build` task depends
-        // on the `build` task from package `a`
-        let b_build_task_id = TaskId::new("b", "build");
-        let b_dev_task_id = TaskId::new("b", "dev");
-
-        let b_build_idx = engine.get_index(&b_build_task_id);
-        engine.add_definition(
-            b_build_task_id.clone(),
-            TaskDefinition {
-                task_dependencies: vec![Spanned::new(TaskName::from(a_build_task_id.clone()))],
-                ..Default::default()
-            },
-        );
-
-        engine.get_index(&b_dev_task_id);
-        engine.add_definition(b_dev_task_id.clone(), TaskDefinition::default());
-        engine
-            .task_graph_mut()
-            .add_edge(b_build_idx, a_build_idx, ());
-
-        let engine = engine.seal();
-        let subgraph =
-            engine.create_engine_for_subgraph(&[PackageName::from("a")].into_iter().collect());
-
-        // a's tasks are entrypoints, b#build is a transitive dependent, and
-        // Root is preserved for graph integrity. b#dev has no dependency on
-        // any of a's tasks so it's pruned.
-        let tasks: Vec<_> = subgraph.tasks().collect();
-        assert_eq!(tasks.len(), 4);
-        assert!(tasks.contains(&&TaskNode::Root));
-        assert!(tasks.contains(&&TaskNode::Task(a_build_task_id)));
-        assert!(tasks.contains(&&TaskNode::Task(a_dev_task_id)));
-        assert!(tasks.contains(&&TaskNode::Task(b_build_task_id)));
-    }
-
-    /// When a downstream package changes in watch mode, the subgraph must
-    /// include its upstream dependency tasks so the executor can produce
-    /// their outputs (cold cache, first run, or cleared cache).
-    #[test]
-    fn test_subgraph_retains_upstream_dependency() {
-        let mut engine: Engine<Building> = Engine::new();
-
-        let lib_build = TaskId::new("lib", "build");
-        let app_build = TaskId::new("app", "build");
-
-        let lib_idx = engine.get_index(&lib_build);
-        let app_idx = engine.get_index(&app_build);
-
-        engine.add_definition(lib_build.clone(), TaskDefinition::default());
-        engine.add_definition(app_build.clone(), TaskDefinition::default());
-
-        // app#build depends on lib#build (^build)
-        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
-        engine.connect_to_root(&lib_build);
-
-        let engine = engine.seal();
-
-        // Only app's files changed — lib is untouched.
-        let subgraph =
-            engine.create_engine_for_subgraph(&[PackageName::from("app")].into_iter().collect());
-
-        let task_ids: HashSet<_> = subgraph.task_ids().cloned().collect();
-        assert!(
-            task_ids.contains(&app_build),
-            "changed package's task should survive"
-        );
-        assert!(
-            task_ids.contains(&lib_build),
-            "upstream dependency must survive — executor needs it to produce outputs on cold cache"
-        );
-    }
-
-    /// Regression test for https://github.com/vercel/turborepo/issues/12654
-    ///
-    /// `turbo watch dev` should not re-run a dependency package's `dev` task
-    /// when only the dependent app changed. Non-cacheable tasks cannot restore
-    /// outputs from cache, so retaining them would force unnecessary execution.
-    #[test]
-    fn test_subgraph_excludes_non_cacheable_upstream_dependency() {
-        let mut engine: Engine<Building> = Engine::new();
-
-        let lib_dev = TaskId::new("lib", "dev");
-        let app_dev = TaskId::new("app", "dev");
-
-        let lib_idx = engine.get_index(&lib_dev);
-        let app_idx = engine.get_index(&app_dev);
-
-        let dev_definition = TaskDefinition {
-            cache: false,
-            ..Default::default()
-        };
-
-        engine.add_definition(lib_dev.clone(), dev_definition.clone());
-        engine.add_definition(app_dev.clone(), dev_definition);
-
-        // app#dev depends on lib#dev (^dev)
-        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
-        engine.connect_to_root(&lib_dev);
-
-        let engine = engine.seal();
-
-        // Only app's files changed — lib is untouched.
-        let subgraph =
-            engine.create_engine_for_subgraph(&[PackageName::from("app")].into_iter().collect());
-
-        let task_ids: HashSet<_> = subgraph.task_ids().cloned().collect();
-        assert!(
-            task_ids.contains(&app_dev),
-            "changed package's task should survive"
-        );
-        assert!(
-            !task_ids.contains(&lib_dev),
-            "non-cacheable upstream dependency should not be re-run for an app-only change"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_tasks_impacted_by_packages() {
-        // Tests the batched transitive dependents lookup for watch mode.
-        //
-        // Graph structure:
-        //   a:build  <--  b:build  <--  c:build
-        //   a:test       b:test        c:test
-        //
-        // Where b:build depends on a:build, and c:build depends on b:build.
-        // Changing package "a" should impact: a:build, a:test, b:build, c:build
-        // Changing package "b" should impact: b:build, b:test, c:build
-
-        let mut engine: Engine<Building> = Engine::new();
-
-        // Package a
-        let a_build = TaskId::new("a", "build");
-        let a_test = TaskId::new("a", "test");
-        let a_build_idx = engine.get_index(&a_build);
-        engine.get_index(&a_test);
-        engine.add_definition(a_build.clone(), TaskDefinition::default());
-        engine.add_definition(a_test.clone(), TaskDefinition::default());
-
-        // Package b (b:build depends on a:build)
-        let b_build = TaskId::new("b", "build");
-        let b_test = TaskId::new("b", "test");
-        let b_build_idx = engine.get_index(&b_build);
-        engine.get_index(&b_test);
-        engine.add_definition(b_build.clone(), TaskDefinition::default());
-        engine.add_definition(b_test.clone(), TaskDefinition::default());
-        engine
-            .task_graph_mut()
-            .add_edge(b_build_idx, a_build_idx, ());
-
-        // Package c (c:build depends on b:build)
-        let c_build = TaskId::new("c", "build");
-        let c_test = TaskId::new("c", "test");
-        let c_build_idx = engine.get_index(&c_build);
-        engine.get_index(&c_test);
-        engine.add_definition(c_build.clone(), TaskDefinition::default());
-        engine.add_definition(c_test.clone(), TaskDefinition::default());
-        engine
-            .task_graph_mut()
-            .add_edge(c_build_idx, b_build_idx, ());
-
-        let engine = engine.seal();
-
-        // Test: changing package "a" should impact a:build, a:test, b:build, c:build
-        let impacted =
-            engine.tasks_impacted_by_packages(&[PackageName::from("a")].into_iter().collect());
-
-        // Filter out Root node and collect task IDs
-        let impacted_tasks: std::collections::HashSet<_> = impacted
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(id) => Some(id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
-
-        assert_eq!(impacted_tasks.len(), 4);
-        assert!(impacted_tasks.contains(&a_build));
-        assert!(impacted_tasks.contains(&a_test));
-        assert!(impacted_tasks.contains(&b_build)); // transitive dependent
-        assert!(impacted_tasks.contains(&c_build)); // transitive dependent
-
-        // Test: changing package "b" should impact b:build, b:test, c:build
-        let impacted =
-            engine.tasks_impacted_by_packages(&[PackageName::from("b")].into_iter().collect());
-
-        let impacted_tasks: std::collections::HashSet<_> = impacted
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(id) => Some(id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
-
-        assert_eq!(impacted_tasks.len(), 3);
-        assert!(impacted_tasks.contains(&b_build));
-        assert!(impacted_tasks.contains(&b_test));
-        assert!(impacted_tasks.contains(&c_build)); // transitive dependent
-
-        // Test: changing multiple packages at once (a and c)
-        // Should find: a:build, a:test, b:build, c:build, c:test
-        let impacted = engine.tasks_impacted_by_packages(
-            &[PackageName::from("a"), PackageName::from("c")]
-                .into_iter()
-                .collect(),
-        );
-
-        let impacted_tasks: std::collections::HashSet<_> = impacted
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(id) => Some(id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
-
-        assert_eq!(impacted_tasks.len(), 5);
-        assert!(impacted_tasks.contains(&a_build));
-        assert!(impacted_tasks.contains(&a_test));
-        assert!(impacted_tasks.contains(&b_build)); // transitive dependent of a
-        assert!(impacted_tasks.contains(&c_build)); // both direct (c) and transitive (a->b->c)
-        assert!(impacted_tasks.contains(&c_test)); // direct from c
-
-        // Test: empty set returns empty
-        let impacted = engine.tasks_impacted_by_packages(&std::collections::HashSet::new());
-        assert!(impacted.is_empty());
-
-        // Test: non-existent package returns empty
-        let impacted = engine
-            .tasks_impacted_by_packages(&[PackageName::from("nonexistent")].into_iter().collect());
-        assert!(impacted.is_empty());
     }
 }

@@ -11,10 +11,11 @@ use turborepo_devtools::{
     package_graph_to_data, GraphData, GraphEdge, RepositoryGraphBuilder, TaskGraphData,
     TaskGraphError, TaskNode,
 };
+use turborepo_engine::{EngineBuilder, TaskNode as EngineTaskNode};
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_package_watcher::repository_graph::RepositoryGraphFeatures;
 use turborepo_repository::package_graph::{PackageGraph, PackageGraphBuilder, PackageName};
-use turborepo_run::{EngineBuilder, EngineTurboJsonLoader, TaskNode as EngineTaskNode};
+use turborepo_run::engine_loader::EngineTurboJsonLoader;
 use turborepo_run_opts::Opts;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::TurboJsonReader;

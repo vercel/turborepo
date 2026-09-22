@@ -1,15 +1,13 @@
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
-use turborepo_engine::GraphVisualizerError;
+use turborepo_engine::{BuilderError, GraphVisualizerError, ValidateError};
 use turborepo_repository::package_graph;
 use turborepo_run_opts::Error as OptsError;
 use turborepo_scope::filter::ResolutionError;
 use turborepo_task_graph::VisitorError;
 use turborepo_task_hash::{Error as TaskHashError, global_hash};
 use turborepo_ui::tui;
-
-use crate::{engine, engine::ValidateError};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -19,7 +17,7 @@ pub enum Error {
     Graph(#[from] GraphVisualizerError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Builder(#[from] engine::BuilderError),
+    Builder(#[from] BuilderError),
     #[error(transparent)]
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]

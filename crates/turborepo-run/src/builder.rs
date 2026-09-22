@@ -13,6 +13,7 @@ use turbopath::{
 use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
+use turborepo_engine::{Built, Engine, EngineBuilder, task_has_command, task_participates};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -37,11 +38,12 @@ use turborepo_telemetry::events::{
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
 };
-use turborepo_types::{FilterMode, TaskDefinitionHashInfo, TaskInputs, UIMode};
+use turborepo_types::{FilterMode, TaskDefinition, TaskDefinitionHashInfo, TaskInputs, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
 
+type RunEngine = Engine<Built, TaskDefinition>;
 type FilteredPackages = (
     HashMap<PackageName, PackageInclusionReason>,
     FilterMode,
@@ -86,7 +88,7 @@ struct ExecutionContext {
     task_access: TaskAccess,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
-    engine: Arc<Engine>,
+    engine: Arc<RunEngine>,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
 }
 
@@ -117,9 +119,7 @@ use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
     Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunBuilderInput,
-    RunCache,
-    engine::{Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader, task_has_command},
-    scope,
+    RunCache, engine_loader::EngineTurboJsonLoader, scope,
 };
 
 fn project_task_io_environment(
@@ -479,7 +479,7 @@ impl RunBuilder {
     fn untracked_scan_prefixes(
         repo_root: &AbsoluteSystemPath,
         git_root: Option<&AbsoluteSystemPath>,
-        engine: &Engine,
+        engine: &RunEngine,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filter_mode: &FilterMode,
@@ -1847,12 +1847,12 @@ impl RunBuilder {
     #[tracing::instrument(skip_all)]
     fn filter_engine_to_affected_tasks(
         &self,
-        engine: Engine,
+        engine: RunEngine,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         scm: &SCM,
         package_scope: Option<&HashSet<PackageName>>,
-    ) -> Result<(Engine, Option<HashSet<PackageName>>), Error> {
+    ) -> Result<(RunEngine, Option<HashSet<PackageName>>), Error> {
         let (from_ref, to_ref) = self
             .opts
             .scope_opts
@@ -1956,7 +1956,7 @@ impl RunBuilder {
 
     fn command_task_entrypoints(
         &self,
-        engine: &Engine,
+        engine: &RunEngine,
         pkg_dep_graph: &PackageGraph,
         candidate_packages: &HashSet<PackageName>,
     ) -> TaskEntrypointSelection {
@@ -1984,7 +1984,7 @@ impl RunBuilder {
                 .any(|context| context.native_tasks().participates(task.task()))
                 || engine.task_ids().any(|task_id| {
                     task_id.task() == task.task()
-                        && crate::engine::task_participates(engine, pkg_dep_graph, task_id)
+                        && task_participates(engine, pkg_dep_graph, task_id)
                 });
 
             for package in candidate_packages {
@@ -1994,9 +1994,7 @@ impl RunBuilder {
                 }
 
                 selection.candidates.insert(task_id.clone());
-                if !has_participant
-                    || crate::engine::task_participates(engine, pkg_dep_graph, &task_id)
-                {
+                if !has_participant || task_participates(engine, pkg_dep_graph, &task_id) {
                     selection.selected.insert(task_id.clone());
                     if !has_participant {
                         selection
@@ -2036,10 +2034,10 @@ impl RunBuilder {
 
     fn select_engine_task_entrypoints(
         &self,
-        engine: Engine,
+        engine: RunEngine,
         pkg_dep_graph: &PackageGraph,
         filter_mode: &FilterMode,
-    ) -> Engine {
+    ) -> RunEngine {
         let package_tasks: HashSet<_> = self
             .opts
             .run_opts
@@ -2113,7 +2111,7 @@ impl RunBuilder {
         entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
         environment: &EnvironmentVariableMap,
-    ) -> Result<(Engine, HashSet<ToolchainId>), Error> {
+    ) -> Result<(RunEngine, HashSet<ToolchainId>), Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())

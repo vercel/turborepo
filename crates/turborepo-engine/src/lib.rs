@@ -19,6 +19,7 @@ mod loader;
 mod mermaid;
 mod task_definition;
 mod validate;
+mod validate_engine;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -50,6 +51,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskId;
 use turborepo_types::{EngineInfo, TaskDefinition};
 pub use validate::{TaskDefinitionResult, validate_task_name};
+pub use validate_engine::{ValidateError, task_has_command, task_participates};
 
 /// Trait for types that provide task definition information needed by the
 /// engine.
@@ -1469,6 +1471,128 @@ mod affected_tasks_tests {
             ids.contains(&TaskId::new("common", "build")),
             "^build dependency must survive for the app to execute"
         );
+    }
+
+    #[test]
+    fn package_subgraph_keeps_dependents_and_cacheable_dependencies() {
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+
+        let lib_build = TaskId::new("lib", "build");
+        let tools_dev = TaskId::new("tools", "dev");
+        let app_build = TaskId::new("app", "build");
+        let app_test = TaskId::new("app", "test");
+        let consumer_build = TaskId::new("consumer", "build");
+        let unrelated_build = TaskId::new("unrelated", "build");
+
+        let lib_idx = engine.get_index(&lib_build);
+        let tools_idx = engine.get_index(&tools_dev);
+        let app_idx = engine.get_index(&app_build);
+        engine.get_index(&app_test);
+        let consumer_idx = engine.get_index(&consumer_build);
+        engine.get_index(&unrelated_build);
+
+        engine.add_definition(lib_build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            tools_dev.clone(),
+            TaskDefinition {
+                cache: false,
+                ..Default::default()
+            },
+        );
+        engine.add_definition(app_build.clone(), TaskDefinition::default());
+        engine.add_definition(app_test.clone(), TaskDefinition::default());
+        engine.add_definition(consumer_build.clone(), TaskDefinition::default());
+        engine.add_definition(unrelated_build.clone(), TaskDefinition::default());
+
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.task_graph_mut().add_edge(app_idx, tools_idx, ());
+        engine.task_graph_mut().add_edge(consumer_idx, app_idx, ());
+        engine.connect_to_root(&lib_build);
+        engine.connect_to_root(&tools_dev);
+        engine.connect_to_root(&unrelated_build);
+
+        let subgraph = engine
+            .seal()
+            .create_engine_for_subgraph(&HashSet::from([PackageName::from("app")]));
+        assert!(subgraph.tasks().any(|node| *node == TaskNode::Root));
+        let ids = task_ids_set(&subgraph);
+
+        assert!(ids.contains(&app_build));
+        assert!(ids.contains(&app_test));
+        assert!(ids.contains(&consumer_build));
+        assert!(ids.contains(&lib_build));
+        assert!(!ids.contains(&tools_dev));
+        assert!(!ids.contains(&unrelated_build));
+    }
+
+    #[test]
+    fn tasks_impacted_by_packages_batches_transitive_dependents() {
+        // Graph structure:
+        //   a:build  <--  b:build  <--  c:build
+        //   a:test       b:test        c:test
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+
+        let a_build = TaskId::new("a", "build");
+        let a_test = TaskId::new("a", "test");
+        let a_build_idx = engine.get_index(&a_build);
+        engine.get_index(&a_test);
+        engine.add_definition(a_build.clone(), TaskDefinition::default());
+        engine.add_definition(a_test.clone(), TaskDefinition::default());
+
+        let b_build = TaskId::new("b", "build");
+        let b_test = TaskId::new("b", "test");
+        let b_build_idx = engine.get_index(&b_build);
+        engine.get_index(&b_test);
+        engine.add_definition(b_build.clone(), TaskDefinition::default());
+        engine.add_definition(b_test.clone(), TaskDefinition::default());
+        engine
+            .task_graph_mut()
+            .add_edge(b_build_idx, a_build_idx, ());
+
+        let c_build = TaskId::new("c", "build");
+        let c_test = TaskId::new("c", "test");
+        let c_build_idx = engine.get_index(&c_build);
+        engine.get_index(&c_test);
+        engine.add_definition(c_build.clone(), TaskDefinition::default());
+        engine.add_definition(c_test.clone(), TaskDefinition::default());
+        engine
+            .task_graph_mut()
+            .add_edge(c_build_idx, b_build_idx, ());
+
+        let engine = engine.seal();
+        let task_ids = |packages: HashSet<PackageName>| {
+            engine
+                .tasks_impacted_by_packages(&packages)
+                .into_iter()
+                .filter_map(|node| match node {
+                    TaskNode::Task(id) => Some(id.clone()),
+                    TaskNode::Root => None,
+                })
+                .collect::<HashSet<_>>()
+        };
+
+        assert_eq!(
+            task_ids(HashSet::from([PackageName::from("a")])),
+            HashSet::from([
+                a_build.clone(),
+                a_test.clone(),
+                b_build.clone(),
+                c_build.clone(),
+            ])
+        );
+        assert_eq!(
+            task_ids(HashSet::from([PackageName::from("b")])),
+            HashSet::from([b_build.clone(), b_test, c_build.clone()])
+        );
+        assert_eq!(
+            task_ids(HashSet::from([
+                PackageName::from("a"),
+                PackageName::from("c"),
+            ])),
+            HashSet::from([a_build, a_test, b_build, c_build, c_test])
+        );
+        assert!(task_ids(HashSet::new()).is_empty());
+        assert!(task_ids(HashSet::from([PackageName::from("missing")])).is_empty());
     }
 }
 

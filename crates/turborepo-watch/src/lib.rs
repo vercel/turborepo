@@ -27,7 +27,7 @@ use turborepo_filewatch::{
 use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_run as run;
-use turborepo_run::{EngineExt, Run, RunBuilderInput, builder::RunBuilder};
+use turborepo_run::{Run, RunBuilderInput, builder::RunBuilder};
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_run_opts::Error as OptsError;
 use turborepo_scm::SCM;

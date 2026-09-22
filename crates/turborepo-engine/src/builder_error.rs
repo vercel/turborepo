@@ -17,7 +17,7 @@ use crate::{
         CyclicExtends, MissingPackageFromTaskError, MissingPackageTaskError,
         MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
     },
-    validate::Error as ValidateError,
+    validate::Error as TaskNameValidateError,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -81,10 +81,10 @@ pub enum Error {
     },
 }
 
-impl From<ValidateError> for Error {
-    fn from(err: ValidateError) -> Self {
+impl From<TaskNameValidateError> for Error {
+    fn from(err: TaskNameValidateError) -> Self {
         match err {
-            ValidateError::InvalidTaskName(e) => Error::InvalidTaskName(e),
+            TaskNameValidateError::InvalidTaskName(e) => Error::InvalidTaskName(e),
         }
     }
 }
