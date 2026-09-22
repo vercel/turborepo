@@ -13,6 +13,7 @@ use turbopath::{
 use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
+use turborepo_engine::{task_has_command, task_participates};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -118,7 +119,7 @@ use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 use crate::{
     Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunBuilderInput,
     RunCache,
-    engine::{Engine, EngineBuilder, EngineExt, EngineTurboJsonLoader, task_has_command},
+    engine::{Engine, EngineBuilder, EngineTurboJsonLoader},
     scope,
 };
 
@@ -1984,7 +1985,7 @@ impl RunBuilder {
                 .any(|context| context.native_tasks().participates(task.task()))
                 || engine.task_ids().any(|task_id| {
                     task_id.task() == task.task()
-                        && crate::engine::task_participates(engine, pkg_dep_graph, task_id)
+                        && task_participates(engine, pkg_dep_graph, task_id)
                 });
 
             for package in candidate_packages {
@@ -1994,9 +1995,7 @@ impl RunBuilder {
                 }
 
                 selection.candidates.insert(task_id.clone());
-                if !has_participant
-                    || crate::engine::task_participates(engine, pkg_dep_graph, &task_id)
-                {
+                if !has_participant || task_participates(engine, pkg_dep_graph, &task_id) {
                     selection.selected.insert(task_id.clone());
                     if !has_participant {
                         selection

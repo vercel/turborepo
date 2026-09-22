@@ -36,7 +36,7 @@ pub struct RunBuilderInput {
     pub api_auth: Option<APIAuth>,
 }
 
-pub use engine::{EngineBuilder, EngineExt, EngineTurboJsonLoader, TaskNode, ValidateError};
+pub use engine::{EngineBuilder, EngineTurboJsonLoader, TaskNode, ValidateError};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
