@@ -656,6 +656,82 @@ exit 0
     }
 
     #[test]
+    fn run_stops_with_task_when_parent_exits() {
+        let (_tempdir, test_dir) = setup_shutdown_fixture(
+            "finite-parent.sh",
+            r#"#!/usr/bin/env bash
+set -eu
+deadline=$((SECONDS + 10))
+while [ ! -f sidecar.ready ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then exit 1; fi
+  sleep 0.1
+done
+printf "parent done\n"
+"#,
+        );
+        let app_dir = test_dir.join("apps/app-a");
+        fs::write(
+            app_dir.join("sidecar.sh"),
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "sidecar cleanup\n"; : > sidecar.cleanup; exit 0' INT
+: > sidecar.ready
+while true; do sleep 0.2 || true; done
+"#,
+        )
+        .expect("failed to write sidecar script");
+
+        let package_json_path = app_dir.join("package.json");
+        let mut package_json: Value = serde_json::from_str(
+            &fs::read_to_string(&package_json_path).expect("failed to read app package.json"),
+        )
+        .expect("failed to parse app package.json");
+        package_json["scripts"]["sidecar"] = Value::String("bash ./sidecar.sh".to_string());
+        fs::write(
+            &package_json_path,
+            serde_json::to_string_pretty(&package_json).expect("failed to serialize app package"),
+        )
+        .expect("failed to update app package.json");
+
+        let turbo_json_path = test_dir.join("turbo.json");
+        let mut turbo_json: Value = serde_json::from_str(
+            &fs::read_to_string(&turbo_json_path).expect("failed to read turbo.json"),
+        )
+        .expect("failed to parse turbo.json");
+        turbo_json["tasks"]["dev"] = json!({
+            "cache": false,
+            "with": ["sidecar"],
+        });
+        turbo_json["tasks"]["sidecar"] = json!({
+            "cache": false,
+            "persistent": true,
+        });
+        fs::write(
+            &turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).expect("failed to serialize turbo.json"),
+        )
+        .expect("failed to update turbo.json");
+
+        let child = spawn_noninteractive_turbo(&test_dir);
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(output.status.success(), "run should exit 0\n{combined}");
+        assert!(
+            app_dir.join("sidecar.cleanup").exists(),
+            "with task should receive a graceful stop when its parent exits\n{combined}"
+        );
+        assert!(
+            combined.contains("sidecar cleanup"),
+            "expected sidecar cleanup output\n{combined}"
+        );
+    }
+
+    #[test]
     fn run_gracefully_shuts_down_on_first_sigint_in_tty() {
         let (_tempdir, test_dir) = setup_shutdown_fixture(
             "graceful.sh",
