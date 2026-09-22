@@ -4,7 +4,9 @@ mod common;
 
 use std::fs;
 
-use common::{combined_output, git, run_turbo, run_turbo_with_env, setup};
+use common::{
+    combined_output, git, git_commit_staged_if_changed, run_turbo, run_turbo_with_env, setup,
+};
 
 const TURBO_JSON_GLOBAL_DEPS: &str = r#"{
   "globalDependencies": ["config.txt"],
@@ -61,16 +63,7 @@ fn setup_fixture(dir: &std::path::Path, turbo_json: &str) {
     setup::setup_integration_test(dir, "global_inputs", "npm@10.5.0", false).unwrap();
     fs::write(dir.join("turbo.json"), turbo_json).unwrap();
     git(dir, &["add", "."]);
-    git(
-        dir,
-        &[
-            "commit",
-            "-m",
-            "set turbo config",
-            "--quiet",
-            "--allow-empty",
-        ],
-    );
+    git_commit_staged_if_changed(dir, "set turbo config");
 }
 
 /// With `globalDependencies`, changing a global dep file invalidates ALL

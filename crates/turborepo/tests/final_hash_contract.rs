@@ -4,7 +4,7 @@ mod common;
 
 use std::{fs, path::Path, process::Stdio};
 
-use common::{git, replace_turbo_json, run_turbo_with_env, setup};
+use common::{git, git_commit_staged_if_changed, replace_turbo_json, run_turbo_with_env, setup};
 use serde_json::Value;
 
 const TURBO_JSON_GLOBAL_DEPS: &str = r#"{
@@ -121,16 +121,7 @@ fn setup_global_inputs_fixture(dir: &Path, turbo_json: &str) {
     setup::setup_integration_test(dir, "global_inputs", "npm@10.5.0", false).unwrap();
     fs::write(dir.join("turbo.json"), turbo_json).unwrap();
     git(dir, &["add", "."]);
-    git(
-        dir,
-        &[
-            "commit",
-            "-m",
-            "set turbo config",
-            "--quiet",
-            "--allow-empty",
-        ],
-    );
+    git_commit_staged_if_changed(dir, "set turbo config");
 }
 
 fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {

@@ -115,6 +115,27 @@ pub fn git(dir: &Path, args: &[&str]) {
     );
 }
 
+/// Commit staged changes, or do nothing when the index matches `HEAD`.
+pub fn git_commit_staged_if_changed(dir: &Path, message: &str) {
+    let output = std::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(dir)
+        .output()
+        .expect("failed to inspect staged git changes");
+
+    match output.status.code() {
+        Some(0) => {}
+        Some(1) => git(dir, &["commit", "-m", message, "--quiet"]),
+        _ => panic!(
+            "git diff --cached --quiet failed in {} with status {}\nstdout:\n{}\nstderr:\n{}",
+            dir.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        ),
+    }
+}
+
 /// Combine stdout and stderr into a single string.
 pub fn combined_output(output: &Output) -> String {
     format!(
