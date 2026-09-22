@@ -1409,31 +1409,231 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
     }
 }
 
+fn query_task_id(task_id: &turborepo_task_id::TaskId) -> turborepo_query_api::QueryTaskId {
+    turborepo_query_api::QueryTaskId::new(task_id.package(), task_id.task())
+}
+
+fn engine_task_id(
+    task_id: &turborepo_query_api::QueryTaskId,
+) -> turborepo_task_id::TaskId<'static> {
+    turborepo_task_id::TaskId::from_static(task_id.package.clone(), task_id.task.clone())
+}
+
+fn query_task_nodes<'a>(
+    nodes: impl IntoIterator<Item = &'a turborepo_engine::TaskNode>,
+) -> Vec<turborepo_query_api::QueryTaskId> {
+    nodes
+        .into_iter()
+        .filter_map(|node| match node {
+            turborepo_engine::TaskNode::Root => None,
+            turborepo_engine::TaskNode::Task(task_id) => Some(query_task_id(task_id)),
+        })
+        .collect()
+}
+
+fn query_boundary_diagnostic(
+    diagnostic: turborepo_boundaries::BoundariesDiagnostic,
+) -> turborepo_query_api::BoundaryDiagnostic {
+    let message = diagnostic.to_string();
+    match diagnostic {
+        turborepo_boundaries::BoundariesDiagnostic::NotTypeOnlyImport {
+            import,
+            span,
+            text: _,
+            path,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(import),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::PackageNotFound {
+            name,
+            span,
+            text: _,
+            path,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(name.to_string()),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::ImportLeavesPackage {
+            import,
+            span,
+            text: _,
+            path,
+            ..
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(import),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::ParseError(_, _) => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                start: None,
+                end: None,
+                import: None,
+                path: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::NoTagInAllowlist {
+            source_package_name: _,
+            help: _,
+            secondary: _,
+            package_name,
+            span,
+            text,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(text.name().to_string()),
+            start: span.map(|span| span.offset()),
+            end: span.map(|span| span.offset() + span.len()),
+            import: Some(package_name.to_string()),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::DeniedTag {
+            source_package_name: _,
+            secondary: _,
+            package_name,
+            tag,
+            span,
+            text,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(text.name().to_string()),
+            start: span.map(|span| span.offset()),
+            end: span.map(|span| span.offset() + span.len()),
+            import: Some(package_name.to_string()),
+            reason: Some(tag),
+        },
+        turborepo_boundaries::BoundariesDiagnostic::InvalidPath { path } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: Some(path),
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::TagSharesPackageName {
+            tag, tag_span, ..
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: None,
+            start: tag_span.map(|span| span.offset()),
+            end: tag_span.map(|span| span.offset() + span.len()),
+            import: None,
+            reason: Some(tag),
+        },
+        turborepo_boundaries::BoundariesDiagnostic::PackageBoundariesHasTags { span, text: _ } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: None,
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
+                import: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::CircularDependency { .. } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: None,
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            }
+        }
+    }
+}
+
 impl turborepo_query_api::QueryRun for Run {
-    fn version(&self) -> &'static str {
-        self.repo.version
+    fn repo_context(&self) -> &RepoContext {
+        &self.repo
     }
 
-    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
-        self.repo_root()
+    fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
+        self.engine.task_ids().map(query_task_id).collect()
     }
 
-    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph {
-        self.pkg_dep_graph()
+    fn task_ids_for_package(&self, package: &str) -> Vec<turborepo_query_api::QueryTaskId> {
+        self.engine
+            .task_ids_for_packages(&HashSet::from([PackageName::from(package)]))
+            .iter()
+            .map(query_task_id)
+            .collect()
     }
 
-    fn engine(
+    fn task_definition(
         &self,
-    ) -> &turborepo_engine::Engine<turborepo_engine::Built, turborepo_types::TaskDefinition> {
-        &self.engine
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Option<&turborepo_types::TaskDefinition> {
+        self.engine.task_definition(&engine_task_id(task_id))
     }
 
-    fn scm(&self) -> &turborepo_scm::SCM {
-        self.scm()
+    fn task_dependencies(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.engine
+                .dependencies(&engine_task_id(task_id))
+                .into_iter()
+                .flatten(),
+        )
     }
 
-    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson {
-        self.root_turbo_json()
+    fn task_dependents(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.engine
+                .dependents(&engine_task_id(task_id))
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    fn transitive_task_dependencies(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.engine
+                .transitive_dependencies(&engine_task_id(task_id)),
+        )
+    }
+
+    fn transitive_task_dependents(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(self.engine.transitive_dependents(&engine_task_id(task_id)))
+    }
+
+    fn collect_task_dependencies(
+        &self,
+        task_ids: &HashSet<turborepo_query_api::QueryTaskId>,
+    ) -> HashSet<turborepo_query_api::QueryTaskId> {
+        let task_ids = task_ids.iter().map(engine_task_id).collect();
+        self.engine
+            .collect_task_dependencies(&task_ids)
+            .iter()
+            .map(query_task_id)
+            .collect()
     }
 
     fn calculate_affected_packages(
@@ -1482,20 +1682,28 @@ impl turborepo_query_api::QueryRun for Run {
         }
     }
 
-    fn check_boundaries(
+    fn match_tasks_against_changed_files(
         &self,
-        show_progress: bool,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<
-                        turborepo_boundaries::BoundariesResult,
-                        turborepo_boundaries::Error,
-                    >,
-                > + Send
-                + '_,
-        >,
+        changed_files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+    ) -> Result<
+        std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
+        turborepo_query_api::AffectedPackagesError,
     > {
+        turborepo_engine::match_tasks_against_changed_files(
+            &self.engine,
+            self.pkg_dep_graph(),
+            changed_files,
+        )
+        .map(|matched| {
+            matched
+                .into_iter()
+                .map(|(task_id, file)| (query_task_id(&task_id), file))
+                .collect()
+        })
+        .map_err(|error| turborepo_query_api::AffectedPackagesError::Other(Box::new(error)))
+    }
+
+    fn check_boundaries(&self, show_progress: bool) -> turborepo_query_api::BoundariesFuture<'_> {
         let turbo_json_provider =
             crate::boundaries::RunTurboJsonProvider::new(self.turbo_json_loader());
         let root_boundaries_config = self
@@ -1510,9 +1718,16 @@ impl turborepo_query_api::QueryRun for Run {
             root_boundaries_config,
             filtered_pkgs: self.filtered_pkgs(),
         };
-        Box::pin(std::future::ready(
-            turborepo_boundaries::BoundariesChecker::check_boundaries(&ctx, show_progress),
-        ))
+        let result = turborepo_boundaries::BoundariesChecker::check_boundaries(&ctx, show_progress)
+            .map(|result| {
+                result
+                    .diagnostics
+                    .into_iter()
+                    .map(query_boundary_diagnostic)
+                    .collect()
+            })
+            .map_err(|error| turborepo_query_api::Error::Boundaries(Box::new(error)));
+        Box::pin(std::future::ready(result))
     }
 }
 

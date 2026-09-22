@@ -1,12 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use async_graphql::{Json, Object, SimpleObject};
-use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
-use turborepo_task_id::TaskId;
 use turborepo_types::TaskCommandOverride;
 
-use crate::{package::Package, Array, Error, QueryRun};
+use crate::{package::Package, Array, Error, QueryRun, QueryTaskId};
 
 /// Configured environment patterns, without expanding names or reading values.
 #[derive(Default, SimpleObject)]
@@ -22,24 +20,26 @@ pub struct RepositoryTask {
 }
 
 impl RepositoryTask {
-    pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
-        let package = Package::for_task(run.clone(), task_id.package().into())?;
-        let script = package.get_tasks().get(task_id.task()).cloned();
+    pub fn new(task_id: &QueryTaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
+        let package = Package::for_task(run.clone(), task_id.package.clone().into())?;
+        let script = package.get_tasks().get(&task_id.task).cloned();
 
         Ok(RepositoryTask {
-            name: task_id.task().to_string(),
+            name: task_id.task.clone(),
             package,
             script,
         })
     }
 
+    fn task_id(&self) -> QueryTaskId {
+        QueryTaskId::new(self.package.get_name().to_string(), self.name.clone())
+    }
+
     pub fn executes(&self) -> bool {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         match self
             .package
             .run()
-            .engine()
-            .task_definition(&task_id)
+            .task_definition(&self.task_id())
             .and_then(|definition| definition.command.as_ref())
         {
             Some(TaskCommandOverride::Argv(_)) => true,
@@ -47,6 +47,7 @@ impl RepositoryTask {
             None => self
                 .package
                 .run()
+                .repo_context()
                 .pkg_dep_graph()
                 .package_task_context(self.package.get_name())
                 .is_some_and(|context| context.native_tasks().defines(&self.name)),
@@ -54,12 +55,10 @@ impl RepositoryTask {
     }
 
     pub fn resolved_command(&self) -> Option<String> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         match self
             .package
             .run()
-            .engine()
-            .task_definition(&task_id)
+            .task_definition(&self.task_id())
             .and_then(|definition| definition.command.as_ref())
         {
             Some(TaskCommandOverride::Argv(argv)) => Some(argv.join(" ")),
@@ -67,6 +66,7 @@ impl RepositoryTask {
             None => self
                 .package
                 .run()
+                .repo_context()
                 .pkg_dep_graph()
                 .package_task_context(self.package.get_name())
                 .and_then(|context| context.native_tasks().get(&self.name))
@@ -76,34 +76,23 @@ impl RepositoryTask {
     }
 
     pub fn participates_in_run(&self) -> bool {
-        if self.executes() {
-            return true;
-        }
-
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
-        self.package
-            .run()
-            .engine()
-            .dependencies(&task_id)
-            .is_some_and(|dependencies| {
-                dependencies
-                    .into_iter()
-                    .any(|node| matches!(node, TaskNode::Task(_)))
-            })
+        self.executes()
+            || !self
+                .package
+                .run()
+                .task_dependencies(&self.task_id())
+                .is_empty()
     }
 
-    fn collect_and_sort<'a>(
+    fn collect_and_sort(
         &self,
-        task_id: &TaskId<'a>,
-        tasks: impl IntoIterator<Item = &'a TaskNode>,
+        task_id: &QueryTaskId,
+        tasks: impl IntoIterator<Item = QueryTaskId>,
     ) -> Result<Array<RepositoryTask>, Error> {
         let mut tasks = tasks
             .into_iter()
-            .filter_map(|task| match task {
-                TaskNode::Root => None,
-                TaskNode::Task(task) if task == task_id => None,
-                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
-            })
+            .filter(|task| task != task_id)
+            .map(|task| RepositoryTask::new(&task, self.package.run()))
             .collect::<Result<Array<_>, _>>()?;
         tasks.sort_by(|a, b| {
             a.package
@@ -142,11 +131,9 @@ impl RepositoryTask {
     /// Environment patterns after resolving task configuration inheritance.
     /// Global patterns are exposed separately by `globalEnvironment`.
     async fn environment(&self) -> Environment {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         self.package
             .run()
-            .engine()
-            .task_definition(&task_id)
+            .task_definition(&self.task_id())
             .map(|definition| Environment {
                 env: definition.env.clone(),
                 pass_through_env: definition.pass_through_env.clone().unwrap_or_default(),
@@ -159,112 +146,77 @@ impl RepositoryTask {
     /// boolean or an object with arbitrary keys. Null if the key is not set.
     #[graphql(name = "experimentalCI")]
     async fn experimental_ci(&self) -> Result<Option<Json<serde_json::Value>>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         self.package
             .run()
-            .engine()
-            .task_definition(&task_id)
+            .task_definition(&self.task_id())
             .and_then(|definition| definition.experimental_ci.as_ref())
             .map(|config| serde_json::to_value(config).map(Json).map_err(Error::from))
             .transpose()
     }
 
     async fn direct_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
-
-        self.collect_and_sort(
-            &task_id,
-            self.package
-                .run()
-                .engine()
-                .dependents(&task_id)
-                .into_iter()
-                .flatten(),
-        )
+        let task_id = self.task_id();
+        self.collect_and_sort(&task_id, self.package.run().task_dependents(&task_id))
     }
 
     async fn direct_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::new(self.package.get_name().as_ref(), &self.name);
-
-        self.collect_and_sort(
-            &task_id,
-            self.package
-                .run()
-                .engine()
-                .dependencies(&task_id)
-                .into_iter()
-                .flatten(),
-        )
+        let task_id = self.task_id();
+        self.collect_and_sort(&task_id, self.package.run().task_dependencies(&task_id))
     }
 
     async fn indirect_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
-        let direct_dependents = self
+        let task_id = self.task_id();
+        // Preserve the existing query semantics: this exclusion set is the
+        // task's direct dependencies rather than its direct dependents.
+        let direct_dependents: HashSet<_> = self
             .package
             .run()
-            .engine()
-            .dependencies(&task_id)
-            .unwrap_or_default();
+            .task_dependencies(&task_id)
+            .into_iter()
+            .collect();
 
         self.collect_and_sort(
             &task_id,
             self.package
                 .run()
-                .engine()
-                .transitive_dependents(&task_id)
+                .transitive_task_dependents(&task_id)
                 .into_iter()
-                .filter(|node| !direct_dependents.contains(node)),
+                .filter(|task| !direct_dependents.contains(task)),
         )
     }
 
     async fn indirect_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
-        let direct_dependencies = self
+        let task_id = self.task_id();
+        let direct_dependencies: HashSet<_> = self
             .package
             .run()
-            .engine()
-            .dependencies(&task_id)
-            .unwrap_or_default();
-        let mut dependencies = self
-            .package
-            .run()
-            .engine()
-            .transitive_dependencies(&task_id)
+            .task_dependencies(&task_id)
             .into_iter()
-            .filter(|node| !direct_dependencies.contains(node))
-            .filter_map(|node| match node {
-                TaskNode::Root => None,
-                TaskNode::Task(task) if task == &task_id => None,
-                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
-            })
-            .collect::<Result<Array<_>, _>>()?;
+            .collect();
 
-        dependencies.sort_by(|a, b| {
-            a.package
-                .get_name()
-                .cmp(b.package.get_name())
-                .then_with(|| a.name.cmp(&b.name))
-        });
-
-        Ok(dependencies)
-    }
-
-    async fn all_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
-        self.collect_and_sort(
-            &task_id,
-            self.package.run().engine().transitive_dependents(&task_id),
-        )
-    }
-
-    async fn all_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
-        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         self.collect_and_sort(
             &task_id,
             self.package
                 .run()
-                .engine()
-                .transitive_dependencies(&task_id),
+                .transitive_task_dependencies(&task_id)
+                .into_iter()
+                .filter(|task| !direct_dependencies.contains(task)),
+        )
+    }
+
+    async fn all_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = self.task_id();
+        self.collect_and_sort(
+            &task_id,
+            self.package.run().transitive_task_dependents(&task_id),
+        )
+    }
+
+    async fn all_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+        let task_id = self.task_id();
+        self.collect_and_sort(
+            &task_id,
+            self.package.run().transitive_task_dependencies(&task_id),
         )
     }
 }

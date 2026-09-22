@@ -146,7 +146,8 @@ pub async fn run(
                 let valid_count = packages
                     .iter()
                     .position(|package| {
-                        run.pkg_dep_graph()
+                        run.repo_context()
+                            .pkg_dep_graph()
                             .package_view(&PackageName::from(package.as_str()))
                             .is_none()
                     })
@@ -226,6 +227,7 @@ async fn query_package_details(
 ) -> Result<Vec<PackageDetailsDisplay>, cli::Error> {
     for package in packages {
         if run
+            .repo_context()
             .pkg_dep_graph()
             .package_view(&PackageName::from(package.as_str()))
             .is_none()

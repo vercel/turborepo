@@ -16,7 +16,7 @@ pub struct File {
 
 impl File {
     pub fn new(run: Arc<dyn QueryRun>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
-        let path = confine_file_path(run.repo_root(), path)?;
+        let path = confine_file_path(&run.repo_context().repo_root, path)?;
 
         Ok(Self {
             run,
@@ -155,7 +155,8 @@ impl File {
     async fn path(&self) -> Result<String, Error> {
         Ok(self
             .run
-            .repo_root()
+            .repo_context()
+            .repo_root
             .anchor(&self.path)
             .map(|path| path.to_string())?)
     }
@@ -173,7 +174,7 @@ impl File {
         emit_errors: Option<bool>,
     ) -> Result<TraceResult, Error> {
         let mut tracer = Tracer::new(
-            self.run.repo_root().to_owned(),
+            self.run.repo_context().repo_root.clone(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );
@@ -208,7 +209,7 @@ impl File {
         import_type: Option<ImportType>,
     ) -> Result<TraceResult, Error> {
         let mut tracer = Tracer::new(
-            self.run.repo_root().to_owned(),
+            self.run.repo_context().repo_root.clone(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );

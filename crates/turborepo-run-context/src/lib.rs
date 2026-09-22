@@ -22,6 +22,24 @@ pub struct RepoContext {
     pub root_turbo_json: TurboJson,
 }
 
+impl RepoContext {
+    pub fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
+        &self.repo_root
+    }
+
+    pub fn pkg_dep_graph(&self) -> &PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    pub fn root_turbo_json(&self) -> &TurboJson {
+        &self.root_turbo_json
+    }
+
+    pub fn version(&self) -> &'static str {
+        self.version
+    }
+}
+
 /// Why remote caching was disabled by local configuration.
 /// Determined during options resolution without a network call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
