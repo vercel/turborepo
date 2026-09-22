@@ -8,7 +8,7 @@ fn test_query() -> Result<(), anyhow::Error> {
         "query",
         "get packages" => ["query { packages { items { name } } }"],
         "get packages with equals filter" => ["query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { name } } }"],
-        "get package that doesn't exist" => ["query { package(name: \"doesnotexist\") { path } }"],
+        "get package that doesn't exist" => ["query { package(name: \"doesnotexist\") { path } }"]; 2,
         "get packages with less than 1 dependents" => ["query { packages(filter: {lessThan: {field: DIRECT_DEPENDENT_COUNT, value: 1}}) { items { name directDependents { length } } } }"],
         "get packages with more than 0 dependents" => ["query { packages(filter: {greaterThan: {field: DIRECT_DEPENDENT_COUNT, value: 0}}) { items { name directDependents { length } } } }"],
         "get packages that have a task named `build`" => ["query { packages(filter: {has: { field: TASK_NAME, value: \"build\" }}) { items { name } } }"],

@@ -1991,9 +1991,14 @@ fn test_prune_pure_cargo_rejects_malformed_package_json() {
     fs::write(tempdir.path().join("package.json"), "{").unwrap();
 
     let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    let combined = common::combined_output(&output);
     assert!(
         !output.status.success(),
-        "malformed package.json must not be treated as absent"
+        "malformed package.json must not be treated as absent: {combined}"
+    );
+    assert!(
+        combined.contains("Unable to parse package.json"),
+        "expected package.json parse diagnostic, got: {combined}"
     );
 }
 
@@ -2008,9 +2013,14 @@ fn test_prune_missing_package_json_requires_cargo_feature() {
     .unwrap();
 
     let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    let combined = common::combined_output(&output);
     assert!(
         !output.status.success(),
-        "missing package.json must fail without Cargo support"
+        "missing package.json must fail without Cargo support: {combined}"
+    );
+    assert!(
+        combined.contains("Unable to read package.json"),
+        "expected missing package.json diagnostic, got: {combined}"
     );
 }
 
@@ -2021,9 +2031,14 @@ fn test_prune_missing_package_json_requires_root_cargo_manifest() {
     fs::remove_file(tempdir.path().join("Cargo.toml")).unwrap();
 
     let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    let combined = common::combined_output(&output);
     assert!(
         !output.status.success(),
-        "missing package.json must fail without a root Cargo.toml"
+        "missing package.json must fail without a root Cargo.toml: {combined}"
+    );
+    assert!(
+        combined.contains("Unable to read package.json"),
+        "expected missing package.json diagnostic, got: {combined}"
     );
 }
 
@@ -2227,9 +2242,14 @@ fn test_pure_cargo_workspace_rejects_malformed_package_json() {
     fs::write(tempdir.path().join("package.json"), "{").unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "--dry-run=json"]);
+    let combined = common::combined_output(&output);
     assert!(
         !output.status.success(),
-        "malformed package.json must not be treated as absent"
+        "malformed package.json must not be treated as absent: {combined}"
+    );
+    assert!(
+        combined.contains("Unable to parse package.json"),
+        "expected package.json parse diagnostic, got: {combined}"
     );
 }
 

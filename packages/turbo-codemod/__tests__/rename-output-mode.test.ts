@@ -11,7 +11,7 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - basic", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "old-output-mode"
     });
 
@@ -21,7 +21,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
@@ -58,7 +58,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(readJson("turbo.json") || "{}").toStrictEqual({
+    expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
@@ -71,7 +71,7 @@ describe("rename-output-mode", () => {
       }
     });
 
-    expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
+    expect(readJson("apps/docs/turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
@@ -79,7 +79,7 @@ describe("rename-output-mode", () => {
       }
     });
 
-    expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
+    expect(readJson("apps/web/turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
@@ -89,7 +89,7 @@ describe("rename-output-mode", () => {
       }
     });
 
-    expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
+    expect(readJson("packages/ui/turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
@@ -128,11 +128,11 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - dry", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "old-output-mode"
     });
 
-    const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
+    const turboJson = JSON.parse(read("turbo.json")) as Schema;
 
     // run the transformer
     const result = transformer({
@@ -141,7 +141,7 @@ describe("rename-output-mode", () => {
     });
 
     // make sure it didn't change
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboJson);
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
@@ -157,7 +157,7 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - print", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "old-output-mode"
     });
 
@@ -167,7 +167,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: true }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
@@ -194,11 +194,11 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - dry & print", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "old-output-mode"
     });
 
-    const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
+    const turboJson = JSON.parse(read("turbo.json")) as Schema;
 
     // run the transformer
     const result = transformer({
@@ -207,7 +207,7 @@ describe("rename-output-mode", () => {
     });
 
     // make sure it didn't change
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboJson);
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
@@ -223,7 +223,7 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - invalid", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "invalid-output-mode"
     });
 
@@ -233,7 +233,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
@@ -284,7 +284,7 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - config with no pipeline", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-pipeline"
     });
 
@@ -294,7 +294,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       pipeline: {}
@@ -314,7 +314,7 @@ describe("rename-output-mode", () => {
 
   it("migrates turbo.json outputs - config with no output mode", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-output-mode"
     });
 
@@ -324,7 +324,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
@@ -353,11 +353,11 @@ describe("rename-output-mode", () => {
 
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-turbo-json"
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // run the transformer
     const result = transformer({
@@ -365,7 +365,7 @@ describe("rename-output-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
       /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/

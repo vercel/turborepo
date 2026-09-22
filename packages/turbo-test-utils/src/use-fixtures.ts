@@ -74,11 +74,23 @@ export function setupTestFixtures({
     };
 
     const readGenerator = (method: (filePath: string) => unknown) => {
-      return <T>(filename: string) => {
+      return <T>(filename: string) => method(getFilePath(filename)) as T;
+    };
+
+    const optionalReadGenerator = (method: (filePath: string) => unknown) => {
+      return <T>(filename: string): T | undefined => {
         try {
           return method(getFilePath(filename)) as T;
-        } catch (e) {
-          return undefined;
+        } catch (error) {
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            error.code === "ENOENT"
+          ) {
+            return undefined;
+          }
+          throw error;
         }
       };
     };
@@ -94,19 +106,24 @@ export function setupTestFixtures({
       return existsSync(getFilePath(filename));
     };
 
-    const read = readGenerator((filePath) => readFileSync(filePath, "utf8"));
-    const readJson = readGenerator((filePath) =>
-      JSON5Parse(readFileSync(filePath, "utf8"))
-    );
-    const readYaml = readGenerator((filePath) =>
-      yaml.load(readFileSync(filePath, "utf8"))
-    );
+    const readFile = (filePath: string) => readFileSync(filePath, "utf8");
+    const readJsonFile = (filePath: string) => JSON5Parse(readFile(filePath));
+    const readYamlFile = (filePath: string) => yaml.load(readFile(filePath));
+    const read = readGenerator(readFile);
+    const readJson = readGenerator(readJsonFile);
+    const readYaml = readGenerator(readYamlFile);
+    const readOptional = optionalReadGenerator(readFile);
+    const readJsonOptional = optionalReadGenerator(readJsonFile);
+    const readYamlOptional = optionalReadGenerator(readYamlFile);
 
     return {
       root: testDirectory,
       read,
       readJson,
       readYaml,
+      readOptional,
+      readJsonOptional,
+      readYamlOptional,
       write,
       exists,
       directoryName

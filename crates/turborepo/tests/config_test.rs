@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{run_turbo, run_turbo_with_env, setup};
+use common::{combined_output, run_turbo, run_turbo_with_env, setup};
 
 fn setup_cargo_workspace(root: &std::path::Path) {
     std::fs::create_dir_all(root.join("crates/app/src")).unwrap();
@@ -111,7 +111,12 @@ fn config_rejects_missing_root_manifest_without_cargo() {
     std::fs::write(tempdir.path().join("turbo.json"), r#"{"tasks":{}}"#).unwrap();
 
     let output = run_turbo(tempdir.path(), &["config"]);
-    assert!(!output.status.success());
+    let combined = combined_output(&output);
+    assert!(!output.status.success(), "config unexpectedly succeeded");
+    assert!(
+        combined.contains("Unable to read package.json"),
+        "expected missing package.json diagnostic, got: {combined}"
+    );
 }
 
 #[test]
@@ -121,7 +126,12 @@ fn config_rejects_malformed_root_manifest_with_cargo_enabled() {
     std::fs::write(tempdir.path().join("package.json"), "{").unwrap();
 
     let output = run_turbo(tempdir.path(), &["config"]);
-    assert!(!output.status.success());
+    let combined = combined_output(&output);
+    assert!(!output.status.success(), "config unexpectedly succeeded");
+    assert!(
+        combined.contains("Unable to parse package.json"),
+        "expected package.json parse diagnostic, got: {combined}"
+    );
 }
 
 #[test]
