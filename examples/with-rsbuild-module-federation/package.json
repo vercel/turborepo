@@ -2,9 +2,16 @@
   "name": "with-rsbuild-module-federation",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@11.22.0",
+  "packageManager": "pnpm@12.5.1",
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=24.21.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.5.1",
+      "onFail": "download"
+    }
   },
   "workspaces": [
     "host",
@@ -21,6 +28,6 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "turbo": "2.10.11"
+    "turbo": "2.11.2"
   }
 }
