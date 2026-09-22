@@ -61,17 +61,24 @@ impl From<DependencyKind> for DependencyKindGraphQL {
 #[Object]
 impl PackageGraph {
     async fn nodes(&self) -> Result<Array<Package>, Error> {
-        let direct_dependencies = self
-            .center
-            .as_ref()
-            .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
+        let direct_dependencies = self.center.as_ref().and_then(|center| {
+            self.run
+                .repo_context()
+                .pkg_dep_graph()
+                .immediate_dependencies(center)
+        });
 
         let mut nodes = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .node_indices()
             .filter_map(|idx| {
-                let package_node = self.run.pkg_dep_graph().get_package_by_index(idx)?;
+                let package_node = self
+                    .run
+                    .repo_context()
+                    .pkg_dep_graph()
+                    .get_package_by_index(idx)?;
                 if let Some(center) = &self.center {
                     if center == package_node {
                         return Some(Package::new(
@@ -116,11 +123,14 @@ impl PackageGraph {
     }
 
     async fn edges(&self) -> Array<Edge> {
-        let direct_dependencies = self
-            .center
-            .as_ref()
-            .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
+        let direct_dependencies = self.center.as_ref().and_then(|center| {
+            self.run
+                .repo_context()
+                .pkg_dep_graph()
+                .immediate_dependencies(center)
+        });
         self.run
+            .repo_context()
             .pkg_dep_graph()
             .edges()
             .iter()
@@ -130,10 +140,12 @@ impl PackageGraph {
                 }
                 let source_node = self
                     .run
+                    .repo_context()
                     .pkg_dep_graph()
                     .get_package_by_index(edge.source())?;
                 let target_node = self
                     .run
+                    .repo_context()
                     .pkg_dep_graph()
                     .get_package_by_index(edge.target())?;
 

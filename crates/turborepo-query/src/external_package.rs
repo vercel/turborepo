@@ -14,6 +14,7 @@ pub struct ExternalPackage {
 impl ExternalPackage {
     pub fn new(run: Arc<dyn QueryRun>, package: turborepo_lockfiles::Package) -> Self {
         let identity = run
+            .repo_context()
             .pkg_dep_graph()
             .resolve_external_package_identity(&package)
             .cloned()
@@ -41,6 +42,7 @@ impl ExternalPackage {
     async fn internal_dependents(&self) -> Result<Array<Package>, Error> {
         let Some(names) = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .internal_dependencies_for_external_identity(&self.identity)
         else {

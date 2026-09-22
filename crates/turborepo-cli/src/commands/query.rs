@@ -284,8 +284,11 @@ pub async fn run(
         {
             query
         } else {
-            &fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))
-                .map_err(turborepo_query_api::Error::Server)?
+            &fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(
+                run.repo_context().repo_root(),
+                query,
+            ))
+            .map_err(turborepo_query_api::Error::Server)?
         };
 
         let variables_json = variables_path
