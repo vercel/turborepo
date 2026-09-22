@@ -25,4 +25,4 @@ Key types:
 
 ## Notes
 
-Separated from `turborepo-lib` so the `@turbo/repository` NPM package can use it without pulling in the entire CLI. This crate is foundational - most other crates depend on it for package information.
+Separated from `turborepo-cli` so the `@turbo/repository` NPM package can use it without pulling in the entire CLI. This crate is foundational - most other crates depend on it for package information.

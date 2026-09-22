@@ -4,7 +4,7 @@
 //!
 //! # Architecture
 //!
-//! The executor is designed to be decoupled from the rest of turborepo-lib
+//! The executor is designed to be decoupled from turborepo-run
 //! through trait abstractions:
 //!
 //! - [`MfeConfigProvider`]: Abstraction for microfrontends configuration
@@ -105,10 +105,10 @@ pub trait MfeConfigProvider: Send + Sync {
 ///
 /// This trait abstracts task access tracing to allow the executor to work with
 /// automatic caching features without depending on the full TaskAccess
-/// implementation in turborepo-lib.
+/// implementation in `turborepo-task-access`.
 ///
 /// # Implementors
-/// - `TaskAccess` in turborepo-lib
+/// - `TaskAccess` in `turborepo-task-access`
 pub trait TaskAccessProvider: Clone + Send + Sync {
     /// Returns true if task access tracing is enabled
     fn is_enabled(&self) -> bool;

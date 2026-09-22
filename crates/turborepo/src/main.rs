@@ -33,7 +33,7 @@ enum InternalWindowsConsoleCommand {
 /// `turborepo_query`.
 ///
 /// Lives in the binary crate because it's the only place that depends on both
-/// `turborepo-lib` and `turborepo-query`, enabling the dependency inversion
+/// `turborepo-cli` and `turborepo-query`, enabling the dependency inversion
 /// that allows them to compile in parallel.
 struct TurboQueryServer;
 
@@ -72,7 +72,7 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 }
 
 // This function should not expanded. Please add any logic to
-// `turborepo_lib::main` instead
+// `turborepo_cli::main` instead
 fn main() -> Result<()> {
     #[cfg(windows)]
     if let Some(command) = internal_windows_ctrl_c_command(std::env::args_os()) {
@@ -92,15 +92,15 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    std::panic::set_hook(Box::new(turborepo_lib::panic_handler));
+    std::panic::set_hook(Box::new(turborepo_cli::panic_handler));
 
-    let query_server: Arc<dyn turborepo_lib::QueryServer> = Arc::new(TurboQueryServer);
-    let exit_code = turborepo_lib::main(Some(query_server)).unwrap_or_else(|err| {
+    let query_server: Arc<dyn turborepo_cli::QueryServer> = Arc::new(TurboQueryServer);
+    let exit_code = turborepo_cli::main(Some(query_server)).unwrap_or_else(|err| {
         eprintln!("{:?}", Report::new(err));
         1
     });
 
-    turborepo_lib::finish_heap_profile();
+    turborepo_cli::finish_heap_profile();
     process::exit(exit_code)
 }
 

@@ -1,7 +1,7 @@
 //! Shim run logic with trait-based dependency injection.
 //!
 //! This module contains the main entry point for the shim, refactored to use
-//! injected traits instead of direct `crate::` imports from `turborepo-lib`.
+//! injected traits instead of direct `crate::` imports from `turborepo-cli`.
 
 use std::{env, process, process::Stdio, sync::Arc, time::Duration};
 
@@ -43,7 +43,7 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 ///
 /// This struct holds all the trait implementations needed by the shim to
 /// execute. By using trait objects, we avoid circular dependencies with
-/// `turborepo-lib`.
+/// `turborepo-cli`.
 ///
 /// # Type Parameters
 ///

@@ -10,7 +10,7 @@
 //! ## Architecture
 //!
 //! **Data Flow:**
-//! 1. turborepo-lib loads configuration using
+//! 1. turborepo-cli loads configuration using
 //!    `TurborepoMfeConfig::load_from_dir()`
 //! 2. `TurborepoMfeConfig` only extracts Turborepo-relevant fields
 //! 3. When starting the proxy, `TurborepoMfeConfig` is converted to `Config`

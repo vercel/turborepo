@@ -1,6 +1,6 @@
 //! Glob matching for task `inputs` patterns against changed files.
 //!
-//! Shared between `turbo run --affected` (via `turborepo-lib`) and
+//! Shared between `turbo run --affected` (via `turborepo-run`) and
 //! `turbo query { affectedTasks }` (via `turborepo-query`).
 //!
 //! This is intentionally separate from the task hashing glob infrastructure

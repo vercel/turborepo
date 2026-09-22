@@ -34,7 +34,7 @@ Package scope resolution for Turborepo. Filters and selects packages based on `-
 
 ## Notes
 
-- Extracted from `turborepo-lib` to reduce coupling
+- Extracted from the former monolithic CLI crate to reduce coupling
 - The `ResolutionError` type is large (~128 bytes) due to `ChangeMapError`; boxing was intentionally avoided for CLI ergonomics
 - `ScopeOpts` is re-exported from `turborepo-types` for backwards compatibility
 - `SimpleGlob` is intentionally minimal - use `wax::Glob` for path matching

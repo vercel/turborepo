@@ -1,8 +1,9 @@
 //! Visitor support types and traits.
 //!
 //! This module provides shared types and trait definitions for the task graph
-//! visitor. The concrete `Visitor` implementation remains in `turborepo-lib`,
-//! but these abstractions allow for decoupling and testing.
+//! visitor. The concrete `Visitor` implementation lives in
+//! `turborepo-task-graph`, but these abstractions allow for decoupling and
+//! testing.
 
 use tokio::sync::mpsc;
 use turborepo_task_id::TaskId;

@@ -1,7 +1,7 @@
 //! Trait abstraction for TurboJson loading.
 //!
 //! This trait allows the engine to be decoupled from the concrete
-//! TurboJsonLoader implementation in turborepo-lib.
+//! TurboJsonLoader implementation in turborepo-run.
 
 use turborepo_repository::package_graph::PackageName;
 use turborepo_turbo_json::TurboJson;

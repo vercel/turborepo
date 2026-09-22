@@ -79,14 +79,14 @@ async function withGitHub(
 
 test("defers non-release paths to the native team review policy", async () => {
   await withGitHub(
-    { files: [{ filename: "crates/turborepo-lib/src/lib.rs" }] },
+    { files: [{ filename: "crates/turborepo-cli/src/lib.rs" }] },
     async () => assert.doesNotReject(run()),
   );
 });
 
 test("defers fork PRs with non-release paths to native review", async () => {
   await withGitHub(
-    { files: [{ filename: "crates/turborepo-lib/src/lib.rs" }] },
+    { files: [{ filename: "crates/turborepo-cli/src/lib.rs" }] },
     async (pull) => {
       pull.head.repo.full_name = "contributor/turborepo";
       await assert.doesNotReject(run());
@@ -99,7 +99,7 @@ test("finds non-release paths after the first page", async () => {
     {
       filePages: [
         Array.from({ length: 100 }, () => ({ filename: "version.txt" })),
-        [{ filename: "crates/turborepo-lib/src/lib.rs" }],
+        [{ filename: "crates/turborepo-cli/src/lib.rs" }],
       ],
     },
     async () => assert.doesNotReject(run()),

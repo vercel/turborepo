@@ -8,12 +8,12 @@
 //!
 //! ```text
 //! turborepo (binary)
-//!   ├── turborepo-lib ──────► turborepo-run ──► turborepo-query-api (traits)
+//!   ├── turborepo-cli ──────► turborepo-run ──► turborepo-query-api (traits)
 //!   └── turborepo-query ────► turborepo-query-api (traits)
 //! ```
 //!
 //! The binary crate implements `QueryServer` and passes it to
-//! `turborepo_lib::main()`, connecting the two halves at runtime.
+//! `turborepo_cli::main()`, connecting the two halves at runtime.
 //!
 //! Note: this crate's dependency list is larger than ideal for a pure
 //! interface crate because `QueryRun` methods expose types from crates
@@ -123,7 +123,7 @@ pub const SCHEMA_QUERY: &str = include_str!("schema_query.graphql");
 ///
 /// `turborepo-run` uses this trait to dispatch query operations without
 /// depending on `turborepo-query` directly. The concrete implementation
-/// lives in the binary crate, which depends on `turborepo-lib`,
+/// lives in the binary crate, which depends on `turborepo-cli`,
 /// `turborepo-run`, and `turborepo-query`.
 pub trait QueryServer: Send + Sync {
     /// Execute a single GraphQL query and return the result as JSON.
