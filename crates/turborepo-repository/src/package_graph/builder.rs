@@ -511,7 +511,7 @@ where
             observations.push((id, ContributorObservation::Inventory(inventory)));
         }
 
-        let plan = LazyPlan {
+        let mut plan = LazyPlan {
             repo_root: repo_root.to_owned(),
             root_package_json,
             lockfile,
@@ -522,6 +522,9 @@ where
             observations,
         };
         let graph = Arc::new(plan.reassemble().await?);
+        // Retain the initial graph's parsed lockfile so loading an inventory-only
+        // contributor does not read and parse the same lockfile again.
+        plan.lockfile = graph.shared_lockfile().cloned();
         Ok(LazyPackageGraph { graph, plan })
     }
 }
