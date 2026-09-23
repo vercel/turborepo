@@ -3071,7 +3071,7 @@ fn assemble_uv_contribution(
             let directory = package.manifest_path.parent().ok_or_else(|| {
                 Error::InvalidMemberManifestPath(package.manifest_path.to_string())
             })?;
-            let directory = AnchoredSystemPathBuf::new(&repo_root, directory)?;
+            let directory = AnchoredSystemPathBuf::new(repo_root, directory)?;
             Ok((package.name.clone(), directory.to_unix().to_string()))
         })
         .collect::<Result<_, Error>>()
@@ -3085,9 +3085,9 @@ fn assemble_uv_contribution(
         .collect();
     workspace_directories.sort();
     workspace_directories.dedup();
-    let change_observation = uv_change_observation(&repo_root, &workspace_directories);
+    let change_observation = uv_change_observation(repo_root, &workspace_directories);
     let prune_domain = UvPruneKnowledge::discover(
-        &repo_root,
+        repo_root,
         package_directories.clone(),
         workspace.root_project_name.clone(),
         lockfile.clone(),
@@ -3143,7 +3143,7 @@ fn assemble_uv_contribution(
             AnchoredSystemPathBuf::from_raw(PYPROJECT_TOML).expect("static path is valid"),
         )
         .chain(packages.iter().filter_map(|package| {
-            AnchoredSystemPathBuf::new(&repo_root, &package.manifest_path).ok()
+            AnchoredSystemPathBuf::new(repo_root, &package.manifest_path).ok()
         }))
         .collect::<Vec<_>>();
     let mut discovered = Vec::with_capacity(packages.len() + 1);
