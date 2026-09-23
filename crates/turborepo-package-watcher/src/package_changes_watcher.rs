@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    ops::DerefMut,
     sync::{
         Arc, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -147,6 +146,25 @@ impl ChangedFiles {
 impl Default for ChangedFiles {
     fn default() -> Self {
         ChangedFiles::Some(Box::new(Trie::new()))
+    }
+}
+
+/// Accumulate file events between poll ticks. The trie coalesces repeated
+/// paths; a non-UTF-8 path conservatively requests full rediscovery.
+fn accumulate_changed_files(changed_files: &mut ChangedFiles, paths: Vec<std::path::PathBuf>) {
+    if let ChangedFiles::Some(trie) = changed_files {
+        for path in paths {
+            if let Some(path) = path.to_str() {
+                trie.insert(path.to_string(), ());
+            } else {
+                tracing::warn!(
+                    ?path,
+                    "non-UTF-8 file event requires conservative rediscovery"
+                );
+                *changed_files = ChangedFiles::All;
+                break;
+            }
+        }
     }
 }
 
@@ -710,25 +728,7 @@ impl Subscriber {
                 match file_events.recv().await {
                     Ok(Ok(Event { paths, .. })) => {
                         let changed_files = self.changed_files.lock().await;
-                        let mut changed_files = changed_files.borrow_mut();
-                        let mut non_utf8 = false;
-                        if let ChangedFiles::Some(trie) = changed_files.deref_mut() {
-                            for path in paths {
-                                if let Some(path) = path.to_str() {
-                                    trie.insert(path.to_string(), ());
-                                } else {
-                                    tracing::warn!(
-                                        ?path,
-                                        "non-UTF-8 file event requires conservative rediscovery"
-                                    );
-                                    non_utf8 = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if non_utf8 {
-                            *changed_files = ChangedFiles::All;
-                        }
+                        accumulate_changed_files(&mut changed_files.borrow_mut(), paths);
                     }
                     Ok(Err(err)) => {
                         tracing::error!("file event error: {:?}", err);
@@ -902,7 +902,7 @@ mod test {
 
     use ignore::gitignore::GitignoreBuilder;
     use notify::event::{CreateKind, EventKind};
-    use radix_trie::Trie;
+    use radix_trie::{Trie, TrieCommon};
     use tokio::sync::{broadcast, watch};
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_filewatch::{
@@ -919,8 +919,9 @@ mod test {
 
     use super::{
         CONFIG_FILE, ChangedFiles, FileChangeAction, PackageChangeEvent, PackageChangesWatcher,
-        PackageHashBaseline, RepositoryIgnore, Subscriber, ancestors_is_ignored, baseline_matches,
-        classify_changed_files, hash_scopes, is_in_git_folder,
+        PackageHashBaseline, RepositoryIgnore, Subscriber, accumulate_changed_files,
+        ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
+        is_in_git_folder,
     };
     use crate::repository_graph::RepositoryGraphFeatures;
 
@@ -2000,66 +2001,47 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn watcher_emits_package_event_for_file_change() {
+    #[tokio::test(start_paused = true)]
+    async fn channel_events_coalesce_on_a_virtual_poll_tick() {
         let (_tmp, repo_root) = setup_git_repo();
         let handle = create_test_watcher(&repo_root);
-        let file_tx = &handle.file_events_tx;
         let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+        assert!(matches!(
+            recv_event(&mut rx, Duration::from_secs(2)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        assert!(handle.file_events_tx.receiver_count() > 0);
 
-        // Consume the initial Rediscover
-        let initial = recv_event(&mut rx, Duration::from_secs(2)).await;
-        assert!(
-            matches!(initial, Some(PackageChangeEvent::Rediscover)),
-            "expected initial Rediscover, got {:?}",
-            initial
-        );
-
-        // Give the subscriber time to enter its polling loop
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Check subscriber is alive
-        let receivers = file_tx.receiver_count();
-        assert!(receivers > 0, "subscriber died: 0 receivers on file_tx");
-
-        // Send multiple events to be safe (the subscriber may have
-        // lagged the first one)
         let changed_file = repo_root.join_components(&["packages", "a", "index.ts"]);
         changed_file
             .create_with_contents(b"export const a = 2;")
             .unwrap();
+        let mut batch = ChangedFiles::default();
+        for _ in 0..3 {
+            accumulate_changed_files(&mut batch, vec![changed_file.as_std_path().to_path_buf()]);
+        }
+        assert!(matches!(batch, ChangedFiles::Some(ref paths) if paths.len() == 1));
         handle
             .hash_events_tx
             .send(Ok(make_notify_event_from(&[&changed_file])))
             .unwrap();
         for _ in 0..3 {
-            let _ = file_tx.send(Ok(make_notify_event_from(&[&changed_file])));
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            handle
+                .file_events_tx
+                .send(Ok(make_notify_event_from(&[&changed_file])))
+                .unwrap();
         }
-
-        // Collect all events within a window
-        let mut events = vec![];
-        while let Some(evt) = recv_event(&mut rx, Duration::from_secs(2)).await {
-            events.push(evt);
-        }
-
-        // We should have gotten at least one package change or rediscover event
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(100)).await;
+        let event = recv_event(&mut rx, Duration::from_secs(2)).await;
         assert!(
-            !events.is_empty(),
-            "expected at least one event, got none. Receiver count at send time: {receivers}. \
-             Repo root: {repo_root}"
+            matches!(event, Some(PackageChangeEvent::Package { .. })),
+            "{event:?}"
         );
-
-        let has_package_event = events.iter().any(|e| {
-            matches!(
-                e,
-                PackageChangeEvent::Package { .. } | PackageChangeEvent::Rediscover
-            )
-        });
+        tokio::time::advance(Duration::from_millis(300)).await;
         assert!(
-            has_package_event,
-            "expected Package or Rediscover event, got: {:?}",
-            events
+            matches!(rx.try_recv(), Err(broadcast::error::TryRecvError::Empty)),
+            "watcher remains open and repeated hashes do not emit another change"
         );
     }
 
