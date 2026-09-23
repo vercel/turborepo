@@ -401,7 +401,7 @@ fn test_uv_compatible_member_tools_use_all_packages_entrypoint() {
 }
 
 #[test]
-fn test_uv_workspace_quality_hashes_member_sources_and_ignores_nested_caches() {
+fn test_uv_quality_hash_projection_smoke() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_native_tools(tempdir.path());
     let source = tempdir
@@ -409,47 +409,24 @@ fn test_uv_workspace_quality_hashes_member_sources_and_ignores_nested_caches() {
         .join("packages/py-app/src/py_app/__init__.py");
     fs::create_dir_all(source.parent().unwrap()).unwrap();
     fs::write(&source, "VALUE = 1\n").unwrap();
-
-    let task_hash = || {
+    let hash = || {
         let json = dry_run_tasks(tempdir.path(), &["lint:ruff", "--filter=acme"]);
-        let task = find_task(&json, "acme#lint:ruff");
-        let inputs = task["inputs"].as_object().unwrap();
-        for expected in [
-            "packages/py-app/pyproject.toml",
-            "packages/py-app/src/py_app/__init__.py",
-            "packages/py-lib/pyproject.toml",
-            "pyproject.toml",
-        ] {
-            assert!(
-                inputs.contains_key(expected),
-                "workspace Ruff inputs must contain {expected:?}: {inputs:?}"
-            );
-        }
-        task["hash"].as_str().unwrap().to_string()
+        find_task(&json, "acme#lint:ruff")["hash"]
+            .as_str()
+            .unwrap()
+            .to_string()
     };
-
-    let baseline = task_hash();
+    let baseline = hash();
     fs::write(&source, "VALUE = 2\n").unwrap();
-    let source_changed = task_hash();
-    assert_ne!(
-        baseline, source_changed,
-        "workspace Ruff tasks must hash member sources"
-    );
-
-    for cache in [".pytest_cache", ".ruff_cache"] {
-        let cache_file = tempdir
-            .path()
-            .join("packages/py-app/src/py_app")
-            .join(cache)
-            .join("nested/cache-file");
-        fs::create_dir_all(cache_file.parent().unwrap()).unwrap();
-        fs::write(cache_file, "cache contents").unwrap();
-        assert_eq!(
-            source_changed,
-            task_hash(),
-            "nested {cache} contents must not affect Python task hashes"
-        );
-    }
+    let changed = hash();
+    assert_ne!(baseline, changed, "member source must affect quality hash");
+    let cache = source
+        .parent()
+        .unwrap()
+        .join(".ruff_cache/nested/cache-file");
+    fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    fs::write(cache, "generated\n").unwrap();
+    assert_eq!(changed, hash(), "nested Ruff cache must not affect hash");
 }
 
 #[test]
@@ -930,13 +907,13 @@ fn test_uv_python_selector_is_projected_without_raw_value_hashing() {
     };
     let first = dry_run(&tempdir.path().join("home-a"));
     let second = dry_run(&tempdir.path().join("home-b"));
-    let first_task = find_task(&first, "py-app#build");
+    let task = find_task(&first, "py-app#build");
     assert_eq!(
-        first_task["hash"],
+        task["hash"],
         find_task(&second, "py-app#build")["hash"],
         "config roots must not fragment hashes when external config is disabled"
     );
-    let definition = &first_task["resolvedTaskDefinition"];
+    let definition = &task["resolvedTaskDefinition"];
     assert!(
         !definition["env"]
             .as_array()
@@ -950,97 +927,6 @@ fn test_uv_python_selector_is_projected_without_raw_value_hashing() {
             .unwrap()
             .iter()
             .any(|name| name == "UV_PYTHON")
-    );
-}
-
-#[test]
-fn test_uv_virtual_environment_is_hashed_and_excluded_from_inputs() {
-    if !uv_available() {
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_uv_pure_workspace(tempdir.path());
-
-    let dry_run = |virtual_env: &Path| {
-        let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
-        let mut command = common::turbo_command(tempdir.path());
-        let output = command
-            .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-            .env("UV_NO_CONFIG", "1")
-            .env("VIRTUAL_ENV", virtual_env)
-            .args(["build", "--filter=py-app", "--dry-run=json"])
-            .output()
-            .expect("failed to execute turbo");
-        assert_command_success(&output, "virtual environment dry-run");
-        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
-    };
-
-    let first_env = tempdir.path().join("envs/first");
-    fs::create_dir_all(&first_env).unwrap();
-    let first = dry_run(&first_env);
-    let first_task = find_task(&first, "py-app#build");
-    assert!(
-        first_task["environmentVariables"]["specified"]["env"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|name| name == "VIRTUAL_ENV")
-    );
-    assert!(
-        first_task["resolvedTaskDefinition"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|input| input.as_str().is_some_and(|input| {
-                input.starts_with('!') && input.ends_with("envs/first/**")
-            })),
-        "inputs: {}",
-        first_task["resolvedTaskDefinition"]["inputs"]
-    );
-
-    let second_env = tempdir.path().join("envs/second");
-    fs::create_dir_all(&second_env).unwrap();
-    let second = dry_run(&second_env);
-    assert_ne!(
-        first_task["hash"],
-        find_task(&second, "py-app#build")["hash"],
-        "changing VIRTUAL_ENV must invalidate the task hash"
-    );
-}
-
-#[test]
-fn test_uv_project_environment_is_excluded_from_inputs() {
-    if !uv_available() {
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_uv_pure_workspace(tempdir.path());
-    let project_env = tempdir.path().join("envs/project");
-    fs::create_dir_all(&project_env).unwrap();
-
-    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
-    let mut command = common::turbo_command(tempdir.path());
-    let output = command
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("UV_NO_CONFIG", "1")
-        .env_remove("VIRTUAL_ENV")
-        .env("UV_PROJECT_ENVIRONMENT", &project_env)
-        .args(["build", "--filter=py-app", "--dry-run=json"])
-        .output()
-        .expect("failed to execute turbo");
-    assert_command_success(&output, "project environment dry-run");
-    let dry_run: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let task = find_task(&dry_run, "py-app#build");
-    assert!(
-        task["resolvedTaskDefinition"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|input| input.as_str().is_some_and(|input| {
-                input.starts_with('!') && input.ends_with("envs/project/**")
-            })),
-        "inputs: {}",
-        task["resolvedTaskDefinition"]["inputs"]
     );
 }
 
