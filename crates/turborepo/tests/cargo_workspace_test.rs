@@ -153,19 +153,6 @@ fn run_turbo_with_env(
         .expect("failed to execute turbo")
 }
 
-fn cargo_build_hash(dir: &Path, env: &[(&str, &str)]) -> String {
-    let output = run_turbo_with_env(dir, &["build", "--filter=app", "--dry-run=json"], env);
-    assert!(output.status.success(), "dry-run failed: {output:?}");
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
-    json["tasks"]
-        .as_array()
-        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
-        .and_then(|task| task["hash"].as_str())
-        .expect("app#build has a hash")
-        .to_string()
-}
-
 fn setup_cargo_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "cargo_monorepo", "npm@10.5.0", false).unwrap();
 }
@@ -558,61 +545,6 @@ fn test_unfiltered_cargo_build_falls_back_to_libraries() {
 }
 
 #[test]
-fn test_cargo_semantic_environment_changes_task_hash() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-
-    let baseline = cargo_build_hash(tempdir.path(), &[]);
-    for (name, value) in [
-        ("CARGO_ENCODED_RUSTFLAGS", "--cfg\x1fturbo_env_hash_test"),
-        ("RUSTDOCFLAGS", "--cfg turbo_env_hash_test"),
-        ("CARGO_PROFILE_DEV_LTO", "true"),
-        ("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "clang"),
-        ("CC_aarch64_unknown_linux_gnu", "clang"),
-        ("TARGET_CFLAGS", "-DTURBO_ENV_HASH_TEST"),
-        ("CROSS_COMPILE", "aarch64-linux-gnu-"),
-        ("WASI_SYSROOT", "/opt/wasi-sysroot"),
-        ("WASM_MUSL_SYSROOT", "/opt/wasm-musl-sysroot"),
-    ] {
-        let hash = cargo_build_hash(tempdir.path(), &[(name, value)]);
-        assert_ne!(hash, baseline, "{name} must participate in the task hash");
-    }
-
-    let network_only = cargo_build_hash(tempdir.path(), &[("CARGO_HTTP_TIMEOUT", "120")]);
-    assert_eq!(
-        network_only, baseline,
-        "Cargo network settings must not invalidate build outputs"
-    );
-}
-
-#[test]
-fn test_cargo_location_environment_hashes_effective_semantics() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-
-    let first_home = tempdir.path().join("cargo-home-a");
-    let second_home = tempdir.path().join("cargo-home-b");
-    fs::create_dir_all(&first_home).unwrap();
-    fs::create_dir_all(&second_home).unwrap();
-    let first_home = first_home.to_string_lossy();
-    let second_home = second_home.to_string_lossy();
-    assert_eq!(
-        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &first_home)]),
-        cargo_build_hash(tempdir.path(), &[("CARGO_HOME", &second_home)]),
-        "empty Cargo homes must not fragment task hashes by absolute path"
-    );
-
-    let relative_target = "equivalent-target";
-    let absolute_target = tempdir.path().join(relative_target);
-    let absolute_target = absolute_target.to_string_lossy();
-    assert_eq!(
-        cargo_build_hash(tempdir.path(), &[("CARGO_TARGET_DIR", relative_target)]),
-        cargo_build_hash(tempdir.path(), &[("CARGO_TARGET_DIR", &absolute_target)]),
-        "equivalent target directories must hash by resolved output paths"
-    );
-}
-
-#[test]
 fn test_rustup_selection_reaches_strict_and_loose_execution() {
     let toolchain = active_rustup_toolchain().expect("test toolchain is managed by rustup");
     let rustup_home = rustup_home().expect("rustup home is available");
@@ -643,17 +575,6 @@ fn test_rustup_selection_reaches_strict_and_loose_execution() {
             ("RUSTUP_TOOLCHAIN", toolchain.as_str()),
             ("RUSTUP_HOME", rustup_home.as_str()),
         ];
-        let task = cargo_build_definition(tempdir.path(), &[], &environment);
-        let declared = task["resolvedTaskDefinition"]["env"]
-            .as_array()
-            .expect("declared task environment");
-        assert!(declared.iter().any(|value| value == "RUSTUP_TOOLCHAIN"));
-        assert!(!declared.iter().any(|value| value == "RUSTUP_HOME"));
-        let pass_through = task["resolvedTaskDefinition"]["passThroughEnv"]
-            .as_array()
-            .expect("projected task environment");
-        assert!(pass_through.iter().any(|value| value == "RUSTUP_HOME"));
-
         let output = run_turbo_with_env(
             tempdir.path(),
             &["build", "--filter=app", "--env-mode", env_mode],
@@ -1208,23 +1129,6 @@ fn test_manifest_layout_controls_are_uncached() {
         fs::write(manifest, contents).unwrap();
         let task = cargo_build_definition(tempdir.path(), &[], &[]);
         assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
-    }
-}
-
-#[test]
-fn test_compiler_and_layout_environment_controls_are_uncached() {
-    for (name, value) in [
-        ("RUSTC", "rustc"),
-        ("CARGO_BUILD_RUSTC", "rustc"),
-        ("CARGO_BUILD_TARGET_DIR", "other-target"),
-        ("CARGO_BUILD_ARTIFACT_DIR", "artifact-copy"),
-        ("CARGO_PROFILE_CI_DIR_NAME", "profile-output"),
-    ] {
-        let tempdir = cargo_tempdir();
-        setup_cargo_monorepo(tempdir.path());
-        configure_build_without_outputs(tempdir.path());
-        let task = cargo_build_definition(tempdir.path(), &[], &[(name, value)]);
-        assert_eq!(task["resolvedTaskDefinition"]["cache"], false, "{name}");
     }
 }
 

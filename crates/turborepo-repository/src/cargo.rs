@@ -3603,6 +3603,30 @@ dependencies = ["lib-a"]
             })
         );
 
+        let absolute_target_environment = toolchain::TaskIOEnvironment::new(HashMap::from([
+            (
+                "CARGO_BUILD_TARGET".to_string(),
+                "aarch64-apple-darwin".to_string(),
+            ),
+            (
+                "CARGO_TARGET_DIR".to_string(),
+                root.join_component("env-target").to_string(),
+            ),
+        ]));
+        assert_eq!(
+            cargo_output_layout(
+                &root,
+                &workspace,
+                &package,
+                &toolchain::TaskIOContext {
+                    task_args: None,
+                    environment: &absolute_target_environment,
+                },
+            ),
+            cargo_output_layout(&root, &workspace, &package, &environment_context),
+            "equivalent target directories project the same output path",
+        );
+
         let cli_args = [
             "--release".to_string(),
             "--target=x86_64-pc-windows-msvc".to_string(),
@@ -3648,6 +3672,39 @@ dependencies = ["lib-a"]
                 cargo_output_layout(&root, &workspace, &package, &context),
                 None
             );
+        }
+
+        // The same in-memory observations flow through the native task contract:
+        // automatic caching cannot be enabled without restorable outputs.
+        let contributor = CargoContributor::new(root.clone());
+        let package_context = task_context(&contributor, &root, "app", "crates/app");
+        let contract =
+            CargoTaskContract::new(root.clone(), package.clone(), Some(workspace.clone()));
+        for name in [
+            "CARGO_BUILD_TARGET_DIR",
+            "CARGO_BUILD_ARTIFACT_DIR",
+            "RUSTC",
+            "CARGO_BUILD_RUSTC",
+            "CARGO_PROFILE_CI_DIR_NAME",
+        ] {
+            let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+                name.to_string(),
+                "configured".to_string(),
+            )]));
+            let io = contract
+                .derived_task_io(
+                    &package_context,
+                    "build",
+                    "../..",
+                    &[],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable, "{name}");
         }
 
         for args in [
