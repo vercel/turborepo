@@ -1380,50 +1380,19 @@ fn test_go_verification_hash_changes_only_for_module_and_dependents() {
 }
 
 #[test]
-fn test_go_task_hash_tracks_source_but_not_unrelated_siblings() {
+fn test_go_hash_ignores_checkout_path_and_root_siblings() {
     if !go_available() {
         return;
     }
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-    let original = task_hash(tempdir.path(), "api", "build");
-
-    fs::write(tempdir.path().join("unrelated.txt"), "unrelated\n").unwrap();
-    assert_eq!(
-        original,
-        task_hash(tempdir.path(), "api", "build"),
-        "repository-root siblings outside the module must not affect its hash"
-    );
-
-    fs::write(
-        tempdir.path().join("apps/api/main.go"),
-        "package main\n\nimport \"example.com/lib\"\n\nfunc main() { lib.Greet(); \
-         println(\"changed\") }\n",
-    )
-    .unwrap();
-    assert_ne!(
-        original,
-        task_hash(tempdir.path(), "api", "build"),
-        "module source changes must affect its task hash"
-    );
-}
-
-#[test]
-fn test_go_hash_is_stable_across_equivalent_checkout_roots() {
-    if !go_available() {
-        return;
-    }
-
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();
     setup_go_e2e_workspace(first.path());
     setup_go_e2e_workspace(second.path());
 
-    assert_eq!(
-        task_hash(first.path(), "api", "build"),
-        task_hash(second.path(), "api", "build"),
-        "equivalent checkouts with local replacements must produce the same Go task hash"
-    );
+    let original = task_hash(first.path(), "api", "build");
+    fs::write(first.path().join("unrelated.txt"), "unrelated\n").unwrap();
+    assert_eq!(original, task_hash(first.path(), "api", "build"));
+    assert_eq!(original, task_hash(second.path(), "api", "build"));
 }
 
 #[test]

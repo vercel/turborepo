@@ -3528,6 +3528,137 @@ mod tests {
     }
 
     #[test]
+    fn go_hash_inputs_track_sources_and_sums_without_siblings_or_native_outputs() {
+        fn observe(
+            root: &AbsoluteSystemPath,
+        ) -> (toolchain::DerivedTaskIO, BTreeMap<String, Vec<u8>>) {
+            let api = GoModule {
+                module_path: "example.com/api".to_string(),
+                manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+                relationships: vec![Relationship::internal("lib", DependencyKind::Production)],
+                runnable_target: Some(".".to_string()),
+                root_source_inputs: Some(HashSet::new()),
+            };
+            let lib = GoModule {
+                module_path: "example.com/lib".to_string(),
+                manifest_path: root.join_components(&["packages", "lib", GO_MOD]),
+                relationships: Vec::new(),
+                runnable_target: None,
+                root_source_inputs: Some(HashSet::new()),
+            };
+            let contract = GoTaskContract::module(&api, "linux", &[".cache/build".to_string()]);
+            let app_context = task_context(
+                root,
+                "api",
+                "apps/api",
+                native_tasks_for_module(&api),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+            );
+            let dep_context = task_context(
+                root,
+                "lib",
+                "packages/lib",
+                native_tasks_for_module(&lib),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                    &lib,
+                    "linux",
+                    &[],
+                )),
+            );
+            let environment = toolchain::TaskIOEnvironment::default();
+            let io = contract
+                .derived_task_io(
+                    &app_context,
+                    "build",
+                    "../..",
+                    &[dep_context],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            let snapshot = source_input_snapshot(&root.join_components(&["apps", "api"]), &io)
+                .into_iter()
+                .map(|(path, value)| {
+                    (
+                        AnchoredSystemPathBuf::new(root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        value,
+                    )
+                })
+                .collect();
+            (io, snapshot)
+        }
+
+        fn fixture(root: &AbsoluteSystemPath) {
+            for (path, contents) in [
+                ("go.work", "go 1.22\n"),
+                ("apps/api/go.mod", "module example.com/api\n"),
+                ("apps/api/main.go", "package main\nfunc main() {}\n"),
+                ("packages/lib/go.mod", "module example.com/lib\n"),
+                ("packages/lib/lib.go", "package lib\n"),
+            ] {
+                let file = join_relative_path(root, path).unwrap();
+                file.parent().unwrap().create_dir_all().unwrap();
+                file.create_with_contents(contents).unwrap();
+            }
+        }
+
+        let first = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(first.path()).unwrap();
+        fixture(&root);
+        let (io, baseline) = observe(&root);
+        assert_eq!(
+            io.outputs,
+            DerivedOutputs::Resolved(vec!["api".to_string()])
+        );
+        assert!(baseline.contains_key("apps/api/main.go"));
+        assert!(baseline.contains_key("packages/lib/lib.go"));
+
+        let second = tempfile::tempdir().unwrap();
+        let second_root = AbsoluteSystemPathBuf::try_from(second.path()).unwrap();
+        fixture(&second_root);
+        assert_eq!(
+            (io.clone(), baseline.clone()),
+            observe(&second_root),
+            "equivalent checkout roots"
+        );
+
+        for path in ["unrelated.txt", "apps/api/api", ".cache/build/output"] {
+            let file = join_relative_path(&root, path).unwrap();
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents("generated or unrelated").unwrap();
+            assert_eq!(
+                observe(&root).1,
+                baseline,
+                "{path} must not become an input"
+            );
+        }
+        for path in [
+            "apps/api/main.go",
+            "packages/lib/lib.go",
+            "packages/lib/go.sum",
+            GO_WORK_SUM,
+        ] {
+            let file = join_relative_path(&root, path).unwrap();
+            let previous = file.read_to_string().ok();
+            file.create_with_contents("changed input\n").unwrap();
+            assert_ne!(observe(&root).1, baseline, "{path} must invalidate inputs");
+            if let Some(previous) = previous {
+                file.create_with_contents(previous).unwrap();
+            } else {
+                fs::remove_file(file.as_std_path()).unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn embedded_binary_names_remain_own_and_dependency_source_inputs() {
         if !go_available() {
             return;
