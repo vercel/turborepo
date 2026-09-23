@@ -187,40 +187,17 @@ fn is_global_change(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-    use turborepo_errors::Spanned;
     use turborepo_repository::{
-        discovery::{DiscoveryResponse, PackageDiscovery},
-        package_graph::PackageGraph,
-        package_json::PackageJson,
-        package_manager::PackageManager,
+        package_graph::PackageGraph, package_json::PackageJson, test_util::PackageGraphFixture,
     };
     use turborepo_task_id::TaskId;
     use turborepo_types::{TaskDefinition, TaskInputs};
 
     use super::*;
     use crate::Building;
-
-    struct MockDiscovery;
-
-    impl PackageDiscovery for MockDiscovery {
-        async fn discover_packages(
-            &self,
-        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
-            Ok(DiscoveryResponse {
-                package_manager: PackageManager::Npm,
-                workspaces: vec![],
-            })
-        }
-
-        async fn discover_packages_blocking(
-            &self,
-        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
-            self.discover_packages().await
-        }
-    }
 
     async fn make_pkg_graph(repo_root: &AbsoluteSystemPath, packages: &[&str]) -> PackageGraph {
         make_pkg_graph_with_root(repo_root, packages, PackageJson::default()).await
@@ -231,21 +208,12 @@ mod tests {
         packages: &[&str],
         root_package_json: PackageJson,
     ) -> PackageGraph {
-        let mut pkgs = HashMap::new();
+        let mut fixture =
+            PackageGraphFixture::new(repo_root).with_root_package_json(root_package_json);
         for name in packages {
-            let path = repo_root.join_components(&["packages", name, "package.json"]);
-            let pkg = PackageJson {
-                name: Some(Spanned::new(name.to_string())),
-                ..Default::default()
-            };
-            pkgs.insert(path, pkg);
+            fixture = fixture.with_package(name, &format!("packages/{name}"));
         }
-        PackageGraph::builder(repo_root, root_package_json)
-            .with_package_discovery(MockDiscovery)
-            .with_package_jsons(Some(pkgs))
-            .build()
-            .await
-            .unwrap()
+        fixture.build().await.unwrap()
     }
 
     fn make_engine(

@@ -23,6 +23,17 @@ Key types:
 - `PackageManager` - Abstraction over npm/pnpm/yarn/bun
 - `ExternalResolutionDomain` - Immutable domain identity, membership, and resolution data
 
+## Test utilities
+
+Downstream crates can enable the opt-in `test-util` feature in their
+dev-dependencies and use
+`turborepo_repository::test_util::{MockPackageDiscovery, PackageGraphFixture}`.
+The discovery mock returns a configurable package manager and workspace list.
+The fixture builder accepts repository-relative package directories, typed
+manifests, and internal dependencies; `build().await` constructs a graph
+without walking workspaces or spawning `turbo`. External resolution is skipped
+unless a lockfile is supplied with `with_lockfile`.
+
 ## Notes
 
 Separated from `turborepo-cli` so the `@turbo/repository` NPM package can use it without pulling in the entire CLI. This crate is foundational - most other crates depend on it for package information.
