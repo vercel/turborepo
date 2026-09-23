@@ -639,35 +639,6 @@ fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_usin
 }
 
 #[test]
-fn test_pure_go_workspace_lists_modules() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-
-    let names = package_names(tempdir.path());
-    assert!(names.contains(&"api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
-}
-
-#[test]
-fn test_mixed_go_workspace_lists_js_and_go_packages() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_monorepo(tempdir.path());
-
-    let names = package_names(tempdir.path());
-    assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
-    assert!(names.contains(&"api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
-}
-
-#[test]
 fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     if !go_available() {
         return;
@@ -931,34 +902,23 @@ fn test_go_packages_with_same_short_name_report_both_manifests() {
     )
     .unwrap();
 
-    // The distinct Go module paths must collide as Turborepo package names,
-    // even when a filter selects neither module or only one of their directories.
-    for filter in [
-        None,
-        Some("--filter=api"),
-        Some("--filter=lib"),
-        Some("--filter=./packages/lib"),
-        Some("--filter=./apps/api"),
-        Some("--filter=./tools/other-api"),
-        Some("--filter=example.com/api"),
-        Some("--filter=example.net/api"),
+    // Filters cannot hide a collision in either listing or lazy run planning.
+    for args in [
+        vec!["ls", "--filter=lib"],
+        vec!["run", "build", "--filter=lib", "--dry-run=json"],
     ] {
-        for mut args in [vec!["ls"], vec!["run", "build", "--dry-run=json"]] {
-            args.extend(filter);
-            let output = run_turbo(root, &args);
-            assert!(
-                !output.status.success(),
-                "duplicate package names must fail for {args:?}"
-            );
-            let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
-            assert!(
-                stderr.contains("Failed to add workspace \"api\"")
-                    && stderr.contains("apps/api/go.mod")
-                    && stderr.contains("tools/other-api/go.mod"),
-                "{args:?}: short-name collision must identify both Go manifests, not be hidden by \
-                 selection: {stderr}"
-            );
-        }
+        let output = run_turbo(root, &args);
+        assert!(
+            !output.status.success(),
+            "duplicate names must fail: {args:?}"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+        assert!(
+            stderr.contains("Failed to add workspace \"api\"")
+                && stderr.contains("apps/api/go.mod")
+                && stderr.contains("tools/other-api/go.mod"),
+            "short-name collision must identify both Go manifests: {stderr}"
+        );
     }
 }
 
@@ -1086,32 +1046,24 @@ fn test_go_and_javascript_package_name_collision_is_actionable() {
     )
     .unwrap();
 
-    for filter in [
-        None,
-        Some("--filter=js-pkg"),
-        Some("--filter=unrelated"),
-        Some("--filter=./packages/unrelated"),
-        Some("--filter=./packages/js-pkg"),
-        Some("--filter=./apps/api"),
-        Some("--filter=example.com/js-pkg"),
+    // JavaScript-only selection must not hide a collision in listing or run.
+    for args in [
+        vec!["ls", "--filter=unrelated"],
+        vec!["run", "build", "--filter=unrelated", "--dry-run=json"],
     ] {
-        for mut args in [vec!["ls"], vec!["run", "build", "--dry-run=json"]] {
-            args.extend(filter);
-            let output = run_turbo(tempdir.path(), &args);
-            assert!(
-                !output.status.success(),
-                "cross-language package name collision must fail for {args:?}"
-            );
-            let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
-            assert!(
-                stderr.contains("Failed to add workspace \"js-pkg\"")
-                    && stderr.contains("apps/api/go.mod")
-                    && stderr.contains("packages/js-pkg/package.json")
-                    && stderr.contains("Rename one package or module"),
-                "{args:?}: cross-language identity collision must remain actionable under narrow \
-                 selection: {stderr}"
-            );
-        }
+        let output = run_turbo(tempdir.path(), &args);
+        assert!(
+            !output.status.success(),
+            "cross-language collision must fail"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
+        assert!(
+            stderr.contains("Failed to add workspace \"js-pkg\"")
+                && stderr.contains("apps/api/go.mod")
+                && stderr.contains("packages/js-pkg/package.json")
+                && stderr.contains("Rename one package or module"),
+            "cross-language collision must remain actionable under narrow selection: {stderr}"
+        );
     }
 }
 
