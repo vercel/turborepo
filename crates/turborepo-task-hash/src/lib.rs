@@ -1151,6 +1151,183 @@ mod test {
             .unwrap()
     }
 
+    #[tokio::test]
+    async fn nextjs_inference_changes_only_its_task_hash_and_env_projection() {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, PackageDiscovery},
+            package_manager::PackageManager,
+        };
+
+        struct InjectedDiscovery;
+        impl PackageDiscovery for InjectedDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                Ok(DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        struct InferenceOpts(bool);
+        impl RunOptsHashInfo for InferenceOpts {
+            fn framework_inference(&self) -> bool {
+                self.0
+            }
+
+            fn single_package(&self) -> bool {
+                false
+            }
+
+            fn pass_through_args(&self) -> &[String] {
+                &[]
+            }
+        }
+
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = PackageGraph::builder(
+            &repo_root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(InjectedDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                repo_root.join_components(&["apps", "web", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "web",
+                    "dependencies": { "next": "^15.0.0" }
+                }))
+                .unwrap(),
+            ),
+            (
+                repo_root.join_components(&["packages", "other", "package.json"]),
+                PackageJson::from_value(json!({ "name": "other" })).unwrap(),
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+
+        let task_id = TaskId::new("web", "build").into_owned();
+        let other_task_id = TaskId::new("other", "build").into_owned();
+        let definition = TaskDefinition::default();
+        let file_hash = FileHashes(Vec::new()).hash();
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+        let calculate = |enabled: bool, public_value: &str, unrelated_value: &str| {
+            let opts = InferenceOpts(enabled);
+            let env = EnvironmentVariableMap::from(HashMap::from([
+                ("NEXT_PUBLIC_MESSAGE".to_string(), public_value.to_string()),
+                ("UNRELATED_VALUE".to_string(), unrelated_value.to_string()),
+            ]));
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                "global-hash",
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &[],
+            );
+            let mut hashes = HashMap::new();
+            // The graph's own external fingerprints are used by final monorepo hashes.
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let hash = hasher
+                    .calculate_task_hash(
+                        id,
+                        &definition,
+                        EnvMode::Strict,
+                        &graph
+                            .package_task_context(&PackageName::from(package))
+                            .unwrap(),
+                        &[],
+                        PackageTaskEventBuilder::new(package, "build"),
+                    )
+                    .unwrap();
+                hashes.insert(package, hash);
+            }
+            let tracker = hasher.task_hash_tracker();
+            let projected = tracker.env_vars(&task_id).unwrap();
+            let strict_env = hasher.env(&task_id, EnvMode::Strict, &definition).unwrap();
+            (
+                hashes,
+                tracker.framework(&task_id),
+                tracker.framework(&other_task_id),
+                projected,
+                strict_env,
+            )
+        };
+
+        let (enabled, framework, other_framework, projected, strict_env) =
+            calculate(true, "first", "one");
+        let (changed_public, _, _, changed_projection, _) = calculate(true, "second", "one");
+        let (changed_unrelated, _, _, _, _) = calculate(true, "first", "two");
+        let (
+            disabled,
+            disabled_framework,
+            disabled_other_framework,
+            disabled_projection,
+            disabled_env,
+        ) = calculate(false, "first", "one");
+        let (disabled_changed, _, _, _, _) = calculate(false, "second", "one");
+
+        assert_eq!(framework.unwrap().as_str(), "nextjs");
+        assert!(other_framework.is_none());
+        assert!(disabled_framework.is_none());
+        assert!(disabled_other_framework.is_none());
+        assert_eq!(
+            projected.by_source.matching.names(),
+            ["NEXT_PUBLIC_MESSAGE"]
+        );
+        assert!(projected.by_source.explicit.is_empty());
+        assert_eq!(
+            projected.all.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+        assert_eq!(
+            changed_projection
+                .all
+                .get("NEXT_PUBLIC_MESSAGE")
+                .map(String::as_str),
+            Some("second")
+        );
+        assert_eq!(
+            strict_env.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+        assert!(strict_env.get("UNRELATED_VALUE").is_none());
+        assert!(disabled_projection.all.is_empty());
+        // NEXT_* is built-in pass-through even without framework inference;
+        // unlike the tracked projection, pass-through does not enter the hash.
+        assert_eq!(
+            disabled_env.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+
+        assert_ne!(enabled["web"], changed_public["web"]);
+        assert_eq!(enabled["web"], changed_unrelated["web"]);
+        assert_eq!(disabled["web"], disabled_changed["web"]);
+        assert_ne!(enabled["web"], disabled["web"]);
+        assert_eq!(enabled["other"], changed_public["other"]);
+        assert_eq!(enabled["other"], changed_unrelated["other"]);
+        assert_eq!(enabled["other"], disabled["other"]);
+    }
+
     const FIXTURE_RUSTC_VERSION: &str = concat!(
         "rustc 1.96.0-nightly (f5eca4fcf 2026-04-09)\n",
         "binary: rustc\n",
