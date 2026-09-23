@@ -344,6 +344,7 @@ mod tests {
         repo_context: RepoContext,
         affected_packages: HashMap<PackageName, PackageInclusionReason>,
         changed_files: HashSet<AnchoredSystemPathBuf>,
+        recorded_calls: Arc<std::sync::Mutex<Vec<String>>>,
     }
 
     impl QueryRun for MockQueryRun {
@@ -356,6 +357,10 @@ mod tests {
         }
 
         fn task_ids_for_package(&self, package: &str) -> Vec<QueryTaskId> {
+            self.recorded_calls
+                .lock()
+                .unwrap()
+                .push(format!("task_ids_for_package:{package}"));
             self.engine
                 .task_ids_for_packages(&HashSet::from([PackageName::from(package)]))
                 .iter()
@@ -508,6 +513,7 @@ mod tests {
         root_turbo_json.future_flags.affected_using_task_inputs = affected_using_task_inputs;
         root_turbo_json.future_flags.filter_using_tasks = filter_using_tasks;
         Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
             engine,
             repo_context: make_repo_context(root, pkg_dep_graph, root_turbo_json),
             affected_packages,
@@ -523,6 +529,168 @@ mod tests {
         let result: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
         assert!(result.get("errors").is_none(), "{result}");
         result["data"].clone()
+    }
+
+    #[derive(Default)]
+    struct RecordingQueryServer {
+        calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+    }
+
+    impl turborepo_query_api::QueryServer for RecordingQueryServer {
+        fn execute_query<'a>(
+            &'a self,
+            run: Arc<dyn QueryRun>,
+            query: &'a str,
+            variables_json: Option<&'a str>,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            turborepo_query_api::QueryResult,
+                            turborepo_query_api::Error,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((query.to_string(), variables_json.map(str::to_string)));
+                crate::execute_query(run, query, variables_json)
+                    .await
+                    .map_err(Into::into)
+            })
+        }
+
+        fn run_query_server(
+            &self,
+            _run: Arc<dyn QueryRun>,
+            _signal: turborepo_signals::SignalHandler,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<(), turborepo_query_api::Error>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { unreachable!("recording fake never starts a network server") })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_manifest_graph_projects_tasks_through_recording_query_contracts() {
+        use turborepo_query_api::QueryServer;
+        use turborepo_repository::discovery::WorkspaceData;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let app_manifest = root.join_components(&["packages", "app", "package.json"]);
+        let lib_manifest = root.join_components(&["packages", "lib", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: [app_manifest.clone(), lib_manifest.clone()]
+                .into_iter()
+                .map(|path| WorkspaceData::new(path, None).unwrap())
+                .collect(),
+        };
+        let manifests = HashMap::from([
+            (
+                app_manifest,
+                PackageJson::from_value(serde_json::json!({
+                    "name": "app", "scripts": {"build": "echo app"},
+                    "dependencies": {"lib": "*"}
+                }))
+                .unwrap(),
+            ),
+            (
+                lib_manifest,
+                PackageJson::from_value(serde_json::json!({
+                    "name": "lib", "scripts": {"build": "echo lib"}
+                }))
+                .unwrap(),
+            ),
+        ]);
+        let discovery_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let loader_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery({
+                let calls = discovery_calls.clone();
+                move || {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let response = response.clone();
+                    async move { Ok(response) }
+                }
+            })
+            .with_package_json_loader({
+                let calls = loader_calls.clone();
+                move |path: &AbsoluteSystemPath| {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    manifests.get(path).cloned().ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            "missing injected manifest",
+                        )
+                        .into()
+                    })
+                }
+            })
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(discovery_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(loader_calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("app"))
+                .unwrap(),
+            [PackageName::from("lib")],
+            "the manifest loader must produce the real package edge"
+        );
+        let engine = make_engine_with_edges(
+            &[
+                (TaskId::new("app", "build"), TaskDefinition::default()),
+                (TaskId::new("lib", "build"), TaskDefinition::default()),
+            ],
+            &[(TaskId::new("app", "build"), TaskId::new("lib", "build"))],
+        );
+        let run = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let server = RecordingQueryServer::default();
+        let query = r#"query($name: String!) { package(name: $name) { name tasks { items {
+            name fullName script directDependencies { items { fullName } }
+        } } } }"#;
+        let result = server
+            .execute_query(run.clone(), query, Some(r#"{"name":"app"}"#))
+            .await
+            .unwrap();
+        assert!(result.errors.is_empty(), "{}", result.result_json);
+        let data: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
+        assert_eq!(
+            data["data"]["package"]["tasks"]["items"],
+            serde_json::json!([{
+                "name": "build", "fullName": "app#build", "script": "echo app",
+                "directDependencies": {"items": [{"fullName": "lib#build"}]}
+            }])
+        );
+        assert_eq!(
+            *server.calls.lock().unwrap(),
+            [(query.to_string(), Some(r#"{"name":"app"}"#.to_string()))]
+        );
+        assert!(run
+            .recorded_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| call == "task_ids_for_package:app"));
     }
 
     #[tokio::test]
@@ -828,6 +996,7 @@ mod tests {
                 .collect();
 
         let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
             engine,
             repo_context: make_repo_context(root, pkg_graph, TurboJson::default()),
             affected_packages,
@@ -876,6 +1045,7 @@ mod tests {
             HashSet::from([AnchoredSystemPathBuf::from_raw("pnpm-lock.yaml").unwrap()]);
 
         let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
             engine,
             repo_context: make_repo_context(root, pkg_graph, TurboJson::default()),
             affected_packages,
@@ -930,6 +1100,7 @@ mod tests {
             (unaffected_id.clone(), TaskDefinition::default()),
         ]);
         let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
             engine,
             repo_context: make_repo_context(root, pkg_graph, TurboJson::default()),
             affected_packages: HashMap::new(),
@@ -981,6 +1152,7 @@ mod tests {
             HashSet::from([AnchoredSystemPathBuf::from_raw("packages/lib-a/index.ts").unwrap()]);
 
         let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
             engine,
             repo_context: make_repo_context(root, pkg_graph, TurboJson::default()),
             affected_packages,
