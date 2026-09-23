@@ -62,6 +62,23 @@ pub enum Error {
     Parse(#[related] Vec<ParseDiagnostic>),
 }
 
+/// Supplies workspace manifests after package discovery has located them.
+/// Graph construction uses [`FileSystemPackageJsonLoader`] by default; callers
+/// can inject another loader without replacing workspace discovery.
+pub trait PackageJsonLoader: Send + Sync {
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error>;
+}
+
+/// The production manifest loader, preserving the usual filesystem behavior.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FileSystemPackageJsonLoader;
+
+impl PackageJsonLoader for FileSystemPackageJsonLoader {
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        PackageJson::load(path)
+    }
+}
+
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
         tracing::trace!("loading package.json from {}", path);

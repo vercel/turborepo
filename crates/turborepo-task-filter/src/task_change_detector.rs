@@ -187,11 +187,19 @@ fn is_global_change(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    };
 
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+    use turborepo_errors::Spanned;
     use turborepo_repository::{
-        package_graph::PackageGraph, package_json::PackageJson, test_util::PackageGraphFixture,
+        discovery::WorkspaceData,
+        package_graph::PackageGraph,
+        package_json::PackageJson,
+        package_manager::PackageManager,
+        test_util::{MockPackageDiscovery, MockPackageJsonLoader, PackageGraphFixture},
     };
     use turborepo_task_id::TaskId;
     use turborepo_types::{TaskDefinition, TaskInputs};
@@ -214,6 +222,42 @@ mod tests {
             fixture = fixture.with_package(name, &format!("packages/{name}"));
         }
         fixture.build().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn affected_tasks_use_injected_repository_sources() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let manifest_path = root.join_components(&["packages", "lib-a", "package.json"]);
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(
+                MockPackageDiscovery::new(PackageManager::Npm).with_workspaces(vec![
+                    WorkspaceData::new(manifest_path.clone(), None).unwrap(),
+                ]),
+            )
+            .with_package_json_loader(Arc::new(MockPackageJsonLoader::new(HashMap::from([(
+                manifest_path,
+                PackageJson {
+                    name: Some(Spanned::new("lib-a".to_string())),
+                    ..Default::default()
+                },
+            )]))))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        let build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(build.clone(), TaskDefinition::default())], &[]);
+
+        assert_eq!(
+            affected_task_ids(
+                &engine,
+                &graph,
+                &changed(&["packages/lib-a/src/index.ts"]),
+                &[]
+            ),
+            HashSet::from([build])
+        );
     }
 
     fn make_engine(

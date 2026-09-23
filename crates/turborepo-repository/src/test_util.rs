@@ -3,7 +3,11 @@
 //! Enable the `test-util` feature in a downstream crate's dev-dependencies to
 //! use these helpers without changing the production dependency graph.
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::ErrorKind,
+    sync::Arc,
+};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_errors::Spanned;
@@ -12,7 +16,7 @@ use turborepo_lockfiles::Lockfile;
 use crate::{
     discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
     package_graph::{self, PackageGraph},
-    package_json::PackageJson,
+    package_json::{self, PackageJson, PackageJsonLoader},
     package_manager::PackageManager,
 };
 
@@ -49,8 +53,34 @@ impl PackageDiscovery for MockPackageDiscovery {
     }
 }
 
-/// Builds a JavaScript package graph from typed manifests, without reading
-/// workspace manifests, walking the filesystem, or spawning the `turbo` binary.
+/// Supplies typed manifests without reading them from disk. Use with
+/// [`crate::package_graph::PackageGraphBuilder::with_package_json_loader`].
+#[derive(Debug, Clone, Default)]
+pub struct MockPackageJsonLoader {
+    manifests: HashMap<AbsoluteSystemPathBuf, PackageJson>,
+}
+
+impl MockPackageJsonLoader {
+    pub fn new(manifests: HashMap<AbsoluteSystemPathBuf, PackageJson>) -> Self {
+        Self { manifests }
+    }
+}
+
+impl PackageJsonLoader for MockPackageJsonLoader {
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, package_json::Error> {
+        self.manifests.get(path).cloned().ok_or_else(|| {
+            std::io::Error::new(
+                ErrorKind::NotFound,
+                format!("no fixture package.json at {path}"),
+            )
+            .into()
+        })
+    }
+}
+
+/// Builds a JavaScript package graph from injected discovery and typed
+/// manifests, without reading workspace manifests, walking the filesystem, or
+/// spawning the `turbo` binary.
 /// External resolution is skipped unless a lockfile is supplied explicitly.
 pub struct PackageGraphFixture<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -147,10 +177,17 @@ impl<'a> PackageGraphFixture<'a> {
             package_jsons,
             lockfile,
         } = self;
+        let mut workspaces = package_jsons
+            .keys()
+            .cloned()
+            .map(|path| WorkspaceData::new(path, None))
+            .collect::<Result<Vec<_>, _>>()?;
+        workspaces.sort_by(|a, b| a.package_json().as_str().cmp(b.package_json().as_str()));
         let builder = PackageGraph::builder(repo_root, root_package_json)
-            .with_package_manager(package_manager.clone())
-            .with_package_discovery(MockPackageDiscovery::new(package_manager))
-            .with_package_jsons(Some(package_jsons));
+            .with_package_discovery(
+                MockPackageDiscovery::new(package_manager).with_workspaces(workspaces),
+            )
+            .with_package_json_loader(Arc::new(MockPackageJsonLoader::new(package_jsons)));
         match lockfile {
             Some(lockfile) => builder.with_lockfile(Some(lockfile)).build().await,
             None => builder.without_external_dependencies().build().await,
@@ -223,5 +260,63 @@ mod tests {
         );
         assert_eq!(lib_scope.tasks, vec!["build"]);
         assert_eq!(graph.package_manager(), Some(&PackageManager::Npm));
+    }
+
+    #[tokio::test]
+    async fn injected_sources_control_which_manifests_are_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let selected = root.join_components(&["apps", "selected", "package.json"]);
+        let undiscovered = root.join_components(&["apps", "undiscovered", "package.json"]);
+        let discovery = MockPackageDiscovery::new(PackageManager::Pnpm6)
+            .with_workspaces(vec![WorkspaceData::new(selected.clone(), None).unwrap()]);
+        let loader = MockPackageJsonLoader::new(HashMap::from([
+            (
+                selected,
+                PackageJson {
+                    name: Some(Spanned::new("selected".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                undiscovered,
+                PackageJson {
+                    name: Some(Spanned::new("undiscovered".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ]));
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(discovery.clone())
+            .with_package_json_loader(Arc::new(loader))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(graph.package_manager(), Some(&PackageManager::Pnpm6));
+        assert!(
+            graph
+                .package_task_context(&PackageName::Other("selected".into()))
+                .is_some()
+        );
+        assert!(
+            graph
+                .package_task_context(&PackageName::Other("undiscovered".into()))
+                .is_none()
+        );
+
+        let error = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(discovery)
+            .with_package_json_loader(Arc::new(MockPackageJsonLoader::default()))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            package_graph::Error::PackageJson(package_json::Error::Io(ref io))
+                if io.kind() == ErrorKind::NotFound
+        ));
     }
 }

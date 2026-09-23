@@ -26,7 +26,7 @@ use crate::{
         PackageScopeObservation, RelationshipGroup, RelationshipKnowledge, RepositoryKnowledge,
         ScopeKind, WorkspaceRootObservation,
     },
-    package_json::{DependencyKind, PackageJson},
+    package_json::{DependencyKind, PackageJson, PackageJsonLoader},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     relationships::{Relationship, RelationshipTarget},
     toolchain::{
@@ -44,6 +44,7 @@ pub struct PackageGraphBuilder<'a, T> {
     root_package_json: Option<PackageJson>,
     is_single_package: bool,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
+    package_json_loader: Option<Arc<dyn PackageJsonLoader>>,
     lockfile: Option<Box<dyn Lockfile>>,
     load_lockfile: bool,
     package_discovery: T,
@@ -265,6 +266,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             root_package_json,
             is_single_package: false,
             package_jsons: None,
+            package_json_loader: None,
             lockfile: None,
             load_lockfile: true,
             package_manager: None,
@@ -297,6 +299,14 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     ) -> Self {
         self.package_jsons = package_jsons;
+        self
+    }
+
+    /// Load discovered JavaScript manifests through an injected source instead
+    /// of the default filesystem loader. Discovery still determines which
+    /// workspaces exist; this seam controls how their manifests are parsed.
+    pub fn with_package_json_loader(mut self, loader: Arc<dyn PackageJsonLoader>) -> Self {
+        self.package_json_loader = Some(loader);
         self
     }
 
@@ -357,6 +367,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             root_package_json: self.root_package_json,
             is_single_package: self.is_single_package,
             package_jsons: self.package_jsons,
+            package_json_loader: self.package_json_loader,
             lockfile: self.lockfile,
             load_lockfile: self.load_lockfile,
             package_discovery: discovery,
@@ -461,6 +472,7 @@ where
             lockfile,
             load_lockfile,
             package_jsons,
+            package_json_loader,
             ..
         } = self;
 
@@ -482,6 +494,7 @@ where
             &root_package_json,
             package_discovery,
             known_pm.clone(),
+            package_json_loader,
             extra_contributors,
         )?;
 
@@ -1025,6 +1038,7 @@ where
             is_single_package: single,
 
             package_jsons,
+            package_json_loader,
             lockfile,
             load_lockfile,
             package_discovery,
@@ -1043,6 +1057,7 @@ where
             &root_package_json,
             package_discovery,
             package_manager,
+            package_json_loader,
             extra_contributors,
         )?;
 
@@ -1088,6 +1103,7 @@ fn build_contributors<T>(
     root_package_json: &Option<PackageJson>,
     package_discovery: T,
     package_manager: Option<PackageManager>,
+    package_json_loader: Option<Arc<dyn PackageJsonLoader>>,
     extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
 ) -> Result<ContributorPair<T::Output>, Error>
 where
@@ -1102,11 +1118,15 @@ where
     let javascript = if root_package_json.is_none() {
         None
     } else {
-        Some(Arc::new(JavaScriptContributor::new(
+        let mut contributor = JavaScriptContributor::new(
             CachingPackageDiscovery::new(package_discovery.build().map_err(Into::into)?),
             repo_root.to_owned(),
             package_manager,
-        )))
+        );
+        if let Some(loader) = package_json_loader {
+            contributor = contributor.with_package_json_loader(loader);
+        }
+        Some(Arc::new(contributor))
     };
     let mut additional_contributors: Vec<Arc<dyn RepositoryContributor>> = Vec::new();
     for contributor in extra_contributors {
