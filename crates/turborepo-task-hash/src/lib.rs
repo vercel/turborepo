@@ -1239,6 +1239,50 @@ mod test {
             .unwrap()
     }
 
+    struct UvFixtureContributor {
+        repo_root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for UvFixtureContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("py-app".to_string()),
+                            PackageJson::default(),
+                            self.repo_root.join_components(&[
+                                "packages",
+                                "py-app",
+                                "pyproject.toml",
+                            ]),
+                        )
+                        .with_native_relationships(Vec::new()),
+                    ],
+                    vec![WorkspaceRoot::new("uv", self.repo_root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
     fn task_hasher<'a>(
         task_id: &TaskId<'static>,
         run_opts: &'a TestRunOpts,
@@ -1301,6 +1345,84 @@ mod test {
                 PackageTaskEventBuilder::new(package.as_str(), "build"),
             )
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn uv_virtual_environment_hashes_but_python_selector_is_projected() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(UvFixtureContributor {
+                repo_root: root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap();
+        let task_id = TaskId::new("py-app", "build").into_owned();
+        let package = graph
+            .package_task_context(&PackageName::from("py-app"))
+            .unwrap();
+        let definition = TaskDefinition {
+            env: turborepo_repository::uv::HASHED_ENV_VARS
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            pass_through_env: Some(
+                ["UV_PYTHON", "HOME", "XDG_CONFIG_HOME"]
+                    .map(str::to_string)
+                    .to_vec(),
+            ),
+            ..Default::default()
+        };
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let hash_with = |name: Option<(&str, &str)>| {
+            let env = EnvironmentVariableMap::from(
+                name.into_iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+                    .collect::<HashMap<_, _>>(),
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            let hash = hasher
+                .calculate_task_hash(
+                    &task_id,
+                    &definition,
+                    EnvMode::Strict,
+                    &package,
+                    &[],
+                    PackageTaskEventBuilder::new("py-app", "build"),
+                )
+                .unwrap();
+            (
+                hash,
+                hasher.env(&task_id, EnvMode::Strict, &definition).unwrap(),
+            )
+        };
+        let baseline = hash_with(None).0;
+        for (name, first, second) in [
+            ("VIRTUAL_ENV", "/repo/envs/first", "/repo/envs/second"),
+            (
+                "UV_PROJECT_ENVIRONMENT",
+                "/repo/envs/project-a",
+                "/repo/envs/project-b",
+            ),
+        ] {
+            let first_hash = hash_with(Some((name, first))).0;
+            assert_ne!(first_hash, baseline, "{name}");
+            assert_ne!(first_hash, hash_with(Some((name, second))).0, "{name}");
+        }
+        for (name, value) in [
+            ("UV_PYTHON", "python3.13"),
+            ("HOME", "/repo/home-a"),
+            ("HOME", "/repo/home-b"),
+            ("XDG_CONFIG_HOME", "/repo/config"),
+        ] {
+            let (hash, strict_env) = hash_with(Some((name, value)));
+            assert_eq!(hash, baseline, "{name} must not hash its raw value");
+            assert_eq!(strict_env.get(name).map(String::as_str), Some(value));
+        }
     }
 
     #[tokio::test]

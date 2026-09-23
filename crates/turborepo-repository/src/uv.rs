@@ -4049,6 +4049,60 @@ version = "0.1.0"
     }
 
     #[test]
+    fn python_selector_and_virtual_environment_have_distinct_hash_contracts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let package = PackageTaskContext::new_for_test(
+            PackageName::from("py-app"),
+            &root,
+            turbopath::AnchoredSystemPath::new("packages/py-app").unwrap(),
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let contract = UvTaskContract::new(UvPackageKind::Package, "py-app");
+        assert!(PROJECTED_ONLY_ENV_VARS.contains(&"UV_PYTHON"));
+        assert!(!HASHED_ENV_VARS.contains(&"UV_PYTHON"));
+        for (key, relative) in [
+            ("VIRTUAL_ENV", "envs/first"),
+            ("VIRTUAL_ENV", "envs/second"),
+            ("UV_PROJECT_ENVIRONMENT", "envs/project"),
+        ] {
+            let path = root.join_components(&relative.split('/').collect::<Vec<_>>());
+            path.create_dir_all().unwrap();
+            let environment = toolchain::TaskIOEnvironment::new(HashMap::from([
+                (key.to_string(), path.to_string()),
+                ("UV_PYTHON".to_string(), "python3.13".to_string()),
+                ("UV_NO_CONFIG".to_string(), "true".to_string()),
+            ]));
+            let io = contract
+                .derived_task_io(
+                    &package,
+                    "build",
+                    "../..",
+                    &[],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            assert!(
+                io.env.contains(&key.to_string()),
+                "{key} must affect the hash"
+            );
+            assert!(!io.env.contains(&"UV_PYTHON".to_string()));
+            let relative = format!("../../{relative}");
+            assert!(
+                io.input_globs.contains(&format!("!{relative}/**")),
+                "derived globs: {:?}",
+                io.input_globs
+            );
+            assert!(io.forbidden_output_prefixes.contains(&relative));
+        }
+    }
+
+    #[test]
     fn test_uv_path_environment_disables_automatic_inputs() {
         let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
             "UV_CONFIG_FILE".to_string(),
@@ -4611,6 +4665,112 @@ version = "0.1.0"
             .derived_task_io(&package, "check", "../..", &[], true, &context)
             .unwrap();
         assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+    }
+
+    #[test]
+    fn workspace_quality_inputs_follow_members_and_ignore_nested_caches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let aggregate = PackageTaskContext::new_for_test(
+            PackageName::from("acme"),
+            &root,
+            turbopath::AnchoredSystemPath::new("").unwrap(),
+            PackageTaskContextKind::Aggregate,
+            None,
+        );
+        let contract = UvTaskContract::workspace(
+            "acme",
+            vec!["packages/py-app".to_string(), "packages/py-lib".to_string()],
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let io = contract
+            .derived_task_io(
+                &aggregate,
+                "lint:ruff",
+                "",
+                &[],
+                true,
+                &toolchain::TaskIOContext {
+                    task_args: None,
+                    environment: &environment,
+                },
+            )
+            .unwrap();
+        assert_eq!(io.package_default_inputs, Some(false));
+        let write = |name: &str, contents: &str| {
+            let file = root.join_components(&name.split('/').collect::<Vec<_>>());
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents(contents).unwrap();
+        };
+        for path in [
+            "pyproject.toml",
+            "packages/py-app/pyproject.toml",
+            "packages/py-lib/pyproject.toml",
+            "packages/py-app/src/py_app/__init__.py",
+        ] {
+            write(path, "before\n");
+        }
+        let snapshot = || {
+            let mut includes = Vec::<globwalk::ValidatedGlob>::new();
+            let mut excludes = Vec::new();
+            for glob in &io.input_globs {
+                if let Some(exclude) = glob.strip_prefix('!') {
+                    excludes.push(exclude.parse().unwrap());
+                } else {
+                    includes.push(glob.parse().unwrap());
+                }
+            }
+            globwalk::globwalk(&root, &includes, &excludes, globwalk::WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|path| {
+                    let bytes = std::fs::read(path.as_std_path()).unwrap();
+                    (
+                        turbopath::AnchoredSystemPathBuf::new(&root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        bytes,
+                    )
+                })
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        let baseline = snapshot();
+        for path in [
+            "pyproject.toml",
+            "packages/py-app/pyproject.toml",
+            "packages/py-lib/pyproject.toml",
+            "packages/py-app/src/py_app/__init__.py",
+        ] {
+            assert!(baseline.contains_key(path), "missing {path}");
+        }
+        for path in [
+            "packages/py-app/src/py_app/.pytest_cache/nested/cache-file",
+            "packages/py-app/src/py_app/.ruff_cache/nested/cache-file",
+            "packages/py-lib/.venv/cache-file",
+            "unrelated.txt",
+        ] {
+            write(path, "cache or sibling\n");
+            assert_eq!(snapshot(), baseline, "{path} is not a quality input");
+        }
+        for path in [
+            "packages/py-app/src/py_app/__init__.py",
+            "packages/py-lib/src/py_lib/__init__.py",
+            "ruff.toml",
+        ] {
+            write(path, "changed\n");
+            assert_ne!(snapshot(), baseline, "{path} is a quality input");
+            if let Some(previous) = baseline.get(path) {
+                write(path, std::str::from_utf8(previous).unwrap());
+            } else {
+                std::fs::remove_file(
+                    root.join_components(&path.split('/').collect::<Vec<_>>())
+                        .as_std_path(),
+                )
+                .unwrap();
+            }
+            assert_eq!(snapshot(), baseline);
+        }
     }
 
     #[test]
