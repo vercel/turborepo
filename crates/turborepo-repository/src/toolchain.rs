@@ -45,7 +45,7 @@ use crate::{
     change_knowledge::ChangeObservation,
     discovery::{self, PackageDiscovery},
     external_resolution::ExternalResolutionDomain,
-    package_json::PackageJson,
+    package_json::{FileSystemPackageJsonLoader, PackageJson, PackageJsonLoader},
     package_manager::PackageManager,
     prune_knowledge::PruneDomain,
     relationships::Relationship,
@@ -729,6 +729,7 @@ pub struct JavaScriptContributor<P> {
     discovery: P,
     repo_root: AbsoluteSystemPathBuf,
     known_package_manager: Option<PackageManager>,
+    package_json_loader: Arc<dyn PackageJsonLoader>,
 }
 
 impl<P: PackageDiscovery + Send + Sync> JavaScriptContributor<P> {
@@ -741,7 +742,13 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptContributor<P> {
             discovery,
             repo_root,
             known_package_manager,
+            package_json_loader: Arc::new(FileSystemPackageJsonLoader),
         }
+    }
+
+    pub(crate) fn with_package_json_loader(mut self, loader: Arc<dyn PackageJsonLoader>) -> Self {
+        self.package_json_loader = loader;
+        self
     }
 
     /// The repository's JavaScript package manager.
@@ -900,7 +907,7 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
                     .into_par_iter()
                     .map(|workspace| {
                         let (package_json, _) = workspace.into_paths();
-                        let descriptor = PackageJson::load(&package_json)?;
+                        let descriptor = self.package_json_loader.load(&package_json)?;
                         Ok(Self::package_from_json(package_json, descriptor))
                     })
                     .collect::<Result<Vec<_>, Error>>()

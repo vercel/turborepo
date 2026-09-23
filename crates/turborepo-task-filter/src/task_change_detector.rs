@@ -192,7 +192,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_errors::Spanned;
     use turborepo_repository::{
-        discovery::{DiscoveryResponse, PackageDiscovery},
+        discovery::{DiscoveryResponse, WorkspaceData},
         package_graph::PackageGraph,
         package_json::PackageJson,
         package_manager::PackageManager,
@@ -203,25 +203,6 @@ mod tests {
     use super::*;
     use crate::Building;
 
-    struct MockDiscovery;
-
-    impl PackageDiscovery for MockDiscovery {
-        async fn discover_packages(
-            &self,
-        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
-            Ok(DiscoveryResponse {
-                package_manager: PackageManager::Npm,
-                workspaces: vec![],
-            })
-        }
-
-        async fn discover_packages_blocking(
-            &self,
-        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
-            self.discover_packages().await
-        }
-    }
-
     async fn make_pkg_graph(repo_root: &AbsoluteSystemPath, packages: &[&str]) -> PackageGraph {
         make_pkg_graph_with_root(repo_root, packages, PackageJson::default()).await
     }
@@ -231,18 +212,43 @@ mod tests {
         packages: &[&str],
         root_package_json: PackageJson,
     ) -> PackageGraph {
-        let mut pkgs = HashMap::new();
-        for name in packages {
-            let path = repo_root.join_components(&["packages", name, "package.json"]);
-            let pkg = PackageJson {
-                name: Some(Spanned::new(name.to_string())),
-                ..Default::default()
-            };
-            pkgs.insert(path, pkg);
-        }
+        let manifests: HashMap<_, _> = packages
+            .iter()
+            .map(|name| {
+                (
+                    repo_root.join_components(&["packages", name, "package.json"]),
+                    PackageJson {
+                        name: Some(Spanned::new(name.to_string())),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
+        let workspaces = manifests
+            .keys()
+            .cloned()
+            .map(|path| WorkspaceData::new(path, None).unwrap())
+            .collect();
+        let response = DiscoveryResponse {
+            workspaces,
+            package_manager: PackageManager::Npm,
+        };
+
         PackageGraph::builder(repo_root, root_package_json)
-            .with_package_discovery(MockDiscovery)
-            .with_package_jsons(Some(pkgs))
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &AbsoluteSystemPath| {
+                manifests.get(path).cloned().ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("missing test manifest at {path}"),
+                    )
+                    .into()
+                })
+            })
+            .without_external_dependencies()
             .build()
             .await
             .unwrap()
