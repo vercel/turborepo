@@ -1896,6 +1896,137 @@ impl GoContributor {
     }
 }
 
+/// Wrap an ecosystem failure at the contributor boundary.
+fn contribution_failure(error: Error) -> toolchain::Error {
+    toolchain::Error::Failed(Box::new(error))
+}
+
+/// Assemble the Go contributor's observation envelope from an already-observed
+/// workspace and toolchain environment.
+///
+/// Split from [`GoContributor::discover_packages`] so the subprocess-free half
+/// of Go support — package identities, native tasks, task contracts, external
+/// resolution domains, change observations, and prune knowledge — is directly
+/// exercisable with in-memory observation inputs. Toolchain identity stays lazy
+/// because observing it costs a `go version` process that an empty workspace
+/// never needs.
+fn contributed_packages(
+    repo_root: &AbsoluteSystemPath,
+    workspace: DiscoveredWorkspace,
+    environment: &GoEnvironment,
+    toolchain_identity: impl FnOnce() -> Result<ExternalPackageIdentity, Error>,
+) -> Result<DiscoveredPackages, Error> {
+    let cache_prefixes = go_cache_prefixes(repo_root, environment);
+    let change_observation = go_change_observation(repo_root, &workspace.modules, &cache_prefixes)?;
+
+    let workspace_roots = repo_root
+        .join_component(GO_WORK)
+        .exists()
+        .then(|| WorkspaceRoot::new("go", repo_root.to_owned()))
+        .into_iter()
+        .collect();
+
+    if workspace.modules.is_empty() {
+        return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots)
+            .with_change_observation(change_observation));
+    }
+
+    let toolchain_identity = toolchain_identity()?;
+
+    let mut module_names = workspace
+        .modules
+        .iter()
+        .map(|module| module.package_name().to_string())
+        .collect::<Vec<_>>();
+    module_names.sort();
+    let workspace_relationships = module_names
+        .into_iter()
+        .map(|name| Relationship::internal(name, DependencyKind::Production))
+        .collect();
+
+    let mut packages = workspace
+        .modules
+        .iter()
+        .map(|module| {
+            package_from_module(
+                module,
+                &environment.target_os,
+                &cache_prefixes,
+                environment
+                    .fingerprint_values
+                    .get("GOFLAGS")
+                    .map(String::as_str)
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    packages.push(
+        DiscoveredPackage::aggregate(
+            GO_WORKSPACE_NAME.to_string(),
+            PackageJson::default(),
+            repo_root.join_component(GO_WORK),
+        )
+        .with_native_relationships(workspace_relationships)
+        .with_native_tasks(native_tasks_for_workspace())
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+            GoTaskContract::workspace(&environment.target_os, &cache_prefixes).with_go_flags(
+                environment
+                    .fingerprint_values
+                    .get("GOFLAGS")
+                    .map(String::as_str)
+                    .unwrap_or_default(),
+            ),
+        )),
+    );
+
+    let resolutions = external_resolutions(
+        &workspace.graph,
+        &workspace.modules,
+        &workspace.listed,
+        &toolchain_identity,
+    )?;
+    let members = resolutions
+        .iter()
+        .map(|resolution| resolution.package().to_string())
+        .collect::<Vec<_>>();
+    let anchored = |path| AnchoredSystemPathBuf::from_raw(path).map_err(Error::from);
+    let mut definition_sources = vec![anchored(GO_WORK)?];
+    if repo_root.join_component(GO_WORK_SUM).exists() {
+        definition_sources.push(anchored(GO_WORK_SUM)?);
+    }
+    for module in &workspace.modules {
+        let manifest =
+            AnchoredSystemPathBuf::new(repo_root, &module.manifest_path).map_err(Error::from)?;
+        let module_dir = manifest.parent().ok_or_else(|| Error::MissingGoMod {
+            path: module.manifest_path.to_string(),
+        })?;
+        let sum = module_dir.join_component(GO_SUM);
+        definition_sources.push(manifest);
+        if repo_root.resolve(&sum).exists() {
+            definition_sources.push(sum);
+        }
+    }
+    let resolution = ExternalResolutionDomain::new(
+        GO_RESOLUTION_DOMAIN.clone(),
+        ToolchainId::GO,
+        AnchoredSystemPathBuf::default(),
+        members,
+        definition_sources,
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Complete,
+            packages: resolutions,
+        },
+    );
+
+    let discovered = DiscoveredPackages::new(packages, workspace_roots)
+        .with_external_resolution(resolution)
+        .with_change_observation(change_observation);
+    Ok(match workspace.prune {
+        Some(prune) => discovered.with_prune_domain(std::sync::Arc::new(prune)),
+        None => discovered,
+    })
+}
+
 impl RepositoryContributor for GoContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::GO
@@ -1905,134 +2036,16 @@ impl RepositoryContributor for GoContributor {
         Box::pin(async move {
             let workspace =
                 turborepo_rayon_compat::block_in_place(|| discover_workspace(&self.repo_root))
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+                    .map_err(contribution_failure)?;
             let environment =
                 turborepo_rayon_compat::block_in_place(|| go_environment(&self.repo_root))
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-            let cache_prefixes = go_cache_prefixes(&self.repo_root, &environment);
-            let change_observation =
-                go_change_observation(&self.repo_root, &workspace.modules, &cache_prefixes)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-
-            let workspace_roots = self
-                .repo_root
-                .join_component(GO_WORK)
-                .exists()
-                .then(|| WorkspaceRoot::new("go", self.repo_root.clone()))
-                .into_iter()
-                .collect();
-
-            if workspace.modules.is_empty() {
-                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots)
-                    .with_change_observation(change_observation));
-            }
-
-            let toolchain_identity = turborepo_rayon_compat::block_in_place(|| {
-                go_toolchain_identity(&self.repo_root, &environment)
-            })
-            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-
-            let mut module_names = workspace
-                .modules
-                .iter()
-                .map(|module| module.package_name().to_string())
-                .collect::<Vec<_>>();
-            module_names.sort();
-            let workspace_relationships = module_names
-                .into_iter()
-                .map(|name| Relationship::internal(name, DependencyKind::Production))
-                .collect();
-
-            let mut packages = workspace
-                .modules
-                .iter()
-                .map(|module| {
-                    package_from_module(
-                        module,
-                        &environment.target_os,
-                        &cache_prefixes,
-                        environment
-                            .fingerprint_values
-                            .get("GOFLAGS")
-                            .map(String::as_str)
-                            .unwrap_or_default(),
-                    )
+                    .map_err(contribution_failure)?;
+            contributed_packages(&self.repo_root, workspace, &environment, || {
+                turborepo_rayon_compat::block_in_place(|| {
+                    go_toolchain_identity(&self.repo_root, &environment)
                 })
-                .collect::<Vec<_>>();
-            packages.push(
-                DiscoveredPackage::aggregate(
-                    GO_WORKSPACE_NAME.to_string(),
-                    PackageJson::default(),
-                    self.repo_root.join_component(GO_WORK),
-                )
-                .with_native_relationships(workspace_relationships)
-                .with_native_tasks(native_tasks_for_workspace())
-                .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
-                    GoTaskContract::workspace(&environment.target_os, &cache_prefixes)
-                        .with_go_flags(
-                            environment
-                                .fingerprint_values
-                                .get("GOFLAGS")
-                                .map(String::as_str)
-                                .unwrap_or_default(),
-                        ),
-                )),
-            );
-
-            let resolutions = external_resolutions(
-                &workspace.graph,
-                &workspace.modules,
-                &workspace.listed,
-                &toolchain_identity,
-            )
-            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-            let members = resolutions
-                .iter()
-                .map(|resolution| resolution.package().to_string())
-                .collect::<Vec<_>>();
-            let anchored = |path| {
-                AnchoredSystemPathBuf::from_raw(path)
-                    .map_err(Error::from)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))
-            };
-            let mut definition_sources = vec![anchored(GO_WORK)?];
-            if self.repo_root.join_component(GO_WORK_SUM).exists() {
-                definition_sources.push(anchored(GO_WORK_SUM)?);
-            }
-            for module in &workspace.modules {
-                let manifest = AnchoredSystemPathBuf::new(&self.repo_root, &module.manifest_path)
-                    .map_err(Error::from)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-                let module_dir = manifest.parent().ok_or_else(|| {
-                    toolchain::Error::Failed(Box::new(Error::MissingGoMod {
-                        path: module.manifest_path.to_string(),
-                    }))
-                })?;
-                let sum = module_dir.join_component(GO_SUM);
-                definition_sources.push(manifest);
-                if self.repo_root.resolve(&sum).exists() {
-                    definition_sources.push(sum);
-                }
-            }
-            let resolution = ExternalResolutionDomain::new(
-                GO_RESOLUTION_DOMAIN.clone(),
-                ToolchainId::GO,
-                AnchoredSystemPathBuf::default(),
-                members,
-                definition_sources,
-                ExternalResolutionData::Resolved {
-                    completeness: ResolutionCompleteness::Complete,
-                    packages: resolutions,
-                },
-            );
-
-            let discovered = DiscoveredPackages::new(packages, workspace_roots)
-                .with_external_resolution(resolution)
-                .with_change_observation(change_observation);
-            Ok(match workspace.prune {
-                Some(prune) => discovered.with_prune_domain(std::sync::Arc::new(prune)),
-                None => discovered,
             })
+            .map_err(contribution_failure)
         })
     }
 
@@ -4161,5 +4174,124 @@ mod tests {
                 assert_eq!(io.outputs, DerivedOutputs::Resolved(Vec::new()));
             }
         }
+    }
+
+    fn observed_environment(root: &AbsoluteSystemPath) -> GoEnvironment {
+        GoEnvironment {
+            target_os: "linux".to_string(),
+            build_cache: join_relative_path(root, ".cache/build")
+                .unwrap()
+                .to_string(),
+            module_cache: join_relative_path(root, ".cache/mod").unwrap().to_string(),
+            fingerprint_values: complete_go_environment(),
+        }
+    }
+
+    #[test]
+    fn empty_contribution_does_not_observe_toolchain_identity() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let environment = observed_environment(&root);
+        let discovered =
+            contributed_packages(&root, DiscoveredWorkspace::default(), &environment, || {
+                panic!("empty workspace must not invoke go version")
+            })
+            .unwrap();
+        let (packages, roots, resolutions, observations, prune) = discovered.into_parts();
+        assert!(packages.is_empty());
+        assert!(roots.is_empty());
+        assert!(resolutions.is_empty());
+        assert!(prune.is_empty());
+        assert_eq!(
+            observations,
+            vec![
+                ChangeObservation::new()
+                    .with_rediscovery_file_name(GO_WORK)
+                    .with_rediscovery_file_name(GO_MOD)
+                    .with_resolution_path(GO_WORK_SUM)
+                    .with_ignore_prefix(".cache/build")
+                    .with_ignore_prefix(".cache/mod")
+            ]
+        );
+    }
+
+    #[test]
+    fn contribution_assembles_observed_packages_resolution_and_prune_without_go() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        let manifest = join_relative_path(&root, "apps/api/go.mod").unwrap();
+        manifest.parent().unwrap().create_dir_all().unwrap();
+        manifest
+            .create_with_contents("module example.com/api\n")
+            .unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: manifest,
+            relationships: Vec::new(),
+            runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let workspace = DiscoveredWorkspace {
+            modules: vec![module],
+            graph: String::new(),
+            listed: Vec::new(),
+            prune: Some(GoPruneKnowledge {
+                domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+                go: "1.22".to_string(),
+                toolchain: None,
+                package_directories: HashMap::from([("api".to_string(), "apps/api".to_string())]),
+                relationships: HashMap::new(),
+                replacements: Vec::new(),
+            }),
+        };
+        let environment = observed_environment(&root);
+        let identity = ExternalPackageIdentity::new("go", "go version go1.22.0 fixture");
+        let discovered =
+            contributed_packages(&root, workspace, &environment, || Ok(identity)).unwrap();
+        let (packages, roots, resolutions, observations, prune) = discovered.into_parts();
+        assert_eq!(
+            packages
+                .iter()
+                .map(DiscoveredPackage::name)
+                .collect::<Vec<_>>(),
+            vec![Some("api"), Some(GO_WORKSPACE_NAME)]
+        );
+        assert_eq!(roots.len(), 1);
+        assert_eq!(resolutions.len(), 1);
+        assert_eq!(prune.len(), 1);
+        assert_eq!(
+            observations,
+            vec![
+                ChangeObservation::new()
+                    .with_rediscovery_file_name(GO_WORK)
+                    .with_rediscovery_file_name(GO_MOD)
+                    .with_resolution_path(GO_WORK_SUM)
+                    .with_resolution_path("apps/api/go.sum")
+                    .with_ignore_prefix(".cache/build")
+                    .with_ignore_prefix(".cache/mod")
+            ]
+        );
+
+        let error = contributed_packages(
+            &root,
+            DiscoveredWorkspace {
+                modules: vec![GoModule {
+                    module_path: "example.com/api".to_string(),
+                    manifest_path: join_relative_path(&root, "apps/api/go.mod").unwrap(),
+                    relationships: Vec::new(),
+                    runnable_target: None,
+                    root_source_inputs: Some(HashSet::new()),
+                }],
+                graph: "malformed".to_string(),
+                ..Default::default()
+            },
+            &environment,
+            || Ok(ExternalPackageIdentity::new("go", "fixture")),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::MalformedModGraphLine { .. }));
     }
 }
