@@ -47,10 +47,31 @@ pub fn resolve_packages(
     scm: &SCM,
     global_deps: &[String],
 ) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
+    let globals = opts
+        .global_deps
+        .iter()
+        .map(String::as_str)
+        .chain(global_deps.iter().map(String::as_str));
+    let detector = ScopeChangeDetector::new(turbo_root, scm, pkg_graph, globals, vec![])?;
+    resolve_packages_with_change_detector(opts, turbo_root, pkg_graph, detector)
+}
+
+/// Resolve through the production scope entry point with an injected change
+/// detector. Repository discovery and Git observations can both be supplied in
+/// memory by contract tests without changing the CLI path above.
+#[tracing::instrument(skip(opts, pkg_graph, change_detector))]
+pub fn resolve_packages_with_change_detector<T: GitChangeDetector>(
+    opts: &ScopeOpts,
+    turbo_root: &AbsoluteSystemPath,
+    pkg_graph: &PackageGraph,
+    change_detector: T,
+) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
-
-    FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm, global_deps)?
+    FilterResolver::new_with_change_detector(pkg_graph, turbo_root, pkg_inference, change_detector)
         .resolve(&opts.affected_range, opts.get_filters())
 }
+
+#[cfg(test)]
+mod entrypoint_tests;
