@@ -173,6 +173,75 @@ pub struct PruneInput {
     pub root_turbo_json_path: AbsoluteSystemPathBuf,
 }
 
+/// Decisions made before pruning writes any workspace or native-domain files.
+/// The materializer consumes the same selection that in-process tests inspect.
+#[derive(Debug)]
+struct PruneSelectionPlan {
+    workspaces: Vec<PackageName>,
+    javascript_workspaces: Vec<PackageName>,
+    javascript_paths: Vec<String>,
+    native_domains: HashMap<PruneDomainId, Vec<String>>,
+    docker: bool,
+}
+
+impl PruneSelectionPlan {
+    fn new(
+        graph: &PackageGraph,
+        workspaces: Vec<PackageName>,
+        docker: bool,
+    ) -> Result<Self, Error> {
+        let mut javascript_workspaces = Vec::new();
+        let mut javascript_paths = Vec::new();
+        let mut native_domains: HashMap<PruneDomainId, Vec<String>> = HashMap::new();
+        for workspace in &workspaces {
+            let PackageName::Other(name) = workspace else {
+                // The root has no directory to copy, but its JavaScript
+                // dependencies still belong to the lockfile subgraph.
+                if graph
+                    .package_task_context(workspace)
+                    .is_some_and(|context| {
+                        context.task_contract().prune_package_mode()
+                            == Some(&PrunePackageMode::JavaScript)
+                    })
+                {
+                    javascript_workspaces.push(PackageName::Root);
+                }
+                continue;
+            };
+            let context = graph
+                .package_task_context(workspace)
+                .ok_or_else(|| Error::MissingWorkspace(workspace.clone()))?;
+            let mode = context
+                .task_contract()
+                .prune_package_mode()
+                .ok_or_else(|| Error::MissingPrunePackageMode(workspace.clone()))?;
+            match mode {
+                PrunePackageMode::JavaScript => {
+                    javascript_workspaces.push(workspace.clone());
+                    javascript_paths.push(context.directory().to_unix().to_string());
+                }
+                PrunePackageMode::NativeDomain(domain)
+                    if context.kind() != PackageTaskContextKind::Aggregate
+                        && context.directory().components().next().is_some() =>
+                {
+                    native_domains
+                        .entry(domain.clone())
+                        .or_default()
+                        .push(name.clone());
+                }
+                PrunePackageMode::NativeDomain(_) | PrunePackageMode::NativeCopy => {}
+            }
+        }
+        Ok(Self {
+            workspaces,
+            javascript_workspaces,
+            javascript_paths,
+            native_domains,
+            docker,
+        })
+    }
+}
+
 pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", input.docker);
     telemetry.track_arg_usage("production", input.production);
@@ -201,7 +270,6 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
         )?;
     }
 
-    let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let mut workspaces = prune.internal_dependencies()?;
     if input.future_flags.affected_using_task_inputs {
@@ -212,7 +280,11 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
             input.production,
         )?;
     }
-    prune.plan_package_copies(&workspaces)?;
+    let selection = PruneSelectionPlan::new(&prune.package_graph, workspaces, prune.docker)?;
+    prune.plan_package_copies(&selection.workspaces)?;
+    let workspaces = selection.workspaces.clone();
+    let workspace_paths = selection.javascript_paths;
+    let docker = selection.docker;
     let retained_workspace_names: HashSet<_> = workspaces
         .iter()
         .filter_map(|workspace| match workspace {
@@ -241,31 +313,14 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
     } else {
         HashSet::new()
     };
-    // Only JavaScript packages participate in the JS lockfile subgraph:
-    // other toolchains' external-dependency keys (e.g. Cargo's rustc and
-    // crates.io identities) mean nothing to it and must not leak in.
-    let js_workspaces: Vec<PackageName> = workspaces
-        .iter()
-        .filter(|workspace| {
-            prune
-                .package_graph
-                .package_task_context(workspace)
-                .is_some_and(|context| {
-                    context.task_contract().prune_package_mode()
-                        == Some(&PrunePackageMode::JavaScript)
-                })
-        })
-        .cloned()
-        .collect();
     // The JS lockfile subgraph only exists when there is a JavaScript package
-    // manager. A pure Cargo workspace has none; its lockfile is pruned by the
-    // Cargo toolchain's prune plan below.
+    // manager. Native external identities never leak into its keys.
     let lockfile_keys = if prune.package_graph.package_manager().is_some() {
-        prune.lockfile_keys(&js_workspaces)?
+        prune.lockfile_keys(&selection.javascript_workspaces)?
     } else {
         Vec::new()
     };
-    let mut kept_by_domain: HashMap<PruneDomainId, Vec<String>> = HashMap::new();
+    let mut kept_by_domain = selection.native_domains;
     let mut planned_domains = HashSet::new();
     for workspace in workspaces {
         let context = prune.package_context(&workspace)?;
@@ -301,12 +356,6 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
                 }
                 prune.copy_package_dir(context.directory(), definition_path)?;
                 println!(" - Added {workspace}");
-                if let PrunePackageMode::NativeDomain(domain) = mode {
-                    kept_by_domain
-                        .entry(domain)
-                        .or_default()
-                        .push(workspace.clone());
-                }
                 // Non-JS packages participate in turbo.json task pruning,
                 // but not in the JS lockfile subgraph or package.json
                 // workspaces.
@@ -319,7 +368,6 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
                 definition_path,
                 &excluded_dev_workspaces,
             )?;
-            workspace_paths.push(context.directory().to_unix().to_string());
 
             println!(" - Added {workspace}");
             workspace_names.push(workspace);
@@ -347,7 +395,7 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
             let full_path = prune.full_directory.resolve(&rel);
             full_path.ensure_dir()?;
             full_path.create_with_contents(&contents)?;
-            if prune.docker {
+            if docker {
                 let docker_path = prune.docker_directory().resolve(&rel);
                 docker_path.ensure_dir()?;
                 docker_path.create_with_contents(&contents)?;
@@ -413,7 +461,7 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
         let finalized_files = prune
             .package_graph
             .finalize_prune(&domain, &prune.full_directory);
-        if prune.docker {
+        if docker {
             sync_prune_finalize_files(
                 &prune.full_directory,
                 &prune.docker_directory(),
@@ -1227,7 +1275,7 @@ mod tests {
     use std::{
         collections::{BTreeMap, HashMap, HashSet},
         fs,
-        sync::OnceLock,
+        sync::{Arc, OnceLock},
     };
 
     use serde_json::json;
@@ -1238,11 +1286,19 @@ mod tests {
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
         package_manager::PackageManager,
-        toolchain::ToolchainId,
+        prune_knowledge::{PruneDomain, PruneDomainId, PrunePlan},
+        relationships::{DependencyKind, Relationship},
+        task_contracts::{PrunePackageMode, ScopeTaskContract},
+        toolchain::{
+            DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+            DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, ToolchainId,
+            WorkspaceRoot,
+        },
     };
 
     use super::{
-        ADDITIONAL_FILES, Error, Prune, finalized_path_is_contained, sync_prune_finalize_files,
+        ADDITIONAL_FILES, Error, Prune, PruneSelectionPlan, finalized_path_is_contained,
+        sync_prune_finalize_files,
     };
 
     struct MockDiscovery;
@@ -1356,6 +1412,169 @@ mod tests {
         ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    #[derive(Debug)]
+    struct NativePlanDomain(PruneDomainId);
+
+    impl PruneDomain for NativePlanDomain {
+        fn id(&self) -> &PruneDomainId {
+            &self.0
+        }
+
+        fn plan(
+            &self,
+            kept: &[String],
+        ) -> Result<Option<PrunePlan>, turborepo_repository::prune_knowledge::Error> {
+            Ok((!kept.is_empty()).then_some(PrunePlan::default()))
+        }
+    }
+
+    struct NativePruneObservation {
+        root: AbsoluteSystemPathBuf,
+        domain: PruneDomainId,
+    }
+
+    impl RepositoryContributor for NativePruneObservation {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::RUST
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let native_contract = || {
+                    ScopeTaskContract::derived(
+                        ToolchainId::RUST,
+                        None,
+                        BTreeMap::new(),
+                        BTreeMap::new(),
+                    )
+                    .with_prune_package_mode(PrunePackageMode::NativeDomain(self.domain.clone()))
+                };
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("cargo-app".to_string()),
+                            PackageJson::default(),
+                            self.root.join_components(&["crates", "app", "Cargo.toml"]),
+                        )
+                        .with_native_relationships(Vec::new())
+                        .with_task_contract(native_contract()),
+                        DiscoveredPackage::aggregate(
+                            "cargo-workspace".to_string(),
+                            PackageJson::default(),
+                            self.root.join_component("Cargo.toml"),
+                        )
+                        .with_native_relationships(vec![Relationship::internal(
+                            "cargo-app",
+                            DependencyKind::Production,
+                        )])
+                        .with_task_contract(native_contract()),
+                    ],
+                    vec![WorkspaceRoot::new("cargo", self.root.clone())],
+                )
+                .with_prune_domain(Arc::new(NativePlanDomain(self.domain.clone()))))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    observed.packages(),
+                    observed.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn prune_selection_plan_separates_js_native_and_docker_intent_in_memory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let domain = PruneDomainId::new("cargo-fixture");
+        let graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo", "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "app", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "app", "dependencies": { "lib": "*" }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson::from_value(json!({ "name": "lib" })).unwrap(),
+            ),
+        ])))
+        .with_contributor(Arc::new(NativePruneObservation {
+            root: root.clone(),
+            domain: domain.clone(),
+        }))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["app".to_string(), "cargo-app".to_string()];
+        let out = root.join_component("out");
+        let prune = Prune {
+            package_graph: graph,
+            root: root.clone(),
+            out_directory: out.clone(),
+            full_directory: out.clone(),
+            docker: true,
+            production: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
+        };
+        let mut closure = prune.internal_dependencies().unwrap();
+        let selected = closure.iter().cloned().collect::<HashSet<_>>();
+        for name in ["app", "lib", "cargo-app"] {
+            assert!(selected.contains(&PackageName::from(name)), "{selected:?}");
+        }
+        assert!(selected.contains(&PackageName::Root));
+        assert!(!selected.contains(&PackageName::from("cargo-workspace")));
+        // Task-aware selection can retain an aggregate namespace, but must not
+        // copy its root directory or seed its native lockfile domain.
+        closure.push(PackageName::from("cargo-workspace"));
+        let plan = PruneSelectionPlan::new(&prune.package_graph, closure, true).unwrap();
+        assert!(plan.docker);
+        let js = plan
+            .javascript_workspaces
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            js,
+            [
+                PackageName::Root,
+                PackageName::from("app"),
+                PackageName::from("lib"),
+            ]
+            .into()
+        );
+        let mut paths = plan.javascript_paths.clone();
+        paths.sort();
+        assert_eq!(paths, ["packages/app", "packages/lib"]);
+        assert_eq!(plan.native_domains[&domain], ["cargo-app"]);
+        assert!(
+            plan.workspaces
+                .contains(&PackageName::from("cargo-workspace"))
+        );
+        assert!(
+            !PruneSelectionPlan::new(&prune.package_graph, plan.workspaces, false)
+                .unwrap()
+                .docker
+        );
+        assert!(!out.exists(), "planning must not create output directories");
     }
 
     #[tokio::test]
