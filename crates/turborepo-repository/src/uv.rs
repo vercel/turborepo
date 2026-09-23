@@ -3308,6 +3308,233 @@ mod test {
         );
     }
 
+    struct UvLockObservation {
+        root: AbsoluteSystemPathBuf,
+        metadata: UvWorkspaceMetadata,
+        lockfile: String,
+    }
+
+    impl RepositoryContributor for UvLockObservation {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> toolchain::DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let workspace = discover_workspace_from_manifests(&self.root, false)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+                assemble_uv_contribution(
+                    &self.root,
+                    workspace,
+                    Some(self.metadata.clone()),
+                    Ok(self.lockfile.clone()),
+                    None,
+                    vec![WorkspaceRoot::new("uv", self.root.clone())],
+                    || Err("fixture has no native toolchain identity".to_string()),
+                )
+            })
+        }
+
+        fn discover_package_scopes(&self) -> toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(toolchain::DiscoveredPackageScopes::from_full_observation(
+                    observed.packages(),
+                    observed.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_uv_lock_observations_scope_dependency_fingerprints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                "[tool.turbo]\nname = 'acme'\n[tool.uv.workspace]\nmembers = ['packages/*']\n",
+            )
+            .unwrap();
+        for (name, extra) in [
+            (
+                "py-app",
+                "dependencies = ['py-lib', 'ruff>=0.12']\n[tool.uv.sources]\npy-lib = { workspace \
+                 = true }\n",
+            ),
+            ("py-lib", ""),
+        ] {
+            let manifest = root.join_components(&["packages", name, PYPROJECT_TOML]);
+            manifest.parent().unwrap().create_dir_all().unwrap();
+            manifest
+                .create_with_contents(format!(
+                    "[project]\nname = '{name}'\nversion = '0.1.0'\n{extra}"
+                ))
+                .unwrap();
+        }
+        let metadata = |ruff_version: &str| -> UvWorkspaceMetadata {
+            serde_json::from_value(serde_json::json!({
+                "members": [
+                    {"name":"py-app","path":"/workspace/packages/py-app","id":"app"},
+                    {"name":"py-lib","path":"/workspace/packages/py-lib","id":"lib"}
+                ],
+                "resolution": {
+                    "app": {
+                        "name":"py-app", "version":"0.1.0",
+                        "source":{"editable":"/workspace/packages/py-app"},
+                        "dependencies":[{"id":"lib"},{"id":"ruff"}]
+                    },
+                    "lib": {
+                        "name":"py-lib", "version":"0.1.0",
+                        "source":{"editable":"/workspace/packages/py-lib"},
+                        "dependencies":[]
+                    },
+                    "ruff": {
+                        "name":"ruff", "version":ruff_version,
+                        "source":{"registry":{"url":"https://pypi.org/simple"}},
+                        "dependencies":[],
+                        "wheels":[{"hashes":{"sha256":"ruff-wheel"}}]
+                    }
+                }
+            }))
+            .unwrap()
+        };
+        async fn graph_for(
+            root: &AbsoluteSystemPathBuf,
+            metadata: UvWorkspaceMetadata,
+            lockfile: &str,
+        ) -> crate::package_graph::PackageGraph {
+            crate::package_graph::PackageGraph::builder_optional(root, None)
+                .with_package_jsons(Some(HashMap::new()))
+                .with_contributor(Arc::new(UvLockObservation {
+                    root: root.clone(),
+                    metadata,
+                    lockfile: lockfile.to_string(),
+                }))
+                .build()
+                .await
+                .unwrap()
+        }
+        let initial_lock = concat!(
+            "version = 1\n",
+            "[[package]]\nname = 'py-app'\nversion = '0.1.0'\n",
+            "[[package]]\nname = 'py-lib'\nversion = '0.1.0'\n",
+            "[[package]]\nname = 'ruff'\nversion = '0.12.0'\n",
+        );
+        let comment_lock = format!("{initial_lock}\n# metadata only\n");
+        let upgraded_lock = initial_lock.replace("version = '0.12.0'", "version = '0.12.1'");
+        let before = graph_for(&root, metadata("0.12.0"), initial_lock).await;
+        let comment_only = graph_for(&root, metadata("0.12.0"), &comment_lock).await;
+        let upgraded = graph_for(&root, metadata("0.12.1"), &upgraded_lock).await;
+        let fingerprint = |graph: &crate::package_graph::PackageGraph, name: &str| {
+            graph.package_resolution_states()[name]
+                .task_hash()
+                .expect("resolved package fingerprint")
+                .to_string()
+        };
+        for name in ["py-app", "py-lib", "acme"] {
+            assert_eq!(
+                fingerprint(&before, name),
+                fingerprint(&comment_only, name),
+                "metadata-only lockfile edits do not change {name}'s closure"
+            );
+        }
+        assert_ne!(
+            fingerprint(&before, "py-app"),
+            fingerprint(&upgraded, "py-app")
+        );
+        assert_ne!(fingerprint(&before, "acme"), fingerprint(&upgraded, "acme"));
+        assert_eq!(
+            fingerprint(&before, "py-lib"),
+            fingerprint(&upgraded, "py-lib")
+        );
+        assert_eq!(
+            before
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("py-app"))
+                .unwrap(),
+            [PackageName::from("py-lib")],
+            "an unaffected library remains a build prerequisite"
+        );
+
+        use crate::change_mapper::{
+            ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
+        };
+        let lock_path = AnchoredSystemPathBuf::from_raw(UV_LOCK).unwrap();
+        let changed = HashSet::from([lock_path.clone()]);
+        let classify = |graph: &crate::package_graph::PackageGraph, current: &str| {
+            root.join_component(UV_LOCK)
+                .create_with_contents(current)
+                .unwrap();
+            let detector =
+                GlobalDepsPackageChangeMapper::new(graph, std::iter::empty::<&str>()).unwrap();
+            let mapper = ChangeMapper::new(graph, Vec::new(), detector);
+            mapper
+                .changed_packages(
+                    changed.clone(),
+                    LockfileContents::Changed {
+                        path: lock_path.clone(),
+                        previous_contents: initial_lock.as_bytes().to_vec(),
+                    },
+                )
+                .unwrap()
+        };
+        let PackageChanges::Some(comment_only_changes) = classify(&comment_only, &comment_lock)
+        else {
+            panic!("a lockfile comment must not cause global invalidation");
+        };
+        assert!(
+            comment_only_changes
+                .keys()
+                .all(|package| package.name == PackageName::Root),
+            "metadata-only lock edits must not affect members: {comment_only_changes:?}"
+        );
+        let PackageChanges::Some(upgrade_changes) = classify(&upgraded, &upgraded_lock) else {
+            panic!("a single distribution update must not affect every package");
+        };
+        let changed_names = upgrade_changes
+            .keys()
+            .map(|package| package.name.clone())
+            .collect::<HashSet<_>>();
+        assert!(changed_names.contains(&PackageName::from("py-app")));
+        assert!(changed_names.contains(&PackageName::from("acme")));
+        assert!(!changed_names.contains(&PackageName::from("py-lib")));
+
+        std::fs::remove_file(root.join_component(UV_LOCK)).unwrap();
+        let fallback = assemble_uv_contribution(
+            &root,
+            discover_workspace_from_manifests(&root, false).unwrap(),
+            None,
+            Err("no lockfile".to_string()),
+            Some(crate::external_resolution::ResolutionIncompleteReason::new(
+                "uv-lockfile-unavailable",
+                "no lockfile",
+            )),
+            vec![WorkspaceRoot::new("uv", root.clone())],
+            || Err("no uv identity".to_string()),
+        )
+        .unwrap();
+        let (_, _, domains, _, _) = fallback.into_parts();
+        let domain = &domains[0];
+        assert!(matches!(
+            domain.data(),
+            ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Partial(reason), ..
+            } if reason.code() == "uv-lockfile-unavailable"
+        ));
+        let fallback_inputs = domain
+            .fallback_inputs()
+            .iter()
+            .map(|path| path.to_unix().to_string())
+            .collect::<HashSet<_>>();
+        for path in [
+            "pyproject.toml",
+            "packages/py-app/pyproject.toml",
+            "packages/py-lib/pyproject.toml",
+        ] {
+            assert!(fallback_inputs.contains(path), "missing {path}");
+        }
+    }
+
     #[test]
     fn test_workspace_metadata_unknown_node_errors() {
         let metadata = UvWorkspaceMetadata {
