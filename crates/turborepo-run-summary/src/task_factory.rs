@@ -723,6 +723,260 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn injected_uv_and_javascript_task_summary_contract() {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, WorkspaceData},
+            native_tasks::{
+                NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+            },
+            package_manager::PackageManager,
+            toolchain::{
+                DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+                DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, WorkspaceRoot,
+            },
+        };
+
+        struct PythonContributor(DiscoveredPackages);
+        impl RepositoryContributor for PythonContributor {
+            fn id(&self) -> ToolchainId {
+                ToolchainId::PYTHON
+            }
+
+            fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+                Box::pin(async { Ok(self.0.clone()) })
+            }
+
+            fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+                Box::pin(async {
+                    Ok(DiscoveredPackageScopes::from_full_observation(
+                        self.0.packages(),
+                        self.0.workspace_roots(),
+                    ))
+                })
+            }
+        }
+
+        // Inject native observations and JS manifests at the graph boundary: no uv,
+        // Python, or assembled turbo executable is needed for this projection test.
+        let temp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let native = |name: &str, display: &str| {
+            NativeTask::command_task(
+                name,
+                display.to_string(),
+                NativeCommandProgram::Tool("uv".to_string()),
+                NativeCommandArguments::new(vec!["run".to_string()]),
+                None,
+                WorkingDirectoryPolicy::RepositoryRoot,
+            )
+        };
+        let python = DiscoveredPackages::new(
+            vec![
+                DiscoveredPackage::package(
+                    Some("py-root".to_string()),
+                    PackageJson::default(),
+                    root.join_component("pyproject.toml"),
+                )
+                .with_native_tasks(vec![native(
+                    "test",
+                    "uv run --active --frozen --all-packages pytest",
+                )]),
+                DiscoveredPackage::package(
+                    Some("py-app".to_string()),
+                    PackageJson::default(),
+                    root.join_components(&["packages", "py-app", "pyproject.toml"]),
+                )
+                .with_native_tasks(vec![
+                    native(
+                        "test",
+                        "uv run --active --frozen --package py-app --no-default-groups --group \
+                         tests pytest packages/py-app",
+                    ),
+                    native(
+                        "lint:ruff",
+                        "uv run --active --frozen ruff check packages/py-app",
+                    ),
+                    native(
+                        "check:pyright",
+                        "uv run --active --frozen --package py-app --no-default-groups --group \
+                         types pyright packages/py-app",
+                    ),
+                    native(
+                        "format:ruff",
+                        "uv run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                ]),
+            ],
+            vec![WorkspaceRoot::new("uv", root.clone())],
+        );
+        let web_path = root.join_components(&["packages", "web", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![WorkspaceData::new(web_path.clone(), None).unwrap()],
+        };
+        let graph = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &turbopath::AbsoluteSystemPath| {
+                (path == web_path.as_ref())
+                    .then(|| {
+                        PackageJson::from_value(json!({
+                            "name": "web", "scripts": {"build": "echo web"}
+                        }))
+                        .unwrap()
+                    })
+                    .ok_or_else(|| {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "unknown JS manifest")
+                            .into()
+                    })
+            })
+            .with_contributor(Arc::new(PythonContributor(python)))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        for (name, toolchain) in [
+            ("py-root", ToolchainId::PYTHON),
+            ("py-app", ToolchainId::PYTHON),
+            ("web", ToolchainId::JAVASCRIPT),
+        ] {
+            assert_eq!(
+                graph
+                    .package_task_context(&PackageName::from(name))
+                    .unwrap()
+                    .toolchain(),
+                Some(&toolchain)
+            );
+        }
+
+        let id = |package, task| TaskId::new(package, task).into_owned();
+        let root_test = id("py-root", "test");
+        let member_test = id("py-app", "test");
+        let lint = id("py-app", "lint:ruff");
+        let check = id("py-app", "check:pyright");
+        let format = id("py-app", "format:ruff");
+        let web = id("web", "build");
+        let tasks = [
+            root_test.clone(),
+            member_test.clone(),
+            lint.clone(),
+            check.clone(),
+            format.clone(),
+            web.clone(),
+        ];
+        let engine = PlanEngine {
+            definitions: tasks
+                .iter()
+                .map(|task| {
+                    (
+                        task.clone(),
+                        TaskDefinition {
+                            cache: *task != format,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+            dependencies: HashMap::from([(member_test.clone(), vec![web.clone()])]),
+            dependents: HashMap::from([(web.clone(), vec![member_test.clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: tasks
+                .iter()
+                .map(|task| (task.to_string(), Arc::from("planned-hash")))
+                .collect(),
+            inputs: tasks
+                .iter()
+                .map(|task| (task.to_string(), Vec::new()))
+                .collect(),
+            env: Some(HashTrackerDetailedMap::default()),
+            hit: None,
+        };
+        let external: HashMap<_, _> = ["py-root", "py-app", "web"]
+            .map(|name| (name.to_string(), format!("{name}-closure")))
+            .into();
+        let environment = EnvironmentVariableMap::default();
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+        let plan = |task| serde_json::to_value(factory.task_summary(task, None).unwrap()).unwrap();
+        for (task, command, directory, cache) in [
+            (
+                root_test,
+                "uv run --active --frozen --all-packages pytest",
+                "",
+                true,
+            ),
+            (
+                member_test,
+                "uv run --active --frozen --package py-app --no-default-groups --group tests \
+                 pytest packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                lint,
+                "uv run --active --frozen ruff check packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                check,
+                "uv run --active --frozen --package py-app --no-default-groups --group types \
+                 pyright packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                format,
+                "uv run --active --frozen --package py-app ruff format packages/py-app",
+                "packages/py-app",
+                false,
+            ),
+            (web, "echo web", "packages/web", true),
+        ] {
+            let summary = plan(task.clone());
+            assert_eq!(summary["taskId"], task.to_string());
+            assert_eq!(summary["command"], command, "{task}");
+            assert_eq!(summary["directory"], directory, "{task}");
+            assert_eq!(summary["resolvedTaskDefinition"]["cache"], cache, "{task}");
+            assert_eq!(summary["logFile"].is_null(), !cache, "{task}");
+            assert_eq!(summary["cache"]["status"], "MISS", "{task}");
+            assert_eq!(summary["hash"], "planned-hash", "{task}");
+            assert_eq!(
+                summary["hashOfExternalDependencies"],
+                format!("{}-closure", task.package())
+            );
+            if task.package() == "py-app" {
+                assert_eq!(
+                    summary["logFile"],
+                    if cache {
+                        json!(format!(
+                            "packages/py-app/.turbo/turbo-{}.log",
+                            task.task().replace(':', "$colon$")
+                        ))
+                    } else {
+                        json!(null)
+                    }
+                );
+            }
+            if task.to_string() == "py-app#test" {
+                assert_eq!(summary["dependencies"], json!(["web#build"]));
+            } else if task.to_string() == "web#build" {
+                assert_eq!(summary["dependents"], json!(["py-app#test"]));
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn summary_uses_authoritative_path_and_toolchain_provenance() {
         let (_tempdir, graph) = summary_graph().await;
         let app = PackageName::from("app");
