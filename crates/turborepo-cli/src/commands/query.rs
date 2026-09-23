@@ -1,4 +1,4 @@
-use std::{env, fmt::Write, fs, sync::Arc};
+use std::{env, fmt::Write, fs, io::Write as IoWrite, sync::Arc};
 
 use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
@@ -58,15 +58,35 @@ async fn execute_query_and_print(
     query: &str,
     variables_json: Option<&str>,
 ) -> Result<(i32, String), cli::Error> {
+    execute_query_and_write(
+        run,
+        query_server,
+        query,
+        variables_json,
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    )
+    .await
+}
+
+/// The same query adapter with injectable output streams for in-process tests.
+async fn execute_query_and_write(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    query: &str,
+    variables_json: Option<&str>,
+    stdout: &mut (impl IoWrite + Send),
+    stderr: &mut (impl IoWrite + Send),
+) -> Result<(i32, String), cli::Error> {
     let result = query_server
         .execute_query(run, query, variables_json)
         .await?;
 
-    println!("{}", result.result_json);
+    writeln!(stdout, "{}", result.result_json)?;
     if !result.errors.is_empty() {
         for error in result.errors {
             let error = QueryError::from_query_error(error, query.to_string());
-            eprintln!("{:?}", Report::new(error));
+            writeln!(stderr, "{:?}", Report::new(error))?;
         }
         return Ok((2, result.result_json));
     }
@@ -326,6 +346,209 @@ mod tests {
             head: head.map(String::from),
             exit_code: false,
         }
+    }
+
+    #[derive(Default)]
+    struct RecordingRun(std::sync::atomic::AtomicUsize);
+
+    impl turborepo_query_api::QueryRun for RecordingRun {
+        fn repo_context(&self) -> &turborepo_run_context::RepoContext {
+            unreachable!("the recording query server does not inspect repository data")
+        }
+
+        fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Vec::new()
+        }
+
+        fn task_ids_for_package(&self, _package: &str) -> Vec<turborepo_query_api::QueryTaskId> {
+            Vec::new()
+        }
+
+        fn task_definition(
+            &self,
+            _task: &turborepo_query_api::QueryTaskId,
+        ) -> Option<&turborepo_types::TaskDefinition> {
+            None
+        }
+
+        fn task_dependencies(
+            &self,
+            _task: &turborepo_query_api::QueryTaskId,
+        ) -> Vec<turborepo_query_api::QueryTaskId> {
+            Vec::new()
+        }
+
+        fn task_dependents(
+            &self,
+            _task: &turborepo_query_api::QueryTaskId,
+        ) -> Vec<turborepo_query_api::QueryTaskId> {
+            Vec::new()
+        }
+
+        fn transitive_task_dependencies(
+            &self,
+            _task: &turborepo_query_api::QueryTaskId,
+        ) -> Vec<turborepo_query_api::QueryTaskId> {
+            Vec::new()
+        }
+
+        fn transitive_task_dependents(
+            &self,
+            _task: &turborepo_query_api::QueryTaskId,
+        ) -> Vec<turborepo_query_api::QueryTaskId> {
+            Vec::new()
+        }
+
+        fn collect_task_dependencies(
+            &self,
+            _tasks: &std::collections::HashSet<turborepo_query_api::QueryTaskId>,
+        ) -> std::collections::HashSet<turborepo_query_api::QueryTaskId> {
+            Default::default()
+        }
+
+        fn calculate_affected_packages(
+            &self,
+            _base: Option<String>,
+            _head: Option<String>,
+        ) -> Result<
+            std::collections::HashMap<
+                turborepo_repository::package_graph::PackageName,
+                turborepo_repository::change_mapper::PackageInclusionReason,
+            >,
+            turborepo_query_api::AffectedPackagesError,
+        > {
+            Ok(Default::default())
+        }
+
+        fn changed_files(
+            &self,
+            _base: Option<&str>,
+            _head: Option<&str>,
+        ) -> Result<
+            std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+            turborepo_query_api::AffectedPackagesError,
+        > {
+            Ok(Default::default())
+        }
+
+        fn match_tasks_against_changed_files(
+            &self,
+            _files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        ) -> Result<
+            std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
+            turborepo_query_api::AffectedPackagesError,
+        > {
+            Ok(Default::default())
+        }
+
+        fn check_boundaries(
+            &self,
+            _show_progress: bool,
+        ) -> turborepo_query_api::BoundariesFuture<'_> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingServer {
+        calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+        fail: bool,
+    }
+
+    impl turborepo_query_api::QueryServer for RecordingServer {
+        fn execute_query<'a>(
+            &'a self,
+            run: std::sync::Arc<dyn turborepo_query_api::QueryRun>,
+            query: &'a str,
+            variables_json: Option<&'a str>,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            turborepo_query_api::QueryResult,
+                            turborepo_query_api::Error,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async move {
+                let _ = run.task_ids();
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((query.to_string(), variables_json.map(str::to_string)));
+                Ok(turborepo_query_api::QueryResult {
+                    result_json: r#"{"data":{"version":"fixture"}}"#.to_string(),
+                    errors: self
+                        .fail
+                        .then(|| turborepo_query_api::QueryErrorLocation {
+                            message: "fixture error".to_string(),
+                            line: 1,
+                            column: 1,
+                        })
+                        .into_iter()
+                        .collect(),
+                })
+            })
+        }
+
+        fn run_query_server(
+            &self,
+            _run: std::sync::Arc<dyn turborepo_query_api::QueryRun>,
+            _signal: turborepo_signals::SignalHandler,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<(), turborepo_query_api::Error>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { unreachable!("no network server is started by this test") })
+        }
+    }
+
+    #[tokio::test]
+    async fn query_adapter_forwards_run_query_variables_and_errors() {
+        let run = std::sync::Arc::new(RecordingRun::default());
+        for (fail, expected_exit) in [(false, 0), (true, 2)] {
+            let server = RecordingServer {
+                fail,
+                ..Default::default()
+            };
+            let run_api: std::sync::Arc<dyn turborepo_query_api::QueryRun> = run.clone();
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let (exit, json) = super::execute_query_and_write(
+                run_api,
+                &server,
+                "query { version }",
+                Some(r#"{"name":"app"}"#),
+                &mut stdout,
+                &mut stderr,
+            )
+            .await
+            .unwrap();
+            assert_eq!(exit, expected_exit);
+            assert_eq!(json, r#"{"data":{"version":"fixture"}}"#);
+            assert_eq!(String::from_utf8(stdout).unwrap(), format!("{json}\n"));
+            let diagnostic = String::from_utf8(stderr).unwrap();
+            if fail {
+                assert!(diagnostic.contains("fixture error"), "{diagnostic}");
+                assert!(diagnostic.contains("query { version }"), "{diagnostic}");
+            } else {
+                assert!(diagnostic.is_empty(), "{diagnostic}");
+            }
+            assert_eq!(
+                *server.calls.lock().unwrap(),
+                [(
+                    "query { version }".to_string(),
+                    Some(r#"{"name":"app"}"#.to_string())
+                )]
+            );
+        }
+        assert_eq!(run.0.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 
     // -- escape tests --
