@@ -2213,7 +2213,7 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
 }
 
 #[test]
-fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
+fn test_go_summarized_execution_writes_portable_task_facts() {
     if !go_available() {
         return;
     }
@@ -2223,86 +2223,6 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
     let output_path = executable;
     let build_command = "go build .";
     let task_directory = Path::new("apps").join("api").to_string_lossy().into_owned();
-
-    let output = run_turbo(
-        tempdir.path(),
-        &[
-            "query",
-            "query { api: package(name: \"api\") { name path directDependencies { items { name } \
-             } tasks { items { name command directDependencies { items { fullName } } } } } \
-             aggregate: package(name: \"go-workspace\") { name path tasks { items { name command \
-             } } } }",
-        ],
-    );
-    assert_command_success(&output, "Go package and task query");
-    let query: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("query emits JSON");
-    let api = &query["data"]["api"];
-    assert_eq!(api["name"], "api");
-    assert_eq!(api["path"], "apps/api");
-    assert!(
-        api["directDependencies"]["items"]
-            .as_array()
-            .is_some_and(|dependencies| dependencies
-                .iter()
-                .any(|dependency| dependency["name"] == "lib"))
-    );
-    let queried_build = api["tasks"]["items"]
-        .as_array()
-        .and_then(|tasks| tasks.iter().find(|task| task["name"] == "build"))
-        .expect("queried Go build task");
-    assert_eq!(queried_build["command"], build_command);
-    assert!(
-        queried_build["directDependencies"]["items"]
-            .as_array()
-            .is_some_and(|dependencies| dependencies
-                .iter()
-                .any(|dependency| dependency["fullName"] == "lib#build"))
-    );
-
-    let aggregate = &query["data"]["aggregate"];
-    assert_eq!(aggregate["name"], "go-workspace");
-    assert_eq!(aggregate["path"], "");
-    for (name, command) in [
-        ("test", "go test ./..."),
-        ("lint", "go vet ./..."),
-        ("format", "go fmt ./..."),
-    ] {
-        assert!(api["tasks"]["items"].as_array().is_some_and(|tasks| {
-            tasks
-                .iter()
-                .any(|task| task["name"] == name && task["command"] == command)
-        }));
-        assert!(
-            aggregate["tasks"]["items"]
-                .as_array()
-                .is_some_and(|tasks| tasks.iter().all(|task| task["name"] != name))
-        );
-    }
-
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=api", "--dry-run=json"],
-    );
-    let dry_run = dry_run_task(&output, "api#build");
-    assert_eq!(dry_run["package"], "api");
-    assert_eq!(dry_run["directory"], task_directory);
-    assert_eq!(dry_run["command"], build_command);
-    assert!(
-        dry_run["resolvedTaskDefinition"]["inputs"]
-            .as_array()
-            .is_some_and(|inputs| inputs.iter().any(|input| input == "../../go.work"))
-    );
-    assert!(
-        dry_run["resolvedTaskDefinition"]["outputs"]
-            .as_array()
-            .is_some_and(|outputs| outputs.iter().any(|output| output == output_path))
-    );
-    assert!(
-        dry_run["hashOfExternalDependencies"]
-            .as_str()
-            .is_some_and(|hash| !hash.is_empty())
-    );
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--summarize"]);
     assert_command_success(&output, "summarized Go build");
@@ -2343,7 +2263,7 @@ fn test_go_facts_are_consistent_across_query_dry_run_and_summary() {
 }
 
 #[test]
-fn test_mixed_repository_query_keeps_external_resolution_domains_separate() {
+fn test_mixed_resolution_domains_cli_wiring_smoke() {
     if !go_available() {
         return;
     }
@@ -2353,42 +2273,27 @@ fn test_mixed_repository_query_keeps_external_resolution_domains_separate() {
         tempdir.path(),
         &[
             "query",
-            "query { externalDependencies { items { name internalDependents { items { name } } } \
-             } }",
+            "{ externalDependencies { items { name internalDependents { items { name } } } } }",
         ],
     );
     assert_command_success(&output, "mixed external dependency query");
-    let query: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("query emits JSON");
-    let packages = query["data"]["externalDependencies"]["items"]
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let externals = json["data"]["externalDependencies"]["items"]
         .as_array()
-        .expect("external dependencies");
-    let dependents = |external_name: &str| {
-        packages
+        .expect("mixed external dependency query shape");
+    // Keep one real discovery/serialization seam; exact domain membership is
+    // asserted over injected resolution facts in the query crate.
+    for (external, dependent) in [("go", "api"), ("picocolors@1.1.1", "js-pkg")] {
+        let package = externals
             .iter()
-            .find(|package| package["name"] == external_name)
-            .and_then(|package| package["internalDependents"]["items"].as_array())
-            .unwrap_or_else(|| panic!("{external_name} and its dependents"))
-    };
-
-    let go_dependents = dependents("go");
-    for package in ["api", "lib", "go-workspace"] {
+            .find(|item| item["name"] == external)
+            .unwrap_or_else(|| panic!("missing external {external}"));
         assert!(
-            go_dependents
-                .iter()
-                .any(|dependent| dependent["name"] == package),
-            "{package} must stay in the Go resolution domain: {go_dependents:?}"
+            package["internalDependents"]["items"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item["name"] == dependent))
         );
     }
-    assert!(
-        !go_dependents
-            .iter()
-            .any(|dependent| dependent["name"] == "js-pkg")
-    );
-
-    let js_dependents = dependents("picocolors@1.1.1");
-    assert_eq!(js_dependents.len(), 1);
-    assert_eq!(js_dependents[0]["name"], "js-pkg");
 }
 
 #[test]

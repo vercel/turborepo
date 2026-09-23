@@ -524,6 +524,312 @@ mod tests {
         })
     }
 
+    /// Observed Go scopes, not Go discovery: the graph and query run are
+    /// injected.
+    struct MemoryGoContributor {
+        root: turbopath::AbsoluteSystemPathBuf,
+        resolve_external: bool,
+    }
+
+    impl turborepo_repository::toolchain::RepositoryContributor for MemoryGoContributor {
+        fn id(&self) -> turborepo_repository::toolchain::ToolchainId {
+            turborepo_repository::toolchain::ToolchainId::GO
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                external_resolution::{
+                    ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
+                    PackageResolution, ResolutionCompleteness, GO_RESOLUTION_DOMAIN,
+                },
+                go::{native_tasks_for_module, native_tasks_for_workspace, GoModule},
+                relationships::{DependencyKind, Relationship},
+                toolchain::{DiscoveredPackage, DiscoveredPackages, ToolchainId, WorkspaceRoot},
+            };
+
+            let root = self.root.clone();
+            let resolve_external = self.resolve_external;
+            Box::pin(async move {
+                let module = |dir: &[&str], name: &str, relationships| GoModule {
+                    module_path: format!("example.com/{name}"),
+                    manifest_path: root.join_components(dir).join_component("go.mod"),
+                    relationships,
+                    runnable_target: (name == "api").then(|| ".".to_string()),
+                    root_source_inputs: Some(HashSet::new()),
+                };
+                let modules = [
+                    module(
+                        &["apps", "api"],
+                        "api",
+                        vec![Relationship::internal("lib", DependencyKind::Production)],
+                    ),
+                    module(&["packages", "lib"], "lib", vec![]),
+                ];
+                let mut packages = modules
+                    .iter()
+                    .map(|module| {
+                        DiscoveredPackage::package(
+                            Some(module.module_path.rsplit('/').next().unwrap().to_string()),
+                            PackageJson::default(),
+                            module.manifest_path.clone(),
+                        )
+                        .with_native_relationships(module.relationships.clone())
+                        .with_native_tasks(native_tasks_for_module(module))
+                    })
+                    .collect::<Vec<_>>();
+                packages.push(
+                    DiscoveredPackage::aggregate(
+                        "go-workspace".to_string(),
+                        PackageJson::default(),
+                        root.join_component("go.work"),
+                    )
+                    .with_native_relationships(vec![
+                        Relationship::internal("api", DependencyKind::Production),
+                        Relationship::internal("lib", DependencyKind::Production),
+                    ])
+                    .with_native_tasks(native_tasks_for_workspace()),
+                );
+                let discovered =
+                    DiscoveredPackages::new(packages, vec![WorkspaceRoot::new("go", root)]);
+                if !resolve_external {
+                    return Ok(discovered);
+                }
+                let go = ExternalPackageIdentity::new("go", "go1.24.0").with_human_name("go");
+                let members = ["api", "lib", "go-workspace"];
+                Ok(
+                    discovered.with_external_resolution(ExternalResolutionDomain::new(
+                        GO_RESOLUTION_DOMAIN.clone(),
+                        ToolchainId::GO,
+                        AnchoredSystemPathBuf::default(),
+                        members.into_iter().map(str::to_string),
+                        [AnchoredSystemPathBuf::from_raw("go.work").unwrap()],
+                        ExternalResolutionData::Resolved {
+                            completeness: ResolutionCompleteness::Complete,
+                            packages: members
+                                .into_iter()
+                                .map(|name| PackageResolution::new(name, [go.clone()]))
+                                .collect(),
+                        },
+                    )),
+                )
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            use turborepo_repository::toolchain::DiscoveredPackageScopes;
+            Box::pin(async move {
+                let packages = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    packages.packages(),
+                    packages.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_go_graph_queries_packages_tasks_and_aggregate_exclusion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = PackageGraph::builder_optional(root, None)
+            .with_allow_no_package_manager(true)
+            .with_contributor(Arc::new(MemoryGoContributor {
+                root: root.to_owned(),
+                resolve_external: false,
+            }))
+            .build()
+            .await
+            .unwrap();
+        let engine = make_engine_with_edges(
+            &[
+                (TaskId::new("api", "build"), TaskDefinition::default()),
+                (TaskId::new("api", "test"), TaskDefinition::default()),
+                (TaskId::new("lib", "build"), TaskDefinition::default()),
+                (TaskId::new("lib", "test"), TaskDefinition::default()),
+                (
+                    TaskId::new("go-workspace", "build"),
+                    TaskDefinition::default(),
+                ),
+            ],
+            &[
+                (TaskId::new("api", "build"), TaskId::new("lib", "build")),
+                (TaskId::new("api", "test"), TaskId::new("lib", "test")),
+            ],
+        );
+        let run: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let data = query_data(
+            run,
+            "{ packages { items { name path directDependencies { items { name } } \
+             directDependents { items { name } } tasks { items { name fullName script command \
+             directDependencies { items { fullName command } } } } } } packageGraph { nodes { \
+             items { name } } edges { items { source target } } } package(name: \"go-workspace\") \
+             { name tasks { items { name command directDependencies { items { fullName } } } } } }",
+        )
+        .await;
+        let packages = data["packages"]["items"].as_array().unwrap();
+        assert_eq!(packages.len(), 3, "aggregate is a queryable scope: {data}");
+        let api = packages.iter().find(|pkg| pkg["name"] == "api").unwrap();
+        let lib = packages.iter().find(|pkg| pkg["name"] == "lib").unwrap();
+        let workspace = packages
+            .iter()
+            .find(|pkg| pkg["name"] == "go-workspace")
+            .unwrap();
+        assert_eq!(
+            workspace["directDependencies"]["items"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        // Even with an engine build node, the Go aggregate's contract task
+        // does not register module-only build/test commands on this scope.
+        assert_eq!(workspace["tasks"]["items"], serde_json::json!([]));
+        assert_eq!(api["path"], "apps/api");
+        assert_eq!(lib["path"], "packages/lib");
+        assert_eq!(api["directDependencies"]["items"][0]["name"], "lib");
+        assert_eq!(lib["directDependents"]["items"][0]["name"], "api");
+        let tasks = api["tasks"]["items"].as_array().unwrap();
+        let build = tasks.iter().find(|task| task["name"] == "build").unwrap();
+        assert_eq!(build["fullName"], "api#build");
+        assert!(build["script"].is_null(), "native tasks are not JS scripts");
+        assert_eq!(build["command"], "go build .");
+        assert_eq!(
+            build["directDependencies"]["items"][0]["fullName"],
+            "lib#build"
+        );
+        assert_eq!(
+            build["directDependencies"]["items"][0]["command"],
+            "go build ./..."
+        );
+        let test = tasks.iter().find(|task| task["name"] == "test").unwrap();
+        assert_eq!(test["command"], "go test ./...");
+        assert_eq!(
+            test["directDependencies"]["items"][0]["fullName"],
+            "lib#test"
+        );
+        assert_eq!(
+            data["packageGraph"]["nodes"]["items"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        assert!(data["packageGraph"]["edges"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["source"] == "api" && edge["target"] == "lib"));
+        assert_eq!(data["package"]["name"], "go-workspace");
+        assert_eq!(data["package"]["tasks"]["items"], serde_json::json!([]));
+    }
+
+    #[derive(Debug)]
+    struct PicocolorsLockfile;
+
+    impl turborepo_lockfiles::Lockfile for PicocolorsLockfile {
+        fn resolve_package(
+            &self,
+            _workspace_path: &str,
+            name: &str,
+            _version: &str,
+        ) -> Result<Option<turborepo_lockfiles::Package>, turborepo_lockfiles::Error> {
+            Ok((name == "picocolors")
+                .then(|| turborepo_lockfiles::Package::new("picocolors@1.1.1", "1.1.1")))
+        }
+
+        fn all_dependencies(
+            &self,
+            _key: &str,
+        ) -> Result<
+            Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+            turborepo_lockfiles::Error,
+        > {
+            Ok(None)
+        }
+
+        fn subgraph(
+            &self,
+            _workspaces: &[String],
+            _packages: &[String],
+        ) -> Result<Box<dyn turborepo_lockfiles::Lockfile>, turborepo_lockfiles::Error> {
+            unreachable!("graph construction does not prune")
+        }
+
+        fn encode(&self) -> Result<Vec<u8>, turborepo_lockfiles::Error> {
+            unreachable!("graph construction does not encode")
+        }
+
+        fn global_change(&self, _other: &dyn turborepo_lockfiles::Lockfile) -> bool {
+            unreachable!("graph construction does not compare lockfiles")
+        }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_mixed_graph_keeps_external_resolution_domains_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let js_manifest = root.join_components(&["packages", "js-pkg", "package.json"]);
+        let js_package = PackageJson::from_value(serde_json::json!({
+            "name": "js-pkg",
+            "dependencies": { "picocolors": "1.1.1" }
+        }))
+        .unwrap();
+        let graph = PackageGraph::builder(
+            root,
+            PackageJson::from_value(serde_json::json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([(js_manifest, js_package)])))
+        .with_lockfile(Some(Box::new(PicocolorsLockfile)))
+        .with_contributor(Arc::new(MemoryGoContributor {
+            root: root.to_owned(),
+            resolve_external: true,
+        }))
+        .build()
+        .await
+        .unwrap();
+        let run: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine: make_engine(&[]),
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let data = query_data(
+            run,
+            "{ externalDependencies { items { name internalDependents { items { name } } } } }",
+        )
+        .await;
+        let external = data["externalDependencies"]["items"].as_array().unwrap();
+        assert_eq!(external.len(), 2, "unexpected external identities: {data}");
+        let names = |external_name: &str| {
+            let dependency = external
+                .iter()
+                .find(|item| item["name"] == external_name)
+                .unwrap_or_else(|| panic!("missing {external_name}: {data}"));
+            dependency["internalDependents"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pkg| pkg["name"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names("go"), ["api", "go-workspace", "lib"]);
+        assert_eq!(names("picocolors@1.1.1"), ["js-pkg"]);
+    }
+
     async fn query_data(run: Arc<dyn QueryRun>, query: &str) -> serde_json::Value {
         let result = crate::execute_query(run, query, None).await.unwrap();
         let result: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
