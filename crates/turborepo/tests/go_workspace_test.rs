@@ -585,6 +585,8 @@ fn package_task_names(dir: &Path, package: &str) -> Vec<String> {
         .collect()
 }
 
+// Keep assembled-binary checks of final hash equality and the
+// filterUsingTasks path; the in-process engine matrix covers other selections.
 #[test]
 fn test_go_build_dependencies_and_hash_do_not_depend_on_entrypoint() {
     assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(false);
@@ -617,25 +619,14 @@ fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_usin
     let expected_dependencies = serde_json::json!(["lib#build"]);
     assert_eq!(indirect_api["dependencies"], expected_dependencies);
 
-    for args in [
-        vec!["run", "build", "--dry-run=json"],
-        vec!["run", "build", "--only", "--dry-run=json"],
-        vec!["run", "build", "typecheck", "--dry-run=json"],
-        vec!["run", "api#build", "--dry-run=json"],
-        vec!["run", "build", "--filter=api", "--dry-run=json"],
-    ] {
-        let direct = run_turbo(root, &args);
-        let direct_api = dry_run_task(&direct, "api#build");
-        assert_eq!(
-            direct_api["dependencies"], expected_dependencies,
-            "{args:?}"
-        );
-        assert_eq!(
-            direct_api["resolvedTaskDefinition"], indirect_api["resolvedTaskDefinition"],
-            "{args:?}"
-        );
-        assert_eq!(direct_api["hash"], indirect_api["hash"], "{args:?}");
-    }
+    let direct = run_turbo(root, &["run", "build", "--only", "--dry-run=json"]);
+    let direct_api = dry_run_task(&direct, "api#build");
+    assert_eq!(direct_api["dependencies"], expected_dependencies);
+    assert_eq!(
+        direct_api["resolvedTaskDefinition"],
+        indirect_api["resolvedTaskDefinition"]
+    );
+    assert_eq!(direct_api["hash"], indirect_api["hash"]);
 }
 
 #[test]
