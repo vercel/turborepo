@@ -2980,6 +2980,53 @@ mod test {
         assert_eq!(workspace.crates[0].name, "member");
     }
 
+    /// Cargo's metadata is a toolchain observation; graph interpretation is
+    /// deterministic and can be tested without running cargo or the CLI.
+    #[test]
+    fn metadata_relationships_keep_cycle_closing_dev_inputs_without_task_cycles() {
+        let (_temp, root) = tempdir_root();
+        let crate_at = |name: &str, dependencies: Vec<(&str, DependencyKind)>| ParsedCrate {
+            name: name.to_string(),
+            manifest_path: root.join_components(&["crates", name, CARGO_TOML]),
+            dependencies: dependencies
+                .into_iter()
+                .map(|(target, kind)| ResolvedDep {
+                    dir: root.join_components(&["crates", target]),
+                    kind,
+                })
+                .collect(),
+            deliverables: Vec::new(),
+            manifest_alters_output_layout: false,
+        };
+        let crates = connect_crates(vec![
+            crate_at("app", vec![("lib", DependencyKind::Production)]),
+            crate_at("lib", vec![("test-util", DependencyKind::Development)]),
+            crate_at("test-util", vec![("lib", DependencyKind::Production)]),
+        ]);
+        let relation = |name: &str| {
+            &crates
+                .iter()
+                .find(|item| item.name == name)
+                .unwrap()
+                .relationships
+        };
+        assert_eq!(
+            relation("app"),
+            &vec![Relationship::internal("lib", DependencyKind::Production)]
+        );
+        assert_eq!(
+            relation("lib"),
+            &vec![Relationship::internal_input(
+                "test-util",
+                DependencyKind::Development
+            )]
+        );
+        assert_eq!(
+            relation("test-util"),
+            &vec![Relationship::internal("lib", DependencyKind::Production)]
+        );
+    }
+
     #[test]
     fn crates_register_scoped_tasks() {
         let details = |kind, deliverables| CargoPackageDetails {

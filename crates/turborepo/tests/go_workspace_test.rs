@@ -1,4 +1,7 @@
-//! End-to-end tests for experimental Go workspace support.
+//! Native Go interoperability tests: execution, cache restoration, pruning,
+//! argument forwarding, watch/process behavior, and a few cross-layer checks.
+//! Pure contributor and scope-selection contracts live in turborepo-repository
+//! and turborepo-scope, without launching `go` or the assembled `turbo` binary.
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod common;
@@ -639,85 +642,6 @@ fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_usin
 }
 
 #[test]
-fn test_pure_go_workspace_lists_modules() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-
-    let names = package_names(tempdir.path());
-    assert!(names.contains(&"api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
-}
-
-#[test]
-fn test_mixed_go_workspace_lists_js_and_go_packages() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_monorepo(tempdir.path());
-
-    let names = package_names(tempdir.path());
-    assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
-    assert!(names.contains(&"api".to_string()), "names: {names:?}");
-    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
-}
-
-#[test]
-fn test_colocated_go_and_javascript_cwd_inference() {
-    if !go_available() {
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    let dir = tempdir.path();
-    setup_go_monorepo(dir);
-    let shared = dir.join("packages/lib");
-    fs::write(
-        shared.join("package.json"),
-        r#"{"name":"@repo/lib","scripts":{"build":"echo javascript build"}}"#,
-    )
-    .unwrap();
-    let source_dir = shared.join("src");
-    fs::create_dir(&source_dir).unwrap();
-
-    let task_ids = |cwd: &Path, args: &[&str]| {
-        let output = run_turbo(cwd, args);
-        assert_command_success(&output, "co-located package scope inference");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        json["tasks"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|task| task["taskId"].as_str().unwrap().to_string())
-            .collect::<std::collections::BTreeSet<_>>()
-    };
-    let expected = ["@repo/lib#build".to_string(), "lib#build".to_string()]
-        .into_iter()
-        .collect();
-    assert_eq!(
-        task_ids(
-            dir,
-            &["run", "build", "--filter=./packages/lib", "--dry-run=json"],
-        ),
-        expected
-    );
-    for cwd in [&shared, &source_dir] {
-        assert_eq!(task_ids(cwd, &["run", "build", "--dry-run=json"]), expected);
-        assert_eq!(
-            task_ids(
-                cwd,
-                &["run", "build", "--filter=@repo/lib", "--dry-run=json"]
-            ),
-            ["@repo/lib#build".to_string()].into_iter().collect()
-        );
-    }
-}
-
-#[test]
 fn test_mixed_workspace_executes_and_caches_javascript_and_go_builds() {
     if !go_available() {
         return;
@@ -863,27 +787,6 @@ fn test_go_prune_produces_minimal_valid_workspace() {
             .exists(),
         "the pruned native build must produce its executable"
     );
-}
-
-#[test]
-fn test_go_filter_by_package_name() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-
-    let output = run_turbo(tempdir.path(), &["ls", "--output=json", "--filter=lib"]);
-    assert_command_success(&output, "filtered ls");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("ls emits JSON");
-    let names = json["packages"]["items"]
-        .as_array()
-        .expect("packages items")
-        .iter()
-        .map(|package| package["name"].as_str().expect("name").to_string())
-        .collect::<Vec<_>>();
-    assert_eq!(names, vec!["lib".to_string()]);
 }
 
 #[test]
@@ -1679,37 +1582,6 @@ fn test_go_resolution_sums_invalidate_dependent_task_hashes() {
         task_hash(tempdir.path(), package, "build"),
         "go.work.sum must invalidate Go task hashes"
     );
-}
-
-#[test]
-fn test_affected_go_tasks_follow_internal_module_relationships() {
-    if !go_available() {
-        return;
-    }
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-    fs::write(
-        tempdir.path().join("packages/lib/lib.go"),
-        "package lib\n\nfunc Greet() { println(\"affected\") }\n",
-    )
-    .unwrap();
-
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--affected", "--dry=json"],
-        &[("TURBO_SCM_BASE", "HEAD")],
-    );
-    assert_command_success(&output, "Go --affected dry run");
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("affected dry-run JSON");
-    let tasks = json["tasks"].as_array().expect("affected tasks");
-    for package in ["lib", "api"] {
-        let task_id = format!("{package}#build");
-        assert!(
-            tasks.iter().any(|task| task["taskId"] == task_id),
-            "{task_id} must be affected: {tasks:?}"
-        );
-    }
 }
 
 #[test]
