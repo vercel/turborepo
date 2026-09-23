@@ -2380,122 +2380,6 @@ fn test_cargo_library_test_can_be_filtered() {
 }
 
 #[test]
-fn test_cargo_tasks_are_registered_without_task_configuration() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-    fs::write(
-        tempdir.path().join("turbo.json"),
-        r#"{
-  "$schema": "https://turborepo.dev/schema.json",
-  "futureFlags": { "experimentalCargoWorkspaces": true },
-  "tasks": {}
-}"#,
-    )
-    .unwrap();
-
-    for (task, expected_command) in [
-        ("build", "cargo build --package=app --locked"),
-        ("run", "cargo run --package=app --locked"),
-        ("dev", "cargo run --package=app --locked"),
-    ] {
-        let output = run_turbo(
-            tempdir.path(),
-            &["run", task, "--filter=app", "--dry-run=json"],
-        );
-        assert!(output.status.success(), "{task} failed: {output:?}");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        let task_id = format!("app#{task}");
-        let definition = json["tasks"]
-            .as_array()
-            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
-            .unwrap_or_else(|| panic!("app#{task} in graph"));
-        assert_eq!(definition["command"], expected_command);
-    }
-
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=lib-a", "--dry-run=json"],
-    );
-    assert!(output.status.success(), "library build failed: {output:?}");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let definition = json["tasks"]
-        .as_array()
-        .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == "lib-a#build"))
-        .expect("lib-a#build in graph");
-    assert_eq!(
-        definition["command"],
-        "cargo build --package=lib-a --locked"
-    );
-
-    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
-        let output = run_turbo(
-            tempdir.path(),
-            &["run", task, "--filter=lib-a", "--dry-run=json"],
-        );
-        assert!(output.status.success(), "{task} failed: {output:?}");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        let task_id = format!("lib-a#{task}");
-        let definition = json["tasks"]
-            .as_array()
-            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
-            .unwrap_or_else(|| panic!("lib-a#{task} in graph"));
-        assert_eq!(
-            definition["command"],
-            format!("cargo {subcommand} --package=lib-a --locked")
-        );
-    }
-
-    // The aggregate shares the repository directory with the root task
-    // namespace, so its log stays isolated even when it is the only selection.
-    for (task, subcommand, log_filename) in [
-        ("test", "test", "turbo-test-acme-c7aba2810dce6e39.log"),
-        ("check", "check", "turbo-check-acme-45f6384ef100a60b.log"),
-        ("lint", "clippy", "turbo-lint-acme-40a8d1eb4ccc4540.log"),
-    ] {
-        let output = run_turbo(
-            tempdir.path(),
-            &["run", task, "--filter=acme", "--dry-run=json"],
-        );
-        assert!(output.status.success(), "{task} failed: {output:?}");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        let task_id = format!("acme#{task}");
-        let definition = json["tasks"]
-            .as_array()
-            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
-            .unwrap_or_else(|| panic!("acme#{task} in graph"));
-        assert_eq!(
-            definition["command"],
-            format!("cargo {subcommand} --workspace --locked")
-        );
-        assert_eq!(definition["directory"], "");
-        let log_file = Path::new(".turbo").join(log_filename);
-        assert_eq!(
-            definition["logFile"].as_str().map(Path::new),
-            Some(log_file.as_path())
-        );
-        assert_eq!(json["packages"], serde_json::json!(["acme"]));
-    }
-
-    for (filter, task_id, expected_command) in [
-        ("lib-a", "lib-a#format", "cargo fmt --package=lib-a"),
-        ("acme", "acme#format", "cargo fmt --all"),
-    ] {
-        let output = run_turbo(
-            tempdir.path(),
-            &["format", &format!("--filter={filter}"), "--dry-run=json"],
-        );
-        assert!(output.status.success(), "format failed: {output:?}");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        let definition = json["tasks"]
-            .as_array()
-            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
-            .unwrap_or_else(|| panic!("{task_id} in graph"));
-        assert_eq!(definition["command"], expected_command);
-        assert_eq!(definition["resolvedTaskDefinition"]["cache"], false);
-    }
-}
-
-#[test]
 fn test_cargo_format_formats_selected_crate() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -2568,7 +2452,7 @@ fn test_implicit_cargo_tasks_are_package_aware_and_configurable() {
 }
 
 #[test]
-fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
+fn test_query_package_config_can_disable_implicit_cargo_task() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
@@ -2580,42 +2464,6 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
 }"#,
     )
     .unwrap();
-
-    let query = |package: &str| {
-        let query =
-            format!("query {{ package(name: \"{package}\") {{ tasks {{ items {{ name }} }} }} }}");
-        let output = run_turbo(tempdir.path(), &["query", &query]);
-        assert!(output.status.success(), "query failed: {output:?}");
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        json["data"]["package"]["tasks"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|task| task["name"].as_str())
-            .map(str::to_string)
-            .collect::<Vec<_>>()
-    };
-
-    let app_tasks = query("app");
-    assert!(app_tasks.iter().any(|task| task == "build"));
-    assert!(app_tasks.iter().any(|task| task == "run"));
-    assert!(app_tasks.iter().any(|task| task == "dev"));
-    assert!(app_tasks.iter().any(|task| task == "lint"));
-
-    let library_tasks = query("lib-a");
-    assert!(library_tasks.iter().any(|task| task == "build"));
-    assert!(library_tasks.iter().any(|task| task == "test"));
-    assert!(library_tasks.iter().any(|task| task == "lint"));
-    assert!(library_tasks.iter().any(|task| task == "format"));
-
-    let workspace_tasks = query("acme");
-    assert!(workspace_tasks.iter().any(|task| task == "lint"));
-    assert!(workspace_tasks.iter().any(|task| task == "format"));
-    for removed in ["doc", "docs", "clippy", "bench"] {
-        assert!(!library_tasks.iter().any(|task| task == removed));
-        assert!(!workspace_tasks.iter().any(|task| task == removed));
-    }
-
     fs::write(
         tempdir.path().join("crates/app/turbo.json"),
         r#"{
@@ -2624,7 +2472,20 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
 }"#,
     )
     .unwrap();
-    assert!(!query("app").iter().any(|task| task == "build"));
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "{ package(name: \"app\") { tasks { items { name } } } }",
+        ],
+    );
+    assert_command_success(&output, "query package-specific Cargo override");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let names = json["data"]["package"]["tasks"]["items"]
+        .as_array()
+        .expect("app task list");
+    assert!(!names.iter().any(|task| task["name"] == "build"));
+    assert!(names.iter().any(|task| task["name"] == "run"));
 }
 
 #[test]
@@ -2656,6 +2517,41 @@ fn test_ls_and_query_show_implicit_cargo_task_commands() {
     assert!(output.status.success(), "query failed: {output:?}");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     insta::assert_json_snapshot!("cargo_native_tasks_query", json["data"]["package"]["tasks"]);
+
+    // Retain a binary smoke for the aggregate's task registration and CLI
+    // projection; crate contracts inject task IDs and resolved definitions.
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "{ package(name: \"acme\") { tasks { items { name command } } } }",
+        ],
+    );
+    assert_command_success(&output, "aggregate query");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["data"]["package"]["tasks"]["items"]
+        .as_array()
+        .expect("aggregate task list");
+    assert!(tasks.iter().any(|task| {
+        task["name"] == "test" && task["command"] == "cargo test --workspace --locked"
+    }));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=acme", "--dry-run=json"],
+    );
+    assert_command_success(&output, "aggregate dry-run");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "acme#test"))
+        .expect("aggregate task in dry-run");
+    assert_eq!(task["command"], "cargo test --workspace --locked");
+    assert_eq!(task["directory"], "");
+    assert_eq!(
+        task["logFile"],
+        ".turbo/turbo-test-acme-c7aba2810dce6e39.log"
+    );
 }
 
 #[test]

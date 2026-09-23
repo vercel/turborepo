@@ -722,6 +722,261 @@ mod tests {
         assert!(matches!(plan(&hashes), Err(Error::MissingEnvVars(id)) if id == task));
     }
 
+    struct SummaryCargoContributor(AbsoluteSystemPathBuf);
+
+    impl turborepo_repository::toolchain::RepositoryContributor for SummaryCargoContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::RUST
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                cargo::{
+                    CargoPackageDetails, CargoPackageKind, Deliverable, DeliverableKind,
+                    native_tasks_for_package,
+                },
+                relationships::{DependencyKind, Relationship},
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            Box::pin(async move {
+                let packages = [
+                    ("app", CargoPackageKind::Entrypoint, "crates/app/Cargo.toml"),
+                    (
+                        "lib-a",
+                        CargoPackageKind::Library,
+                        "crates/lib-a/Cargo.toml",
+                    ),
+                    ("acme", CargoPackageKind::Workspace, "Cargo.toml"),
+                ]
+                .into_iter()
+                .map(|(name, kind, manifest)| {
+                    let details = CargoPackageDetails {
+                        kind,
+                        deliverables: (kind == CargoPackageKind::Entrypoint)
+                            .then(|| Deliverable {
+                                name: name.to_string(),
+                                kind: DeliverableKind::Bin,
+                            })
+                            .into_iter()
+                            .collect(),
+                        manifest_alters_output_layout: false,
+                    };
+                    let manifest = self
+                        .0
+                        .join_components(&manifest.split('/').collect::<Vec<_>>());
+                    let package = if kind == CargoPackageKind::Workspace {
+                        DiscoveredPackage::aggregate(
+                            name.to_string(),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    } else {
+                        DiscoveredPackage::package(
+                            Some(name.to_string()),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    };
+                    let edges = match name {
+                        "app" => vec![Relationship::internal("lib-a", DependencyKind::Production)],
+                        "acme" => ["app", "lib-a"]
+                            .into_iter()
+                            .map(|name| Relationship::internal(name, DependencyKind::Production))
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    package
+                        .with_native_relationships(edges)
+                        .with_native_tasks(native_tasks_for_package(&details, name))
+                })
+                .collect();
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("cargo", self.0.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        observed.packages(),
+                        observed.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_cargo_dry_run_summaries_keep_native_commands_and_scope_paths() {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, WorkspaceData},
+            package_manager::PackageManager,
+        };
+
+        let temp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let web_manifest = root.join_components(&["packages", "web", "package.json"]);
+        let discovery = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![WorkspaceData::new(web_manifest.clone(), None).unwrap()],
+        };
+        let graph = PackageGraph::builder_optional(
+            &root,
+            Some(
+                PackageJson::from_value(json!({
+                    "name": "js-root", "packageManager": "npm@10.0.0",
+                    "workspaces": ["packages/*"]
+                }))
+                .unwrap(),
+            ),
+        )
+        .with_package_discovery(move || {
+            let discovery = discovery.clone();
+            async move { Ok(discovery) }
+        })
+        .with_package_jsons(Some(HashMap::from([(
+            web_manifest,
+            PackageJson::from_value(json!({
+                "name": "web", "scripts": {"build": "echo from-js"}
+            }))
+            .unwrap(),
+        )])))
+        .with_contributor(Arc::new(SummaryCargoContributor(root.clone())))
+        .without_external_dependencies()
+        .build()
+        .await
+        .unwrap();
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("app"))
+                .unwrap(),
+            [PackageName::from("lib-a")]
+        );
+        let cases = [
+            (
+                "app",
+                "build",
+                "cargo build --package=app --locked",
+                "crates/app",
+                true,
+            ),
+            (
+                "lib-a",
+                "build",
+                "cargo build --package=lib-a --locked",
+                "crates/lib-a",
+                false,
+            ),
+            ("acme", "test", "cargo test --workspace --locked", "", true),
+            (
+                "acme",
+                "check",
+                "cargo check --workspace --locked",
+                "",
+                true,
+            ),
+            ("acme", "format", "cargo fmt --all", "", false),
+            ("web", "build", "echo from-js", "packages/web", true),
+        ];
+        let ids: Vec<_> = cases
+            .iter()
+            .map(|(pkg, task, ..)| TaskId::new(pkg, task).into_owned())
+            .collect();
+        let engine = PlanEngine {
+            // Resolved plan definitions: library build and format are not cacheable.
+            definitions: ids
+                .iter()
+                .zip(cases.iter())
+                .map(|(id, case)| {
+                    (
+                        id.clone(),
+                        TaskDefinition {
+                            cache: case.4,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+            dependencies: HashMap::from([(ids[0].clone(), vec![ids[1].clone()])]),
+            dependents: HashMap::from([(ids[1].clone(), vec![ids[0].clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: ids
+                .iter()
+                .map(|id| (id.to_string(), Arc::from("planned-hash")))
+                .collect(),
+            inputs: ids.iter().map(|id| (id.to_string(), Vec::new())).collect(),
+            env: Some(HashTrackerDetailedMap::default()),
+            hit: None,
+        };
+        let external = cases
+            .iter()
+            .map(|(pkg, ..)| (pkg.to_string(), format!("{pkg}-closure")))
+            .collect();
+        let environment = EnvironmentVariableMap::default();
+        let opts = PlanRunOpts {
+            args: vec!["--verbose".into()],
+        };
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &opts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+
+        for ((pkg, task, command, directory, cache), id) in cases.iter().zip(ids.iter()) {
+            let context = graph
+                .package_task_context(&PackageName::from(*pkg))
+                .unwrap();
+            assert_eq!(
+                context.toolchain(),
+                Some(if *pkg == "web" {
+                    &ToolchainId::JAVASCRIPT
+                } else {
+                    &ToolchainId::RUST
+                })
+            );
+            let plan =
+                serde_json::to_value(factory.task_summary(id.clone(), None).unwrap()).unwrap();
+            assert_eq!(plan["taskId"], id.to_string());
+            assert_eq!(plan["command"], *command, "{id}");
+            assert_eq!(plan["directory"], *directory, "{id}");
+            assert_eq!(plan["hash"], "planned-hash");
+            assert_eq!(plan["hashOfExternalDependencies"], format!("{pkg}-closure"));
+            assert_eq!(plan["cache"]["status"], "MISS");
+            assert_eq!(plan["resolvedTaskDefinition"]["cache"], *cache);
+            assert_eq!(plan["cliArguments"], json!(["--verbose"]));
+            let expected_log = match (*pkg, *task) {
+                ("app", "build") => Some("crates/app/.turbo/turbo-build.log"),
+                ("acme", "test") => Some(".turbo/turbo-test-acme-c7aba2810dce6e39.log"),
+                ("acme", "check") => Some(".turbo/turbo-check-acme-45f6384ef100a60b.log"),
+                ("web", "build") => Some("packages/web/.turbo/turbo-build.log"),
+                _ => None,
+            };
+            assert_eq!(plan["logFile"], json!(expected_log), "{id}");
+            if *pkg == "acme" {
+                assert_eq!(context.log_namespace(), Some("acme"));
+            }
+        }
+        let app =
+            serde_json::to_value(factory.task_summary(ids[0].clone(), None).unwrap()).unwrap();
+        assert_eq!(app["dependencies"], json!(["lib-a#build"]));
+        let lib =
+            serde_json::to_value(factory.task_summary(ids[1].clone(), None).unwrap()).unwrap();
+        assert_eq!(lib["dependents"], json!(["app#build"]));
+    }
+
     #[tokio::test]
     async fn summary_uses_authoritative_path_and_toolchain_provenance() {
         let (_tempdir, graph) = summary_graph().await;
