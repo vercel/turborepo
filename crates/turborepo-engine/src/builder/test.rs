@@ -600,6 +600,7 @@ fn task_names(tasks: &[Spanned<TaskName<'static>>]) -> Vec<String> {
 
 mod core;
 mod extends;
+mod go;
 mod inheritance;
 mod lazy_loading;
 mod syntax;
