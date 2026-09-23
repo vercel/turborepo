@@ -3647,6 +3647,77 @@ dependencies = ["lib-a"]
     }
 
     #[test]
+    fn test_cargo_output_contract_projects_profiles_targets_and_directory_precedence() {
+        let (_tmp, root) = tempdir_root();
+        let contributor = CargoContributor::new(root.clone());
+        let package_context = task_context(&contributor, &root, "app", "crates/app");
+        let mut workspace = output_test_workspace(&root);
+        workspace.target_directory = root.join_component("config-target");
+        let contract = CargoTaskContract::new(root.clone(), output_test_package(), Some(workspace));
+
+        for (args, env, expected) in [
+            (vec![], vec![], "../../config-target/debug/app"),
+            (vec!["--release"], vec![], "../../config-target/release/app"),
+            (
+                vec!["--profile=test"],
+                vec![],
+                "../../config-target/debug/app",
+            ),
+            (
+                vec!["--profile=bench"],
+                vec![],
+                "../../config-target/release/app",
+            ),
+            (vec!["--profile=ci"], vec![], "../../config-target/ci/app"),
+            (
+                vec![],
+                vec![("CARGO_TARGET_DIR", "env-target")],
+                "../../env-target/debug/app",
+            ),
+            (
+                vec!["--target-dir=cli-target"],
+                vec![("CARGO_TARGET_DIR", "env-target")],
+                "../../cli-target/debug/app",
+            ),
+            (
+                vec![],
+                vec![("CARGO_BUILD_TARGET", "aarch64-apple-darwin")],
+                "../../config-target/aarch64-apple-darwin/debug/app",
+            ),
+            (
+                vec!["--target=x86_64-pc-windows-msvc"],
+                vec![("CARGO_BUILD_TARGET", "aarch64-apple-darwin")],
+                "../../config-target/x86_64-pc-windows-msvc/debug/app.exe",
+            ),
+        ] {
+            let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+            let environment = toolchain::TaskIOEnvironment::new(
+                env.into_iter()
+                    .map(|(name, value)| (name.to_string(), value.to_string()))
+                    .collect(),
+            );
+            let io = contract
+                .derived_task_io(
+                    &package_context,
+                    "build",
+                    "../..",
+                    &[],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: Some(&args),
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                io.outputs,
+                toolchain::DerivedOutputs::Resolved(vec![expected.to_string()]),
+                "args={args:?}, environment={environment:?}",
+            );
+        }
+    }
+
+    #[test]
     fn test_cargo_output_layout_fails_closed_for_unsupported_controls() {
         let (_tmp, root) = tempdir_root();
         let workspace = output_test_workspace(&root);
@@ -3825,6 +3896,70 @@ dependencies = ["lib-a"]
              \"ci-output\"\n",
         );
         assert!(manifest_alters_profile_dirs(&root));
+    }
+
+    #[test]
+    fn test_cargo_output_contract_fails_closed_for_config_and_manifest_layout() {
+        let (_tmp, root) = tempdir_root();
+        let contributor = CargoContributor::new(root.clone());
+        let package_context = task_context(&contributor, &root, "app", "crates/app");
+        let environment = toolchain::TaskIOEnvironment::default();
+        let assert_unavailable = |workspace: CargoWorkspaceDetails,
+                                  package: CargoPackageDetails| {
+            let io = CargoTaskContract::new(root.clone(), package, Some(workspace))
+                .derived_task_io(
+                    &package_context,
+                    "build",
+                    "../..",
+                    &[],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+        };
+
+        for config in [
+            "[build]\ntarget = \"x86_64-unknown-linux-gnu\"\n",
+            "[build]\nartifact-dir = \"artifact-copy\"\n",
+            "[profile.ci]\ninherits = \"dev\"\ndir-name = \"profile-output\"\n",
+        ] {
+            write(&root, &[".cargo", "config.toml"], config);
+            let influence = cargo_config_influence(&root, &CargoHomeEnvironment::default());
+            assert!(influence.repository_alters_output_layout, "{config}");
+            let mut workspace = output_test_workspace(&root);
+            workspace.repository_config_alters_output_layout =
+                influence.repository_alters_output_layout;
+            assert_unavailable(workspace, output_test_package());
+        }
+
+        for manifest in [
+            "cargo-features = [\"per-package-target\"]\n[package]\nname = \"app\"\ndefault-target \
+             = \"x86_64-unknown-linux-gnu\"\n",
+            "cargo-features = [\"different-binary-name\"]\n[[bin]]\nname = \"app\"\nfilename = \
+             \"renamed-app\"\n",
+        ] {
+            write(&root, &["crates", "app", CARGO_TOML], manifest);
+            let mut package = output_test_package();
+            package.manifest_alters_output_layout = manifest_alters_output_layout(
+                &root.join_components(&["crates", "app", CARGO_TOML]),
+            );
+            assert!(package.manifest_alters_output_layout, "{manifest}");
+            assert_unavailable(output_test_workspace(&root), package);
+        }
+        write(
+            &root,
+            &[CARGO_TOML],
+            "[workspace]\nmembers = []\n[profile.ci]\ninherits = \"dev\"\ndir-name = \
+             \"profile-output\"\n",
+        );
+        let mut workspace = output_test_workspace(&root);
+        workspace.manifest_alters_profile_dirs = manifest_alters_profile_dirs(&root);
+        assert!(workspace.manifest_alters_profile_dirs);
+        assert_unavailable(workspace, output_test_package());
     }
 
     #[test]

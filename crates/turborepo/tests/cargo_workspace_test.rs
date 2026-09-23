@@ -780,75 +780,6 @@ fn test_cargo_debug_and_release_caches_are_isolated_both_directions() {
 }
 
 #[test]
-fn test_custom_profile_outputs_are_exact_and_restore() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-    let manifest = tempdir.path().join("Cargo.toml");
-    let contents = fs::read_to_string(&manifest).unwrap();
-    fs::write(
-        &manifest,
-        format!("{contents}\n[profile.ci]\ninherits = \"dev\"\n"),
-    )
-    .unwrap();
-    let debug = cargo_binary(tempdir.path(), &["target", "debug"]);
-    let custom = cargo_binary(tempdir.path(), &["target", "ci"]);
-
-    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
-    assert!(
-        run_cargo_build(tempdir.path(), &["--profile=ci"], &[])
-            .status
-            .success()
-    );
-    fs::remove_file(&debug).unwrap();
-    fs::remove_file(&custom).unwrap();
-    let output = run_cargo_build(tempdir.path(), &["--profile=ci"], &[]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_command_success(&output, "cache restore");
-    assert!(
-        stdout.contains("app:build: cache hit"),
-        "expected cache hit: {stdout}"
-    );
-    assert!(custom.exists());
-    assert!(!debug.exists());
-}
-
-#[test]
-fn test_cargo_test_and_bench_profile_directories_restore_exactly() {
-    assert_isolated_restoration(
-        &["--release"],
-        &["target", "release"],
-        &["--profile=test"],
-        &["target", "debug"],
-    );
-    assert_isolated_restoration(
-        &[],
-        &["target", "debug"],
-        &["--profile=bench"],
-        &["target", "release"],
-    );
-}
-
-#[test]
-fn test_cargo_explicit_and_environment_host_targets_restore_exactly() {
-    let host = rustc_host_target();
-    let target_arg = format!("--target={host}");
-    assert_isolated_restoration(
-        &[],
-        &["target", "debug"],
-        &[&target_arg],
-        &["target", &host, "debug"],
-    );
-    assert_isolated_restoration_with_env(
-        &[],
-        &["target", "debug"],
-        &[],
-        &["target", &host, "debug"],
-        &[],
-        &[("CARGO_BUILD_TARGET", &host)],
-    );
-}
-
-#[test]
 fn test_cargo_cli_target_overrides_environment_target() {
     let host = rustc_host_target();
     let lower_target = alternate_host_target(&host);
@@ -865,24 +796,6 @@ fn test_cargo_cli_target_overrides_environment_target() {
     assert_command_success(&output, "CLI target precedence restore");
     assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
     assert!(artifact.exists(), "CLI target did not override environment");
-}
-
-#[test]
-fn test_cargo_argument_and_environment_target_directories_restore_exactly() {
-    assert_isolated_restoration(
-        &[],
-        &["target", "debug"],
-        &["--target-dir=argument-target"],
-        &["argument-target", "debug"],
-    );
-    assert_isolated_restoration_with_env(
-        &[],
-        &["target", "debug"],
-        &[],
-        &["environment-target", "debug"],
-        &[],
-        &[("CARGO_TARGET_DIR", "environment-target")],
-    );
 }
 
 #[test]
@@ -915,54 +828,6 @@ fn test_cargo_repository_config_target_directory_restores_exactly() {
     );
     assert!(configured.exists());
     assert!(!default.exists());
-}
-
-#[test]
-fn test_cargo_target_directory_precedence_restores_only_effective_output() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-    let cargo_config = tempdir.path().join(".cargo");
-    fs::create_dir_all(&cargo_config).unwrap();
-    fs::write(
-        cargo_config.join("config.toml"),
-        "[build]\ntarget-dir = \"config-target\"\n",
-    )
-    .unwrap();
-    let config = cargo_binary(tempdir.path(), &["config-target", "debug"]);
-    let environment = cargo_binary(tempdir.path(), &["env-target", "debug"]);
-    let cli = cargo_binary(tempdir.path(), &["cli-target", "debug"]);
-
-    let output = run_cargo_build(tempdir.path(), &[], &[]);
-    assert_command_success(&output, "metadata target-directory build");
-    let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
-    assert_command_success(&output, "environment target-directory build");
-    let output = run_cargo_build(
-        tempdir.path(),
-        &["--target-dir=cli-target"],
-        &[("CARGO_TARGET_DIR", "env-target")],
-    );
-    assert_command_success(&output, "CLI target-directory build");
-    assert!(config.exists() && environment.exists() && cli.exists());
-    fs::remove_file(&config).unwrap();
-    fs::remove_file(&environment).unwrap();
-    fs::remove_file(&cli).unwrap();
-
-    let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
-    assert_command_success(&output, "environment target-directory restore");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
-    assert!(environment.exists());
-    assert!(!config.exists() && !cli.exists());
-    fs::remove_file(&environment).unwrap();
-
-    let output = run_cargo_build(
-        tempdir.path(),
-        &["--target-dir=cli-target"],
-        &[("CARGO_TARGET_DIR", "env-target")],
-    );
-    assert_command_success(&output, "CLI target-directory restore");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
-    assert!(cli.exists());
-    assert!(!config.exists() && !environment.exists());
 }
 
 #[cfg(unix)]
@@ -1063,25 +928,11 @@ fn test_untracked_config_respects_only_explicit_cache_authority() {
 }
 
 #[test]
-fn test_repository_config_layout_controls_are_uncached() {
-    let host = rustc_host_target();
-    for config in [
-        format!("[build]\ntarget = \"{host}\"\n"),
-        "[build]\nartifact-dir = \"artifact-copy\"\n".to_string(),
-        "[profile.ci]\ninherits = \"dev\"\ndir-name = \"profile-output\"\n".to_string(),
-    ] {
-        let tempdir = cargo_tempdir();
-        setup_cargo_monorepo(tempdir.path());
-        configure_build_without_outputs(tempdir.path());
-        fs::create_dir_all(tempdir.path().join(".cargo")).unwrap();
-        fs::write(tempdir.path().join(".cargo/config.toml"), config).unwrap();
-        let task = cargo_build_definition(tempdir.path(), &[], &[]);
-        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
-    }
-
+fn test_repository_config_target_layout_bypasses_cache() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     configure_build_without_outputs(tempdir.path());
+    let host = rustc_host_target();
     fs::create_dir_all(tempdir.path().join(".cargo")).unwrap();
     fs::write(
         tempdir.path().join(".cargo/config.toml"),
@@ -1091,44 +942,9 @@ fn test_repository_config_layout_controls_are_uncached() {
     let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
     for _ in 0..2 {
         let output = run_cargo_build(tempdir.path(), &[], &[]);
-        assert!(output.status.success(), "build failed: {output:?}");
+        assert_command_success(&output, "repository-config target build");
         assert!(String::from_utf8_lossy(&output.stdout).contains("cache bypass"));
         assert!(artifact.exists());
-    }
-}
-
-#[test]
-fn test_manifest_layout_controls_are_uncached() {
-    for manifest_control in ["per-package-target", "different-binary-name"] {
-        let tempdir = cargo_tempdir();
-        setup_cargo_monorepo(tempdir.path());
-        configure_build_without_outputs(tempdir.path());
-        fs::write(
-            tempdir.path().join("rust-toolchain.toml"),
-            "[toolchain]\nchannel = \"nightly-2026-04-10\"\n",
-        )
-        .unwrap();
-        let manifest = tempdir.path().join("crates/app/Cargo.toml");
-        let contents = fs::read_to_string(&manifest).unwrap();
-        let contents = if manifest_control == "per-package-target" {
-            let host = rustc_host_target();
-            format!(
-                "cargo-features = [\"per-package-target\"]\n{}",
-                contents.replacen(
-                    "[package]",
-                    &format!("[package]\ndefault-target = \"{host}\""),
-                    1,
-                )
-            )
-        } else {
-            format!(
-                "cargo-features = [\"different-binary-name\"]\n{contents}\n[[bin]]\nname = \
-                 \"app\"\npath = \"src/main.rs\"\nfilename = \"renamed-app\"\n"
-            )
-        };
-        fs::write(manifest, contents).unwrap();
-        let task = cargo_build_definition(tempdir.path(), &[], &[]);
-        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
     }
 }
 
