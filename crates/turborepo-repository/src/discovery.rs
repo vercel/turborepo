@@ -142,6 +142,28 @@ pub trait PackageDiscovery {
     ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send;
 }
 
+/// A closure is a discovery strategy when both discovery modes can return the
+/// same result (for example, in-memory test inputs). Strategies that
+/// distinguish non-blocking from blocking discovery should implement the trait
+/// directly.
+impl<F, Fut> PackageDiscovery for F
+where
+    F: Fn() -> Fut + Send + Sync,
+    Fut: std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send,
+{
+    fn discover_packages(
+        &self,
+    ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send {
+        self()
+    }
+
+    fn discover_packages_blocking(
+        &self,
+    ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send {
+        self()
+    }
+}
+
 /// We want to allow for lazily generating the PackageDiscovery implementation
 /// to prevent unnecessary work. This trait allows us to do that.
 ///

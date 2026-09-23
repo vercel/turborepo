@@ -69,6 +69,15 @@ pub trait PackageJsonLoader: Send + Sync {
     fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error>;
 }
 
+impl<F> PackageJsonLoader for F
+where
+    F: Fn(&AbsoluteSystemPath) -> Result<PackageJson, Error> + Send + Sync,
+{
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        self(path)
+    }
+}
+
 /// The production manifest loader, preserving the usual filesystem behavior.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FileSystemPackageJsonLoader;

@@ -29,8 +29,6 @@ pub mod prune_knowledge;
 pub mod relationships;
 pub mod static_dependencies;
 pub mod task_contracts;
-#[cfg(any(test, feature = "test-util"))]
-pub mod test_util;
 pub mod toolchain;
 pub mod uv;
 pub mod workspaces;

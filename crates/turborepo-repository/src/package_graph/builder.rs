@@ -305,8 +305,8 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Load discovered JavaScript manifests through an injected source instead
     /// of the default filesystem loader. Discovery still determines which
     /// workspaces exist; this seam controls how their manifests are parsed.
-    pub fn with_package_json_loader(mut self, loader: Arc<dyn PackageJsonLoader>) -> Self {
-        self.package_json_loader = Some(loader);
+    pub fn with_package_json_loader(mut self, loader: impl PackageJsonLoader + 'static) -> Self {
+        self.package_json_loader = Some(Arc::new(loader));
         self
     }
 
@@ -2050,6 +2050,84 @@ mod test {
         DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackageScope,
         DiscoveredPackageScopes, DiscoveredPackages, WorkspaceRoot,
     };
+
+    #[tokio::test]
+    async fn injected_sources_control_discovery_and_manifest_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let selected = root.join_components(&["apps", "selected", "package.json"]);
+        let undiscovered = root.join_components(&["apps", "undiscovered", "package.json"]);
+        let response = crate::discovery::DiscoveryResponse {
+            package_manager: PackageManager::Pnpm6,
+            workspaces: vec![crate::discovery::WorkspaceData::new(selected.clone(), None).unwrap()],
+        };
+        let manifests = HashMap::from([
+            (
+                selected,
+                PackageJson {
+                    name: Some(Spanned::new("selected".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                undiscovered,
+                PackageJson {
+                    name: Some(Spanned::new("undiscovered".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery({
+                let response = response.clone();
+                move || {
+                    let response = response.clone();
+                    async move { Ok(response) }
+                }
+            })
+            .with_package_json_loader(move |path: &AbsoluteSystemPath| {
+                manifests.get(path).cloned().ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "missing fixture manifest")
+                        .into()
+                })
+            })
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(graph.package_manager(), Some(&PackageManager::Pnpm6));
+        assert!(
+            graph
+                .package_task_context(&PackageName::Other("selected".into()))
+                .is_some()
+        );
+        assert!(
+            graph
+                .package_task_context(&PackageName::Other("undiscovered".into()))
+                .is_none()
+        );
+
+        let error = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(|_path: &AbsoluteSystemPath| {
+                Err(
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "missing fixture manifest")
+                        .into(),
+                )
+            })
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::PackageJson(crate::package_json::Error::Io(ref io))
+                if io.kind() == std::io::ErrorKind::NotFound
+        ));
+    }
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
