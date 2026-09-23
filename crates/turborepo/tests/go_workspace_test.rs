@@ -3,7 +3,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::OnceLock};
 #[cfg(unix)]
 use std::{
     process::{Child, Stdio},
@@ -40,6 +40,7 @@ const AMBIENT_GO_ENV: &[&str] = &[
     "GOMIPS64",
     "GOMODCACHE",
     "GOOS",
+    "GOPATH",
     "GOPPC64",
     "GORISCV64",
     "GOTOOLCHAIN",
@@ -74,19 +75,41 @@ fn setup_go_e2e_workspace(dir: &Path) {
     setup::setup_git(dir).unwrap();
 }
 
+fn shared_go_caches() -> &'static Path {
+    static CACHES: OnceLock<std::path::PathBuf> = OnceLock::new();
+    CACHES
+        .get_or_init(|| common::integration_toolchain_cache_dir("go"))
+        .as_path()
+}
+
+/// Opt in to cold Go compilation/module caches when the cache itself is under
+/// test.
+fn cold_go_caches() -> tempfile::TempDir {
+    tempfile::tempdir().expect("failed to create cold Go cache tempdir")
+}
+
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
     run_turbo_with_env(dir, args, &[])
 }
 
 fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
+    run_turbo_with_env_and_go_caches(dir, args, env, shared_go_caches())
+}
+
+fn run_turbo_with_env_and_go_caches(
+    dir: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    caches: &Path,
+) -> std::process::Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
-    let go_cache_dir = tempfile::tempdir().expect("failed to create Go cache tempdir");
     let mut command = common::turbo_command(dir);
     for name in AMBIENT_GO_ENV {
         command.env_remove(name);
     }
     command
-        .env("GOCACHE", go_cache_dir.path())
+        .env("GOCACHE", caches.join("go-build"))
+        .env("GOMODCACHE", caches.join("go-mod"))
         .env("GOENV", "off")
         .env("GOTOOLCHAIN", "local")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
@@ -98,19 +121,54 @@ fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::p
 }
 
 fn run_go(dir: &Path, args: &[&str]) -> std::process::Output {
-    let cache = tempfile::tempdir().expect("failed to create Go cache tempdir");
+    run_go_with_caches(dir, args, shared_go_caches())
+}
+
+fn run_go_with_caches(dir: &Path, args: &[&str], caches: &Path) -> std::process::Output {
     let mut command = std::process::Command::new("go");
     for name in AMBIENT_GO_ENV {
         command.env_remove(name);
     }
     command
         .args(args)
-        .env("GOCACHE", cache.path())
+        .env("GOCACHE", caches.join("go-build"))
+        .env("GOMODCACHE", caches.join("go-mod"))
         .env("GOENV", "off")
         .env("GOTOOLCHAIN", "local")
         .current_dir(dir)
         .output()
         .expect("failed to execute go")
+}
+
+#[test]
+fn test_go_compilation_caches_are_shared_unless_cold_requested() {
+    if !go_available() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let read_caches = |caches: &Path| {
+        let output = run_go_with_caches(
+            dir.path(),
+            &["env", "GOCACHE", "GOMODCACHE", "GOENV", "GOTOOLCHAIN"],
+            caches,
+        );
+        assert_command_success(&output, "read Go cache environment");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let shared = read_caches(shared_go_caches());
+    assert_eq!(shared, read_caches(shared_go_caches()));
+    let cold = cold_go_caches();
+    let cold_env = read_caches(cold.path());
+    assert_ne!(shared, cold_env);
+    let expected = |caches: &Path| {
+        format!(
+            "{}\n{}\n\nlocal\n",
+            caches.join("go-build").display(),
+            caches.join("go-mod").display()
+        )
+    };
+    assert_eq!(shared, expected(shared_go_caches()));
+    assert_eq!(cold_env, expected(cold.path()));
 }
 
 fn assert_command_success(output: &std::process::Output, context: &str) {
@@ -1330,11 +1388,6 @@ fn test_go_verification_reuses_cache_across_filtered_and_unfiltered_runs() {
     }
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
-    // Share Go's compiler cache across invocations, outside the task inputs.
-    let go_cache = tempfile::tempdir().unwrap();
-    let go_cache_path = go_cache.path().to_string_lossy();
-    let environment = [("GOCACHE", go_cache_path.as_ref())];
-
     for task in ["test", "lint"] {
         for (filter, expected) in [
             (Some("--filter=./packages/lib"), vec![("lib", "cache miss")]),
@@ -1343,7 +1396,7 @@ fn test_go_verification_reuses_cache_across_filtered_and_unfiltered_runs() {
         ] {
             let mut args = vec!["run", task, "--log-order=grouped"];
             args.extend(filter);
-            let output = run_turbo_with_env(tempdir.path(), &args, &environment);
+            let output = run_turbo(tempdir.path(), &args);
             assert_command_success(&output, "Go verification cache reuse");
             let combined = format!(
                 "{}{}",
@@ -1480,12 +1533,10 @@ fn test_go_cache_invalidates_every_north_star_input() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_e2e_workspace(tempdir.path());
     let root = tempdir.path();
-    let go_cache = tempfile::tempdir().expect("failed to create shared Go cache tempdir");
-    let go_cache = go_cache.path().to_str().unwrap();
+    // The Turborepo cache is fixture-local; changing its inputs must invalidate
+    // tasks even when the Go compiler cache is already warm from other tests.
     let assert_cache_result = |environment: &[(&str, &str)], expected, context| {
-        let mut environment = environment.to_vec();
-        environment.push(("GOCACHE", go_cache));
-        assert_go_build_cache_result(root, &environment, expected, context);
+        assert_go_build_cache_result(root, environment, expected, context);
     };
 
     assert_cache_result(&[], "cache miss", "cold Go build");
@@ -2034,10 +2085,8 @@ fn test_go_versioned_default_binaries_match_go_and_do_not_hash_into_dependents()
         root.join(directory)
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
     });
-    let go_cache = tempfile::tempdir().unwrap();
-    let environment = [("GOCACHE", go_cache.path().to_str().unwrap())];
     let dry_run = || {
-        let output = run_turbo_with_env(root, &["run", "build", "--dry-run=json"], &environment);
+        let output = run_turbo(root, &["run", "build", "--dry-run=json"]);
         cases.map(|(task, _, _, _)| dry_run_task(&output, task))
     };
     let before = dry_run();
@@ -2096,8 +2145,7 @@ fn test_go_versioned_default_binaries_match_go_and_do_not_hash_into_dependents()
             }
             assert_hashes_unchanged();
         }
-        let output =
-            run_turbo_with_env(root, &["run", "build", "--log-order=grouped"], &environment);
+        let output = run_turbo(root, &["run", "build", "--log-order=grouped"]);
         assert_command_success(&output, &format!("{stage} versioned Go build"));
         let combined = common::combined_output(&output);
         for (task, _, _, _) in cases {
@@ -2182,18 +2230,11 @@ fn test_go_explicit_build_command_preserves_authored_output_and_cache_restore() 
     let native_binary = root
         .join("apps/api")
         .join(format!("api{}", std::env::consts::EXE_SUFFIX));
-    let go_cache = tempfile::tempdir().unwrap();
-    let environment = [("GOCACHE", go_cache.path().to_str().unwrap())];
-    assert_go_build_cache_result(root, &environment, "cache miss", "cold authored Go build");
+    assert_go_build_cache_result(root, &[], "cache miss", "cold authored Go build");
     let contents = fs::read(&binary).expect("explicit -o must preserve bin/pigo-api verbatim");
-    assert_go_build_cache_result(root, &environment, "cache hit", "warm authored Go build");
+    assert_go_build_cache_result(root, &[], "cache hit", "warm authored Go build");
     fs::remove_file(&binary).unwrap();
-    assert_go_build_cache_result(
-        root,
-        &environment,
-        "cache hit",
-        "restored authored Go build",
-    );
+    assert_go_build_cache_result(root, &[], "cache hit", "restored authored Go build");
     assert_eq!(fs::read(&binary).unwrap(), contents);
     assert!(
         !native_binary.exists(),
@@ -2547,17 +2588,15 @@ fn test_go_regression_profile_outputs_are_not_log_only_cache_hits() {
     }
     let root = tempfile::tempdir().unwrap();
     let outputs = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(root.path());
     let profile = outputs.path().join("coverage.out");
     let flag = format!("-coverprofile={}", profile.display());
-    let cache_path = cache.path().to_str().unwrap();
     // Cover both executable and library modules. The report deliberately lives
     // outside default input globs.
     for filter in ["--filter=api", "--filter=lib"] {
         let args = ["run", "test", filter, "--", &flag];
         for _ in 0..2 {
-            let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
+            let output = run_turbo(root.path(), &args);
             assert_command_success(&output, "test with coverage output");
             assert!(
                 profile.exists(),
@@ -2616,14 +2655,12 @@ fn test_go_regression_native_output_and_test_argument_placement() {
     }
     let root = tempfile::tempdir().unwrap();
     let outputs = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(root.path());
     let binary = outputs.path().join(if cfg!(windows) {
         "custom.exe"
     } else {
         "custom"
     });
-    let cache_path = cache.path().to_str().unwrap();
     let output = run_turbo_with_env(
         root.path(),
         &[
@@ -2634,7 +2671,7 @@ fn test_go_regression_native_output_and_test_argument_placement() {
             "-o",
             binary.to_str().unwrap(),
         ],
-        &[("GOCACHE", cache_path)],
+        &[],
     );
     assert_command_success(&output, "Go build with custom output");
     assert!(
@@ -2659,7 +2696,7 @@ func TestCustom(t *testing.T) {
         let mut args = vec!["run", "test"];
         args.extend(filter);
         args.extend(["--", "-args", "-custom=expected"]);
-        let output = run_turbo_with_env(root.path(), &args, &[("GOCACHE", cache_path)]);
+        let output = run_turbo(root.path(), &args);
         assert_command_success(&output, "Go test with test-binary arguments");
         assert!(
             String::from_utf8_lossy(&output.stdout).contains("example.com/api/subpackage"),
