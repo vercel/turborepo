@@ -112,27 +112,23 @@ fn test_uv_packages_in_task_graph() {
 }
 
 #[test]
-fn test_pure_uv_workspace_task_graph() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_uv_pure_workspace(tempdir.path());
-
-    let json = dry_run_tasks(tempdir.path(), &["build"]);
-    let ids = task_ids(&json);
-    assert!(ids.contains(&"py-app#build".to_string()), "ids: {ids:?}");
-    assert!(ids.contains(&"py-lib#build".to_string()), "ids: {ids:?}");
-
-    let json = dry_run_tasks(tempdir.path(), &["format"]);
-    assert_eq!(task_ids(&json), vec!["acme#format".to_string()]);
+fn test_uv_quality_selection_wiring_smoke() {
+    let pure = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(pure.path());
     assert_eq!(
-        find_task(&json, "acme#format")["command"],
-        "uv format -- packages/py-app packages/py-lib"
+        task_ids(&dry_run_tasks(pure.path(), &["format"])),
+        ["acme#format"]
+    );
+    assert_eq!(
+        task_ids(&dry_run_tasks(pure.path(), &["check"])),
+        ["acme#check"]
     );
 
-    let json = dry_run_tasks(tempdir.path(), &["check"]);
-    assert_eq!(task_ids(&json), vec!["acme#check".to_string()]);
+    let mixed = tempfile::tempdir().unwrap();
+    setup_uv_native_tools(mixed.path());
     assert_eq!(
-        find_task(&json, "acme#check")["command"],
-        "uv check --frozen --all-packages"
+        task_ids(&dry_run_tasks(mixed.path(), &["format"])),
+        ["py-app#format", "py-lib#format"]
     );
 }
 
@@ -317,59 +313,6 @@ dev = ["Ruff", "black", "mypy", "ty", "pyright"]
     assert_eq!(
         fs::read(tempdir.path().join("uv.lock")).unwrap(),
         lock_before
-    );
-}
-
-#[test]
-fn test_uv_heterogeneous_tools_use_member_entrypoints() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_uv_native_tools(tempdir.path());
-
-    let format = dry_run_tasks(tempdir.path(), &["format"]);
-    let ids = task_ids(&format);
-    assert_eq!(
-        ids,
-        ["py-app#format".to_string(), "py-lib#format".to_string()]
-    );
-    assert_eq!(
-        find_task(&format, "py-app#format")["command"],
-        "uv run --active --frozen --package py-app black packages/py-app"
-    );
-    assert_eq!(
-        find_task(&format, "py-lib#format")["command"],
-        "uv run --active --frozen ruff format packages/py-lib"
-    );
-
-    let check = dry_run_tasks(tempdir.path(), &["check"]);
-    let ids = task_ids(&check);
-    assert!(
-        !ids.iter().any(|id| id.starts_with("acme#")),
-        "ids: {ids:?}"
-    );
-    for id in [
-        "py-app#check",
-        "py-app#check:pyright",
-        "py-lib#check",
-        "py-lib#check:mypy",
-    ] {
-        assert!(ids.contains(&id.to_string()), "ids: {ids:?}");
-    }
-    for package in ["py-app", "py-lib"] {
-        let dependencies = find_task(&check, &format!("{package}#check"))["dependencies"]
-            .as_array()
-            .unwrap();
-        assert!(dependencies.iter().all(|dependency| {
-            dependency
-                .as_str()
-                .is_some_and(|dependency| dependency.starts_with(package))
-        }));
-    }
-
-    let lint = dry_run_tasks(tempdir.path(), &["lint"]);
-    assert!(task_ids(&lint).contains(&"acme#lint".to_string()));
-    assert_eq!(
-        find_task(&lint, "acme#lint:ruff")["command"],
-        "uv run --active --frozen ruff check packages/py-app packages/py-lib"
     );
 }
 

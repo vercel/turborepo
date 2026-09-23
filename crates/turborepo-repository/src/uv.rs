@@ -3026,225 +3026,246 @@ impl RepositoryContributor for UvContributor {
                     )
                 }
             };
-            let workspace_roots = self.workspace_roots();
-            let packages = workspace.packages;
-            if packages.is_empty() {
-                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
-            }
-
-            // Using Turborepo with Python requires naming the workspace: the
-            // synthetic workspace package is a real package (task keys,
-            // filters), and every package must have a name. Only enforced
-            // when there are members to host — a memberless manifest doesn't
-            // demand a name for nothing.
-            let workspace_name = workspace
-                .name
-                .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
-
-            let mut package_directories: HashMap<String, String> = packages
-                .iter()
-                .map(|package| {
-                    let directory = package.manifest_path.parent().ok_or_else(|| {
-                        Error::InvalidMemberManifestPath(package.manifest_path.to_string())
-                    })?;
-                    let directory = AnchoredSystemPathBuf::new(&self.repo_root, directory)?;
-                    Ok((package.name.clone(), directory.to_unix().to_string()))
-                })
-                .collect::<Result<_, Error>>()
-                .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-            if let Some(root_project) = &workspace.root_project_name {
-                package_directories.insert(root_project.clone(), ".".to_string());
-            }
-            let mut workspace_directories: Vec<String> = packages
-                .iter()
-                .filter_map(|package| package_directories.get(&package.name).cloned())
-                .collect();
-            workspace_directories.sort();
-            workspace_directories.dedup();
-            let change_observation = uv_change_observation(&self.repo_root, &workspace_directories);
-            let prune_domain = UvPruneKnowledge::discover(
+            assemble_uv_contribution(
                 &self.repo_root,
-                package_directories.clone(),
-                workspace.root_project_name.clone(),
-                lockfile.clone(),
-                metadata.clone(),
+                workspace,
+                metadata,
+                lockfile,
+                resolution_incomplete,
+                self.workspace_roots(),
+                || turborepo_rayon_compat::block_in_place(|| toolchain_identities(&self.repo_root)),
             )
-            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
-
-            // Each package contributes its already-classified native
-            // internal relationships directly. External dependencies (locked
-            // registry/git/URL distributions) participate in each package
-            // task's hash through the same external-dependency mechanism JS
-            // packages use, scoped to the package's transitive closure — a
-            // dependency bump only invalidates packages that actually depend
-            // on it.
-            let mut closure_members: Vec<String> = packages
-                .iter()
-                .map(|package| package.name.clone())
-                .collect();
-            if let Some(root_project) = &workspace.root_project_name {
-                closure_members.push(root_project.clone());
-            }
-            let mut closures = metadata
-                .as_ref()
-                .map(|metadata| external_closures(metadata, &closure_members))
-                .transpose()
-                .map_err(|err| toolchain::Error::Failed(Box::new(err)))?
-                .unwrap_or_default();
-            let toolchain_identity =
-                turborepo_rayon_compat::block_in_place(|| toolchain_identities(&self.repo_root));
-            if let Err(reason) = &toolchain_identity {
-                tracing::warn!(
-                    "uv task caching is disabled because Turborepo could not identify uv and its \
-                     Python interpreter: {reason}"
-                );
-            }
-            let toolchain_identity = toolchain_identity.ok();
-            let toolchain_identified = toolchain_identity.is_some();
-            let toolchain_packages = toolchain_identity
-                .as_ref()
-                .map(|identity| identity.packages.as_slice())
-                .unwrap_or_default();
-
-            // The workspace-scoped closure covers every member plus the root
-            // project's own dependencies (when the root is a package).
-            let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
-                .values()
-                .flatten()
-                .cloned()
-                .chain(toolchain_packages.iter().cloned())
-                .collect();
-
-            let fallback_inputs = std::iter::once(
-                AnchoredSystemPathBuf::from_raw(PYPROJECT_TOML).expect("static path is valid"),
-            )
-            .chain(packages.iter().filter_map(|package| {
-                AnchoredSystemPathBuf::new(&self.repo_root, &package.manifest_path).ok()
-            }))
-            .collect::<Vec<_>>();
-            let mut discovered = Vec::with_capacity(packages.len() + 1);
-            let mut resolutions = Vec::with_capacity(packages.len() + 1);
-            let mut package_names = Vec::with_capacity(packages.len());
-            for package in packages {
-                let kind = if package.buildable {
-                    UvPackageKind::Package
-                } else {
-                    UvPackageKind::VirtualPackage
-                };
-                let package_directory = package_directories
-                    .get(&package.name)
-                    .map_or(".", String::as_str);
-                let build_cacheable = toolchain_identity.as_ref().is_some_and(|identity| {
-                    package
-                        .bundled_uv_build_requirement
-                        .as_deref()
-                        .is_some_and(|requirement| {
-                            bundled_uv_build_matches(requirement, &identity.uv_version)
-                        })
-                });
-                let native_tasks = python_tasks_for_package(
-                    kind,
-                    &package.name,
-                    package_directory,
-                    &[],
-                    &package.quality_plan,
-                    package.pytest.as_ref(),
-                    !workspace.quality_plan.format_homogeneous,
-                    toolchain_identified,
-                    build_cacheable,
-                );
-                let task_contract = UvTaskContract::new(kind, &package.name);
-                let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
-                if package.quality_plan.uses_root_tools() {
-                    // Root-owned tools execute against the root environment.
-                    external_dependencies.extend(workspace_externals.iter().cloned());
-                }
-                external_dependencies.extend(toolchain_packages.iter().cloned());
-                resolutions.push(package_resolution(
-                    package.name.clone(),
-                    &external_dependencies,
-                ));
-                package_names.push(package.name.clone());
-                discovered.push(
-                    DiscoveredPackage::package(
-                        Some(package.name),
-                        PackageJson::default(),
-                        package.manifest_path,
-                    )
-                    .with_native_relationships(package.relationships)
-                    .with_native_tasks(native_tasks)
-                    .with_task_contract(
-                        crate::task_contracts::ScopeTaskContract::python(task_contract),
-                    ),
-                );
-            }
-
-            // The workspace aggregate, anchored at the root pyproject.toml
-            // and named by the user via `[tool.turbo] name`. It depends on
-            // every package so `--affected` and dependent-filters propagate
-            // package changes to it.
-            let workspace_native_tasks = python_tasks_for_package(
-                UvPackageKind::Workspace,
-                &workspace_name,
-                ".",
-                &workspace_directories,
-                &workspace.quality_plan,
-                workspace.pytest.as_ref(),
-                true,
-                toolchain_identified,
-                false,
-            );
-            let workspace_task_contract =
-                UvTaskContract::workspace(&workspace_name, workspace_directories);
-            package_names.sort();
-            let workspace_relationships = package_names
-                .into_iter()
-                .map(|name| Relationship::internal(name, DependencyKind::Production))
-                .collect();
-            resolutions.push(package_resolution(
-                workspace_name.clone(),
-                &workspace_externals,
-            ));
-            discovered.push(
-                DiscoveredPackage::aggregate(
-                    workspace_name,
-                    PackageJson::default(),
-                    self.repo_root.join_component(PYPROJECT_TOML),
-                )
-                .with_native_relationships(workspace_relationships)
-                .with_native_tasks(workspace_native_tasks)
-                .with_task_contract(
-                    crate::task_contracts::ScopeTaskContract::python(workspace_task_contract),
-                ),
-            );
-
-            let members = resolutions
-                .iter()
-                .map(|resolution| resolution.package().to_string())
-                .collect::<Vec<_>>();
-            let resolution = ExternalResolutionDomain::new(
-                crate::external_resolution::PYTHON_RESOLUTION_DOMAIN.clone(),
-                ToolchainId::PYTHON,
-                AnchoredSystemPathBuf::default(),
-                members,
-                [AnchoredSystemPathBuf::from_raw(UV_LOCK)
-                    .map_err(Error::from)
-                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
-                ExternalResolutionData::Resolved {
-                    completeness: resolution_incomplete.map_or(
-                        ResolutionCompleteness::Complete,
-                        ResolutionCompleteness::Partial,
-                    ),
-                    packages: resolutions,
-                },
-            )
-            .with_fallback_inputs(fallback_inputs);
-            Ok(DiscoveredPackages::new(discovered, workspace_roots)
-                .with_external_resolution(resolution)
-                .with_change_observation(change_observation)
-                .with_prune_domain(Arc::new(prune_domain)))
         })
     }
+}
+
+/// Assemble Python packages, task contracts, and resolution/prune facts from
+/// observed workspace data. Discovery and toolchain process execution stay in
+/// `UvContributor`; tests can supply observations without invoking either.
+fn assemble_uv_contribution(
+    repo_root: &AbsoluteSystemPath,
+    workspace: DiscoveredWorkspace,
+    metadata: Option<UvWorkspaceMetadata>,
+    lockfile: Result<String, String>,
+    resolution_incomplete: Option<crate::external_resolution::ResolutionIncompleteReason>,
+    workspace_roots: Vec<WorkspaceRoot>,
+    toolchain_identity: impl FnOnce() -> Result<UvToolchainIdentity, String>,
+) -> Result<DiscoveredPackages, toolchain::Error> {
+    let packages = workspace.packages;
+    if packages.is_empty() {
+        return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
+    }
+
+    // Using Turborepo with Python requires naming the workspace: the
+    // synthetic workspace package is a real package (task keys,
+    // filters), and every package must have a name. Only enforced
+    // when there are members to host — a memberless manifest doesn't
+    // demand a name for nothing.
+    let workspace_name = workspace
+        .name
+        .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
+
+    let mut package_directories: HashMap<String, String> = packages
+        .iter()
+        .map(|package| {
+            let directory = package.manifest_path.parent().ok_or_else(|| {
+                Error::InvalidMemberManifestPath(package.manifest_path.to_string())
+            })?;
+            let directory = AnchoredSystemPathBuf::new(repo_root, directory)?;
+            Ok((package.name.clone(), directory.to_unix().to_string()))
+        })
+        .collect::<Result<_, Error>>()
+        .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+    if let Some(root_project) = &workspace.root_project_name {
+        package_directories.insert(root_project.clone(), ".".to_string());
+    }
+    let mut workspace_directories: Vec<String> = packages
+        .iter()
+        .filter_map(|package| package_directories.get(&package.name).cloned())
+        .collect();
+    workspace_directories.sort();
+    workspace_directories.dedup();
+    let change_observation = uv_change_observation(repo_root, &workspace_directories);
+    let prune_domain = UvPruneKnowledge::discover(
+        repo_root,
+        package_directories.clone(),
+        workspace.root_project_name.clone(),
+        lockfile.clone(),
+        metadata.clone(),
+    )
+    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+
+    // Each package contributes its already-classified native
+    // internal relationships directly. External dependencies (locked
+    // registry/git/URL distributions) participate in each package
+    // task's hash through the same external-dependency mechanism JS
+    // packages use, scoped to the package's transitive closure — a
+    // dependency bump only invalidates packages that actually depend
+    // on it.
+    let mut closure_members: Vec<String> = packages
+        .iter()
+        .map(|package| package.name.clone())
+        .collect();
+    if let Some(root_project) = &workspace.root_project_name {
+        closure_members.push(root_project.clone());
+    }
+    let mut closures = metadata
+        .as_ref()
+        .map(|metadata| external_closures(metadata, &closure_members))
+        .transpose()
+        .map_err(|err| toolchain::Error::Failed(Box::new(err)))?
+        .unwrap_or_default();
+    let toolchain_identity = toolchain_identity();
+    if let Err(reason) = &toolchain_identity {
+        tracing::warn!(
+            "uv task caching is disabled because Turborepo could not identify uv and its Python \
+             interpreter: {reason}"
+        );
+    }
+    let toolchain_identity = toolchain_identity.ok();
+    let toolchain_identified = toolchain_identity.is_some();
+    let toolchain_packages = toolchain_identity
+        .as_ref()
+        .map(|identity| identity.packages.as_slice())
+        .unwrap_or_default();
+
+    // The workspace-scoped closure covers every member plus the root
+    // project's own dependencies (when the root is a package).
+    let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
+        .values()
+        .flatten()
+        .cloned()
+        .chain(toolchain_packages.iter().cloned())
+        .collect();
+
+    let fallback_inputs =
+        std::iter::once(
+            AnchoredSystemPathBuf::from_raw(PYPROJECT_TOML).expect("static path is valid"),
+        )
+        .chain(packages.iter().filter_map(|package| {
+            AnchoredSystemPathBuf::new(repo_root, &package.manifest_path).ok()
+        }))
+        .collect::<Vec<_>>();
+    let mut discovered = Vec::with_capacity(packages.len() + 1);
+    let mut resolutions = Vec::with_capacity(packages.len() + 1);
+    let mut package_names = Vec::with_capacity(packages.len());
+    for package in packages {
+        let kind = if package.buildable {
+            UvPackageKind::Package
+        } else {
+            UvPackageKind::VirtualPackage
+        };
+        let package_directory = package_directories
+            .get(&package.name)
+            .map_or(".", String::as_str);
+        let build_cacheable = toolchain_identity.as_ref().is_some_and(|identity| {
+            package
+                .bundled_uv_build_requirement
+                .as_deref()
+                .is_some_and(|requirement| {
+                    bundled_uv_build_matches(requirement, &identity.uv_version)
+                })
+        });
+        let native_tasks = python_tasks_for_package(
+            kind,
+            &package.name,
+            package_directory,
+            &[],
+            &package.quality_plan,
+            package.pytest.as_ref(),
+            !workspace.quality_plan.format_homogeneous,
+            toolchain_identified,
+            build_cacheable,
+        );
+        let task_contract = UvTaskContract::new(kind, &package.name);
+        let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
+        if package.quality_plan.uses_root_tools() {
+            // Root-owned tools execute against the root environment.
+            external_dependencies.extend(workspace_externals.iter().cloned());
+        }
+        external_dependencies.extend(toolchain_packages.iter().cloned());
+        resolutions.push(package_resolution(
+            package.name.clone(),
+            &external_dependencies,
+        ));
+        package_names.push(package.name.clone());
+        discovered.push(
+            DiscoveredPackage::package(
+                Some(package.name),
+                PackageJson::default(),
+                package.manifest_path,
+            )
+            .with_native_relationships(package.relationships)
+            .with_native_tasks(native_tasks)
+            .with_task_contract(crate::task_contracts::ScopeTaskContract::python(
+                task_contract,
+            )),
+        );
+    }
+
+    // The workspace aggregate, anchored at the root pyproject.toml
+    // and named by the user via `[tool.turbo] name`. It depends on
+    // every package so `--affected` and dependent-filters propagate
+    // package changes to it.
+    let workspace_native_tasks = python_tasks_for_package(
+        UvPackageKind::Workspace,
+        &workspace_name,
+        ".",
+        &workspace_directories,
+        &workspace.quality_plan,
+        workspace.pytest.as_ref(),
+        true,
+        toolchain_identified,
+        false,
+    );
+    let workspace_task_contract = UvTaskContract::workspace(&workspace_name, workspace_directories);
+    package_names.sort();
+    let workspace_relationships = package_names
+        .into_iter()
+        .map(|name| Relationship::internal(name, DependencyKind::Production))
+        .collect();
+    resolutions.push(package_resolution(
+        workspace_name.clone(),
+        &workspace_externals,
+    ));
+    discovered.push(
+        DiscoveredPackage::aggregate(
+            workspace_name,
+            PackageJson::default(),
+            repo_root.join_component(PYPROJECT_TOML),
+        )
+        .with_native_relationships(workspace_relationships)
+        .with_native_tasks(workspace_native_tasks)
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::python(
+            workspace_task_contract,
+        )),
+    );
+
+    let members = resolutions
+        .iter()
+        .map(|resolution| resolution.package().to_string())
+        .collect::<Vec<_>>();
+    let resolution = ExternalResolutionDomain::new(
+        crate::external_resolution::PYTHON_RESOLUTION_DOMAIN.clone(),
+        ToolchainId::PYTHON,
+        AnchoredSystemPathBuf::default(),
+        members,
+        [AnchoredSystemPathBuf::from_raw(UV_LOCK)
+            .map_err(Error::from)
+            .map_err(|error| toolchain::Error::Failed(Box::new(error)))?],
+        ExternalResolutionData::Resolved {
+            completeness: resolution_incomplete.map_or(
+                ResolutionCompleteness::Complete,
+                ResolutionCompleteness::Partial,
+            ),
+            packages: resolutions,
+        },
+    )
+    .with_fallback_inputs(fallback_inputs);
+    Ok(DiscoveredPackages::new(discovered, workspace_roots)
+        .with_external_resolution(resolution)
+        .with_change_observation(change_observation)
+        .with_prune_domain(Arc::new(prune_domain)))
 }
 
 #[cfg(test)]
@@ -3799,6 +3820,153 @@ version = "0.1.0"
                 .create_with_contents(contents)
                 .unwrap();
         }
+    }
+
+    /// Supplies manifest observations to the production assembly boundary,
+    /// without asking uv or Python for metadata or toolchain identity.
+    struct ObservedUvContributor {
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for ObservedUvContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> toolchain::DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let workspace = discover_workspace_from_manifests(&self.root, false)
+                    .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
+                assemble_uv_contribution(
+                    &self.root,
+                    workspace,
+                    None,
+                    Err("fixture has no lockfile".to_string()),
+                    Some(crate::external_resolution::ResolutionIncompleteReason::new(
+                        "uv-fixture",
+                        "no lockfile",
+                    )),
+                    vec![WorkspaceRoot::new("uv", self.root.clone())],
+                    || Err("fixture omits native toolchain identity".to_string()),
+                )
+            })
+        }
+
+        fn discover_package_scopes(&self) -> toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(toolchain::DiscoveredPackageScopes::from_full_observation(
+                    observed.packages(),
+                    observed.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn observed_uv_workspace_builds_native_graph_and_quality_plan_without_uv() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        write_workspace(&root);
+        for (manifest, extra) in [
+            (
+                root.join_component(PYPROJECT_TOML),
+                "\n[dependency-groups]\ndev = ['pytest', 'ruff']\n",
+            ),
+            (
+                root.join_components(&["packages", "py-app", PYPROJECT_TOML]),
+                "\n[build-system]\nrequires = ['uv_build>=0.12']\nbuild-backend = 'uv_build'\n",
+            ),
+            (
+                root.join_components(&["packages", "py-lib", PYPROJECT_TOML]),
+                "\n[dependency-groups]\ndev = ['black', 'mypy']\n",
+            ),
+        ] {
+            let contents = manifest.read_to_string().unwrap();
+            manifest
+                .create_with_contents(format!("{contents}{extra}"))
+                .unwrap();
+        }
+        let contributor = Arc::new(ObservedUvContributor { root: root.clone() });
+        let observed = contributor.discover_packages().await.unwrap();
+        let names = observed
+            .packages()
+            .iter()
+            .map(|package| package.name().unwrap())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(names, ["py-app", "py-lib", "acme"].into());
+
+        let graph = crate::package_graph::PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(contributor)
+            .build()
+            .await
+            .unwrap();
+        assert!(!graph.has_root_javascript_scope());
+        let task = |name: &str, task: &str| {
+            let context = graph
+                .package_task_context(&PackageName::from(name))
+                .unwrap_or_else(|| panic!("missing {name} scope"));
+            context
+                .native_tasks()
+                .get(task)
+                .map(|task| task.display().map(str::to_string))
+        };
+        assert_eq!(
+            task("py-app", "build"),
+            Some(Some("uv build --package=py-app".to_string()))
+        );
+        assert_eq!(task("py-lib", "build"), Some(None));
+        assert_eq!(task("acme", "build"), Some(None));
+        let aggregate = graph
+            .package_task_context(&PackageName::from("acme"))
+            .unwrap();
+        assert!(
+            !aggregate
+                .native_tasks()
+                .get("build")
+                .unwrap()
+                .participates()
+        );
+        assert_eq!(
+            task("acme", "test"),
+            Some(Some(
+                "uv run --active --frozen --all-packages pytest".to_string()
+            ))
+        );
+        assert!(task("py-app", "test").is_some());
+        assert!(task("py-lib", "test").is_none());
+        assert!(task("acme", "check:mypy").is_some());
+        assert!(task("py-app", "lint:ruff").is_some());
+        assert!(task("py-app", "format:ruff").is_some());
+        assert_eq!(
+            task("py-lib", "format:black"),
+            Some(Some(
+                "uv run --active --frozen --package py-lib black packages/py-lib".to_string()
+            ))
+        );
+        assert!(task("py-lib", "check:mypy").is_some());
+        assert_eq!(task("acme", "lint:ruff"), Some(None));
+        assert_eq!(
+            task("py-app", "lint:ruff"),
+            Some(Some(
+                "uv run --active --frozen --package py-app ruff check packages/py-app".to_string()
+            ))
+        );
+        assert!(
+            !aggregate
+                .native_tasks()
+                .get("format")
+                .unwrap()
+                .participates()
+        );
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("acme"))
+                .unwrap(),
+            [PackageName::from("py-app"), PackageName::from("py-lib")]
+        );
     }
 
     #[test]
