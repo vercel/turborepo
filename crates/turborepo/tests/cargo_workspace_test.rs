@@ -1,8 +1,7 @@
-//! Native Cargo interoperability tests: a mixed npm + Cargo fixture driven
-//! through the real turbo binary, covering execution, cache restoration,
-//! pruning, arguments, process behavior, and selected cross-layer checks.
-//! Pure metadata interpretation, graph edges, task commands, and output
-//! selection are exercised in turborepo-repository without invoking Cargo.
+//! End-to-end tests for experimental Cargo workspace support: a mixed
+//! npm + Cargo fixture driven through the real turbo binary, covering
+//! discovery, execution, caching, invalidation, output restoration, and the
+//! opt-in surface (`futureFlags.experimentalCargoWorkspaces`).
 //!
 //! These tests invoke `cargo build` inside the fixture, so they require a
 //! Rust toolchain — which is guaranteed, since the tests themselves are
@@ -239,6 +238,14 @@ fn rustc_host_target() -> String {
         .find_map(|line| line.strip_prefix("host: "))
         .expect("rustc reports host target")
         .to_string()
+}
+
+fn alternate_host_target(host: &str) -> &'static str {
+    if host == "x86_64-unknown-linux-gnu" {
+        "aarch64-unknown-linux-gnu"
+    } else {
+        "x86_64-unknown-linux-gnu"
+    }
 }
 
 fn run_cargo_build(dir: &Path, cargo_args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
@@ -885,6 +892,22 @@ fn test_custom_profile_outputs_are_exact_and_restore() {
 }
 
 #[test]
+fn test_cargo_test_and_bench_profile_directories_restore_exactly() {
+    assert_isolated_restoration(
+        &["--release"],
+        &["target", "release"],
+        &["--profile=test"],
+        &["target", "debug"],
+    );
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--profile=bench"],
+        &["target", "release"],
+    );
+}
+
+#[test]
 fn test_cargo_explicit_and_environment_host_targets_restore_exactly() {
     let host = rustc_host_target();
     let target_arg = format!("--target={host}");
@@ -902,6 +925,25 @@ fn test_cargo_explicit_and_environment_host_targets_restore_exactly() {
         &[],
         &[("CARGO_BUILD_TARGET", &host)],
     );
+}
+
+#[test]
+fn test_cargo_cli_target_overrides_environment_target() {
+    let host = rustc_host_target();
+    let lower_target = alternate_host_target(&host);
+    let target_arg = format!("--target={host}");
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
+    let environment = [("CARGO_BUILD_TARGET", lower_target)];
+
+    let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert_command_success(&output, "CLI target precedence build");
+    fs::remove_file(&artifact).unwrap();
+    let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert_command_success(&output, "CLI target precedence restore");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("app:build: cache hit"));
+    assert!(artifact.exists(), "CLI target did not override environment");
 }
 
 #[test]
@@ -1166,6 +1208,23 @@ fn test_manifest_layout_controls_are_uncached() {
         fs::write(manifest, contents).unwrap();
         let task = cargo_build_definition(tempdir.path(), &[], &[]);
         assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+    }
+}
+
+#[test]
+fn test_compiler_and_layout_environment_controls_are_uncached() {
+    for (name, value) in [
+        ("RUSTC", "rustc"),
+        ("CARGO_BUILD_RUSTC", "rustc"),
+        ("CARGO_BUILD_TARGET_DIR", "other-target"),
+        ("CARGO_BUILD_ARTIFACT_DIR", "artifact-copy"),
+        ("CARGO_PROFILE_CI_DIR_NAME", "profile-output"),
+    ] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        configure_build_without_outputs(tempdir.path());
+        let task = cargo_build_definition(tempdir.path(), &[], &[(name, value)]);
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], false, "{name}");
     }
 }
 
@@ -2598,6 +2657,122 @@ fn test_cargo_library_test_can_be_filtered() {
         !combined.contains("No tasks were executed"),
         "filtered library tests must not be a no-op: {combined}"
     );
+}
+
+#[test]
+fn test_cargo_tasks_are_registered_without_task_configuration() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    for (task, expected_command) in [
+        ("build", "cargo build --package=app --locked"),
+        ("run", "cargo run --package=app --locked"),
+        ("dev", "cargo run --package=app --locked"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=app", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("app#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("app#{task} in graph"));
+        assert_eq!(definition["command"], expected_command);
+    }
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "library build failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let definition = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == "lib-a#build"))
+        .expect("lib-a#build in graph");
+    assert_eq!(
+        definition["command"],
+        "cargo build --package=lib-a --locked"
+    );
+
+    for (task, subcommand) in [("test", "test"), ("check", "check"), ("lint", "clippy")] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=lib-a", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("lib-a#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("lib-a#{task} in graph"));
+        assert_eq!(
+            definition["command"],
+            format!("cargo {subcommand} --package=lib-a --locked")
+        );
+    }
+
+    // The aggregate shares the repository directory with the root task
+    // namespace, so its log stays isolated even when it is the only selection.
+    for (task, subcommand, log_filename) in [
+        ("test", "test", "turbo-test-acme-c7aba2810dce6e39.log"),
+        ("check", "check", "turbo-check-acme-45f6384ef100a60b.log"),
+        ("lint", "clippy", "turbo-lint-acme-40a8d1eb4ccc4540.log"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=acme", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("acme#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("acme#{task} in graph"));
+        assert_eq!(
+            definition["command"],
+            format!("cargo {subcommand} --workspace --locked")
+        );
+        assert_eq!(definition["directory"], "");
+        let log_file = Path::new(".turbo").join(log_filename);
+        assert_eq!(
+            definition["logFile"].as_str().map(Path::new),
+            Some(log_file.as_path())
+        );
+        assert_eq!(json["packages"], serde_json::json!(["acme"]));
+    }
+
+    for (filter, task_id, expected_command) in [
+        ("lib-a", "lib-a#format", "cargo fmt --package=lib-a"),
+        ("acme", "acme#format", "cargo fmt --all"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["format", &format!("--filter={filter}"), "--dry-run=json"],
+        );
+        assert!(output.status.success(), "format failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("{task_id} in graph"));
+        assert_eq!(definition["command"], expected_command);
+        assert_eq!(definition["resolvedTaskDefinition"]["cache"], false);
+    }
 }
 
 #[test]

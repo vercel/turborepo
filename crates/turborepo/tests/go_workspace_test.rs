@@ -1,7 +1,4 @@
-//! Native Go interoperability tests: execution, cache restoration, pruning,
-//! argument forwarding, watch/process behavior, and a few cross-layer checks.
-//! Pure contributor and scope-selection contracts live in turborepo-repository
-//! and turborepo-scope, without launching `go` or the assembled `turbo` binary.
+//! End-to-end tests for experimental Go workspace support.
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod common;
@@ -639,6 +636,35 @@ fn assert_go_build_dependencies_and_hash_do_not_depend_on_entrypoint(filter_usin
         );
         assert_eq!(direct_api["hash"], indirect_api["hash"], "{args:?}");
     }
+}
+
+#[test]
+fn test_pure_go_workspace_lists_modules() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_pure_workspace(tempdir.path());
+
+    let names = package_names(tempdir.path());
+    assert!(names.contains(&"api".to_string()), "names: {names:?}");
+    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
+}
+
+#[test]
+fn test_mixed_go_workspace_lists_js_and_go_packages() {
+    if !go_available() {
+        return;
+    }
+
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_go_monorepo(tempdir.path());
+
+    let names = package_names(tempdir.path());
+    assert!(names.contains(&"js-pkg".to_string()), "names: {names:?}");
+    assert!(names.contains(&"api".to_string()), "names: {names:?}");
+    assert!(names.contains(&"lib".to_string()), "names: {names:?}");
 }
 
 #[test]
