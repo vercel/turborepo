@@ -405,6 +405,323 @@ mod tests {
         (tempdir, graph)
     }
 
+    struct PlanRunOpts {
+        args: Vec<String>,
+    }
+
+    impl RunOptsInfo for PlanRunOpts {
+        fn dry_run(&self) -> Option<DryRunMode> {
+            Some(DryRunMode::Json)
+        }
+
+        fn single_package(&self) -> bool {
+            false
+        }
+
+        fn summarize(&self) -> Option<&str> {
+            None
+        }
+
+        fn framework_inference(&self) -> bool {
+            false
+        }
+
+        fn pass_through_args(&self) -> &[String] {
+            &self.args
+        }
+
+        fn tasks(&self) -> &[String] {
+            &[]
+        }
+    }
+
+    /// The same package-graph boundary used by run planning, with discovery and
+    /// manifests supplied in memory rather than reading files or spawning
+    /// tools.
+    async fn injected_summary_graph() -> (tempfile::TempDir, PackageGraph) {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, WorkspaceData},
+            package_manager::PackageManager,
+        };
+
+        let tempdir = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let app_path = root.join_components(&["packages", "app", "package.json"]);
+        let lib_path = root.join_components(&["packages", "lib", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: [app_path.clone(), lib_path.clone()]
+                .into_iter()
+                .map(|path| WorkspaceData::new(path, None).unwrap())
+                .collect(),
+        };
+        let manifests = HashMap::from([
+            (
+                app_path,
+                PackageJson::from_value(json!({
+                    "name": "app", "scripts": {"build": "echo app"},
+                    "dependencies": {"lib": "*"}
+                }))
+                .unwrap(),
+            ),
+            (
+                lib_path,
+                PackageJson::from_value(json!({
+                    "name": "lib", "scripts": {"build": "echo lib"}
+                }))
+                .unwrap(),
+            ),
+        ]);
+        let graph = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &turbopath::AbsoluteSystemPath| {
+                manifests.get(path).cloned().ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "missing injected manifest")
+                        .into()
+                })
+            })
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("app"))
+                .unwrap(),
+            [PackageName::from("lib")]
+        );
+        (tempdir, graph)
+    }
+
+    struct PlanEngine {
+        definitions: HashMap<TaskId<'static>, TaskDefinition>,
+        dependencies: HashMap<TaskId<'static>, Vec<TaskId<'static>>>,
+        dependents: HashMap<TaskId<'static>, Vec<TaskId<'static>>>,
+    }
+
+    impl EngineInfo for PlanEngine {
+        type TaskIter<'a> = std::slice::Iter<'a, TaskId<'static>>;
+
+        fn task_definition(&self, task: &TaskId<'static>) -> Option<&TaskDefinition> {
+            self.definitions.get(task)
+        }
+
+        fn dependencies(&self, task: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+            self.dependencies.get(task).map(|tasks| tasks.iter())
+        }
+
+        fn dependents(&self, task: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+            self.dependents.get(task).map(|tasks| tasks.iter())
+        }
+    }
+
+    struct PlanHashes {
+        hashes: HashMap<String, Arc<str>>,
+        inputs: HashMap<String, Vec<(turbopath::RelativeUnixPathBuf, String)>>,
+        env: Option<HashTrackerDetailedMap>,
+        hit: Option<HashTrackerCacheHitMetadata>,
+    }
+
+    impl HashTrackerInfo for PlanHashes {
+        fn hash(&self, task: &TaskId) -> Option<Arc<str>> {
+            self.hashes.get(&task.to_string()).cloned()
+        }
+
+        fn env_vars(&self, _task: &TaskId) -> Option<HashTrackerDetailedMap> {
+            self.env.clone()
+        }
+
+        fn cache_status(&self, _task: &TaskId) -> Option<HashTrackerCacheHitMetadata> {
+            self.hit.clone()
+        }
+
+        fn expanded_outputs(&self, _task: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
+            None
+        }
+
+        fn framework(&self, _task: &TaskId) -> Option<String> {
+            None
+        }
+
+        fn expanded_inputs(
+            &self,
+            task: &TaskId,
+        ) -> Option<Vec<(turbopath::RelativeUnixPathBuf, String)>> {
+            self.inputs.get(&task.to_string()).cloned()
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_dry_run_task_summary_projects_graph_definition_and_hash_facts() {
+        let (_tmp, graph) = injected_summary_graph().await;
+        let app = TaskId::new("app", "build").into_owned();
+        let lib = TaskId::new("lib", "build").into_owned();
+        let app_definition = TaskDefinition {
+            outputs: turborepo_types::TaskOutputs {
+                inclusions: vec!["dist/**".to_string()],
+                exclusions: vec!["dist/tmp/**".to_string()],
+            },
+            env: vec!["API_URL".to_string()],
+            pass_through_env: Some(vec!["SECRET_TOKEN".to_string()]),
+            topological_dependencies: vec![turborepo_errors::Spanned::new(
+                turborepo_task_id::TaskName::from("build"),
+            )],
+            ..Default::default()
+        };
+        let engine = PlanEngine {
+            definitions: HashMap::from([
+                (app.clone(), app_definition),
+                (lib.clone(), TaskDefinition::default()),
+            ]),
+            dependencies: HashMap::from([(app.clone(), vec![lib.clone()])]),
+            dependents: HashMap::from([(lib.clone(), vec![app.clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: HashMap::from([
+                (app.to_string(), Arc::from("planned-hash")),
+                (lib.to_string(), Arc::from("lib-hash")),
+            ]),
+            inputs: HashMap::from([
+                (
+                    app.to_string(),
+                    vec![(
+                        turbopath::RelativeUnixPathBuf::new("src/app.ts").unwrap(),
+                        "app-file-hash".to_string(),
+                    )],
+                ),
+                (
+                    lib.to_string(),
+                    vec![(
+                        turbopath::RelativeUnixPathBuf::new("src/lib.ts").unwrap(),
+                        "lib-file-hash".to_string(),
+                    )],
+                ),
+            ]),
+            env: Some(HashTrackerDetailedMap::default()),
+            hit: None,
+        };
+        let environment = EnvironmentVariableMap::from(HashMap::from([(
+            "SECRET_TOKEN".to_string(),
+            "unprintable-secret".to_string(),
+        )]));
+        let opts = PlanRunOpts {
+            args: vec!["--verbose".to_string()],
+        };
+        let external = HashMap::from([
+            ("app".to_string(), "app-closure".to_string()),
+            ("lib".to_string(), "lib-closure".to_string()),
+        ]);
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &opts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+        let app_plan =
+            serde_json::to_value(factory.task_summary(app.clone(), None).unwrap()).unwrap();
+        assert_eq!(app_plan["taskId"], "app#build");
+        assert_eq!(app_plan["command"], "echo app");
+        assert_eq!(app_plan["hash"], "planned-hash");
+        assert_eq!(app_plan["inputs"]["src/app.ts"], "app-file-hash");
+        assert_eq!(app_plan["hashOfExternalDependencies"], "app-closure");
+        assert_eq!(app_plan["dependencies"], json!(["lib#build"]));
+        assert_eq!(app_plan["dependents"], json!([]));
+        assert_eq!(app_plan["cache"]["status"], "MISS");
+        assert_eq!(app_plan["cliArguments"], json!(["--verbose"]));
+        assert_eq!(app_plan["outputs"], json!(["dist/**"]));
+        assert_eq!(app_plan["excludedOutputs"], json!(["dist/tmp/**"]));
+        assert_eq!(app_plan["resolvedTaskDefinition"]["cache"], true);
+        assert_eq!(
+            app_plan["resolvedTaskDefinition"]["dependsOn"],
+            json!(["^build"])
+        );
+        assert_eq!(
+            app_plan["resolvedTaskDefinition"]["env"],
+            json!(["API_URL"])
+        );
+        assert_eq!(
+            app_plan["environmentVariables"]["specified"]["passThroughEnv"],
+            json!(["SECRET_TOKEN"])
+        );
+        assert!(!app_plan.to_string().contains("unprintable-secret"));
+        let lib_plan = serde_json::to_value(factory.task_summary(lib, None).unwrap()).unwrap();
+        assert_eq!(lib_plan["command"], "echo lib");
+        assert_eq!(lib_plan["hash"], "lib-hash");
+        assert_eq!(lib_plan["inputs"]["src/lib.ts"], "lib-file-hash");
+        assert!(lib_plan["inputs"].get("src/app.ts").is_none());
+        assert_eq!(lib_plan["dependencies"], json!([]));
+        assert_eq!(lib_plan["dependents"], json!(["app#build"]));
+    }
+
+    #[tokio::test]
+    async fn injected_dry_run_task_summary_reports_hits_deferred_hashes_and_missing_facts() {
+        let (_tmp, graph) = injected_summary_graph().await;
+        let task = TaskId::new("app", "build").into_owned();
+        let engine = PlanEngine {
+            definitions: HashMap::from([(task.clone(), TaskDefinition::default())]),
+            dependencies: HashMap::new(),
+            dependents: HashMap::new(),
+        };
+        let environment = EnvironmentVariableMap::default();
+        let external = HashMap::new();
+        let mut hashes = PlanHashes {
+            hashes: HashMap::from([(task.to_string(), Arc::from("hit-hash"))]),
+            inputs: HashMap::from([(task.to_string(), Vec::new())]),
+            env: Some(HashTrackerDetailedMap::default()),
+            hit: Some(HashTrackerCacheHitMetadata {
+                local: true,
+                remote: false,
+                time_saved: 123,
+                sha: None,
+                dirty_hash: None,
+            }),
+        };
+        let plan = |hashes: &PlanHashes| {
+            TaskSummaryFactory::new(
+                &graph,
+                &engine,
+                hashes,
+                &environment,
+                &TestRunOpts,
+                EnvMode::Strict,
+                Some(&external),
+            )
+            .task_summary(task.clone(), None)
+        };
+        let hit = serde_json::to_value(plan(&hashes).unwrap()).unwrap();
+        assert_eq!(hit["cache"]["status"], "HIT");
+        assert_eq!(hit["cache"]["local"], true);
+        hashes.hashes.insert(
+            task.to_string(),
+            Arc::from("Deferred because JIT hashing mode was used."),
+        );
+        let deferred = serde_json::to_value(plan(&hashes).unwrap()).unwrap();
+        assert!(deferred["hash"].is_null());
+        assert!(
+            deferred["hashReason"]
+                .as_str()
+                .unwrap()
+                .contains("JIT hashing")
+        );
+        hashes.hashes.remove(&task.to_string());
+        assert!(matches!(plan(&hashes), Err(Error::MissingHash(id)) if id == task));
+        hashes
+            .hashes
+            .insert(task.to_string(), Arc::from("restored"));
+        hashes.inputs.remove(&task.to_string());
+        assert!(matches!(plan(&hashes), Err(Error::MissingExpandedInputs(id)) if id == task));
+        hashes.inputs.insert(task.to_string(), Vec::new());
+        hashes.env = None;
+        assert!(matches!(plan(&hashes), Err(Error::MissingEnvVars(id)) if id == task));
+    }
+
     #[tokio::test]
     async fn summary_uses_authoritative_path_and_toolchain_provenance() {
         let (_tempdir, graph) = summary_graph().await;
