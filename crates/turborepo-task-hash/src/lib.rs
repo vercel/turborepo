@@ -1304,6 +1304,89 @@ mod test {
     }
 
     #[tokio::test]
+    async fn cargo_semantic_environment_changes_hash_without_hashing_locations() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = cargo_graph(&root).await;
+        let task_id = TaskId::new("cargo-app", "build").into_owned();
+        let context = graph
+            .package_task_context(&PackageName::from("cargo-app"))
+            .unwrap();
+        let definition = TaskDefinition {
+            env: turborepo_repository::cargo::HASHED_ENV_VARS
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            pass_through_env: Some(vec!["RUSTUP_HOME".to_string()]),
+            ..Default::default()
+        };
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let hash_with = |name: Option<(&str, &str)>| {
+            let env = EnvironmentVariableMap::from(
+                name.into_iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+                    .collect::<HashMap<_, _>>(),
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            let hash = hasher
+                .calculate_task_hash(
+                    &task_id,
+                    &definition,
+                    EnvMode::Strict,
+                    &context,
+                    &[],
+                    PackageTaskEventBuilder::new("cargo-app", "build"),
+                )
+                .unwrap();
+            (
+                hash,
+                hasher.env(&task_id, EnvMode::Strict, &definition).unwrap(),
+                env,
+            )
+        };
+        let (baseline, _, _) = hash_with(None);
+        for (name, value) in [
+            ("CARGO_ENCODED_RUSTFLAGS", "--cfg\x1fturbo_env_hash_test"),
+            ("RUSTDOCFLAGS", "--cfg turbo_env_hash_test"),
+            ("CARGO_PROFILE_DEV_LTO", "true"),
+            ("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "clang"),
+            ("CC_aarch64_unknown_linux_gnu", "clang"),
+            ("TARGET_CFLAGS", "-DTURBO_ENV_HASH_TEST"),
+            ("CROSS_COMPILE", "aarch64-linux-gnu-"),
+            ("WASI_SYSROOT", "/opt/wasi-sysroot"),
+            ("WASM_MUSL_SYSROOT", "/opt/wasm-musl-sysroot"),
+            ("RUSTUP_TOOLCHAIN", "stable"),
+        ] {
+            assert_ne!(hash_with(Some((name, value))).0, baseline, "{name}");
+        }
+        for (name, value) in [
+            ("CARGO_HTTP_TIMEOUT", "120"),
+            ("CARGO_HOME", "/some/cargo-home"),
+            ("CARGO_HOME", "/another/cargo-home"),
+            ("CARGO_TARGET_DIR", "/some/target"),
+            ("RUSTUP_HOME", "/some/rustup-home"),
+        ] {
+            let (hash, strict, env) = hash_with(Some((name, value)));
+            assert_eq!(hash, baseline, "{name} is not hashed verbatim");
+            assert_eq!(
+                strict.get(name).map(String::as_str),
+                (name == "RUSTUP_HOME").then_some(value)
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            assert_eq!(
+                hasher
+                    .env(&task_id, EnvMode::Loose, &definition)
+                    .unwrap()
+                    .get(name)
+                    .map(String::as_str),
+                Some(value)
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn scoped_log_paths_separate_equal_hash_inputs_and_invalidate_legacy_entries() {
         let tmp = tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
