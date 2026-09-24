@@ -137,11 +137,16 @@ pub(super) fn discover_package_scopes(
         return Ok(DiscoveredPackageScopes::new(Vec::new(), Vec::new()));
     }
 
-    validate_single_workspace(repo_root)?;
     let work = parse_go_work(&read_manifest(&work_path)?, &work_path)?;
     if work.uses.is_empty() {
         return Err(Error::EmptyWorkspace);
     }
+    let member_dirs = work
+        .uses
+        .iter()
+        .map(|disk_path| resolve_member_dir(repo_root, disk_path))
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_single_workspace(repo_root, &member_dirs)?;
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
         let manifest = repo_root.join_component(GO_MOD);
@@ -759,6 +764,24 @@ mod tests {
         let scopes = discover_package_scopes(&root).unwrap();
         assert!(scopes.scopes().is_empty());
         assert!(scopes.workspace_roots().is_empty());
+    }
+
+    #[test]
+    fn inventory_ignores_worktree_checked_out_inside_repository() {
+        let (_tempdir, root) = temp_root();
+        write_work(&root, &["./module"]);
+        write_member(&root, "module", "example.com/module");
+
+        // Go never reads this go.work for `module`: it is neither above the
+        // member nor inside it.
+        let worktree = root.join_components(&[".claude", "worktrees", "copy"]);
+        worktree.create_dir_all().unwrap();
+        write_work(&worktree, &["./module"]);
+        write_member(&worktree, "module", "example.com/module");
+
+        let scopes = discover_package_scopes(&root).unwrap();
+        // The member, then the aggregate.
+        assert_eq!(scopes.scopes().len(), 2);
     }
 
     #[test]

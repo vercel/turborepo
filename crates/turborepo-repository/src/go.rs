@@ -727,7 +727,56 @@ fn required_module_path<'a>(
         })
 }
 
-fn validate_single_workspace(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
+/// Reject any `go.work` that Go would pick over the root workspace for a
+/// member.
+///
+/// Go uses the first `go.work` it finds walking up from the working directory,
+/// so a secondary workspace only matters between the repository root and a
+/// member, or inside a member's own module. A `go.work` anywhere else, such as
+/// in a git worktree checked out under the repository, is never read for this
+/// workspace.
+fn validate_single_workspace(
+    repo_root: &AbsoluteSystemPath,
+    member_dirs: &[AbsoluteSystemPathBuf],
+) -> Result<(), Error> {
+    let mut secondary = Vec::new();
+    for member_dir in member_dirs {
+        secondary.extend(
+            member_dir
+                .ancestors()
+                .skip(1)
+                .take_while(|dir| *dir != repo_root && repo_root.contains(dir))
+                .map(|dir| dir.join_component(GO_WORK))
+                .filter(|path| path.exists()),
+        );
+        secondary.extend(
+            workspaces_under(member_dir)?
+                .into_iter()
+                .filter(|path| !is_in_nested_module(member_dir, path)),
+        );
+    }
+    let root_workspace = repo_root.join_component(GO_WORK);
+    secondary.retain(|path| path != &root_workspace);
+    secondary.sort();
+    if let Some(path) = secondary.into_iter().next() {
+        return Err(Error::SecondaryWorkspace {
+            path: path.to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// A `go.work` below another `go.mod` belongs to that nested module, which Go
+/// excludes from the member's packages.
+fn is_in_nested_module(member_dir: &AbsoluteSystemPath, work_path: &AbsoluteSystemPath) -> bool {
+    work_path
+        .ancestors()
+        .skip(1)
+        .take_while(|dir| *dir != member_dir)
+        .any(|dir| dir.join_component(GO_MOD).exists())
+}
+
+fn workspaces_under(dir: &AbsoluteSystemPath) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
     let includes = ["**/go.work"]
         .into_iter()
         .map(str::parse)
@@ -743,20 +792,12 @@ fn validate_single_workspace(repo_root: &AbsoluteSystemPath) -> Result<(), Error
     .map(str::parse)
     .collect::<Result<Vec<globwalk::ValidatedGlob>, _>>()
     .map_err(Error::WorkspaceGlob)?;
-    let root_workspace = repo_root.join_component(GO_WORK);
-    let mut secondary =
-        globwalk::globwalk(repo_root, &includes, &excludes, globwalk::WalkType::Files)
+    Ok(
+        globwalk::globwalk(dir, &includes, &excludes, globwalk::WalkType::Files)
             .map_err(Error::WorkspaceScan)?
             .into_iter()
-            .filter(|path| path != &root_workspace)
-            .collect::<Vec<_>>();
-    secondary.sort();
-    if let Some(path) = secondary.into_iter().next() {
-        return Err(Error::SecondaryWorkspace {
-            path: path.to_string(),
-        });
-    }
-    Ok(())
+            .collect(),
+    )
 }
 
 fn resolve_member_dir(
@@ -1102,12 +1143,21 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         return Ok(DiscoveredWorkspace::default());
     }
 
-    validate_single_workspace(repo_root)?;
     let work = go_work_json(repo_root)?;
     let uses = work.use_.clone().ok_or(Error::EmptyWorkspace)?;
     if uses.is_empty() {
         return Err(Error::EmptyWorkspace);
     }
+    let member_dirs = uses
+        .iter()
+        .map(|entry| match entry.disk_path.as_deref() {
+            Some(disk_path) => resolve_member_dir(repo_root, disk_path),
+            None => Err(Error::MalformedModGraphLine {
+                line: "go.work Use entry is missing DiskPath".to_string(),
+            }),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_single_workspace(repo_root, &member_dirs)?;
 
     let root_module_path = if repo_root.join_component(GO_MOD).exists() {
         let root_module = go_mod_edit_json(repo_root, repo_root)?;
@@ -1122,15 +1172,7 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
     let mut package_directories = HashMap::new();
     let mut member_paths = HashSet::new();
 
-    for entry in uses {
-        let member_dir = match entry.disk_path.as_deref() {
-            Some(disk_path) => resolve_member_dir(repo_root, disk_path)?,
-            None => {
-                return Err(Error::MalformedModGraphLine {
-                    line: "go.work Use entry is missing DiskPath".to_string(),
-                });
-            }
-        };
+    for (entry, member_dir) in uses.into_iter().zip(member_dirs) {
         if !member_dir.join_component(GO_MOD).exists() {
             return Err(Error::MissingGoMod {
                 path: member_dir.to_string(),
@@ -2444,6 +2486,47 @@ mod tests {
         let error = discover_workspace(&root).expect_err("secondary workspace fails");
         assert!(matches!(error, Error::SecondaryWorkspace { .. }));
         assert!(error.to_string().contains("single go.work"));
+    }
+
+    #[test]
+    fn rejects_secondary_workspace_above_member() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("apps/module", "example.com/module", "")]);
+        root.join_components(&["apps", GO_WORK])
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("secondary workspace fails");
+        assert!(matches!(error, Error::SecondaryWorkspace { .. }));
+    }
+
+    #[test]
+    fn ignores_workspaces_go_never_reads_for_members() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+
+        // A git worktree checked out inside the repository.
+        let worktree = root.join_components(&[".claude", "worktrees", "copy"]);
+        write_workspace(&worktree, &[("module", "example.com/module", "")]);
+
+        // A nested module inside a member, which Go excludes from the member.
+        let nested = root.join_components(&["module", "nested"]);
+        write_workspace(&nested, &[("inner", "example.com/inner", "")]);
+        nested
+            .join_component(GO_MOD)
+            .create_with_contents("module example.com/nested\n\ngo 1.22\n")
+            .unwrap();
+
+        let workspace = discover_workspace(&root).expect("secondary workspaces are unreachable");
+        assert_eq!(workspace.modules.len(), 1);
     }
 
     #[test]
