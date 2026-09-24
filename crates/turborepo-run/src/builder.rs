@@ -2800,6 +2800,7 @@ mod origins_match_tests {
     use std::sync::{Arc, Mutex};
 
     use turbopath::AnchoredSystemPathBuf;
+    use turborepo_engine::Building;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_graph::PackageGraph, package_json::PackageJson,
         package_manager::PackageManager,
@@ -3000,6 +3001,91 @@ mod origins_match_tests {
                 true
             )]
         );
+    }
+
+    #[test]
+    fn task_level_affected_filter_uses_an_injected_changed_file_set() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector {
+            affected: true,
+            ..Default::default()
+        };
+        let opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        let builder = RunBuilder::new(
+            crate::RunBuilderInput {
+                repo_root: repo_root.clone(),
+                color_config: ColorConfig::new(true),
+                opts,
+                version: "test",
+                api_auth: None,
+            },
+            None,
+        )
+        .unwrap();
+
+        let app_build = TaskId::new("app", "build").into_owned();
+        let lib_build = TaskId::new("lib", "build").into_owned();
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+        let app_index = engine.get_index(&app_build);
+        let lib_index = engine.get_index(&lib_build);
+        engine.add_definition(
+            app_build.clone(),
+            TaskDefinition {
+                command: Some(turborepo_types::TaskCommandOverride::Argv(vec![
+                    "build".into(),
+                ])),
+                ..Default::default()
+            },
+        );
+        engine.add_definition(
+            lib_build.clone(),
+            TaskDefinition {
+                command: Some(turborepo_types::TaskCommandOverride::Argv(vec![
+                    "build".into(),
+                ])),
+                inputs: TaskInputs {
+                    globs: vec!["src/**".to_string()],
+                    default: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(app_index, lib_index, ());
+
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let (filtered, selected_packages) = builder
+            .filter_engine_to_affected_tasks(
+                engine.seal(),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: HashSet::from([AnchoredSystemPathBuf::from_raw(
+                        "packages/lib/src/index.ts",
+                    )
+                    .unwrap()]),
+                    calls: calls.clone(),
+                },
+                None,
+            )
+            .unwrap();
+
+        assert!(filtered.task_definition(&lib_build).is_some());
+        assert!(filtered.task_definition(&app_build).is_some());
+        assert_eq!(
+            selected_packages.unwrap(),
+            HashSet::from([PackageName::from("app"), PackageName::from("lib")])
+        );
+        assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
     }
 
     fn names(packages: Vec<PackageName>) -> Vec<String> {
