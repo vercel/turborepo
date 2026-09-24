@@ -4487,7 +4487,7 @@ release: 1.96.0-nightly\n",
             .discover_packages()
             .await
             .unwrap_err();
-        let error = error.to_string();
+        let error = error.to_string().replace('\\', "/");
         assert!(error.contains("local"), "{error}");
         assert!(error.contains("not a workspace member"), "{error}");
         assert!(error.contains("crates/local/Cargo.toml"), "{error}");
