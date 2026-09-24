@@ -87,7 +87,7 @@ struct ExecutionContextInput<'a> {
     async_cache: AsyncCache,
 }
 
-struct ExecutionContext {
+struct BuiltExecutionContext {
     pkg_dep_graph: Arc<PackageGraph>,
     turbo_json_loader: UnifiedTurboJsonLoader,
     root_turbo_json: TurboJson,
@@ -297,7 +297,7 @@ struct RunServicesInput<'a> {
     analytics_handle: Option<AnalyticsHandle>,
 }
 
-struct RunServices {
+struct BuiltRunServices {
     run_cache: Arc<RunCache>,
     remote_cache_status: RemoteCacheStatus,
     observability_handle: Option<observability::Handle>,
@@ -310,8 +310,8 @@ use turborepo_task_access::TaskAccess;
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
-    Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunBuilderInput,
-    RunCache, engine_loader::EngineTurboJsonLoader, scope,
+    Error, ExecutionContext, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason,
+    Run, RunBuilderInput, RunCache, RunServices, engine_loader::EngineTurboJsonLoader, scope,
 };
 
 fn project_task_io_environment(
@@ -1110,7 +1110,7 @@ impl RunBuilder {
     async fn build_execution_context(
         &self,
         input: ExecutionContextInput<'_>,
-    ) -> Result<ExecutionContext, Error> {
+    ) -> Result<BuiltExecutionContext, Error> {
         let ExecutionContextInput {
             root_package_json,
             is_single_package,
@@ -1246,7 +1246,7 @@ impl RunBuilder {
             ..
         } = settled;
 
-        Ok(ExecutionContext {
+        Ok(BuiltExecutionContext {
             pkg_dep_graph,
             turbo_json_loader,
             root_turbo_json,
@@ -1871,7 +1871,10 @@ impl RunBuilder {
         Ok(())
     }
 
-    async fn build_run_services(&self, input: RunServicesInput<'_>) -> Result<RunServices, Error> {
+    async fn build_run_services(
+        &self,
+        input: RunServicesInput<'_>,
+    ) -> Result<BuiltRunServices, Error> {
         let RunServicesInput {
             preflight_handle,
             async_cache,
@@ -1960,7 +1963,7 @@ impl RunBuilder {
             scm_state.resolve(None);
         }
 
-        Ok(RunServices {
+        Ok(BuiltRunServices {
             run_cache,
             remote_cache_status,
             observability_handle,
@@ -2058,7 +2061,7 @@ impl RunBuilder {
             )?
         };
 
-        let ExecutionContext {
+        let BuiltExecutionContext {
             pkg_dep_graph,
             turbo_json_loader,
             root_turbo_json,
@@ -2080,7 +2083,7 @@ impl RunBuilder {
             })
             .await?;
 
-        let RunServices {
+        let BuiltRunServices {
             run_cache,
             remote_cache_status,
             observability_handle,
@@ -2110,23 +2113,27 @@ impl RunBuilder {
         Ok((
             Run {
                 repo,
-                start_at,
-                processes: self.processes,
-                run_telemetry,
-                task_access,
-                opts: Arc::new(self.opts),
-                api_auth: self.api_auth,
-                env_at_execution_start,
-                filtered_pkgs,
-                engine,
-                run_cache,
-                signal_handler: signal_handler.clone(),
-                remote_cache_status,
-                micro_frontend_configs,
-                repo_index,
-                observability_handle,
-                query_server: self.query_server,
-                shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                execution: ExecutionContext {
+                    start_at,
+                    opts: Arc::new(self.opts),
+                    env_at_execution_start,
+                    filtered_pkgs,
+                    remote_cache_status,
+                    engine,
+                    task_access,
+                    micro_frontend_configs,
+                },
+                services: RunServices {
+                    processes: self.processes,
+                    run_telemetry,
+                    api_auth: self.api_auth,
+                    run_cache,
+                    signal_handler: signal_handler.clone(),
+                    repo_index,
+                    observability_handle,
+                    query_server: self.query_server,
+                    shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                },
             },
             analytics_handle,
         ))
