@@ -1669,9 +1669,7 @@ impl turborepo_query_api::QueryRun for Run {
         std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
         turborepo_query_api::AffectedPackagesError,
     > {
-        match self
-            .scm()
-            .changed_files(self.repo_root(), base, head, true, true, true)
+        match builder::changed_files_for_affected_range(self.scm(), self.repo_root(), base, head)
             .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
         {
             Ok(files) => Ok(files),
