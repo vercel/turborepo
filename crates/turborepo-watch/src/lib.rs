@@ -3,6 +3,7 @@
 use std::{
     collections::HashSet,
     env,
+    future::Future,
     ops::DerefMut as _,
     sync::{Arc, Mutex},
     time::Duration,
@@ -143,11 +144,9 @@ pub struct WatchClient {
     /// alter it. See `package_graph_invalidated`.
     shared_pkg_graph: Option<Arc<PackageGraph>>,
     watched_packages: HashSet<PackageName>,
-    active_runs: Vec<RunHandle>,
-    // Stoppers from completed runs whose ProcessManagers may still track
-    // background persistent processes. Used by stop_impacted_tasks to kill
-    // interruptible persistent tasks on file changes. Cleared on All rebuild.
-    background_stoppers: Vec<run::RunStopper>,
+    // Active runs and completed-run stoppers share one lifecycle. A completed
+    // task can still own persistent processes that must be stopped later.
+    lifecycle: WatchRunLifecycle<run::RunStopper>,
     _watching: FileWatching,
     output_watcher: Arc<dyn OutputWatcher>,
     // Subscribed eagerly (before building the Run) so we don't miss the
@@ -193,9 +192,91 @@ fn package_graph_invalidated(
     })
 }
 
-struct RunHandle {
-    stopper: run::RunStopper,
+struct RunHandle<S> {
+    stopper: S,
     run_task: JoinHandle<Result<i32, run::Error>>,
+}
+
+/// Run completion does not imply process completion: a finished run can still
+/// own persistent tasks through its stopper. Keep that transition and the
+/// stop-before-join ordering testable independently of `Run`/ProcessManager.
+struct WatchRunLifecycle<S> {
+    active_runs: Vec<RunHandle<S>>,
+    background_stoppers: Vec<S>,
+}
+
+impl<S: Clone> WatchRunLifecycle<S> {
+    fn new() -> Self {
+        Self {
+            active_runs: Vec::new(),
+            background_stoppers: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, handle: RunHandle<S>) {
+        self.active_runs.push(handle);
+    }
+
+    async fn settle_completed(&mut self) {
+        for handle in &mut self.active_runs {
+            let _ = (&mut handle.run_task).await;
+        }
+        for handle in &self.active_runs {
+            if handle.run_task.is_finished() {
+                self.background_stoppers.push(handle.stopper.clone());
+            }
+        }
+        self.active_runs
+            .retain(|handle| !handle.run_task.is_finished());
+    }
+
+    async fn stop_tasks<F, Fut>(&self, mut stop: F)
+    where
+        F: FnMut(S) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        for handle in &self.active_runs {
+            stop(handle.stopper.clone()).await;
+        }
+        for stopper in &self.background_stoppers {
+            stop(stopper.clone()).await;
+        }
+    }
+
+    async fn stop_for_rediscovery<F, Fut>(&mut self, mut stop: F)
+    where
+        F: FnMut(S) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        for stopper in self.background_stoppers.drain(..) {
+            stop(stopper).await;
+        }
+        for handle in self.active_runs.drain(..) {
+            stop(handle.stopper).await;
+            let _ = handle.run_task.await;
+        }
+    }
+
+    /// Stop both active and completed runs, returning every stopper for the
+    /// subsequent cache-write shutdown. The injected callback selects graceful
+    /// or forced process shutdown; joining always follows stopping.
+    async fn drain_for_shutdown<F, Fut>(&mut self, mut stop: F) -> Vec<S>
+    where
+        F: FnMut(S) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        let mut stoppers = std::mem::take(&mut self.background_stoppers);
+        for stopper in &stoppers {
+            stop(stopper.clone()).await;
+        }
+        for handle in self.active_runs.drain(..) {
+            let RunHandle { stopper, run_task } = handle;
+            stop(stopper.clone()).await;
+            let _ = run_task.await;
+            stoppers.push(stopper);
+        }
+        stoppers
+    }
 }
 
 /// Format the slowest-to-hash files reported by the [`HashWatcher`] into a
@@ -437,8 +518,7 @@ impl WatchClient {
             shutdown_guard: None,
             telemetry,
             experimental_write_cache,
-            background_stoppers: Vec::new(),
-            active_runs: Vec::new(),
+            lifecycle: WatchRunLifecycle::new(),
             ui_sender,
             ui_handle,
             query_server,
@@ -502,41 +582,19 @@ impl WatchClient {
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
-        let pending_changes = Mutex::new(ChangedPackages::default());
+        let pending_changes = Arc::new(Mutex::new(ChangedPackages::default()));
         let notify_run = Arc::new(Notify::new());
         let notify_event = notify_run.clone();
 
         Self::handle_change_event(&pending_changes, initial_event);
         notify_event.notify_one();
 
-        let event_fut = async {
-            loop {
-                match events.recv().await {
-                    Ok(ref event) => {
-                        debug!(?event, "received package change event");
-                        Self::handle_change_event(&pending_changes, event.clone());
-                        notify_event.notify_one();
-                    }
-                    Err(broadcast::error::RecvError::Closed) => {
-                        return Err(Error::PackageChangeClosed);
-                    }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {
-                        Self::handle_change_event(&pending_changes, PackageChangeEvent::Rediscover);
-                        notify_event.notify_one();
-                    }
-                }
-            }
-        };
+        let event_fut = Self::collect_change_events(events, pending_changes.clone(), notify_event);
 
         let run_fut = async {
             loop {
                 notify_run.notified().await;
-                let some_changed_packages = {
-                    let mut guard = pending_changes
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
-                };
+                let some_changed_packages = Self::take_pending_changes(&pending_changes);
 
                 if let Some(mut changed_packages) = some_changed_packages {
                     // Stop impacted tasks and wait for prior runs to finish
@@ -557,41 +615,25 @@ impl WatchClient {
                             }
                         }
                         ChangedPackages::All => {
-                            for stopper in self.background_stoppers.drain(..) {
-                                stopper.stop().await;
-                            }
-                            for handle in self.active_runs.drain(..) {
-                                handle.stopper.stop().await;
-                                let _ = handle.run_task.await;
-                            }
+                            self.lifecycle
+                                .stop_for_rediscovery(|stopper| async move { stopper.stop().await })
+                                .await;
                         }
                     }
 
                     changed_packages.filter_to_watched(&self.watched_packages);
 
                     let new_run = self.execute_run(changed_packages).await?;
-                    self.active_runs.push(new_run);
+                    self.lifecycle.push(new_run);
 
-                    // Wait for runs to complete before processing more events.
-                    // In watch mode the visitor treats persistent tasks as
-                    // fire-and-forget, so this only blocks on non-persistent
-                    // tasks (builds).
+                    // Persistent tasks are fire-and-forget. Completed runs may
+                    // still own their processes, so retain their stoppers.
                     debug!(
-                        active_runs = self.active_runs.len(),
+                        active_runs = self.lifecycle.active_runs.len(),
                         "waiting for runs to complete"
                     );
-                    for handle in &mut self.active_runs {
-                        let _ = (&mut handle.run_task).await;
-                    }
+                    self.lifecycle.settle_completed().await;
                     debug!("all runs completed, ready for next event");
-                    // Save stoppers before retain drops them — their PMs may
-                    // still track background persistent processes.
-                    for handle in &self.active_runs {
-                        if handle.run_task.is_finished() {
-                            self.background_stoppers.push(handle.stopper.clone());
-                        }
-                    }
-                    self.active_runs.retain(|h| !h.run_task.is_finished());
                 }
             }
         };
@@ -605,6 +647,34 @@ impl WatchClient {
         self.shutdown_guard = shutdown_guard;
         tracing::info!("shutting down");
         Err(Error::SignalInterrupt)
+    }
+
+    async fn collect_change_events(
+        mut events: broadcast::Receiver<PackageChangeEvent>,
+        pending: Arc<Mutex<ChangedPackages>>,
+        notify: Arc<Notify>,
+    ) -> Result<(), Error> {
+        loop {
+            match events.recv().await {
+                Ok(event) => {
+                    debug!(?event, "received package change event");
+                    Self::handle_change_event(&pending, event);
+                    notify.notify_one();
+                }
+                Err(broadcast::error::RecvError::Closed) => return Err(Error::PackageChangeClosed),
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    Self::handle_change_event(&pending, PackageChangeEvent::Rediscover);
+                    notify.notify_one();
+                }
+            }
+        }
+    }
+
+    fn take_pending_changes(pending: &Mutex<ChangedPackages>) -> Option<ChangedPackages> {
+        let mut guard = pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
     }
 
     #[instrument(skip(changed_packages))]
@@ -645,35 +715,22 @@ impl WatchClient {
                 .emit_shutdown_started_once_for_run(force_shutdown_timeout);
         }
 
-        let mut stoppers = std::mem::take(&mut self.background_stoppers);
-        for stopper in &stoppers {
-            if graceful_shutdown {
-                stopper
-                    .shutdown(
-                        force_shutdown_timeout,
-                        Some(self.handler.subscribe_signals()),
-                    )
-                    .await;
-            } else {
-                stopper.stop().await;
-            }
-        }
-
-        for handle in self.active_runs.drain(..) {
-            let RunHandle { stopper, run_task } = handle;
-            if graceful_shutdown {
-                stopper
-                    .shutdown(
-                        force_shutdown_timeout,
-                        Some(self.handler.subscribe_signals()),
-                    )
-                    .await;
-            } else {
-                stopper.stop().await;
-            }
-            let _ = run_task.await;
-            stoppers.push(stopper);
-        }
+        let handler = self.handler.clone();
+        let stoppers = self
+            .lifecycle
+            .drain_for_shutdown(|stopper| {
+                let handler = handler.clone();
+                async move {
+                    if graceful_shutdown {
+                        stopper
+                            .shutdown(force_shutdown_timeout, Some(handler.subscribe_signals()))
+                            .await;
+                    } else {
+                        stopper.stop().await;
+                    }
+                }
+            })
+            .await;
 
         if stoppers
             .iter()
@@ -772,12 +829,12 @@ impl WatchClient {
             .collect();
 
         debug!(?stoppable_ids, "stopping interruptible tasks");
-        for handle in &self.active_runs {
-            handle.stopper.stop_tasks(&stoppable_ids).await;
-        }
-        for stopper in &self.background_stoppers {
-            stopper.stop_tasks(&stoppable_ids).await;
-        }
+        let stoppable_ids = &stoppable_ids;
+        self.lifecycle
+            .stop_tasks(|stopper| async move {
+                stopper.stop_tasks(stoppable_ids).await;
+            })
+            .await;
 
         impacted_packages
     }
@@ -790,7 +847,10 @@ impl WatchClient {
     /// Persistent tasks are handled as fire-and-forget by the visitor in watch
     /// mode: they run as background processes tracked by the ProcessManager
     /// while the run itself completes after non-persistent tasks finish.
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
+    async fn execute_run(
+        &mut self,
+        changed_packages: ChangedPackages,
+    ) -> Result<RunHandle<run::RunStopper>, Error> {
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
             ChangedPackages::Some {
@@ -936,11 +996,15 @@ mod test {
         sync::{Arc, Mutex},
     };
 
+    use tokio::sync::{Notify, broadcast, oneshot};
     use turbopath::AnchoredSystemPathBuf;
     use turborepo_daemon::PackageChangeEvent;
     use turborepo_repository::{package_graph::PackageName, toolchain::WatchSpec};
 
-    use super::{ChangedPackages, WatchClient, package_graph_invalidated};
+    use super::{
+        ChangedPackages, Error, RunHandle, WatchClient, WatchRunLifecycle,
+        package_graph_invalidated,
+    };
 
     fn make_package_changed(name: &str) -> PackageChangeEvent {
         PackageChangeEvent::Package {
@@ -963,6 +1027,211 @@ mod test {
 
     fn make_rediscover() -> PackageChangeEvent {
         PackageChangeEvent::Rediscover
+    }
+
+    #[derive(Clone)]
+    struct RecordingStopper {
+        name: &'static str,
+        events: Arc<Mutex<Vec<String>>>,
+        completion: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    }
+
+    impl RecordingStopper {
+        fn record(&self, action: &str) {
+            self.events
+                .lock()
+                .unwrap()
+                .push(format!("{}:{action}", self.name));
+        }
+
+        fn complete(&self) {
+            if let Some(completion) = self.completion.lock().unwrap().take() {
+                completion.send(()).unwrap();
+            }
+        }
+
+        async fn stop(&self, action: &str) {
+            self.record(action);
+            self.complete();
+            tokio::task::yield_now().await;
+        }
+    }
+
+    fn recording_run(
+        name: &'static str,
+        events: &Arc<Mutex<Vec<String>>>,
+    ) -> (RunHandle<RecordingStopper>, RecordingStopper) {
+        let (completion, done) = oneshot::channel();
+        let stopper = RecordingStopper {
+            name,
+            events: events.clone(),
+            completion: Arc::new(Mutex::new(Some(completion))),
+        };
+        let recorded = events.clone();
+        let run_task = tokio::spawn(async move {
+            done.await.expect("run must be completed or stopped");
+            recorded.lock().unwrap().push(format!("{name}:joined"));
+            Ok(0)
+        });
+        (
+            RunHandle {
+                stopper: stopper.clone(),
+                run_task,
+            },
+            stopper,
+        )
+    }
+
+    #[tokio::test]
+    async fn lifecycle_retains_completed_stoppers_until_rediscovery() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut lifecycle = WatchRunLifecycle::new();
+        let (completed, done) = recording_run("completed", &events);
+        lifecycle.push(completed);
+        done.complete();
+        lifecycle.settle_completed().await;
+        assert!(lifecycle.active_runs.is_empty());
+        assert_eq!(lifecycle.background_stoppers.len(), 1);
+        lifecycle.settle_completed().await;
+        assert_eq!(
+            lifecycle.background_stoppers.len(),
+            1,
+            "no duplicate stoppers"
+        );
+
+        let (active, _) = recording_run("active", &events);
+        lifecycle.push(active);
+        lifecycle
+            .stop_tasks(|stopper| async move { stopper.record("stop_tasks") })
+            .await;
+        assert_eq!(
+            events.lock().unwrap().as_slice(),
+            [
+                "completed:joined",
+                "active:stop_tasks",
+                "completed:stop_tasks"
+            ]
+        );
+        lifecycle
+            .stop_for_rediscovery(|stopper| async move { stopper.stop("rediscover").await })
+            .await;
+        assert!(lifecycle.active_runs.is_empty());
+        assert!(lifecycle.background_stoppers.is_empty());
+        assert_eq!(
+            events.lock().unwrap().as_slice(),
+            [
+                "completed:joined",
+                "active:stop_tasks",
+                "completed:stop_tasks",
+                "completed:rediscover",
+                "active:rediscover",
+                "active:joined",
+            ]
+        );
+        let (restarted, done) = recording_run("restart", &events);
+        lifecycle.push(restarted);
+        done.complete();
+        lifecycle.settle_completed().await;
+        assert_eq!(lifecycle.background_stoppers.len(), 1);
+        assert_eq!(events.lock().unwrap().last().unwrap(), "restart:joined");
+    }
+
+    #[tokio::test]
+    async fn lifecycle_shutdown_joins_before_returning_cache_owners() {
+        // The callback represents the signal-selected stop policy. Actual
+        // RunStopper signal and cache behavior stays in the real watch smokes.
+        for graceful in [true, false] {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let mut lifecycle = WatchRunLifecycle::new();
+            let (finished, done) = recording_run("finished", &events);
+            lifecycle.push(finished);
+            done.complete();
+            lifecycle.settle_completed().await;
+            let (active, _) = recording_run("active", &events);
+            lifecycle.push(active);
+            let stoppers = lifecycle
+                .drain_for_shutdown(|stopper| async move {
+                    stopper
+                        .stop(if graceful { "graceful" } else { "forced" })
+                        .await;
+                })
+                .await;
+            assert_eq!(stoppers.len(), 2);
+            assert!(lifecycle.active_runs.is_empty());
+            assert!(lifecycle.background_stoppers.is_empty());
+            for stopper in &stoppers {
+                stopper.record("cache_cleanup");
+            }
+            let action = if graceful { "graceful" } else { "forced" };
+            assert_eq!(
+                events.lock().unwrap().as_slice(),
+                [
+                    "finished:joined".to_string(),
+                    format!("finished:{action}"),
+                    format!("active:{action}"),
+                    "active:joined".to_string(),
+                    "finished:cache_cleanup".to_string(),
+                    "active:cache_cleanup".to_string(),
+                ]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_event_channel_drains_and_rediscover_supersedes_packages() {
+        let (tx, rx) = broadcast::channel(16);
+        let pending = Arc::new(Mutex::new(ChangedPackages::default()));
+        let notify = Arc::new(Notify::new());
+        let collector = tokio::spawn(WatchClient::collect_change_events(
+            rx,
+            pending.clone(),
+            notify,
+        ));
+        for event in [
+            make_package_changed("web"),
+            make_package_changed("ui"),
+            make_rediscover(),
+            make_package_changed("py-app"),
+        ] {
+            tx.send(event).unwrap();
+        }
+        for _ in 0..100 {
+            if matches!(*pending.lock().unwrap(), ChangedPackages::All) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(matches!(
+            WatchClient::take_pending_changes(&pending),
+            Some(ChangedPackages::All)
+        ));
+        assert!(WatchClient::take_pending_changes(&pending).is_none());
+
+        tx.send(make_package_changed_with_files(
+            "go-app",
+            &["apps/go/main.go"],
+        ))
+        .unwrap();
+        for _ in 0..100 {
+            if !pending.lock().unwrap().is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let Some(ChangedPackages::Some {
+            packages,
+            changed_files,
+        }) = WatchClient::take_pending_changes(&pending)
+        else {
+            panic!("a later event must start a new partial run");
+        };
+        assert_eq!(packages, [PackageName::from("go-app")].into());
+        assert_eq!(changed_files, files(&["apps/go/main.go"]));
+        drop(tx);
+        assert!(matches!(
+            collector.await.unwrap(),
+            Err(Error::PackageChangeClosed)
+        ));
     }
 
     #[test]
