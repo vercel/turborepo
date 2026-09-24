@@ -946,7 +946,11 @@ mod tests {
             let summary = plan(task.clone());
             assert_eq!(summary["taskId"], task.to_string());
             assert_eq!(summary["command"], command, "{task}");
-            assert_eq!(summary["directory"], directory, "{task}");
+            assert_eq!(
+                summary["directory"],
+                directory.replace('/', std::path::MAIN_SEPARATOR_STR),
+                "{task}"
+            );
             assert_eq!(summary["resolvedTaskDefinition"]["cache"], cache, "{task}");
             assert_eq!(summary["logFile"].is_null(), !cache, "{task}");
             assert_eq!(summary["cache"]["status"], "MISS", "{task}");
@@ -959,10 +963,13 @@ mod tests {
                 assert_eq!(
                     summary["logFile"],
                     if cache {
-                        json!(format!(
-                            "packages/py-app/.turbo/turbo-{}.log",
-                            task.task().replace(':', "$colon$")
-                        ))
+                        json!(
+                            format!(
+                                "packages/py-app/.turbo/turbo-{}.log",
+                                task.task().replace(':', "$colon$")
+                            )
+                            .replace('/', std::path::MAIN_SEPARATOR_STR)
+                        )
                     } else {
                         json!(null)
                     }
