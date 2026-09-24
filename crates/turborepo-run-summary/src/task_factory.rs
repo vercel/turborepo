@@ -1038,7 +1038,10 @@ mod tests {
 
         let library = serde_json::to_value(factory.task_summary(lib, None).unwrap()).unwrap();
         assert_eq!(library["command"], "go build ./...");
-        assert_eq!(library["directory"], "packages/lib");
+        assert_eq!(
+            library["directory"],
+            Path::new("packages").join("lib").to_string_lossy().as_ref()
+        );
         assert_eq!(library["dependents"], json!(["api#build"]));
         assert_eq!(
             library["hashOfExternalDependencies"],
