@@ -18,8 +18,9 @@ const RETRY_MAX: u32 = 2;
 // bounding the total time spent waiting for the coordinator and retry backoff.
 const MAX_RETRY_ELAPSED: Duration = Duration::from_secs(20);
 
-/// Serializes artifact attempts (including initial requests) until the response
-/// headers are known. Clones of an APIClient share this gate for a team/token.
+/// Shared cooldown for artifact requests from one APIClient/team/token.
+/// In-flight requests may complete after another request publishes a 429
+/// cooldown.
 #[derive(Clone, Default)]
 pub(crate) struct RateLimit(Arc<Mutex<Option<Instant>>>);
 
@@ -36,10 +37,12 @@ fn retry_after(response: &Response, now: SystemTime) -> Option<Duration> {
     Some(duration.min(Duration::from_secs(MAX_SLEEP_TIME_SECS)))
 }
 
-/// Artifact-only retry path. A 429 publishes its cooldown before another
-/// request for the same team/token may start, even when the first request's
-/// body cannot be replayed. 5xx and transport errors use ordinary backoff and
-/// never extend the shared cooldown.
+/// Artifact-only retry path. Requests check the shared cooldown before each
+/// send; an already-in-flight request may still complete after a 429. A 429
+/// publishes its cooldown even for non-replayable bodies. 5xx and transport
+/// errors use ordinary backoff and never extend the shared cooldown.
+/// The elapsed budget bounds waiting and retries, not an in-flight HTTP send;
+/// that is subject to the request's timeout, if one was configured.
 pub(crate) async fn make_rate_limited_request(
     request_builder: RequestBuilder,
     strategy: RetryStrategy,
@@ -51,14 +54,15 @@ pub(crate) async fn make_rate_limited_request(
     let mut last_error = None;
 
     for retry_count in 0..RETRY_MAX {
-        // Do not hold the gate while waiting for a cooldown: other callers can
-        // observe it too, and cancellation cannot leave a lock behind.
-        let response = loop {
-            let mut gate = match timeout_at(deadline, rate_limit.0.lock()).await {
+        // Check immediately before sending. The lock is released before HTTP I/O:
+        // requests already in flight when a 429 arrives cannot be recalled.
+        loop {
+            let gate = match timeout_at(deadline, rate_limit.0.lock()).await {
                 Ok(gate) => gate,
                 Err(_) => return exhausted(last_response, last_error, retry_count),
             };
-            if let Some(until) = *gate
+            let until = *gate;
+            if let Some(until) = until
                 && until > Instant::now()
             {
                 drop(gate);
@@ -68,35 +72,35 @@ pub(crate) async fn make_rate_limited_request(
                 sleep(until.saturating_duration_since(Instant::now())).await;
                 continue;
             }
+            break;
+        }
 
-            // The gate covers the send, not just the wait: concurrent initial
-            // requests cannot race ahead of the first 429 response.
-            let builder = request_builder.as_ref().and_then(RequestBuilder::try_clone);
-            let can_retry = builder.is_some();
-            let response = match builder {
-                Some(builder) => builder.send().await,
-                None => {
-                    let Some(builder) = request_builder.take() else {
-                        return exhausted(last_response, last_error, retry_count);
-                    };
-                    builder.send().await
-                }
-            };
-            if let Ok(ref response) = response
-                && response.status() == StatusCode::TOO_MANY_REQUESTS
-            {
-                let backoff = Duration::from_secs(
-                    2_u64
-                        .pow(retry_count)
-                        .clamp(MIN_SLEEP_TIME_SECS, MAX_SLEEP_TIME_SECS),
-                );
-                let delay = retry_after(response, SystemTime::now()).unwrap_or(backoff);
-                *gate = Some(Instant::now() + delay);
+        let builder = request_builder.as_ref().and_then(RequestBuilder::try_clone);
+        let can_retry = builder.is_some();
+        let response = match builder {
+            Some(builder) => builder.send().await,
+            None => {
+                let Some(builder) = request_builder.take() else {
+                    return exhausted(last_response, last_error, retry_count);
+                };
+                builder.send().await
             }
-            break (response, can_retry);
         };
-
-        let (response, can_retry) = response;
+        if let Ok(ref response) = response
+            && response.status() == StatusCode::TOO_MANY_REQUESTS
+        {
+            let backoff = Duration::from_secs(
+                2_u64
+                    .pow(retry_count)
+                    .clamp(MIN_SLEEP_TIME_SECS, MAX_SLEEP_TIME_SECS),
+            );
+            let delay = retry_after(response, SystemTime::now()).unwrap_or(backoff);
+            let until = Instant::now() + delay;
+            let mut gate = rate_limit.0.lock().await;
+            // Concurrent 429s can arrive out of order; never shorten a
+            // cooldown already published by another request.
+            *gate = Some(gate.map_or(until, |previous| previous.max(until)));
+        }
         match response {
             Ok(response) => {
                 let status = response.status();
@@ -300,11 +304,10 @@ mod test {
         }
     }
 
-    // A tiny deterministic HTTP server: the first response waits until the
-    // second request has been started, then returns a 429. This catches the
-    // initial-request race that a gate only around retries would miss.
+    // A tiny deterministic HTTP server: publish a 429 before starting the
+    // second request, which must wait for Retry-After before its first send.
     #[tokio::test(start_paused = true)]
-    async fn coordinates_initial_attempts_and_retry_after() {
+    async fn waits_for_known_cooldown_before_initial_send() {
         // Keep the runtime runnable so its paused clock advances only when
         // explicitly requested, even while the HTTP driver is waiting on I/O.
         let keep_running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -364,19 +367,6 @@ mod test {
         ));
         first_received_rx.await.unwrap();
         assert_eq!(requests_rx.recv().await, Some(1));
-        let second = tokio::spawn(make_rate_limited_request(
-            http.get(&url),
-            RetryStrategy::Timeout,
-            rate_limit.clone(),
-        ));
-        // An unrelated client/key can still send while the first is in flight.
-        let independent = tokio::spawn(make_rate_limited_request(
-            http.get(&url),
-            RetryStrategy::Timeout,
-            RateLimit::default(),
-        ));
-        assert_eq!(requests_rx.recv().await, Some(2));
-        assert!(requests_rx.try_recv().is_err());
         release_tx.send(()).unwrap();
         // Wait until the first 429 has published its cooldown.
         for _ in 0..1000 {
@@ -386,6 +376,18 @@ mod test {
             tokio::task::yield_now().await;
         }
         assert!(rate_limit.0.lock().await.is_some());
+        let second = tokio::spawn(make_rate_limited_request(
+            http.get(&url),
+            RetryStrategy::Timeout,
+            rate_limit.clone(),
+        ));
+        // An unrelated client/key can send during the cooldown.
+        let independent = tokio::spawn(make_rate_limited_request(
+            http.get(&url),
+            RetryStrategy::Timeout,
+            RateLimit::default(),
+        ));
+        assert_eq!(requests_rx.recv().await, Some(2));
         tokio::time::advance(Duration::from_secs(2)).await;
         assert!(requests_rx.try_recv().is_err());
         tokio::time::advance(Duration::from_secs(1)).await;
@@ -413,6 +415,63 @@ mod test {
         server.abort();
         keep_running.store(false, std::sync::atomic::Ordering::Relaxed);
         keepalive.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn successful_requests_share_a_key_without_serializing_headers() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let (first_received_tx, first_received_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut first_stream, _) = listener.accept().await.unwrap();
+            let mut buffer = [0; 4096];
+            let _ = first_stream.read(&mut buffer).await.unwrap();
+            first_received_tx.send(()).unwrap();
+            let (mut second_stream, _) = listener.accept().await.unwrap();
+            let _ = second_stream.read(&mut buffer).await.unwrap();
+            second_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await
+                .unwrap();
+            release_rx.await.unwrap();
+            first_stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await
+                .unwrap();
+        });
+        let http = reqwest::Client::new();
+        let limit = RateLimit::default();
+        let first = tokio::spawn(make_rate_limited_request(
+            http.get(&url),
+            RetryStrategy::Timeout,
+            limit.clone(),
+        ));
+        first_received_rx.await.unwrap();
+        let second = tokio::spawn(make_rate_limited_request(
+            http.get(&url),
+            RetryStrategy::Timeout,
+            limit.clone(),
+        ));
+        // The second must finish while the first still waits for headers.
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), second)
+                .await
+                .expect("second request was serialized")
+                .unwrap()
+                .unwrap()
+                .into_response()
+                .status(),
+            StatusCode::OK
+        );
+        assert!(!first.is_finished());
+        assert!(limit.0.lock().await.is_none());
+        release_tx.send(()).unwrap();
+        assert_eq!(
+            first.await.unwrap().unwrap().into_response().status(),
+            StatusCode::OK
+        );
+        server.await.unwrap();
     }
 
     #[test]
