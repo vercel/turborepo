@@ -1475,11 +1475,18 @@ fn test_prune_task_aware_cross_toolchain_buildable_output() {
         )
         .unwrap();
 
+        // Each scope prunes into its own directory outside the repository.
+        // Deleting a pruned output right after building executables in it
+        // intermittently fails on Windows (os error 5) while handles are
+        // released; the tempdir is cleaned up on drop instead.
+        let outputs = cargo_tempdir();
+
         // There is no package-manifest dependency between js-pkg and app.
         for scope in ["js-pkg", "app"] {
-            let output = run_turbo(dir, &["prune", scope]);
+            let out = outputs.path().join(scope);
+            let out_dir = out.to_str().expect("tempdir path is UTF-8");
+            let output = run_turbo(dir, &["prune", scope, "--out-dir", out_dir]);
             assert_command_success(&output, "cross-toolchain prune");
-            let out = dir.join("out");
             let task_aware = flag == Some(true);
             assert_eq!(
                 out.join("crates/app/src/main.rs").exists(),
@@ -1508,7 +1515,6 @@ fn test_prune_task_aware_cross_toolchain_buildable_output() {
                 let build = run_turbo(&out, &["run", "build", "--filter=js-pkg"]);
                 assert_command_success(&build, "task-aware pruned cross-toolchain build");
             }
-            fs::remove_dir_all(out).unwrap();
         }
     }
 }
