@@ -522,7 +522,9 @@ mod tests {
     struct PlanHashes {
         hashes: HashMap<String, Arc<str>>,
         inputs: HashMap<String, Vec<(turbopath::RelativeUnixPathBuf, String)>>,
+        frameworks: HashMap<String, String>,
         env: Option<HashTrackerDetailedMap>,
+        env_by_task: HashMap<String, HashTrackerDetailedMap>,
         hit: Option<HashTrackerCacheHitMetadata>,
     }
 
@@ -531,8 +533,11 @@ mod tests {
             self.hashes.get(&task.to_string()).cloned()
         }
 
-        fn env_vars(&self, _task: &TaskId) -> Option<HashTrackerDetailedMap> {
-            self.env.clone()
+        fn env_vars(&self, task: &TaskId) -> Option<HashTrackerDetailedMap> {
+            self.env_by_task
+                .get(&task.to_string())
+                .cloned()
+                .or_else(|| self.env.clone())
         }
 
         fn cache_status(&self, _task: &TaskId) -> Option<HashTrackerCacheHitMetadata> {
@@ -543,8 +548,8 @@ mod tests {
             None
         }
 
-        fn framework(&self, _task: &TaskId) -> Option<String> {
-            None
+        fn framework(&self, task: &TaskId) -> Option<String> {
+            self.frameworks.get(&task.to_string()).cloned()
         }
 
         fn expanded_inputs(
@@ -601,7 +606,9 @@ mod tests {
                     )],
                 ),
             ]),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: None,
         };
         let environment = EnvironmentVariableMap::from(HashMap::from([(
@@ -661,6 +668,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn injected_javascript_framework_hash_facts_reach_dry_run_summary() {
+        let (_tmp, graph) = injected_summary_graph().await;
+        let app = TaskId::new("app", "build").into_owned();
+        let lib = TaskId::new("lib", "build").into_owned();
+        let engine = PlanEngine {
+            definitions: HashMap::from([
+                (app.clone(), TaskDefinition::default()),
+                (lib.clone(), TaskDefinition::default()),
+            ]),
+            dependencies: HashMap::new(),
+            dependents: HashMap::new(),
+        };
+        let environment = EnvironmentVariableMap::from(HashMap::from([(
+            "NEXT_PUBLIC_MESSAGE".to_string(),
+            "unprintable-public-value".to_string(),
+        )]));
+        let external = HashMap::from([
+            ("app".to_string(), "app-closure".to_string()),
+            ("lib".to_string(), "lib-closure".to_string()),
+        ]);
+        for enabled in [true, false] {
+            // These are the per-task facts supplied by TaskHasher: its own
+            // contract tests verify how Next.js inference changes the hash.
+            let hashes = PlanHashes {
+                hashes: HashMap::from([
+                    (
+                        app.to_string(),
+                        Arc::from(if enabled {
+                            "inferred-hash"
+                        } else {
+                            "plain-hash"
+                        }),
+                    ),
+                    (lib.to_string(), Arc::from("lib-hash")),
+                ]),
+                inputs: HashMap::from([
+                    (app.to_string(), Vec::new()),
+                    (lib.to_string(), Vec::new()),
+                ]),
+                frameworks: if enabled {
+                    HashMap::from([(app.to_string(), "nextjs".to_string())])
+                } else {
+                    HashMap::new()
+                },
+                env: None,
+                env_by_task: HashMap::from([
+                    (
+                        app.to_string(),
+                        HashTrackerDetailedMap {
+                            explicit: Vec::new(),
+                            matching: if enabled {
+                                vec!["NEXT_PUBLIC_MESSAGE=opaque-hash".to_string()]
+                            } else {
+                                Vec::new()
+                            },
+                        },
+                    ),
+                    (lib.to_string(), HashTrackerDetailedMap::default()),
+                ]),
+                hit: None,
+            };
+            let factory = TaskSummaryFactory::new(
+                &graph,
+                &engine,
+                &hashes,
+                &environment,
+                &TestRunOpts,
+                EnvMode::Strict,
+                Some(&external),
+            );
+            let app_plan =
+                serde_json::to_value(factory.task_summary(app.clone(), None).unwrap()).unwrap();
+            let lib_plan =
+                serde_json::to_value(factory.task_summary(lib.clone(), None).unwrap()).unwrap();
+            assert_eq!(app_plan["framework"], if enabled { "nextjs" } else { "" });
+            assert_eq!(
+                app_plan["hash"],
+                if enabled {
+                    "inferred-hash"
+                } else {
+                    "plain-hash"
+                }
+            );
+            assert_eq!(app_plan["hashOfExternalDependencies"], "app-closure");
+            assert_eq!(
+                app_plan["environmentVariables"]["inferred"],
+                if enabled {
+                    json!(["NEXT_PUBLIC_MESSAGE=opaque-hash"])
+                } else {
+                    json!([])
+                }
+            );
+            assert!(!app_plan.to_string().contains("unprintable-public-value"));
+            assert_eq!(lib_plan["framework"], "");
+            assert_eq!(lib_plan["hash"], "lib-hash");
+            assert_eq!(lib_plan["environmentVariables"]["inferred"], json!([]));
+        }
+    }
+
+    #[tokio::test]
     async fn injected_dry_run_task_summary_reports_hits_deferred_hashes_and_missing_facts() {
         let (_tmp, graph) = injected_summary_graph().await;
         let task = TaskId::new("app", "build").into_owned();
@@ -674,7 +781,9 @@ mod tests {
         let mut hashes = PlanHashes {
             hashes: HashMap::from([(task.to_string(), Arc::from("hit-hash"))]),
             inputs: HashMap::from([(task.to_string(), Vec::new())]),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: Some(HashTrackerCacheHitMetadata {
                 local: true,
                 remote: false,

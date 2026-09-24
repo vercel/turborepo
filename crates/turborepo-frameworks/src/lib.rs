@@ -385,6 +385,121 @@ mod tests {
     }
 
     #[test]
+    fn discovered_packages_infer_nextjs_only_for_the_matching_app() {
+        use std::{
+            future::Future,
+            path::Path,
+            task::{Context, Poll, Waker},
+        };
+
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, PackageDiscovery},
+            package_graph::{PackageGraph, PackageName},
+            package_manager::PackageManager,
+        };
+
+        struct Discovery;
+        impl PackageDiscovery for Discovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                Ok(DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let root = Path::new(if cfg!(windows) { r"C:\repo" } else { "/repo" });
+        let manifests = [
+            (
+                "apps/web",
+                r#"{"name":"web","dependencies":{"next":"^15.0.0"}}"#,
+            ),
+            (
+                "packages/ui",
+                r#"{"name":"ui","dependencies":{"react":"^19.0.0"}}"#,
+            ),
+            (
+                "apps/alias",
+                r#"{"name":"alias","dependencies":{"next-alias":"npm:next@^15.0.0"}}"#,
+            ),
+            (
+                "apps/peer",
+                r#"{"name":"peer","peerDependencies":{"next":"^15.0.0"}}"#,
+            ),
+        ]
+        .into_iter()
+        .map(|(dir, manifest)| {
+            (
+                root.join(dir)
+                    .join("package.json")
+                    .try_into()
+                    .expect("absolute path"),
+                PackageJson::from_value(serde_json::from_str(manifest).expect("valid JSON"))
+                    .expect("valid manifest"),
+            )
+        })
+        .collect();
+        let mut build = std::pin::pin!(
+            PackageGraph::builder(
+                root.try_into().expect("absolute root"),
+                PackageJson::default()
+            )
+            .with_package_discovery(Discovery)
+            .with_package_jsons(Some(manifests))
+            .without_external_dependencies()
+            .build()
+        );
+        let graph = match build.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(result) => result.expect("package graph builds"),
+            Poll::Pending => panic!("injected package graph should not require async I/O"),
+        };
+
+        let nextjs = get_framework_by_slug("nextjs");
+        let detected =
+            infer_framework(graph.external_declarations(&PackageName::from("web")), true)
+                .expect("web should infer Next.js");
+        assert_eq!(detected, nextjs);
+        assert_eq!(
+            infer_framework(graph.external_declarations(&PackageName::from("ui")), true),
+            None,
+        );
+        let alias_name = PackageName::from("alias");
+        let alias = graph.external_declarations(&alias_name);
+        assert_eq!(
+            alias
+                .iter()
+                .map(|d| (d.declaration_name(), d.package_name()))
+                .collect::<Vec<_>>(),
+            vec![("next-alias", "next-alias")],
+        );
+        assert_eq!(infer_framework(alias, true), None);
+        assert_eq!(
+            infer_framework(
+                graph.external_declarations(&PackageName::from("peer")),
+                true
+            ),
+            None,
+        );
+
+        let env = detected.env(&HashMap::new());
+        assert!(env.contains(&"NEXT_PUBLIC_*".to_string()));
+        assert!(!env.contains(&"VERCEL_DEPLOYMENT_ID".to_string()));
+        let env = detected.env(&HashMap::from([(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        )]));
+        assert!(env.contains(&"VERCEL_DEPLOYMENT_ID".to_string()));
+    }
+
+    #[test]
     fn test_env_with_no_conditions() {
         let framework = get_framework_by_slug("nextjs");
 
