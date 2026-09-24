@@ -34,6 +34,12 @@ turborepo-scope = { workspace = true }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-task-filter = { workspace = true }
+turborepo-task-id = { workspace = true }
 turborepo-telemetry = { workspace = true }
 turborepo-tracing = { workspace = true }
 turborepo-ui = { workspace = true, features = ["tui"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+turborepo-types = { workspace = true }
