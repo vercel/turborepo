@@ -7,7 +7,14 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future, time::Duration};
+use std::{
+    backtrace::Backtrace,
+    collections::HashMap,
+    env,
+    future::Future,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 #[cfg(feature = "rustls-tls")]
 use std::{io::Cursor, path::Path};
 
@@ -16,6 +23,7 @@ use reqwest::{Body, Method, RequestBuilder, StatusCode};
 #[cfg(feature = "rustls-tls")]
 use rustls_pemfile::{self, Item};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use turborepo_ci::{Vendor, is_ci};
 use turborepo_types::SecretString;
 use turborepo_vercel_api::{
@@ -129,6 +137,8 @@ pub trait TokenClient {
     fn delete_token(&self, token: &SecretString) -> impl Future<Output = Result<()>> + Send;
 }
 
+type ArtifactRateLimitKey = (Option<String>, Option<String>, [u8; 32]);
+
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
@@ -137,6 +147,9 @@ pub struct APIClient {
     use_preflight: bool,
     timeout: Option<Duration>,
     upload_timeout: Option<Duration>,
+    // Kept on APIClient, not the shared reqwest client: different API clients
+    // (and different teams/tokens on the same client) must not block each other.
+    artifact_rate_limits: Arc<Mutex<HashMap<ArtifactRateLimitKey, retry::RateLimit>>>,
 }
 
 #[derive(Clone)]
@@ -308,11 +321,12 @@ impl CacheClient for APIClient {
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(
+                .do_preflight_with_rate_limit(
                     token,
                     request_url.clone(),
                     "GET",
                     "Authorization, User-Agent",
+                    Some(self.artifact_rate_limit(token, team_id, team_slug)),
                 )
                 .await?;
 
@@ -328,8 +342,12 @@ impl CacheClient for APIClient {
             request_builder = request_builder.bearer_auth(token.expose());
         }
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?;
         let response = response.into_response();
 
         match response.status() {
@@ -384,12 +402,13 @@ impl CacheClient for APIClient {
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(
+                .do_preflight_with_rate_limit(
                     token,
                     request_url.clone(),
                     "PUT",
                     "Authorization, Content-Type, User-Agent, x-artifact-duration, \
                      x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
+                    Some(self.artifact_rate_limit(token, team_id, team_slug)),
                 )
                 .await?;
 
@@ -425,10 +444,13 @@ impl CacheClient for APIClient {
             request_builder = request_builder.header("x-artifact-dirty-hash", dirty_hash);
         }
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Connection)
-                .await?
-                .into_response();
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Connection,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response();
 
         if response.status() == StatusCode::FORBIDDEN {
             return Err(Self::handle_403(response).await);
@@ -453,11 +475,14 @@ impl CacheClient for APIClient {
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-                .await?
-                .into_response()
-                .error_for_status()?;
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response()
+        .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -637,6 +662,7 @@ impl APIClient {
             use_preflight,
             timeout,
             upload_timeout,
+            artifact_rate_limits: Arc::default(),
         })
     }
 
@@ -658,6 +684,7 @@ impl APIClient {
             use_preflight,
             timeout,
             upload_timeout,
+            artifact_rate_limits: Arc::default(),
         }
     }
 
@@ -817,6 +844,26 @@ impl APIClient {
         builder
     }
 
+    fn artifact_rate_limit(
+        &self,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> retry::RateLimit {
+        // Keep credentials out of the map, which lives for the lifetime of this client.
+        let key = (
+            team_id.map(str::to_owned),
+            team_slug.map(str::to_owned),
+            Sha256::digest(token.expose().as_bytes()).into(),
+        );
+        self.artifact_rate_limits
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(key)
+            .or_default()
+            .clone()
+    }
+
     pub fn base_url(&self) -> &str {
         self.base_url.as_str()
     }
@@ -853,6 +900,18 @@ impl APIClient {
         request_method: &str,
         request_headers: &str,
     ) -> Result<PreflightResponse> {
+        self.do_preflight_with_rate_limit(token, request_url, request_method, request_headers, None)
+            .await
+    }
+
+    async fn do_preflight_with_rate_limit(
+        &self,
+        token: &SecretString,
+        request_url: Url,
+        request_method: &str,
+        request_headers: &str,
+        rate_limit: Option<retry::RateLimit>,
+    ) -> Result<PreflightResponse> {
         let request_builder = self
             .api_request(Method::OPTIONS, request_url)
             .header("User-Agent", self.user_agent.clone())
@@ -860,10 +919,21 @@ impl APIClient {
             .header("Access-Control-Request-Headers", request_headers)
             .bearer_auth(token.expose());
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+        let response = match rate_limit {
+            Some(rate_limit) => {
+                retry::make_rate_limited_request(
+                    request_builder,
+                    retry::RetryStrategy::Timeout,
+                    rate_limit,
+                )
                 .await?
-                .into_response();
+            }
+            None => {
+                retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                    .await?
+            }
+        }
+        .into_response();
 
         let headers = response.headers();
         let location = if let Some(location) = headers.get("Location") {
