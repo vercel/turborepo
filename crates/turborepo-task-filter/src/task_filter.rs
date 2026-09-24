@@ -19,8 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
-use turborepo_scm::SCM;
-use turborepo_scope::{TargetSelector, target_selector::GitRange};
+use turborepo_scope::{ChangedFilesDetector, TargetSelector, target_selector::GitRange};
 use turborepo_task_id::TaskId;
 use wax::Program;
 
@@ -33,7 +32,7 @@ pub fn resolve_affected_tasks(
     engine: &Engine,
     affected_range: &(Option<String>, Option<String>),
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
 ) -> Result<HashSet<TaskId<'static>>, crate::Error> {
@@ -78,7 +77,7 @@ pub fn filter_engine_to_tasks(
     selectors: &[TargetSelector],
     affected_constraint: Option<&HashSet<TaskId<'static>>>,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
 ) -> Result<Engine, crate::Error> {
@@ -106,7 +105,7 @@ pub fn filter_engine_to_tasks_with_inclusions(
     selectors: &[TargetSelector],
     constraints: TaskFilterConstraints<'_>,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
 ) -> Result<Engine, crate::Error> {
@@ -189,7 +188,7 @@ fn resolve_selector_to_tasks(
     engine: &Engine,
     selector: &TargetSelector,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
@@ -254,7 +253,7 @@ fn resolve_base_tasks(
     engine: &Engine,
     selector: &TargetSelector,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
@@ -345,7 +344,7 @@ fn resolve_git_range(
     engine: &Engine,
     selector: &TargetSelector,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
 ) -> Result<Option<HashSet<TaskId<'static>>>, crate::Error> {
@@ -385,7 +384,7 @@ fn resolve_match_dependencies(
     engine: &Engine,
     selector: &TargetSelector,
     pkg_dep_graph: &PackageGraph,
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
@@ -430,7 +429,7 @@ fn resolve_match_dependencies(
 }
 
 fn get_changed_files(
-    scm: &SCM,
+    scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     git_range: &GitRange,
 ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>, crate::Error>
@@ -615,7 +614,10 @@ fn collect_orchestration_branch(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::Mutex,
+    };
 
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_repository::{
@@ -624,6 +626,7 @@ mod tests {
         package_json::PackageJson,
         package_manager::PackageManager,
     };
+    use turborepo_scope::ChangedFilesDetector;
     use turborepo_task_id::TaskId;
     use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskInputs};
 
@@ -699,6 +702,75 @@ mod tests {
             command: Some(TaskCommandOverride::Argv(vec!["run".to_string()])),
             ..Default::default()
         }
+    }
+
+    type DetectorCall = (Option<String>, Option<String>, bool, bool, bool);
+
+    struct FixedChangedFiles {
+        files: HashSet<AnchoredSystemPathBuf>,
+        calls: Mutex<Vec<DetectorCall>>,
+    }
+
+    impl ChangedFilesDetector for FixedChangedFiles {
+        fn changed_files(
+            &self,
+            _turbo_root: &AbsoluteSystemPath,
+            from_ref: Option<&str>,
+            to_ref: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<
+            Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
+            turborepo_scm::Error,
+        > {
+            self.calls.lock().unwrap().push((
+                from_ref.map(str::to_string),
+                to_ref.map(str::to_string),
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            ));
+            Ok(Ok(self.files.clone()))
+        }
+    }
+
+    #[tokio::test]
+    async fn affected_task_resolution_accepts_fixed_changed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(build.clone(), def_with_inputs(&["src/**"], true))], &[]);
+        let detector = FixedChangedFiles {
+            files: HashSet::from([
+                AnchoredSystemPathBuf::from_raw("packages/lib-a/src/index.ts").unwrap(),
+            ]),
+            calls: Mutex::new(Vec::new()),
+        };
+        let affected_range = (Some("main".to_string()), Some("HEAD".to_string()));
+
+        let affected = super::resolve_affected_tasks(
+            &engine,
+            &affected_range,
+            &pkg_graph,
+            &detector,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        assert!(affected.contains(&build));
+        assert_eq!(
+            *detector.calls.lock().unwrap(),
+            [(
+                Some("main".to_string()),
+                Some("HEAD".to_string()),
+                true,
+                true,
+                true
+            )]
+        );
     }
 
     #[tokio::test]

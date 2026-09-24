@@ -9,7 +9,8 @@ use std::{
 use chrono::Local;
 use tracing::Instrument;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPathBuf,
 };
 use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
@@ -29,7 +30,9 @@ use turborepo_run_context::RepoContext;
 use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
-use turborepo_scope::{TargetSelector, filter::ResolutionError};
+use turborepo_scope::{
+    ChangedFilesDetector, GitChangeDetector, TargetSelector, filter::ResolutionError,
+};
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::{TaskId, TaskName};
@@ -133,6 +136,18 @@ struct SelectionModes {
 
 type RemoteCachePreflight =
     tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>;
+
+pub(crate) fn changed_files_for_affected_range<D: ChangedFilesDetector>(
+    detector: &D,
+    repo_root: &AbsoluteSystemPath,
+    from_ref: Option<&str>,
+    to_ref: Option<&str>,
+) -> Result<
+    Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
+    turborepo_scm::Error,
+> {
+    detector.changed_files(repo_root, from_ref, to_ref, true, true, true)
+}
 
 trait CacheStatusProbe: Send + Sync + 'static {
     fn check_caching_status(
@@ -688,12 +703,34 @@ impl RunBuilder {
         scm: &SCM,
         root_turbo_json: &TurboJson,
     ) -> Result<FilteredPackages, Error> {
-        let (mut filtered_pkgs, filter_mode) = scope::resolve_packages(
+        let change_detector = scope::change_detector(
             &opts.scope_opts,
             repo_root,
             pkg_dep_graph,
             scm,
             root_turbo_json,
+        )?;
+        Self::calculate_filtered_packages_with_change_detector(
+            repo_root,
+            opts,
+            pkg_dep_graph,
+            change_detector,
+            root_turbo_json,
+        )
+    }
+
+    pub(crate) fn calculate_filtered_packages_with_change_detector<D: GitChangeDetector>(
+        repo_root: &AbsoluteSystemPath,
+        opts: &Opts,
+        pkg_dep_graph: &PackageGraph,
+        change_detector: D,
+        root_turbo_json: &TurboJson,
+    ) -> Result<FilteredPackages, Error> {
+        let (mut filtered_pkgs, filter_mode) = scope::resolve_packages_with_change_detector(
+            &opts.scope_opts,
+            repo_root,
+            pkg_dep_graph,
+            change_detector,
         )
         .map_err(|err| match err {
             // A filter that names a Rust crate or Python package is a likely
@@ -2111,7 +2148,7 @@ impl RunBuilder {
         engine: RunEngine,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        scm: &SCM,
+        change_detector: &impl ChangedFilesDetector,
         package_scope: Option<&HashSet<PackageName>>,
     ) -> Result<(RunEngine, Option<HashSet<PackageName>>), Error> {
         let (from_ref, to_ref) = self
@@ -2120,13 +2157,11 @@ impl RunBuilder {
             .affected_range
             .as_ref()
             .ok_or(Error::MissingAffectedRange)?;
-        let maybe_changed_files = scm.changed_files(
+        let maybe_changed_files = changed_files_for_affected_range(
+            change_detector,
             &self.repo_root,
             from_ref.as_deref(),
             to_ref.as_deref(),
-            true,
-            true,
-            true,
         )?;
 
         match maybe_changed_files {
@@ -2762,10 +2797,15 @@ mod untracked_scoping_tests {
 
 #[cfg(test)]
 mod origins_match_tests {
+    use std::sync::{Arc, Mutex};
+
+    use turbopath::AnchoredSystemPathBuf;
+    use turborepo_engine::Building;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_graph::PackageGraph, package_json::PackageJson,
         package_manager::PackageManager,
     };
+    use turborepo_run_opts::{ExecutionSelector, RunSelector};
 
     use super::*;
 
@@ -2831,6 +2871,221 @@ mod origins_match_tests {
                 .build(),
         )
         .unwrap()
+    }
+
+    type ChangeCall = (Option<String>, Option<String>, bool, bool, bool);
+
+    #[derive(Clone)]
+    struct FixedPackageChanges {
+        calls: Arc<Mutex<Vec<ChangeCall>>>,
+    }
+
+    impl GitChangeDetector for FixedPackageChanges {
+        fn changed_packages(
+            &self,
+            from_ref: Option<&str>,
+            to_ref: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
+            self.calls.lock().unwrap().push((
+                from_ref.map(str::to_string),
+                to_ref.map(str::to_string),
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            ));
+            Ok(HashMap::from([(
+                PackageName::from("lib"),
+                PackageInclusionReason::FileChanged {
+                    file: AnchoredSystemPathBuf::from_raw("packages/lib/src/index.ts").unwrap(),
+                },
+            )]))
+        }
+    }
+
+    #[test]
+    fn filtered_packages_can_use_an_injected_change_detector() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector {
+            affected: true,
+            ..Default::default()
+        };
+        let opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+
+        let (packages, mode, _) = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: calls.clone(),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap();
+
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+        assert!(packages.contains_key(&PackageName::from("lib")));
+        assert!(packages.contains_key(&PackageName::from("app")));
+        assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[derive(Clone)]
+    struct FixedChangedFiles {
+        files: HashSet<AnchoredSystemPathBuf>,
+        calls: Arc<Mutex<Vec<ChangeCall>>>,
+    }
+
+    impl ChangedFilesDetector for FixedChangedFiles {
+        fn changed_files(
+            &self,
+            _turbo_root: &AbsoluteSystemPath,
+            from_ref: Option<&str>,
+            to_ref: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<
+            Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
+            turborepo_scm::Error,
+        > {
+            self.calls.lock().unwrap().push((
+                from_ref.map(str::to_string),
+                to_ref.map(str::to_string),
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            ));
+            Ok(Ok(self.files.clone()))
+        }
+    }
+
+    #[test]
+    fn affected_file_observation_passes_merge_base_policy_to_the_injected_detector() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let files =
+            HashSet::from([AnchoredSystemPathBuf::from_raw("apps/web/src/index.ts").unwrap()]);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let detected = changed_files_for_affected_range(
+            &FixedChangedFiles {
+                files: files.clone(),
+                calls: calls.clone(),
+            },
+            &repo_root,
+            Some("main"),
+            Some("HEAD"),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(detected, files);
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [(
+                Some("main".to_string()),
+                Some("HEAD".to_string()),
+                true,
+                true,
+                true
+            )]
+        );
+    }
+
+    #[test]
+    fn task_level_affected_filter_uses_an_injected_changed_file_set() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector {
+            affected: true,
+            ..Default::default()
+        };
+        let opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        let builder = RunBuilder::new(
+            crate::RunBuilderInput {
+                repo_root: repo_root.clone(),
+                color_config: ColorConfig::new(true),
+                opts,
+                version: "test",
+                api_auth: None,
+            },
+            None,
+        )
+        .unwrap();
+
+        let app_build = TaskId::new("app", "build").into_owned();
+        let lib_build = TaskId::new("lib", "build").into_owned();
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+        let app_index = engine.get_index(&app_build);
+        let lib_index = engine.get_index(&lib_build);
+        engine.add_definition(
+            app_build.clone(),
+            TaskDefinition {
+                command: Some(turborepo_types::TaskCommandOverride::Argv(vec![
+                    "build".into(),
+                ])),
+                ..Default::default()
+            },
+        );
+        engine.add_definition(
+            lib_build.clone(),
+            TaskDefinition {
+                command: Some(turborepo_types::TaskCommandOverride::Argv(vec![
+                    "build".into(),
+                ])),
+                inputs: TaskInputs {
+                    globs: vec!["src/**".to_string()],
+                    default: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(app_index, lib_index, ());
+
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let (filtered, selected_packages) = builder
+            .filter_engine_to_affected_tasks(
+                engine.seal(),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: HashSet::from([AnchoredSystemPathBuf::from_raw(
+                        "packages/lib/src/index.ts",
+                    )
+                    .unwrap()]),
+                    calls: calls.clone(),
+                },
+                None,
+            )
+            .unwrap();
+
+        assert!(filtered.task_definition(&lib_build).is_some());
+        assert!(filtered.task_definition(&app_build).is_some());
+        assert_eq!(
+            selected_packages.unwrap(),
+            HashSet::from([PackageName::from("app"), PackageName::from("lib")])
+        );
+        assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
     }
 
     fn names(packages: Vec<PackageName>) -> Vec<String> {
