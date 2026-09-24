@@ -84,6 +84,15 @@ pub trait Client {
     fn make_url(&self, endpoint: &str) -> Result<Url>;
 }
 
+/// Metadata returned for a hit by POST /v8/artifacts.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactQueryHit {
+    pub task_duration_ms: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
+}
+
 pub trait CacheClient {
     fn get_artifact(
         &self,
@@ -301,6 +310,37 @@ impl Client for APIClient {
     fn make_url(&self, endpoint: &str) -> Result<Url> {
         let url = format!("{}{}", self.base_url, endpoint);
         Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
+    }
+}
+
+impl APIClient {
+    /// Query multiple artifacts without downloading their bodies. An invalid or
+    /// unsupported response is an error so callers can fall back to HEAD.
+    pub async fn query_artifacts(
+        &self,
+        hashes: &[String],
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<HashMap<String, Option<ArtifactQueryHit>>> {
+        let request = self
+            .api_request(Method::POST, self.make_url("/v8/artifacts")?)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Content-Type", "application/json")
+            .bearer_auth(token.expose())
+            .json(&serde_json::json!({ "hashes": hashes }));
+        let request = Self::add_team_params(request, team_id, team_slug);
+        let response = retry::make_rate_limited_request(
+            request,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response();
+        if response.status() == StatusCode::FORBIDDEN {
+            return Err(Self::handle_403(response).await);
+        }
+        Ok(response.error_for_status()?.json().await?)
     }
 }
 
@@ -1357,6 +1397,42 @@ mod test {
         APIClient::add_team_params_to_url(&mut url, None, None);
 
         assert_eq!(url.as_str(), "https://cache.example/v8/artifacts/abc123");
+    }
+
+    #[tokio::test]
+    async fn query_artifacts_sends_one_authenticated_batch_and_parses_metadata()
+    -> anyhow::Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST)
+                    .path("/v8/artifacts")
+                    .query_param("teamId", "team_123")
+                    .query_param("slug", "my-team")
+                    .header("authorization", "Bearer secret-token")
+                    .json_body(serde_json::json!({"hashes": ["hit", "miss"]}));
+                then.status(200).json_body(serde_json::json!({
+                    "hit": {"size": 12, "taskDurationMs": 456, "sha": "abc", "dirtyHash": "def"},
+                    "miss": null
+                }));
+            })
+            .await;
+        let client = APIClient::new(server.base_url(), None, None, "2.0.0", false)?;
+        let results = client
+            .query_artifacts(
+                &["hit".into(), "miss".into()],
+                &SecretString::new("secret-token".into()),
+                Some("team_123"),
+                Some("my-team"),
+            )
+            .await?;
+        query.assert_calls_async(1).await;
+        let hit = results.get("hit").unwrap().as_ref().unwrap();
+        assert_eq!(hit.task_duration_ms, 456);
+        assert_eq!(hit.sha.as_deref(), Some("abc"));
+        assert_eq!(hit.dirty_hash.as_deref(), Some("def"));
+        assert!(results.get("miss").unwrap().is_none());
+        Ok(())
     }
 
     #[tokio::test]

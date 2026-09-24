@@ -300,6 +300,41 @@ impl CacheMultiplexer {
         Ok(None)
     }
 
+    /// Dry-run-only batched existence check. Local hits take precedence; a
+    /// server without the query endpoint still works through individual HEADs.
+    pub async fn batch_exists(&self, keys: &[String]) -> Vec<Option<CacheHitMetadata>> {
+        let mut hits = vec![None; keys.len()];
+        let mut remote_keys = Vec::new();
+        for (index, key) in keys.iter().enumerate() {
+            if self.cache_config.local.read
+                && let Some(fs) = &self.fs
+                && let Ok(Some(hit)) = fs.exists(key)
+            {
+                hits[index] = Some(hit);
+            } else {
+                remote_keys.push((index, key.clone()));
+            }
+        }
+        if remote_keys.is_empty() || !self.cache_config.remote.read {
+            return hits;
+        }
+        let Some(http) = self.get_http_cache() else {
+            return hits;
+        };
+        let hashes: Vec<_> = remote_keys.iter().map(|(_, key)| key.clone()).collect();
+        let batch = http.batch_exists(&hashes).await;
+        for (index, key) in remote_keys {
+            hits[index] = match &batch {
+                Ok(entries) => match entries.get(&key) {
+                    Some(hit) => hit.clone(),
+                    None => http.exists(&key).await.ok().flatten(),
+                },
+                Err(_) => http.exists(&key).await.ok().flatten(),
+            };
+        }
+        hits
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         if self.cache_config.local.read
@@ -419,6 +454,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn batch_exists_prefers_local_hit_without_querying_remote() -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST).path("/v8/artifacts");
+                then.status(500);
+            })
+            .await;
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+        std::fs::write(root.resolve(&file), "local content")?;
+        let cache = CacheMultiplexer::new(
+            &both_write_opts(),
+            &root,
+            Some(APIClient::new(
+                server.base_url(),
+                None,
+                None,
+                "2.0.0",
+                false,
+            )?),
+            Some(APIAuth {
+                team_id: None,
+                team_slug: None,
+                token: SecretString::new("token".into()),
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache
+            .fs
+            .as_ref()
+            .unwrap()
+            .put(&root, "local", &[file], 17)?;
+        let hits = cache.batch_exists(&["local".into()]).await;
+        assert_eq!(
+            hits,
+            vec![Some(CacheHitMetadata {
+                source: CacheSource::Local,
+                time_saved: 17,
+                sha: None,
+                dirty_hash: None,
+            })]
+        );
+        query.assert_calls_async(0).await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_disabled_remote_cache_preserves_local_reads_and_writes() -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
@@ -459,6 +544,10 @@ mod tests {
             b"local fallback"
         );
         assert!(cache.exists("remote-only").await?.is_none());
+        assert_eq!(
+            cache.batch_exists(&["remote-only".into()]).await,
+            vec![None]
+        );
         Ok(())
     }
 
