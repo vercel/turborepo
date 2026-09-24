@@ -118,6 +118,7 @@ pub struct RunCache {
     warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
+    is_dry_run: bool,
     repo_root: AbsoluteSystemPathBuf,
     output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
@@ -149,6 +150,7 @@ impl RunCache {
             warnings: Default::default(),
             reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
             writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
+            is_dry_run,
             repo_root: repo_root.to_owned(),
             output_watcher,
             ui,
@@ -528,7 +530,11 @@ impl TaskCache {
         if self.caching_disabled || self.run_cache.reads_disabled {
             return Ok(None);
         }
-        self.run_cache.cache.exists(&self.hash).await
+        if self.run_cache.is_dry_run {
+            self.run_cache.cache.dry_run_exists(&self.hash).await
+        } else {
+            self.run_cache.cache.exists(&self.hash).await
+        }
     }
 
     pub async fn restore_outputs(
@@ -1374,6 +1380,7 @@ mod test {
             warnings: warnings.clone(),
             reads_disabled: false,
             writes_disabled: false,
+            is_dry_run: false,
             repo_root: repo_root.to_owned(),
             output_watcher: None,
             ui,

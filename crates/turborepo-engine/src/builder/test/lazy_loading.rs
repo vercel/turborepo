@@ -150,6 +150,98 @@ impl RepositoryContributor for DeclaredDependencyContributor {
     }
 }
 
+struct CountingNativeContributor {
+    id: ToolchainId,
+    toolchain: &'static str,
+    program: &'static str,
+    package_name: &'static str,
+    repo_root: AbsoluteSystemPathBuf,
+    full_calls: Arc<AtomicUsize>,
+}
+
+impl CountingNativeContributor {
+    fn new(
+        id: ToolchainId,
+        toolchain: &'static str,
+        program: &'static str,
+        package_name: &'static str,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Self {
+        Self {
+            id,
+            toolchain,
+            program,
+            package_name,
+            repo_root: repo_root.clone(),
+            full_calls: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn full_calls(&self) -> usize {
+        self.full_calls.load(Ordering::SeqCst)
+    }
+
+    fn manifest_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root
+            .join_components(&["native", self.package_name, "manifest"])
+    }
+}
+
+impl RepositoryContributor for CountingNativeContributor {
+    fn id(&self) -> ToolchainId {
+        self.id.clone()
+    }
+
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        self.full_calls.fetch_add(1, Ordering::SeqCst);
+        let root = self.repo_root.clone();
+        let package_name = self.package_name.to_string();
+        let manifest_path = self.manifest_path();
+        let toolchain = self.toolchain;
+        let program = self.program;
+
+        Box::pin(async move {
+            let task = NativeTask::command_task(
+                "build",
+                format!("{toolchain} build"),
+                NativeCommandProgram::Tool(program.to_string()),
+                NativeCommandArguments::new(vec!["build".to_string()]),
+                None,
+                WorkingDirectoryPolicy::PackageDirectory,
+            );
+            let package = DiscoveredPackage::package(
+                Some(package_name),
+                PackageJson::default(),
+                manifest_path,
+            )
+            .with_native_relationships(Vec::new())
+            .with_native_tasks(vec![task]);
+
+            Ok(DiscoveredPackages::new(
+                vec![package],
+                vec![WorkspaceRoot::new(toolchain, root)],
+            ))
+        })
+    }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        let root = self.repo_root.clone();
+        let package_name = self.package_name.to_string();
+        let manifest_path = self.manifest_path();
+        let toolchain = self.toolchain;
+
+        Box::pin(async move {
+            Ok(DiscoveredPackageScopes::new(
+                vec![DiscoveredPackageScope::new(
+                    Some(package_name),
+                    manifest_path,
+                )],
+                vec![WorkspaceRoot::new(toolchain, root)],
+            ))
+        })
+    }
+}
+
 fn web_package_json(dependencies: &[(&str, &str)]) -> PackageJson {
     PackageJson {
         name: Some(Spanned::new("web".to_string())),
@@ -410,6 +502,94 @@ fn topological_dependency_through_declared_native_dep_loads_real_metadata() {
             }),
         "the dependency edge reaches the native task"
     );
+}
+
+#[tokio::test]
+async fn javascript_scoped_selections_do_not_load_native_contributors() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let go = Arc::new(CountingNativeContributor::new(
+        ToolchainId::GO,
+        "go",
+        "go",
+        "go-app",
+        &repo_root,
+    ));
+    let cargo = Arc::new(CountingNativeContributor::new(
+        ToolchainId::RUST,
+        "rust",
+        "cargo",
+        "rust-app",
+        &repo_root,
+    ));
+    let python = Arc::new(CountingNativeContributor::new(
+        ToolchainId::PYTHON,
+        "python",
+        "uv",
+        "py-app",
+        &repo_root,
+    ));
+    let (graph, mut plan) = PackageGraph::builder(&repo_root, PackageJson::default())
+        .with_package_discovery(MockDiscovery)
+        .with_lockfile(Some(Box::new(MockLockfile)))
+        .with_package_jsons(Some(web_package_jsons(&repo_root, web_package_json(&[]))))
+        .with_contributor(go.clone())
+        .with_contributor(cargo.clone())
+        .with_contributor(python.clone())
+        .build_lazy()
+        .await
+        .unwrap()
+        .into_parts();
+    let native_owners = HashSet::from([ToolchainId::GO, ToolchainId::RUST, ToolchainId::PYTHON]);
+    assert_eq!(
+        graph.unloaded_owners().into_iter().collect::<HashSet<_>>(),
+        native_owners,
+        "the fixture registers all three native contributors"
+    );
+    let loader = TestTurboJsonLoader::new(HashMap::from([
+        (
+            PackageName::Root,
+            turbo_json(json!({ "tasks": { "build": {}, "dev": {} } })),
+        ),
+        (
+            PackageName::from("web"),
+            turbo_json(json!({ "extends": ["//"], "tasks": {} })),
+        ),
+    ]));
+
+    // CLI selection forms resolve to a JavaScript workspace and task before
+    // engine construction. Exercise those resolved cases at the planning seam:
+    // none may demand authoritative discovery from an unselected native owner.
+    for (selection, task) in [
+        ("package-name filter", "build"),
+        ("directory filter", "build"),
+        ("package#task argument", "build"),
+        ("--only", "build"),
+        ("task-level filter", "dev"),
+        ("exclude-only JavaScript filter", "dev"),
+    ] {
+        let (engine, demands) = EngineBuilder::new(&repo_root, &graph, &loader, false)
+            .with_workspaces(vec![PackageName::from("web")])
+            .with_tasks(Some(Spanned::new(TaskName::from(task))))
+            .build_with_unloaded_demands()
+            .unwrap();
+        assert!(demands.is_empty(), "{selection} demanded {demands:?}");
+        assert!(
+            engine.task_definition(&TaskId::new("web", task)).is_some(),
+            "{selection} should retain the selected JavaScript task"
+        );
+        plan.load(&demands).await.unwrap();
+        assert_eq!(go.full_calls(), 0, "{selection} loaded Go");
+        assert_eq!(cargo.full_calls(), 0, "{selection} loaded Cargo");
+        assert_eq!(python.full_calls(), 0, "{selection} loaded uv");
+    }
+
+    // Prove the counters observe real authoritative loads rather than merely
+    // being disconnected from package-graph construction.
+    plan.load(&native_owners).await.unwrap();
+    assert_eq!(go.full_calls(), 1);
+    assert_eq!(cargo.full_calls(), 1);
+    assert_eq!(python.full_calls(), 1);
 }
 
 #[test]
