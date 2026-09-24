@@ -2163,6 +2163,30 @@ mod tests {
         assert!(!diagnostic.contains("line 1 column"));
     }
 
+    #[tokio::test]
+    async fn scope_inventory_reports_invalid_go_work_diagnostic_without_toolchain() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nunsupported ./apps/api\n")
+            .unwrap();
+
+        // This path only parses the scope inventory; it never consults PATH or
+        // invokes `go work edit -json` before returning the focused diagnostic.
+        let error = GoContributor::new(root.clone())
+            .discover_package_scopes()
+            .await
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("go.work at"), "{message}");
+        assert!(
+            message.contains("unknown `unsupported` directive"),
+            "{message}"
+        );
+        assert!(message.contains("go work edit"), "{message}");
+        assert!(!message.contains("go work edit -json"), "{message}");
+    }
+
     fn write_workspace(root: &AbsoluteSystemPath, layout: &[(&str, &str, &str)]) {
         fs::create_dir_all(root.as_std_path()).unwrap();
         let mut work = String::from("go 1.22\n\nuse (\n");
