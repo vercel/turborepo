@@ -1099,6 +1099,9 @@ mod test {
 
     use super::*;
 
+    #[path = "jit_inputs_test.rs"]
+    mod jit_inputs;
+
     struct TestRunOpts {
         single_package: bool,
     }
