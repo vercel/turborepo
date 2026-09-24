@@ -2,7 +2,10 @@ use std::{
     backtrace::Backtrace,
     collections::HashMap,
     io::{Read, Seek, SeekFrom, Write},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use tracing::{debug, warn};
@@ -38,6 +41,7 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     api_auth: Arc<Mutex<APIAuth>>,
+    disabled: AtomicBool,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
     scm_state: LazyScmState,
@@ -92,9 +96,27 @@ impl HTTPCache {
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
+            disabled: AtomicBool::new(false),
             analytics_recorder,
             scm_state,
         })
+    }
+
+    pub(crate) fn is_disabled(&self) -> bool {
+        self.disabled.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn disable_after_forbidden(&self) -> bool {
+        let first = !self.disabled.swap(true, Ordering::AcqRel);
+        if first {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Remote cache returned 403 and access could not be restored; disabling remote \
+                 caching for this run",
+            )
+            .emit();
+        }
+        first
     }
 
     /// Attempts to refresh the auth token when a cache operation encounters a
@@ -170,6 +192,9 @@ impl HTTPCache {
         RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
         E: std::fmt::Debug,
     {
+        if self.is_disabled() {
+            return Err(CacheError::ForbiddenRemoteCacheWrite);
+        }
         let api_auth = self
             .api_auth
             .lock()
@@ -184,10 +209,17 @@ impl HTTPCache {
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .clone();
-                    operation(refreshed_auth)
-                        .await
-                        .map_err(|err| Self::convert_api_error(hash, err))
+                    match operation(refreshed_auth).await {
+                        Err(turborepo_api_client::Error::UnknownStatus { code, .. })
+                            if code == "forbidden" =>
+                        {
+                            self.disable_after_forbidden();
+                            Err(CacheError::ForbiddenRemoteCacheWrite)
+                        }
+                        result => result.map_err(|err| Self::convert_api_error(hash, err)),
+                    }
                 } else {
+                    self.disable_after_forbidden();
                     Err(CacheError::ForbiddenRemoteCacheWrite)
                 }
             }
@@ -1029,6 +1061,7 @@ mod test {
             .unwrap();
 
         assert_eq!(result, "retried");
+        assert!(!cache.is_disabled());
         assert_eq!(
             *attempted_tokens.lock().unwrap(),
             ["expired-token", "refreshed-token"]
@@ -1071,10 +1104,111 @@ mod test {
             crate::CacheError::ForbiddenRemoteCacheWrite
         ));
         assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(cache.is_disabled());
         assert_eq!(
             cache.api_auth.lock().unwrap().token.expose(),
             "expired-token"
         );
+
+        // Once disabled, neither the operation nor recovery is attempted again.
+        let later_attempts = std::sync::atomic::AtomicUsize::new(0);
+        let later_recoveries = std::sync::atomic::AtomicUsize::new(0);
+        let error = cache
+            .execute_with_token_refresh_and_recovery(
+                "other-hash",
+                |_| {
+                    later_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async { Ok::<(), turborepo_api_client::Error>(()) }
+                },
+                |_| {
+                    later_recoveries.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async { Ok::<_, ()>(None) }
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            crate::CacheError::ForbiddenRemoteCacheWrite
+        ));
+        assert_eq!(later_attempts.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(
+            later_recoveries.load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_token_refresh_failure_disables_remote_cache() {
+        let cache = cache_with_token("expired-token");
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| async {
+                    Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                        code: "forbidden".into(),
+                        message: "expired".into(),
+                        backtrace: Backtrace::capture(),
+                    })
+                },
+                |_| async { Err::<Option<SecretString>, _>("recovery failed") },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_403_after_successful_refresh_disables_remote_cache() {
+        let cache = cache_with_token("expired-token");
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| {
+                    attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async {
+                        Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                            code: "forbidden".into(),
+                            message: "still forbidden".into(),
+                            backtrace: Backtrace::capture(),
+                        })
+                    }
+                },
+                |_| async { Ok::<_, ()>(Some(SecretString::new("new-token".into()))) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert!(cache.is_disabled());
+        assert_eq!(cache.api_auth.lock().unwrap().token.expose(), "new-token");
+    }
+
+    #[test]
+    fn test_forbidden_warning_is_emitted_only_once_across_workers() {
+        let cache = std::sync::Arc::new(cache_with_token("expired-token"));
+        let workers: Vec<_> = (0..20)
+            .map(|_| {
+                let cache = cache.clone();
+                std::thread::spawn(move || cache.disable_after_forbidden())
+            })
+            .collect();
+        // Only the worker that transitioned the state emits the warning.
+        assert_eq!(
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .filter(|first| *first)
+                .count(),
+            1
+        );
+        assert!(cache.is_disabled());
     }
 
     #[test]

@@ -115,7 +115,7 @@ impl CacheMultiplexer {
     // a few extra cache requests.
     fn get_http_cache(&self) -> Option<&Arc<HTTPCache>> {
         if self.should_use_http_cache.load(Ordering::Relaxed) {
-            self.http.as_ref()
+            self.http.as_ref().filter(|http| !http.is_disabled())
         } else {
             None
         }
@@ -178,6 +178,7 @@ impl CacheMultiplexer {
                     self.should_use_http_cache.store(false, Ordering::Relaxed);
                     Ok(())
                 }
+                Err(CacheError::ForbiddenRemoteCacheWrite) if http.is_disabled() => Ok(()),
                 Err(e) => Err(e),
                 Ok(()) => Ok(()),
             };
@@ -229,6 +230,11 @@ impl CacheMultiplexer {
             ))) => {
                 warn!("failed to put to http cache: cache disabled");
                 self.should_use_http_cache.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+            Some(Err(CacheError::ForbiddenRemoteCacheWrite))
+                if self.http.as_ref().is_some_and(|http| http.is_disabled()) =>
+            {
                 Ok(())
             }
             Some(Err(e)) => Err(e),
@@ -494,6 +500,54 @@ mod tests {
             })]
         );
         query.assert_calls_async(0).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_disabled_remote_cache_preserves_local_reads_and_writes() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("out/output.txt")?;
+        std::fs::create_dir_all(repo_root_path.resolve(&file).parent().unwrap())?;
+        std::fs::write(repo_root_path.resolve(&file), "local fallback")?;
+
+        // A failed 403 recovery disables the HTTP cache, even though remote
+        // reads and writes remain enabled in the original configuration.
+        let cache = test_multiplexer(&both_write_opts(), &repo_root_path, 1);
+        cache.http.as_ref().unwrap().disable_after_forbidden();
+        assert!(cache.get_http_cache().is_none());
+
+        cache
+            .put(
+                &repo_root_path,
+                "local-only",
+                std::slice::from_ref(&file),
+                42,
+            )
+            .await?;
+        assert_eq!(
+            cache.exists("local-only").await?.unwrap().source,
+            CacheSource::Local
+        );
+        std::fs::remove_file(repo_root_path.resolve(&file))?;
+        assert_eq!(
+            cache
+                .fetch(&repo_root_path, "local-only")
+                .await?
+                .unwrap()
+                .0
+                .source,
+            CacheSource::Local
+        );
+        assert_eq!(
+            std::fs::read(repo_root_path.resolve(&file))?,
+            b"local fallback"
+        );
+        assert!(cache.exists("remote-only").await?.is_none());
+        assert_eq!(
+            cache.batch_exists(&["remote-only".into()]).await,
+            vec![None]
+        );
         Ok(())
     }
 
