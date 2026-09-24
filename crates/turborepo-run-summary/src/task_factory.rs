@@ -831,6 +831,221 @@ mod tests {
         assert!(matches!(plan(&hashes), Err(Error::MissingEnvVars(id)) if id == task));
     }
 
+    /// Supplies Go module and native task observations without invoking `go`.
+    struct PlannedGoContributor {
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl turborepo_repository::toolchain::RepositoryContributor for PlannedGoContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::GO
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                go::{GoModule, native_tasks_for_module},
+                relationships::{DependencyKind, Relationship},
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            Box::pin(async move {
+                let modules = [
+                    (
+                        "api",
+                        "apps/api",
+                        "example.com/api",
+                        vec![Relationship::internal("lib", DependencyKind::Production)],
+                        Some("."),
+                    ),
+                    ("lib", "packages/lib", "example.com/lib", vec![], None),
+                ];
+                let packages = modules
+                    .into_iter()
+                    .map(|(name, directory, module_path, relationships, target)| {
+                        let module = GoModule {
+                            module_path: module_path.to_string(),
+                            manifest_path: self.root.join_components(
+                                &directory.split('/').chain(["go.mod"]).collect::<Vec<_>>(),
+                            ),
+                            relationships: relationships.clone(),
+                            runnable_target: target.map(str::to_string),
+                            root_source_inputs: Some(Default::default()),
+                        };
+                        DiscoveredPackage::package(
+                            Some(name.to_string()),
+                            PackageJson::default(),
+                            module.manifest_path.clone(),
+                        )
+                        .with_native_relationships(relationships)
+                        .with_native_tasks(native_tasks_for_module(&module))
+                    })
+                    .collect();
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("go", self.root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let full = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        full.packages(),
+                        full.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_go_dry_run_and_run_summary_share_planned_task_facts() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(PlannedGoContributor { root: root.clone() }))
+            .build()
+            .await
+            .unwrap();
+        let api = TaskId::new("api", "build").into_owned();
+        let lib = TaskId::new("lib", "build").into_owned();
+        let context = graph
+            .package_task_context(&PackageName::from("api"))
+            .unwrap();
+        assert_eq!(context.toolchain(), Some(&ToolchainId::GO));
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("api"))
+                .unwrap(),
+            [PackageName::from("lib")]
+        );
+
+        // These are already-resolved planning and hashing facts: the factory
+        // projects them; it does not execute Go or resolve inputs itself.
+        let definition = TaskDefinition {
+            inputs: turborepo_types::TaskInputs::new(vec!["../../go.work".into()])
+                .with_default(true),
+            outputs: turborepo_types::TaskOutputs {
+                inclusions: vec!["api".into()],
+                ..Default::default()
+            },
+            topological_dependencies: vec![turborepo_errors::Spanned::new(
+                turborepo_task_id::TaskName::from("build"),
+            )],
+            ..Default::default()
+        };
+        let engine = PlanEngine {
+            definitions: HashMap::from([
+                (api.clone(), definition),
+                (lib.clone(), TaskDefinition::default()),
+            ]),
+            dependencies: HashMap::from([(api.clone(), vec![lib.clone()])]),
+            dependents: HashMap::from([(lib.clone(), vec![api.clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: HashMap::from([
+                (api.to_string(), Arc::from("api-task-hash")),
+                (lib.to_string(), Arc::from("lib-task-hash")),
+            ]),
+            inputs: HashMap::from([
+                (
+                    api.to_string(),
+                    [("main.go", "main-hash"), ("go.mod", "module-hash")]
+                        .into_iter()
+                        .map(|(path, hash)| {
+                            (
+                                turbopath::RelativeUnixPathBuf::new(path).unwrap(),
+                                hash.into(),
+                            )
+                        })
+                        .collect(),
+                ),
+                (
+                    lib.to_string(),
+                    vec![(
+                        turbopath::RelativeUnixPathBuf::new("go.mod").unwrap(),
+                        "lib-module-hash".into(),
+                    )],
+                ),
+            ]),
+            frameworks: HashMap::new(),
+            env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
+            hit: None,
+        };
+        let external = HashMap::from([
+            ("api".into(), "api-go-resolution-hash".into()),
+            ("lib".into(), "lib-go-resolution-hash".into()),
+        ]);
+        let environment = EnvironmentVariableMap::default();
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+        let dry = serde_json::to_value(factory.task_summary(api.clone(), None).unwrap()).unwrap();
+        assert_eq!(dry["taskId"], "api#build");
+        assert_eq!(dry["package"], "api");
+        assert_eq!(
+            dry["directory"],
+            Path::new("apps").join("api").to_string_lossy().as_ref()
+        );
+        assert_eq!(dry["command"], "go build .");
+        assert_eq!(dry["dependencies"], json!(["lib#build"]));
+        assert_eq!(dry["hash"], "api-task-hash");
+        assert_eq!(
+            dry["inputs"],
+            json!({"main.go": "main-hash", "go.mod": "module-hash"})
+        );
+        assert_eq!(
+            dry["resolvedTaskDefinition"]["inputs"],
+            json!(["../../go.work"])
+        );
+        assert_eq!(
+            dry["resolvedTaskDefinition"]["dependsOn"],
+            json!(["^build"])
+        );
+        assert_eq!(dry["outputs"], json!(["api"]));
+        assert_eq!(dry["resolvedTaskDefinition"]["outputs"], json!(["api"]));
+        assert_eq!(dry["hashOfExternalDependencies"], "api-go-resolution-hash");
+        assert_eq!(dry["cache"]["status"], "MISS");
+        assert!(dry.get("execution").is_none());
+
+        let execution = TaskExecutionSummary {
+            start_time: 100,
+            end_time: 110,
+            error: None,
+            exit_code: Some(0),
+        };
+        let mut summarized =
+            serde_json::to_value(factory.task_summary(api, Some(execution)).unwrap()).unwrap();
+        assert_eq!(summarized["execution"]["exitCode"], 0);
+        summarized.as_object_mut().unwrap().remove("execution");
+        assert_eq!(
+            summarized, dry,
+            "dry-run and run summary share the same portable task facts"
+        );
+
+        let library = serde_json::to_value(factory.task_summary(lib, None).unwrap()).unwrap();
+        assert_eq!(library["command"], "go build ./...");
+        assert_eq!(library["directory"], "packages/lib");
+        assert_eq!(library["dependents"], json!(["api#build"]));
+        assert_eq!(
+            library["hashOfExternalDependencies"],
+            "lib-go-resolution-hash"
+        );
+    }
+
     struct SummaryCargoContributor(AbsoluteSystemPathBuf);
 
     impl turborepo_repository::toolchain::RepositoryContributor for SummaryCargoContributor {
@@ -1023,7 +1238,9 @@ mod tests {
                 .map(|id| (id.to_string(), Arc::from("planned-hash")))
                 .collect(),
             inputs: ids.iter().map(|id| (id.to_string(), Vec::new())).collect(),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: None,
         };
         let external = cases
@@ -1263,7 +1480,9 @@ mod tests {
                 .iter()
                 .map(|task| (task.to_string(), Vec::new()))
                 .collect(),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: None,
         };
         let external: HashMap<_, _> = ["py-root", "py-app", "web"]
