@@ -18,13 +18,12 @@ use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
 pub use turborepo_vercel_api::AnalyticsEvent;
 use uuid::Uuid;
 
-// Batch frequent cache events without waiting for the idle timer on busy runs.
-// The API's request body limit is not specified here; this is an event count,
-// not a byte limit.
+// Bound each request to 100 events; any partial batch is sent at the end of the
+// run. The API's request body limit is not specified here; this is an event
+// count, not a byte limit.
 const BUFFER_THRESHOLD: usize = 100;
 
 static EVENT_TIMEOUT: Duration = Duration::from_millis(200);
-static NO_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
 static REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Error)]
@@ -108,7 +107,6 @@ struct Worker<C> {
 impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
     pub fn start(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let mut timeout = tokio::time::sleep(NO_TIMEOUT);
             loop {
                 select! {
                     // We want the events to be prioritized over closing
@@ -122,14 +120,7 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                         }
                         if self.buffer.len() >= BUFFER_THRESHOLD {
                             self.flush_events();
-                            timeout = tokio::time::sleep(NO_TIMEOUT);
-                        } else {
-                            timeout = tokio::time::sleep(EVENT_TIMEOUT);
                         }
-                    }
-                    _ = timeout => {
-                        self.flush_events();
-                        timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
                         break;
@@ -240,21 +231,6 @@ mod tests {
         }
     }
 
-    // Asserts that we get the message after the timeout
-    async fn expect_timeout_then_message(rx: &mut UnboundedReceiver<()>) {
-        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
-
-        select! {
-            _ = rx.recv() => {
-                panic!("Expected to wait out the flush timeout")
-            }
-            _ = timeout => {
-            }
-        }
-
-        rx.recv().await;
-    }
-
     // Asserts that we get the message immediately before the timeout
     async fn expected_immediate_message(rx: &mut UnboundedReceiver<()>) {
         let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
@@ -301,13 +277,17 @@ mod tests {
         // Should have no events since we haven't flushed yet
         assert_eq!(found.len(), 0);
 
-        expect_timeout_then_message(&mut rx).await;
+        // Even after the former idle flush timeout, the partial batch waits
+        // until the run ends.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), rx.recv())
+                .await
+                .is_err()
+        );
+        analytics_handle.close().await.unwrap();
         let found = client.events();
         assert_eq!(found.len(), 1);
-        let payloads = &found[0];
-        assert_eq!(payloads.len(), 2);
-
-        drop(analytics_handle);
+        assert_eq!(found[0].len(), 2);
     }
 
     #[tokio::test]
@@ -348,14 +328,15 @@ mod tests {
         let payloads = &found[0];
         assert_eq!(payloads.len(), BUFFER_THRESHOLD);
 
-        expect_timeout_then_message(&mut rx).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), rx.recv())
+                .await
+                .is_err()
+        );
+        analytics_handle.close().await.unwrap();
         let found = client.events();
         assert_eq!(found.len(), 2);
-
-        let payloads = &found[1];
-        assert_eq!(payloads.len(), 2);
-
-        drop(analytics_handle);
+        assert_eq!(found[1].len(), 2);
     }
 
     #[derive(Clone, Copy)]
