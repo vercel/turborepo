@@ -1225,4 +1225,102 @@ mod tests {
         assert!(depends_on.extends);
         assert_eq!(depends_on.deps.len(), 2);
     }
+
+    fn process_build_task(inputs: &str) -> Result<ProcessedTaskDefinition, Error> {
+        let json = format!(r#"{{"tasks": {{"build": {{"inputs": {inputs}}}}}}}"#);
+        let raw = crate::RawRootTurboJson::parse(&json, "turbo.json").expect("turbo.json parses");
+        let task = raw
+            .tasks
+            .expect("tasks are present")
+            .0
+            .remove(&crate::TaskName::from("build"))
+            .expect("build task is present");
+        ProcessedTaskDefinition::from_raw(task.into_inner(), &FutureFlags::default())
+    }
+
+    #[test_case(
+        r#"["$TURBO_DEFAULT$", {"mode": "startup", "globs": ["src/**"]}]"#,
+        &["Legacy input strings normalize to mode \"startup\"", "Use either legacy startup inputs", "Or one structured startup input"]
+        ; "legacy and structured startup inputs cannot mix"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["src/generated/**"]}, {"mode": "jit", "globs": ["other/**"]}]"#,
+        &["duplicate structured \"jit\" input mode"]
+        ; "duplicate structured modes"
+    )]
+    #[test_case(
+        r#"[{"globs": ["src/**"]}]"#,
+        &["Structured input entries must specify mode"]
+        ; "mode is required"
+    )]
+    #[test_case(
+        r#"[{"mode": "runtime", "globs": ["src/**"]}]"#,
+        &["Unknown input mode \"runtime\""]
+        ; "unknown modes"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "from": ["codegen"], "globs": ["src/generated/**"]}]"#,
+        &["from is only valid for dependencyOutputs inputs"]
+        ; "from outside dependency outputs"
+    )]
+    #[test_case(
+        r#"[{"mode": "dependencyOutputs", "withDefaults": true}]"#,
+        &["withDefaults is only valid for startup or jit inputs"]
+        ; "with defaults on dependency outputs"
+    )]
+    #[test_case(
+        r#"[{"mode": "startup", "globs": ["$TURBO_DEFAULT$"]}]"#,
+        &["Sentinel string \"$TURBO_DEFAULT$\" is not valid inside structured globs"]
+        ; "default sentinel inside structured globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["$TURBO_EXTENDS$"]}]"#,
+        &["Sentinel string \"$TURBO_EXTENDS$\" is not valid inside structured globs"]
+        ; "extends sentinel inside structured globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "startup", "globs": ["!src/generated/**"]}]"#,
+        &["negative-only startup globs require withDefaults: true"]
+        ; "negative only startup globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["!src/generated/**"]}]"#,
+        &["negative-only jit globs require withDefaults: true"]
+        ; "negative only jit globs"
+    )]
+    fn test_structured_inputs_reject_invalid_configuration(inputs: &str, expected: &[&str]) {
+        let err = process_build_task(inputs).unwrap_err();
+        assert_matches!(err, Error::StructuredInput { .. });
+        let message = err.to_string();
+        for fragment in expected {
+            assert!(
+                message.contains(fragment),
+                "expected {fragment:?} in {message:?}"
+            );
+        }
+    }
+
+    #[test_case(r#"[{"mode": "startup", "withDefaults": true, "globs": ["!src/generated/**"]}]"# ; "negative only startup globs with defaults")]
+    #[test_case(r#"[{"mode": "jit", "withDefaults": true, "globs": ["!src/generated/**"]}]"# ; "negative only jit globs with defaults")]
+    #[test_case(r#"[{"mode": "dependencyOutputs", "from": ["codegen"], "globs": ["dist/**"]}]"# ; "from on dependency outputs")]
+    fn test_structured_inputs_accept_valid_counterparts(inputs: &str) {
+        process_build_task(inputs).unwrap();
+    }
+
+    #[test]
+    fn test_env_rejects_pipeline_delimiter_prefix() {
+        let err = ProcessedEnv::new(
+            vec![
+                Spanned::new(UnescapedString::from("NODE_ENV".to_string())),
+                Spanned::new(UnescapedString::from("$FOOBAR".to_string())),
+            ],
+            &FutureFlags::default(),
+        )
+        .unwrap_err();
+        let Error::InvalidEnvPrefix(err) = err else {
+            panic!("expected InvalidEnvPrefix, got {err:?}");
+        };
+        assert_eq!(err.value, "$FOOBAR");
+        assert_eq!(err.key, "env");
+    }
 }

@@ -1467,3 +1467,40 @@ fn test_nonconflicting_env_exclusions_keep_resolved_outputs() {
         assert_eq!(task.outputs.inclusions, ["automatic-output"]);
     }
 }
+
+#[test_case(
+    json!({ "dev": { "interruptible": true } }),
+    "dev",
+    "Interruptible tasks must be persistent."
+    ; "interruptible task must be persistent"
+)]
+#[test_case(
+    json!({ "build": { "inputs": [{ "mode": "dependencyOutputs" }] } }),
+    "build",
+    "dependencyOutputs mode was used for task \"build\", but this task has no dependency tasks to select."
+    ; "dependency outputs require a dependency task to select"
+)]
+fn test_task_definition_validation_errors(tasks: serde_json::Value, task: &str, expected: &str) {
+    let repo_root_dir = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_dir.path()).unwrap();
+    let package_graph = mock_package_graph(
+        &repo_root,
+        package_jsons! {
+            repo_root,
+            "a" => []
+        },
+    );
+    let loader = TestTurboJsonLoader::new(HashMap::from([(
+        PackageName::Root,
+        turbo_json(json!({ "tasks": tasks })),
+    )]));
+    let err = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_workspaces(vec![PackageName::from("a")])
+        .with_tasks(vec![Spanned::new(TaskName::from(task).into_owned())])
+        .build()
+        .unwrap_err();
+    assert!(
+        err.to_string().contains(expected),
+        "expected {expected:?}, got {err}"
+    );
+}

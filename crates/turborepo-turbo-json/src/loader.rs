@@ -1020,6 +1020,31 @@ mod tests {
     }
 
     #[test]
+    fn test_single_package_rejects_package_tasks() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let root_turbo_json = repo_root.join_component(CONFIG_FILE);
+        root_turbo_json
+            .create_with_contents(r#"{"tasks": {"build": {}, "my-app#build": {}}}"#)
+            .unwrap();
+
+        let loader = TurboJsonLoader::<NoOpUpdater>::single_package(
+            TurboJsonReader::new(repo_root.to_owned()),
+            root_turbo_json,
+            vec!["build".to_string()],
+        );
+        let err = loader.load(&PackageName::Root).unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                LoaderError::TurboJson(Error::PackageTaskInSinglePackageMode { task_id, .. })
+                    if task_id == "my-app#build"
+            ),
+            "expected PackageTaskInSinglePackageMode, got {err:?}"
+        );
+    }
+
+    #[test]
     fn test_workspace_turbo_json_loading() {
         let root_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
