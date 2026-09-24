@@ -2,6 +2,7 @@
 #![allow(clippy::result_large_err)]
 
 mod loader;
+pub mod port;
 
 use std::collections::{HashMap, HashSet};
 
@@ -209,6 +210,18 @@ impl MicrofrontendsConfigs {
         self.configs
             .values()
             .find_map(|config| config.ports.get(task_id).copied())
+    }
+
+    /// Returns the configured development port for a package referenced by a
+    /// microfrontend application.
+    pub fn port_for_package(&self, package_name: &str) -> Option<u16> {
+        self.configs.values().find_map(|config| {
+            config.tasks.iter().find_map(|(task, _)| {
+                (task.package() == package_name)
+                    .then(|| config.ports.get(task).copied())
+                    .flatten()
+            })
+        })
     }
 
     pub fn should_use_turborepo_proxy(&self) -> bool {
