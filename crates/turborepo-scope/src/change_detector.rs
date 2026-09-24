@@ -39,6 +39,43 @@ pub(crate) fn all_package_changes(
         .collect()
 }
 
+/// Resolves raw changed files for an affected comparison. The merge-base and
+/// working-tree policies are explicit so run and query callers can use the
+/// same SCM behavior while tests provide fixed file sets.
+pub trait ChangedFilesDetector {
+    fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, ScmError>;
+}
+
+impl ChangedFilesDetector for SCM {
+    fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, ScmError> {
+        SCM::changed_files(
+            self,
+            turbo_root,
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            allow_unknown_objects,
+            merge_base,
+        )
+    }
+}
+
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
     /// Determine which packages have changed between two git refs.

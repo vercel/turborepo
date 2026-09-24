@@ -22,7 +22,7 @@ pub mod target_selector;
 
 use std::collections::HashMap;
 
-pub use change_detector::{GitChangeDetector, ScopeChangeDetector};
+pub use change_detector::{ChangedFilesDetector, GitChangeDetector, ScopeChangeDetector};
 pub use filter::{FilterResolver, PackageInference, ResolutionError};
 pub use target_selector::{GitRange, InvalidSelectorError, TargetSelector};
 use turbopath::AbsoluteSystemPath;
