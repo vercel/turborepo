@@ -284,35 +284,6 @@ fn test_prune_task_aware_inherited_package_configuration() {
 }
 
 #[test]
-fn test_prune_production_excludes_dev_dependencies() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_with_root_dep",
-        "pnpm@7.25.1",
-        false,
-    )
-    .unwrap();
-
-    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
-    assert!(
-        output.status.success(),
-        "prune --production failed: {}",
-        combined_output(&output)
-    );
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Added web"));
-    assert!(stdout.contains("Added shared"));
-    assert!(!stdout.contains("Added util"));
-
-    let packages_dir = tempdir.path().join("out/packages");
-    let package_entries = ls_dir(&packages_dir);
-    assert_eq!(package_entries, vec!["shared".to_string()]);
-    assert!(!packages_dir.join("util").exists());
-}
-
-#[test]
 fn test_prune_production_docker_excludes_dev_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
@@ -955,10 +926,10 @@ fn test_prune_composable_config() {
     assert!(stdout.contains("1 successful, 1 total"));
 }
 
-// --- includes-root-deps.t ---
+// --- JSONC configuration materialization ---
 
 #[test]
-fn test_prune_includes_root_deps() {
+fn test_prune_copies_jsonc_configuration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
         tempdir.path(),
@@ -968,20 +939,13 @@ fn test_prune_includes_root_deps() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "web"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Added web"));
-
-    // Rename to turbo.jsonc, prune again
     fs::rename(
         tempdir.path().join("turbo.json"),
         tempdir.path().join("turbo.jsonc"),
     )
     .unwrap();
-    let _ = fs::remove_dir_all(tempdir.path().join("out"));
     let output = run_turbo(tempdir.path(), &["prune", "web"]);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", combined_output(&output));
 
     let out_entries = ls_dir(&tempdir.path().join("out"));
     assert!(
