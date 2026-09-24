@@ -2548,9 +2548,10 @@ fn test_ls_and_query_show_implicit_cargo_task_commands() {
         .expect("aggregate task in dry-run");
     assert_eq!(task["command"], "cargo test --workspace --locked");
     assert_eq!(task["directory"], "");
+    let expected_log = Path::new(".turbo").join("turbo-test-acme-c7aba2810dce6e39.log");
     assert_eq!(
-        task["logFile"],
-        ".turbo/turbo-test-acme-c7aba2810dce6e39.log"
+        task["logFile"].as_str().map(Path::new),
+        Some(expected_log.as_path())
     );
 }
 

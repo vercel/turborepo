@@ -951,7 +951,11 @@ mod tests {
                 serde_json::to_value(factory.task_summary(id.clone(), None).unwrap()).unwrap();
             assert_eq!(plan["taskId"], id.to_string());
             assert_eq!(plan["command"], *command, "{id}");
-            assert_eq!(plan["directory"], *directory, "{id}");
+            assert_eq!(
+                plan["directory"],
+                directory.replace('/', std::path::MAIN_SEPARATOR_STR),
+                "{id}"
+            );
             assert_eq!(plan["hash"], "planned-hash");
             assert_eq!(plan["hashOfExternalDependencies"], format!("{pkg}-closure"));
             assert_eq!(plan["cache"]["status"], "MISS");
@@ -964,7 +968,11 @@ mod tests {
                 ("web", "build") => Some("packages/web/.turbo/turbo-build.log"),
                 _ => None,
             };
-            assert_eq!(plan["logFile"], json!(expected_log), "{id}");
+            assert_eq!(
+                plan["logFile"],
+                json!(expected_log.map(|path| path.replace('/', std::path::MAIN_SEPARATOR_STR))),
+                "{id}"
+            );
             if *pkg == "acme" {
                 assert_eq!(context.log_namespace(), Some("acme"));
             }
