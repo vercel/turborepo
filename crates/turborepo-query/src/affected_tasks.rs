@@ -222,7 +222,7 @@ mod tests {
     use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
     use turborepo_query_api::{AffectedPackagesError, BoundariesFuture};
     use turborepo_repository::{
-        change_mapper::PackageInclusionReason,
+        change_mapper::{AllPackageChangeReason, PackageInclusionReason},
         discovery::{DiscoveryResponse, PackageDiscovery},
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
@@ -232,7 +232,7 @@ mod tests {
     use turborepo_scm::SCM;
     use turborepo_task_id::TaskId;
     use turborepo_turbo_json::TurboJson;
-    use turborepo_types::{TaskDefinition, TaskInputs};
+    use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskInputs};
     use turborepo_ui::ColorConfig;
 
     use super::*;
@@ -415,17 +415,25 @@ mod tests {
 
         fn calculate_affected_packages(
             &self,
-            _base: Option<String>,
-            _head: Option<String>,
+            base: Option<String>,
+            head: Option<String>,
         ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError> {
+            self.recorded_calls
+                .lock()
+                .unwrap()
+                .push(format!("calculate_affected_packages:{base:?}:{head:?}"));
             Ok(self.affected_packages.clone())
         }
 
         fn changed_files(
             &self,
-            _base: Option<&str>,
-            _head: Option<&str>,
+            base: Option<&str>,
+            head: Option<&str>,
         ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError> {
+            self.recorded_calls
+                .lock()
+                .unwrap()
+                .push(format!("changed_files:{base:?}:{head:?}"));
             Ok(self.changed_files.clone())
         }
 
@@ -463,6 +471,7 @@ mod tests {
         let pkg_dep_graph =
             make_pkg_graph(root, &["app-a", "lib-a", "lib-b", "ignored", "no-tasks"]).await;
         let source_task = TaskDefinition {
+            command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
             inputs: TaskInputs {
                 globs: vec!["src/**".to_string()],
                 ..Default::default()
@@ -835,6 +844,123 @@ mod tests {
         let result: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
         assert!(result.get("errors").is_none(), "{result}");
         result["data"].clone()
+    }
+
+    #[tokio::test]
+    async fn affected_tasks_query_filters_fixed_files_and_forwards_base_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = affected_packages_query_run(
+            root,
+            true,
+            false,
+            &["packages/lib-a/src/index.ts", "packages/lib-b/src/index.ts"],
+        )
+        .await;
+        let data = query_data(
+            run.clone(),
+            r#"{
+                affectedTasks(
+                    base: "main",
+                    head: "HEAD",
+                    tasks: ["test"],
+                    filter: { equal: { field: NAME, value: "lib-a" } }
+                ) {
+                    length
+                    items { fullName package { name } reason { __typename } }
+                }
+            }"#,
+        )
+        .await;
+        let items = data["affectedTasks"]["items"].as_array().unwrap();
+        let task_names: HashSet<_> = items
+            .iter()
+            .map(|item| item["fullName"].as_str().unwrap())
+            .collect();
+        assert_eq!(data["affectedTasks"]["length"], 1);
+        assert!(task_names.contains("lib-a#test"));
+        assert!(!task_names.contains("app-a#test"));
+
+        let calls = run.recorded_calls.lock().unwrap();
+        assert!(calls
+            .contains(&"calculate_affected_packages:Some(\"main\"):Some(\"HEAD\")".to_string()));
+        assert!(calls.contains(&"changed_files:Some(\"main\"):Some(\"HEAD\")".to_string()));
+        drop(calls);
+
+        let no_matching_task = query_data(
+            run,
+            r#"{
+                affectedTasks(
+                    tasks: ["test"],
+                    filter: { equal: { field: NAME, value: "lib-b" } }
+                ) {
+                    length
+                    items { fullName }
+                }
+            }"#,
+        )
+        .await;
+        assert_eq!(no_matching_task["affectedTasks"]["length"], 0);
+    }
+
+    #[tokio::test]
+    async fn affected_tasks_query_respects_task_input_flags_with_fixed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        for (affected_using_task_inputs, filter_using_tasks, expected) in
+            [(false, false, 2), (true, false, 0), (false, true, 0)]
+        {
+            let run = affected_packages_query_run(
+                root,
+                affected_using_task_inputs,
+                filter_using_tasks,
+                &["packages/lib-a/README.md"],
+            )
+            .await;
+            let data = query_data(
+                run,
+                "{ affectedTasks { length items { fullName reason { __typename } } } }",
+            )
+            .await;
+            assert_eq!(
+                data["affectedTasks"]["length"], expected,
+                "unexpected result for affectedUsingTaskInputs={affected_using_task_inputs}, \
+                 filterUsingTasks={filter_using_tasks}"
+            );
+        }
+
+        let root_package_change =
+            affected_packages_query_run(root, true, false, &["package.json"]).await;
+        let data = query_data(
+            root_package_change,
+            "{ affectedTasks { length items { fullName } } }",
+        )
+        .await;
+        assert_eq!(data["affectedTasks"]["length"], 0);
+    }
+
+    #[tokio::test]
+    async fn affected_tasks_query_preserves_global_dependency_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let mut run = affected_packages_query_run(root, true, false, &[]).await;
+        Arc::get_mut(&mut run).unwrap().affected_packages = HashMap::from([(
+            PackageName::from("lib-a"),
+            PackageInclusionReason::All(AllPackageChangeReason::GlobalDepsChanged {
+                file: AnchoredSystemPathBuf::from_raw("foo.txt").unwrap(),
+            }),
+        )]);
+
+        let data = query_data(
+            run,
+            "{ affectedTasks { length items { fullName reason { __typename } } } }",
+        )
+        .await;
+        let items = data["affectedTasks"]["items"].as_array().unwrap();
+        assert!(!items.is_empty());
+        assert!(items
+            .iter()
+            .all(|item| { item["reason"]["__typename"] == "TaskGlobalDepsChanged" }));
     }
 
     #[derive(Default)]
