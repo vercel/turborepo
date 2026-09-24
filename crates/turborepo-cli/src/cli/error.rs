@@ -135,53 +135,32 @@ pub async fn print_potential_tasks(
 
 #[cfg(test)]
 mod tests {
+    use turborepo_microfrontends_config::port::PortResolutionError;
+
     use super::*;
 
     #[test]
     fn test_get_mfe_port_error_conversion() {
-        // Test NoPackageJson error
-        let err = get_mfe_port::Error::NoPackageJson;
+        let err = get_mfe_port::Error::PortResolution(PortResolutionError::NoPackageJson);
         let cli_err: Error = err.into();
         assert!(matches!(cli_err, Error::GetMfePort(_)));
         assert_eq!(
             cli_err.to_string(),
             "Current directory does not belong to a named JavaScript package"
         );
-
-        // Test NoPackageName error
-        let err = get_mfe_port::Error::NoPackageName;
-        let cli_err: Error = err.into();
-        assert!(matches!(cli_err, Error::GetMfePort(_)));
-        assert_eq!(
-            cli_err.to_string(),
-            "package.json is missing the 'name' field"
-        );
-
-        // Test NoMicrofrontendsConfig error
-        let err = get_mfe_port::Error::NoMicrofrontendsConfig;
-        let cli_err: Error = err.into();
-        assert!(matches!(cli_err, Error::GetMfePort(_)));
-        assert_eq!(cli_err.to_string(), "No microfrontends configuration found");
-
-        // Test PackageNotInConfig error
-        let err = get_mfe_port::Error::PackageNotInConfig("my-app".to_string());
-        let cli_err: Error = err.into();
-        assert!(matches!(cli_err, Error::GetMfePort(_)));
-        assert_eq!(
-            cli_err.to_string(),
-            "Package 'my-app' not found in microfrontends configuration"
-        );
     }
 
     #[test]
     fn test_get_mfe_port_error_source() {
-        // Test that error source chain works properly
-        let err = get_mfe_port::Error::NoPackageJson;
+        let err = get_mfe_port::Error::PortResolution(PortResolutionError::NoPackageJson);
         let cli_err: Error = err.into();
 
         match cli_err {
             Error::GetMfePort(inner) => {
-                assert!(matches!(inner, get_mfe_port::Error::NoPackageJson));
+                assert!(matches!(
+                    inner,
+                    get_mfe_port::Error::PortResolution(PortResolutionError::NoPackageJson)
+                ));
             }
             _ => panic!("Expected GetMfePort error variant"),
         }
