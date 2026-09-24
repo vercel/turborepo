@@ -373,7 +373,7 @@ fn test_uv_quality_hash_projection_smoke() {
 }
 
 #[test]
-fn test_uv_root_and_member_pytest_both_run_and_member_filter_uses_direct_declaration() {
+fn test_uv_root_and_member_pytest_cli_wiring_smoke() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
     append_manifest(
@@ -387,26 +387,11 @@ fn test_uv_root_and_member_pytest_both_run_and_member_filter_uses_direct_declara
         "\n[dependency-groups]\ndev = [\"pytest\"]\n",
     );
 
-    let workspace = dry_run_tasks(tempdir.path(), &["test"]);
-    assert_eq!(task_ids(&workspace), ["acme#test", "py-app#test"]);
-    assert_eq!(
-        find_task(&workspace, "acme#test")["command"],
-        "uv run --active --frozen --all-packages pytest"
-    );
-    assert_eq!(
-        find_task(&workspace, "py-app#test")["command"],
-        "uv run --active --frozen --package py-app pytest packages/py-app"
-    );
-
-    let app = dry_run_tasks(tempdir.path(), &["test", "--filter=py-app"]);
-    assert_eq!(task_ids(&app), ["py-app#test"]);
-    assert_eq!(
-        find_task(&app, "py-app#test")["command"],
-        "uv run --active --frozen --package py-app pytest packages/py-app"
-    );
-
-    let lib = dry_run_tasks(tempdir.path(), &["test", "--filter=py-lib"]);
-    assert!(task_ids(&lib).is_empty());
+    // The CLI still has to co-select declarations at their owning scopes;
+    // the in-process query/summary contracts inject those task observations.
+    let json = dry_run_tasks(tempdir.path(), &["test"]);
+    assert_eq!(task_ids(&json), ["acme#test", "py-app#test"]);
+    assert!(!task_ids(&json).contains(&"py-lib#test".to_string()));
 }
 
 #[test]
@@ -424,12 +409,10 @@ fn test_uv_member_pytest_tasks_run_per_declaring_package() {
         "\n[dependency-groups]\ntests = [\"pytest\"]\n\n[tool.uv]\ndefault-groups = []\n",
     );
 
-    let test = dry_run_tasks(tempdir.path(), &["test"]);
-    assert_eq!(task_ids(&test), ["py-app#test", "py-lib#test"]);
-    assert_eq!(
-        find_task(&test, "py-app#test")["command"],
-        "uv run --active --frozen --package py-app pytest packages/py-app"
-    );
+    // Retain the alternate-group wiring through the assembled CLI. The
+    // root/member command projections are covered by injected crate tests.
+    let test = dry_run_tasks(tempdir.path(), &["test", "--filter=py-lib"]);
+    assert_eq!(task_ids(&test), ["py-lib#test"]);
     assert_eq!(
         find_task(&test, "py-lib#test")["command"],
         "uv run --active --frozen --package py-lib --no-default-groups --group tests pytest \
@@ -513,14 +496,6 @@ fn test_uv_native_tools_are_visible_to_query_in_mixed_repo() {
         tempdir.path(),
         "pyproject.toml",
         "\n[dependency-groups]\ndev = [\"ruff\", \"mypy\"]\n",
-    );
-
-    let lint = dry_run_tasks(tempdir.path(), &["lint"]);
-    let ids = task_ids(&lint);
-    assert!(ids.contains(&"pyacme#lint".to_string()), "ids: {ids:?}");
-    assert!(
-        ids.contains(&"pyacme#lint:ruff".to_string()),
-        "ids: {ids:?}"
     );
 
     let output = run_turbo(

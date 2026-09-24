@@ -1283,10 +1283,16 @@ mod tests {
     use turborepo_errors::Spanned;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery},
+        native_tasks::{
+            NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+        },
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
         package_manager::PackageManager,
-        prune_knowledge::{PruneDomain, PruneDomainId, PrunePlan},
+        prune_knowledge::{
+            CARGO_PRUNE_DOMAIN, GO_PRUNE_DOMAIN, PYTHON_PRUNE_DOMAIN, PruneDomain, PruneDomainId,
+            PrunePlan,
+        },
         relationships::{DependencyKind, Relationship},
         task_contracts::{PrunePackageMode, ScopeTaskContract},
         toolchain::{
@@ -1426,7 +1432,10 @@ mod tests {
             &self,
             kept: &[String],
         ) -> Result<Option<PrunePlan>, turborepo_repository::prune_knowledge::Error> {
-            Ok((!kept.is_empty()).then_some(PrunePlan::default()))
+            Ok((!kept.is_empty()).then(|| PrunePlan {
+                copy_paths: vec![format!("{}.lock", self.0)],
+                ..Default::default()
+            }))
         }
     }
 
@@ -1488,11 +1497,99 @@ mod tests {
         }
     }
 
+    /// Add two independent native domains to the existing JS/Cargo graph.
+    /// Scope identity and prune intent come from observations, not executables.
+    struct OtherNativePruneObservation {
+        root: AbsoluteSystemPathBuf,
+        domain: PruneDomainId,
+        toolchain: ToolchainId,
+    }
+
+    impl RepositoryContributor for OtherNativePruneObservation {
+        fn id(&self) -> ToolchainId {
+            self.toolchain.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let (member, aggregate, manifest, root_manifest) =
+                    if self.toolchain == ToolchainId::GO {
+                        ("go-app", "go-workspace", "apps/go/go.mod", "go.work")
+                    } else {
+                        (
+                            "py-app",
+                            "python-workspace",
+                            "packages/python/pyproject.toml",
+                            "pyproject.toml",
+                        )
+                    };
+                let contract = || {
+                    ScopeTaskContract::derived(
+                        self.toolchain.clone(),
+                        None,
+                        BTreeMap::new(),
+                        BTreeMap::new(),
+                    )
+                    .with_prune_package_mode(PrunePackageMode::NativeDomain(self.domain.clone()))
+                };
+                let member_path = self
+                    .root
+                    .join_components(&manifest.split('/').collect::<Vec<_>>());
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some(member.into()),
+                            PackageJson::default(),
+                            member_path,
+                        )
+                        .with_native_relationships(Vec::new())
+                        .with_native_tasks(vec![NativeTask::command_task(
+                            "build",
+                            format!("{} build", self.toolchain),
+                            NativeCommandProgram::Tool(self.toolchain.as_str().into()),
+                            NativeCommandArguments::new(vec!["build".into()]),
+                            None,
+                            WorkingDirectoryPolicy::RepositoryRoot,
+                        )])
+                        .with_task_contract(contract()),
+                        DiscoveredPackage::aggregate(
+                            aggregate.into(),
+                            PackageJson::default(),
+                            self.root.join_component(root_manifest),
+                        )
+                        .with_native_relationships(vec![Relationship::internal(
+                            member,
+                            DependencyKind::Production,
+                        )])
+                        .with_task_contract(contract()),
+                    ],
+                    vec![WorkspaceRoot::new(
+                        self.toolchain.as_str(),
+                        self.root.clone(),
+                    )],
+                )
+                .with_prune_domain(Arc::new(NativePlanDomain(self.domain.clone()))))
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    observed.packages(),
+                    observed.workspace_roots(),
+                ))
+            })
+        }
+    }
+
     #[tokio::test]
     async fn prune_selection_plan_separates_js_native_and_docker_intent_in_memory() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
-        let domain = PruneDomainId::new("cargo-fixture");
+        let domain = CARGO_PRUNE_DOMAIN.clone();
+        let go_domain = GO_PRUNE_DOMAIN.clone();
+        let python_domain = PYTHON_PRUNE_DOMAIN.clone();
         let graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({
@@ -1518,10 +1615,22 @@ mod tests {
             root: root.clone(),
             domain: domain.clone(),
         }))
+        .with_contributor(Arc::new(OtherNativePruneObservation {
+            root: root.clone(),
+            domain: go_domain.clone(),
+            toolchain: ToolchainId::GO,
+        }))
+        .with_contributor(Arc::new(OtherNativePruneObservation {
+            root: root.clone(),
+            domain: python_domain.clone(),
+            toolchain: ToolchainId::PYTHON,
+        }))
         .build()
         .await
         .unwrap();
-        let scope = vec!["app".to_string(), "cargo-app".to_string()];
+        let scope = ["app", "cargo-app", "go-app", "py-app"]
+            .map(str::to_string)
+            .to_vec();
         let out = root.join_component("out");
         let prune = Prune {
             package_graph: graph,
@@ -1537,14 +1646,16 @@ mod tests {
         };
         let mut closure = prune.internal_dependencies().unwrap();
         let selected = closure.iter().cloned().collect::<HashSet<_>>();
-        for name in ["app", "lib", "cargo-app"] {
+        for name in ["app", "lib", "cargo-app", "go-app", "py-app"] {
             assert!(selected.contains(&PackageName::from(name)), "{selected:?}");
         }
         assert!(selected.contains(&PackageName::Root));
-        assert!(!selected.contains(&PackageName::from("cargo-workspace")));
-        // Task-aware selection can retain an aggregate namespace, but must not
-        // copy its root directory or seed its native lockfile domain.
-        closure.push(PackageName::from("cargo-workspace"));
+        for aggregate in ["cargo-workspace", "go-workspace", "python-workspace"] {
+            assert!(!selected.contains(&PackageName::from(aggregate)));
+            // Task-aware selection can retain aggregate namespaces, but must
+            // not copy root directories or seed a native domain with them.
+            closure.push(PackageName::from(aggregate));
+        }
         let plan = PruneSelectionPlan::new(&prune.package_graph, closure, true).unwrap();
         assert!(plan.docker);
         let js = plan
@@ -1564,17 +1675,179 @@ mod tests {
         let mut paths = plan.javascript_paths.clone();
         paths.sort();
         assert_eq!(paths, ["packages/app", "packages/lib"]);
-        assert_eq!(plan.native_domains[&domain], ["cargo-app"]);
-        assert!(
-            plan.workspaces
-                .contains(&PackageName::from("cargo-workspace"))
-        );
+        for (domain, member) in [
+            (&domain, "cargo-app"),
+            (&go_domain, "go-app"),
+            (&python_domain, "py-app"),
+        ] {
+            assert_eq!(plan.native_domains[domain], [member]);
+            let native = prune
+                .package_graph
+                .prune_plan(domain, &plan.native_domains[domain])
+                .unwrap()
+                .expect("domain has a selected member");
+            assert_eq!(native.copy_paths, [format!("{domain}.lock")]);
+        }
+        for aggregate in ["cargo-workspace", "go-workspace", "python-workspace"] {
+            assert!(plan.workspaces.contains(&PackageName::from(aggregate)));
+        }
         assert!(
             !PruneSelectionPlan::new(&prune.package_graph, plan.workspaces, false)
                 .unwrap()
                 .docker
         );
         assert!(!out.exists(), "planning must not create output directories");
+    }
+
+    #[tokio::test]
+    async fn task_aware_prune_closes_explicit_task_owners_before_layout() {
+        use super::{ColorConfig, FutureFlags, PruneInput, tasks};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let config = root.join_component("turbo.json");
+        config
+            .create_with_contents(
+                json!({
+                    "tasks": {
+                        "build": {}, "generate": {},
+                        "web#build": {
+                            "dependsOn": ["tool#generate", "go-app#build", "py-app#build"]
+                        },
+                        "tool#generate": {"dependsOn": ["leaf#generate"]}
+                    }
+                })
+                .to_string(),
+            )
+            .unwrap();
+        let manifests = [
+            (
+                "web",
+                json!({
+                    "scripts": {"build": "echo web"},
+                    "dependencies": {"install": "*"},
+                    "devDependencies": {"dev-only": "*"}
+                }),
+            ),
+            ("install", json!({"scripts": {"build": "echo install"}})),
+            ("dev-only", json!({"scripts": {"build": "echo dev"}})),
+            ("tool", json!({"scripts": {"generate": "echo tool"}})),
+            ("leaf", json!({"scripts": {"generate": "echo leaf"}})),
+            ("unrelated", json!({"scripts": {"build": "echo unrelated"}})),
+        ]
+        .into_iter()
+        .map(|(name, fields)| {
+            let mut fields = fields;
+            fields["name"] = json!(name);
+            (
+                root.join_components(&["packages", name, "package.json"]),
+                PackageJson::from_value(fields).unwrap(),
+            )
+        })
+        .collect();
+        let graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo", "packageManager": "npm@10.5.0",
+                "workspaces": ["packages/*"]
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(manifests))
+        .with_contributor(Arc::new(OtherNativePruneObservation {
+            root: root.clone(),
+            domain: GO_PRUNE_DOMAIN.clone(),
+            toolchain: ToolchainId::GO,
+        }))
+        .with_contributor(Arc::new(OtherNativePruneObservation {
+            root: root.clone(),
+            domain: PYTHON_PRUNE_DOMAIN.clone(),
+            toolchain: ToolchainId::PYTHON,
+        }))
+        .without_external_dependencies()
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["web".to_string()];
+        let output = root.join_component("out");
+        let mut prune = Prune {
+            package_graph: graph,
+            root: root.clone(),
+            out_directory: output.clone(),
+            full_directory: output.clone(),
+            docker: true,
+            production: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
+        };
+        let invalid_config = root.join_components(&["packages", "web", "turbo.json"]);
+        invalid_config.ensure_dir().unwrap();
+        invalid_config.create_with_contents("not JSON").unwrap();
+        // Legacy closure must not load task configuration when task-aware
+        // selection is disabled, even if the selected package config is bad.
+        let initial = prune.internal_dependencies().unwrap();
+        prune.production = true;
+        let production = prune.internal_dependencies().unwrap();
+        prune.production = false;
+        let production_set = production.into_iter().collect::<HashSet<_>>();
+        assert!(production_set.contains(&PackageName::from("install")));
+        assert!(!production_set.contains(&PackageName::from("dev-only")));
+        std::fs::remove_file(invalid_config.as_std_path()).unwrap();
+        let initial_set = initial.iter().cloned().collect::<HashSet<_>>();
+        for name in ["web", "install", "dev-only"] {
+            assert!(initial_set.contains(&PackageName::from(name)));
+        }
+        for name in ["tool", "leaf", "go-app", "py-app", "unrelated"] {
+            assert!(!initial_set.contains(&PackageName::from(name)));
+        }
+        let input = PruneInput {
+            repo_root: root.clone(),
+            color_config: ColorConfig::new(true),
+            scope: scope.clone(),
+            docker: true,
+            production: false,
+            output_dir: "out".into(),
+            use_gitignore: false,
+            allow_missing_package_manager: false,
+            future_flags: FutureFlags {
+                affected_using_task_inputs: true,
+                ..Default::default()
+            },
+            root_turbo_json_path: config,
+        };
+        let retained =
+            tasks::retain_task_dependencies(&input, &prune.package_graph, initial, false).unwrap();
+        let selected = retained.iter().cloned().collect::<HashSet<_>>();
+        for name in [
+            "web", "install", "dev-only", "tool", "leaf", "go-app", "py-app",
+        ] {
+            assert!(selected.contains(&PackageName::from(name)));
+        }
+        assert!(!selected.contains(&PackageName::from("unrelated")));
+        let plan = PruneSelectionPlan::new(&prune.package_graph, retained, true).unwrap();
+        assert_eq!(plan.native_domains[&GO_PRUNE_DOMAIN], ["go-app"]);
+        assert_eq!(plan.native_domains[&PYTHON_PRUNE_DOMAIN], ["py-app"]);
+        let paths = plan.javascript_paths.into_iter().collect::<HashSet<_>>();
+        assert_eq!(
+            paths,
+            [
+                "packages/web",
+                "packages/install",
+                "packages/dev-only",
+                "packages/tool",
+                "packages/leaf"
+            ]
+            .map(str::to_string)
+            .into()
+        );
+        assert!(plan.docker);
+        assert!(
+            !output.exists(),
+            "planning must not materialize the Docker tree"
+        );
     }
 
     #[tokio::test]

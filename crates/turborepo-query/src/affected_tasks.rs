@@ -999,6 +999,238 @@ mod tests {
             .any(|call| call == "task_ids_for_package:app"));
     }
 
+    // Exercise the query projection with full Cargo task observations, but no
+    // cargo metadata process, CLI invocation, or on-disk Cargo workspace.
+    struct QueryCargoContributor {
+        root: turbopath::AbsoluteSystemPathBuf,
+    }
+
+    impl turborepo_repository::toolchain::RepositoryContributor for QueryCargoContributor {
+        fn id(&self) -> turborepo_repository::toolchain::ToolchainId {
+            turborepo_repository::toolchain::ToolchainId::RUST
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let packages = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        packages.packages(),
+                        packages.workspace_roots(),
+                    ),
+                )
+            })
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                cargo::{
+                    native_tasks_for_package, CargoPackageDetails, CargoPackageKind, Deliverable,
+                    DeliverableKind,
+                },
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            Box::pin(async move {
+                let packages = [
+                    ("app", CargoPackageKind::Entrypoint, "crates/app/Cargo.toml"),
+                    (
+                        "lib-a",
+                        CargoPackageKind::Library,
+                        "crates/lib-a/Cargo.toml",
+                    ),
+                    ("acme", CargoPackageKind::Workspace, "Cargo.toml"),
+                ]
+                .into_iter()
+                .map(|(name, kind, path)| {
+                    let details = CargoPackageDetails {
+                        kind,
+                        deliverables: (kind == CargoPackageKind::Entrypoint)
+                            .then(|| Deliverable {
+                                name: name.to_string(),
+                                kind: DeliverableKind::Bin,
+                            })
+                            .into_iter()
+                            .collect(),
+                        manifest_alters_output_layout: false,
+                    };
+                    let manifest = self
+                        .root
+                        .join_components(&path.split('/').collect::<Vec<_>>());
+                    let package = if kind == CargoPackageKind::Workspace {
+                        DiscoveredPackage::aggregate(
+                            name.to_string(),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    } else {
+                        DiscoveredPackage::package(
+                            Some(name.to_string()),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    };
+                    package
+                        .with_native_relationships(Vec::new())
+                        .with_native_tasks(native_tasks_for_package(&details, name))
+                })
+                .collect();
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("cargo", self.root.clone())],
+                ))
+            })
+        }
+    }
+
+    async fn cargo_query_run(root: &AbsoluteSystemPath, javascript: bool) -> Arc<MockQueryRun> {
+        let mut builder = if javascript {
+            PackageGraph::builder_optional(root, Some(PackageJson::default()))
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::from([(
+                    root.join_components(&["packages", "web", "package.json"]),
+                    PackageJson::from_value(serde_json::json!({
+                        "name": "web", "scripts": {"build": "echo web", "doc": "echo docs"}
+                    }))
+                    .unwrap(),
+                )])))
+        } else {
+            PackageGraph::builder_optional(root, None)
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::new()))
+        };
+        builder = builder.with_contributor(Arc::new(QueryCargoContributor {
+            root: root.to_owned(),
+        }));
+        let graph = builder.build().await.unwrap();
+        let tasks = ["app", "lib-a", "acme"]
+            .into_iter()
+            .flat_map(|name| {
+                graph
+                    .package_task_context(&PackageName::from(name))
+                    .unwrap()
+                    .native_tasks()
+                    .registered_names()
+                    .into_iter()
+                    .map(move |task| {
+                        (
+                            TaskId::from_static(name.to_string(), task.to_string()),
+                            TaskDefinition::default(),
+                        )
+                    })
+            })
+            .collect::<Vec<_>>();
+        Arc::new(MockQueryRun {
+            engine: make_engine(&tasks),
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        })
+    }
+
+    async fn queried_tasks(run: Arc<MockQueryRun>, name: &str) -> serde_json::Value {
+        let data = query_data(
+            run,
+            &format!(
+                r#"{{ package(name: "{name}") {{ tasks {{ items {{ name script command }} }} }} }}"#
+            ),
+        )
+        .await;
+        let items = data["package"]["tasks"]["items"].as_array().unwrap();
+        items
+            .iter()
+            .map(|task| (task["name"].as_str().unwrap().to_string(), task.clone()))
+            .collect::<serde_json::Map<_, _>>()
+            .into()
+    }
+
+    #[tokio::test]
+    async fn cargo_package_and_aggregate_tasks_query_native_commands_without_aliases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = cargo_query_run(root, false).await;
+        assert!(!run.repo_context.pkg_dep_graph().has_root_javascript_scope());
+
+        for (package, expected) in [
+            (
+                "app",
+                vec![
+                    ("build", "cargo build --package=app --locked"),
+                    ("run", "cargo run --package=app --locked"),
+                    ("dev", "cargo run --package=app --locked"),
+                    ("test", "cargo test --package=app --locked"),
+                    ("check", "cargo check --package=app --locked"),
+                    ("lint", "cargo clippy --package=app --locked"),
+                    ("format", "cargo fmt --package=app"),
+                ],
+            ),
+            (
+                "lib-a",
+                vec![
+                    ("build", "cargo build --package=lib-a --locked"),
+                    ("test", "cargo test --package=lib-a --locked"),
+                    ("check", "cargo check --package=lib-a --locked"),
+                    ("lint", "cargo clippy --package=lib-a --locked"),
+                    ("format", "cargo fmt --package=lib-a"),
+                ],
+            ),
+            (
+                "acme",
+                vec![
+                    ("test", "cargo test --workspace --locked"),
+                    ("check", "cargo check --workspace --locked"),
+                    ("lint", "cargo clippy --workspace --locked"),
+                    ("format", "cargo fmt --all"),
+                ],
+            ),
+        ] {
+            let tasks = queried_tasks(run.clone(), package).await;
+            let names: HashSet<_> = tasks
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect();
+            assert_eq!(
+                names,
+                expected.iter().map(|(name, _)| *name).collect(),
+                "{package}"
+            );
+            for (name, command) in expected {
+                assert_eq!(tasks[name]["command"], command, "{package}#{name}");
+                assert!(tasks[name]["script"].is_null(), "{package}#{name}");
+            }
+            for alias in ["doc", "docs", "clippy", "bench"] {
+                assert!(tasks.get(alias).is_none(), "{package}#{alias}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_cargo_and_javascript_tasks_keep_javascript_scripts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = cargo_query_run(root, true).await;
+        let web = queried_tasks(run.clone(), "web").await;
+        assert_eq!(
+            web["build"],
+            serde_json::json!({
+                "name": "build", "script": "echo web", "command": "echo web"
+            })
+        );
+        assert_eq!(web["doc"]["script"], "echo docs");
+        assert!(web.get("lint").is_none());
+        let rust = queried_tasks(run, "lib-a").await;
+        assert_eq!(
+            rust["lint"]["command"],
+            "cargo clippy --package=lib-a --locked"
+        );
+        assert!(rust.get("doc").is_none());
+    }
+
     #[tokio::test]
     async fn affected_packages_projects_raw_task_owners_and_preserves_predicates() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1425,6 +1657,262 @@ mod tests {
                 Some(TaskChangeReason::AllTasksChanged { description })
                     if description == "conservative affectedness fallback"
             ));
+        }
+    }
+
+    // Query projection coverage uses the same graph and engine seams as the
+    // affected-task tests, but supplies native Python facts without running uv.
+    struct QueryPythonContributor {
+        root: turbopath::AbsoluteSystemPathBuf,
+    }
+
+    impl turborepo_repository::toolchain::RepositoryContributor for QueryPythonContributor {
+        fn id(&self) -> turborepo_repository::toolchain::ToolchainId {
+            turborepo_repository::toolchain::ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                native_tasks::{
+                    NativeCommandArguments, NativeCommandProgram, NativeTask,
+                    WorkingDirectoryPolicy,
+                },
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            fn command(name: &str, arguments: &str) -> NativeTask {
+                NativeTask::command_task(
+                    name,
+                    format!("uv {arguments}"),
+                    NativeCommandProgram::Tool("uv".into()),
+                    NativeCommandArguments::new(
+                        arguments.split_whitespace().map(str::to_string).collect(),
+                    ),
+                    None,
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+            }
+
+            Box::pin(async move {
+                let root = DiscoveredPackage::aggregate(
+                    "acme".into(),
+                    PackageJson::default(),
+                    self.root.join_component("pyproject.toml"),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![
+                    command("test", "run --active --frozen --all-packages pytest"),
+                    NativeTask::aggregate("lint", ["lint:ruff"]),
+                    command(
+                        "lint:ruff",
+                        "run --active --frozen ruff check packages/py-app packages/py-lib",
+                    ),
+                    NativeTask::aggregate("check", ["check:mypy"]),
+                    command(
+                        "check:mypy",
+                        "run --active --frozen mypy packages/py-app packages/py-lib",
+                    ),
+                    command(
+                        "format",
+                        "run --active --frozen ruff format packages/py-app packages/py-lib",
+                    ),
+                    command(
+                        "format:ruff",
+                        "run --active --frozen ruff format packages/py-app packages/py-lib",
+                    ),
+                ]);
+                let app = DiscoveredPackage::package(
+                    Some("py-app".into()),
+                    PackageJson::default(),
+                    self.root
+                        .join_components(&["packages", "py-app", "pyproject.toml"]),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![
+                    command(
+                        "test",
+                        "run --active --frozen --package py-app pytest packages/py-app",
+                    ),
+                    NativeTask::aggregate("lint", ["lint:ruff"]),
+                    command(
+                        "lint:ruff",
+                        "run --active --frozen --package py-app ruff check packages/py-app",
+                    ),
+                    NativeTask::aggregate("check", ["check:mypy"]),
+                    command(
+                        "check:mypy",
+                        "run --active --frozen --package py-app mypy packages/py-app",
+                    ),
+                    command(
+                        "format",
+                        "run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                    command(
+                        "format:ruff",
+                        "run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                ]);
+                let lib = DiscoveredPackage::package(
+                    Some("py-lib".into()),
+                    PackageJson::default(),
+                    self.root
+                        .join_components(&["packages", "py-lib", "pyproject.toml"]),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![command("format", "format -- packages/py-lib")]);
+                Ok(DiscoveredPackages::new(
+                    vec![root, app, lib],
+                    vec![WorkspaceRoot::new("python", self.root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observation = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        observation.packages(),
+                        observation.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn uv_native_query_projects_root_member_and_mixed_js_tasks() {
+        use serde_json::{json, Value};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let js_path = root.join_components(&["packages", "web", "package.json"]);
+        let js = PackageJson {
+            name: Some(turborepo_errors::Spanned::new("web".into())),
+            scripts: [(
+                "lint".into(),
+                turborepo_errors::Spanned::new("eslint .".into()),
+            )]
+            .into(),
+            ..Default::default()
+        };
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([(js_path, js)])))
+            .with_contributor(Arc::new(QueryPythonContributor {
+                root: root.to_owned(),
+            }))
+            .build()
+            .await
+            .unwrap();
+        let native_tasks: Vec<_> = ["acme", "py-app"]
+            .into_iter()
+            .flat_map(|package| {
+                [
+                    "test",
+                    "lint",
+                    "lint:ruff",
+                    "check",
+                    "check:mypy",
+                    "format",
+                    "format:ruff",
+                ]
+                .into_iter()
+                .map(move |task| (TaskId::new(package, task), TaskDefinition::default()))
+            })
+            .chain([(TaskId::new("py-lib", "format"), TaskDefinition::default())])
+            .collect();
+        let edges: Vec<_> = ["acme", "py-app"]
+            .into_iter()
+            .flat_map(|package| {
+                [("lint", "lint:ruff"), ("check", "check:mypy")]
+                    .into_iter()
+                    .map(move |(parent, child)| {
+                        (TaskId::new(package, parent), TaskId::new(package, child))
+                    })
+            })
+            .collect();
+        let engine = make_engine_with_edges(&native_tasks, &edges);
+        let run: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+        });
+
+        for (name, expected) in [
+            (
+                "acme",
+                json!({
+                    "test": "uv run --active --frozen --all-packages pytest",
+                    "lint": null,
+                    "lint:ruff": "uv run --active --frozen ruff check packages/py-app packages/py-lib",
+                    "check": null,
+                    "check:mypy": "uv run --active --frozen mypy packages/py-app packages/py-lib",
+                    "format": "uv run --active --frozen ruff format packages/py-app packages/py-lib",
+                    "format:ruff": "uv run --active --frozen ruff format packages/py-app packages/py-lib"
+                }),
+            ),
+            (
+                "py-app",
+                json!({
+                    "test": "uv run --active --frozen --package py-app pytest packages/py-app",
+                    "lint": null,
+                    "lint:ruff": "uv run --active --frozen --package py-app ruff check packages/py-app",
+                    "check": null,
+                    "check:mypy": "uv run --active --frozen --package py-app mypy packages/py-app",
+                    "format": "uv run --active --frozen --package py-app ruff format packages/py-app",
+                    "format:ruff": "uv run --active --frozen --package py-app ruff format packages/py-app"
+                }),
+            ),
+            ("py-lib", json!({"format": "uv format -- packages/py-lib"})),
+            ("web", json!({"lint": "eslint ."})),
+        ] {
+            let data = query_data(
+                run.clone(),
+                &format!(
+                    "{{ package(name: \"{name}\") {{ tasks {{ items {{ name command script \
+                     directDependencies {{ items {{ fullName }} }} }} }} }} }}"
+                ),
+            )
+            .await;
+            let tasks = data["package"]["tasks"]["items"].as_array().unwrap();
+            let commands: Value = tasks
+                .iter()
+                .map(|task| {
+                    (
+                        task["name"].as_str().unwrap().to_string(),
+                        task["command"].clone(),
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into();
+            assert_eq!(commands, expected, "package: {name}");
+            for task in tasks {
+                let task_name = task["name"].as_str().unwrap();
+                if name == "web" && task_name == "lint" {
+                    assert_eq!(task["script"], "eslint .");
+                } else {
+                    assert!(task["script"].is_null(), "{name}#{task_name}");
+                }
+                let dependencies = &task["directDependencies"]["items"];
+                let expected_child = match task_name {
+                    "lint" if name != "web" => Some(format!("{name}#lint:ruff")),
+                    "check" => Some(format!("{name}#check:mypy")),
+                    _ => None,
+                };
+                assert_eq!(
+                    dependencies,
+                    &json!(expected_child
+                        .into_iter()
+                        .map(|full_name| json!({"fullName": full_name}))
+                        .collect::<Vec<_>>()),
+                    "{name}#{task_name}"
+                );
+            }
         }
     }
 

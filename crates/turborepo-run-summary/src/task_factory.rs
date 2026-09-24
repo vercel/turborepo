@@ -522,7 +522,9 @@ mod tests {
     struct PlanHashes {
         hashes: HashMap<String, Arc<str>>,
         inputs: HashMap<String, Vec<(turbopath::RelativeUnixPathBuf, String)>>,
+        frameworks: HashMap<String, String>,
         env: Option<HashTrackerDetailedMap>,
+        env_by_task: HashMap<String, HashTrackerDetailedMap>,
         hit: Option<HashTrackerCacheHitMetadata>,
     }
 
@@ -531,8 +533,11 @@ mod tests {
             self.hashes.get(&task.to_string()).cloned()
         }
 
-        fn env_vars(&self, _task: &TaskId) -> Option<HashTrackerDetailedMap> {
-            self.env.clone()
+        fn env_vars(&self, task: &TaskId) -> Option<HashTrackerDetailedMap> {
+            self.env_by_task
+                .get(&task.to_string())
+                .cloned()
+                .or_else(|| self.env.clone())
         }
 
         fn cache_status(&self, _task: &TaskId) -> Option<HashTrackerCacheHitMetadata> {
@@ -543,8 +548,8 @@ mod tests {
             None
         }
 
-        fn framework(&self, _task: &TaskId) -> Option<String> {
-            None
+        fn framework(&self, task: &TaskId) -> Option<String> {
+            self.frameworks.get(&task.to_string()).cloned()
         }
 
         fn expanded_inputs(
@@ -601,7 +606,9 @@ mod tests {
                     )],
                 ),
             ]),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: None,
         };
         let environment = EnvironmentVariableMap::from(HashMap::from([(
@@ -661,6 +668,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn injected_javascript_framework_hash_facts_reach_dry_run_summary() {
+        let (_tmp, graph) = injected_summary_graph().await;
+        let app = TaskId::new("app", "build").into_owned();
+        let lib = TaskId::new("lib", "build").into_owned();
+        let engine = PlanEngine {
+            definitions: HashMap::from([
+                (app.clone(), TaskDefinition::default()),
+                (lib.clone(), TaskDefinition::default()),
+            ]),
+            dependencies: HashMap::new(),
+            dependents: HashMap::new(),
+        };
+        let environment = EnvironmentVariableMap::from(HashMap::from([(
+            "NEXT_PUBLIC_MESSAGE".to_string(),
+            "unprintable-public-value".to_string(),
+        )]));
+        let external = HashMap::from([
+            ("app".to_string(), "app-closure".to_string()),
+            ("lib".to_string(), "lib-closure".to_string()),
+        ]);
+        for enabled in [true, false] {
+            // These are the per-task facts supplied by TaskHasher: its own
+            // contract tests verify how Next.js inference changes the hash.
+            let hashes = PlanHashes {
+                hashes: HashMap::from([
+                    (
+                        app.to_string(),
+                        Arc::from(if enabled {
+                            "inferred-hash"
+                        } else {
+                            "plain-hash"
+                        }),
+                    ),
+                    (lib.to_string(), Arc::from("lib-hash")),
+                ]),
+                inputs: HashMap::from([
+                    (app.to_string(), Vec::new()),
+                    (lib.to_string(), Vec::new()),
+                ]),
+                frameworks: if enabled {
+                    HashMap::from([(app.to_string(), "nextjs".to_string())])
+                } else {
+                    HashMap::new()
+                },
+                env: None,
+                env_by_task: HashMap::from([
+                    (
+                        app.to_string(),
+                        HashTrackerDetailedMap {
+                            explicit: Vec::new(),
+                            matching: if enabled {
+                                vec!["NEXT_PUBLIC_MESSAGE=opaque-hash".to_string()]
+                            } else {
+                                Vec::new()
+                            },
+                        },
+                    ),
+                    (lib.to_string(), HashTrackerDetailedMap::default()),
+                ]),
+                hit: None,
+            };
+            let factory = TaskSummaryFactory::new(
+                &graph,
+                &engine,
+                &hashes,
+                &environment,
+                &TestRunOpts,
+                EnvMode::Strict,
+                Some(&external),
+            );
+            let app_plan =
+                serde_json::to_value(factory.task_summary(app.clone(), None).unwrap()).unwrap();
+            let lib_plan =
+                serde_json::to_value(factory.task_summary(lib.clone(), None).unwrap()).unwrap();
+            assert_eq!(app_plan["framework"], if enabled { "nextjs" } else { "" });
+            assert_eq!(
+                app_plan["hash"],
+                if enabled {
+                    "inferred-hash"
+                } else {
+                    "plain-hash"
+                }
+            );
+            assert_eq!(app_plan["hashOfExternalDependencies"], "app-closure");
+            assert_eq!(
+                app_plan["environmentVariables"]["inferred"],
+                if enabled {
+                    json!(["NEXT_PUBLIC_MESSAGE=opaque-hash"])
+                } else {
+                    json!([])
+                }
+            );
+            assert!(!app_plan.to_string().contains("unprintable-public-value"));
+            assert_eq!(lib_plan["framework"], "");
+            assert_eq!(lib_plan["hash"], "lib-hash");
+            assert_eq!(lib_plan["environmentVariables"]["inferred"], json!([]));
+        }
+    }
+
+    #[tokio::test]
     async fn injected_dry_run_task_summary_reports_hits_deferred_hashes_and_missing_facts() {
         let (_tmp, graph) = injected_summary_graph().await;
         let task = TaskId::new("app", "build").into_owned();
@@ -674,7 +781,9 @@ mod tests {
         let mut hashes = PlanHashes {
             hashes: HashMap::from([(task.to_string(), Arc::from("hit-hash"))]),
             inputs: HashMap::from([(task.to_string(), Vec::new())]),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: Some(HashTrackerCacheHitMetadata {
                 local: true,
                 remote: false,
@@ -865,7 +974,9 @@ mod tests {
                     )],
                 ),
             ]),
+            frameworks: HashMap::new(),
             env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
             hit: None,
         };
         let external = HashMap::from([
@@ -933,6 +1044,534 @@ mod tests {
             library["hashOfExternalDependencies"],
             "lib-go-resolution-hash"
         );
+    }
+
+    struct SummaryCargoContributor(AbsoluteSystemPathBuf);
+
+    impl turborepo_repository::toolchain::RepositoryContributor for SummaryCargoContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::RUST
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                cargo::{
+                    CargoPackageDetails, CargoPackageKind, Deliverable, DeliverableKind,
+                    native_tasks_for_package,
+                },
+                relationships::{DependencyKind, Relationship},
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            Box::pin(async move {
+                let packages = [
+                    ("app", CargoPackageKind::Entrypoint, "crates/app/Cargo.toml"),
+                    (
+                        "lib-a",
+                        CargoPackageKind::Library,
+                        "crates/lib-a/Cargo.toml",
+                    ),
+                    ("acme", CargoPackageKind::Workspace, "Cargo.toml"),
+                ]
+                .into_iter()
+                .map(|(name, kind, manifest)| {
+                    let details = CargoPackageDetails {
+                        kind,
+                        deliverables: (kind == CargoPackageKind::Entrypoint)
+                            .then(|| Deliverable {
+                                name: name.to_string(),
+                                kind: DeliverableKind::Bin,
+                            })
+                            .into_iter()
+                            .collect(),
+                        manifest_alters_output_layout: false,
+                    };
+                    let manifest = self
+                        .0
+                        .join_components(&manifest.split('/').collect::<Vec<_>>());
+                    let package = if kind == CargoPackageKind::Workspace {
+                        DiscoveredPackage::aggregate(
+                            name.to_string(),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    } else {
+                        DiscoveredPackage::package(
+                            Some(name.to_string()),
+                            PackageJson::default(),
+                            manifest,
+                        )
+                    };
+                    let edges = match name {
+                        "app" => vec![Relationship::internal("lib-a", DependencyKind::Production)],
+                        "acme" => ["app", "lib-a"]
+                            .into_iter()
+                            .map(|name| Relationship::internal(name, DependencyKind::Production))
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    package
+                        .with_native_relationships(edges)
+                        .with_native_tasks(native_tasks_for_package(&details, name))
+                })
+                .collect();
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("cargo", self.0.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observed = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        observed.packages(),
+                        observed.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_cargo_dry_run_summaries_keep_native_commands_and_scope_paths() {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, WorkspaceData},
+            package_manager::PackageManager,
+        };
+
+        let temp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let web_manifest = root.join_components(&["packages", "web", "package.json"]);
+        let discovery = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![WorkspaceData::new(web_manifest.clone(), None).unwrap()],
+        };
+        let graph = PackageGraph::builder_optional(
+            &root,
+            Some(
+                PackageJson::from_value(json!({
+                    "name": "js-root", "packageManager": "npm@10.0.0",
+                    "workspaces": ["packages/*"]
+                }))
+                .unwrap(),
+            ),
+        )
+        .with_package_discovery(move || {
+            let discovery = discovery.clone();
+            async move { Ok(discovery) }
+        })
+        .with_package_jsons(Some(HashMap::from([(
+            web_manifest,
+            PackageJson::from_value(json!({
+                "name": "web", "scripts": {"build": "echo from-js"}
+            }))
+            .unwrap(),
+        )])))
+        .with_contributor(Arc::new(SummaryCargoContributor(root.clone())))
+        .without_external_dependencies()
+        .build()
+        .await
+        .unwrap();
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("app"))
+                .unwrap(),
+            [PackageName::from("lib-a")]
+        );
+        let cases = [
+            (
+                "app",
+                "build",
+                "cargo build --package=app --locked",
+                "crates/app",
+                true,
+            ),
+            (
+                "lib-a",
+                "build",
+                "cargo build --package=lib-a --locked",
+                "crates/lib-a",
+                false,
+            ),
+            ("acme", "test", "cargo test --workspace --locked", "", true),
+            (
+                "acme",
+                "check",
+                "cargo check --workspace --locked",
+                "",
+                true,
+            ),
+            ("acme", "format", "cargo fmt --all", "", false),
+            ("web", "build", "echo from-js", "packages/web", true),
+        ];
+        let ids: Vec<_> = cases
+            .iter()
+            .map(|(pkg, task, ..)| TaskId::new(pkg, task).into_owned())
+            .collect();
+        let engine = PlanEngine {
+            // Resolved plan definitions: library build and format are not cacheable.
+            definitions: ids
+                .iter()
+                .zip(cases.iter())
+                .map(|(id, case)| {
+                    (
+                        id.clone(),
+                        TaskDefinition {
+                            cache: case.4,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+            dependencies: HashMap::from([(ids[0].clone(), vec![ids[1].clone()])]),
+            dependents: HashMap::from([(ids[1].clone(), vec![ids[0].clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: ids
+                .iter()
+                .map(|id| (id.to_string(), Arc::from("planned-hash")))
+                .collect(),
+            inputs: ids.iter().map(|id| (id.to_string(), Vec::new())).collect(),
+            frameworks: HashMap::new(),
+            env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
+            hit: None,
+        };
+        let external = cases
+            .iter()
+            .map(|(pkg, ..)| (pkg.to_string(), format!("{pkg}-closure")))
+            .collect();
+        let environment = EnvironmentVariableMap::default();
+        let opts = PlanRunOpts {
+            args: vec!["--verbose".into()],
+        };
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &opts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+
+        for ((pkg, task, command, directory, cache), id) in cases.iter().zip(ids.iter()) {
+            let context = graph
+                .package_task_context(&PackageName::from(*pkg))
+                .unwrap();
+            assert_eq!(
+                context.toolchain(),
+                Some(if *pkg == "web" {
+                    &ToolchainId::JAVASCRIPT
+                } else {
+                    &ToolchainId::RUST
+                })
+            );
+            let plan =
+                serde_json::to_value(factory.task_summary(id.clone(), None).unwrap()).unwrap();
+            assert_eq!(plan["taskId"], id.to_string());
+            assert_eq!(plan["command"], *command, "{id}");
+            assert_eq!(
+                plan["directory"],
+                directory.replace('/', std::path::MAIN_SEPARATOR_STR),
+                "{id}"
+            );
+            assert_eq!(plan["hash"], "planned-hash");
+            assert_eq!(plan["hashOfExternalDependencies"], format!("{pkg}-closure"));
+            assert_eq!(plan["cache"]["status"], "MISS");
+            assert_eq!(plan["resolvedTaskDefinition"]["cache"], *cache);
+            assert_eq!(plan["cliArguments"], json!(["--verbose"]));
+            let expected_log = match (*pkg, *task) {
+                ("app", "build") => Some("crates/app/.turbo/turbo-build.log"),
+                ("acme", "test") => Some(".turbo/turbo-test-acme-c7aba2810dce6e39.log"),
+                ("acme", "check") => Some(".turbo/turbo-check-acme-45f6384ef100a60b.log"),
+                ("web", "build") => Some("packages/web/.turbo/turbo-build.log"),
+                _ => None,
+            };
+            assert_eq!(
+                plan["logFile"],
+                json!(expected_log.map(|path| path.replace('/', std::path::MAIN_SEPARATOR_STR))),
+                "{id}"
+            );
+            if *pkg == "acme" {
+                assert_eq!(context.log_namespace(), Some("acme"));
+            }
+        }
+        let app =
+            serde_json::to_value(factory.task_summary(ids[0].clone(), None).unwrap()).unwrap();
+        assert_eq!(app["dependencies"], json!(["lib-a#build"]));
+        let lib =
+            serde_json::to_value(factory.task_summary(ids[1].clone(), None).unwrap()).unwrap();
+        assert_eq!(lib["dependents"], json!(["app#build"]));
+    }
+
+    #[tokio::test]
+    async fn injected_uv_and_javascript_task_summary_contract() {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, WorkspaceData},
+            native_tasks::{
+                NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+            },
+            package_manager::PackageManager,
+            toolchain::{
+                DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+                DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, WorkspaceRoot,
+            },
+        };
+
+        struct PythonContributor(DiscoveredPackages);
+        impl RepositoryContributor for PythonContributor {
+            fn id(&self) -> ToolchainId {
+                ToolchainId::PYTHON
+            }
+
+            fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+                Box::pin(async { Ok(self.0.clone()) })
+            }
+
+            fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+                Box::pin(async {
+                    Ok(DiscoveredPackageScopes::from_full_observation(
+                        self.0.packages(),
+                        self.0.workspace_roots(),
+                    ))
+                })
+            }
+        }
+
+        // Inject native observations and JS manifests at the graph boundary: no uv,
+        // Python, or assembled turbo executable is needed for this projection test.
+        let temp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let native = |name: &str, display: &str| {
+            NativeTask::command_task(
+                name,
+                display.to_string(),
+                NativeCommandProgram::Tool("uv".to_string()),
+                NativeCommandArguments::new(vec!["run".to_string()]),
+                None,
+                WorkingDirectoryPolicy::RepositoryRoot,
+            )
+        };
+        let python = DiscoveredPackages::new(
+            vec![
+                DiscoveredPackage::package(
+                    Some("py-root".to_string()),
+                    PackageJson::default(),
+                    root.join_component("pyproject.toml"),
+                )
+                .with_native_tasks(vec![native(
+                    "test",
+                    "uv run --active --frozen --all-packages pytest",
+                )]),
+                DiscoveredPackage::package(
+                    Some("py-app".to_string()),
+                    PackageJson::default(),
+                    root.join_components(&["packages", "py-app", "pyproject.toml"]),
+                )
+                .with_native_tasks(vec![
+                    native(
+                        "test",
+                        "uv run --active --frozen --package py-app --no-default-groups --group \
+                         tests pytest packages/py-app",
+                    ),
+                    native(
+                        "lint:ruff",
+                        "uv run --active --frozen ruff check packages/py-app",
+                    ),
+                    native(
+                        "check:pyright",
+                        "uv run --active --frozen --package py-app --no-default-groups --group \
+                         types pyright packages/py-app",
+                    ),
+                    native(
+                        "format:ruff",
+                        "uv run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                ]),
+            ],
+            vec![WorkspaceRoot::new("uv", root.clone())],
+        );
+        let web_path = root.join_components(&["packages", "web", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![WorkspaceData::new(web_path.clone(), None).unwrap()],
+        };
+        let graph = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &turbopath::AbsoluteSystemPath| {
+                (path == web_path.as_ref())
+                    .then(|| {
+                        PackageJson::from_value(json!({
+                            "name": "web", "scripts": {"build": "echo web"}
+                        }))
+                        .unwrap()
+                    })
+                    .ok_or_else(|| {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "unknown JS manifest")
+                            .into()
+                    })
+            })
+            .with_contributor(Arc::new(PythonContributor(python)))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        for (name, toolchain) in [
+            ("py-root", ToolchainId::PYTHON),
+            ("py-app", ToolchainId::PYTHON),
+            ("web", ToolchainId::JAVASCRIPT),
+        ] {
+            assert_eq!(
+                graph
+                    .package_task_context(&PackageName::from(name))
+                    .unwrap()
+                    .toolchain(),
+                Some(&toolchain)
+            );
+        }
+
+        let id = |package, task| TaskId::new(package, task).into_owned();
+        let root_test = id("py-root", "test");
+        let member_test = id("py-app", "test");
+        let lint = id("py-app", "lint:ruff");
+        let check = id("py-app", "check:pyright");
+        let format = id("py-app", "format:ruff");
+        let web = id("web", "build");
+        let tasks = [
+            root_test.clone(),
+            member_test.clone(),
+            lint.clone(),
+            check.clone(),
+            format.clone(),
+            web.clone(),
+        ];
+        let engine = PlanEngine {
+            definitions: tasks
+                .iter()
+                .map(|task| {
+                    (
+                        task.clone(),
+                        TaskDefinition {
+                            cache: *task != format,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+            dependencies: HashMap::from([(member_test.clone(), vec![web.clone()])]),
+            dependents: HashMap::from([(web.clone(), vec![member_test.clone()])]),
+        };
+        let hashes = PlanHashes {
+            hashes: tasks
+                .iter()
+                .map(|task| (task.to_string(), Arc::from("planned-hash")))
+                .collect(),
+            inputs: tasks
+                .iter()
+                .map(|task| (task.to_string(), Vec::new()))
+                .collect(),
+            frameworks: HashMap::new(),
+            env: Some(HashTrackerDetailedMap::default()),
+            env_by_task: HashMap::new(),
+            hit: None,
+        };
+        let external: HashMap<_, _> = ["py-root", "py-app", "web"]
+            .map(|name| (name.to_string(), format!("{name}-closure")))
+            .into();
+        let environment = EnvironmentVariableMap::default();
+        let factory = TaskSummaryFactory::new(
+            &graph,
+            &engine,
+            &hashes,
+            &environment,
+            &TestRunOpts,
+            EnvMode::Strict,
+            Some(&external),
+        );
+        let plan = |task| serde_json::to_value(factory.task_summary(task, None).unwrap()).unwrap();
+        for (task, command, directory, cache) in [
+            (
+                root_test,
+                "uv run --active --frozen --all-packages pytest",
+                "",
+                true,
+            ),
+            (
+                member_test,
+                "uv run --active --frozen --package py-app --no-default-groups --group tests \
+                 pytest packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                lint,
+                "uv run --active --frozen ruff check packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                check,
+                "uv run --active --frozen --package py-app --no-default-groups --group types \
+                 pyright packages/py-app",
+                "packages/py-app",
+                true,
+            ),
+            (
+                format,
+                "uv run --active --frozen --package py-app ruff format packages/py-app",
+                "packages/py-app",
+                false,
+            ),
+            (web, "echo web", "packages/web", true),
+        ] {
+            let summary = plan(task.clone());
+            assert_eq!(summary["taskId"], task.to_string());
+            assert_eq!(summary["command"], command, "{task}");
+            assert_eq!(
+                summary["directory"],
+                directory.replace('/', std::path::MAIN_SEPARATOR_STR),
+                "{task}"
+            );
+            assert_eq!(summary["resolvedTaskDefinition"]["cache"], cache, "{task}");
+            assert_eq!(summary["logFile"].is_null(), !cache, "{task}");
+            assert_eq!(summary["cache"]["status"], "MISS", "{task}");
+            assert_eq!(summary["hash"], "planned-hash", "{task}");
+            assert_eq!(
+                summary["hashOfExternalDependencies"],
+                format!("{}-closure", task.package())
+            );
+            if task.package() == "py-app" {
+                assert_eq!(
+                    summary["logFile"],
+                    if cache {
+                        json!(
+                            format!(
+                                "packages/py-app/.turbo/turbo-{}.log",
+                                task.task().replace(':', "$colon$")
+                            )
+                            .replace('/', std::path::MAIN_SEPARATOR_STR)
+                        )
+                    } else {
+                        json!(null)
+                    }
+                );
+            }
+            if task.to_string() == "py-app#test" {
+                assert_eq!(summary["dependencies"], json!(["web#build"]));
+            } else if task.to_string() == "web#build" {
+                assert_eq!(summary["dependents"], json!(["py-app#test"]));
+            }
+        }
     }
 
     #[tokio::test]

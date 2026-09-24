@@ -23,7 +23,7 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
-use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
+use turborepo_repository::package_graph::{PackageName, PackageTaskContext, ROOT_PKG_NAME};
 use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
@@ -90,6 +90,35 @@ pub struct RecursiveTurboError {
     pub span: Option<SourceSpan>,
     #[source_code]
     pub text: NamedSource<String>,
+}
+
+/// Classify the authoritative graph task before dispatch can spawn its script.
+/// Keeping this decision independent of the process runner lets the recursion
+/// contract be tested without risking an unbounded child-process loop.
+fn recursive_root_script(
+    info: &TaskId<'_>,
+    package_context: &PackageTaskContext<'_>,
+) -> Option<RecursiveTurboError> {
+    if info.package() != ROOT_PKG_NAME {
+        return None;
+    }
+    let task = package_context.native_tasks().get(info.task())?;
+    let command = task
+        .display()
+        .or_else(|| task.script().map(|script| script.as_inner().as_str()))?;
+    if !command_invokes_turbo(command) {
+        return None;
+    }
+    let (span, text) = task
+        .script()
+        .map(|script| script.span_and_text("package.json"))
+        .unwrap_or((None, NamedSource::new("", String::new())));
+    Some(RecursiveTurboError {
+        task_name: info.to_string(),
+        command: command.to_string(),
+        span,
+        text,
+    })
 }
 
 enum PrecomputedTask {
@@ -723,31 +752,11 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                 });
                 break;
             };
-            // Recursive turbo detection uses catalog authored display/source
-            // facts, not a live PackageJson::scripts read.
-            if info.package() == ROOT_PKG_NAME
-                && let Some(native_task) = package_context.native_tasks().get(info.task())
-                && let Some(cmd) = native_task.display().or_else(|| {
-                    native_task
-                        .script()
-                        .map(|script| script.as_inner().as_str())
-                })
-                && command_invokes_turbo(cmd)
-            {
+            if let Some(error) = recursive_root_script(&info, &package_context) {
                 let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task())
                     .with_parent(telemetry);
                 package_task_event.track_error(TrackedErrors::RecursiveError);
-                let (span, text) = native_task
-                    .script()
-                    .map(|script| script.span_and_text("package.json"))
-                    .unwrap_or((None, NamedSource::new("", String::new())));
-
-                dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                    task_name: info.to_string(),
-                    command: cmd.to_string(),
-                    span,
-                    text,
-                })));
+                dispatch_error = Some(Error::RecursiveTurbo(Box::new(error)));
                 break;
             }
 
@@ -1253,6 +1262,74 @@ impl CompiledOutputGlobs {
         }
 
         self.inclusions.iter().any(|glob| glob.is_match(path))
+    }
+}
+
+#[cfg(test)]
+mod recursive_script_tests {
+    use std::collections::{BTreeMap, HashMap};
+
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_errors::Spanned;
+    use turborepo_repository::{
+        package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+    use turborepo_task_id::TaskId;
+
+    use super::recursive_root_script;
+
+    #[tokio::test]
+    async fn graph_root_script_recursion_is_rejected_before_process_dispatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let root_manifest = PackageJson {
+            name: Some(Spanned::new("monorepo".into())),
+            scripts: BTreeMap::from([
+                ("something".into(), Spanned::new("turbo run build".into())),
+                ("safe".into(), Spanned::new("echo building".into())),
+                ("similar".into(), Spanned::new("turbopack build".into())),
+            ]),
+            ..Default::default()
+        };
+        let member_manifest = PackageJson {
+            name: Some(Spanned::new("util".into())),
+            scripts: BTreeMap::from([("something".into(), Spanned::new("turbo run build".into()))]),
+            ..Default::default()
+        };
+        let graph = PackageGraph::builder(&root, root_manifest)
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::from([(
+                root.join_components(&["packages", "util", "package.json"]),
+                member_manifest,
+            )])))
+            .without_external_dependencies()
+            .build()
+            .await
+            .unwrap();
+        let root_context = graph.package_task_context(&PackageName::Root).unwrap();
+        let error = recursive_root_script(&TaskId::new(ROOT_PKG_NAME, "something"), &root_context)
+            .expect("root turbo script is recursive");
+        assert_eq!(error.task_name, "//#something");
+        assert_eq!(error.command, "turbo run build");
+        assert!(error.to_string().contains("creating a loop"));
+        assert_eq!(
+            miette::Diagnostic::code(&error).unwrap().to_string(),
+            "recursive_turbo_invocations"
+        );
+        for task in ["safe", "similar"] {
+            assert!(
+                recursive_root_script(&TaskId::new(ROOT_PKG_NAME, task), &root_context).is_none(),
+                "{task} must not be mistaken for a recursive invocation"
+            );
+        }
+        let member_context = graph
+            .package_task_context(&PackageName::from("util"))
+            .unwrap();
+        assert!(
+            recursive_root_script(&TaskId::new("util", "something"), &member_context,).is_none()
+        );
     }
 }
 
