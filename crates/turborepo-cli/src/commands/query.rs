@@ -1,16 +1,19 @@
-use std::{env, fmt::Write, fs, io::Write as IoWrite, sync::Arc};
+use std::{env, fs, io::Write as IoWrite, sync::Arc};
 
 use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_query::affected_query::{
+    affected_query_exit_code, build_affected_query, AffectedQueryInput, AffectedQuerySelector,
+};
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_run::builder::RunBuilder;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    cli::{self, AffectedArgs, QuerySubcommand},
+    cli::{self, QuerySubcommand},
     commands::{ls, CommandBase},
 };
 
@@ -93,144 +96,6 @@ async fn execute_query_and_write(
     Ok((0, result.result_json))
 }
 
-/// Inspect the JSON response from an affected query to determine whether any
-/// packages or tasks were found. Returns `Some(count)` on success, or `None`
-/// if the response doesn't match the expected schema (which callers should
-/// treat as an error).
-fn affected_result_count(json: &str) -> Option<u64> {
-    let value: serde_json::Value = serde_json::from_str(json).ok()?;
-    value
-        .pointer("/data/affectedTasks/length")
-        .or_else(|| value.pointer("/data/affectedPackages/length"))
-        .and_then(|v| v.as_u64())
-}
-
-pub(crate) fn escape_graphql_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{0008}' => out.push_str("\\b"),
-            '\u{000C}' => out.push_str("\\f"),
-            c if c.is_control() => {
-                let _ = write!(out, "\\u{:04X}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-impl AffectedArgs {
-    fn to_graphql_query(&self) -> String {
-        self.to_graphql_query_with_refs(None, None)
-    }
-
-    fn to_graphql_query_with_env(&self) -> String {
-        let scm_base = Self::env_ref("TURBO_SCM_BASE");
-        let scm_head = Self::env_ref("TURBO_SCM_HEAD");
-        self.to_graphql_query_with_refs(scm_base.as_deref(), scm_head.as_deref())
-    }
-
-    fn to_graphql_query_with_refs(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> String {
-        // --packages alone → affectedPackages
-        // Everything else (default, --tasks, --tasks + --packages) → affectedTasks
-        if self.packages.is_some() && self.tasks.is_none() {
-            self.build_affected_packages_query(scm_base, scm_head)
-        } else {
-            self.build_affected_tasks_query(scm_base, scm_head)
-        }
-    }
-
-    fn build_affected_packages_query(
-        &self,
-        scm_base: Option<&str>,
-        scm_head: Option<&str>,
-    ) -> String {
-        let mut query = String::from("{ affectedPackages");
-        let mut args = self.build_ref_args(scm_base, scm_head);
-        self.push_package_filter(&mut args);
-        if !args.is_empty() {
-            let joined = args.join(", ");
-            let _ = write!(query, "({joined})");
-        }
-        query.push_str(" { items { name path reason { __typename } } length } }");
-        query
-    }
-
-    fn build_affected_tasks_query(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> String {
-        let mut query = String::from("{ affectedTasks");
-        let mut args = self.build_ref_args(scm_base, scm_head);
-        let tasks = self.tasks.as_deref().unwrap_or_default();
-        if !tasks.is_empty() {
-            let task_values: Vec<String> = tasks
-                .iter()
-                .map(|t| format!("\"{}\"", escape_graphql_string(t)))
-                .collect();
-            args.push(format!("tasks: [{}]", task_values.join(", ")));
-        }
-        self.push_package_filter(&mut args);
-        if !args.is_empty() {
-            let joined = args.join(", ");
-            let _ = write!(query, "({joined})");
-        }
-        query.push_str(
-            " { items { name fullName package { name } reason { __typename } } length } }",
-        );
-        query
-    }
-
-    fn build_ref_args(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> Vec<String> {
-        let mut args = Vec::new();
-        if let Some(base) = Self::ref_arg(self.base.as_ref(), scm_base) {
-            args.push(format!("base: \"{}\"", escape_graphql_string(base)));
-        }
-        if let Some(head) = Self::ref_arg(self.head.as_ref(), scm_head) {
-            args.push(format!("head: \"{}\"", escape_graphql_string(head)));
-        }
-        args
-    }
-
-    fn ref_arg<'a>(cli_value: Option<&'a String>, env_value: Option<&'a str>) -> Option<&'a str> {
-        cli_value
-            .map(String::as_str)
-            .or_else(|| env_value.filter(|value| !value.is_empty()))
-    }
-
-    fn env_ref(env_key: &str) -> Option<String> {
-        env::var(env_key).ok().filter(|value| !value.is_empty())
-    }
-
-    fn push_package_filter(&self, args: &mut Vec<String>) {
-        let packages = self.packages.as_deref().unwrap_or_default();
-        if packages.is_empty() {
-            return;
-        }
-        let filter = if packages.len() == 1 {
-            format!(
-                "{{ equal: {{ field: NAME, value: \"{}\" }} }}",
-                escape_graphql_string(&packages[0])
-            )
-        } else {
-            let predicates: Vec<String> = packages
-                .iter()
-                .map(|p| {
-                    format!(
-                        "{{ equal: {{ field: NAME, value: \"{}\" }} }}",
-                        escape_graphql_string(p)
-                    )
-                })
-                .collect();
-            format!("{{ or: [{}] }}", predicates.join(", "))
-        };
-        args.push(format!("filter: {filter}"));
-    }
-}
-
 pub async fn run(
     base: CommandBase,
     telemetry: CommandEventBuilder,
@@ -266,7 +131,20 @@ pub async fn run(
     if let Some(subcommand) = subcommand {
         match &subcommand {
             QuerySubcommand::Affected(args) => {
-                let query = args.to_graphql_query_with_env();
+                let input = AffectedQueryInput {
+                    selector: if args.packages.is_some() && args.tasks.is_none() {
+                        AffectedQuerySelector::Packages
+                    } else {
+                        AffectedQuerySelector::Tasks
+                    },
+                    base: args.base.clone(),
+                    head: args.head.clone(),
+                    scm_base: env::var("TURBO_SCM_BASE").ok(),
+                    scm_head: env::var("TURBO_SCM_HEAD").ok(),
+                    package_filters: args.packages.clone().unwrap_or_default(),
+                    task_filters: args.tasks.clone().unwrap_or_default(),
+                };
+                let query = build_affected_query(&input);
                 let (exit_code, result_json) =
                     execute_query_and_print(run, query_server, &query, None).await?;
 
@@ -275,8 +153,8 @@ pub async fn run(
                 }
 
                 if args.exit_code {
-                    return match affected_result_count(&result_json) {
-                        Some(count) => Ok(if count > 0 { 1 } else { 0 }),
+                    return match affected_query_exit_code(&result_json) {
+                        Some(exit_code) => Ok(exit_code),
                         None => {
                             eprintln!(
                                 "error: could not determine affected count from query result"
@@ -330,24 +208,6 @@ pub async fn run(
 
 #[cfg(test)]
 mod tests {
-    use super::{affected_result_count, escape_graphql_string};
-    use crate::cli::AffectedArgs;
-
-    fn affected(
-        packages: Option<Vec<&str>>,
-        tasks: Option<Vec<&str>>,
-        base: Option<&str>,
-        head: Option<&str>,
-    ) -> AffectedArgs {
-        AffectedArgs {
-            packages: packages.map(|v| v.into_iter().map(String::from).collect()),
-            tasks: tasks.map(|v| v.into_iter().map(String::from).collect()),
-            base: base.map(String::from),
-            head: head.map(String::from),
-            exit_code: false,
-        }
-    }
-
     #[derive(Default)]
     struct RecordingRun(std::sync::atomic::AtomicUsize);
 
@@ -549,288 +409,5 @@ mod tests {
             );
         }
         assert_eq!(run.0.load(std::sync::atomic::Ordering::SeqCst), 2);
-    }
-
-    // -- escape tests --
-
-    #[test]
-    fn escape_noop_for_plain_strings() {
-        assert_eq!(escape_graphql_string("main"), "main");
-        assert_eq!(escape_graphql_string("my-app"), "my-app");
-    }
-
-    #[test]
-    fn escape_double_quotes() {
-        assert_eq!(escape_graphql_string(r#"a"b"#), r#"a\"b"#);
-    }
-
-    #[test]
-    fn escape_backslashes() {
-        assert_eq!(escape_graphql_string(r"a\b"), r"a\\b");
-    }
-
-    #[test]
-    fn escape_combined() {
-        assert_eq!(escape_graphql_string(r#"a\"b"#), r#"a\\\"b"#);
-    }
-
-    #[test]
-    fn escape_newline() {
-        assert_eq!(escape_graphql_string("a\nb"), "a\\nb");
-    }
-
-    #[test]
-    fn escape_carriage_return() {
-        assert_eq!(escape_graphql_string("a\rb"), "a\\rb");
-    }
-
-    #[test]
-    fn escape_tab() {
-        assert_eq!(escape_graphql_string("a\tb"), "a\\tb");
-    }
-
-    #[test]
-    fn escape_null_byte() {
-        assert_eq!(escape_graphql_string("a\x00b"), "a\\u0000b");
-    }
-
-    #[test]
-    fn escape_unicode_passthrough() {
-        assert_eq!(escape_graphql_string("日本語"), "日本語");
-    }
-
-    #[test]
-    fn escape_empty() {
-        assert_eq!(escape_graphql_string(""), "");
-    }
-
-    // -- default behavior: affected tasks --
-
-    #[test]
-    fn no_flags_defaults_to_affected_tasks() {
-        let q = affected(None, None, None, None).to_graphql_query();
-        assert_eq!(
-            q,
-            "{ affectedTasks { items { name fullName package { name } reason { __typename } } \
-             length } }"
-        );
-    }
-
-    #[test]
-    fn bare_tasks_flag_returns_all_affected_tasks() {
-        let q = affected(None, Some(vec![]), None, None).to_graphql_query();
-        assert_eq!(
-            q,
-            "{ affectedTasks { items { name fullName package { name } reason { __typename } } \
-             length } }"
-        );
-    }
-
-    #[test]
-    fn tasks_with_values_filters() {
-        let q = affected(None, Some(vec!["build"]), None, None).to_graphql_query();
-        assert!(q.starts_with("{ affectedTasks"), "{q}");
-        assert!(q.contains(r#"tasks: ["build"]"#), "{q}");
-    }
-
-    #[test]
-    fn multiple_tasks_all_appear() {
-        let q = affected(None, Some(vec!["build", "test"]), None, None).to_graphql_query();
-        assert!(q.contains(r#"tasks: ["build", "test"]"#), "{q}");
-    }
-
-    // -- --packages routes to affected packages --
-
-    #[test]
-    fn bare_packages_flag_returns_all_affected_packages() {
-        let q = affected(Some(vec![]), None, None, None).to_graphql_query();
-        assert_eq!(
-            q,
-            "{ affectedPackages { items { name path reason { __typename } } length } }"
-        );
-    }
-
-    #[test]
-    fn single_package_uses_equal_filter() {
-        let q = affected(Some(vec!["web"]), None, None, None).to_graphql_query();
-        assert!(q.starts_with("{ affectedPackages"), "{q}");
-        assert!(q.contains(r#"equal: { field: NAME, value: "web" }"#), "{q}");
-        assert!(!q.contains("or:"), "single package should not use or: {q}");
-    }
-
-    #[test]
-    fn multiple_packages_use_or_filter() {
-        let q = affected(Some(vec!["web", "docs"]), None, None, None).to_graphql_query();
-        assert!(q.contains("or: ["), "{q}");
-        assert!(q.contains(r#"value: "web""#), "{q}");
-        assert!(q.contains(r#"value: "docs""#), "{q}");
-    }
-
-    // -- ref args --
-
-    #[test]
-    fn base_and_head_appear_in_tasks_query() {
-        let q = affected(None, None, Some("main"), Some("HEAD")).to_graphql_query();
-        assert!(q.starts_with("{ affectedTasks"), "{q}");
-        assert!(q.contains(r#"base: "main""#), "{q}");
-        assert!(q.contains(r#"head: "HEAD""#), "{q}");
-    }
-
-    #[test]
-    fn base_and_head_appear_in_packages_query() {
-        let q = affected(Some(vec![]), None, Some("main"), Some("HEAD")).to_graphql_query();
-        assert!(q.starts_with("{ affectedPackages"), "{q}");
-        assert!(q.contains(r#"base: "main""#), "{q}");
-        assert!(q.contains(r#"head: "HEAD""#), "{q}");
-    }
-
-    #[test]
-    fn ref_arg_uses_env_when_cli_missing() {
-        assert_eq!(AffectedArgs::ref_arg(None, Some("main")), Some("main"));
-    }
-
-    #[test]
-    fn ref_arg_ignores_empty_env() {
-        assert_eq!(AffectedArgs::ref_arg(None, Some("")), None);
-    }
-
-    #[test]
-    fn ref_arg_prefers_cli_over_env() {
-        let cli = "HEAD".to_string();
-        assert_eq!(
-            AffectedArgs::ref_arg(Some(&cli), Some("main")),
-            Some("HEAD")
-        );
-    }
-
-    // -- escaping in context --
-
-    #[test]
-    fn base_with_quotes_is_escaped() {
-        let q = affected(None, None, Some(r#"feat/"branch"#), None).to_graphql_query();
-        assert!(
-            q.contains(r#"base: "feat/\"branch""#),
-            "quotes should be escaped: {q}"
-        );
-    }
-
-    #[test]
-    fn package_with_quotes_is_escaped() {
-        let q = affected(Some(vec![r#"@scope/"pkg""#]), None, None, None).to_graphql_query();
-        assert!(
-            q.contains(r#"value: "@scope/\"pkg\""#),
-            "package quotes should be escaped: {q}"
-        );
-    }
-
-    #[test]
-    fn task_with_quotes_is_escaped() {
-        let q = affected(None, Some(vec![r#"build"inject"#]), None, None).to_graphql_query();
-        assert!(
-            q.contains(r#""build\"inject""#),
-            "task quotes should be escaped: {q}"
-        );
-    }
-
-    #[test]
-    fn head_with_backslash_is_escaped() {
-        let q = affected(None, None, None, Some(r"ref\path")).to_graphql_query();
-        assert!(
-            q.contains(r#"head: "ref\\path""#),
-            "backslash should be escaped: {q}"
-        );
-    }
-
-    // -- combined --packages + --tasks → affectedTasks with both filters
-    // (intersection) --
-
-    #[test]
-    fn combined_packages_and_tasks_routes_to_affected_tasks() {
-        let q = affected(Some(vec!["web"]), Some(vec!["build"]), None, None).to_graphql_query();
-        assert!(q.starts_with("{ affectedTasks"), "{q}");
-        assert!(q.contains(r#"tasks: ["build"]"#), "{q}");
-        assert!(
-            q.contains(r#"filter: { equal: { field: NAME, value: "web" } }"#),
-            "{q}"
-        );
-    }
-
-    #[test]
-    fn combined_bare_tasks_with_packages_filters_by_package_only() {
-        // --tasks (bare) + --packages web → affectedTasks with only package filter
-        let q = affected(Some(vec!["web"]), Some(vec![]), None, None).to_graphql_query();
-        assert!(q.starts_with("{ affectedTasks"), "{q}");
-        assert!(
-            !q.contains("tasks:"),
-            "bare --tasks should not add tasks arg: {q}"
-        );
-        assert!(q.contains("filter:"), "{q}");
-    }
-
-    #[test]
-    fn combined_tasks_with_bare_packages_filters_by_task_only() {
-        // --tasks build + --packages (bare) → affectedTasks with only task filter
-        let q = affected(Some(vec![]), Some(vec!["build"]), None, None).to_graphql_query();
-        assert!(q.starts_with("{ affectedTasks"), "{q}");
-        assert!(q.contains(r#"tasks: ["build"]"#), "{q}");
-        assert!(
-            !q.contains("filter:"),
-            "bare --packages should not add filter: {q}"
-        );
-    }
-
-    // -- affected_result_count tests --
-
-    #[test]
-    fn affected_result_count_tasks_with_results() {
-        let json = r#"{"data":{"affectedTasks":{"items":[{"name":"build"}],"length":1}}}"#;
-        assert_eq!(affected_result_count(json), Some(1));
-    }
-
-    #[test]
-    fn affected_result_count_tasks_empty() {
-        let json = r#"{"data":{"affectedTasks":{"items":[],"length":0}}}"#;
-        assert_eq!(affected_result_count(json), Some(0));
-    }
-
-    #[test]
-    fn affected_result_count_packages_with_results() {
-        let json = r#"{"data":{"affectedPackages":{"items":[{"name":"web"}],"length":2}}}"#;
-        assert_eq!(affected_result_count(json), Some(2));
-    }
-
-    #[test]
-    fn affected_result_count_packages_empty() {
-        let json = r#"{"data":{"affectedPackages":{"items":[],"length":0}}}"#;
-        assert_eq!(affected_result_count(json), Some(0));
-    }
-
-    #[test]
-    fn affected_result_count_missing_data_key() {
-        let json = r#"{"errors":[{"message":"something broke"}]}"#;
-        assert_eq!(affected_result_count(json), None);
-    }
-
-    #[test]
-    fn affected_result_count_empty_data() {
-        let json = r#"{"data":{}}"#;
-        assert_eq!(affected_result_count(json), None);
-    }
-
-    #[test]
-    fn affected_result_count_invalid_json() {
-        assert_eq!(affected_result_count("not json"), None);
-    }
-
-    #[test]
-    fn affected_result_count_length_is_string() {
-        let json = r#"{"data":{"affectedTasks":{"length":"oops"}}}"#;
-        assert_eq!(affected_result_count(json), None);
-    }
-
-    #[test]
-    fn affected_result_count_missing_length_field() {
-        let json = r#"{"data":{"affectedTasks":{"items":[]}}}"#;
-        assert_eq!(affected_result_count(json), None);
     }
 }

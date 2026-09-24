@@ -9,6 +9,7 @@ use std::{fmt::Write, sync::Arc};
 use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
+use turborepo_query::affected_query::escape_graphql_string;
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run::builder::RunBuilder;
@@ -36,7 +37,7 @@ const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } le
 fn package_details_query(packages: &[String]) -> String {
     let mut query = String::from("{");
     for (index, package) in packages.iter().enumerate() {
-        let escaped = super::query::escape_graphql_string(package);
+        let escaped = escape_graphql_string(package);
         let _ = write!(
             query,
             r#" package{index}: package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }}"#
