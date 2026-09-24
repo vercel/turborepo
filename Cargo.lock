@@ -9361,6 +9361,8 @@ name = "turborepo-watch"
 version = "0.1.0"
 dependencies = [
  "miette",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9381,8 +9383,10 @@ dependencies = [
  "turborepo-shim",
  "turborepo-signals",
  "turborepo-task-filter",
+ "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-tracing",
+ "turborepo-types",
  "turborepo-ui",
 ]
 

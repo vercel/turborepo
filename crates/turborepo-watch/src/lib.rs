@@ -17,7 +17,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, instrument, trace};
-use turbopath::AnchoredSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_config::resolve_turbo_config_path;
 use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
 use turborepo_engine::TaskNode;
@@ -34,6 +34,7 @@ use turborepo_run_opts::Error as OptsError;
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
 use turborepo_signals::{ShutdownReason, SignalHandler, SubscriberGuard, listeners::get_signal};
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_tracing::TurboSubscriber;
 use turborepo_ui::{LogSinks, sender::UISender};
@@ -358,6 +359,69 @@ pub enum Error {
     Config(#[from] turborepo_config::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
+}
+
+struct ImpactedTasks {
+    packages: HashSet<PackageName>,
+    stoppable_ids: Vec<TaskId<'static>>,
+}
+
+/// Keep task-input and package-aware stop decisions aligned with the partial
+/// RunBuilder rerun, without depending on a running watcher or child process.
+struct WatchTaskSelection<'a> {
+    engine: &'a turborepo_task_filter::Engine,
+    graph: &'a PackageGraph,
+    repo_root: &'a AbsoluteSystemPath,
+    global_deps: &'a [String],
+    task_inputs: bool,
+}
+
+impl WatchTaskSelection<'_> {
+    fn impacted_by(
+        &self,
+        packages: &HashSet<PackageName>,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> ImpactedTasks {
+        let task_ids: Vec<_> = if self.task_inputs && !changed_files.is_empty() {
+            turborepo_task_filter::resolve_watch_task_filter(
+                self.engine,
+                self.graph,
+                self.repo_root,
+                changed_files,
+                self.global_deps,
+            )
+            .execution_tasks
+            .into_iter()
+            .collect()
+        } else {
+            self.engine
+                .tasks_impacted_by_packages(packages)
+                .iter()
+                .filter_map(|node| match node {
+                    TaskNode::Task(id) => Some(id.clone()),
+                    TaskNode::Root => None,
+                })
+                .collect()
+        };
+
+        let packages = task_ids
+            .iter()
+            .map(|id| PackageName::from(id.package()))
+            .collect();
+        let stoppable_ids = task_ids
+            .into_iter()
+            .filter(|id| {
+                !self
+                    .engine
+                    .task_definition(id)
+                    .is_some_and(|def| def.persistent && !def.interruptible)
+            })
+            .collect();
+        ImpactedTasks {
+            packages,
+            stoppable_ids,
+        }
+    }
 }
 
 impl WatchClient {
@@ -768,75 +832,27 @@ impl WatchClient {
         pkgs: &HashSet<PackageName>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> HashSet<PackageName> {
-        let engine = self.run.engine();
+        let selection = WatchTaskSelection {
+            engine: self.run.engine(),
+            graph: self.run.pkg_dep_graph(),
+            repo_root: self.run.repo_root(),
+            global_deps: &self.run.root_turbo_json().global_deps,
+            task_inputs: self.run.opts().future_flags.watch_using_task_inputs,
+        }
+        .impacted_by(pkgs, changed_files);
 
-        let (task_ids, impacted_packages) =
-            if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                let filter = turborepo_task_filter::resolve_watch_task_filter(
-                    engine,
-                    self.run.pkg_dep_graph(),
-                    self.run.repo_root(),
-                    changed_files,
-                    &self.run.root_turbo_json().global_deps,
-                );
-
-                let impacted_packages: HashSet<PackageName> = filter
-                    .execution_tasks
-                    .iter()
-                    .map(|task_id| PackageName::from(task_id.package()))
-                    .collect();
-
-                (
-                    filter.execution_tasks.into_iter().collect::<Vec<_>>(),
-                    impacted_packages,
-                )
-            } else {
-                let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
-
-                let task_ids: Vec<_> = impacted_nodes
-                    .iter()
-                    .filter_map(|node| match node {
-                        TaskNode::Task(task_id) => Some(task_id.clone()),
-                        TaskNode::Root => None,
-                    })
-                    .collect();
-
-                let impacted_packages: HashSet<PackageName> = task_ids
-                    .iter()
-                    .map(|task_id| PackageName::from(task_id.package()))
-                    .collect();
-
-                (task_ids, impacted_packages)
-            };
-
-        debug!(
-            ?pkgs,
-            ?impacted_packages,
-            impacted_tasks = ?task_ids,
-            "identified impacted tasks for changed packages"
-        );
-
-        // Only stop tasks that are allowed to be restarted. Non-interruptible
-        // persistent tasks survive file changes — they are only killed on a
-        // full rebuild (ChangedPackages::All) or shutdown.
-        let stoppable_ids: Vec<_> = task_ids
-            .into_iter()
-            .filter(|tid| {
-                !engine
-                    .task_definition(tid)
-                    .is_some_and(|d| d.persistent && !d.interruptible)
-            })
-            .collect();
-
-        debug!(?stoppable_ids, "stopping interruptible tasks");
-        let stoppable_ids = &stoppable_ids;
+        debug!(?pkgs, impacted_packages = ?selection.packages, stoppable_tasks = ?selection.stoppable_ids,
+            "identified impacted tasks for changed packages");
+        // Non-interruptible persistent tasks survive partial reruns; full
+        // rediscovery stops them through the lifecycle's full-stop path.
+        let stoppable_ids = &selection.stoppable_ids;
         self.lifecycle
             .stop_tasks(|stopper| async move {
                 stopper.stop_tasks(stoppable_ids).await;
             })
             .await;
 
-        impacted_packages
+        selection.packages
     }
 
     /// Start executing tasks.
@@ -988,6 +1004,9 @@ impl WatchClient {
         }
     }
 }
+
+#[cfg(test)]
+mod impacted_selection_tests;
 
 #[cfg(test)]
 mod test {
