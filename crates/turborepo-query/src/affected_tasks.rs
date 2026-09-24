@@ -881,11 +881,13 @@ mod tests {
         assert!(task_names.contains("lib-a#test"));
         assert!(!task_names.contains("app-a#test"));
 
-        let calls = run.recorded_calls.lock().unwrap();
-        assert!(calls
-            .contains(&"calculate_affected_packages:Some(\"main\"):Some(\"HEAD\")".to_string()));
-        assert!(calls.contains(&"changed_files:Some(\"main\"):Some(\"HEAD\")".to_string()));
-        drop(calls);
+        {
+            let calls = run.recorded_calls.lock().unwrap();
+            assert!(calls.contains(
+                &"calculate_affected_packages:Some(\"main\"):Some(\"HEAD\")".to_string()
+            ));
+            assert!(calls.contains(&"changed_files:Some(\"main\"):Some(\"HEAD\")".to_string()));
+        }
 
         let no_matching_task = query_data(
             run,
