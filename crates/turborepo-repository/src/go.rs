@@ -3663,6 +3663,186 @@ mod tests {
         }
     }
 
+    /// File-level north-star inputs for a Go build: the module's own manifest
+    /// and checksums, every connected workspace dependency (including local
+    /// replacements), and no disconnected module. Graph edits reach this layer
+    /// as a different set of dependency contexts after rediscovery.
+    #[test]
+    fn go_hash_inputs_follow_dependency_edges_manifests_and_checksums() {
+        const DEPENDENCIES: &[(&str, &str)] = &[
+            ("example.com/lib", "packages/lib"),
+            ("example.net/message", "third_party/message"),
+            ("example.com/independent", "tools/independent"),
+        ];
+
+        fn module(root: &AbsoluteSystemPath, path: &str, directory: &str) -> GoModule {
+            GoModule {
+                module_path: path.to_string(),
+                manifest_path: join_relative_path(root, &format!("{directory}/{GO_MOD}")).unwrap(),
+                relationships: Vec::new(),
+                runnable_target: None,
+                root_source_inputs: Some(HashSet::new()),
+            }
+        }
+
+        fn observe(root: &AbsoluteSystemPath, connected: usize) -> BTreeMap<String, Vec<u8>> {
+            let dependencies = DEPENDENCIES[..connected]
+                .iter()
+                .map(|(path, directory)| (module(root, path, directory), *directory))
+                .collect::<Vec<_>>();
+            let api = GoModule {
+                relationships: dependencies
+                    .iter()
+                    .map(|(dependency, _)| {
+                        Relationship::internal(
+                            dependency.package_name(),
+                            DependencyKind::Production,
+                        )
+                    })
+                    .collect(),
+                runnable_target: Some(".".to_string()),
+                ..module(root, "example.com/api", "apps/api")
+            };
+            let contract = GoTaskContract::module(&api, "linux", &[]);
+            let app_context = task_context(
+                root,
+                "api",
+                "apps/api",
+                native_tasks_for_module(&api),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+            );
+            let dependency_contexts = dependencies
+                .iter()
+                .map(|(dependency, directory)| {
+                    task_context(
+                        root,
+                        dependency.package_name(),
+                        directory,
+                        native_tasks_for_module(dependency),
+                        crate::package_graph::PackageTaskContextKind::Package,
+                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                            dependency,
+                            "linux",
+                            &[],
+                        )),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let environment = toolchain::TaskIOEnvironment::default();
+            let io = contract
+                .derived_task_io(
+                    &app_context,
+                    "build",
+                    "../..",
+                    &dependency_contexts,
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            source_input_snapshot(&root.join_components(&["apps", "api"]), &io)
+                .into_iter()
+                .map(|(path, value)| {
+                    (
+                        AnchoredSystemPathBuf::new(root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        value,
+                    )
+                })
+                .collect()
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        for (path, contents) in [
+            ("go.work", "go 1.22\n"),
+            ("apps/api/go.mod", "module example.com/api\n"),
+            ("apps/api/go.sum", ""),
+            ("apps/api/main.go", "package main\nfunc main() {}\n"),
+            ("packages/lib/go.mod", "module example.com/lib\n"),
+            ("packages/lib/lib.go", "package lib\n"),
+            ("third_party/message/go.mod", "module example.net/message\n"),
+            ("third_party/message/message.go", "package message\n"),
+            (
+                "tools/independent/go.mod",
+                "module example.com/independent\n",
+            ),
+            ("tools/independent/independent.go", "package independent\n"),
+        ] {
+            let file = join_relative_path(&root, path).unwrap();
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents(contents).unwrap();
+        }
+        let change = |path: &str, contents: &str| {
+            join_relative_path(&root, path)
+                .unwrap()
+                .create_with_contents(contents)
+                .unwrap();
+        };
+
+        let mut baseline = observe(&root, 2);
+        change(
+            "tools/independent/independent.go",
+            "package independent\nconst Value = 1\n",
+        );
+        assert_eq!(
+            observe(&root, 2),
+            baseline,
+            "a disconnected workspace module must not become an input"
+        );
+
+        for (path, contents, reason) in [
+            (
+                "apps/api/main.go",
+                "package main\nfunc main() { println() }\n",
+                "module source",
+            ),
+            (
+                "packages/lib/lib.go",
+                "package lib\nconst Value = 1\n",
+                "internal dependency source",
+            ),
+            (
+                "third_party/message/message.go",
+                "package message\nconst Value = 1\n",
+                "local replacement source",
+            ),
+            (
+                "apps/api/go.mod",
+                "module example.com/api\n\ngo 1.22\n",
+                "module manifest",
+            ),
+            (
+                "apps/api/go.sum",
+                "example.org/checksum-only v1.0.1/go.mod \
+                 h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n",
+                "external checksum",
+            ),
+        ] {
+            change(path, contents);
+            let changed = observe(&root, 2);
+            assert_ne!(changed, baseline, "{reason} change must invalidate inputs");
+            baseline = changed;
+        }
+
+        let connected = observe(&root, 3);
+        assert!(connected.contains_key("tools/independent/independent.go"));
+        change(
+            "tools/independent/independent.go",
+            "package independent\nconst Value = 2\n",
+        );
+        assert_ne!(
+            observe(&root, 3),
+            connected,
+            "a newly connected dependency's source must invalidate inputs"
+        );
+    }
+
     #[test]
     fn embedded_binary_names_remain_own_and_dependency_source_inputs() {
         if !go_available() {
