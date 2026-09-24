@@ -602,6 +602,7 @@ mod core;
 mod extends;
 mod go;
 mod inheritance;
+mod jit_dependency;
 mod lazy_loading;
 mod syntax;
 mod workspace;
