@@ -60,16 +60,34 @@ async fn execute_query_and_print(
     query_server: &dyn QueryServer,
     query: &str,
     variables_json: Option<&str>,
+    version: &str,
 ) -> Result<(i32, String), cli::Error> {
     execute_query_and_write(
         run,
         query_server,
         query,
         variables_json,
+        version,
         &mut std::io::stdout(),
         &mut std::io::stderr(),
     )
     .await
+}
+
+/// Prepend a `version` key to a JSON object so the output stays a single
+/// parseable document (the version banner is suppressed for query output).
+/// Non-object or unparseable input is returned unchanged.
+fn with_version_key(result_json: &str, version: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(result_json) {
+        Ok(serde_json::Value::Object(fields)) => {
+            let mut output = serde_json::Map::with_capacity(fields.len() + 1);
+            output.insert("version".to_string(), version.into());
+            output.extend(fields.into_iter().filter(|(key, _)| key != "version"));
+            serde_json::to_string_pretty(&serde_json::Value::Object(output))
+                .unwrap_or_else(|_| result_json.to_string())
+        }
+        _ => result_json.to_string(),
+    }
 }
 
 /// The same query adapter with injectable output streams for in-process tests.
@@ -78,6 +96,7 @@ async fn execute_query_and_write(
     query_server: &dyn QueryServer,
     query: &str,
     variables_json: Option<&str>,
+    version: &str,
     stdout: &mut (impl IoWrite + Send),
     stderr: &mut (impl IoWrite + Send),
 ) -> Result<(i32, String), cli::Error> {
@@ -85,7 +104,7 @@ async fn execute_query_and_write(
         .execute_query(run, query, variables_json)
         .await?;
 
-    writeln!(stdout, "{}", result.result_json)?;
+    writeln!(stdout, "{}", with_version_key(&result.result_json, version))?;
     if !result.errors.is_empty() {
         for error in result.errors {
             let error = QueryError::from_query_error(error, query.to_string());
@@ -119,6 +138,7 @@ pub async fn run(
         return Ok(0);
     }
 
+    let version = base.version();
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -146,7 +166,7 @@ pub async fn run(
                 };
                 let query = build_affected_query(&input);
                 let (exit_code, result_json) =
-                    execute_query_and_print(run, query_server, &query, None).await?;
+                    execute_query_and_print(run, query_server, &query, None, version).await?;
 
                 if exit_code != 0 {
                     return Ok(exit_code);
@@ -198,7 +218,8 @@ pub async fn run(
             .map_err(turborepo_query_api::Error::Server)?;
 
         let (exit_code, _) =
-            execute_query_and_print(run, query_server, query, variables_json.as_deref()).await?;
+            execute_query_and_print(run, query_server, query, variables_json.as_deref(), version)
+                .await?;
         Ok(exit_code)
     } else {
         query_server.run_query_server(run, handler).await?;
@@ -385,6 +406,7 @@ mod tests {
                 &server,
                 "query { version }",
                 Some(r#"{"name":"app"}"#),
+                "1.2.3",
                 &mut stdout,
                 &mut stderr,
             )
@@ -392,7 +414,11 @@ mod tests {
             .unwrap();
             assert_eq!(exit, expected_exit);
             assert_eq!(json, r#"{"data":{"version":"fixture"}}"#);
-            assert_eq!(String::from_utf8(stdout).unwrap(), format!("{json}\n"));
+            assert_eq!(
+                String::from_utf8(stdout).unwrap(),
+                "{\n  \"version\": \"1.2.3\",\n  \"data\": {\n    \"version\": \"fixture\"\n  \
+                 }\n}\n"
+            );
             let diagnostic = String::from_utf8(stderr).unwrap();
             if fail {
                 assert!(diagnostic.contains("fixture error"), "{diagnostic}");

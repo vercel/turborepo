@@ -64,6 +64,14 @@ use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui,
 
 pub use crate::error::Error;
 
+/// Whether the `• turbo <version>` line should be shown. Disabled in CI and
+/// when `TURBO_PRINT_VERSION_DISABLED` is `1` or `true`.
+pub fn should_print_version() -> bool {
+    let disabled = std::env::var("TURBO_PRINT_VERSION_DISABLED")
+        .is_ok_and(|var| matches!(var.as_str(), "1" | "true"));
+    !disabled && !turborepo_ci::is_ci()
+}
+
 /// Live status of the remote cache, determined by a preflight API check
 /// that runs concurrently with graph building.
 #[derive(Debug, Clone, Copy)]
@@ -425,6 +433,14 @@ impl Run {
             "",
         )
         .emit();
+
+        if should_print_version() {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• turbo {}", self.repo.version),
+            )
+            .emit();
+        }
 
         let targets_list = self.execution.opts.run_opts.tasks.join(", ");
         if self.execution.opts.run_opts.single_package {
