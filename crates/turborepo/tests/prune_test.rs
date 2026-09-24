@@ -166,29 +166,26 @@ fn setup_task_aware_prune(dir: &Path, flag: Option<bool>) {
 
 #[test]
 fn test_prune_task_aware_flag_off_preserves_package_closure() {
-    for flag in [None, Some(false)] {
+    // Keep pairwise CLI coverage for omitted versus explicit-off flags and
+    // production mode. The full planning matrix now lives in the prune crate.
+    for (flag, production) in [(None, false), (Some(false), true)] {
         let tempdir = tempfile::tempdir().unwrap();
         setup_task_aware_prune(tempdir.path(), flag);
-        // Even invalid task configuration in the selected package must not
-        // change legacy prune's validation behavior.
         fs::write(tempdir.path().join("packages/web/turbo.json"), "not JSON").unwrap();
-        for production in [false, true] {
-            let mut args = vec!["prune", "web"];
-            if production {
-                args.push("--production");
-            }
-            let output = run_turbo(tempdir.path(), &args);
-            assert!(output.status.success(), "{}", combined_output(&output));
-            let mut expected = vec!["install", "root-dep", "web"];
-            if !production {
-                expected.insert(0, "dev-only");
-            }
-            assert_eq!(
-                prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
-                expected
-            );
-            fs::remove_dir_all(tempdir.path().join("out")).unwrap();
+        let mut args = vec!["prune", "web"];
+        if production {
+            args.push("--production");
         }
+        let output = run_turbo(tempdir.path(), &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let mut expected = vec!["install", "root-dep", "web"];
+        if !production {
+            expected.insert(0, "dev-only");
+        }
+        assert_eq!(
+            prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+            expected
+        );
     }
 }
 
