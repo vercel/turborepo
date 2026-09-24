@@ -2905,6 +2905,65 @@ mod origins_match_tests {
         }
     }
 
+    fn affected_opts(repo_root: &AbsoluteSystemPathBuf, filters: &[&str]) -> Opts {
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector {
+            affected: true,
+            ..Default::default()
+        };
+        let mut opts = Opts::new(
+            repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = filters.iter().map(|filter| filter.to_string()).collect();
+        opts
+    }
+
+    fn run_builder(repo_root: &AbsoluteSystemPathBuf, filters: &[&str]) -> RunBuilder {
+        RunBuilder::new(
+            crate::RunBuilderInput {
+                repo_root: repo_root.clone(),
+                color_config: ColorConfig::new(true),
+                opts: affected_opts(repo_root, filters),
+                version: "test",
+                api_auth: None,
+            },
+            None,
+        )
+        .unwrap()
+    }
+
+    fn task_engine(
+        definitions: &[(TaskId<'static>, TaskDefinition)],
+        edges: &[(TaskId<'static>, TaskId<'static>)],
+    ) -> RunEngine {
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+        for (task_id, definition) in definitions {
+            engine.get_index(task_id);
+            engine.add_definition(task_id.clone(), definition.clone());
+        }
+        for (from, to) in edges {
+            let from_index = engine.get_index(from);
+            let to_index = engine.get_index(to);
+            engine.task_graph_mut().add_edge(from_index, to_index, ());
+        }
+        engine.seal()
+    }
+
+    fn task_with_inputs(globs: &[&str]) -> TaskDefinition {
+        TaskDefinition {
+            inputs: TaskInputs {
+                globs: globs.iter().map(|glob| glob.to_string()).collect(),
+                default: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn filtered_packages_can_use_an_injected_change_detector() {
         let temp_dir = tempfile::TempDir::new().unwrap();
@@ -2938,6 +2997,30 @@ mod origins_match_tests {
         assert_eq!(mode, FilterMode::ExplicitSelection);
         assert!(packages.contains_key(&PackageName::from("lib")));
         assert!(packages.contains_key(&PackageName::from("app")));
+        assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[test]
+    fn affected_package_filter_intersects_fixed_package_changes() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let opts = affected_opts(&repo_root, &["app"]);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+
+        let (packages, mode, _) = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: calls.clone(),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap();
+
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+        assert_eq!(names(packages.into_keys().collect()), ["app"]);
         assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
     }
 
@@ -3086,6 +3169,120 @@ mod origins_match_tests {
             HashSet::from([PackageName::from("app"), PackageName::from("lib")])
         );
         assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[test]
+    fn task_level_affected_filter_scopes_entrypoints_before_dependencies() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(
+            &repo_root,
+            &[("app", "lib"), ("lib-no-test", "placeholder")],
+        );
+        let builder = run_builder(&repo_root, &[]);
+        let app_build = TaskId::new("app", "build").into_owned();
+        let lib_build = TaskId::new("lib", "build").into_owned();
+        let no_test_build = TaskId::new("lib-no-test", "build").into_owned();
+        let definitions = [
+            (app_build.clone(), task_with_inputs(&["src/**"])),
+            (lib_build.clone(), task_with_inputs(&["src/**"])),
+            (no_test_build.clone(), task_with_inputs(&["src/**"])),
+        ];
+        let edges = [(app_build.clone(), lib_build.clone())];
+        let files = HashSet::from([
+            AnchoredSystemPathBuf::from_raw("packages/app/src/index.ts").unwrap(),
+            AnchoredSystemPathBuf::from_raw("packages/lib-no-test/src/index.ts").unwrap(),
+        ]);
+
+        let library_scope = HashSet::from([PackageName::from("lib")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: files.clone(),
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&library_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_ids().next().is_none());
+        assert!(selected.unwrap().is_empty());
+
+        let app_scope = HashSet::from([PackageName::from("app")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: files.clone(),
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&app_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_definition(&app_build).is_some());
+        assert!(filtered.task_definition(&lib_build).is_some());
+        assert_eq!(selected.unwrap(), app_scope);
+
+        let no_test_scope = HashSet::from([PackageName::from("lib-no-test")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files,
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&no_test_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_definition(&no_test_build).is_some());
+        assert!(filtered.task_definition(&app_build).is_none());
+        assert!(filtered.task_definition(&lib_build).is_none());
+        assert_eq!(selected.unwrap(), no_test_scope);
+    }
+
+    #[test]
+    fn task_level_affected_filter_matches_root_inputs_without_globalizing_package_json() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("lib-a", "placeholder")]);
+        let builder = run_builder(&repo_root, &[]);
+        let test_task = TaskId::new("lib-a", "test").into_owned();
+        let definitions = [(test_task.clone(), task_with_inputs(&["../../shared.txt"]))];
+
+        for (file, expected) in [("shared.txt", true), ("package.json", false)] {
+            let (filtered, selected) = builder
+                .filter_engine_to_affected_tasks(
+                    task_engine(&definitions, &[]),
+                    &graph,
+                    &TurboJson::default(),
+                    &FixedChangedFiles {
+                        files: HashSet::from([AnchoredSystemPathBuf::from_raw(file).unwrap()]),
+                        calls: Arc::new(Mutex::new(Vec::new())),
+                    },
+                    None,
+                )
+                .unwrap();
+
+            assert_eq!(
+                filtered.task_definition(&test_task).is_some(),
+                expected,
+                "unexpected selection for changed file {file}"
+            );
+            assert_eq!(
+                selected.unwrap(),
+                if expected {
+                    HashSet::from([PackageName::from("lib-a")])
+                } else {
+                    HashSet::new()
+                }
+            );
+        }
     }
 
     fn names(packages: Vec<PackageName>) -> Vec<String> {
