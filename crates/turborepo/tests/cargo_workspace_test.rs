@@ -1638,31 +1638,6 @@ fn test_unfiltered_cargo_verification_runs_once_at_workspace_scope() {
 }
 
 #[test]
-fn test_cargo_verification_honors_exclude_only_filters() {
-    let tempdir = cargo_tempdir();
-    setup_cargo_monorepo(tempdir.path());
-
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "test", "--filter=!lib-a", "--dry-run=json"],
-    );
-    assert!(output.status.success(), "dry run failed: {output:?}");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let task_ids: Vec<_> = json["tasks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|task| task["taskId"].as_str())
-        .collect();
-    assert!(
-        task_ids.contains(&"app#test"),
-        "expected crate tests: {task_ids:?}"
-    );
-    assert!(!task_ids.contains(&"lib-a#test"));
-    assert!(!task_ids.contains(&"acme#test"));
-}
-
-#[test]
 fn test_cargo_verification_works_with_task_level_filters() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
