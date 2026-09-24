@@ -82,7 +82,8 @@ fn allow_pnpm_esbuild(package_manager_command: &mut PackageManagerCommand, versi
     // The `--allow-build` flag was introduced in pnpm v10.2.0. Passing it to
     // earlier versions (including 10.0.x and 10.1.x) causes pnpm to error out
     // with "Unknown option: 'allow-build'".
-    let supports_allow_build = Version::parse(version.trim())
+    let trimmed = version.trim().trim_start_matches('v');
+    let supports_allow_build = Version::parse(trimmed)
         .is_ok_and(|version| version.major > 10 || (version.major == 10 && version.minor >= 2));
 
     if supports_allow_build {
@@ -118,7 +119,11 @@ fn call_turbo_gen(
         package_manager,
         PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
     ) {
-        if let Ok(output) = Command::new(&command_path).arg("--version").output() {
+        if let Ok(output) = Command::new(&command_path)
+            .current_dir(repo_root)
+            .arg("--version")
+            .output()
+        {
             if output.status.success() {
                 allow_pnpm_esbuild(
                     &mut package_manager_command,
@@ -129,6 +134,7 @@ fn call_turbo_gen(
     }
     let mut package_manager_process = Command::new(command_path);
     package_manager_process
+        .current_dir(repo_root)
         .args(package_manager_command.args)
         .arg("raw")
         .arg(command)
@@ -231,6 +237,22 @@ mod tests {
         let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
 
         allow_pnpm_esbuild(&mut command, "10.2.0");
+
+        assert_eq!(
+            command.args,
+            vec![
+                "--allow-build=esbuild".to_string(),
+                "dlx".to_string(),
+                "@turbo/gen@1.2.3".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn handles_version_with_v_prefix() {
+        let mut command = turbo_gen_command(&PackageManager::Pnpm9, "1.2.3");
+
+        allow_pnpm_esbuild(&mut command, "v12.4.2\n");
 
         assert_eq!(
             command.args,
