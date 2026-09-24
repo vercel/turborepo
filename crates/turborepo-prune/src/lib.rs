@@ -1769,8 +1769,10 @@ mod tests {
         root.join_component("package.json")
             .create_with_contents("{")
             .unwrap();
-        let mut future_flags = FutureFlags::default();
-        future_flags.experimental_cargo_workspaces = true;
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: true,
+            ..Default::default()
+        };
 
         let error = prune_initialization_error(&prune_input(&root, future_flags)).await;
 
@@ -1800,8 +1802,10 @@ mod tests {
     async fn pure_cargo_prune_requires_root_manifest_for_missing_package_json() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
-        let mut future_flags = FutureFlags::default();
-        future_flags.experimental_cargo_workspaces = true;
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: true,
+            ..Default::default()
+        };
 
         let error = prune_initialization_error(&prune_input(&root, future_flags)).await;
 
