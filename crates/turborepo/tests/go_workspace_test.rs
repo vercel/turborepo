@@ -217,50 +217,6 @@ fn assert_go_build_cache_result(
     );
 }
 
-fn alternate_go_arch(host_arch: &str) -> &'static str {
-    if host_arch == "arm64" {
-        "amd64"
-    } else {
-        "arm64"
-    }
-}
-
-#[cfg(unix)]
-fn go_version_shim_path(dir: &Path) -> String {
-    use std::os::unix::fs::PermissionsExt;
-
-    let real_go = which::which("go").expect("go is available");
-    let shim_dir = dir.join("go-version-shim");
-    fs::create_dir_all(&shim_dir).unwrap();
-    let quoted_go = real_go.to_string_lossy().replace('\'', "'\"'\"'");
-    let shim = shim_dir.join("go");
-    fs::write(
-        &shim,
-        format!(
-            concat!(
-                "#!/bin/sh\n",
-                "if [ \"$1\" = version ]; then\n",
-                "  echo 'go version go1.99.0 turbo/e2e'\n",
-                "  exit 0\n",
-                "fi\n",
-                "exec '{}' \"$@\"\n",
-            ),
-            quoted_go
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
-
-    let mut paths = vec![shim_dir];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").unwrap_or_default(),
-    ));
-    std::env::join_paths(paths)
-        .expect("PATH can include the Go version shim")
-        .to_string_lossy()
-        .into_owned()
-}
-
 #[cfg(unix)]
 fn publish_go_work(path: &Path, contents: &[u8]) {
     use std::io::Write;
@@ -1339,43 +1295,19 @@ fn test_go_hash_ignores_checkout_path_and_root_siblings() {
 }
 
 #[test]
-fn test_go_cache_alternate_arch_is_supported_on_ci_platforms() {
+fn test_go_cache_invalidates_on_dependency_source_and_build_environment() {
     if !go_available() {
         return;
     }
 
-    let tempdir = tempfile::tempdir().unwrap();
-    let supported = run_go(tempdir.path(), &["tool", "dist", "list"]);
-    assert_command_success(&supported, "list supported Go targets");
-    let supported = String::from_utf8_lossy(&supported.stdout);
-
-    for goos in ["darwin", "linux", "windows"] {
-        for host_arch in ["amd64", "arm64"] {
-            let target_arch = alternate_go_arch(host_arch);
-            assert_ne!(
-                target_arch, host_arch,
-                "cache invalidation target must differ from the host architecture"
-            );
-            let target = format!("{goos}/{target_arch}");
-            assert!(
-                supported.lines().any(|candidate| candidate == target),
-                "{target} must remain a supported Go cross-compilation target"
-            );
-        }
-    }
-}
-
-#[test]
-fn test_go_cache_invalidates_every_north_star_input() {
-    if !go_available() {
-        return;
-    }
-
+    // Per-input invalidation (module/dependency/replacement sources, manifests,
+    // checksums, disconnected modules, and the Go toolchain/environment
+    // fingerprint) is covered by crate contracts in turborepo-repository's
+    // go.rs. This smoke proves the assembled binary restores and invalidates
+    // real Go builds through one file input and one environment input.
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_e2e_workspace(tempdir.path());
     let root = tempdir.path();
-    // The Turborepo cache is fixture-local; changing its inputs must invalidate
-    // tasks even when the Go compiler cache is already warm from other tests.
     let assert_cache_result = |environment: &[(&str, &str)], expected, context| {
         assert_go_build_cache_result(root, environment, expected, context);
     };
@@ -1391,96 +1323,12 @@ fn test_go_cache_invalidates_every_north_star_input() {
     assert_cache_result(&[], "cache hit", "unrelated module source change");
 
     fs::write(
-        root.join("apps/api/main.go"),
-        r#"package main
-
-import (
-	"fmt"
-
-	"example.com/lib"
-	"example.net/message"
-)
-
-func main() {
-	fmt.Println(lib.Value(), message.Value(), "source-changed")
-}
-"#,
-    )
-    .unwrap();
-    assert_cache_result(&[], "cache miss", "module source change");
-
-    fs::write(
         root.join("packages/lib/lib.go"),
         "package lib\n\nfunc Value() string { return \"dependency-changed\" }\n",
     )
     .unwrap();
     assert_cache_result(&[], "cache miss", "internal dependency change");
 
-    fs::write(
-        root.join("third_party/message/message.go"),
-        "package message\n\nfunc Value() string { return \"replacement-changed\" }\n",
-    )
-    .unwrap();
-    assert_cache_result(&[], "cache miss", "local replacement change");
-
-    fs::write(
-        root.join("apps/api/go.mod"),
-        r#"module example.com/api
-
-go 1.22
-
-require (
-	example.com/independent v0.0.0
-	example.com/lib v0.0.0
-	example.net/message v0.0.0
-)
-
-replace example.com/independent => ../../tools/independent
-
-replace example.com/lib => ../../packages/lib
-
-replace example.net/message => ../../third_party/message
-"#,
-    )
-    .unwrap();
-    assert_cache_result(&[], "cache miss", "module graph change");
-
-    fs::write(
-        root.join("tools/independent/independent.go"),
-        "package independent\n\nconst Value = \"now-dependent\"\n",
-    )
-    .unwrap();
-    assert_cache_result(
-        &[],
-        "cache miss",
-        "newly connected dependency source change",
-    );
-
-    fs::write(
-        root.join("apps/api/go.sum"),
-        "example.org/checksum-only v1.0.1/go.mod h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n",
-    )
-    .unwrap();
-    assert_cache_result(&[], "cache miss", "external checksum change");
-
-    #[cfg(unix)]
-    {
-        let path = go_version_shim_path(root);
-        assert_cache_result(
-            &[("PATH", &path)],
-            "cache miss",
-            "Go compiler version change",
-        );
-    }
-
-    let go_arch = run_go(root, &["env", "GOARCH"]);
-    assert_command_success(&go_arch, "read host Go architecture");
-    let target_arch = alternate_go_arch(String::from_utf8_lossy(&go_arch.stdout).trim());
-    assert_cache_result(
-        &[("GOARCH", target_arch)],
-        "cache miss",
-        "Go target architecture change",
-    );
     assert_cache_result(
         &[("GOFLAGS", "-tags=turbo_cache_invalidation")],
         "cache miss",
