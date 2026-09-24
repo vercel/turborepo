@@ -885,7 +885,10 @@ mod tests {
         let dry = serde_json::to_value(factory.task_summary(api.clone(), None).unwrap()).unwrap();
         assert_eq!(dry["taskId"], "api#build");
         assert_eq!(dry["package"], "api");
-        assert_eq!(dry["directory"], "apps/api");
+        assert_eq!(
+            dry["directory"],
+            Path::new("apps").join("api").to_string_lossy().as_ref()
+        );
         assert_eq!(dry["command"], "go build .");
         assert_eq!(dry["dependencies"], json!(["lib#build"]));
         assert_eq!(dry["hash"], "api-task-hash");
