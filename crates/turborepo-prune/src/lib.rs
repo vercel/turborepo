@@ -27,7 +27,7 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind},
     package_json::PackageJson,
     package_manager::{PackageManager, npmrc::NpmRc},
-    prune_knowledge::PruneDomainId,
+    prune_knowledge::{PruneDomainId, PrunePlan},
     task_contracts::PrunePackageMode,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -242,6 +242,26 @@ impl PruneSelectionPlan {
     }
 }
 
+fn plan_native_domains(
+    package_graph: &PackageGraph,
+    kept_by_domain: &HashMap<PruneDomainId, Vec<String>>,
+) -> Result<Vec<(PruneDomainId, PrunePlan)>, Error> {
+    package_graph
+        .prune_domains()
+        .filter_map(|domain| {
+            let kept = kept_by_domain
+                .get(domain)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            match package_graph.prune_plan(domain, kept) {
+                Ok(Some(plan)) => Some(Ok((domain.clone(), plan))),
+                Ok(None) => None,
+                Err(error) => Some(Err(error.into())),
+            }
+        })
+        .collect()
+}
+
 pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", input.docker);
     telemetry.track_arg_usage("production", input.production);
@@ -320,7 +340,6 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
     } else {
         Vec::new()
     };
-    let mut kept_by_domain = selection.native_domains;
     let mut planned_domains = HashSet::new();
     for workspace in workspaces {
         let context = prune.package_context(&workspace)?;
@@ -376,11 +395,8 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
 
     // Project plans from immutable knowledge captured by this graph's
     // discovery generation; live toolchains retain no prune authority.
-    for domain in prune.package_graph.prune_domains() {
-        let kept = kept_by_domain.remove(domain).unwrap_or_default();
-        let Some(plan) = prune.package_graph.prune_plan(domain, &kept)? else {
-            continue;
-        };
+    let native_plans = plan_native_domains(&prune.package_graph, &selection.native_domains)?;
+    for (domain, plan) in native_plans {
         planned_domains.insert(domain.clone());
         for extra in plan.extra_packages {
             let name = PackageName::Other(extra.clone());
@@ -561,6 +577,41 @@ enum CopyDestination {
     All,
 }
 
+fn validate_prune_targets(package_graph: &PackageGraph, scope: &[String]) -> Result<(), Error> {
+    for target in scope {
+        let workspace = PackageName::Other(target.clone());
+        let Some(context) = package_graph.package_task_context(&workspace) else {
+            return Err(Error::MissingWorkspace(workspace));
+        };
+        // A package anchored at the repository root (e.g. the synthetic
+        // Cargo workspace package) has no directory of its own; pruning it
+        // would mean copying the whole repository.
+        if context.kind() == PackageTaskContextKind::Aggregate
+            || context.directory().components().next().is_none()
+        {
+            return Err(Error::PackageNotPruneable(target.clone()));
+        }
+        let definition_path = package_graph
+            .package_definition_path(context.package())
+            .ok_or_else(|| Error::MissingPackageDefinition(context.package().clone()))?;
+        trace!("target: {}", context.package());
+        trace!("workspace directory: {}", context.directory());
+        trace!("workspace definition: {definition_path}");
+        let declarations: Vec<_> = package_graph
+            .external_declarations(context.package())
+            .iter()
+            .map(|declaration| {
+                (
+                    declaration.package_name().to_string(),
+                    declaration.specifier().to_string(),
+                )
+            })
+            .collect();
+        trace!("external dependencies: {:?}", declarations);
+    }
+    Ok(())
+}
+
 impl<'a> Prune<'a> {
     fn package_context(&self, package: &PackageName) -> Result<PackageTaskContext<'_>, Error> {
         self.package_graph
@@ -609,37 +660,7 @@ impl<'a> Prune<'a> {
         trace!("production: {}", input.production);
         trace!("out directory: {}", &out_directory);
 
-        for target in &input.scope {
-            let workspace = PackageName::Other(target.clone());
-            let Some(context) = package_graph.package_task_context(&workspace) else {
-                return Err(Error::MissingWorkspace(workspace));
-            };
-            // A package anchored at the repository root (e.g. the synthetic
-            // Cargo workspace package) has no directory of its own; pruning
-            // it would mean copying the whole repository.
-            if context.kind() == PackageTaskContextKind::Aggregate
-                || context.directory().components().next().is_none()
-            {
-                return Err(Error::PackageNotPruneable(target.clone()));
-            }
-            let definition_path = package_graph
-                .package_definition_path(context.package())
-                .ok_or_else(|| Error::MissingPackageDefinition(context.package().clone()))?;
-            trace!("target: {}", context.package());
-            trace!("workspace directory: {}", context.directory());
-            trace!("workspace definition: {definition_path}");
-            let declarations: Vec<_> = package_graph
-                .external_declarations(context.package())
-                .iter()
-                .map(|declaration| {
-                    (
-                        declaration.package_name().to_string(),
-                        declaration.specifier().to_string(),
-                    )
-                })
-                .collect();
-            trace!("external dependencies: {:?}", declarations);
-        }
+        validate_prune_targets(&package_graph, &input.scope)?;
 
         // A JavaScript project must have a lockfile to subgraph. A pure Cargo
         // workspace has no JavaScript package manager and no JS lockfile; its
@@ -1303,8 +1324,9 @@ mod tests {
     };
 
     use super::{
-        ADDITIONAL_FILES, Error, Prune, PruneSelectionPlan, finalized_path_is_contained,
-        sync_prune_finalize_files,
+        ADDITIONAL_FILES, ColorConfig, CommandEventBuilder, Error, FutureFlags, Prune, PruneInput,
+        PruneSelectionPlan, finalized_path_is_contained, plan_native_domains,
+        sync_prune_finalize_files, validate_prune_targets,
     };
 
     struct MockDiscovery;
@@ -1583,6 +1605,216 @@ mod tests {
         }
     }
 
+    async fn cargo_prune_graph(
+        root: &AbsoluteSystemPathBuf,
+        include_javascript: bool,
+    ) -> PackageGraph {
+        let native = || {
+            Arc::new(NativePruneObservation {
+                root: root.clone(),
+                domain: CARGO_PRUNE_DOMAIN.clone(),
+            })
+        };
+        if include_javascript {
+            PackageGraph::builder(
+                root,
+                PackageJson::from_value(json!({
+                    "name": "repo",
+                    "packageManager": "npm@10.5.0"
+                }))
+                .unwrap(),
+            )
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([(
+                root.join_components(&["packages", "js-pkg", "package.json"]),
+                PackageJson::from_value(json!({ "name": "js-pkg" })).unwrap(),
+            )])))
+            .with_contributor(native())
+            .build()
+            .await
+            .unwrap()
+        } else {
+            PackageGraph::builder_optional(root, None)
+                .with_contributor(native())
+                .build()
+                .await
+                .unwrap()
+        }
+    }
+
+    fn in_memory_prune<'a>(
+        root: &AbsoluteSystemPathBuf,
+        package_graph: PackageGraph,
+        scope: &'a [String],
+        docker: bool,
+    ) -> Prune<'a> {
+        let out_directory = root.join_component("out");
+        Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: if docker {
+                out_directory.join_component("full")
+            } else {
+                out_directory
+            },
+            docker,
+            production: false,
+            scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+            copy_plan: OnceLock::new(),
+        }
+    }
+
+    fn prune_input(root: &AbsoluteSystemPathBuf, future_flags: FutureFlags) -> PruneInput {
+        PruneInput {
+            repo_root: root.clone(),
+            color_config: ColorConfig::new(true),
+            scope: vec!["cargo-app".to_string()],
+            docker: false,
+            production: false,
+            output_dir: "out".to_string(),
+            use_gitignore: false,
+            allow_missing_package_manager: false,
+            future_flags,
+            root_turbo_json_path: root.join_component("turbo.json"),
+        }
+    }
+
+    async fn prune_initialization_error(input: &PruneInput) -> Error {
+        match Prune::new(input, CommandEventBuilder::new("prune")).await {
+            Ok(_) => panic!("expected prune initialization to fail"),
+            Err(error) => error,
+        }
+    }
+
+    #[tokio::test]
+    async fn pure_cargo_prune_plan_covers_full_and_docker_layouts_without_js_assets() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        for docker in [false, true] {
+            let graph = cargo_prune_graph(&root, false).await;
+            let scope = vec!["cargo-app".to_string()];
+            let prune = in_memory_prune(&root, graph, &scope, docker);
+            let workspaces = prune.internal_dependencies().unwrap();
+            let selection =
+                PruneSelectionPlan::new(&prune.package_graph, workspaces, docker).unwrap();
+
+            assert!(selection.javascript_workspaces.is_empty());
+            assert!(selection.javascript_paths.is_empty());
+            assert_eq!(selection.native_domains[&CARGO_PRUNE_DOMAIN], ["cargo-app"]);
+            assert_eq!(selection.docker, docker);
+
+            let native_plans =
+                plan_native_domains(&prune.package_graph, &selection.native_domains).unwrap();
+            assert_eq!(native_plans.len(), 1);
+            assert_eq!(native_plans[0].0, CARGO_PRUNE_DOMAIN.clone());
+            assert_eq!(native_plans[0].1.copy_paths, ["cargo.lock"]);
+            assert!(
+                !root.join_component("out").exists(),
+                "planning must not materialize a prune layout"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn javascript_prune_plan_does_not_select_or_finalize_cargo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        for docker in [false, true] {
+            let graph = cargo_prune_graph(&root, true).await;
+            let scope = vec!["js-pkg".to_string()];
+            let prune = in_memory_prune(&root, graph, &scope, docker);
+            let workspaces = prune.internal_dependencies().unwrap();
+            let selection =
+                PruneSelectionPlan::new(&prune.package_graph, workspaces, docker).unwrap();
+
+            assert_eq!(selection.javascript_paths, ["packages/js-pkg"]);
+            assert!(selection.native_domains.is_empty());
+            assert!(
+                plan_native_domains(&prune.package_graph, &selection.native_domains)
+                    .unwrap()
+                    .is_empty(),
+                "a JS-only plan must not finalize Cargo"
+            );
+            assert_eq!(selection.docker, docker);
+            assert!(!root.join_component("out").exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn cargo_prune_rejects_aggregate_targets_before_materialization() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = cargo_prune_graph(&root, false).await;
+
+        let error = validate_prune_targets(&graph, &["cargo-workspace".to_string()]).unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PackageNotPruneable(name) if name == "cargo-workspace"
+        ));
+    }
+
+    #[tokio::test]
+    async fn pure_cargo_prune_rejects_malformed_package_json_in_process() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents("[workspace]\n")
+            .unwrap();
+        root.join_component("package.json")
+            .create_with_contents("{")
+            .unwrap();
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: true,
+            ..Default::default()
+        };
+
+        let error = prune_initialization_error(&prune_input(&root, future_flags)).await;
+
+        assert!(
+            error.to_string().contains("Unable to parse package.json"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pure_cargo_prune_requires_the_feature_for_missing_package_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents("[workspace]\n")
+            .unwrap();
+
+        let error = prune_initialization_error(&prune_input(&root, FutureFlags::default())).await;
+
+        assert!(
+            error.to_string().contains("Unable to read package.json"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pure_cargo_prune_requires_root_manifest_for_missing_package_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: true,
+            ..Default::default()
+        };
+
+        let error = prune_initialization_error(&prune_input(&root, future_flags)).await;
+
+        assert!(
+            error.to_string().contains("Unable to read package.json"),
+            "unexpected error: {error}"
+        );
+    }
+
     #[tokio::test]
     async fn prune_selection_plan_separates_js_native_and_docker_intent_in_memory() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1712,7 +1944,18 @@ mod tests {
                     "tasks": {
                         "build": {}, "generate": {},
                         "web#build": {
-                            "dependsOn": ["tool#generate", "go-app#build", "py-app#build"]
+                            "dependsOn": [
+                                "tool#generate", "cargo-workspace#generate",
+                                "go-app#build", "py-app#build"
+                            ]
+                        },
+                        "cargo-workspace#generate": {
+                            "dependsOn": ["cargo-workspace#check"]
+                        },
+                        "cargo-workspace#check": {
+                            "cache": false,
+                            "env": ["AGGREGATE_CHECK"],
+                            "dependsOn": ["cargo-app#build"]
                         },
                         "tool#generate": {"dependsOn": ["leaf#generate"]}
                     }
@@ -1755,6 +1998,10 @@ mod tests {
         )
         .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some(manifests))
+        .with_contributor(Arc::new(NativePruneObservation {
+            root: root.clone(),
+            domain: CARGO_PRUNE_DOMAIN.clone(),
+        }))
         .with_contributor(Arc::new(OtherNativePruneObservation {
             root: root.clone(),
             domain: GO_PRUNE_DOMAIN.clone(),
@@ -1822,13 +2069,59 @@ mod tests {
             tasks::retain_task_dependencies(&input, &prune.package_graph, initial, false).unwrap();
         let selected = retained.iter().cloned().collect::<HashSet<_>>();
         for name in [
-            "web", "install", "dev-only", "tool", "leaf", "go-app", "py-app",
+            "web",
+            "install",
+            "dev-only",
+            "tool",
+            "leaf",
+            "cargo-app",
+            "cargo-workspace",
+            "go-app",
+            "py-app",
         ] {
             assert!(selected.contains(&PackageName::from(name)));
         }
         assert!(!selected.contains(&PackageName::from("unrelated")));
         let plan = PruneSelectionPlan::new(&prune.package_graph, retained, true).unwrap();
+        assert!(
+            plan.workspaces
+                .contains(&PackageName::from("cargo-workspace"))
+        );
+        assert_eq!(plan.native_domains[&CARGO_PRUNE_DOMAIN], ["cargo-app"]);
         assert_eq!(plan.native_domains[&GO_PRUNE_DOMAIN], ["go-app"]);
+        let native_plans = plan_native_domains(&prune.package_graph, &plan.native_domains).unwrap();
+        let cargo_plan = native_plans
+            .iter()
+            .find(|(domain, _)| domain == &CARGO_PRUNE_DOMAIN.clone())
+            .expect("the kept Cargo member produces a domain plan");
+        assert_eq!(cargo_plan.1.copy_paths, ["cargo.lock"]);
+
+        let workspace_names = plan
+            .workspaces
+            .iter()
+            .filter_map(|workspace| match workspace {
+                PackageName::Root => None,
+                PackageName::Other(name) => Some(name.as_str()),
+            })
+            .collect::<Vec<_>>();
+        let (root_turbo_json, _) = prune
+            .get_turbo_json(super::turbo_json())
+            .unwrap()
+            .expect("root turbo.json exists");
+        let pruned_turbo_json =
+            serde_json::to_value(root_turbo_json.prune_tasks(&workspace_names)).unwrap();
+        assert_eq!(
+            pruned_turbo_json["tasks"]["cargo-workspace#generate"]["dependsOn"][0],
+            "cargo-workspace#check"
+        );
+        assert_eq!(
+            pruned_turbo_json["tasks"]["cargo-workspace#check"]["cache"],
+            false
+        );
+        assert_eq!(
+            pruned_turbo_json["tasks"]["cargo-workspace#check"]["env"][0],
+            "AGGREGATE_CHECK"
+        );
         assert_eq!(plan.native_domains[&PYTHON_PRUNE_DOMAIN], ["py-app"]);
         let paths = plan.javascript_paths.into_iter().collect::<HashSet<_>>();
         assert_eq!(
