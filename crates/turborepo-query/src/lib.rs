@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+pub mod affected_query;
 pub mod affected_tasks;
 mod boundaries;
 mod external_package;
