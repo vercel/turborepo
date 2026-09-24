@@ -36,6 +36,7 @@ use std::{
 use camino::{Utf8Path, Utf8PathBuf};
 use derive_setters::Setters;
 use env::EnvVars;
+pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::Diagnostic;
@@ -679,6 +680,28 @@ impl TurborepoConfigBuilder {
     }
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(self.get_environment(), None)
+    }
+
+    /// Resolves configuration against an explicit environment snapshot and
+    /// explicit global config/auth file paths.
+    pub fn build_with_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: ConfigurationFileInputs,
+    ) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(environment, Some(file_inputs))
+    }
+
+    fn build_with_optional_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: Option<ConfigurationFileInputs>,
+    ) -> Result<ConfigurationOptions, Error> {
+        let environment = environment
+            .into_iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value))
+            .collect::<HashMap<_, _>>();
         // Sources are listed highest-to-lowest priority. The fold merges each
         // source into the accumulator; `overwrite_none` keeps the first `Some`
         // it sees, so processing highest-priority first gives it precedence.
@@ -695,10 +718,25 @@ impl TurborepoConfigBuilder {
         // See `test_experimental_observability_otel_precedence` for coverage.
 
         let turbo_json = TurboJsonReader::new(&self.repo_root);
-        let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
-        let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
+        let (global_config, global_auth) = match &file_inputs {
+            Some(file_inputs) => {
+                let global_config_path = file_inputs.global_config_path.clone();
+                (
+                    ConfigFile::from_path(global_config_path.clone()),
+                    AuthFile::from_paths(
+                        file_inputs.global_auth_path.clone(),
+                        Some(global_config_path),
+                        file_inputs.legacy_auth_path.clone(),
+                    ),
+                )
+            }
+            None => (
+                ConfigFile::global_config(self.global_config_path.clone())?,
+                AuthFile::global_auth(self.global_config_path.clone())?,
+            ),
+        };
         let local_config = ConfigFile::local_config(&self.repo_root);
-        let env_vars = self.get_environment();
+        let env_vars = environment;
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 

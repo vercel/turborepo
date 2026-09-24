@@ -65,7 +65,8 @@ pub(crate) fn resolve_configuration_from_args(
     args: &Args,
 ) -> Result<ConfigurationOptions, ConfigError> {
     let overrides = cli_overrides_from_args(args)?;
-    resolve_configuration_with_overrides(repo_root, overrides)
+    let (environment, file_inputs) = crate::cli::configuration_inputs_from_process()?;
+    resolve_configuration_with_overrides(repo_root, overrides, environment, file_inputs)
 }
 
 #[cfg(test)]
