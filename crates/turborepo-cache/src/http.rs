@@ -41,6 +41,7 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     api_auth: Arc<Mutex<APIAuth>>,
+    recovery_lock: tokio::sync::Mutex<()>,
     disabled: AtomicBool,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
@@ -96,6 +97,7 @@ impl HTTPCache {
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
+            recovery_lock: tokio::sync::Mutex::new(()),
             disabled: AtomicBool::new(false),
             analytics_recorder,
             scm_state,
@@ -119,35 +121,42 @@ impl HTTPCache {
         first
     }
 
-    /// Attempts to refresh the auth token when a cache operation encounters a
-    /// 403 forbidden error. Returns true if the token was successfully
-    /// refreshed, false otherwise.
-    async fn try_refresh_token<F, Fut, E>(&self, recover: F) -> bool
+    /// Only one operation may recover a rejected token. Waiters whose request
+    /// used that token retry with the replacement instead of recovering again.
+    async fn try_refresh_token<F, Fut, E>(&self, rejected_token: &SecretString, recover: F) -> bool
     where
         F: FnOnce(SecretString) -> Fut,
         Fut: std::future::Future<Output = Result<Option<SecretString>, E>>,
         E: std::fmt::Debug,
     {
-        let current_token = match self.api_auth.lock() {
-            Ok(auth) => auth.token.clone(),
-            Err(_) => {
-                warn!("Failed to acquire lock for reading auth token");
-                return false;
-            }
-        };
+        let _recovery_guard = self.recovery_lock.lock().await;
+        if self.is_disabled() {
+            return false;
+        }
 
-        match recover(current_token).await {
+        // Drop the std mutex guard before awaiting recovery.
+        let current_token = {
+            self.api_auth
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .token
+                .clone()
+        };
+        if current_token.expose() != rejected_token.expose() {
+            return true;
+        }
+
+        let recovered = match recover(current_token).await {
             Ok(Some(new_token)) => {
-                if let Ok(mut auth) = self.api_auth.lock() {
-                    if replace_api_auth_token(&mut auth, new_token) {
-                        debug!("Successfully recovered auth token for cache operations");
-                        true
-                    } else {
-                        debug!("Recovered auth token matched the current token; skipping retry");
-                        false
-                    }
+                let mut auth = self
+                    .api_auth
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if replace_api_auth_token(&mut auth, new_token) {
+                    debug!("Successfully recovered auth token for cache operations");
+                    true
                 } else {
-                    warn!("Failed to acquire lock for updating auth token");
+                    debug!("Recovered auth token matched the current token; skipping retry");
                     false
                 }
             }
@@ -159,7 +168,11 @@ impl HTTPCache {
                 warn!("Failed to recover token after forbidden response: {:?}", e);
                 false
             }
+        };
+        if !recovered {
+            self.disable_after_forbidden();
         }
+        recovered
     }
 
     /// Helper method to execute a cache operation with automatic token refresh
@@ -200,10 +213,11 @@ impl HTTPCache {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
+        let rejected_token = api_auth.token.clone();
         match operation(api_auth).await {
             Ok(result) => Ok(result),
             Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
-                if self.try_refresh_token(recover).await {
+                if self.try_refresh_token(&rejected_token, recover).await {
                     let refreshed_auth = self
                         .api_auth
                         .lock()
@@ -1023,6 +1037,219 @@ mod test {
             },
         );
         assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
+    }
+
+    fn forbidden() -> turborepo_api_client::Error {
+        turborepo_api_client::Error::UnknownStatus {
+            code: "forbidden".into(),
+            message: "expired".into(),
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_simultaneous_403_recovers_once_and_retries_each_operation() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        const WORKERS: usize = 8;
+        let cache = Arc::new(cache_with_token("expired-token"));
+        let initial_attempts = Arc::new(tokio::sync::Barrier::new(WORKERS));
+        let recoveries = Arc::new(AtomicUsize::new(0));
+        let retries = Arc::new(AtomicUsize::new(0));
+        let (recovery_started, started) = tokio::sync::oneshot::channel();
+        let (release, recovery_release) = tokio::sync::oneshot::channel();
+        let recovery_signal = Arc::new(std::sync::Mutex::new(Some((
+            recovery_started,
+            recovery_release,
+        ))));
+        let tasks: Vec<_> = (0..WORKERS)
+            .map(|id| {
+                let cache = cache.clone();
+                let initial_attempts = initial_attempts.clone();
+                let recoveries = recoveries.clone();
+                let retries = retries.clone();
+                let recovery_signal = recovery_signal.clone();
+                tokio::spawn(async move {
+                    cache
+                        .execute_with_token_refresh_and_recovery(
+                            "hash",
+                            |auth| {
+                                let initial_attempts = initial_attempts.clone();
+                                let retries = retries.clone();
+                                async move {
+                                    if auth.token.expose() == "expired-token" {
+                                        initial_attempts.wait().await;
+                                        Err(forbidden())
+                                    } else {
+                                        assert_eq!(auth.token.expose(), "refreshed-token");
+                                        retries.fetch_add(1, Ordering::SeqCst);
+                                        Ok(id)
+                                    }
+                                }
+                            },
+                            |token| async move {
+                                recoveries.fetch_add(1, Ordering::SeqCst);
+                                assert_eq!(token.expose(), "expired-token");
+                                let signal = recovery_signal.lock().unwrap().take();
+                                if let Some((started, release)) = signal {
+                                    started.send(()).unwrap();
+                                    release.await.unwrap();
+                                }
+                                Ok::<_, ()>(Some(SecretString::new("refreshed-token".into())))
+                            },
+                        )
+                        .await
+                })
+            })
+            .collect();
+        started.await.unwrap();
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        release.send(()).unwrap();
+        let results = futures::future::join_all(tasks).await;
+        for (id, result) in results.into_iter().enumerate() {
+            assert_eq!(result.unwrap().unwrap(), id);
+        }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        assert_eq!(retries.load(Ordering::SeqCst), WORKERS);
+        assert!(!cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_simultaneous_403_failed_recovery_disables_without_retries() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        const WORKERS: usize = 8;
+        let cache = Arc::new(cache_with_token("expired-token"));
+        let initial_attempts = Arc::new(tokio::sync::Barrier::new(WORKERS));
+        let recoveries = Arc::new(AtomicUsize::new(0));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let tasks: Vec<_> = (0..WORKERS)
+            .map(|_| {
+                let cache = cache.clone();
+                let initial_attempts = initial_attempts.clone();
+                let recoveries = recoveries.clone();
+                let attempts = attempts.clone();
+                tokio::spawn(async move {
+                    cache
+                        .execute_with_token_refresh_and_recovery(
+                            "hash",
+                            |_| {
+                                let initial_attempts = initial_attempts.clone();
+                                attempts.fetch_add(1, Ordering::SeqCst);
+                                async move {
+                                    initial_attempts.wait().await;
+                                    Err::<(), _>(forbidden())
+                                }
+                            },
+                            |_| async move {
+                                recoveries.fetch_add(1, Ordering::SeqCst);
+                                tokio::task::yield_now().await;
+                                Err::<Option<SecretString>, _>("recovery failed")
+                            },
+                        )
+                        .await
+                })
+            })
+            .collect();
+        for result in futures::future::join_all(tasks).await {
+            assert!(matches!(
+                result.unwrap(),
+                Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+            ));
+        }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        assert_eq!(attempts.load(Ordering::SeqCst), WORKERS);
+        assert!(cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_stale_403_uses_changed_token_without_recovering_it() {
+        let cache = cache_with_token("old-token");
+        let (attempted, old_attempted) = tokio::sync::oneshot::channel();
+        let (release, old_release) = tokio::sync::oneshot::channel();
+        let attempted = std::sync::Mutex::new(Some(attempted));
+        let old_release = std::sync::Mutex::new(Some(old_release));
+        let operation = cache.execute_with_token_refresh_and_recovery(
+            "hash",
+            |auth| {
+                let (attempted, release) = if auth.token.expose() == "old-token" {
+                    (
+                        attempted.lock().unwrap().take(),
+                        old_release.lock().unwrap().take(),
+                    )
+                } else {
+                    (None, None)
+                };
+                async move {
+                    if auth.token.expose() == "old-token" {
+                        attempted.unwrap().send(()).unwrap();
+                        release.unwrap().await.unwrap();
+                        Err(forbidden())
+                    } else {
+                        assert_eq!(auth.token.expose(), "new-token");
+                        Ok("retried")
+                    }
+                }
+            },
+            |_| async {
+                panic!("stale 403 must not recover the replacement token");
+                #[allow(unreachable_code)]
+                Ok::<Option<SecretString>, ()>(None)
+            },
+        );
+        tokio::pin!(operation);
+        tokio::select! {
+            result = &mut operation => panic!("operation finished before token changed: {result:?}"),
+            result = old_attempted => result.unwrap(),
+        }
+        super::replace_api_auth_token(
+            &mut cache.api_auth.lock().unwrap(),
+            SecretString::new("new-token".into()),
+        );
+        release.send(()).unwrap();
+        assert_eq!(operation.await.unwrap(), "retried");
+        assert!(!cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_different_rejected_tokens_each_get_their_own_recovery() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = cache_with_token("first-token");
+        let recoveries = AtomicUsize::new(0);
+        for (rejected, replacement) in [
+            ("first-token", "second-token"),
+            ("second-token", "third-token"),
+        ] {
+            let result = cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |auth| async move {
+                        if auth.token.expose() == rejected {
+                            Err(forbidden())
+                        } else {
+                            Ok(auth.token.expose().to_string())
+                        }
+                    },
+                    |token| {
+                        recoveries.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(token.expose(), rejected);
+                        async move { Ok::<_, ()>(Some(SecretString::new(replacement.into()))) }
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result, replacement);
+        }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 2);
+        assert_eq!(cache.api_auth.lock().unwrap().token.expose(), "third-token");
+        assert!(!cache.is_disabled());
     }
 
     #[tokio::test]
