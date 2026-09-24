@@ -42,6 +42,7 @@ pub struct HTTPCache {
     repo_root: AbsoluteSystemPathBuf,
     api_auth: Arc<Mutex<APIAuth>>,
     disabled: AtomicBool,
+    outage_breaker: crate::outage_breaker::OutageBreaker,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
     scm_state: LazyScmState,
@@ -97,9 +98,20 @@ impl HTTPCache {
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
             disabled: AtomicBool::new(false),
+            outage_breaker: Default::default(),
             analytics_recorder,
             scm_state,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn trip_outage_for_test(&self) {
+        for _ in 0..3 {
+            self.outage_breaker
+                .enter()
+                .unwrap()
+                .finish(&Err(&CacheError::ConnectError));
+        }
     }
 
     pub(crate) fn is_disabled(&self) -> bool {
@@ -180,6 +192,33 @@ impl HTTPCache {
     }
 
     async fn execute_with_token_refresh_and_recovery<T, F, Fut, R, RecoveryFut, E>(
+        &self,
+        hash: &str,
+        operation: F,
+        recover: R,
+    ) -> Result<T, CacheError>
+    where
+        F: Fn(APIAuth) -> Fut,
+        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
+        R: FnOnce(SecretString) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
+        if self.is_disabled() {
+            return Err(CacheError::ForbiddenRemoteCacheWrite);
+        }
+        let permit = self
+            .outage_breaker
+            .enter()
+            .ok_or(CacheError::RemoteCacheUnavailable)?;
+        let result = self
+            .execute_with_token_refresh_inner(hash, operation, recover)
+            .await;
+        permit.finish(&result.as_ref().map(|_| ()));
+        result
+    }
+
+    async fn execute_with_token_refresh_inner<T, F, Fut, R, RecoveryFut, E>(
         &self,
         hash: &str,
         operation: F,
@@ -1174,6 +1213,117 @@ mod test {
             1
         );
         assert!(cache.is_disabled());
+    }
+
+    // The operation closure stands in for an artifact HTTP call, so these tests
+    // exercise the same admission and error classification as PUT/GET/HEAD.
+    async fn status_error(status: u16) -> turborepo_api_client::Error {
+        use tokio::io::AsyncWriteExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            socket
+                .write_all(
+                    format!("HTTP/1.1 {status} Test\r\nContent-Length: 0\r\n\r\n").as_bytes(),
+                )
+                .await
+                .unwrap();
+        });
+        let error = reqwest::Client::new()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap_err();
+        server.await.unwrap();
+        error.into()
+    }
+
+    #[tokio::test]
+    async fn test_outage_breaker_repeated_5xx_recovery_and_exclusions() {
+        let cache = cache_with_token("token");
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        for status in [404, 401, 429, 503, 200, 503, 503, 503] {
+            let result = cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| {
+                        attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        async move {
+                            if status == 200 {
+                                Ok(())
+                            } else {
+                                Err(status_error(status).await)
+                            }
+                        }
+                    },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await;
+            assert_eq!(result.is_ok(), status == 200);
+        }
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 8);
+        assert!(!cache.is_disabled());
+        assert!(matches!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await,
+            Err(crate::CacheError::RemoteCacheUnavailable)
+        ));
+        cache.outage_breaker.expire_for_test();
+        assert!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await
+                .is_ok()
+        );
+        assert!(cache.outage_breaker.enter().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_forbidden_after_outage_stays_permanently_disabled() {
+        let cache = cache_with_token("token");
+        cache.trip_outage_for_test();
+        cache.outage_breaker.expire_for_test();
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| async {
+                    Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                        code: "forbidden".into(),
+                        message: "forbidden".into(),
+                        backtrace: Backtrace::capture(),
+                    })
+                },
+                |_| async { Ok::<_, ()>(None) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(cache.is_disabled());
+        cache.outage_breaker.expire_for_test();
+        assert!(matches!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
     }
 
     #[test]
