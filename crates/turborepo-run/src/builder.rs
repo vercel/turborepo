@@ -92,6 +92,42 @@ struct ExecutionContext {
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
 }
 
+struct EngineSettlementInput<'a> {
+    pkg_dep_graph: Arc<PackageGraph>,
+    lazy_plan: Option<LazyPlan<CachingPackageDiscovery<LocalPackageDiscovery>>>,
+    turbo_json_loader: &'a UnifiedTurboJsonLoader,
+    root_turbo_json: &'a TurboJson,
+    env_at_execution_start: &'a EnvironmentVariableMap,
+    package_resolution_opts: &'a Opts,
+    scm: &'a SCM,
+    use_task_level_affected: bool,
+    has_task_level_affected_package_scope: bool,
+    needs_all_packages: bool,
+}
+
+struct SettledEngine {
+    pkg_dep_graph: Arc<PackageGraph>,
+    engine: RunEngine,
+    filtered_pkgs: HashMap<PackageName, PackageInclusionReason>,
+    filter_mode: FilterMode,
+    unqualified_entrypoint_packages: HashSet<PackageName>,
+    all_pkgs: Vec<PackageName>,
+    task_level_affected_package_scope: Option<HashSet<PackageName>>,
+}
+
+struct PassEngineContext<'a> {
+    root_turbo_json: &'a TurboJson,
+    engine_loader: &'a EngineTurboJsonLoader<'a>,
+    env_at_execution_start: &'a EnvironmentVariableMap,
+    needs_all_packages: bool,
+}
+
+struct SelectionModes {
+    use_task_level_filter: bool,
+    use_task_level_affected: bool,
+    needs_all_packages: bool,
+}
+
 type RemoteCachePreflight =
     tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>;
 
@@ -1033,12 +1069,136 @@ impl RunBuilder {
             }
         }
 
+        let (turbo_json_loader, task_access_enabled) = self.build_turbo_json_loader(
+            &pkg_dep_graph,
+            root_package_json.is_some(),
+            is_single_package,
+            &micro_frontend_configs,
+        )?;
+
+        let root_turbo_json = {
+            let _span = tracing::info_span!("root_turbo_json_load").entered();
+            turbo_json_loader
+                .load(&PackageName::Root)
+                .map_err(turborepo_config::Error::from)?
+                .clone()
+        };
+
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+
+        // When filterUsingTasks is active, --affected is handled by the
+        // same task-level filter rather than a separate codepath.
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.affected_range.is_some());
+
+        let use_task_level_affected = !use_task_level_filter
+            && self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        let has_task_level_affected_package_scope = use_task_level_affected
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.pkg_inference_root.is_some());
+
+        // Task-level affectedness replaces package-level affectedness. Resolve
+        // package constraints independently so SCM is queried only by the task
+        // detector and the final package list can come from selected tasks.
+        let package_scope_opts = use_task_level_affected.then(|| {
+            let mut opts = self.opts.clone();
+            opts.scope_opts.affected_range = None;
+            opts
+        });
+        let package_resolution_opts = package_scope_opts.as_ref().unwrap_or(&self.opts);
+
+        // Resolution knowledge is complete at package-graph construction, so
+        // scope filtering can read lockfile-affected packages without joining
+        // deferred closure work.
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(
+                self.repo_root.clone(),
+                async_cache.clone(),
+                scm,
+                task_access_enabled,
+            );
+            ta.restore_config().await;
+            ta
+        };
+
+        let use_watch_task_level_filter = self
+            .changed_files_for_watch
+            .as_ref()
+            .is_some_and(|changed_files| !changed_files.is_empty())
+            && self.opts.future_flags.watch_using_task_inputs;
+
+        let needs_all_packages = use_task_level_affected
+            || use_task_level_filter
+            || use_watch_task_level_filter
+            || self.add_all_tasks;
+
+        let settled = self
+            .settle_engine(EngineSettlementInput {
+                pkg_dep_graph,
+                lazy_plan,
+                turbo_json_loader: &turbo_json_loader,
+                root_turbo_json: &root_turbo_json,
+                env_at_execution_start: &env_at_execution_start,
+                package_resolution_opts,
+                scm,
+                use_task_level_affected,
+                has_task_level_affected_package_scope,
+                needs_all_packages,
+            })
+            .await?;
+        let settled = self.select_tasks(
+            settled,
+            SelectionModes {
+                use_task_level_filter,
+                use_task_level_affected,
+                needs_all_packages,
+            },
+            &root_turbo_json,
+            scm,
+        )?;
+        self.finalize_engine(&settled, &root_turbo_json, scm, untracked_scan_scope_tx)?;
+        let SettledEngine {
+            pkg_dep_graph,
+            engine,
+            filtered_pkgs,
+            ..
+        } = settled;
+
+        Ok(ExecutionContext {
+            pkg_dep_graph,
+            turbo_json_loader,
+            root_turbo_json,
+            task_access,
+            env_at_execution_start,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+            engine: Arc::new(engine),
+            micro_frontend_configs,
+        })
+    }
+
+    /// Chooses the turbo.json loader for this repository shape and reports
+    /// whether task access tracing is enabled.
+    fn build_turbo_json_loader(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        has_root_package_json: bool,
+        is_single_package: bool,
+        micro_frontend_configs: &Option<MicrofrontendsConfigs>,
+    ) -> Result<(UnifiedTurboJsonLoader, bool), Error> {
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
         let root_native_tasks = pkg_dep_graph
             .package_task_context(&PackageName::Root)
             .map(|context| context.native_tasks());
-        let task_access_enabled = root_package_json.is_some()
+        let task_access_enabled = has_root_package_json
             && root_native_tasks
                 .is_some_and(|tasks| TaskAccess::check_enabled(&self.repo_root, tasks));
 
@@ -1118,69 +1278,27 @@ impl RunBuilder {
             }
         };
 
-        let root_turbo_json = {
-            let _span = tracing::info_span!("root_turbo_json_load").entered();
-            turbo_json_loader
-                .load(&PackageName::Root)
-                .map_err(turborepo_config::Error::from)?
-                .clone()
-        };
+        Ok((turbo_json_loader, task_access_enabled))
+    }
 
-        let env_at_execution_start = {
-            let _span = tracing::info_span!("env_infer").entered();
-            EnvironmentVariableMap::infer()
-        };
-
-        // When filterUsingTasks is active, --affected is handled by the
-        // same task-level filter rather than a separate codepath.
-        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
-            && (!self.opts.scope_opts.filter_patterns.is_empty()
-                || self.opts.scope_opts.affected_range.is_some());
-
-        let use_task_level_affected = !use_task_level_filter
-            && self.opts.scope_opts.affected_range.is_some()
-            && self.opts.future_flags.affected_using_task_inputs;
-
-        let has_task_level_affected_package_scope = use_task_level_affected
-            && (!self.opts.scope_opts.filter_patterns.is_empty()
-                || self.opts.scope_opts.pkg_inference_root.is_some());
-
-        // Task-level affectedness replaces package-level affectedness. Resolve
-        // package constraints independently so SCM is queried only by the task
-        // detector and the final package list can come from selected tasks.
-        let package_scope_opts = use_task_level_affected.then(|| {
-            let mut opts = self.opts.clone();
-            opts.scope_opts.affected_range = None;
-            opts
-        });
-        let package_resolution_opts = package_scope_opts.as_ref().unwrap_or(&self.opts);
-
-        // Resolution knowledge is complete at package-graph construction, so
-        // scope filtering can read lockfile-affected packages without joining
-        // deferred closure work.
-
-        let task_access = {
-            let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(
-                self.repo_root.clone(),
-                async_cache.clone(),
-                scm,
-                task_access_enabled,
-            );
-            ta.restore_config().await;
-            ta
-        };
-
-        let use_watch_task_level_filter = self
-            .changed_files_for_watch
-            .as_ref()
-            .is_some_and(|changed_files| !changed_files.is_empty())
-            && self.opts.future_flags.watch_using_task_inputs;
-
-        let needs_all_packages = use_task_level_affected
-            || use_task_level_filter
-            || use_watch_task_level_filter
-            || self.add_all_tasks;
+    /// Settles package selection, the package graph, and the engine against
+    /// the run's metadata demands, then validates the settled graph.
+    async fn settle_engine(
+        &self,
+        input: EngineSettlementInput<'_>,
+    ) -> Result<SettledEngine, Error> {
+        let EngineSettlementInput {
+            mut pkg_dep_graph,
+            mut lazy_plan,
+            turbo_json_loader,
+            root_turbo_json,
+            env_at_execution_start,
+            package_resolution_opts,
+            scm,
+            use_task_level_affected,
+            has_task_level_affected_package_scope,
+            needs_all_packages,
+        } = input;
 
         // The task graph is finalized only after the run's metadata demands
         // settle. Each pass recomputes package selection and the engine over
@@ -1190,7 +1308,13 @@ impl RunBuilder {
         // the loop terminates; the final selection below runs exactly once,
         // on the settled graph and engine — no frozen task set, no post-hoc
         // reconciliation.
-        let engine_loader = EngineTurboJsonLoader::new(&turbo_json_loader);
+        let engine_loader = EngineTurboJsonLoader::new(turbo_json_loader);
+        let pass = PassEngineContext {
+            root_turbo_json,
+            engine_loader: &engine_loader,
+            env_at_execution_start,
+            needs_all_packages,
+        };
         let mut engine;
         let mut filtered_pkgs;
         let mut filter_mode;
@@ -1206,7 +1330,7 @@ impl RunBuilder {
                     package_resolution_opts,
                     &pkg_dep_graph,
                     scm,
-                    &root_turbo_json,
+                    root_turbo_json,
                 )?
             };
             filtered_pkgs = resolution;
@@ -1259,37 +1383,19 @@ impl RunBuilder {
                         .filter(|name| name != &PackageName::Root),
                 )
                 .collect();
-            let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
-                &pkg_dep_graph,
-                unqualified_entrypoint_packages.iter(),
-                task_namespace_packages.iter(),
-                &filter_mode,
-            );
-            let explicitly_requested_tasks: HashSet<_> = self
-                .opts
-                .run_opts
-                .tasks
-                .iter()
-                .filter_map(|task| {
-                    TaskName::from(task.as_str())
-                        .task_id()
-                        .map(TaskId::into_owned)
-                })
-                .collect();
-            scoped_entrypoint_exclusions
-                .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
-
             task_level_affected_package_scope = if has_task_level_affected_package_scope {
                 Some(filtered_pkgs.keys().cloned().collect())
             } else {
                 None
             };
 
-            entrypoint_exclusions = if needs_all_packages {
-                HashSet::new()
-            } else {
-                scoped_entrypoint_exclusions
-            };
+            entrypoint_exclusions = self.pass_entrypoint_exclusions(
+                &pkg_dep_graph,
+                &unqualified_entrypoint_packages,
+                &task_namespace_packages,
+                &filter_mode,
+                needs_all_packages,
+            );
 
             // Config preloading overlaps engine construction. Repository-wide
             // engines consult every package's config, but scoped engines only
@@ -1328,71 +1434,19 @@ impl RunBuilder {
             } else {
                 Vec::new()
             };
-            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
-                Box::new(all_pkgs.iter())
-            } else {
-                Box::new(filtered_pkgs.keys())
-            };
-
-            let (built_engine, mut demands) = self.build_engine(
-                &pkg_dep_graph,
-                &root_turbo_json,
-                engine_pkgs,
+            let (built_engine, demands) = self.build_pass_engine(
+                &mut pkg_dep_graph,
+                &pass,
+                &all_pkgs,
+                &filtered_pkgs,
                 &entrypoint_exclusions,
-                &engine_loader,
-                &env_at_execution_start,
             )?;
             engine = built_engine;
-
-            // --parallel removes inter-package dependencies from the package
-            // graph, requiring a fresh engine build. Affected filtering runs
-            // once afterward rather than on both engines to avoid a
-            // redundant SCM query.
-            if self.opts.run_opts.parallel {
-                // A --parallel run never reuses a shared package graph (the
-                // sharing path above opts out for parallel), so this Arc is
-                // uniquely owned here.
-                let Some(graph) = Arc::get_mut(&mut pkg_dep_graph) else {
-                    unreachable!("--parallel runs never reuse a shared package graph");
-                };
-                graph.remove_package_dependencies();
-                let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
-                    Box::new(all_pkgs.iter())
-                } else {
-                    Box::new(filtered_pkgs.keys())
-                };
-                let (rebuilt_engine, rebuilt_demands) = self.build_engine(
-                    &pkg_dep_graph,
-                    &root_turbo_json,
-                    engine_pkgs,
-                    &entrypoint_exclusions,
-                    &engine_loader,
-                    &env_at_execution_start,
-                )?;
-                engine = rebuilt_engine;
-                demands.extend(rebuilt_demands);
-            }
 
             // Settle: load the owners construction had to consult and repeat
             // the pass. A reused complete snapshot has no inventory-only
             // scopes, so it records no demands.
-            let newly_demanded: HashSet<ToolchainId> = match lazy_plan.as_ref() {
-                Some(plan) => {
-                    let loaded = plan.loaded_owners();
-                    demands
-                        .iter()
-                        .filter(|owner| !loaded.contains(*owner))
-                        .cloned()
-                        .collect()
-                }
-                None => {
-                    debug_assert!(
-                        demands.is_empty(),
-                        "a complete graph snapshot cannot produce metadata demands"
-                    );
-                    HashSet::new()
-                }
-            };
+            let newly_demanded = Self::newly_demanded_owners(lazy_plan.as_ref(), &demands);
             if newly_demanded.is_empty() {
                 break;
             }
@@ -1409,6 +1463,161 @@ impl RunBuilder {
             let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
             pkg_dep_graph.validate()?;
         }
+
+        Ok(SettledEngine {
+            pkg_dep_graph,
+            engine,
+            filtered_pkgs,
+            filter_mode,
+            unqualified_entrypoint_packages,
+            all_pkgs,
+            task_level_affected_package_scope,
+        })
+    }
+
+    /// Computes one settlement pass's task entrypoint exclusions. Explicitly
+    /// requested package tasks are never excluded, and repository-wide
+    /// engines exclude nothing.
+    fn pass_entrypoint_exclusions(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        unqualified_entrypoint_packages: &HashSet<PackageName>,
+        task_namespace_packages: &[PackageName],
+        filter_mode: &FilterMode,
+        needs_all_packages: bool,
+    ) -> HashSet<TaskId<'static>> {
+        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
+            pkg_dep_graph,
+            unqualified_entrypoint_packages.iter(),
+            task_namespace_packages.iter(),
+            filter_mode,
+        );
+        let explicitly_requested_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        scoped_entrypoint_exclusions
+            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
+
+        if needs_all_packages {
+            HashSet::new()
+        } else {
+            scoped_entrypoint_exclusions
+        }
+    }
+
+    /// Builds one settlement pass's engine, rebuilding it without package
+    /// dependencies for `--parallel`, and returns the owners it demanded.
+    fn build_pass_engine(
+        &self,
+        pkg_dep_graph: &mut Arc<PackageGraph>,
+        pass: &PassEngineContext<'_>,
+        all_pkgs: &[PackageName],
+        filtered_pkgs: &HashMap<PackageName, PackageInclusionReason>,
+        entrypoint_exclusions: &HashSet<TaskId<'static>>,
+    ) -> Result<(RunEngine, HashSet<ToolchainId>), Error> {
+        let needs_all_packages = pass.needs_all_packages;
+        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+            Box::new(all_pkgs.iter())
+        } else {
+            Box::new(filtered_pkgs.keys())
+        };
+
+        let (mut engine, mut demands) = self.build_engine(
+            pkg_dep_graph,
+            pass.root_turbo_json,
+            engine_pkgs,
+            entrypoint_exclusions,
+            pass.engine_loader,
+            pass.env_at_execution_start,
+        )?;
+
+        // --parallel removes inter-package dependencies from the package
+        // graph, requiring a fresh engine build. Affected filtering runs
+        // once afterward rather than on both engines to avoid a
+        // redundant SCM query.
+        if self.opts.run_opts.parallel {
+            // A --parallel run never reuses a shared package graph (watch
+            // graph sharing opts out for parallel), so this Arc is uniquely
+            // owned here.
+            let Some(graph) = Arc::get_mut(pkg_dep_graph) else {
+                unreachable!("--parallel runs never reuse a shared package graph");
+            };
+            graph.remove_package_dependencies();
+            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
+                Box::new(all_pkgs.iter())
+            } else {
+                Box::new(filtered_pkgs.keys())
+            };
+            let (rebuilt_engine, rebuilt_demands) = self.build_engine(
+                pkg_dep_graph,
+                pass.root_turbo_json,
+                engine_pkgs,
+                entrypoint_exclusions,
+                pass.engine_loader,
+                pass.env_at_execution_start,
+            )?;
+            engine = rebuilt_engine;
+            demands.extend(rebuilt_demands);
+        }
+
+        Ok((engine, demands))
+    }
+
+    /// Owners demanded by engine construction that the plan has not loaded.
+    fn newly_demanded_owners(
+        lazy_plan: Option<&LazyPlan<CachingPackageDiscovery<LocalPackageDiscovery>>>,
+        demands: &HashSet<ToolchainId>,
+    ) -> HashSet<ToolchainId> {
+        match lazy_plan {
+            Some(plan) => {
+                let loaded = plan.loaded_owners();
+                demands
+                    .iter()
+                    .filter(|owner| !loaded.contains(*owner))
+                    .cloned()
+                    .collect()
+            }
+            None => {
+                debug_assert!(
+                    demands.is_empty(),
+                    "a complete graph snapshot cannot produce metadata demands"
+                );
+                HashSet::new()
+            }
+        }
+    }
+
+    /// Applies task-level filtering, affectedness, and entrypoint selection to
+    /// the settled engine.
+    fn select_tasks(
+        &self,
+        settled: SettledEngine,
+        modes: SelectionModes,
+        root_turbo_json: &TurboJson,
+        scm: &SCM,
+    ) -> Result<SettledEngine, Error> {
+        let SettledEngine {
+            pkg_dep_graph,
+            mut engine,
+            mut filtered_pkgs,
+            filter_mode,
+            unqualified_entrypoint_packages,
+            all_pkgs,
+            task_level_affected_package_scope,
+        } = settled;
+        let SelectionModes {
+            use_task_level_filter,
+            use_task_level_affected,
+            needs_all_packages,
+        } = modes;
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {
@@ -1486,7 +1695,7 @@ impl RunBuilder {
             let (affected_engine, selected_packages) = self.filter_engine_to_affected_tasks(
                 engine,
                 &pkg_dep_graph,
-                &root_turbo_json,
+                root_turbo_json,
                 scm,
                 task_level_affected_package_scope.as_ref(),
             )?;
@@ -1517,6 +1726,33 @@ impl RunBuilder {
             );
         }
 
+        Ok(SettledEngine {
+            pkg_dep_graph,
+            engine,
+            filtered_pkgs,
+            filter_mode,
+            unqualified_entrypoint_packages,
+            all_pkgs,
+            task_level_affected_package_scope,
+        })
+    }
+
+    /// Scopes the untracked-file scan to the final engine and validates it.
+    fn finalize_engine(
+        &self,
+        settled: &SettledEngine,
+        root_turbo_json: &TurboJson,
+        scm: &SCM,
+        untracked_scan_scope_tx: Option<
+            tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>,
+        >,
+    ) -> Result<(), Error> {
+        let SettledEngine {
+            pkg_dep_graph,
+            engine,
+            filter_mode,
+            ..
+        } = settled;
         // The engine is final: every task the run will hash is known. Send
         // the untracked scan its scope. Provably package-local runs walk
         // only the participating packages' directories (plus the root
@@ -1526,10 +1762,10 @@ impl RunBuilder {
             let scoped_prefixes = Self::untracked_scan_prefixes(
                 &self.repo_root,
                 scm.git_root(),
-                &engine,
-                &pkg_dep_graph,
-                &root_turbo_json,
-                &filter_mode,
+                engine,
+                pkg_dep_graph,
+                root_turbo_json,
+                filter_mode,
             );
             match &scoped_prefixes {
                 Some(prefixes) => tracing::debug!(
@@ -1550,7 +1786,7 @@ impl RunBuilder {
         if !self.opts.run_opts.parallel && self.should_validate_engine {
             engine
                 .validate(
-                    &pkg_dep_graph,
+                    pkg_dep_graph,
                     self.opts.run_opts.concurrency,
                     self.opts.run_opts.ui_mode,
                     self.will_execute_tasks(),
@@ -1558,16 +1794,7 @@ impl RunBuilder {
                 .map_err(Error::EngineValidation)?;
         }
 
-        Ok(ExecutionContext {
-            pkg_dep_graph,
-            turbo_json_loader,
-            root_turbo_json,
-            task_access,
-            env_at_execution_start,
-            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-            engine: Arc::new(engine),
-            micro_frontend_configs,
-        })
+        Ok(())
     }
 
     async fn build_run_services(&self, input: RunServicesInput<'_>) -> Result<RunServices, Error> {
