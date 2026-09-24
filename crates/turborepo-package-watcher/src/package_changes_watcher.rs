@@ -1442,6 +1442,44 @@ mod test {
     }
 
     #[tokio::test]
+    async fn coalesced_ignored_events_cannot_hide_config_rediscovery() {
+        let f = ClassifyFixture::new().await;
+        let config = f.repo_root.join_component("turbo.json");
+        let git = f.repo_root.join_components(&[".git", "objects", "abc123"]);
+        let ignored =
+            f.repo_root
+                .join_components(&["packages", "a", "node_modules", "dep", "index.js"]);
+        let mut pending = ChangedFiles::default();
+        for path in [&git, &ignored, &config, &config] {
+            accumulate_changed_files(&mut pending, vec![path.as_std_path().to_path_buf()]);
+        }
+        let ChangedFiles::Some(ref trie) = pending else {
+            panic!("UTF-8 paths must remain a scoped batch");
+        };
+        assert_eq!(trie.len(), 3, "repeated config paths coalesce");
+        assert!(matches!(
+            f.classify(trie, &["node_modules/"], None),
+            FileChangeAction::ConfigChanged
+        ));
+
+        let mut ignored_only = ChangedFiles::default();
+        accumulate_changed_files(
+            &mut ignored_only,
+            vec![
+                git.as_std_path().to_path_buf(),
+                ignored.as_std_path().to_path_buf(),
+            ],
+        );
+        let ChangedFiles::Some(ref trie) = ignored_only else {
+            panic!("UTF-8 paths must remain a scoped batch");
+        };
+        assert!(matches!(
+            f.classify(trie, &["node_modules/"], None),
+            FileChangeAction::NoRelevantChanges
+        ));
+    }
+
+    #[tokio::test]
     async fn classify_turbo_jsonc_change_triggers_config_changed() {
         let f = ClassifyFixture::new().await;
         let turbo_jsonc_path = f.repo_root.join_component("turbo.jsonc");
@@ -2132,7 +2170,7 @@ mod test {
         assert!(recv_event(rx, Duration::from_secs(1)).await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn watcher_suppresses_file_event_when_content_hash_is_unchanged() {
         let (_tmp, repo_root) = setup_git_repo();
         let handle = create_test_watcher(&repo_root);
@@ -2140,7 +2178,8 @@ mod test {
 
         let initial = recv_event(&mut rx, Duration::from_secs(2)).await;
         assert!(matches!(initial, Some(PackageChangeEvent::Rediscover)));
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        // The initial Rediscover is published after the hash baseline is ready.
+        // The paused clock makes the negative assertion independent of wall time.
 
         let unchanged_file = repo_root.join_components(&["packages", "a", "index.ts"]);
         unchanged_file
@@ -2149,6 +2188,8 @@ mod test {
         let event = make_notify_event_from(&[&unchanged_file]);
         handle.hash_events_tx.send(Ok(event.clone())).unwrap();
         handle.file_events_tx.send(Ok(event)).unwrap();
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(150)).await;
 
         assert!(
             recv_event(&mut rx, Duration::from_secs(1)).await.is_none(),
@@ -2196,10 +2237,8 @@ mod test {
             .send(Ok(make_notify_event_from(&[&git_path])))
             .unwrap();
 
-        // Then send a real config change as a sentinel — when we see its
-        // Rediscover event, we know the watcher processed both events
-        // and chose to skip the .git one.
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // The config sentinel may share a poll tick with the .git event;
+        // config must still trigger exactly one rediscovery.
         let turbo_path = repo_root.join_component("turbo.json");
         file_tx
             .send(Ok(make_notify_event_from(&[&turbo_path])))
@@ -2429,10 +2468,8 @@ mod test {
             .send(Ok(make_notify_event_from(&[&ignored_path])))
             .unwrap();
 
-        // Then send a real config change as a sentinel — when we see its
-        // Rediscover event, we know the watcher processed the ignored event
-        // and correctly dropped it.
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // The config sentinel may share a poll tick with the ignored event;
+        // the only observable event must still be Rediscover.
         let turbo_path = repo_root.join_component("turbo.json");
         file_tx
             .send(Ok(make_notify_event_from(&[&turbo_path])))
