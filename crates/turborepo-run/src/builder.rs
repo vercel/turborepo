@@ -3177,6 +3177,47 @@ mod origins_match_tests {
     }
 
     #[test]
+    fn missing_go_filter_points_to_disabled_workspace_support() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        repo_root
+            .join_component(turborepo_repository::go::GO_WORK)
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector::default();
+        let mut opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = vec!["api".to_string()];
+
+        let error = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PackageMayBeGoModule { ref name } if name == "api"
+        ));
+        let hint = miette::Diagnostic::help(&error)
+            .expect("disabled Go support has an opt-in hint")
+            .to_string();
+        assert!(hint.contains("experimentalGoWorkspaces"), "{hint}");
+    }
+
+    #[test]
     fn missing_python_filter_points_to_disabled_workspace_support() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();

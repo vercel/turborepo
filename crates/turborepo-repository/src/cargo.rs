@@ -4413,6 +4413,86 @@ release: 1.96.0-nightly\n",
         assert!(prune_domains[0].plan(&["app".to_string()]).is_err());
     }
 
+    async fn assert_cargo_lockfile_fallback(root: &AbsoluteSystemPathBuf, original_lock: &str) {
+        let (packages, _, resolutions, _, _) = CargoContributor::new(root.clone())
+            .discover_packages()
+            .await
+            .unwrap()
+            .into_parts();
+        assert_eq!(packages.len(), 4);
+        let ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Partial(reason),
+            packages: resolved,
+        } = resolutions[0].data()
+        else {
+            panic!("unusable Cargo.lock should produce partial resolution")
+        };
+        assert_eq!(reason.code(), "cargo-lockfile-unavailable");
+        assert_eq!(resolved.len(), 4);
+        assert!(
+            resolutions[0]
+                .fallback_inputs()
+                .iter()
+                .any(|path| path.as_str().ends_with(CARGO_TOML))
+        );
+        assert_eq!(
+            root.join_component(CARGO_LOCK).read_to_string().unwrap(),
+            original_lock,
+            "fallback discovery must not rewrite Cargo.lock"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_falls_back_with_stale_lockfile() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        let lockfile = root.join_component(CARGO_LOCK).read_to_string().unwrap();
+        write(
+            &root,
+            &["crates", "app", CARGO_TOML],
+            "[package]\nname = \"app\"\nversion = \"0.2.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+        );
+
+        assert_cargo_lockfile_fallback(&root, &lockfile).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_falls_back_with_unparsable_lockfile() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        let lockfile = "not valid lockfile TOML";
+        write(&root, &[CARGO_LOCK], lockfile);
+
+        assert_cargo_lockfile_fallback(&root, lockfile).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_rejects_excluded_path_dependency() {
+        let (_tmp, root) = tempdir_root();
+        write_local_dependency_workspace(
+            &root,
+            "[dependencies]\nlocal = { path = \"../local\" }\n",
+            true,
+        );
+        let root_manifest = root.join_component(CARGO_TOML);
+        let manifest = root_manifest.read_to_string().unwrap();
+        root_manifest
+            .create_with_contents(format!(
+                "{manifest}\n[workspace.metadata]\nname = \"fixture-ws\"\n"
+            ))
+            .unwrap();
+
+        let error = CargoContributor::new(root.clone())
+            .discover_packages()
+            .await
+            .unwrap_err();
+        let error = error.to_string().replace('\\', "/");
+        assert!(error.contains("local"), "{error}");
+        assert!(error.contains("not a workspace member"), "{error}");
+        assert!(error.contains("crates/local/Cargo.toml"), "{error}");
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_emits_native_relationships_without_dependency_descriptors() {
         let (_tmp, root) = tempdir_root();
