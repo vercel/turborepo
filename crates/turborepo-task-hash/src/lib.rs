@@ -1099,6 +1099,9 @@ mod test {
 
     use super::*;
 
+    #[path = "structured_inputs_test.rs"]
+    mod structured_inputs;
+
     struct TestRunOpts {
         single_package: bool,
     }
