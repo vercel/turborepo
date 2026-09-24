@@ -6,11 +6,38 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 
 use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
+/// Explicit paths for the global configuration and authentication sources.
+/// Repository-local config and the selected root turbo.json are resolved from
+/// the resolver's repository root and configuration options.
+#[derive(Debug, Clone)]
+pub struct ConfigurationFileInputs {
+    pub global_config_path: AbsoluteSystemPathBuf,
+    pub global_auth_path: AbsoluteSystemPathBuf,
+    pub legacy_auth_path: Option<AbsoluteSystemPathBuf>,
+}
+
+impl ConfigurationFileInputs {
+    /// Resolves the default global configuration and authentication paths from
+    /// the current process environment. Production adapters can pass the
+    /// resulting paths to the pure configuration resolver.
+    pub fn from_process_environment() -> Result<Self, Error> {
+        Ok(Self {
+            global_config_path: global_config_path()?,
+            global_auth_path: global_auth_path()?,
+            legacy_auth_path: legacy_auth_path()?,
+        })
+    }
+}
+
 pub struct ConfigFile {
     path: AbsoluteSystemPathBuf,
 }
 
 impl ConfigFile {
+    pub(crate) fn from_path(path: AbsoluteSystemPathBuf) -> Self {
+        Self { path }
+    }
+
     pub fn global_config(override_path: Option<AbsoluteSystemPathBuf>) -> Result<Self, Error> {
         let path = override_path.map_or_else(global_config_path, Ok)?;
         Ok(Self { path })
@@ -50,6 +77,18 @@ pub struct AuthFile {
 }
 
 impl AuthFile {
+    pub(crate) fn from_paths(
+        path: AbsoluteSystemPathBuf,
+        fallback_path: Option<AbsoluteSystemPathBuf>,
+        legacy_path: Option<AbsoluteSystemPathBuf>,
+    ) -> Self {
+        Self {
+            path,
+            fallback_path,
+            legacy_path,
+        }
+    }
+
     pub fn global_auth(override_path: Option<AbsoluteSystemPathBuf>) -> Result<Self, Error> {
         match override_path {
             Some(path) => Ok(Self {

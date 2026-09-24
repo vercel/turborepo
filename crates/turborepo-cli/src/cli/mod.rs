@@ -1,10 +1,11 @@
-use std::{env, mem, process, sync::Arc};
+use std::{collections::HashMap, env, ffi::OsString, mem, process, sync::Arc};
 
 use camino::Utf8Path;
 pub use error::Error;
 use tracing::{debug, error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::SharedHttpClient;
+use turborepo_config::ConfigurationFileInputs;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_shim::TurboState;
 use turborepo_telemetry::{
@@ -50,6 +51,15 @@ fn exit_with_heap_profile(code: i32) -> ! {
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
+
+pub(crate) fn configuration_inputs_from_process(
+) -> Result<(HashMap<OsString, OsString>, ConfigurationFileInputs), turborepo_config::Error> {
+    let environment = env::vars_os()
+        .map(|(key, value)| (key.to_ascii_lowercase(), value))
+        .collect();
+    let file_inputs = ConfigurationFileInputs::from_process_environment()?;
+    Ok((environment, file_inputs))
+}
 
 /// Returns a scaled thread count for rayon's global pool based on
 /// available CPU cores, capped at

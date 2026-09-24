@@ -76,14 +76,22 @@ impl ConfigProvider for TurboConfigProvider {
         // which can cause it to abort before reaching the turbo.json source.
         // Falling back unconditionally would allow turbo.json to override a
         // higher-priority source like `TURBO_NO_UPDATE_NOTIFIER=0`.
-        let no_update_notifier =
-            match crate::config::resolve_configuration_for_shim(root, root_turbo_json) {
-                Ok(config) => config.no_update_notifier(),
-                Err(e) => {
-                    tracing::debug!("Failed to resolve configuration for shim: {e}");
-                    read_no_update_notifier_from_turbo_json(root, root_turbo_json)
-                }
-            };
+        let no_update_notifier = match crate::cli::configuration_inputs_from_process().and_then(
+            |(environment, file_inputs)| {
+                crate::config::resolve_configuration_for_shim(
+                    root,
+                    root_turbo_json,
+                    environment,
+                    file_inputs,
+                )
+            },
+        ) {
+            Ok(config) => config.no_update_notifier(),
+            Err(e) => {
+                tracing::debug!("Failed to resolve configuration for shim: {e}");
+                read_no_update_notifier_from_turbo_json(root, root_turbo_json)
+            }
+        };
 
         ShimConfigurationOptions::new(Some(no_update_notifier))
     }
