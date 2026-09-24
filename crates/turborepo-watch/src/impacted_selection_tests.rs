@@ -81,6 +81,8 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
     for path in [
         "packages/web/src/main.ts",
         "packages/web/dev.config",
+        "packages/web/serve.config",
+        "packages/web/notes.md",
         "apps/go/src/main.go",
         "crates/cargo/src/main.rs",
         "packages/py/src/main.py",
@@ -142,6 +144,7 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
 
     let web = TaskId::new("web", "build").into_owned();
     let dev = TaskId::new("web", "dev").into_owned();
+    let serve = TaskId::new("web", "serve").into_owned();
     let go = TaskId::new("go-app", "build").into_owned();
     let cargo = TaskId::new("cargo-app", "build").into_owned();
     let py = TaskId::new("py-app", "build").into_owned();
@@ -158,6 +161,14 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
                 persistent: true,
                 interruptible: false,
                 ..input("dev.config")
+            },
+        ),
+        (
+            serve.clone(),
+            TaskDefinition {
+                persistent: true,
+                interruptible: true,
+                ..input("serve.config")
             },
         ),
         (go.clone(), input("src/main.go")),
@@ -226,6 +237,21 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
         .impacted_by(&packages(&["web"]), &changed(&["packages/web/dev.config"]));
     assert!(dev_only.packages.is_empty());
     assert!(dev_only.stoppable_ids.is_empty());
+
+    // A file outside an interruptible persistent task's inputs must not
+    // restart it. This pure selection decision used to cost a live watcher
+    // plus three ten-second negative assertions in the CLI suite.
+    let outside_inputs =
+        task_input_selection.impacted_by(&packages(&["web"]), &changed(&["packages/web/notes.md"]));
+    assert!(outside_inputs.packages.is_empty());
+    assert!(outside_inputs.stoppable_ids.is_empty());
+    let serve_input = task_input_selection.impacted_by(
+        &packages(&["web"]),
+        &changed(&["packages/web/serve.config"]),
+    );
+    assert_eq!(names(&serve_input.packages), HashSet::from(["web".into()]));
+    assert_eq!(serve_input.stoppable_ids, vec![serve.clone()]);
+
     let missing = task_input_selection.impacted_by(
         &packages(&["go-app"]),
         &changed(&["apps/go/src/deleted.go"]),
@@ -260,7 +286,7 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
     assert_eq!(names(&selected.packages), HashSet::from(["web".into()]));
     assert_eq!(
         selected.stoppable_ids.into_iter().collect::<HashSet<_>>(),
-        HashSet::from([web])
+        HashSet::from([web, serve.clone()])
     );
 
     let mut partial = ChangedPackages::Some {
@@ -286,6 +312,7 @@ async fn mixed_toolchain_watch_selects_impacted_tasks_and_partial_reruns_without
         ])
     );
     assert!(!all.stoppable_ids.contains(&dev));
+    assert!(all.stoppable_ids.contains(&serve));
     let pending = std::sync::Mutex::new(partial);
     WatchClient::handle_change_event(&pending, PackageChangeEvent::Rediscover);
     let mut rediscovered = WatchClient::take_pending_changes(&pending).unwrap();
