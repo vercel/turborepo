@@ -603,5 +603,6 @@ mod extends;
 mod go;
 mod inheritance;
 mod lazy_loading;
+mod structured_inputs;
 mod syntax;
 mod workspace;
