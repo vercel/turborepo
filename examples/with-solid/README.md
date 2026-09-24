@@ -20,7 +20,7 @@ This starter project leverages Turborepo to manage a monorepo structure that com
 
 ## Getting Started
 
-This example requires Node.js 24 or newer.
+This example requires Node.js 24.21.0 or newer.
 
 To bootstrap your new turborepo using this starter, simply run:
 
