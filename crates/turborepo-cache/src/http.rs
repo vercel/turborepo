@@ -288,6 +288,41 @@ impl HTTPCache {
         Ok(())
     }
 
+    /// Query remote hits in one request; missing or invalid entries are left to
+    /// the caller to resolve with the single-artifact endpoint.
+    pub async fn batch_exists(
+        &self,
+        hashes: &[String],
+    ) -> Result<HashMap<String, Option<CacheHitMetadata>>, CacheError> {
+        let response = self
+            .execute_with_token_refresh("batch", |api_auth| {
+                let client = &self.client;
+                async move {
+                    client
+                        .query_artifacts(
+                            hashes,
+                            &api_auth.token,
+                            api_auth.team_id.as_deref(),
+                            api_auth.team_slug.as_deref(),
+                        )
+                        .await
+                }
+            })
+            .await?;
+        Ok(response
+            .into_iter()
+            .map(|(hash, hit)| {
+                let metadata = hit.map(|hit| CacheHitMetadata {
+                    source: CacheSource::Remote,
+                    time_saved: hit.task_duration_ms,
+                    sha: hit.sha,
+                    dirty_hash: hit.dirty_hash,
+                });
+                (hash, metadata)
+            })
+            .collect())
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let response = self
