@@ -26,7 +26,7 @@ use turborepo_repository::{
     toolchain::ToolchainId,
 };
 use turborepo_run_context::RepoContext;
-use turborepo_run_opts::Opts;
+use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_scope::{TargetSelector, filter::ResolutionError};
@@ -136,9 +136,14 @@ fn start_remote_cache_preflight(
 
 #[tracing::instrument(skip_all)]
 async fn resolve_remote_cache_status(
+    remote_cache_disabled_reason: Option<RemoteCacheDisabledReason>,
     preflight_handle: Option<RemoteCachePreflight>,
 ) -> RemoteCacheStatus {
     use turborepo_vercel_api::CachingStatus;
+
+    if let Some(reason) = remote_cache_disabled_reason {
+        return RemoteCacheStatus::Disabled(reason);
+    }
 
     let Some(handle) = preflight_handle else {
         return RemoteCacheStatus::Enabled;
@@ -1612,10 +1617,9 @@ impl RunBuilder {
             repo_index,
             analytics_handle,
         } = input;
-        let remote_cache_status = match self.opts.remote_cache_disabled_reason {
-            Some(reason) => RemoteCacheStatus::Disabled(reason),
-            None => resolve_remote_cache_status(preflight_handle).await,
-        };
+        let remote_cache_status =
+            resolve_remote_cache_status(self.opts.remote_cache_disabled_reason, preflight_handle)
+                .await;
 
         let run_cache = Arc::new(RunCache::new(
             async_cache,
@@ -2780,6 +2784,7 @@ mod lazy_selector_tests {
 mod remote_cache_status_tests {
     use std::{future::Future, sync::Mutex};
 
+    use turborepo_run_opts::RemoteCacheDisabledReason;
     use turborepo_types::SecretString;
     use turborepo_vercel_api::{CachingStatus, CachingStatusResponse};
 
@@ -2813,11 +2818,21 @@ mod remote_cache_status_tests {
             None,
             None,
         );
-        resolve_remote_cache_status(Some(handle)).await
+        resolve_remote_cache_status(None, Some(handle)).await
     }
 
     fn response(status: CachingStatus) -> CachingStatusResponse {
         CachingStatusResponse { status }
+    }
+
+    #[tokio::test]
+    async fn preserves_local_disabled_reason_without_a_preflight() {
+        let status =
+            resolve_remote_cache_status(Some(RemoteCacheDisabledReason::ByFlags), None).await;
+        assert!(matches!(
+            status,
+            RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::ByFlags)
+        ));
     }
 
     #[tokio::test]
