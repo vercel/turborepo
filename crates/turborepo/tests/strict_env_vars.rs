@@ -4,7 +4,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{replace_turbo_json, run_turbo, run_turbo_with_env, setup};
+use common::{combined_output, replace_turbo_json, run_turbo, run_turbo_with_env, setup};
 
 /// Get all task hashes as a sorted string. When the global hash (including
 /// env mode) changes, all task hashes change.
@@ -112,13 +112,14 @@ fn test_global_hash_default_mode() {
 fn test_usage_strict() {
     let tempdir = setup_strict_env();
 
+    // Never replace SystemRoot on Windows: Node/npm need the real OS path to
+    // initialize cryptography before the task script can inspect its env.
     let env_vars = &[
         ("GLOBAL_VAR_PT", "higlobalpt"),
         ("GLOBAL_VAR_DEP", "higlobaldep"),
         ("LOCAL_VAR_PT", "hilocalpt"),
         ("LOCAL_VAR_DEP", "hilocaldep"),
         ("OTHER_VAR", "hiother"),
-        ("SYSTEMROOT", "hisysroot"),
     ];
 
     let out_path = if cfg!(windows) {
@@ -128,11 +129,12 @@ fn test_usage_strict() {
     };
 
     // Default config: no vars available in strict mode
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=strict"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: ''") && out.contains("localpt: ''") && out.contains("other: ''"),
@@ -141,11 +143,12 @@ fn test_usage_strict() {
 
     // With all.json: declared vars available, others not
     replace_turbo_json(tempdir.path(), "strict_env_vars/all.json");
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=strict"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: 'higlobalpt'") && out.contains("localpt: 'hilocalpt'"),
@@ -169,7 +172,6 @@ fn test_usage_loose() {
         ("LOCAL_VAR_PT", "hilocalpt"),
         ("LOCAL_VAR_DEP", "hilocaldep"),
         ("OTHER_VAR", "hiother"),
-        ("SYSTEMROOT", "hisysroot"),
     ];
 
     let out_path = if cfg!(windows) {
@@ -179,11 +181,12 @@ fn test_usage_loose() {
     };
 
     // Loose mode: all vars available
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=loose"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: 'higlobalpt'") && out.contains("other: 'hiother'"),
@@ -192,11 +195,12 @@ fn test_usage_loose() {
 
     // With all.json: still all vars available
     replace_turbo_json(tempdir.path(), "strict_env_vars/all.json");
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=loose"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: 'higlobalpt'") && out.contains("other: 'hiother'"),
