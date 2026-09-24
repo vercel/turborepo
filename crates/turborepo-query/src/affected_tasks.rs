@@ -1354,6 +1354,262 @@ mod tests {
         }
     }
 
+    // Query projection coverage uses the same graph and engine seams as the
+    // affected-task tests, but supplies native Python facts without running uv.
+    struct QueryPythonContributor {
+        root: turbopath::AbsoluteSystemPathBuf,
+    }
+
+    impl turborepo_repository::toolchain::RepositoryContributor for QueryPythonContributor {
+        fn id(&self) -> turborepo_repository::toolchain::ToolchainId {
+            turborepo_repository::toolchain::ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+            use turborepo_repository::{
+                native_tasks::{
+                    NativeCommandArguments, NativeCommandProgram, NativeTask,
+                    WorkingDirectoryPolicy,
+                },
+                toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
+            };
+
+            fn command(name: &str, arguments: &str) -> NativeTask {
+                NativeTask::command_task(
+                    name,
+                    format!("uv {arguments}"),
+                    NativeCommandProgram::Tool("uv".into()),
+                    NativeCommandArguments::new(
+                        arguments.split_whitespace().map(str::to_string).collect(),
+                    ),
+                    None,
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+            }
+
+            Box::pin(async move {
+                let root = DiscoveredPackage::aggregate(
+                    "acme".into(),
+                    PackageJson::default(),
+                    self.root.join_component("pyproject.toml"),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![
+                    command("test", "run --active --frozen --all-packages pytest"),
+                    NativeTask::aggregate("lint", ["lint:ruff"]),
+                    command(
+                        "lint:ruff",
+                        "run --active --frozen ruff check packages/py-app packages/py-lib",
+                    ),
+                    NativeTask::aggregate("check", ["check:mypy"]),
+                    command(
+                        "check:mypy",
+                        "run --active --frozen mypy packages/py-app packages/py-lib",
+                    ),
+                    command(
+                        "format",
+                        "run --active --frozen ruff format packages/py-app packages/py-lib",
+                    ),
+                    command(
+                        "format:ruff",
+                        "run --active --frozen ruff format packages/py-app packages/py-lib",
+                    ),
+                ]);
+                let app = DiscoveredPackage::package(
+                    Some("py-app".into()),
+                    PackageJson::default(),
+                    self.root
+                        .join_components(&["packages", "py-app", "pyproject.toml"]),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![
+                    command(
+                        "test",
+                        "run --active --frozen --package py-app pytest packages/py-app",
+                    ),
+                    NativeTask::aggregate("lint", ["lint:ruff"]),
+                    command(
+                        "lint:ruff",
+                        "run --active --frozen --package py-app ruff check packages/py-app",
+                    ),
+                    NativeTask::aggregate("check", ["check:mypy"]),
+                    command(
+                        "check:mypy",
+                        "run --active --frozen --package py-app mypy packages/py-app",
+                    ),
+                    command(
+                        "format",
+                        "run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                    command(
+                        "format:ruff",
+                        "run --active --frozen --package py-app ruff format packages/py-app",
+                    ),
+                ]);
+                let lib = DiscoveredPackage::package(
+                    Some("py-lib".into()),
+                    PackageJson::default(),
+                    self.root
+                        .join_components(&["packages", "py-lib", "pyproject.toml"]),
+                )
+                .with_native_relationships(vec![])
+                .with_native_tasks(vec![command("format", "format -- packages/py-lib")]);
+                Ok(DiscoveredPackages::new(
+                    vec![root, app, lib],
+                    vec![WorkspaceRoot::new("python", self.root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let observation = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        observation.packages(),
+                        observation.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn uv_native_query_projects_root_member_and_mixed_js_tasks() {
+        use serde_json::{json, Value};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let js_path = root.join_components(&["packages", "web", "package.json"]);
+        let js = PackageJson {
+            name: Some(turborepo_errors::Spanned::new("web".into())),
+            scripts: [(
+                "lint".into(),
+                turborepo_errors::Spanned::new("eslint .".into()),
+            )]
+            .into(),
+            ..Default::default()
+        };
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([(js_path, js)])))
+            .with_contributor(Arc::new(QueryPythonContributor {
+                root: root.to_owned(),
+            }))
+            .build()
+            .await
+            .unwrap();
+        let native_tasks: Vec<_> = ["acme", "py-app"]
+            .into_iter()
+            .flat_map(|package| {
+                [
+                    "test",
+                    "lint",
+                    "lint:ruff",
+                    "check",
+                    "check:mypy",
+                    "format",
+                    "format:ruff",
+                ]
+                .into_iter()
+                .map(move |task| (TaskId::new(package, task), TaskDefinition::default()))
+            })
+            .chain([(TaskId::new("py-lib", "format"), TaskDefinition::default())])
+            .collect();
+        let edges: Vec<_> = ["acme", "py-app"]
+            .into_iter()
+            .flat_map(|package| {
+                [("lint", "lint:ruff"), ("check", "check:mypy")]
+                    .into_iter()
+                    .map(move |(parent, child)| {
+                        (TaskId::new(package, parent), TaskId::new(package, child))
+                    })
+            })
+            .collect();
+        let engine = make_engine_with_edges(&native_tasks, &edges);
+        let run: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            recorded_calls: Default::default(),
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+        });
+
+        for (name, expected) in [
+            (
+                "acme",
+                json!({
+                    "test": "uv run --active --frozen --all-packages pytest",
+                    "lint": null,
+                    "lint:ruff": "uv run --active --frozen ruff check packages/py-app packages/py-lib",
+                    "check": null,
+                    "check:mypy": "uv run --active --frozen mypy packages/py-app packages/py-lib",
+                    "format": "uv run --active --frozen ruff format packages/py-app packages/py-lib",
+                    "format:ruff": "uv run --active --frozen ruff format packages/py-app packages/py-lib"
+                }),
+            ),
+            (
+                "py-app",
+                json!({
+                    "test": "uv run --active --frozen --package py-app pytest packages/py-app",
+                    "lint": null,
+                    "lint:ruff": "uv run --active --frozen --package py-app ruff check packages/py-app",
+                    "check": null,
+                    "check:mypy": "uv run --active --frozen --package py-app mypy packages/py-app",
+                    "format": "uv run --active --frozen --package py-app ruff format packages/py-app",
+                    "format:ruff": "uv run --active --frozen --package py-app ruff format packages/py-app"
+                }),
+            ),
+            ("py-lib", json!({"format": "uv format -- packages/py-lib"})),
+            ("web", json!({"lint": "eslint ."})),
+        ] {
+            let data = query_data(
+                run.clone(),
+                &format!(
+                    "{{ package(name: \"{name}\") {{ tasks {{ items {{ name command script \
+                     directDependencies {{ items {{ fullName }} }} }} }} }} }}"
+                ),
+            )
+            .await;
+            let tasks = data["package"]["tasks"]["items"].as_array().unwrap();
+            let commands: Value = tasks
+                .iter()
+                .map(|task| {
+                    (
+                        task["name"].as_str().unwrap().to_string(),
+                        task["command"].clone(),
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into();
+            assert_eq!(commands, expected, "package: {name}");
+            for task in tasks {
+                let task_name = task["name"].as_str().unwrap();
+                if name == "web" && task_name == "lint" {
+                    assert_eq!(task["script"], "eslint .");
+                } else {
+                    assert!(task["script"].is_null(), "{name}#{task_name}");
+                }
+                let dependencies = &task["directDependencies"]["items"];
+                let expected_child = match task_name {
+                    "lint" if name != "web" => Some(format!("{name}#lint:ruff")),
+                    "check" => Some(format!("{name}#check:mypy")),
+                    _ => None,
+                };
+                assert_eq!(
+                    dependencies,
+                    &json!(expected_child
+                        .into_iter()
+                        .map(|full_name| json!({"fullName": full_name}))
+                        .collect::<Vec<_>>()),
+                    "{name}#{task_name}"
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn directly_affected_task_propagates_to_task_dependents() {
         let tmp = tempfile::tempdir().unwrap();
