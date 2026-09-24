@@ -76,6 +76,33 @@ struct RepoDiscovery {
     untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
 }
 
+/// Inputs that join package-graph discovery, SCM detection, and turbo.json
+/// loading into the repository context consumed by the rest of a run. Keeping
+/// the graph as a `PackageGraph` lets callers provide JavaScript and native
+/// contributor scopes without coupling this phase to a particular discovery
+/// implementation.
+struct RepoContextInput {
+    repo_root: AbsoluteSystemPathBuf,
+    color_config: ColorConfig,
+    version: &'static str,
+    scm: SCM,
+    pkg_dep_graph: Arc<PackageGraph>,
+    turbo_json_loader: UnifiedTurboJsonLoader,
+    root_turbo_json: TurboJson,
+}
+
+fn build_repo_context(input: RepoContextInput) -> Arc<RepoContext> {
+    Arc::new(RepoContext {
+        repo_root: input.repo_root,
+        color_config: input.color_config,
+        version: input.version,
+        scm: input.scm,
+        pkg_dep_graph: input.pkg_dep_graph,
+        turbo_json_loader: input.turbo_json_loader,
+        root_turbo_json: input.root_turbo_json,
+    })
+}
+
 struct ExecutionContextInput<'a> {
     root_package_json: Option<package_json::PackageJson>,
     is_single_package: bool,
@@ -2097,7 +2124,7 @@ impl RunBuilder {
             })
             .await?;
 
-        let repo = Arc::new(RepoContext {
+        let repo = build_repo_context(RepoContextInput {
             repo_root: self.repo_root,
             color_config: self.color_config,
             version: self.version,
@@ -2871,6 +2898,124 @@ mod origins_match_tests {
                 .build(),
         )
         .unwrap()
+    }
+
+    fn injected_repo_context(
+        repo_root: &AbsoluteSystemPath,
+        pkg_dep_graph: Arc<PackageGraph>,
+    ) -> Arc<RepoContext> {
+        build_repo_context(RepoContextInput {
+            repo_root: repo_root.to_owned(),
+            color_config: ColorConfig::new(true),
+            version: "test",
+            scm: SCM::Manual,
+            pkg_dep_graph,
+            turbo_json_loader: UnifiedTurboJsonLoader::noop(HashMap::from([(
+                PackageName::Root,
+                TurboJson::default(),
+            )])),
+            root_turbo_json: TurboJson::default(),
+        })
+    }
+
+    #[test]
+    fn repo_context_accepts_injected_javascript_package_graph_and_services() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = Arc::new(package_graph_with_dependencies(
+            &repo_root,
+            &[("web", "shared")],
+        ));
+
+        let context = injected_repo_context(&repo_root, graph);
+
+        assert_eq!(context.repo_root(), repo_root.as_ref());
+        assert_eq!(context.version(), "test");
+        assert!(context.scm.is_manual());
+        assert!(
+            context
+                .pkg_dep_graph()
+                .package_task_context(&PackageName::from("web"))
+                .is_some()
+        );
+        assert!(
+            context
+                .pkg_dep_graph()
+                .package_task_context(&PackageName::from("shared"))
+                .is_some()
+        );
+        assert!(context.turbo_json_loader.load(&PackageName::Root).is_ok());
+    }
+
+    #[tokio::test]
+    async fn repo_context_accepts_injected_mixed_toolchain_package_graph() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let write = |relative: &[&str], contents: &str| {
+            let path = repo_root.join_components(relative);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        };
+        write(
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"rust/app\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"rust-workspace\"\n",
+        );
+        write(
+            &["rust", "app", "Cargo.toml"],
+            "[package]\nname = \"rust-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(
+            &["Cargo.lock"],
+            "version = 3\n\n[[package]]\nname = \"rust-app\"\nversion = \"0.1.0\"\n",
+        );
+        write(&["go.work"], "go 1.23.0\n\nuse ./go/app\n");
+        write(
+            &["go", "app", "go.mod"],
+            "module example.com/go-app\n\ngo 1.23.0\n",
+        );
+        write(
+            &["pyproject.toml"],
+            "[tool.turbo]\nname = \"python-workspace\"\n\n[tool.uv.workspace]\nmembers = \
+             [\"python/*\"]\n",
+        );
+        write(
+            &["python", "app", "pyproject.toml"],
+            "[project]\nname = \"python-app\"\nversion = \"0.1.0\"\n",
+        );
+
+        let js_package_path = repo_root.join_components(&["packages", "web", "package.json"]);
+        let package_graph =
+            PackageGraph::builder_optional(&repo_root, Some(PackageJson::default()))
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::from([(
+                    js_package_path,
+                    PackageJson {
+                        name: Some(turborepo_errors::Spanned::new("web".to_string())),
+                        ..Default::default()
+                    },
+                )])))
+                .with_cargo()
+                .with_go()
+                .with_uv()
+                .build_lazy()
+                .await
+                .unwrap()
+                .into_parts()
+                .0;
+        let context = injected_repo_context(&repo_root, package_graph);
+
+        for package in ["web", "rust-app", "go-app", "python-app"] {
+            assert!(
+                context
+                    .pkg_dep_graph()
+                    .package_task_context(&PackageName::from(package))
+                    .is_some(),
+                "expected injected package graph to retain {package}"
+            );
+        }
+        assert!(context.scm.is_manual());
+        assert!(context.turbo_json_loader.load(&PackageName::Root).is_ok());
     }
 
     type ChangeCall = (Option<String>, Option<String>, bool, bool, bool);
