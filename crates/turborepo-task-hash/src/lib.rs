@@ -1099,6 +1099,9 @@ mod test {
 
     use super::*;
 
+    #[path = "dependency_outputs_test.rs"]
+    mod dependency_outputs;
+
     struct TestRunOpts {
         single_package: bool,
     }
