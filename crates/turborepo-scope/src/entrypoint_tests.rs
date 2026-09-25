@@ -447,6 +447,27 @@ async fn mixed_toolchains_follow_shared_filter_and_affected_contracts() {
     assert_eq!(selected.len(), 9);
     assert!(!selected.contains(&PackageName::from("go-app")));
     assert!(!selected.contains(&PackageName::from("py-app")));
+
+    let (cargo_selected, cargo_mode) = resolve(
+        ScopeOpts {
+            filter_patterns: vec!["!cargo-lib".into()],
+            ..Default::default()
+        },
+        &[],
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        cargo_mode,
+        FilterMode::ExcludeOnly {
+            root_excluded: false
+        }
+    );
+    assert_eq!(cargo_selected.len(), 10);
+    assert!(cargo_selected.contains(&PackageName::from("cargo-app")));
+    assert!(!cargo_selected.contains(&PackageName::from("cargo-lib")));
+    assert!(cargo_selected.contains(&PackageName::from("cargo-workspace")));
+
     let (_, mode) = resolve(
         ScopeOpts {
             filter_patterns: vec!["!//".into()],

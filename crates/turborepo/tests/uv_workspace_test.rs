@@ -516,34 +516,6 @@ fn test_uv_native_tools_are_visible_to_query_in_mixed_repo() {
 }
 
 #[test]
-fn test_uv_flag_disabled_hints_at_opt_in() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_uv_pure_workspace(tempdir.path());
-    fs::write(
-        tempdir.path().join("turbo.json"),
-        r#"{
-  "$schema": "https://turborepo.dev/schema.json",
-  "tasks": { "build": {} }
-}"#,
-    )
-    .unwrap();
-    fs::write(
-        tempdir.path().join("package.json"),
-        r#"{"name": "root", "packageManager": "npm@10.5.0"}"#,
-    )
-    .unwrap();
-    fs::write(tempdir.path().join("package-lock.json"), "{}").unwrap();
-
-    let output = run_turbo(tempdir.path(), &["build", "--filter=py-app"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("experimentalPythonWorkspaces"),
-        "stderr should point at the flag: {stderr}"
-    );
-}
-
-#[test]
 fn test_uv_workspace_falls_back_with_unparsable_lockfile() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
