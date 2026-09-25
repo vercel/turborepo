@@ -277,6 +277,7 @@ fn shared_cargo_build_dir_is_concurrency_safe_and_keeps_target_outputs_local() {
     setup_cargo_monorepo(third.path());
     let output = cargo_command(third.path())
         .env("CARGO_BUILD_BUILD_DIR", &build_dir)
+        .env("CARGO_TERM_COLOR", "never")
         .args(["build", "--package=app", "--verbose"])
         .output()
         .unwrap();
