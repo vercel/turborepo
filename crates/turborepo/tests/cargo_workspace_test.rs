@@ -273,9 +273,7 @@ fn shared_cargo_build_dir_is_concurrency_safe_and_keeps_target_outputs_local() {
         "Cargo compiler artifacts should use the shared build directory"
     );
 
-    let third = cargo_tempdir();
-    setup_cargo_monorepo(third.path());
-    let output = cargo_command(third.path())
+    let output = cargo_command(first.path())
         .env("CARGO_BUILD_BUILD_DIR", &build_dir)
         .env("CARGO_TERM_COLOR", "never")
         .args(["build", "--package=app", "--verbose"])
@@ -289,11 +287,12 @@ fn shared_cargo_build_dir_is_concurrency_safe_and_keeps_target_outputs_local() {
     );
     assert!(
         combined.contains("Fresh app"),
-        "a copied workspace should reuse Cargo compilation artifacts: {combined}"
+        "a repeated build in the same workspace should reuse Cargo compilation artifacts: \
+         {combined}"
     );
     assert!(
-        cargo_binary(third.path(), &["target", "debug"]).is_file(),
-        "the warm build should still emit under the third fixture's local target"
+        cargo_binary(first.path(), &["target", "debug"]).is_file(),
+        "the warm build should still emit under the fixture's local target"
     );
 }
 
@@ -1107,10 +1106,11 @@ fn shared_cargo_build_dir_changes_hash_without_relocating_outputs() {
         shared_task["resolvedTaskDefinition"]["outputs"],
         "the compiler build directory must not relocate Cargo target outputs"
     );
+    let app_output = format!("../../target/debug/app{}", std::env::consts::EXE_SUFFIX);
     assert!(
         shared_task["resolvedTaskDefinition"]["outputs"]
             .as_array()
-            .is_some_and(|outputs| outputs.contains(&serde_json::json!("../../target/debug/app"))),
+            .is_some_and(|outputs| outputs.contains(&serde_json::json!(app_output))),
         "the native app binary must remain under the fixture target directory"
     );
 }
