@@ -1101,6 +1101,8 @@ mod test {
 
     #[path = "dependency_outputs_test.rs"]
     mod dependency_outputs;
+    #[path = "jit_inputs_test.rs"]
+    mod jit_inputs;
 
     struct TestRunOpts {
         single_package: bool,
