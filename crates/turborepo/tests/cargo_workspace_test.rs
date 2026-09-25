@@ -1072,74 +1072,67 @@ fn test_prune_produces_buildable_cargo_workspace() {
 fn test_prune_task_aware_cross_toolchain_buildable_output() {
     use serde_json::json;
 
-    for flag in [None, Some(false), Some(true)] {
-        let tempdir = cargo_tempdir();
-        let dir = tempdir.path();
-        setup_cargo_monorepo(dir);
-        let mut config = json!({
-            "futureFlags": {"experimentalCargoWorkspaces": true},
-            "tasks": {
-                "build": {"dependsOn": ["^build"]},
-                "js-pkg#build": {"dependsOn": ["app#build"]},
-                "app#build": {"dependsOn": ["^build", "js-pkg#prepare"]},
-                "prepare": {}
-            }
-        });
-        if let Some(flag) = flag {
-            config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+    let tempdir = cargo_tempdir();
+    let dir = tempdir.path();
+    setup_cargo_monorepo(dir);
+    let config = json!({
+        "futureFlags": {
+            "experimentalCargoWorkspaces": true,
+            "affectedUsingTaskInputs": true
+        },
+        "tasks": {
+            "build": {"dependsOn": ["^build"]},
+            "js-pkg#build": {"dependsOn": ["app#build"]},
+            "app#build": {"dependsOn": ["^build", "js-pkg#prepare"]},
+            "prepare": {}
         }
-        fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
-        fs::write(
-            dir.join("packages/js-pkg/package.json"),
-            json!({
-                "name": "js-pkg", "version": "1.0.0",
-                "scripts": {"build": "echo js-pkg built", "prepare": "echo js-pkg prepared"}
-            })
-            .to_string(),
-        )
-        .unwrap();
+    });
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    fs::write(
+        dir.join("packages/js-pkg/package.json"),
+        json!({
+            "name": "js-pkg", "version": "1.0.0",
+            "scripts": {"build": "echo js-pkg built", "prepare": "echo js-pkg prepared"}
+        })
+        .to_string(),
+    )
+    .unwrap();
 
-        // Each scope prunes into its own directory outside the repository.
-        // Deleting a pruned output right after building executables in it
-        // intermittently fails on Windows (os error 5) while handles are
-        // released; the tempdir is cleaned up on drop instead.
-        let outputs = cargo_tempdir();
+    // Planning and flag-state matrices are covered by the prune crate and prune
+    // CLI contracts. This smoke keeps one task-aware plan for both scopes and
+    // proves its pruned native and JavaScript outputs are genuinely buildable.
+    // Each scope prunes into its own directory outside the repository. Deleting
+    // a pruned output immediately after building it can fail on Windows while
+    // handles are released; the tempdir is cleaned up on drop instead.
+    let outputs = cargo_tempdir();
 
-        // There is no package-manifest dependency between js-pkg and app.
-        for scope in ["js-pkg", "app"] {
-            let out = outputs.path().join(scope);
-            let out_dir = out.to_str().expect("tempdir path is UTF-8");
-            let output = run_turbo(dir, &["prune", scope, "--out-dir", out_dir]);
-            assert_command_success(&output, "cross-toolchain prune");
-            let task_aware = flag == Some(true);
-            assert_eq!(
-                out.join("crates/app/src/main.rs").exists(),
-                task_aware || scope == "app"
-            );
-            assert_eq!(
-                out.join("packages/js-pkg/package.json").exists(),
-                task_aware || scope == "js-pkg"
-            );
-            if task_aware {
-                assert!(out.join("crates/lib-a/src/lib.rs").exists());
-                assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
-                let build = cargo_command(&out)
-                    .args(["build", "--locked", "-p", "app"])
-                    .output()
-                    .expect("cargo build runs");
-                assert_command_success(&build, "task-aware pruned cargo build --locked");
-                // Resolve npm.cmd through PATHEXT on Windows.
-                let npm = which::which("npm").expect("npm is available on PATH");
-                let install = std::process::Command::new(npm)
-                    .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
-                    .current_dir(&out)
-                    .output()
-                    .expect("npm ci runs");
-                assert_command_success(&install, "task-aware pruned npm ci");
-                let build = run_turbo(&out, &["run", "build", "--filter=js-pkg"]);
-                assert_command_success(&build, "task-aware pruned cross-toolchain build");
-            }
-        }
+    // There is no package-manifest dependency between js-pkg and app. Task-only
+    // edges connect them in both directions, so either scope retains both.
+    for scope in ["js-pkg", "app"] {
+        let out = outputs.path().join(scope);
+        let out_dir = out.to_str().expect("tempdir path is UTF-8");
+        let output = run_turbo(dir, &["prune", scope, "--out-dir", out_dir]);
+        assert_command_success(&output, "task-aware cross-toolchain prune");
+        assert!(out.join("crates/app/src/main.rs").exists());
+        assert!(out.join("packages/js-pkg/package.json").exists());
+        assert!(out.join("crates/lib-a/src/lib.rs").exists());
+        assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
+
+        let cargo_build = cargo_command(&out)
+            .args(["build", "--locked", "-p", "app"])
+            .output()
+            .expect("cargo build runs");
+        assert_command_success(&cargo_build, "task-aware pruned cargo build --locked");
+        // Resolve npm.cmd through PATHEXT on Windows.
+        let npm = which::which("npm").expect("npm is available on PATH");
+        let install = std::process::Command::new(npm)
+            .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
+            .current_dir(&out)
+            .output()
+            .expect("npm ci runs");
+        assert_command_success(&install, "task-aware pruned npm ci");
+        let js_build = run_turbo(&out, &["run", "build", "--filter=js-pkg"]);
+        assert_command_success(&js_build, "task-aware pruned cross-toolchain build");
     }
 }
 
