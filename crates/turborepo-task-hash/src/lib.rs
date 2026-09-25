@@ -2161,6 +2161,27 @@ mod test {
     }
 
     #[test]
+    fn versioned_package_filter_and_explicit_task_id_share_a_hash() {
+        let package = PackageName::from("api/v10");
+        let task_name = turborepo_task_id::TaskName::from("build");
+        let filtered_task = TaskId::from_graph(&package, &task_name);
+        let explicit_task = TaskId::try_from("api/v10#build").unwrap().into_owned();
+        assert_eq!(filtered_task, explicit_task);
+
+        let tracker = TaskHashTracker::default();
+        tracker.insert_hash(
+            filtered_task,
+            DetailedMap::default(),
+            Arc::from("versioned-task-hash"),
+            None,
+        );
+        assert_eq!(
+            tracker.hash(&explicit_task).as_deref(),
+            Some("versioned-task-hash")
+        );
+    }
+
+    #[test]
     fn test_hash_tracker_concurrent_read_write() {
         let tracker = TaskHashTracker::new(HashMap::new());
 
