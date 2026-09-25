@@ -4,7 +4,7 @@ mod common;
 
 use std::fs;
 
-use common::{setup, setup_lockfile_test, turbo_command};
+use common::{setup_lockfile_test, turbo_command};
 
 #[test]
 fn test_new_package_in_lockfile_filter() {
@@ -18,39 +18,37 @@ fn test_new_package_in_lockfile_filter() {
     )
     .unwrap();
 
-    // Update only the lockfile, using the fixture's pinned pnpm version and
-    // existing resolutions. The new importer must be present for this test to
-    // exercise lockfile-aware package selection; don't hide a failed update.
-    let pnpm_output = std::process::Command::new("pnpm")
-        .args([
-            "install",
-            "--lockfile-only",
-            "--offline",
-            "--ignore-scripts",
-            "--no-frozen-lockfile",
-        ])
-        .current_dir(tempdir.path())
-        .env(
-            "PATH",
-            setup::prepend_to_path(&setup::corepack_dir_for_test_dir(tempdir.path())),
-        )
-        .env("COREPACK_HOME", setup::corepack_home())
-        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
-        .output()
-        .expect("failed to execute pnpm");
-    assert!(
-        pnpm_output.status.success(),
-        "pnpm lockfile-only update failed with {}\nstdout:\n{}\nstderr:\n{}",
-        pnpm_output.status,
-        String::from_utf8_lossy(&pnpm_output.stdout),
-        String::from_utf8_lossy(&pnpm_output.stderr),
-    );
+    // Add the exact importer pnpm v7 would write, reusing the existing
+    // has-symbols resolution. This keeps the lockfile-filter regression
+    // deterministic without invoking pnpm or relying on a populated package
+    // store.
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    let mut lockfile_lines = lockfile.lines().map(str::to_owned).collect::<Vec<_>>();
+    let packages_index = lockfile_lines
+        .iter()
+        .position(|line| line == "packages:")
+        .expect("pnpm lockfile should include package resolutions");
+    for (offset, line) in [
+        "  apps/c:",
+        "    specifiers:",
+        "      has-symbols: ^1.0.3",
+        "    dependencies:",
+        "      has-symbols: 1.0.3",
+        "",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        lockfile_lines.insert(packages_index + offset, line.to_string());
+    }
+    fs::write(&lockfile_path, format!("{}\n", lockfile_lines.join("\n"))).unwrap();
 
-    let lockfile = fs::read_to_string(tempdir.path().join("pnpm-lock.yaml")).unwrap();
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
     let importer_start = lockfile
         .lines()
         .position(|line| line.trim_end() == "  apps/c:")
-        .expect("pnpm lockfile update must add the new package importer");
+        .expect("lockfile fixture must add the new package importer");
     let importer = lockfile
         .lines()
         .skip(importer_start + 1)
