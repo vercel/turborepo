@@ -357,12 +357,17 @@ impl PnpmLockfile {
     ///
     /// `workspace_lockfiles` is a list of `(workspace_path, lockfile_bytes)`
     /// where `workspace_path` is the workspace's relative path from the
-    /// repo root (e.g. "apps/web").
+    /// repo root (e.g. "apps/web"). Conflicting package and snapshot keys
+    /// are taken from the lexicographically first workspace path.
     pub fn merge_per_workspace_lockfiles(
         &mut self,
         workspace_lockfiles: &[(&str, &[u8])],
     ) -> Result<(), crate::Error> {
-        for &(workspace_path, bytes) in workspace_lockfiles {
+        // Workspace discovery order is nondeterministic. Since duplicate keys keep
+        // the first value, sort before merging so identical inputs hash identically.
+        let mut workspace_lockfiles = workspace_lockfiles.to_vec();
+        workspace_lockfiles.sort_unstable_by(|a, b| a.0.cmp(b.0).then_with(|| a.1.cmp(b.1)));
+        for (workspace_path, bytes) in workspace_lockfiles {
             let ws_lockfile = PnpmLockfile::from_bytes(bytes)?;
 
             // Re-key the "." importer to the workspace's relative path
@@ -1788,6 +1793,66 @@ snapshots:
             .resolve_package("packages/ui", "lodash", "^4.17.21")
             .unwrap();
         assert!(ui_pkg.is_some());
+    }
+
+    #[test]
+    fn test_merge_per_workspace_lockfiles_conflicting_keys_is_order_independent() {
+        let root_yaml = "lockfileVersion: '9.0'\nimporters:\n  .: {}\n";
+        let a_yaml = r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      shared:
+        specifier: 1.0.0
+        version: 1.0.0
+packages:
+  shared@1.0.0:
+    resolution: {integrity: sha512-a}
+snapshots:
+  shared@1.0.0:
+    dependencies:
+      dep: 1.0.0
+"#;
+        let b_yaml = r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      shared:
+        specifier: 1.0.0
+        version: 1.0.0
+packages:
+  shared@1.0.0:
+    resolution: {integrity: sha512-b}
+snapshots:
+  shared@1.0.0:
+    dependencies:
+      dep: 2.0.0
+"#;
+
+        let mut forward = PnpmLockfile::from_bytes(root_yaml.as_bytes()).unwrap();
+        forward
+            .merge_per_workspace_lockfiles(&[("a", a_yaml.as_bytes()), ("b", b_yaml.as_bytes())])
+            .unwrap();
+        let mut reverse = PnpmLockfile::from_bytes(root_yaml.as_bytes()).unwrap();
+        reverse
+            .merge_per_workspace_lockfiles(&[("b", b_yaml.as_bytes()), ("a", a_yaml.as_bytes())])
+            .unwrap();
+
+        assert_eq!(forward, reverse);
+        assert_eq!(
+            forward.snapshots.as_ref().unwrap()["shared@1.0.0"]
+                .dependencies
+                .as_ref()
+                .unwrap()["dep"],
+            "1.0.0"
+        );
+        assert_eq!(
+            forward.packages.as_ref().unwrap()["shared@1.0.0"]
+                .resolution
+                .integrity
+                .as_deref(),
+            Some("sha512-a")
+        );
     }
 
     #[test]
