@@ -605,5 +605,6 @@ mod go;
 mod inheritance;
 mod jit_dependency;
 mod lazy_loading;
+mod structured_inputs;
 mod syntax;
 mod workspace;
