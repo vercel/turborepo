@@ -153,6 +153,27 @@ fn run_turbo_with_env(
         .expect("failed to execute turbo")
 }
 
+fn shared_cargo_build_dir() -> std::path::PathBuf {
+    let build_dir = common::integration_toolchain_cache_dir("cargo").join("build");
+    fs::create_dir_all(&build_dir).unwrap();
+    build_dir
+}
+
+/// Cargo's build directory holds compiler artifacts separately from each
+/// fixture's target directory, preserving Cargo's native output paths.
+fn run_turbo_with_shared_cargo_build_dir(dir: &Path, args: &[&str]) -> std::process::Output {
+    let build_dir = shared_cargo_build_dir().to_string_lossy().into_owned();
+    run_turbo_with_env(dir, args, &[("CARGO_BUILD_BUILD_DIR", &build_dir)])
+}
+
+fn enable_shared_cargo_build_dir(dir: &Path) {
+    let turbo_json = dir.join("turbo.json");
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(&turbo_json).unwrap()).unwrap();
+    config["globalPassThroughEnv"] = serde_json::json!(["CARGO_BUILD_BUILD_DIR"]);
+    fs::write(turbo_json, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+}
+
 fn setup_cargo_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "cargo_monorepo", "npm@10.5.0", false).unwrap();
 }
@@ -204,6 +225,75 @@ name = "rust-workspace"
         .unwrap();
     assert_command_success(&output, "generate root package lockfile");
     setup::setup_git(dir).unwrap();
+}
+
+#[test]
+fn shared_cargo_build_dir_is_concurrency_safe_and_keeps_target_outputs_local() {
+    let first = cargo_tempdir();
+    let second = cargo_tempdir();
+    setup_cargo_monorepo(first.path());
+    setup_cargo_monorepo(second.path());
+    let build_dir = shared_cargo_build_dir();
+    let first_path = first.path();
+    let second_path = second.path();
+
+    let (first_output, second_output) = std::thread::scope(|scope| {
+        let first_build = scope.spawn(|| {
+            cargo_command(first_path)
+                .env("CARGO_BUILD_BUILD_DIR", &build_dir)
+                .args(["build", "--package=app"])
+                .output()
+                .unwrap()
+        });
+        let second_build = scope.spawn(|| {
+            cargo_command(second_path)
+                .env("CARGO_BUILD_BUILD_DIR", &build_dir)
+                .args(["build", "--package=app"])
+                .output()
+                .unwrap()
+        });
+        (first_build.join().unwrap(), second_build.join().unwrap())
+    });
+    assert_command_success(&first_output, "first shared-build-dir fixture");
+    assert_command_success(&second_output, "second shared-build-dir fixture");
+
+    let first_binary = cargo_binary(first.path(), &["target", "debug"]);
+    let second_binary = cargo_binary(second.path(), &["target", "debug"]);
+    assert!(
+        first_binary.is_file(),
+        "first fixture target output missing: {first_binary:?}"
+    );
+    assert!(
+        second_binary.is_file(),
+        "second fixture target output missing: {second_binary:?}"
+    );
+    assert_ne!(first_binary, second_binary);
+    assert!(
+        build_dir.join("debug").is_dir(),
+        "Cargo compiler artifacts should use the shared build directory"
+    );
+
+    let output = cargo_command(first.path())
+        .env("CARGO_BUILD_BUILD_DIR", &build_dir)
+        .env("CARGO_TERM_COLOR", "never")
+        .args(["build", "--package=app", "--verbose"])
+        .output()
+        .unwrap();
+    assert_command_success(&output, "warm shared-build-dir fixture");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("Fresh app"),
+        "a repeated build in the same workspace should reuse Cargo compilation artifacts: \
+         {combined}"
+    );
+    assert!(
+        cargo_binary(first.path(), &["target", "debug"]).is_file(),
+        "the warm build should still emit under the fixture's local target"
+    );
 }
 
 fn cargo_binary(dir: &Path, segments: &[&str]) -> std::path::PathBuf {
@@ -834,6 +924,7 @@ fn test_cargo_command_override_preserves_native_task_contract() {
 fn test_cargo_run_and_dev_default_to_uncached() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
+    enable_shared_cargo_build_dir(tempdir.path());
 
     let output = run_turbo(
         tempdir.path(),
@@ -862,7 +953,7 @@ fn test_cargo_run_and_dev_default_to_uncached() {
     assert_eq!(dev["resolvedTaskDefinition"]["cache"], false);
 
     for _ in 0..2 {
-        let output = run_turbo(
+        let output = run_turbo_with_shared_cargo_build_dir(
             tempdir.path(),
             &["run", "run", "--filter=app", "--log-order", "grouped"],
         );
@@ -877,6 +968,11 @@ fn test_cargo_run_and_dev_default_to_uncached() {
             "cargo run must start the requested process: {stdout}"
         );
     }
+    let app_binary = cargo_binary(tempdir.path(), &["target", "debug"]);
+    assert!(
+        app_binary.is_file(),
+        "cargo run must keep its executable under the fixture target: {app_binary:?}"
+    );
 }
 
 #[test]
@@ -976,6 +1072,46 @@ fn test_command_override_preserves_native_cache_defaults() {
     assert_eq!(
         dev["resolvedTaskDefinition"]["cache"], false,
         "explicit cache configuration must win"
+    );
+}
+
+#[test]
+fn shared_cargo_build_dir_changes_hash_without_relocating_outputs() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    enable_shared_cargo_build_dir(tempdir.path());
+
+    let isolated = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+    let shared = run_turbo_with_shared_cargo_build_dir(
+        tempdir.path(),
+        &["build", "--filter=app", "--dry-run=json"],
+    );
+    let app_build = |output: &std::process::Output| {
+        assert_command_success(output, "app build dry run");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+            .cloned()
+            .expect("app#build task")
+    };
+    let isolated_task = app_build(&isolated);
+    let shared_task = app_build(&shared);
+    assert_ne!(
+        isolated_task["hash"], shared_task["hash"],
+        "CARGO_BUILD_BUILD_DIR changes the hash, so shared mode is limited to uncached tasks"
+    );
+    assert_eq!(
+        isolated_task["resolvedTaskDefinition"]["outputs"],
+        shared_task["resolvedTaskDefinition"]["outputs"],
+        "the compiler build directory must not relocate Cargo target outputs"
+    );
+    let app_output = format!("../../target/debug/app{}", std::env::consts::EXE_SUFFIX);
+    assert!(
+        shared_task["resolvedTaskDefinition"]["outputs"]
+            .as_array()
+            .is_some_and(|outputs| outputs.contains(&serde_json::json!(app_output))),
+        "the native app binary must remain under the fixture target directory"
     );
 }
 
