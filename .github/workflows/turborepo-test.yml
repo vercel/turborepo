@@ -54,7 +54,7 @@ jobs:
           fi
 
           if [[ "$PR_TITLE" == "chore: Release Turborepo "* && "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json|skills/turborepo/.*\.md)$"
+            ALLOWED_PATTERN="^(version\.txt|packages/(create-turbo|eslint-config-turbo|eslint-plugin-turbo|turbo-codemod|turbo-gen|turbo-ignore|turbo-types|turbo-workspaces|turbo)/package\.json)$"
           elif [[ "$PR_TITLE" == "chore: Release Turbo repository packages "* && "$PR_HEAD_REF" =~ ^library-release/[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             ALLOWED_PATTERN="^packages/turbo-repository/(js|npm/(darwin-arm64|darwin-x64|linux-arm64-gnu|linux-arm64-musl|linux-x64-gnu|linux-x64-musl|win32-arm64-msvc|win32-x64-msvc))/package\.json$"
           else
