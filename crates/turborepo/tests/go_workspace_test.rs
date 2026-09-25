@@ -1097,9 +1097,10 @@ fn test_go_cache_invalidates_on_dependency_source_and_build_environment() {
     // checksums, disconnected modules, and the Go toolchain/environment
     // fingerprint) is covered by crate contracts in turborepo-repository's
     // go.rs. This smoke proves the assembled binary restores and invalidates
-    // real Go builds through one file input and one environment input.
+    // real Go builds through one file input and one environment input. Keep its
+    // fixture to the app and direct dependency to avoid unrelated native work.
     let tempdir = tempfile::tempdir().unwrap();
-    setup_go_e2e_workspace(tempdir.path());
+    setup_go_pure_workspace(tempdir.path());
     let root = tempdir.path();
     let assert_cache_result = |environment: &[(&str, &str)], expected, context| {
         assert_go_build_cache_result(root, environment, expected, context);
@@ -1109,15 +1110,8 @@ fn test_go_cache_invalidates_on_dependency_source_and_build_environment() {
     assert_cache_result(&[], "cache hit", "unchanged Go build");
 
     fs::write(
-        root.join("tools/independent/independent.go"),
-        "package independent\n\nconst Value = \"still-independent\"\n",
-    )
-    .unwrap();
-    assert_cache_result(&[], "cache hit", "unrelated module source change");
-
-    fs::write(
         root.join("packages/lib/lib.go"),
-        "package lib\n\nfunc Value() string { return \"dependency-changed\" }\n",
+        "package lib\n\nfunc Greet() { println(\"dependency-changed\") }\n",
     )
     .unwrap();
     assert_cache_result(&[], "cache miss", "internal dependency change");
