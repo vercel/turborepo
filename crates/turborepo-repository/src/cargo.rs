@@ -3355,6 +3355,66 @@ dependencies = ["lib-a"]
         }
     }
 
+    fn workspace_with_config_influence(
+        root: &AbsoluteSystemPathBuf,
+        influence: &CargoConfigInfluence,
+    ) -> CargoWorkspaceDetails {
+        let mut workspace = output_test_workspace(root);
+        workspace.repository_config_alters_output_layout =
+            influence.repository_alters_output_layout;
+        workspace.repository_config_untracked = influence.repository_config_untracked;
+        workspace.external_config_present = influence.external_present;
+        workspace
+    }
+
+    fn derived_build_io(
+        root: &AbsoluteSystemPathBuf,
+        workspace: CargoWorkspaceDetails,
+        environment: &toolchain::TaskIOEnvironment,
+    ) -> toolchain::DerivedTaskIO {
+        let contributor = CargoContributor::new(root.clone());
+        let package = task_context(&contributor, root, "app", "crates/app");
+        let contract = CargoTaskContract::new(root.clone(), output_test_package(), Some(workspace));
+        let args: [String; 0] = [];
+        contract
+            .derived_task_io(
+                &package,
+                "build",
+                "../..",
+                &[],
+                true,
+                &toolchain::TaskIOContext {
+                    task_args: Some(&args),
+                    environment,
+                },
+            )
+            .unwrap()
+    }
+
+    fn assert_untracked_repository_config_io(
+        root: &AbsoluteSystemPathBuf,
+        influence: &CargoConfigInfluence,
+    ) {
+        let io = derived_build_io(
+            root,
+            workspace_with_config_influence(root, influence),
+            &toolchain::TaskIOEnvironment::default(),
+        );
+        assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+        assert_eq!(
+            io.cache_reason.as_deref(),
+            Some("repository Cargo configuration cannot be hashed safely")
+        );
+        assert!(
+            io.input_globs.iter().all(|input| {
+                !input.ends_with(".cargo/config.toml") && !input.ends_with(".cargo/config")
+            }),
+            "unsafe repository config must not be a hash input: {:?}",
+            io.input_globs
+        );
+    }
+
     #[test]
     fn test_location_only_environment_is_projected_but_not_hashed_verbatim() {
         for variable in [
@@ -3863,6 +3923,13 @@ dependencies = ["lib-a"]
             &root,
             &escape.join_component("target")
         ));
+        let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "CARGO_TARGET_DIR".to_string(),
+            "escape/build".to_string(),
+        )]));
+        let io = derived_build_io(&root, output_test_workspace(&root), &environment);
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+        assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Tracked);
 
         let contained = root.join_component("contained");
         std::fs::create_dir_all(contained.as_std_path()).unwrap();
@@ -3920,6 +3987,14 @@ dependencies = ["lib-a"]
                 )
                 .unwrap();
             assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+            assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Tracked);
+            assert!(
+                io.input_globs
+                    .iter()
+                    .any(|input| input.ends_with(".cargo/config.toml")),
+                "tracked output-layout config must remain a task input: {:?}",
+                io.input_globs
+            );
         };
 
         for config in [
@@ -3990,12 +4065,52 @@ dependencies = ["lib-a"]
             &[".cargo", "config.toml"],
             "include = \"other-config.toml\"\n",
         );
-        assert!(
-            cargo_config_influence(&repo, &CargoHomeEnvironment::default())
-                .repository_config_untracked
-        );
+        let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
+        assert!(influence.repository_config_untracked);
+        assert_untracked_repository_config_io(&repo, &influence);
         write(&root, &[".cargo", "config.toml"], "[net]\nretry = 2\n");
         assert!(cargo_config_influence(&repo, &CargoHomeEnvironment::default()).external_present);
+    }
+
+    #[test]
+    fn cargo_home_config_marks_derived_inputs_untracked() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        let cargo_home = root.join_component("external-cargo-home");
+        std::fs::create_dir_all(repo.as_std_path()).unwrap();
+        std::fs::create_dir_all(cargo_home.as_std_path()).unwrap();
+        cargo_home
+            .join_component("config.toml")
+            .create_with_contents("[build]\ntarget-dir = \"cargo-home-target\"\n")
+            .unwrap();
+
+        let cargo_home_environment = CargoHomeEnvironment {
+            cargo_home: Some(cargo_home.as_std_path().as_os_str().to_owned()),
+            ..Default::default()
+        };
+        let influence = cargo_config_influence(&repo, &cargo_home_environment);
+        assert!(influence.external_present);
+        let task_environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "CARGO_HOME".to_string(),
+            cargo_home.to_string(),
+        )]));
+        let io = derived_build_io(
+            &repo,
+            workspace_with_config_influence(&repo, &influence),
+            &task_environment,
+        );
+
+        assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
+        assert_eq!(
+            io.cache_reason.as_deref(),
+            Some("Cargo configuration outside the repository is not included in the task hash")
+        );
+        assert!(
+            io.input_globs
+                .iter()
+                .all(|input| !input.contains(cargo_home.as_str()))
+        );
     }
 
     #[cfg(unix)]
@@ -4017,6 +4132,7 @@ dependencies = ["lib-a"]
         let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
         assert!(influence.repository_alters_output_layout);
         assert!(influence.repository_config_untracked);
+        assert_untracked_repository_config_io(&repo, &influence);
     }
 
     #[cfg(unix)]
@@ -4037,6 +4153,7 @@ dependencies = ["lib-a"]
         let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
         assert!(!influence.repository_alters_output_layout);
         assert!(influence.repository_config_untracked);
+        assert_untracked_repository_config_io(&repo, &influence);
     }
 
     #[cfg(unix)]
@@ -4060,6 +4177,7 @@ dependencies = ["lib-a"]
         let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
         assert!(!influence.repository_alters_output_layout);
         assert!(influence.repository_config_untracked);
+        assert_untracked_repository_config_io(&repo, &influence);
     }
 
     #[cfg(unix)]
