@@ -8,9 +8,9 @@ use turborepo_run_opts::{ExecutionSelector, RunSelector};
 use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
 use crate::cli::{
-    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
-    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
-    RunArgs,
+    should_maintain_agent_guidance, ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs,
+    GenerateCommand, GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath,
+    OutputLogsModeArg, RunArgs,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -19,6 +19,14 @@ where
     S: Into<OsString>,
 {
     Args::parse_args(args.into_iter().map(Into::into).collect())
+}
+
+#[test]
+fn agent_guidance_requires_repository_context_and_detected_agent() {
+    assert!(should_maintain_agent_guidance(true, false, true));
+    assert!(should_maintain_agent_guidance(false, true, true));
+    assert!(!should_maintain_agent_guidance(false, false, true));
+    assert!(!should_maintain_agent_guidance(true, false, false));
 }
 
 fn get_subcommand(name: &str) -> &'static usage::Command<'static> {

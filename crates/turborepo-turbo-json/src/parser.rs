@@ -478,6 +478,7 @@ impl WithMetadata for RawGlobalConfig {
 impl WithMetadata for RawRootTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
+        self.agent_guidance.add_text(text.clone());
         self.tags.add_text(text.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_text(text.clone());
@@ -511,6 +512,7 @@ impl WithMetadata for RawRootTurboJson {
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
+        self.agent_guidance.add_path(path.clone());
         self.tags.add_path(path.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_path(path.clone());
@@ -770,6 +772,41 @@ mod tests {
             result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
             Some(true),
             "noUpdateNotifier should be parsed from a full turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_agent_guidance_parses_and_defaults_to_true() {
+        let default = RawRootTurboJson::parse(r#"{"tasks": {}}"#, "turbo.json").unwrap();
+        assert_eq!(default.agent_guidance, None);
+        let enabled = RawRootTurboJson::parse(r#"{"agentGuidance": true}"#, "turbo.json").unwrap();
+        assert_eq!(
+            enabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(true)
+        );
+        let disabled =
+            RawRootTurboJson::parse(r#"{"agentGuidance": false}"#, "turbo.json").unwrap();
+        assert_eq!(
+            disabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(false)
+        );
+    }
+
+    #[test_case(r#"{"agentGuidance": "false"}"#)]
+    #[test_case(r#"{"agentGuidance": 0}"#)]
+    #[test_case(r#"{"agentGuidance": null}"#)]
+    fn test_agent_guidance_rejects_non_booleans(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+    }
+
+    #[test]
+    fn test_agent_guidance_is_root_only() {
+        assert!(
+            RawPackageTurboJson::parse(
+                r#"{"extends": ["//"], "agentGuidance": false}"#,
+                "packages/app/turbo.json"
+            )
+            .is_err()
         );
     }
 

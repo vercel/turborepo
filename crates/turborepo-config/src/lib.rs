@@ -316,6 +316,9 @@ pub struct ConfigurationOptions {
     pub tui_scrollback_length: Option<u64>,
     pub concurrency: Option<String>,
     pub no_update_notifier: Option<bool>,
+    /// Whether turbo should maintain its managed guidance block in `AGENTS.md`.
+    #[serde(skip)]
+    pub agent_guidance: Option<bool>,
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
@@ -605,6 +608,10 @@ impl ConfigurationOptions {
 
     pub fn no_update_notifier(&self) -> bool {
         self.no_update_notifier.unwrap_or_default()
+    }
+
+    pub fn agent_guidance(&self) -> bool {
+        self.agent_guidance.unwrap_or(true)
     }
 
     pub fn sso_login_callback_port(&self) -> Option<u16> {
