@@ -64,6 +64,14 @@ use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui,
 
 pub use crate::error::Error;
 
+/// Whether the `• turbo <version>` line should be shown. Disabled in CI and
+/// when `TURBO_PRINT_VERSION_DISABLED` is `1` or `true`.
+pub fn should_print_version() -> bool {
+    let disabled = std::env::var("TURBO_PRINT_VERSION_DISABLED")
+        .is_ok_and(|var| matches!(var.as_str(), "1" | "true"));
+    !disabled && !turborepo_ci::is_ci()
+}
+
 /// Live status of the remote cache, determined by a preflight API check
 /// that runs concurrently with graph building.
 #[derive(Debug, Clone, Copy)]
@@ -118,25 +126,35 @@ impl PendingRepoIndex {
 }
 
 #[derive(Clone)]
+pub(crate) struct ExecutionContext {
+    pub(crate) start_at: DateTime<Local>,
+    pub(crate) opts: Arc<Opts>,
+    pub(crate) env_at_execution_start: EnvironmentVariableMap,
+    pub(crate) filtered_pkgs: HashSet<PackageName>,
+    pub(crate) remote_cache_status: RemoteCacheStatus,
+    pub(crate) engine: Arc<Engine<Built, TaskDefinition>>,
+    pub(crate) task_access: TaskAccess,
+    pub(crate) micro_frontend_configs: Option<MicrofrontendsConfigs>,
+}
+
+#[derive(Clone)]
+pub(crate) struct RunServices {
+    pub(crate) processes: ProcessManager,
+    pub(crate) run_telemetry: GenericEventBuilder,
+    pub(crate) api_auth: Option<APIAuth>,
+    pub(crate) run_cache: Arc<RunCache>,
+    pub(crate) signal_handler: SignalHandler,
+    pub(crate) repo_index: PendingRepoIndex,
+    pub(crate) observability_handle: Option<ObservabilityHandle>,
+    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    pub(crate) shutdown_started_emitted: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
 pub struct Run {
     repo: Arc<RepoContext>,
-    start_at: DateTime<Local>,
-    processes: ProcessManager,
-    run_telemetry: GenericEventBuilder,
-    opts: Arc<Opts>,
-    api_auth: Option<APIAuth>,
-    env_at_execution_start: EnvironmentVariableMap,
-    filtered_pkgs: HashSet<PackageName>,
-    run_cache: Arc<RunCache>,
-    signal_handler: SignalHandler,
-    remote_cache_status: RemoteCacheStatus,
-    engine: Arc<Engine<Built, TaskDefinition>>,
-    task_access: TaskAccess,
-    micro_frontend_configs: Option<MicrofrontendsConfigs>,
-    repo_index: PendingRepoIndex,
-    observability_handle: Option<ObservabilityHandle>,
-    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
-    shutdown_started_emitted: Arc<AtomicBool>,
+    execution: ExecutionContext,
+    services: RunServices,
 }
 
 // The join handle covers the render thread plus its sink-restoring
@@ -253,7 +271,7 @@ impl Run {
 
     pub fn emit_shutdown_started_once_for_run(&self, force_shutdown_timeout: Option<Duration>) {
         Self::emit_shutdown_started_once(
-            self.shutdown_started_emitted.as_ref(),
+            self.services.shutdown_started_emitted.as_ref(),
             force_shutdown_timeout,
         );
     }
@@ -416,8 +434,16 @@ impl Run {
         )
         .emit();
 
-        let targets_list = self.opts.run_opts.tasks.join(", ");
-        if self.opts.run_opts.single_package {
+        if should_print_version() {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• turbo {}", self.repo.version),
+            )
+            .emit();
+        }
+
+        let targets_list = self.execution.opts.run_opts.tasks.join(", ");
+        if self.execution.opts.run_opts.single_package {
             turborepo_log::info(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!("{pad}• Running {targets_list}"),
@@ -425,6 +451,7 @@ impl Run {
             .emit();
         } else {
             let mut packages = self
+                .execution
                 .filtered_pkgs
                 .iter()
                 .map(|workspace_name| workspace_name.to_string())
@@ -439,8 +466,8 @@ impl Run {
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!(
                     "{pad}• Running {targets_list} in {package_count} {package_label}",
-                    package_count = self.filtered_pkgs.len(),
-                    package_label = if self.filtered_pkgs.len() == 1 {
+                    package_count = self.execution.filtered_pkgs.len(),
+                    package_label = if self.execution.filtered_pkgs.len() == 1 {
                         "package"
                     } else {
                         "packages"
@@ -451,11 +478,11 @@ impl Run {
         }
 
         let (base_msg, is_warning) = remote_cache_status_message(
-            self.remote_cache_status,
-            &self.opts.api_client_opts.api_url,
+            self.execution.remote_cache_status,
+            &self.execution.opts.api_client_opts.api_url,
         );
 
-        let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
+        let cache_status = if self.execution.opts.run_opts.is_shared_worktree_cache {
             format!("{pad}• {base_msg}, using shared worktree cache")
         } else {
             format!("{pad}• {base_msg}")
@@ -486,7 +513,7 @@ impl Run {
     }
 
     pub fn opts(&self) -> &Opts {
-        &self.opts
+        &self.execution.opts
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
@@ -506,6 +533,7 @@ impl Run {
     #[instrument(skip(self), ret)]
     pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
         let packages: Vec<_> = self
+            .execution
             .filtered_pkgs
             .iter()
             .map(|pkg| PackageNode::Workspace(pkg.clone()))
@@ -526,7 +554,7 @@ impl Run {
         let mut tasks = BTreeMap::new();
         for context in self.pkg_dep_graph().package_task_contexts() {
             let name = context.package();
-            if !self.filtered_pkgs.contains(name) {
+            if !self.execution.filtered_pkgs.contains(name) {
                 continue;
             }
             // Authored scripts and registered native tasks both come from the
@@ -557,11 +585,11 @@ impl Run {
     }
 
     pub fn engine(&self) -> &Engine<Built, TaskDefinition> {
-        &self.engine
+        &self.execution.engine
     }
 
     pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
-        &self.filtered_pkgs
+        &self.execution.filtered_pkgs
     }
 
     pub fn color_config(&self) -> ColorConfig {
@@ -569,17 +597,17 @@ impl Run {
     }
 
     pub fn has_tui(&self) -> bool {
-        self.opts.run_opts.ui_mode.use_tui()
+        self.execution.opts.run_opts.ui_mode.use_tui()
     }
 
     pub fn should_start_ui(&self) -> Result<bool, Error> {
-        Ok(self.opts.run_opts.ui_mode.use_tui()
-            && self.opts.run_opts.dry_run.is_none()
+        Ok(self.execution.opts.run_opts.ui_mode.use_tui()
+            && self.execution.opts.run_opts.dry_run.is_none()
             && tui::terminal_big_enough()?)
     }
 
     pub fn start_ui(self: &Arc<Self>, terminal_sink: Arc<TerminalSink>) -> UIResult<UISender> {
-        match self.opts.run_opts.ui_mode {
+        match self.execution.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui(terminal_sink)
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
@@ -593,7 +621,10 @@ impl Run {
             return Ok(None);
         }
 
-        let task_names = self.engine.tasks_with_command(self.pkg_dep_graph());
+        let task_names = self
+            .execution
+            .engine
+            .tasks_with_command(self.pkg_dep_graph());
         // If there aren't any tasks to run, then shouldn't start the UI
         if task_names.is_empty() {
             return Ok(None);
@@ -601,9 +632,9 @@ impl Run {
 
         let (sender, receiver) = TuiSender::new();
         let color_config = self.color_config();
-        let scrollback_len = self.opts.tui_opts.scrollback_length;
+        let scrollback_len = self.execution.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root().to_owned();
-        let signal_handler = self.signal_handler.clone();
+        let signal_handler = self.services.signal_handler.clone();
         let interrupt = Arc::new(move || signal_handler.notify_signal());
         let handle = tui::spawn_run_app(
             task_names,
@@ -636,9 +667,9 @@ impl Run {
     /// Returns a handle that can be used to stop a run
     pub fn stopper(&self) -> RunStopper {
         RunStopper {
-            manager: self.processes.clone(),
-            run_cache: self.run_cache.clone(),
-            skip_cache_writes: self.opts.cache_opts.cache.skip_writes(),
+            manager: self.services.processes.clone(),
+            run_cache: self.services.run_cache.clone(),
+            skip_cache_writes: self.execution.opts.cache_opts.cache.skip_writes(),
         }
     }
 
@@ -652,12 +683,12 @@ impl Run {
         )>,
         Error,
     > {
-        let Some(mfe_configs) = &self.micro_frontend_configs else {
+        let Some(mfe_configs) = &self.execution.micro_frontend_configs else {
             return Ok(None);
         };
 
         if !mfe_configs.should_use_turborepo_proxy()
-            || !mfe_configs.has_dev_task(self.engine.task_ids())
+            || !mfe_configs.has_dev_task(self.execution.engine.task_ids())
         {
             return Ok(None);
         }
@@ -764,11 +795,11 @@ impl Run {
         shutdown_handle: tokio::sync::broadcast::Sender<()>,
         shutdown_complete_rx: tokio::sync::oneshot::Receiver<()>,
     ) {
-        if let Some(subscriber) = self.signal_handler.subscribe() {
-            let signal_handler = self.signal_handler.clone();
-            let process_manager = self.processes.clone();
+        if let Some(subscriber) = self.services.signal_handler.subscribe() {
+            let signal_handler = self.services.signal_handler.clone();
+            let process_manager = self.services.processes.clone();
             let force_shutdown_timeout = Self::force_shutdown_timeout();
-            let shutdown_started_emitted = self.shutdown_started_emitted.clone();
+            let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
             tokio::spawn(async move {
                 info!("Proxy signal handler registered and waiting");
                 let Ok(_guard) = subscriber.listen().await else {
@@ -835,20 +866,20 @@ impl Run {
     }
 
     fn setup_cache_shutdown_handler(&self) {
-        let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
+        let skip_cache_writes = self.execution.opts.cache_opts.cache.skip_writes();
         if skip_cache_writes {
             return;
         }
 
-        let Some(subscriber) = self.signal_handler.subscribe() else {
+        let Some(subscriber) = self.services.signal_handler.subscribe() else {
             return;
         };
 
-        let run_cache = self.run_cache.clone();
-        let signal_handler = self.signal_handler.clone();
+        let run_cache = self.services.run_cache.clone();
+        let signal_handler = self.services.signal_handler.clone();
         let force_shutdown_timeout = Self::force_shutdown_timeout();
-        let shutdown_started_emitted = self.shutdown_started_emitted.clone();
-        let use_tui = self.opts.run_opts.ui_mode.use_tui();
+        let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
+        let use_tui = self.execution.opts.run_opts.ui_mode.use_tui();
         tokio::spawn(async move {
             let Ok(_guard) = subscriber.listen().await else {
                 tracing::debug!(
@@ -940,14 +971,14 @@ impl Run {
     }
 
     fn setup_process_manager_shutdown_handler(&self) {
-        let Some(subscriber) = self.signal_handler.subscribe() else {
+        let Some(subscriber) = self.services.signal_handler.subscribe() else {
             return;
         };
 
-        let signal_handler = self.signal_handler.clone();
-        let process_manager = self.processes.clone();
+        let signal_handler = self.services.signal_handler.clone();
+        let process_manager = self.services.processes.clone();
         let force_shutdown_timeout = Self::force_shutdown_timeout();
-        let shutdown_started_emitted = self.shutdown_started_emitted.clone();
+        let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
         tokio::spawn(async move {
             let Ok(_guard) = subscriber.listen().await else {
                 debug!("signal handler exited before process manager subscriber was notified");
@@ -1028,7 +1059,8 @@ impl Run {
         // error semantics are unchanged from when `Run` construction waited.
         let repo_index_arc = {
             use tracing::Instrument;
-            self.repo_index
+            self.services
+                .repo_index
                 .get()
                 .instrument(tracing::info_span!("repo_index_untracked_await"))
                 .await
@@ -1039,7 +1071,7 @@ impl Run {
             .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
 
-        let is_monorepo = !self.opts.run_opts.single_package;
+        let is_monorepo = !self.execution.opts.run_opts.single_package;
 
         // Run four expensive operations concurrently using rayon::scope:
         // 1. Package file hashing - walks every package's files and computes hashes
@@ -1055,7 +1087,7 @@ impl Run {
                 .root_internal_package_dependencies_paths()
         });
 
-        let env_mode = self.opts.run_opts.env_mode;
+        let env_mode = self.execution.opts.run_opts.env_mode;
 
         let mut file_hash_result = None;
         let mut internal_deps_result = None;
@@ -1067,16 +1099,16 @@ impl Run {
             rayon::scope(|s| {
                 s.spawn(|_| {
                     let _span = tracing::info_span!("calculate_file_hashes_task").entered();
-                    let needs_expanded = self.opts.run_opts.dry_run.is_some()
-                        || self.opts.run_opts.summarize
-                        || self.observability_handle.is_some();
+                    let needs_expanded = self.execution.opts.run_opts.dry_run.is_some()
+                        || self.execution.opts.run_opts.summarize
+                        || self.services.observability_handle.is_some();
                     file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                         self.scm(),
-                        self.engine.tasks(),
+                        self.execution.engine.tasks(),
                         self.pkg_dep_graph(),
-                        self.engine.task_definitions(),
+                        self.execution.engine.task_definitions(),
                         self.repo_root(),
-                        &self.run_telemetry,
+                        &self.services.run_telemetry,
                         repo_index,
                         needs_expanded,
                     ));
@@ -1111,7 +1143,7 @@ impl Run {
                         self.pkg_dep_graph().package_manager(),
                         &resolution_file_fallback,
                         self.root_turbo_json().global_deps_for_hash(),
-                        &self.env_at_execution_start,
+                        &self.execution.env_at_execution_start,
                         &self.root_turbo_json().global_env,
                         self.scm(),
                     ));
@@ -1172,14 +1204,15 @@ impl Run {
             resolved_env_vars: Some(global_file_inputs.global_hashable_env_vars),
             pass_through_env,
             env_mode,
-            framework_inference: self.opts.run_opts.framework_inference,
-            env_at_execution_start: &self.env_at_execution_start,
-            global_configuration: self.opts.future_flags.global_configuration,
+            framework_inference: self.execution.opts.run_opts.framework_inference,
+            env_at_execution_start: &self.execution.env_at_execution_start,
+            global_configuration: self.execution.opts.future_flags.global_configuration,
         };
         let global_hash = global_hash_inputs.calculate_global_hash();
 
         let global_env = {
             let mut env = self
+                .execution
                 .env_at_execution_start
                 .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
                 .map_err(Error::Env)?;
@@ -1190,43 +1223,43 @@ impl Run {
         };
 
         let run_tracker = RunTracker::new(
-            self.start_at,
-            self.opts.synthesize_command(),
+            self.execution.start_at,
+            self.execution.opts.synthesize_command(),
             self.repo.version,
             Vendor::get_user(),
-            self.observability_handle.clone(),
+            self.services.observability_handle.clone(),
         );
 
         drop(_setup_span);
 
         let mut visitor = Visitor::new(
             self.repo.as_ref(),
-            self.run_cache.clone(),
+            self.services.run_cache.clone(),
             run_tracker,
-            &self.task_access,
-            &self.opts.run_opts,
+            &self.execution.task_access,
+            &self.execution.opts.run_opts,
             package_inputs_hashes,
-            &self.env_at_execution_start,
+            &self.execution.env_at_execution_start,
             &global_hash,
-            self.processes.clone(),
+            self.services.processes.clone(),
             repo_index,
             global_env,
             &self.root_turbo_json().global_env,
             ui_sender,
             is_watch,
-            self.micro_frontend_configs.as_ref(),
+            self.execution.micro_frontend_configs.as_ref(),
             external_deps_hashes,
         )
         .await?;
 
-        if self.opts.run_opts.dry_run.is_some() {
+        if self.execution.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
 
         debug!("running visitor");
 
         let errors = visitor
-            .visit(self.engine.clone(), &self.run_telemetry)
+            .visit(self.execution.engine.clone(), &self.services.run_telemetry)
             .await?;
 
         debug!("visitor completed, calculating exit code");
@@ -1257,17 +1290,17 @@ impl Run {
         // processes that outlive the visit() call. The watch coordinator
         // manages their lifecycle via RunStopper, so we must not kill them here.
         if !is_watch {
-            self.processes.stop().await;
+            self.services.processes.stop().await;
         }
 
         visitor
             .finish(
                 exit_code,
-                &self.filtered_pkgs,
+                &self.execution.filtered_pkgs,
                 global_hash_inputs,
-                &self.engine,
-                &self.env_at_execution_start,
-                self.opts.scope_opts.pkg_inference_root.as_deref(),
+                &self.execution.engine,
+                &self.execution.env_at_execution_start,
+                self.execution.opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;
 
@@ -1290,14 +1323,14 @@ impl Run {
             self.setup_process_manager_shutdown_handler();
         }
 
-        if let Some(graph_opts) = &self.opts.run_opts.graph {
+        if let Some(graph_opts) = &self.execution.opts.run_opts.graph {
             let spawner = SharedChildSpawner;
             let graphviz_warning: turborepo_engine::GraphvizWarningFn =
                 Box::new(emit_graphviz_warning);
             turborepo_engine::write_graph(
                 graph_opts,
-                &self.engine,
-                self.opts.run_opts.single_package,
+                &self.execution.engine,
+                self.execution.opts.run_opts.single_package,
                 self.repo_root(),
                 &spawner,
                 Some(graphviz_warning),
@@ -1566,11 +1599,16 @@ impl turborepo_query_api::QueryRun for Run {
     }
 
     fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
-        self.engine.task_ids().map(query_task_id).collect()
+        self.execution
+            .engine
+            .task_ids()
+            .map(query_task_id)
+            .collect()
     }
 
     fn task_ids_for_package(&self, package: &str) -> Vec<turborepo_query_api::QueryTaskId> {
-        self.engine
+        self.execution
+            .engine
             .task_ids_for_packages(&HashSet::from([PackageName::from(package)]))
             .iter()
             .map(query_task_id)
@@ -1581,7 +1619,9 @@ impl turborepo_query_api::QueryRun for Run {
         &self,
         task_id: &turborepo_query_api::QueryTaskId,
     ) -> Option<&turborepo_types::TaskDefinition> {
-        self.engine.task_definition(&engine_task_id(task_id))
+        self.execution
+            .engine
+            .task_definition(&engine_task_id(task_id))
     }
 
     fn task_dependencies(
@@ -1589,7 +1629,8 @@ impl turborepo_query_api::QueryRun for Run {
         task_id: &turborepo_query_api::QueryTaskId,
     ) -> Vec<turborepo_query_api::QueryTaskId> {
         query_task_nodes(
-            self.engine
+            self.execution
+                .engine
                 .dependencies(&engine_task_id(task_id))
                 .into_iter()
                 .flatten(),
@@ -1601,7 +1642,8 @@ impl turborepo_query_api::QueryRun for Run {
         task_id: &turborepo_query_api::QueryTaskId,
     ) -> Vec<turborepo_query_api::QueryTaskId> {
         query_task_nodes(
-            self.engine
+            self.execution
+                .engine
                 .dependents(&engine_task_id(task_id))
                 .into_iter()
                 .flatten(),
@@ -1613,7 +1655,8 @@ impl turborepo_query_api::QueryRun for Run {
         task_id: &turborepo_query_api::QueryTaskId,
     ) -> Vec<turborepo_query_api::QueryTaskId> {
         query_task_nodes(
-            self.engine
+            self.execution
+                .engine
                 .transitive_dependencies(&engine_task_id(task_id)),
         )
     }
@@ -1622,7 +1665,11 @@ impl turborepo_query_api::QueryRun for Run {
         &self,
         task_id: &turborepo_query_api::QueryTaskId,
     ) -> Vec<turborepo_query_api::QueryTaskId> {
-        query_task_nodes(self.engine.transitive_dependents(&engine_task_id(task_id)))
+        query_task_nodes(
+            self.execution
+                .engine
+                .transitive_dependents(&engine_task_id(task_id)),
+        )
     }
 
     fn collect_task_dependencies(
@@ -1630,7 +1677,8 @@ impl turborepo_query_api::QueryRun for Run {
         task_ids: &HashSet<turborepo_query_api::QueryTaskId>,
     ) -> HashSet<turborepo_query_api::QueryTaskId> {
         let task_ids = task_ids.iter().map(engine_task_id).collect();
-        self.engine
+        self.execution
+            .engine
             .collect_task_dependencies(&task_ids)
             .iter()
             .map(query_task_id)
@@ -1648,7 +1696,7 @@ impl turborepo_query_api::QueryRun for Run {
         >,
         turborepo_query_api::AffectedPackagesError,
     > {
-        let mut opts = self.opts.as_ref().clone();
+        let mut opts = self.execution.opts.as_ref().clone();
         opts.scope_opts.affected_range = Some((base, head));
         builder::RunBuilder::calculate_filtered_packages(
             self.repo_root(),
@@ -1689,7 +1737,7 @@ impl turborepo_query_api::QueryRun for Run {
         turborepo_query_api::AffectedPackagesError,
     > {
         turborepo_engine::match_tasks_against_changed_files(
-            &self.engine,
+            &self.execution.engine,
             self.pkg_dep_graph(),
             changed_files,
         )

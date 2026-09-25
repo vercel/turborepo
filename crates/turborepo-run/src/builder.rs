@@ -76,6 +76,33 @@ struct RepoDiscovery {
     untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
 }
 
+/// Inputs that join package-graph discovery, SCM detection, and turbo.json
+/// loading into the repository context consumed by the rest of a run. Keeping
+/// the graph as a `PackageGraph` lets callers provide JavaScript and native
+/// contributor scopes without coupling this phase to a particular discovery
+/// implementation.
+struct RepoContextInput {
+    repo_root: AbsoluteSystemPathBuf,
+    color_config: ColorConfig,
+    version: &'static str,
+    scm: SCM,
+    pkg_dep_graph: Arc<PackageGraph>,
+    turbo_json_loader: UnifiedTurboJsonLoader,
+    root_turbo_json: TurboJson,
+}
+
+fn build_repo_context(input: RepoContextInput) -> Arc<RepoContext> {
+    Arc::new(RepoContext {
+        repo_root: input.repo_root,
+        color_config: input.color_config,
+        version: input.version,
+        scm: input.scm,
+        pkg_dep_graph: input.pkg_dep_graph,
+        turbo_json_loader: input.turbo_json_loader,
+        root_turbo_json: input.root_turbo_json,
+    })
+}
+
 struct ExecutionContextInput<'a> {
     root_package_json: Option<package_json::PackageJson>,
     is_single_package: bool,
@@ -87,7 +114,7 @@ struct ExecutionContextInput<'a> {
     async_cache: AsyncCache,
 }
 
-struct ExecutionContext {
+struct BuiltExecutionContext {
     pkg_dep_graph: Arc<PackageGraph>,
     turbo_json_loader: UnifiedTurboJsonLoader,
     root_turbo_json: TurboJson,
@@ -297,7 +324,7 @@ struct RunServicesInput<'a> {
     analytics_handle: Option<AnalyticsHandle>,
 }
 
-struct RunServices {
+struct BuiltRunServices {
     run_cache: Arc<RunCache>,
     remote_cache_status: RemoteCacheStatus,
     observability_handle: Option<observability::Handle>,
@@ -310,8 +337,8 @@ use turborepo_task_access::TaskAccess;
 use turborepo_turbo_json::{TurboJson, TurboJsonReader};
 
 use crate::{
-    Error, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason, Run, RunBuilderInput,
-    RunCache, engine_loader::EngineTurboJsonLoader, scope,
+    Error, ExecutionContext, PendingRepoIndex, RemoteCacheStatus, RemoteCacheUnavailableReason,
+    Run, RunBuilderInput, RunCache, RunServices, engine_loader::EngineTurboJsonLoader, scope,
 };
 
 fn project_task_io_environment(
@@ -1110,7 +1137,7 @@ impl RunBuilder {
     async fn build_execution_context(
         &self,
         input: ExecutionContextInput<'_>,
-    ) -> Result<ExecutionContext, Error> {
+    ) -> Result<BuiltExecutionContext, Error> {
         let ExecutionContextInput {
             root_package_json,
             is_single_package,
@@ -1246,7 +1273,7 @@ impl RunBuilder {
             ..
         } = settled;
 
-        Ok(ExecutionContext {
+        Ok(BuiltExecutionContext {
             pkg_dep_graph,
             turbo_json_loader,
             root_turbo_json,
@@ -1871,7 +1898,10 @@ impl RunBuilder {
         Ok(())
     }
 
-    async fn build_run_services(&self, input: RunServicesInput<'_>) -> Result<RunServices, Error> {
+    async fn build_run_services(
+        &self,
+        input: RunServicesInput<'_>,
+    ) -> Result<BuiltRunServices, Error> {
         let RunServicesInput {
             preflight_handle,
             async_cache,
@@ -1960,7 +1990,7 @@ impl RunBuilder {
             scm_state.resolve(None);
         }
 
-        Ok(RunServices {
+        Ok(BuiltRunServices {
             run_cache,
             remote_cache_status,
             observability_handle,
@@ -2058,7 +2088,7 @@ impl RunBuilder {
             )?
         };
 
-        let ExecutionContext {
+        let BuiltExecutionContext {
             pkg_dep_graph,
             turbo_json_loader,
             root_turbo_json,
@@ -2080,7 +2110,7 @@ impl RunBuilder {
             })
             .await?;
 
-        let RunServices {
+        let BuiltRunServices {
             run_cache,
             remote_cache_status,
             observability_handle,
@@ -2097,7 +2127,7 @@ impl RunBuilder {
             })
             .await?;
 
-        let repo = Arc::new(RepoContext {
+        let repo = build_repo_context(RepoContextInput {
             repo_root: self.repo_root,
             color_config: self.color_config,
             version: self.version,
@@ -2110,23 +2140,27 @@ impl RunBuilder {
         Ok((
             Run {
                 repo,
-                start_at,
-                processes: self.processes,
-                run_telemetry,
-                task_access,
-                opts: Arc::new(self.opts),
-                api_auth: self.api_auth,
-                env_at_execution_start,
-                filtered_pkgs,
-                engine,
-                run_cache,
-                signal_handler: signal_handler.clone(),
-                remote_cache_status,
-                micro_frontend_configs,
-                repo_index,
-                observability_handle,
-                query_server: self.query_server,
-                shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                execution: ExecutionContext {
+                    start_at,
+                    opts: Arc::new(self.opts),
+                    env_at_execution_start,
+                    filtered_pkgs,
+                    remote_cache_status,
+                    engine,
+                    task_access,
+                    micro_frontend_configs,
+                },
+                services: RunServices {
+                    processes: self.processes,
+                    run_telemetry,
+                    api_auth: self.api_auth,
+                    run_cache,
+                    signal_handler: signal_handler.clone(),
+                    repo_index,
+                    observability_handle,
+                    query_server: self.query_server,
+                    shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                },
             },
             analytics_handle,
         ))
@@ -2873,6 +2907,124 @@ mod origins_match_tests {
         .unwrap()
     }
 
+    fn injected_repo_context(
+        repo_root: &AbsoluteSystemPath,
+        pkg_dep_graph: Arc<PackageGraph>,
+    ) -> Arc<RepoContext> {
+        build_repo_context(RepoContextInput {
+            repo_root: repo_root.to_owned(),
+            color_config: ColorConfig::new(true),
+            version: "test",
+            scm: SCM::Manual,
+            pkg_dep_graph,
+            turbo_json_loader: UnifiedTurboJsonLoader::noop(HashMap::from([(
+                PackageName::Root,
+                TurboJson::default(),
+            )])),
+            root_turbo_json: TurboJson::default(),
+        })
+    }
+
+    #[test]
+    fn repo_context_accepts_injected_javascript_package_graph_and_services() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = Arc::new(package_graph_with_dependencies(
+            &repo_root,
+            &[("web", "shared")],
+        ));
+
+        let context = injected_repo_context(&repo_root, graph);
+
+        assert_eq!(context.repo_root(), repo_root.as_ref());
+        assert_eq!(context.version(), "test");
+        assert!(context.scm.is_manual());
+        assert!(
+            context
+                .pkg_dep_graph()
+                .package_task_context(&PackageName::from("web"))
+                .is_some()
+        );
+        assert!(
+            context
+                .pkg_dep_graph()
+                .package_task_context(&PackageName::from("shared"))
+                .is_some()
+        );
+        assert!(context.turbo_json_loader.load(&PackageName::Root).is_ok());
+    }
+
+    #[tokio::test]
+    async fn repo_context_accepts_injected_mixed_toolchain_package_graph() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let write = |relative: &[&str], contents: &str| {
+            let path = repo_root.join_components(relative);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        };
+        write(
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"rust/app\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"rust-workspace\"\n",
+        );
+        write(
+            &["rust", "app", "Cargo.toml"],
+            "[package]\nname = \"rust-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(
+            &["Cargo.lock"],
+            "version = 3\n\n[[package]]\nname = \"rust-app\"\nversion = \"0.1.0\"\n",
+        );
+        write(&["go.work"], "go 1.23.0\n\nuse ./go/app\n");
+        write(
+            &["go", "app", "go.mod"],
+            "module example.com/go-app\n\ngo 1.23.0\n",
+        );
+        write(
+            &["pyproject.toml"],
+            "[tool.turbo]\nname = \"python-workspace\"\n\n[tool.uv.workspace]\nmembers = \
+             [\"python/*\"]\n",
+        );
+        write(
+            &["python", "app", "pyproject.toml"],
+            "[project]\nname = \"python-app\"\nversion = \"0.1.0\"\n",
+        );
+
+        let js_package_path = repo_root.join_components(&["packages", "web", "package.json"]);
+        let package_graph =
+            PackageGraph::builder_optional(&repo_root, Some(PackageJson::default()))
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::from([(
+                    js_package_path,
+                    PackageJson {
+                        name: Some(turborepo_errors::Spanned::new("web".to_string())),
+                        ..Default::default()
+                    },
+                )])))
+                .with_cargo()
+                .with_go()
+                .with_uv()
+                .build_lazy()
+                .await
+                .unwrap()
+                .into_parts()
+                .0;
+        let context = injected_repo_context(&repo_root, package_graph);
+
+        for package in ["web", "rust-app", "go-app", "python-app"] {
+            assert!(
+                context
+                    .pkg_dep_graph()
+                    .package_task_context(&PackageName::from(package))
+                    .is_some(),
+                "expected injected package graph to retain {package}"
+            );
+        }
+        assert!(context.scm.is_manual());
+        assert!(context.turbo_json_loader.load(&PackageName::Root).is_ok());
+    }
+
     type ChangeCall = (Option<String>, Option<String>, bool, bool, bool);
 
     #[derive(Clone)]
@@ -2902,6 +3054,65 @@ mod origins_match_tests {
                     file: AnchoredSystemPathBuf::from_raw("packages/lib/src/index.ts").unwrap(),
                 },
             )]))
+        }
+    }
+
+    fn affected_opts(repo_root: &AbsoluteSystemPathBuf, filters: &[&str]) -> Opts {
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector {
+            affected: true,
+            ..Default::default()
+        };
+        let mut opts = Opts::new(
+            repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = filters.iter().map(|filter| filter.to_string()).collect();
+        opts
+    }
+
+    fn run_builder(repo_root: &AbsoluteSystemPathBuf, filters: &[&str]) -> RunBuilder {
+        RunBuilder::new(
+            crate::RunBuilderInput {
+                repo_root: repo_root.clone(),
+                color_config: ColorConfig::new(true),
+                opts: affected_opts(repo_root, filters),
+                version: "test",
+                api_auth: None,
+            },
+            None,
+        )
+        .unwrap()
+    }
+
+    fn task_engine(
+        definitions: &[(TaskId<'static>, TaskDefinition)],
+        edges: &[(TaskId<'static>, TaskId<'static>)],
+    ) -> RunEngine {
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+        for (task_id, definition) in definitions {
+            engine.get_index(task_id);
+            engine.add_definition(task_id.clone(), definition.clone());
+        }
+        for (from, to) in edges {
+            let from_index = engine.get_index(from);
+            let to_index = engine.get_index(to);
+            engine.task_graph_mut().add_edge(from_index, to_index, ());
+        }
+        engine.seal()
+    }
+
+    fn task_with_inputs(globs: &[&str]) -> TaskDefinition {
+        TaskDefinition {
+            inputs: TaskInputs {
+                globs: globs.iter().map(|glob| glob.to_string()).collect(),
+                default: true,
+                ..Default::default()
+            },
+            ..Default::default()
         }
     }
 
@@ -2939,6 +3150,112 @@ mod origins_match_tests {
         assert!(packages.contains_key(&PackageName::from("lib")));
         assert!(packages.contains_key(&PackageName::from("app")));
         assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[test]
+    fn affected_package_filter_intersects_fixed_package_changes() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let opts = affected_opts(&repo_root, &["app"]);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+
+        let (packages, mode, _) = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: calls.clone(),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap();
+
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+        assert_eq!(names(packages.into_keys().collect()), ["app"]);
+        assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[test]
+    fn missing_go_filter_points_to_disabled_workspace_support() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        repo_root
+            .join_component(turborepo_repository::go::GO_WORK)
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector::default();
+        let mut opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = vec!["api".to_string()];
+
+        let error = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PackageMayBeGoModule { ref name } if name == "api"
+        ));
+        let hint = miette::Diagnostic::help(&error)
+            .expect("disabled Go support has an opt-in hint")
+            .to_string();
+        assert!(hint.contains("experimentalGoWorkspaces"), "{hint}");
+    }
+
+    #[test]
+    fn missing_python_filter_points_to_disabled_workspace_support() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        repo_root
+            .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+            .create_with_contents("[tool.uv.workspace]\nmembers = ['packages/*']\n")
+            .unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector::default();
+        let mut opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = vec!["py-app".to_string()];
+
+        let error = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PackageMayBePythonPackage { ref name } if name == "py-app"
+        ));
+        let hint = miette::Diagnostic::help(&error)
+            .expect("disabled Python support has an opt-in hint")
+            .to_string();
+        assert!(hint.contains("experimentalPythonWorkspaces"), "{hint}");
     }
 
     #[derive(Clone)]
@@ -3086,6 +3403,120 @@ mod origins_match_tests {
             HashSet::from([PackageName::from("app"), PackageName::from("lib")])
         );
         assert_eq!(*calls.lock().unwrap(), [(None, None, true, true, true)]);
+    }
+
+    #[test]
+    fn task_level_affected_filter_scopes_entrypoints_before_dependencies() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(
+            &repo_root,
+            &[("app", "lib"), ("lib-no-test", "placeholder")],
+        );
+        let builder = run_builder(&repo_root, &[]);
+        let app_build = TaskId::new("app", "build").into_owned();
+        let lib_build = TaskId::new("lib", "build").into_owned();
+        let no_test_build = TaskId::new("lib-no-test", "build").into_owned();
+        let definitions = [
+            (app_build.clone(), task_with_inputs(&["src/**"])),
+            (lib_build.clone(), task_with_inputs(&["src/**"])),
+            (no_test_build.clone(), task_with_inputs(&["src/**"])),
+        ];
+        let edges = [(app_build.clone(), lib_build.clone())];
+        let files = HashSet::from([
+            AnchoredSystemPathBuf::from_raw("packages/app/src/index.ts").unwrap(),
+            AnchoredSystemPathBuf::from_raw("packages/lib-no-test/src/index.ts").unwrap(),
+        ]);
+
+        let library_scope = HashSet::from([PackageName::from("lib")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: files.clone(),
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&library_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_ids().next().is_none());
+        assert!(selected.unwrap().is_empty());
+
+        let app_scope = HashSet::from([PackageName::from("app")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files: files.clone(),
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&app_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_definition(&app_build).is_some());
+        assert!(filtered.task_definition(&lib_build).is_some());
+        assert_eq!(selected.unwrap(), app_scope);
+
+        let no_test_scope = HashSet::from([PackageName::from("lib-no-test")]);
+        let (filtered, selected) = builder
+            .filter_engine_to_affected_tasks(
+                task_engine(&definitions, &edges),
+                &graph,
+                &TurboJson::default(),
+                &FixedChangedFiles {
+                    files,
+                    calls: Arc::new(Mutex::new(Vec::new())),
+                },
+                Some(&no_test_scope),
+            )
+            .unwrap();
+        assert!(filtered.task_definition(&no_test_build).is_some());
+        assert!(filtered.task_definition(&app_build).is_none());
+        assert!(filtered.task_definition(&lib_build).is_none());
+        assert_eq!(selected.unwrap(), no_test_scope);
+    }
+
+    #[test]
+    fn task_level_affected_filter_matches_root_inputs_without_globalizing_package_json() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("lib-a", "placeholder")]);
+        let builder = run_builder(&repo_root, &[]);
+        let test_task = TaskId::new("lib-a", "test").into_owned();
+        let definitions = [(test_task.clone(), task_with_inputs(&["../../shared.txt"]))];
+
+        for (file, expected) in [("shared.txt", true), ("package.json", false)] {
+            let (filtered, selected) = builder
+                .filter_engine_to_affected_tasks(
+                    task_engine(&definitions, &[]),
+                    &graph,
+                    &TurboJson::default(),
+                    &FixedChangedFiles {
+                        files: HashSet::from([AnchoredSystemPathBuf::from_raw(file).unwrap()]),
+                        calls: Arc::new(Mutex::new(Vec::new())),
+                    },
+                    None,
+                )
+                .unwrap();
+
+            assert_eq!(
+                filtered.task_definition(&test_task).is_some(),
+                expected,
+                "unexpected selection for changed file {file}"
+            );
+            assert_eq!(
+                selected.unwrap(),
+                if expected {
+                    HashSet::from([PackageName::from("lib-a")])
+                } else {
+                    HashSet::new()
+                }
+            );
+        }
     }
 
     fn names(packages: Vec<PackageName>) -> Vec<String> {

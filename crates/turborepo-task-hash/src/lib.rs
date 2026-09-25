@@ -1099,6 +1099,13 @@ mod test {
 
     use super::*;
 
+    #[path = "dependency_outputs_test.rs"]
+    mod dependency_outputs;
+    #[path = "jit_inputs_test.rs"]
+    mod jit_inputs;
+    #[path = "structured_inputs_test.rs"]
+    mod structured_inputs;
+
     struct TestRunOpts {
         single_package: bool,
     }

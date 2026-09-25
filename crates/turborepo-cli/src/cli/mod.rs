@@ -134,41 +134,6 @@ fn initialize_deferred_telemetry_client(
     }
 }
 
-#[derive(PartialEq)]
-enum PrintVersionState {
-    Enabled,
-    Disabled,
-}
-
-fn get_print_version_state() -> PrintVersionState {
-    env::var("TURBO_PRINT_VERSION_DISABLED")
-        .map(|var| match var.as_str() {
-            "1" | "true" => PrintVersionState::Disabled,
-            _ => PrintVersionState::Enabled,
-        })
-        .unwrap_or(PrintVersionState::Enabled)
-}
-
-#[derive(PartialEq)]
-enum CIState {
-    Inside,
-    Outside,
-}
-
-fn get_ci_state() -> CIState {
-    match turborepo_ci::is_ci() {
-        true => CIState::Inside,
-        _ => CIState::Outside,
-    }
-}
-
-fn should_print_version() -> bool {
-    let print_version_state = get_print_version_state();
-    let ci_state = get_ci_state();
-
-    print_version_state == PrintVersionState::Enabled && ci_state == CIState::Outside
-}
-
 fn set_run_flags<'a>(
     command: &'a mut Command,
     repo_state: &'a Option<RepoState>,
@@ -340,14 +305,27 @@ async fn run_main(
 
     let mut command = get_command(&mut cli_args)?;
 
-    // Suppress the version banner in --json mode — all output on stdout
-    // must be machine-readable NDJSON.
-    let is_json_mode = matches!(
-        &command,
-        Command::Run { execution_args, .. } | Command::Watch { execution_args, .. }
-            if execution_args.json
-    );
-    if should_print_version() && !is_json_mode {
+    // Skip the standalone version banner when the command reports the version
+    // itself: `run`/`watch` print it as the first bullet of the run prelude
+    // (and omit it entirely in --json mode), and `turbo query` executions that
+    // print a JSON document embed it in that document.
+    let reports_own_version = matches!(&command, Command::Run { .. } | Command::Watch { .. })
+        || matches!(
+            &command,
+            Command::Query {
+                subcommand: Some(QuerySubcommand::Affected(_)),
+                ..
+            } | Command::Query {
+                subcommand: None,
+                query: Some(_),
+                ..
+            } | Command::Query {
+                subcommand: None,
+                schema: true,
+                ..
+            }
+        );
+    if turborepo_run::should_print_version() && !reports_own_version {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 

@@ -21,6 +21,7 @@ httpmock = { workspace = true }
 insta = { workspace = true }
 port_scanner = { workspace = true }
 test-case = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -28,6 +29,7 @@ workspace = true
 
 [dependencies]
 bytes.workspace = true
+chrono.workspace = true
 reqwest = { workspace = true, features = ["json", "stream"] }
 rustc_version_runtime = "0.2.1"
 # `ring`, rustls' default crypto provider, cannot verify P-521 (secp521r1)
@@ -45,6 +47,7 @@ rustls-webpki = { version = "0.103.10", default-features = false, features = [
 ], optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"

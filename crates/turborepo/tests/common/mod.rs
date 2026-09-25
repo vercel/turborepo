@@ -467,7 +467,25 @@ macro_rules! check_json_output {
                     stderr,
                 );
 
-                let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
+                let mut query_output: serde_json::Value = serde_json::from_str(&stdout)?;
+                // `turbo query` embeds the CLI version as the first key. Verify
+                // it, then drop it so snapshots stay stable across releases.
+                if $command == "query" {
+                    let object = query_output
+                        .as_object_mut()
+                        .expect("turbo query output should be a JSON object");
+                    assert_eq!(
+                        object.keys().next().map(String::as_str),
+                        Some("version"),
+                        "turbo query output should start with a version key:\n{}",
+                        stdout,
+                    );
+                    let version = object.shift_remove("version").unwrap();
+                    assert!(
+                        version.as_str().is_some_and(|v| !v.is_empty()),
+                        "version should be a non-empty string: {version}"
+                    );
+                }
                 let test_name = format!(
                     "{}_{}_({})",
                     $fixture,
