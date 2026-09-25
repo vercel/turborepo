@@ -4,7 +4,7 @@ mod common;
 
 use std::fs;
 
-use common::{setup_lockfile_test, turbo_command};
+use common::{setup, setup_lockfile_test, turbo_command};
 
 #[test]
 fn test_new_package_in_lockfile_filter() {
@@ -18,17 +18,57 @@ fn test_new_package_in_lockfile_filter() {
     )
     .unwrap();
 
-    // Update lockfile — tolerate failure
-    std::process::Command::new("pnpm")
-        .args(["i", "--frozen-lockfile=false"])
+    // Update only the lockfile, using the fixture's pinned pnpm version and
+    // existing resolutions. The new importer must be present for this test to
+    // exercise lockfile-aware package selection; don't hide a failed update.
+    let pnpm_output = std::process::Command::new("pnpm")
+        .args([
+            "install",
+            "--lockfile-only",
+            "--offline",
+            "--ignore-scripts",
+            "--no-frozen-lockfile",
+        ])
         .current_dir(tempdir.path())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .ok();
+        .env(
+            "PATH",
+            setup::prepend_to_path(&setup::corepack_dir_for_test_dir(tempdir.path())),
+        )
+        .env("COREPACK_HOME", setup::corepack_home())
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .output()
+        .expect("failed to execute pnpm");
+    assert!(
+        pnpm_output.status.success(),
+        "pnpm lockfile-only update failed with {}\nstdout:\n{}\nstderr:\n{}",
+        pnpm_output.status,
+        String::from_utf8_lossy(&pnpm_output.stdout),
+        String::from_utf8_lossy(&pnpm_output.stderr),
+    );
 
-    // --skip-infer needed because pnpm install creates a local turbo in
-    // node_modules, and the shim would delegate to it otherwise.
+    let lockfile = fs::read_to_string(tempdir.path().join("pnpm-lock.yaml")).unwrap();
+    let importer_start = lockfile
+        .lines()
+        .position(|line| line.trim_end() == "  apps/c:")
+        .expect("pnpm lockfile update must add the new package importer");
+    let importer = lockfile
+        .lines()
+        .skip(importer_start + 1)
+        .take_while(|line| line.starts_with("    "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        importer
+            .lines()
+            .any(|line| line.trim() == "has-symbols: ^1.0.3")
+            && importer
+                .lines()
+                .any(|line| line.trim() == "has-symbols: 1.0.3"),
+        "pnpm lockfile importer must record the package specifier and resolution:\n{importer}"
+    );
+
+    // --skip-infer ensures the smoke exercises the repository-built CLI rather
+    // than delegating to the fixture's declared local turbo dependency.
     let config_dir = tempfile::tempdir().unwrap();
     let output = turbo_command(tempdir.path())
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
