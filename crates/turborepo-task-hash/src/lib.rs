@@ -1099,6 +1099,8 @@ mod test {
 
     use super::*;
 
+    #[path = "dependency_outputs_test.rs"]
+    mod dependency_outputs;
     #[path = "jit_inputs_test.rs"]
     mod jit_inputs;
 
