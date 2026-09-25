@@ -1694,7 +1694,7 @@ fn test_go_explicit_build_command_preserves_authored_output_and_cache_restore() 
 }
 
 #[test]
-fn test_go_format_runs_per_module_without_formatting_non_packages() {
+fn test_go_format_selection_uncached_override_and_failure_propagation() {
     if !go_available() {
         return;
     }
@@ -1733,6 +1733,8 @@ fn test_go_format_runs_per_module_without_formatting_non_packages() {
         fs::write(root.join(path), unformatted).unwrap();
     }
 
+    // Keep one filtered format smoke, then verify workspace-wide formatting
+    // executes again for identical source-mutating task inputs.
     let output = run_turbo(root, &["run", "format", "--filter=lib"]);
     assert_command_success(&output, "filtered native Go format");
     assert_eq!(
@@ -1744,8 +1746,6 @@ fn test_go_format_runs_per_module_without_formatting_non_packages() {
         sources[1].2
     );
 
-    // Restore identical inputs before each run: source-mutating tasks must not
-    // replay a cached success instead of formatting the files again.
     for _ in 0..2 {
         for (path, unformatted, _) in sources {
             fs::write(root.join(path), unformatted).unwrap();
@@ -1767,27 +1767,9 @@ fn test_go_format_runs_per_module_without_formatting_non_packages() {
             );
         }
     }
-}
-
-#[test]
-fn test_go_format_override_exclusion_and_failure_propagation() {
-    if !go_available() {
-        return;
-    }
-
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_go_pure_workspace(tempdir.path());
-    let library = tempdir.path().join("packages/lib/lib.go");
-    fs::write(&library, "package lib\nfunc   Greet( ){ }\n").unwrap();
-    let output = run_turbo(tempdir.path(), &["run", "format", "--filter=lib"]);
-    assert_command_success(&output, "filtered native Go format");
-    assert_eq!(
-        fs::read_to_string(&library).unwrap(),
-        "package lib\n\nfunc Greet() {}\n"
-    );
 
     fs::write(
-        tempdir.path().join("turbo.json"),
+        root.join("turbo.json"),
         r#"{
   "$schema": "https://turborepo.dev/schema.json",
   "futureFlags": {
@@ -1800,15 +1782,14 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
 }"#,
     )
     .unwrap();
-    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=api"]);
+    let output = run_turbo(root, &["run", "build", "--filter=api"]);
     assert_command_success(&output, "authored Go build override");
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("go version go"),
         "the authored command must execute: {output:?}"
     );
     assert!(
-        !tempdir
-            .path()
+        !root
             .join("apps/api")
             .join(if cfg!(windows) { "api.exe" } else { "api" })
             .exists(),
@@ -1816,7 +1797,7 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
     );
 
     fs::write(
-        tempdir.path().join("apps/api/turbo.json"),
+        root.join("apps/api/turbo.json"),
         r#"{
   "extends": ["//"],
   "tasks": {
@@ -1825,19 +1806,19 @@ fn test_go_format_override_exclusion_and_failure_propagation() {
 }"#,
     )
     .unwrap();
-    let tasks = package_task_names(tempdir.path(), "api");
+    let tasks = package_task_names(root, "api");
     assert!(
         !tasks.iter().any(|task| task == "build"),
         "package task exclusion must remove the inherited command: {tasks:?}"
     );
 
     fs::write(
-        tempdir.path().join("packages/lib/lib_test.go"),
+        root.join("packages/lib/lib_test.go"),
         "package lib\n\nimport \"testing\"\n\nfunc TestFailure(t *testing.T) { \
          t.Fatal(\"intentional failure\") }\n",
     )
     .unwrap();
-    let output = run_turbo(tempdir.path(), &["run", "test", "--filter=lib"]);
+    let output = run_turbo(root, &["run", "test", "--filter=lib"]);
     assert!(
         !output.status.success(),
         "a failing Go test must fail the Turbo task"
