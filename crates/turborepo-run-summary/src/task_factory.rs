@@ -819,6 +819,16 @@ mod tests {
                 .unwrap()
                 .contains("JIT hashing")
         );
+        hashes.hashes.insert(
+            task.to_string(),
+            Arc::from("Deferred because dependencyOutputs hashing mode was used."),
+        );
+        let deferred = serde_json::to_value(plan(&hashes).unwrap()).unwrap();
+        assert!(deferred["hash"].is_null());
+        assert_eq!(
+            deferred["hashReason"],
+            "Deferred because dependencyOutputs hashing mode was used."
+        );
         hashes.hashes.remove(&task.to_string());
         assert!(matches!(plan(&hashes), Err(Error::MissingHash(id)) if id == task));
         hashes

@@ -599,6 +599,7 @@ fn task_names(tasks: &[Spanned<TaskName<'static>>]) -> Vec<String> {
 }
 
 mod core;
+mod dependency_outputs;
 mod extends;
 mod go;
 mod inheritance;

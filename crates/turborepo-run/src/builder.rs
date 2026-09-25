@@ -3217,6 +3217,47 @@ mod origins_match_tests {
         assert!(hint.contains("experimentalGoWorkspaces"), "{hint}");
     }
 
+    #[test]
+    fn missing_python_filter_points_to_disabled_workspace_support() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        repo_root
+            .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+            .create_with_contents("[tool.uv.workspace]\nmembers = ['packages/*']\n")
+            .unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        let run_opts = RunSelector::default();
+        let execution_opts = ExecutionSelector::default();
+        let mut opts = Opts::new(
+            &repo_root,
+            &run_opts,
+            &execution_opts,
+            turborepo_config::ConfigurationOptions::default(),
+        )
+        .unwrap();
+        opts.scope_opts.filter_patterns = vec!["py-app".to_string()];
+
+        let error = RunBuilder::calculate_filtered_packages_with_change_detector(
+            &repo_root,
+            &opts,
+            &graph,
+            FixedPackageChanges {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            },
+            &TurboJson::default(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PackageMayBePythonPackage { ref name } if name == "py-app"
+        ));
+        let hint = miette::Diagnostic::help(&error)
+            .expect("disabled Python support has an opt-in hint")
+            .to_string();
+        assert!(hint.contains("experimentalPythonWorkspaces"), "{hint}");
+    }
+
     #[derive(Clone)]
     struct FixedChangedFiles {
         files: HashSet<AnchoredSystemPathBuf>,
