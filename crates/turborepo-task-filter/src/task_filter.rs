@@ -626,7 +626,7 @@ mod tests {
         package_json::PackageJson,
         package_manager::PackageManager,
     };
-    use turborepo_scope::ChangedFilesDetector;
+    use turborepo_scope::{ChangedFilesDetector, TargetSelector};
     use turborepo_task_id::TaskId;
     use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskInputs};
 
@@ -733,6 +733,50 @@ mod tests {
             ));
             Ok(Ok(self.files.clone()))
         }
+    }
+
+    // The package graph only supplies names; these task IDs model the tasks a
+    // Cargo workspace contributes, without Cargo discovery or process execution.
+    async fn make_cargo_task_pkg_graph(root: &AbsoluteSystemPath) -> PackageGraph {
+        make_pkg_graph(root, &["acme", "app", "lib-a"]).await
+    }
+
+    fn fixed_changed_files(files: &[&str]) -> FixedChangedFiles {
+        FixedChangedFiles {
+            files: files
+                .iter()
+                .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+                .collect(),
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn filter_cargo_task_graph(
+        engine: Engine,
+        selectors: &[TargetSelector],
+        pkg_graph: &PackageGraph,
+        changed_files: &FixedChangedFiles,
+        root: &AbsoluteSystemPath,
+        always_include: &HashSet<TaskId<'static>>,
+        entrypoints: Option<&HashSet<TaskId<'static>>>,
+        excluded_entrypoints: &HashSet<TaskId<'static>>,
+    ) -> Engine {
+        super::filter_engine_to_tasks_with_inclusions(
+            engine,
+            selectors,
+            super::TaskFilterConstraints {
+                affected: None,
+                always_include,
+                entrypoints,
+                excluded_entrypoints,
+                orchestration_entrypoints: None,
+            },
+            pkg_graph,
+            changed_files,
+            root,
+            &[],
+        )
+        .unwrap()
     }
 
     #[tokio::test]
@@ -1709,6 +1753,249 @@ mod tests {
             !tasks.contains(&app_build),
             "app#build should not match lib-* glob: {tasks:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn cargo_task_level_filter_respects_command_entrypoints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_cargo_task_pkg_graph(root).await;
+        let acme_test = TaskId::new("acme", "test");
+        let app_test = TaskId::new("app", "test");
+        let lib_test = TaskId::new("lib-a", "test");
+        let engine = make_engine(
+            &[
+                (acme_test.clone(), TaskDefinition::default()),
+                (app_test.clone(), TaskDefinition::default()),
+                (lib_test.clone(), TaskDefinition::default()),
+            ],
+            &[(app_test.clone(), lib_test.clone())],
+        );
+        let entrypoints = HashSet::from([acme_test.clone(), app_test.clone(), lib_test.clone()]);
+        let excluded_entrypoints = HashSet::from([acme_test.clone()]);
+        let always_include = HashSet::new();
+        let changed_files = fixed_changed_files(&[]);
+        let selector: TargetSelector = "...lib-a".parse().unwrap();
+
+        let result = filter_cargo_task_graph(
+            engine,
+            &[selector],
+            &pkg_graph,
+            &changed_files,
+            root,
+            &always_include,
+            Some(&entrypoints),
+            &excluded_entrypoints,
+        );
+        let selected: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert!(
+            selected.contains(&lib_test),
+            "member test is selected: {selected:?}"
+        );
+        assert!(
+            selected.contains(&app_test),
+            "task dependent is retained: {selected:?}"
+        );
+        assert!(
+            !selected.contains(&acme_test),
+            "workspace aggregate is not a selected entrypoint: {selected:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn cargo_task_filter_retains_excluded_with_sibling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_cargo_task_pkg_graph(root).await;
+        let app_test = TaskId::new("app", "test");
+        let acme_test = TaskId::new("acme", "test");
+        let lib_test = TaskId::new("lib-a", "test");
+        let engine = make_engine(
+            &[
+                (app_test.clone(), def_with_siblings(&["acme#test"])),
+                (acme_test.clone(), TaskDefinition::default()),
+                (lib_test.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+        let selector = TargetSelector {
+            name_pattern: "app".to_string(),
+            ..Default::default()
+        };
+        let empty = HashSet::new();
+        let changed_files = fixed_changed_files(&[]);
+
+        let result = filter_cargo_task_graph(
+            engine,
+            &[selector],
+            &pkg_graph,
+            &changed_files,
+            root,
+            &empty,
+            None,
+            &empty,
+        );
+        let selected: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert!(selected.contains(&app_test));
+        assert!(
+            selected.contains(&acme_test),
+            "the excluded Cargo aggregate `with` sibling is retained: {selected:?}"
+        );
+        assert!(!selected.contains(&lib_test));
+    }
+
+    #[tokio::test]
+    async fn cargo_task_filter_closes_dependencies_and_with_siblings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_cargo_task_pkg_graph(root).await;
+        let app_test = TaskId::new("app", "test");
+        let lib_test = TaskId::new("lib-a", "test");
+        let acme_test = TaskId::new("acme", "test");
+        let acme_build = TaskId::new("acme", "build");
+        let lib_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(
+            &[
+                (app_test.clone(), TaskDefinition::default()),
+                (lib_test.clone(), TaskDefinition::default()),
+                (acme_test.clone(), def_with_siblings(&["acme#build"])),
+                (acme_build.clone(), TaskDefinition::default()),
+                (lib_build.clone(), TaskDefinition::default()),
+            ],
+            &[
+                (app_test.clone(), lib_test.clone()),
+                (lib_test.clone(), acme_test.clone()),
+            ],
+        );
+        let selectors = [
+            TargetSelector {
+                name_pattern: "app".to_string(),
+                ..Default::default()
+            },
+            TargetSelector {
+                name_pattern: "acme".to_string(),
+                ..Default::default()
+            },
+        ];
+        // The requested entrypoints include test tasks, but the build sibling
+        // must come from the `with` relationship rather than package selection.
+        let entrypoints = HashSet::from([app_test.clone(), acme_test.clone()]);
+        let empty = HashSet::new();
+        let changed_files = fixed_changed_files(&[]);
+
+        let result = filter_cargo_task_graph(
+            engine,
+            &selectors,
+            &pkg_graph,
+            &changed_files,
+            root,
+            &empty,
+            Some(&entrypoints),
+            &empty,
+        );
+        let selected: HashSet<_> = result.task_ids().cloned().collect();
+
+        for task in [&app_test, &lib_test, &acme_test, &acme_build] {
+            assert!(
+                selected.contains(task),
+                "dependency/`with` closure lost {task}: {selected:?}"
+            );
+        }
+        assert!(!selected.contains(&lib_build));
+    }
+
+    #[tokio::test]
+    async fn cargo_task_input_filter_uses_injected_changed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_cargo_task_pkg_graph(root).await;
+        std::fs::write(tmp.path().join("shared.txt"), "after\n").unwrap();
+
+        let acme_test = TaskId::new("acme", "test");
+        let app_test = TaskId::new("app", "test");
+        let lib_test = TaskId::new("lib-a", "test");
+        let engine = make_engine(
+            &[
+                (acme_test.clone(), def_with_inputs(&["src/**"], true)),
+                (app_test.clone(), def_with_inputs(&["src/**"], true)),
+                (
+                    lib_test.clone(),
+                    def_with_inputs(&["../../shared.txt"], true),
+                ),
+            ],
+            &[],
+        );
+        let selector: TargetSelector = "[HEAD]".parse().unwrap();
+        let changed_files = fixed_changed_files(&["shared.txt"]);
+        let empty = HashSet::new();
+
+        let result = filter_cargo_task_graph(
+            engine,
+            &[selector],
+            &pkg_graph,
+            &changed_files,
+            root,
+            &empty,
+            None,
+            &empty,
+        );
+        let selected: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert!(
+            selected.contains(&lib_test),
+            "root-level task input selects the Cargo member: {selected:?}"
+        );
+        assert!(!selected.contains(&acme_test));
+        assert!(!selected.contains(&app_test));
+        assert_eq!(changed_files.calls.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn qualified_cargo_tasks_do_not_expand_unqualified_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_cargo_task_pkg_graph(root).await;
+        let acme_test = TaskId::new("acme", "test");
+        let app_build = TaskId::new("app", "build");
+        let app_test = TaskId::new("app", "test");
+        let lib_test = TaskId::new("lib-a", "test");
+        let tasks = [
+            (acme_test.clone(), TaskDefinition::default()),
+            (app_build.clone(), TaskDefinition::default()),
+            (app_test.clone(), TaskDefinition::default()),
+            (lib_test.clone(), TaskDefinition::default()),
+        ];
+        let selector = TargetSelector {
+            name_pattern: "acme".to_string(),
+            ..Default::default()
+        };
+        let changed_files = fixed_changed_files(&[]);
+        let empty = HashSet::new();
+
+        for qualified_task in [app_build, lib_test] {
+            let engine = make_engine(&tasks, &[]);
+            let always_include = HashSet::from([qualified_task.clone()]);
+            let result = filter_cargo_task_graph(
+                engine,
+                std::slice::from_ref(&selector),
+                &pkg_graph,
+                &changed_files,
+                root,
+                &always_include,
+                None,
+                &empty,
+            );
+            let selected: HashSet<_> = result.task_ids().cloned().collect();
+
+            assert!(selected.contains(&acme_test));
+            assert!(selected.contains(&qualified_task));
+            assert!(
+                !selected.contains(&app_test),
+                "qualified Cargo tasks must not broaden unqualified selection: {selected:?}"
+            );
+        }
     }
 
     fn def_with_siblings(siblings: &[&str]) -> TaskDefinition {
