@@ -1218,17 +1218,28 @@ mod test {
     // The operation closure stands in for an artifact HTTP call, so these tests
     // exercise the same admission and error classification as PUT/GET/HEAD.
     async fn status_error(status: u16) -> turborepo_api_client::Error {
-        use tokio::io::AsyncWriteExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
+            // Drain the request before closing the socket: on Windows, dropping a
+            // socket with unread data can reset the connection before reqwest sees
+            // the response status.
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0];
+                assert_ne!(socket.read(&mut byte).await.unwrap(), 0);
+                request.push(byte[0]);
+                assert!(request.len() < 8192);
+            }
             socket
                 .write_all(
                     format!("HTTP/1.1 {status} Test\r\nContent-Length: 0\r\n\r\n").as_bytes(),
                 )
                 .await
                 .unwrap();
+            socket.shutdown().await.unwrap();
         });
         let error = reqwest::Client::new()
             .get(format!("http://{address}"))
