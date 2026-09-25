@@ -54,6 +54,13 @@ impl GitChangeDetector for RecordingDetector {
 }
 
 async fn injected_graph() -> (tempfile::TempDir, AbsoluteSystemPathBuf, PackageGraph) {
+    injected_graph_with_names("app", "lib").await
+}
+
+async fn injected_graph_with_names(
+    app_name: &str,
+    lib_name: &str,
+) -> (tempfile::TempDir, AbsoluteSystemPathBuf, PackageGraph) {
     let tmp = tempfile::tempdir().unwrap();
     let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
     let app = root.join_components(&["packages", "app", "package.json"]);
@@ -69,15 +76,15 @@ async fn injected_graph() -> (tempfile::TempDir, AbsoluteSystemPathBuf, PackageG
         (
             app,
             PackageJson {
-                name: Some(Spanned::new("app".to_string())),
-                dependencies: Some(BTreeMap::from([("lib".to_string(), "*".to_string())])),
+                name: Some(Spanned::new(app_name.to_string())),
+                dependencies: Some(BTreeMap::from([((lib_name.to_string()), "*".to_string())])),
                 ..Default::default()
             },
         ),
         (
             lib,
             PackageJson {
-                name: Some(Spanned::new("lib".to_string())),
+                name: Some(Spanned::new(lib_name.to_string())),
                 ..Default::default()
             },
         ),
@@ -168,6 +175,53 @@ async fn injected_scope_entrypoint_resolves_affected_dependents_and_exclusions()
         1,
         "no Git call for exclusion-only selection"
     );
+}
+
+#[tokio::test]
+async fn injected_scope_selects_versioned_go_names_and_rejects_aliases() {
+    let (_tmp, root, graph) = injected_graph_with_names("api/v2", "lib/v10").await;
+    assert_eq!(
+        graph
+            .filtering_relationships()
+            .transitive_dependencies(&PackageName::from("api/v2"))
+            .unwrap(),
+        [PackageName::from("lib/v10")],
+    );
+
+    let opts = ScopeOpts {
+        filter_patterns: vec!["api/v2...".to_string()],
+        ..Default::default()
+    };
+    let (selected, mode) = resolve_packages_with_change_detector(
+        &opts,
+        &root,
+        &graph,
+        RecordingDetector {
+            calls: Arc::new(Mutex::new(Vec::new())),
+        },
+    )
+    .unwrap();
+    assert_eq!(mode, FilterMode::ExplicitSelection);
+    assert_eq!(
+        selected.into_keys().collect::<HashSet<_>>(),
+        [PackageName::from("api/v2"), PackageName::from("lib/v10")].into(),
+    );
+
+    for alias in ["api", "v2", "lib", "v10", "example.com/team/api/v2"] {
+        let opts = ScopeOpts {
+            filter_patterns: vec![alias.to_string()],
+            ..Default::default()
+        };
+        let result = resolve_packages_with_change_detector(
+            &opts,
+            &root,
+            &graph,
+            RecordingDetector {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            },
+        );
+        assert!(result.is_err(), "{alias:?} must not select a Go package");
+    }
 }
 
 struct MatrixContributor {

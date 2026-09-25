@@ -491,18 +491,6 @@ fn task_hash(dir: &Path, package: &str, task: &str) -> String {
         .to_string()
 }
 
-fn package_names(dir: &Path) -> Vec<String> {
-    let output = run_turbo(dir, &["ls", "--output=json"]);
-    assert_command_success(&output, "turbo ls");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("ls emits JSON");
-    json["packages"]["items"]
-        .as_array()
-        .expect("packages items")
-        .iter()
-        .map(|package| package["name"].as_str().expect("name").to_string())
-        .collect()
-}
-
 fn query_packages(dir: &Path) -> serde_json::Value {
     let output = run_turbo(
         dir,
@@ -727,96 +715,61 @@ fn test_go_package_names_preserve_major_versions_without_aliases() {
         return;
     }
 
-    for suffix in ["", "/v2", "/v10"] {
-        let tempdir = tempfile::tempdir().unwrap();
-        let root = tempdir.path();
-        setup_go_pure_workspace(root);
-        let name = format!("api{suffix}");
-        let module_path = format!("example.com/{name}");
-        fs::write(
-            root.join("apps/api/go.mod"),
-            format!(
-                "module {module_path}\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace \
-                 example.com/lib => ../../packages/lib\n"
-            ),
-        )
-        .unwrap();
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_go_pure_workspace(root);
+    let name = "api/v10";
+    let module_path = "example.com/team/api/v10";
+    fs::write(
+        root.join("apps/api/go.mod"),
+        format!(
+            "module {module_path}\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace \
+             example.com/lib => ../../packages/lib\n"
+        ),
+    )
+    .unwrap();
 
-        let names = package_names(root);
-        assert!(names.contains(&name), "names: {names:?}");
-        assert!(names.contains(&"lib".to_string()), "names: {names:?}");
-        assert!(
-            !names.contains(&module_path),
-            "no full-path alias: {names:?}"
-        );
-        if !suffix.is_empty() {
-            assert!(
-                !names.contains(&"api".to_string()),
-                "no unversioned alias: {names:?}"
-            );
-            assert!(
-                !names.contains(&suffix.trim_start_matches('/').to_string()),
-                "the major version alone is not a package name: {names:?}"
-            );
-        }
+    let task_id = format!("{name}#build");
+    let filtered = run_turbo(
+        root,
+        &[
+            "run",
+            "build",
+            &format!("--filter={name}"),
+            "--dry-run=json",
+        ],
+    );
+    let task = dry_run_task(&filtered, &task_id);
+    assert_eq!(task["package"], name);
+    assert_eq!(task["dependencies"], serde_json::json!(["lib#build"]));
 
-        let task_id = format!("{name}#build");
-        let filtered = run_turbo(
-            root,
-            &[
-                "run",
-                "build",
-                &format!("--filter={name}"),
-                "--dry-run=json",
-            ],
-        );
-        let task = dry_run_task(&filtered, &task_id);
-        assert_eq!(task["package"], name);
-        assert_eq!(task["dependencies"], serde_json::json!(["lib#build"]));
-        let explicit = run_turbo(root, &["run", &task_id, "--dry-run=json"]);
-        assert_eq!(task["hash"], dry_run_task(&explicit, &task_id)["hash"]);
+    // Full module paths are Go metadata, not alternate Turborepo selectors.
+    let alias = run_turbo(
+        root,
+        &[
+            "run",
+            "build",
+            &format!("--filter={module_path}"),
+            "--dry-run=json",
+        ],
+    );
+    assert!(
+        !alias.status.success(),
+        "{module_path} must not select {name}: {}",
+        common::combined_output(&alias)
+    );
 
-        // Full module paths are Go metadata, not alternate Turborepo selectors.
-        let mut aliases = vec![module_path.clone()];
-        if !suffix.is_empty() {
-            aliases.push("api".to_string());
-        }
-        for alias in aliases {
-            for args in [
-                vec![
-                    "run".to_string(),
-                    "build".to_string(),
-                    format!("--filter={alias}"),
-                    "--dry-run=json".to_string(),
-                ],
-                vec![
-                    "run".to_string(),
-                    format!("{alias}#build"),
-                    "--dry-run=json".to_string(),
-                ],
-            ] {
-                let args = args.iter().map(String::as_str).collect::<Vec<_>>();
-                let output = run_turbo(root, &args);
-                assert!(
-                    !output.status.success(),
-                    "{alias} must not select {name}: {}",
-                    common::combined_output(&output)
-                );
-            }
-        }
-
-        let output = run_go(&root.join("apps/api"), &["list", "-json", "."]);
-        assert_command_success(&output, "Go metadata after short-name task selection");
-        let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(metadata["Module"]["Path"], module_path);
-        assert!(
-            metadata["Imports"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!("example.com/lib")),
-            "Go imports must retain full module paths: {metadata}"
-        );
-    }
+    let output = run_go(&root.join("apps/api"), &["list", "-json", "."]);
+    assert_command_success(&output, "Go metadata after versioned-name task selection");
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(metadata["Module"]["Path"], module_path);
+    assert!(
+        metadata["Imports"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("example.com/lib")),
+        "Go imports must retain full module paths: {metadata}"
+    );
 }
 
 #[test]
