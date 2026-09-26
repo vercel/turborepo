@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod loader;
 pub mod port;
 
@@ -19,7 +17,6 @@ use turborepo_turbo_json::{LoaderError, TurboJson, TurboJsonUpdater};
 pub struct MicrofrontendsConfigs {
     configs: HashMap<String, ConfigInfo>,
     mfe_package: Option<&'static str>,
-    has_mfe_dependency: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -140,7 +137,6 @@ impl MicrofrontendsConfigs {
             configs,
             missing_default_apps,
             missing_applications,
-            unsupported_version: _,
             mfe_package,
             has_mfe_dependency,
         } = PackageGraphResult::new(package_names, configs, package_has_mfe_dependency)?;
@@ -180,7 +176,6 @@ impl MicrofrontendsConfigs {
         Ok((!configs.is_empty()).then_some(Self {
             configs,
             mfe_package,
-            has_mfe_dependency,
         }))
     }
 
@@ -455,7 +450,6 @@ struct PackageGraphResult {
     configs: HashMap<String, ConfigInfo>,
     missing_default_apps: Vec<String>,
     missing_applications: Vec<String>,
-    unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
     has_mfe_dependency: bool,
 }
@@ -469,7 +463,6 @@ impl PackageGraphResult {
         let mut configs = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut referenced_packages = HashSet::new();
-        let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
         let mut has_mfe_dependency = false;
         // We sort packages to ensure deterministic behavior
@@ -493,7 +486,7 @@ impl PackageGraphResult {
             let Some(config) = config.or_else(|err| {
                 match &err {
                     turborepo_microfrontends::Error::UnsupportedVersion(_) => {
-                        unsupported_version.push((package_name.to_string(), err.to_string()));
+                        warn!("Ignoring microfrontends config in {package_name}: {err}");
                         Ok(None)
                     }
                     turborepo_microfrontends::Error::ChildConfig { reference } => {
@@ -566,7 +559,6 @@ impl PackageGraphResult {
             configs,
             missing_default_apps,
             missing_applications,
-            unsupported_version,
             mfe_package,
             has_mfe_dependency,
         })
@@ -789,77 +781,6 @@ mod test {
         assert!(has_mfe_dependency(&graph, &PackageName::Root));
     }
 
-    struct PackageUpdateTest {
-        package_name: &'static str,
-        version: &'static str,
-        result: Option<TestFindResult>,
-    }
-
-    struct TestFindResult {
-        dev: Option<&'static str>,
-        proxy: &'static str,
-    }
-
-    impl PackageUpdateTest {
-        pub const fn new(package_name: &'static str) -> Self {
-            Self {
-                package_name,
-                version: "1",
-                result: None,
-            }
-        }
-
-        pub const fn v1(mut self) -> Self {
-            self.version = "1";
-            self
-        }
-
-        pub const fn dev(mut self, dev: &'static str, proxy: &'static str) -> Self {
-            self.result = Some(TestFindResult {
-                dev: Some(dev),
-                proxy,
-            });
-            self
-        }
-
-        pub const fn proxy_only(mut self, proxy: &'static str) -> Self {
-            self.result = Some(TestFindResult { dev: None, proxy });
-            self
-        }
-
-        pub fn package_name(&self) -> PackageName {
-            PackageName::from(self.package_name)
-        }
-
-        pub fn expected(&self) -> Option<FindResult<'_>> {
-            match self.result {
-                Some(TestFindResult {
-                    dev: Some(dev),
-                    proxy,
-                }) => Some(FindResult {
-                    dev: Some(Self::str_to_task(dev)),
-                    proxy: Self::str_to_task(proxy),
-                    version: self.version,
-                    use_turborepo_proxy: false,
-                }),
-                Some(TestFindResult { dev: None, proxy }) => Some(FindResult {
-                    dev: None,
-                    proxy: Self::str_to_task(proxy),
-                    version: self.version,
-                    use_turborepo_proxy: false,
-                }),
-                None => None,
-            }
-        }
-
-        fn str_to_task(s: &str) -> TaskId<'static> {
-            turborepo_task_id::TaskName::from(s)
-                .task_id()
-                .unwrap()
-                .into_owned()
-        }
-    }
-
     #[test]
     fn test_mfe_package_is_found() {
         let result = PackageGraphResult::new(
@@ -959,6 +880,45 @@ mod test {
         .unwrap();
         assert_eq!(result.configs, HashMap::new());
         assert_eq!(result.missing_default_apps, &["main".to_string()]);
+    }
+
+    #[test]
+    fn test_compatible_newer_version_is_loaded() {
+        let config = MfeConfig::from_str(
+            r#"{"version":"2","applications":{"web":{}}}"#,
+            "microfrontends.json",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            [("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        assert!(result.configs.contains_key("web"));
+    }
+
+    #[test]
+    fn test_unsupported_version_skips_only_unsupported_package() {
+        let config = MfeConfig::from_str(
+            r#"{"version":"1","applications":{"web":{}}}"#,
+            "microfrontends.json",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            [
+                ("legacy", Err(Error::UnsupportedVersion("2".into()))),
+                ("web", Ok(Some(config))),
+            ]
+            .into_iter(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        assert!(!result.configs.contains_key("legacy"));
+        assert!(result.configs.contains_key("web"));
     }
 
     #[test]
@@ -1124,7 +1084,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_ids = [TaskId::new("web", "dev"), TaskId::new("docs", "build")];
@@ -1137,7 +1096,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_ids = [TaskId::new("web", "build"), TaskId::new("docs", "lint")];
@@ -1150,7 +1108,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_ids = [TaskId::new("web", "dev")];
@@ -1163,7 +1120,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_ids: Vec<TaskId> = vec![];
@@ -1261,7 +1217,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: result.configs,
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_id = TaskId::new("web", "dev");
@@ -1276,7 +1231,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_id = TaskId::new("web", "build");
@@ -1313,7 +1267,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: result.configs,
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_id = TaskId::new("web", "dev");
@@ -1351,7 +1304,6 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: result.configs,
             mfe_package: None,
-            has_mfe_dependency: false,
         };
 
         let task_id = TaskId::new("web", "dev");
