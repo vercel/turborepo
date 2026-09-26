@@ -23,9 +23,10 @@ pub const DEFAULT_PORT: u16 = 9876;
 /// Find an available port, starting from the requested port.
 /// If the requested port is in use, finds an open one.
 pub fn find_available_port(requested: u16) -> u16 {
-    if std::net::TcpStream::connect(("0.0.0.0", requested)).is_ok() {
-        // Port is in use, find another
-        std::net::TcpListener::bind("0.0.0.0:0")
+    // Probe the same loopback address the devtools server binds to. Connecting
+    // to 0.0.0.0 does not reliably detect an occupied port on Windows.
+    if std::net::TcpListener::bind(("127.0.0.1", requested)).is_err() {
+        std::net::TcpListener::bind("127.0.0.1:0")
             .ok()
             .and_then(|listener| listener.local_addr().ok().map(|addr| addr.port()))
             .unwrap_or(requested.saturating_add(1))
@@ -42,7 +43,7 @@ mod tests {
 
     #[test]
     fn keeps_unoccupied_port() {
-        let listener = TcpListener::bind("0.0.0.0:0").unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
 
@@ -51,7 +52,7 @@ mod tests {
 
     #[test]
     fn chooses_another_port_when_occupied() {
-        let listener = TcpListener::bind("0.0.0.0:0").unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
 
         let selected = find_available_port(port);
