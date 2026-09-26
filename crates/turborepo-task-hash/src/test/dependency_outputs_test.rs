@@ -84,17 +84,21 @@ fn consumer_hash_with_outputs(
 
     hasher
         .calculate_task_hash_with_deferred_inputs(
-            &consumer,
-            &TaskDefinition::default(),
-            EnvMode::Strict,
-            &package_context,
-            &dependency_set,
-            PackageTaskEventBuilder::new("app", "build"),
-            &SCM::new(repo_root),
-            repo_root,
-            None,
-            Some(dependency_outputs),
-            &selected_producers,
+            TaskHashRequest {
+                task_id: &consumer,
+                task_definition: &TaskDefinition::default(),
+                task_env_mode: EnvMode::Strict,
+                package_context: &package_context,
+                dependency_set: &dependency_set,
+                telemetry: PackageTaskEventBuilder::new("app", "build"),
+            },
+            DeferredHashInputs {
+                scm: &SCM::new(repo_root),
+                repo_root,
+                repo_index: None,
+                dependency_output_hashes: Some(dependency_outputs),
+                dependency_output_producers: &selected_producers,
+            },
         )
         .unwrap()
 }

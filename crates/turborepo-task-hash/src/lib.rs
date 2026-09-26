@@ -327,6 +327,25 @@ pub struct TaskHashTrackerState {
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
+/// Information shared by eager and deferred hashing of one task.
+pub struct TaskHashRequest<'a, 'context, 'dep, T> {
+    pub task_id: &'a TaskId<'static>,
+    pub task_definition: &'a T,
+    pub task_env_mode: EnvMode,
+    pub package_context: &'a PackageTaskContext<'context>,
+    pub dependency_set: &'a [&'dep TaskNode],
+    pub telemetry: PackageTaskEventBuilder,
+}
+
+/// Repository and dependency outputs needed only for deferred task hashing.
+pub struct DeferredHashInputs<'a> {
+    pub scm: &'a SCM,
+    pub repo_root: &'a AbsoluteSystemPath,
+    pub repo_index: Option<&'a RepoGitIndex>,
+    pub dependency_output_hashes: Option<Arc<FileHashes>>,
+    pub dependency_output_producers: &'a HashSet<TaskId<'static>>,
+}
+
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a, R> {
     hashes: HashMap<TaskId<'static>, String>,
@@ -445,44 +464,49 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
         self.calculate_task_hash_with_file_hash(
+            TaskHashRequest {
+                task_id,
+                task_definition,
+                task_env_mode,
+                package_context,
+                dependency_set,
+                telemetry,
+            },
+            hash_of_files,
+            None,
+        )
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = ?task.task_id,
+            telemetry = ?task.telemetry,
+            repo_root = ?inputs.repo_root,
+            dependency_output_hashes = ?inputs.dependency_output_hashes,
+            dependency_output_producers = ?inputs.dependency_output_producers
+        )
+    )]
+    pub fn calculate_task_hash_with_deferred_inputs<T: TaskDefinitionHashInfo>(
+        &self,
+        task: TaskHashRequest<'_, '_, '_, T>,
+        inputs: DeferredHashInputs<'_>,
+    ) -> Result<String, Error> {
+        let TaskHashRequest {
             task_id,
             task_definition,
             task_env_mode,
             package_context,
             dependency_set,
             telemetry,
-            hash_of_files,
-            None,
-        )
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "deferred hashing needs task context, repository state, and dependency outputs"
-    )]
-    #[tracing::instrument(skip(
-        self,
-        task_definition,
-        task_env_mode,
-        package_context,
-        dependency_set,
-        scm,
-        repo_index
-    ))]
-    pub fn calculate_task_hash_with_deferred_inputs<T: TaskDefinitionHashInfo>(
-        &self,
-        task_id: &TaskId<'static>,
-        task_definition: &T,
-        task_env_mode: EnvMode,
-        package_context: &PackageTaskContext<'_>,
-        dependency_set: &[&TaskNode],
-        telemetry: PackageTaskEventBuilder,
-        scm: &SCM,
-        repo_root: &AbsoluteSystemPath,
-        repo_index: Option<&RepoGitIndex>,
-        dependency_output_hashes: Option<Arc<FileHashes>>,
-        dependency_output_producers: &HashSet<TaskId<'static>>,
-    ) -> Result<String, Error> {
+        } = task;
+        let DeferredHashInputs {
+            scm,
+            repo_root,
+            repo_index,
+            dependency_output_hashes,
+            dependency_output_producers,
+        } = inputs;
         validate_task_context(task_id, package_context, repo_root)?;
         self.validate_package_context(task_id, package_context)?;
         if repo_root != self.repository_root {
@@ -523,12 +547,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .insert_expanded_inputs(task_id.clone(), combined_hashes);
 
         self.calculate_task_hash_with_file_hash(
-            task_id,
-            task_definition,
-            task_env_mode,
-            package_context,
-            dependency_set,
-            telemetry,
+            TaskHashRequest {
+                task_id,
+                task_definition,
+                task_env_mode,
+                package_context,
+                dependency_set,
+                telemetry,
+            },
             &hash_of_files,
             Some(dependency_output_producers),
         )
@@ -552,21 +578,20 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         Ok(())
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "hash calculation needs task context, file hashes, and dependency hashes"
-    )]
     fn calculate_task_hash_with_file_hash<T: TaskDefinitionHashInfo>(
         &self,
-        task_id: &TaskId<'static>,
-        task_definition: &T,
-        task_env_mode: EnvMode,
-        package_context: &PackageTaskContext<'_>,
-        dependency_set: &[&TaskNode],
-        telemetry: PackageTaskEventBuilder,
+        task: TaskHashRequest<'_, '_, '_, T>,
         hash_of_files: &str,
         excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
     ) -> Result<String, Error> {
+        let TaskHashRequest {
+            task_id,
+            task_definition,
+            task_env_mode,
+            package_context,
+            dependency_set,
+            telemetry,
+        } = task;
         let do_framework_inference = self.run_opts.framework_inference();
         let is_monorepo = !self.run_opts.single_package();
 
@@ -1874,17 +1899,21 @@ mod test {
 
         let error = hasher
             .calculate_task_hash_with_deferred_inputs(
-                &task_id,
-                &definition,
-                EnvMode::Strict,
-                &foreign_context,
-                &[],
-                PackageTaskEventBuilder::new("app", "build"),
-                &SCM::new(&second_root),
-                &second_root,
-                None,
-                None,
-                &HashSet::new(),
+                TaskHashRequest {
+                    task_id: &task_id,
+                    task_definition: &definition,
+                    task_env_mode: EnvMode::Strict,
+                    package_context: &foreign_context,
+                    dependency_set: &[],
+                    telemetry: PackageTaskEventBuilder::new("app", "build"),
+                },
+                DeferredHashInputs {
+                    scm: &SCM::new(&second_root),
+                    repo_root: &second_root,
+                    repo_index: None,
+                    dependency_output_hashes: None,
+                    dependency_output_producers: &HashSet::new(),
+                },
             )
             .unwrap_err();
 

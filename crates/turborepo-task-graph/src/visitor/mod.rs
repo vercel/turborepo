@@ -33,7 +33,8 @@ use turborepo_task_executor::{
     InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
-    Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHasher,
+    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes,
+    TaskHashRequest, TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
@@ -809,19 +810,23 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     }
                                 };
                             match self.task_hasher.calculate_task_hash_with_deferred_inputs(
-                                &info,
-                                task_definition,
-                                task_env_mode,
-                                &package_context,
-                                &dependency_set,
-                                task_hash_telemetry,
-                                &self.repo.scm,
-                                &self.repo.repo_root,
-                                // Deferred inputs are hashed after dependencies run. Read them
-                                // from disk instead of consulting the run-start repo index.
-                                None,
-                                dependency_output_hashes,
-                                &dependency_output_producers,
+                                TaskHashRequest {
+                                    task_id: &info,
+                                    task_definition,
+                                    task_env_mode,
+                                    package_context: &package_context,
+                                    dependency_set: &dependency_set,
+                                    telemetry: task_hash_telemetry,
+                                },
+                                DeferredHashInputs {
+                                    scm: &self.repo.scm,
+                                    repo_root: &self.repo.repo_root,
+                                    // Deferred inputs are hashed after dependencies run. Read them
+                                    // from disk instead of consulting the run-start repo index.
+                                    repo_index: None,
+                                    dependency_output_hashes,
+                                    dependency_output_producers: &dependency_output_producers,
+                                },
                             ) {
                                 Ok(hash) => hash,
                                 Err(err) => {
