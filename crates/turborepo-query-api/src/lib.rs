@@ -1,4 +1,3 @@
-#![allow(clippy::result_large_err)]
 //! Interface types for the turborepo query layer.
 //!
 //! This crate defines the traits that bridge `turborepo-run` (the run

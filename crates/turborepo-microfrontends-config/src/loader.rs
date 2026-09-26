@@ -108,6 +108,10 @@ impl UnifiedTurboJsonLoader {
     }
 
     /// Load a turbo.json for a given package
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the shared LoaderError API without boxing"
+    )]
     pub fn load(&self, package: &PackageName) -> Result<&TurboJson, LoaderError> {
         match self {
             Self::Standard(loader) => loader.load(package),

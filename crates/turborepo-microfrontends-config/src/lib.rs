@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![allow(clippy::result_large_err)]
 
 mod loader;
 pub mod port;
@@ -240,6 +239,10 @@ impl MicrofrontendsConfigs {
             .any(|config| config.tasks.contains_key(task_id) && config.use_turborepo_proxy)
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the shared LoaderError API and its structured diagnostics"
+    )]
     pub fn update_turbo_json(
         &self,
         package_name: &PackageName,

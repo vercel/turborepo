@@ -1,6 +1,5 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
-#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
@@ -296,6 +295,10 @@ enum GitError {
 }
 
 impl GitRepo {
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the structured git-root error without boxing on this error path"
+    )]
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path

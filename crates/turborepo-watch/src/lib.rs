@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use std::{
     collections::HashSet,
     env,
@@ -425,6 +423,10 @@ impl WatchTaskSelection<'_> {
 }
 
 impl WatchClient {
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain the structured watch-mode error type"
+    )]
     pub async fn new(
         base: RunBuilderInput,
         experimental_write_cache: bool,
@@ -589,6 +591,10 @@ impl WatchClient {
         })
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain the structured watch-mode error type"
+    )]
     pub async fn start(&mut self) -> Result<(), Error> {
         let mut events = std::mem::replace(
             &mut self.package_change_events,
@@ -713,6 +719,10 @@ impl WatchClient {
         Err(Error::SignalInterrupt)
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain the structured watch-mode error type"
+    )]
     async fn collect_change_events(
         mut events: broadcast::Receiver<PackageChangeEvent>,
         pending: Arc<Mutex<ChangedPackages>>,
@@ -863,6 +873,10 @@ impl WatchClient {
     /// Persistent tasks are handled as fire-and-forget by the visitor in watch
     /// mode: they run as background processes tracked by the ProcessManager
     /// while the run itself completes after non-persistent tasks finish.
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain the structured watch-mode error type"
+    )]
     async fn execute_run(
         &mut self,
         changed_packages: ChangedPackages,
