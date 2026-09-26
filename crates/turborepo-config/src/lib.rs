@@ -34,7 +34,6 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use derive_setters::Setters;
 use env::EnvVars;
 pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
@@ -277,13 +276,8 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Setters)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
-// Generate setters for the builder type that set these values on its override_config field
-#[setters(
-    prefix = "with_",
-    generate_delegates(ty = "TurborepoConfigBuilder", field = "override_config")
-)]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
     #[serde(alias = "ApiUrl")]
@@ -379,6 +373,69 @@ pub struct TurborepoConfigBuilder {
     override_config: ConfigurationOptions,
     global_config_path: Option<AbsoluteSystemPathBuf>,
     environment: Option<HashMap<OsString, OsString>>,
+}
+
+// Keep the fluent setters on both types in sync. Each setter accepts the full
+// Option<T>, including None, and the builder writes to its override layer.
+macro_rules! configuration_setters {
+    ($($method:ident: $field:ident: $ty:ty),* $(,)?) => {
+        impl ConfigurationOptions {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.$field = value;
+                    self
+                }
+            )*
+        }
+
+        impl TurborepoConfigBuilder {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.override_config.$field = value;
+                    self
+                }
+            )*
+        }
+    };
+}
+
+configuration_setters! {
+    with_api_url: api_url: Option<String>,
+    with_api_url_source: api_url_source: Option<ConfigurationSource>,
+    with_login_url: login_url: Option<String>,
+    with_login_url_source: login_url_source: Option<ConfigurationSource>,
+    with_team_slug: team_slug: Option<String>,
+    with_team_id: team_id: Option<String>,
+    with_token: token: Option<String>,
+    with_signature: signature: Option<bool>,
+    with_preflight: preflight: Option<bool>,
+    with_timeout: timeout: Option<u64>,
+    with_upload_timeout: upload_timeout: Option<u64>,
+    with_enabled: enabled: Option<bool>,
+    with_ui: ui: Option<UIMode>,
+    with_allow_no_package_manager: allow_no_package_manager: Option<bool>,
+    with_daemon: daemon: Option<bool>,
+    with_env_mode: env_mode: Option<EnvMode>,
+    with_scm_base: scm_base: Option<String>,
+    with_scm_head: scm_head: Option<String>,
+    with_cache_dir: cache_dir: Option<Utf8PathBuf>,
+    with_cache_max_age: cache_max_age: Option<String>,
+    with_cache_max_size: cache_max_size: Option<String>,
+    with_root_turbo_json_path: root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    with_force: force: Option<bool>,
+    with_log_order: log_order: Option<LogOrder>,
+    with_cache: cache: Option<CacheConfig>,
+    with_remote_only: remote_only: Option<bool>,
+    with_remote_cache_read_only: remote_cache_read_only: Option<bool>,
+    with_run_summary: run_summary: Option<bool>,
+    with_allow_no_turbo_json: allow_no_turbo_json: Option<bool>,
+    with_tui_scrollback_length: tui_scrollback_length: Option<u64>,
+    with_concurrency: concurrency: Option<String>,
+    with_no_update_notifier: no_update_notifier: Option<bool>,
+    with_sso_login_callback_port: sso_login_callback_port: Option<u16>,
+    with_future_flags: future_flags: Option<FutureFlags>,
+    with_experimental_observability: experimental_observability: Option<ExperimentalObservabilityOptions>,
+    with_log_file: log_file: Option<LogFileConfig>,
 }
 
 // Getters
@@ -846,6 +903,35 @@ mod test {
         DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
         ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
     };
+
+    #[test]
+    fn test_generated_setters() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\fake\\repo"
+        } else {
+            "/fake/repo"
+        })
+        .unwrap();
+        let config = ConfigurationOptions::default()
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+
+        assert_eq!(config.api_url, None);
+        assert_eq!(config.timeout, Some(42));
+        assert_eq!(config.daemon, Some(false));
+        assert_eq!(config.log_file, Some(crate::LogFileConfig::Enabled));
+
+        let builder = TurborepoConfigBuilder::new(repo_root)
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+        assert_eq!(builder.override_config, config);
+    }
 
     #[test]
     fn test_defaults() {
