@@ -1,14 +1,12 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use merge::Merge;
 use serde::{Deserialize, Serialize};
 // Re-export Protocol from turborepo-otel to avoid duplicating the enum.
 pub use turborepo_otel::Protocol as ExperimentalOtelProtocol;
 
-use crate::Error;
+use crate::{Error, Merge, merge_nested, merge_option};
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelRunAttributesOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -17,8 +15,14 @@ pub struct ExperimentalOtelRunAttributesOptions {
     pub scm_revision: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+impl Merge for ExperimentalOtelRunAttributesOptions {
+    fn merge(&mut self, other: Self) {
+        merge_option(&mut self.id, other.id);
+        merge_option(&mut self.scm_revision, other.scm_revision);
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelTaskAttributesOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,8 +31,14 @@ pub struct ExperimentalOtelTaskAttributesOptions {
     pub hashes: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+impl Merge for ExperimentalOtelTaskAttributesOptions {
+    fn merge(&mut self, other: Self) {
+        merge_option(&mut self.id, other.id);
+        merge_option(&mut self.hashes, other.hashes);
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelMetricsOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,11 +46,18 @@ pub struct ExperimentalOtelMetricsOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::recurse)]
     pub run_attributes: Option<ExperimentalOtelRunAttributesOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::recurse)]
     pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
+}
+
+impl Merge for ExperimentalOtelMetricsOptions {
+    fn merge(&mut self, other: Self) {
+        merge_option(&mut self.run_summary, other.run_summary);
+        merge_option(&mut self.task_details, other.task_details);
+        merge_nested(&mut self.run_attributes, other.run_attributes);
+        merge_nested(&mut self.task_attributes, other.task_attributes);
+    }
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
@@ -81,22 +98,22 @@ pub struct ExperimentalOtelOptions {
 impl Merge for ExperimentalOtelOptions {
     fn merge(&mut self, other: Self) {
         let endpoint_locked = self.endpoint.is_some();
-        merge::option::overwrite_none(&mut self.endpoint, other.endpoint);
+        merge_option(&mut self.endpoint, other.endpoint);
 
         if !endpoint_locked {
-            merge::option::overwrite_none(&mut self.headers, other.headers);
-            merge::option::overwrite_none(
+            merge_option(&mut self.headers, other.headers);
+            merge_option(
                 &mut self.use_remote_cache_token,
                 other.use_remote_cache_token,
             );
         }
 
-        merge::option::overwrite_none(&mut self.enabled, other.enabled);
-        merge::option::overwrite_none(&mut self.protocol, other.protocol);
-        merge::option::overwrite_none(&mut self.timeout_ms, other.timeout_ms);
-        merge::option::overwrite_none(&mut self.interval_ms, other.interval_ms);
-        merge::option::overwrite_none(&mut self.resource, other.resource);
-        merge::option::recurse(&mut self.metrics, other.metrics);
+        merge_option(&mut self.enabled, other.enabled);
+        merge_option(&mut self.protocol, other.protocol);
+        merge_option(&mut self.timeout_ms, other.timeout_ms);
+        merge_option(&mut self.interval_ms, other.interval_ms);
+        merge_option(&mut self.resource, other.resource);
+        merge_nested(&mut self.metrics, other.metrics);
     }
 }
 
