@@ -10,7 +10,6 @@ use dunce::canonicalize as fs_canonicalize;
 use miette::Diagnostic;
 use shared_child::SharedChild;
 use thiserror::Error;
-use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
 use turbo_updater::{UpdateCheckConfig, display_update_check};
 use turbopath::AbsoluteSystemPathBuf;
@@ -601,12 +600,7 @@ fn try_check_for_updates(
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
     if args.should_check_for_update() {
-        // custom footer for update message
-        let footer = format!(
-            "Follow {username} for updates: {url}",
-            username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
-            url = "https://x.com/turborepo"
-        );
+        let footer = "Follow @turborepo for updates: https://x.com/turborepo";
 
         let interval = if args.force_update_check {
             // force update check
@@ -619,7 +613,7 @@ fn try_check_for_updates(
         let _ = display_update_check(UpdateCheckConfig {
             package_name: "turbo",
             github_repo: "https://github.com/vercel/turborepo",
-            footer: Some(&footer),
+            footer: Some(footer),
             current_version,
             // use default for timeout (800ms)
             timeout: None,
