@@ -9,7 +9,16 @@
 //!
 //! For more information see the [FSEvents API reference][ref].
 //!
-//! TODO: document event translation
+//! ## Event translation
+//!
+//! Each callback path is translated from its flags into zero or more `notify`
+//! events. `HistoryDone` is ignored. `MustScanSubDirs` emits an `Other` event
+//! with the rescan flag; user- or kernel-dropped hints are attached as event
+//! info. In imprecise mode, other callbacks become `Any` events. In precise
+//! mode, create, remove, data-change, and metadata flags map to their
+//! corresponding event kinds. A rename flag becomes `RenameMode::Any` because
+//! FSEvents does not provide both the old and new paths. `RootChanged` is
+//! represented as a rename-from event with the `root changed` info string.
 //!
 //! [ref]: https://developer.apple.com/library/mac/documentation/Darwin/Reference/FSEvents_Ref/
 
