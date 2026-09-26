@@ -16,9 +16,6 @@ use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
 use turborepo_types::{EnvMode, GlobalHashInputs as GlobalHashInputsTrait};
 
-#[allow(dead_code)]
-static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
-
 pub const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
 
 #[derive(Debug, Error)]
@@ -55,63 +52,6 @@ pub struct GlobalHashableInputs<'a> {
     /// Whether `futureFlags.globalConfiguration` is enabled. Included in the
     /// hash so that toggling the flag deterministically invalidates caches.
     pub global_configuration: bool,
-}
-
-#[expect(clippy::too_many_arguments)]
-#[expect(
-    clippy::result_large_err,
-    reason = "retain structured global-hash errors"
-)]
-pub fn get_global_hash_inputs<'a>(
-    root_external_dependencies_hash: Option<&'a str>,
-    root_internal_dependencies_hash: Option<&'a str>,
-    root_engines: Option<&'a std::collections::BTreeMap<String, String>>,
-    root_path: &AbsoluteSystemPath,
-    package_manager: Option<&PackageManager>,
-    resolution_file_fallback: &[AbsoluteSystemPathBuf],
-    global_file_dependencies: &'a [String],
-    env_at_execution_start: &'a EnvironmentVariableMap,
-    global_env: &'a [String],
-    global_pass_through_env: Option<&'a [String]>,
-    env_mode: EnvMode,
-    framework_inference: bool,
-    hasher: &SCM,
-    global_configuration: bool,
-) -> Result<GlobalHashableInputs<'a>, Error> {
-    let GlobalFileHashInputs {
-        global_file_hash_map,
-        global_hashable_env_vars,
-        engines,
-    } = collect_global_file_hash_inputs(
-        root_engines,
-        root_path,
-        package_manager,
-        resolution_file_fallback,
-        global_file_dependencies,
-        env_at_execution_start,
-        global_env,
-        hasher,
-    )?;
-
-    debug!(
-        "external deps hash: {}",
-        root_external_dependencies_hash.unwrap_or("no hash (single package)")
-    );
-
-    Ok(GlobalHashableInputs {
-        global_cache_key: GLOBAL_CACHE_KEY,
-        global_file_hash_map,
-        root_external_dependencies_hash,
-        root_internal_dependencies_hash,
-        engines,
-        env: global_env,
-        resolved_env_vars: Some(global_hashable_env_vars),
-        pass_through_env: global_pass_through_env,
-        env_mode,
-        framework_inference,
-        env_at_execution_start,
-        global_configuration,
-    })
 }
 
 /// Intermediate result from `collect_global_file_hash_inputs`. Contains the
@@ -408,9 +348,8 @@ mod tests {
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_repository::package_manager::PackageManager;
     use turborepo_scm::SCM;
-    use turborepo_types::EnvMode;
 
-    use super::{collect_global_deps, get_global_hash_inputs};
+    use super::{collect_global_deps, collect_global_file_hash_inputs};
 
     #[test]
     fn test_absolute_path() {
@@ -433,9 +372,7 @@ mod tests {
         let file_deps = ["C:\\some\\path".to_string()];
         #[cfg(not(windows))]
         let file_deps = ["/some/path".to_string()];
-        let result = get_global_hash_inputs(
-            None,
-            None,
+        let result = collect_global_file_hash_inputs(
             None,
             &root,
             Some(&PackageManager::Pnpm),
@@ -443,18 +380,14 @@ mod tests {
             &file_deps,
             &env_var_map,
             &[],
-            None,
-            EnvMode::Strict,
-            false,
             &SCM::new(&root),
-            false,
         );
         assert!(result.is_ok());
     }
 
-    /// get_global_hash_inputs should not yield any folders when walking since
-    /// turbo does not consider changes to folders when evaluating hashes,
-    /// only to files
+    /// Global dependency collection should not yield any folders when walking
+    /// since turbo does not consider changes to folders when evaluating
+    /// hashes, only to files
     #[test]
     fn test_collect_only_yields_files() {
         let tmp = tempfile::tempdir().unwrap();
