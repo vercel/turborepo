@@ -923,7 +923,7 @@ impl Subscriber {
                 trace!("Ignoring change to {repo_relative_change_path}");
             }
         }
-        // TODO: handle different sets of inputs
+        // Keep distinct HashSpecs so each input set receives its own hash.
 
         // Any rehashing we do was triggered by a file event, so don't do it
         // immediately. Wait for the debouncer to time out instead.
