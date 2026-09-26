@@ -1109,13 +1109,14 @@ mod tests {
 
     use turbopath::AbsoluteSystemPath;
 
-    use super::{resolve_file_path, Error};
+    use super::{Error, resolve_file_path};
 
     #[test]
     fn affected_package_projection_chooses_first_task_reason_regardless_of_order() {
         use super::{
+            PackageChangeReason, PackageName, QueryTaskId,
             affected_tasks::{AffectedTask, TaskChangeReason},
-            project_affected_task_packages, PackageChangeReason, PackageName, QueryTaskId,
+            project_affected_task_packages,
         };
 
         for reverse in [false, true] {

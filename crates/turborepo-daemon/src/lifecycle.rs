@@ -2,14 +2,14 @@ use std::{future::Future, path::PathBuf, time::Duration};
 
 use pidlock::PidlockError::AlreadyOwned;
 use serde::Serialize;
-use time::{format_description, OffsetDateTime};
+use time::{OffsetDateTime, format_description};
 use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use which::which;
 
 use crate::{
-    endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
-    PackageChangesWatcher, PackageChangesWatcherArgs, Paths, TurboGrpcService,
+    CloseReason, DaemonConnector, DaemonConnectorError, DaemonError, PackageChangesWatcher,
+    PackageChangesWatcherArgs, Paths, TurboGrpcService, endpoint::SocketOpenError,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -119,19 +119,19 @@ pub fn clean_daemon_files(
 ) -> Result<(), DaemonError> {
     let mut success = true;
     trace!("cleaning up daemon files");
-    if pid_file.exists() {
-        if let Err(error) = pid_file.remove_file() {
-            println!("Failed to remove pid file: {error}");
-            println!("Please remove manually: {pid_file}");
-            success = false;
-        }
+    if pid_file.exists()
+        && let Err(error) = pid_file.remove_file()
+    {
+        println!("Failed to remove pid file: {error}");
+        println!("Please remove manually: {pid_file}");
+        success = false;
     }
-    if sock_file.exists() {
-        if let Err(error) = sock_file.remove_file() {
-            println!("Failed to remove socket file: {error}");
-            println!("Please remove manually: {sock_file}");
-            success = false;
-        }
+    if sock_file.exists()
+        && let Err(error) = sock_file.remove_file()
+    {
+        println!("Failed to remove socket file: {error}");
+        println!("Please remove manually: {sock_file}");
+        success = false;
     }
 
     if success {
@@ -171,11 +171,12 @@ pub async fn follow_daemon_logs(
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 ) -> Result<(), DaemonError> {
     let connector = DaemonConnector::new(false, false, repo_root, custom_turbo_json_path)?;
-    let log_file = if let Ok(log_file) = get_log_file_from_daemon(connector).await {
-        log_file
-    } else {
-        warn!("couldn't connect to daemon, looking for old log files");
-        latest_log_file_from_dir(&repo_root.join_components(&[".turbo", "daemon"]))?
+    let log_file = match get_log_file_from_daemon(connector).await {
+        Ok(log_file) => log_file,
+        Err(_) => {
+            warn!("couldn't connect to daemon, looking for old log files");
+            latest_log_file_from_dir(&repo_root.join_components(&[".turbo", "daemon"]))?
+        }
     };
     let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
 

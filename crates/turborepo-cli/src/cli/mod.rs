@@ -9,18 +9,19 @@ use turborepo_config::ConfigurationFileInputs;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_shim::TurboState;
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder},
-    init_telemetry, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry,
 };
-use turborepo_tracing::{inject_trace_metadata, TurboSubscriber};
+use turborepo_tracing::{TurboSubscriber, inject_trace_metadata};
 use turborepo_ui::{ColorConfig, GREY};
 use turborepo_watch::WatchClient;
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, telemetry, unlink, CommandBase,
+        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
+        login, logout, ls, prune, query, run, telemetry, unlink,
     },
     get_version,
 };
@@ -52,8 +53,8 @@ fn exit_with_heap_profile(code: i32) -> ! {
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
-pub(crate) fn configuration_inputs_from_process(
-) -> Result<(HashMap<OsString, OsString>, ConfigurationFileInputs), turborepo_config::Error> {
+pub(crate) fn configuration_inputs_from_process()
+-> Result<(HashMap<OsString, OsString>, ConfigurationFileInputs), turborepo_config::Error> {
     let environment = env::vars_os()
         .map(|(key, value)| (key.to_ascii_lowercase(), value))
         .collect();

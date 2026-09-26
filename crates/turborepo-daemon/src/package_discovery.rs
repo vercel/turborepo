@@ -8,8 +8,8 @@ use turborepo_repository::{
 };
 
 use crate::{
-    proto::{DiscoverPackagesResponse, RepositoryScope},
     DaemonClient,
+    proto::{DiscoverPackagesResponse, RepositoryScope},
 };
 
 #[derive(Debug)]
@@ -115,9 +115,11 @@ mod tests {
             tasks: vec!["build".to_string()],
         };
 
-        assert!(javascript_workspace_from_proto(javascript)
-            .unwrap()
-            .is_some());
+        assert!(
+            javascript_workspace_from_proto(javascript)
+                .unwrap()
+                .is_some()
+        );
         assert!(javascript_workspace_from_proto(rust).unwrap().is_none());
     }
 }

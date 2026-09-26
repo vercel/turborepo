@@ -117,15 +117,13 @@ fn call_turbo_gen(
     if matches!(
         package_manager,
         PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-    ) {
-        if let Ok(output) = Command::new(&command_path).arg("--version").output() {
-            if output.status.success() {
-                allow_pnpm_esbuild(
-                    &mut package_manager_command,
-                    String::from_utf8_lossy(&output.stdout).as_ref(),
-                );
-            }
-        }
+    ) && let Ok(output) = Command::new(&command_path).arg("--version").output()
+        && output.status.success()
+    {
+        allow_pnpm_esbuild(
+            &mut package_manager_command,
+            String::from_utf8_lossy(&output.stdout).as_ref(),
+        );
     }
     let mut package_manager_process = Command::new(command_path);
     package_manager_process

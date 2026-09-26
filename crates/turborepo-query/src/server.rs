@@ -3,16 +3,16 @@ use std::sync::Arc;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_graphql_axum::GraphQL;
 use axum::{
+    Router,
     extract::Request,
-    http::{header::HOST, StatusCode},
+    http::{StatusCode, header::HOST},
     middleware::{self, Next},
     response::Response,
     routing::get,
-    Router,
 };
 use tokio::net::TcpListener;
 
-use crate::{graphiql, QueryRun, RepositoryQuery};
+use crate::{QueryRun, RepositoryQuery, graphiql};
 
 fn is_allowed_host(host: &str) -> bool {
     let host = match host.rsplit_once(':') {

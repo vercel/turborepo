@@ -19,11 +19,11 @@ use thiserror::Error;
 use tracing::warn;
 use turborepo_api_client::{CacheClient, Client};
 use turborepo_gitignore::ensure_turbo_is_gitignored;
-use turborepo_json_rewrite::{set_path, unset_path, RewriteError};
+use turborepo_json_rewrite::{RewriteError, set_path, unset_path};
 use turborepo_types::SecretString;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
-use turborepo_ui::{DialoguerTheme, BOLD, GREY};
+use turborepo_ui::{BOLD, DialoguerTheme, GREY};
 use turborepo_vercel_api::{CachingStatus, Team};
 
 use crate::{commands::CommandBase, config};
@@ -435,7 +435,7 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        commands::{link, CommandBase},
+        commands::{CommandBase, link},
         config::TurborepoConfigBuilder,
     };
 

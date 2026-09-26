@@ -115,7 +115,7 @@ pub(crate) fn calculate_affected_tasks_with_packages(
                 format!("root internal dependency changed: {root_internal_dep}")
             }
             AllPackageChangeReason::GitRefNotFound { .. } => "git ref not found".to_string(),
-            AllPackageChangeReason::ScmError { ref error } => {
+            AllPackageChangeReason::ScmError { error } => {
                 format!("SCM error: {error}")
             }
             AllPackageChangeReason::ConservativeFallback => {
@@ -549,9 +549,9 @@ mod tests {
             use turborepo_repository::{
                 external_resolution::{
                     ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
-                    PackageResolution, ResolutionCompleteness, GO_RESOLUTION_DOMAIN,
+                    GO_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
                 },
-                go::{native_tasks_for_module, native_tasks_for_workspace, GoModule},
+                go::{GoModule, native_tasks_for_module, native_tasks_for_workspace},
                 relationships::{DependencyKind, Relationship},
                 toolchain::{DiscoveredPackage, DiscoveredPackages, ToolchainId, WorkspaceRoot},
             };
@@ -731,11 +731,13 @@ mod tests {
                 .len(),
             3
         );
-        assert!(data["packageGraph"]["edges"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|edge| edge["source"] == "api" && edge["target"] == "lib"));
+        assert!(
+            data["packageGraph"]["edges"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|edge| edge["source"] == "api" && edge["target"] == "lib")
+        );
         assert_eq!(data["package"]["name"], "go-workspace");
         assert_eq!(data["package"]["tasks"]["items"], serde_json::json!([]));
     }
@@ -960,9 +962,11 @@ mod tests {
         .await;
         let items = data["affectedTasks"]["items"].as_array().unwrap();
         assert!(!items.is_empty());
-        assert!(items
-            .iter()
-            .all(|item| { item["reason"]["__typename"] == "TaskGlobalDepsChanged" }));
+        assert!(
+            items
+                .iter()
+                .all(|item| { item["reason"]["__typename"] == "TaskGlobalDepsChanged" })
+        );
     }
 
     #[derive(Default)]
@@ -1119,12 +1123,13 @@ mod tests {
             *server.calls.lock().unwrap(),
             [(query.to_string(), Some(r#"{"name":"app"}"#.to_string()))]
         );
-        assert!(run
-            .recorded_calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|call| call == "task_ids_for_package:app"));
+        assert!(
+            run.recorded_calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call == "task_ids_for_package:app")
+        );
     }
 
     // Exercise the query projection with full Cargo task observations, but no
@@ -1155,8 +1160,8 @@ mod tests {
         fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
             use turborepo_repository::{
                 cargo::{
-                    native_tasks_for_package, CargoPackageDetails, CargoPackageKind, Deliverable,
-                    DeliverableKind,
+                    CargoPackageDetails, CargoPackageKind, Deliverable, DeliverableKind,
+                    native_tasks_for_package,
                 },
                 toolchain::{DiscoveredPackage, DiscoveredPackages, WorkspaceRoot},
             };
@@ -1912,7 +1917,7 @@ mod tests {
 
     #[tokio::test]
     async fn uv_native_query_projects_root_member_and_mixed_js_tasks() {
-        use serde_json::{json, Value};
+        use serde_json::{Value, json};
 
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
@@ -2034,10 +2039,12 @@ mod tests {
                 };
                 assert_eq!(
                     dependencies,
-                    &json!(expected_child
-                        .into_iter()
-                        .map(|full_name| json!({"fullName": full_name}))
-                        .collect::<Vec<_>>()),
+                    &json!(
+                        expected_child
+                            .into_iter()
+                            .map(|full_name| json!({"fullName": full_name}))
+                            .collect::<Vec<_>>()
+                    ),
                     "{name}#{task_name}"
                 );
             }

@@ -8,8 +8,8 @@ use std::{future::Future, pin::Pin};
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_devtools::{
-    package_graph_to_data, GraphData, GraphEdge, RepositoryGraphBuilder, TaskGraphData,
-    TaskGraphError, TaskNode,
+    GraphData, GraphEdge, RepositoryGraphBuilder, TaskGraphData, TaskGraphError, TaskNode,
+    package_graph_to_data,
 };
 use turborepo_engine::{EngineBuilder, TaskNode as EngineTaskNode};
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
@@ -20,7 +20,7 @@ use turborepo_run_opts::Opts;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::TurboJsonReader;
 
-use crate::{commands::CommandBase, Args};
+use crate::{Args, commands::CommandBase};
 
 /// Task graph builder that uses the proper `EngineBuilder` logic.
 ///
@@ -192,17 +192,17 @@ impl ProperTaskGraphBuilder {
 
         // Collect edges from dependencies
         for task_node in engine.tasks() {
-            if let EngineTaskNode::Task(task_id) = task_node {
-                if let Some(deps) = engine.dependencies(task_id) {
-                    for dep in deps {
-                        if let EngineTaskNode::Task(dep_id) = dep {
-                            edges.push(GraphEdge {
-                                source: task_id.to_string(),
-                                target: dep_id.to_string(),
-                            });
-                        }
-                        // Skip edges to Root node
+            if let EngineTaskNode::Task(task_id) = task_node
+                && let Some(deps) = engine.dependencies(task_id)
+            {
+                for dep in deps {
+                    if let EngineTaskNode::Task(dep_id) = dep {
+                        edges.push(GraphEdge {
+                            source: task_id.to_string(),
+                            target: dep_id.to_string(),
+                        });
                     }
+                    // Skip edges to Root node
                 }
             }
         }
@@ -345,12 +345,14 @@ mod tests {
         assert!(graphs.task_graph.nodes.iter().any(|node| {
             node.package == "rust-app" && node.task == "build" && node.script.is_empty()
         }));
-        assert!(graphs
-            .task_graph
-            .nodes
-            .iter()
-            .filter(|node| node.package != "//")
-            .all(|node| packages.contains(node.package.as_str())));
+        assert!(
+            graphs
+                .task_graph
+                .nodes
+                .iter()
+                .filter(|node| node.package != "//")
+                .all(|node| packages.contains(node.package.as_str()))
+        );
     }
 
     #[tokio::test]
@@ -430,12 +432,14 @@ mod tests {
         let builder = builder(&root);
 
         builder.build_graphs().await.expect("build from turbo.json");
-        assert!(builder
-            .resolve_opts()
-            .expect("resolve turbo.json")
-            .repo_opts
-            .root_turbo_json_path
-            .ends_with("turbo.json"));
+        assert!(
+            builder
+                .resolve_opts()
+                .expect("resolve turbo.json")
+                .repo_opts
+                .root_turbo_json_path
+                .ends_with("turbo.json")
+        );
 
         root.join_component("turbo.json")
             .remove()
@@ -448,12 +452,14 @@ mod tests {
             .build_graphs()
             .await
             .expect("build from turbo.jsonc");
-        assert!(builder
-            .resolve_opts()
-            .expect("resolve turbo.jsonc")
-            .repo_opts
-            .root_turbo_json_path
-            .ends_with("turbo.jsonc"));
+        assert!(
+            builder
+                .resolve_opts()
+                .expect("resolve turbo.jsonc")
+                .repo_opts
+                .root_turbo_json_path
+                .ends_with("turbo.jsonc")
+        );
     }
 
     #[tokio::test]

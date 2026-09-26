@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 #[cfg(windows)]
 use std::{io::ErrorKind, sync::atomic::Ordering, time::Duration};
 
@@ -81,7 +81,8 @@ pub async fn listen_socket(
 ) -> Result<
     (
         pidlock::Pidlock,
-        impl Stream<Item = Result<impl Connected + AsyncWrite + AsyncRead, std::io::Error>>,
+        impl Stream<Item = Result<impl Connected + AsyncWrite + AsyncRead + use<>, std::io::Error>>
+        + use<>,
     ),
     SocketOpenError,
 > {
@@ -138,18 +139,20 @@ pub async fn listen_socket(
             async move {
                 // ensure the underlying thread is aborted on drop
                 let task_listener = listener.clone();
-                let task = tokio::task::spawn_blocking(move || loop {
-                    break match task_listener.accept() {
-                        Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                            std::thread::sleep(WINDOWS_POLL_DURATION);
-                            if !task_running.load(Ordering::SeqCst) {
-                                None
-                            } else {
-                                continue;
+                let task = tokio::task::spawn_blocking(move || {
+                    loop {
+                        break match task_listener.accept() {
+                            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                                std::thread::sleep(WINDOWS_POLL_DURATION);
+                                if !task_running.load(Ordering::SeqCst) {
+                                    None
+                                } else {
+                                    continue;
+                                }
                             }
-                        }
-                        res => Some(res),
-                    };
+                            res => Some(res),
+                        };
+                    }
                 });
 
                 let Some(accepted) = task.await.ok().flatten() else {
@@ -217,16 +220,16 @@ mod windows_security {
 
     use turbopath::AbsoluteSystemPath;
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL},
+        Foundation::{CloseHandle, ERROR_SUCCESS, HANDLE, HLOCAL, LocalFree},
         Security::{
+            ACL,
             Authorization::{
                 ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
-                GetNamedSecurityInfoW, SetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT,
+                GetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT, SetNamedSecurityInfoW,
             },
-            EqualSid, GetSecurityDescriptorDacl, GetTokenInformation, TokenUser, ACL,
-            DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
-            PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, TOKEN_QUERY,
-            TOKEN_USER,
+            DACL_SECURITY_INFORMATION, EqualSid, GetSecurityDescriptorDacl, GetTokenInformation,
+            OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+            PSID, TOKEN_QUERY, TOKEN_USER, TokenUser,
         },
         System::Threading::{GetCurrentProcess, OpenProcessToken},
     };
@@ -669,7 +672,7 @@ impl<T> Connected for UdsWindowsStream<T> {
 mod test {
     use std::{
         assert_matches,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{Arc, atomic::AtomicBool},
     };
 
     use pidlock::PidlockError;
@@ -680,7 +683,7 @@ mod test {
     use super::listen_socket;
     #[cfg(windows)]
     use super::{secure_socket_dir, secure_socket_file, validate_socket_owner};
-    use crate::{endpoint::SocketOpenError, Paths};
+    use crate::{Paths, endpoint::SocketOpenError};
 
     #[allow(dead_code)]
     fn pid_path(daemon_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {

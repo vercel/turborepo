@@ -8,9 +8,9 @@ use turborepo_run_opts::Opts;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli::{self, resolve_configuration_from_args},
-    config::{resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError},
     Args,
+    cli::{self, resolve_configuration_from_args},
+    config::{ConfigurationOptions, Error as ConfigError, resolve_turbo_config_path},
 };
 
 pub(crate) mod bin;
