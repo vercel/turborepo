@@ -171,28 +171,32 @@ where
     Ok(None)
 }
 
+struct CachedRelations<'a, 'b> {
+    dependencies: &'a [&'b PackageNode],
+    ancestors: &'a [&'b PackageNode],
+}
+
 /// Check tag rules against precomputed dependency/ancestor sets.
 ///
 /// Unlike the previous version that called `ctx.pkg_dep_graph.dependencies()`
 /// per invocation (triggering a full DFS each time), this takes the already-
 /// computed sets to avoid redundant graph traversals when multiple tags share
 /// the same package.
-pub(crate) fn check_tag_with_cache<G, T>(
+fn check_tag_with_cache<G, T>(
     ctx: &BoundariesContext<'_, G, T>,
     diagnostics: &mut Vec<BoundariesDiagnostic>,
     dependencies: Option<&ProcessedPermissions>,
     dependents: Option<&ProcessedPermissions>,
     pkg: &PackageNode,
     package_name_source: Option<&Spanned<()>>,
-    cached_deps: &[&PackageNode],
-    cached_ancestors: &[&PackageNode],
+    cached: &CachedRelations<'_, '_>,
 ) -> Result<(), Error>
 where
     G: PackageGraphProvider,
     T: TurboJsonProvider,
 {
     if let Some(dependency_permissions) = dependencies {
-        for dependency in cached_deps {
+        for dependency in cached.dependencies {
             if matches!(dependency, PackageNode::Root) {
                 continue;
             }
@@ -214,7 +218,7 @@ where
     }
 
     if let Some(dependent_permissions) = dependents {
-        for dependent in cached_ancestors {
+        for dependent in cached.ancestors {
             if matches!(dependent, PackageNode::Root) {
                 continue;
             }
@@ -378,6 +382,11 @@ where
             Vec::new()
         };
 
+    let cached = CachedRelations {
+        dependencies: &cached_deps,
+        ancestors: &cached_ancestors,
+    };
+
     // Load boundaries config for this package (matches original behavior)
     let package_boundaries = ctx
         .turbo_json_provider
@@ -407,8 +416,7 @@ where
             dependents.as_ref(),
             &pkg,
             package_name_source,
-            &cached_deps,
-            &cached_ancestors,
+            &cached,
         )?;
     }
 
@@ -430,8 +438,7 @@ where
                     rule.dependents.as_ref(),
                     &pkg,
                     package_name_source,
-                    &cached_deps,
-                    &cached_ancestors,
+                    &cached,
                 )?;
             }
         }
@@ -962,8 +969,10 @@ mod tests {
             None,
             &pkg,
             None,
-            &cached_deps,
-            &[],
+            &CachedRelations {
+                dependencies: &cached_deps,
+                ancestors: &[],
+            },
         )
         .unwrap();
 

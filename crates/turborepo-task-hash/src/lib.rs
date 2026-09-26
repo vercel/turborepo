@@ -124,6 +124,10 @@ fn validate_task_context(
 }
 
 impl PackageInputsHashes {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "hashing inputs needs task definitions, repository state, and hash options"
+    )]
     #[tracing::instrument(skip(
         all_tasks,
         package_graph,
@@ -452,6 +456,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         )
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "deferred hashing needs task context, repository state, and dependency outputs"
+    )]
     #[tracing::instrument(skip(
         self,
         task_definition,
@@ -544,6 +552,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "hash calculation needs task context, file hashes, and dependency hashes"
+    )]
     fn calculate_task_hash_with_file_hash<T: TaskDefinitionHashInfo>(
         &self,
         task_id: &TaskId<'static>,
