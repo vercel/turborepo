@@ -665,8 +665,8 @@ impl Entry for GlobEntry {
         self.entry.metadata().map_err(WalkError::from)
     }
 
-    // TODO: This needs some work and requires some explanation when applied to
-    // globs.
+    // The underlying depth is relative to the root selected by `Glob::walker`,
+    // which includes any invariant prefix; see `Glob::walk_with_behavior`.
     fn depth(&self) -> usize {
         self.entry.depth()
     }
