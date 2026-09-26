@@ -35,7 +35,10 @@ fn run_child(ci: bool, temp_dir_is_file: bool) -> (Output, tempfile::TempDir) {
         .args(["--exact", "panic_report_child", "--nocapture"])
         .env_clear()
         .env(CHILD_ENV, "1")
-        .env("TMPDIR", tmpdir);
+        // Unix uses TMPDIR; Windows uses TMP or TEMP.
+        .env("TMPDIR", &tmpdir)
+        .env("TMP", &tmpdir)
+        .env("TEMP", &tmpdir);
     if ci {
         command.env("CI", "true");
     }
