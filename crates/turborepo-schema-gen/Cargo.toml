@@ -18,13 +18,11 @@ schemars = { workspace = true }
 ts-rs = { workspace = true }
 
 # Serialization
-serde = { workspace = true }
 serde_json = { workspace = true }
 
 # CLI
 usage = { package = "usage-rs", version = "=6.5.0" }
 
 # Turborepo types
-turborepo-boundaries = { path = "../turborepo-boundaries" }
 turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { path = "../turborepo-types" }
