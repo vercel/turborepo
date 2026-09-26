@@ -19,7 +19,6 @@ rustls-tls = []
 workspace = true
 
 [dependencies]
-clap = { workspace = true, features = ["derive"] }
 crop = "0.4.0"
 go-parse-duration = "0.1.1"
 humantime = "2.1.0"
@@ -36,6 +35,7 @@ tracing-subscriber = { workspace = true }
 turbopath = { version = "0.1.0", path = "../turborepo-paths" }
 turborepo-daemon = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
+usage = { package = "usage-rs", version = "=6.5.0" }
 wax.workspace = true
 
 [dev-dependencies]
