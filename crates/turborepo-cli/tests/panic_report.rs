@@ -56,21 +56,31 @@ fn assert_report(report: &str) {
     let report: toml::Value = toml::from_str(report).expect("crash report must be valid TOML");
     assert_eq!(report["name"].as_str(), Some("turbo"));
     assert_eq!(report["method"].as_str(), Some("Panic"));
-    assert!(report["operating_system"]
-        .as_str()
-        .is_some_and(|os| !os.is_empty()));
-    assert!(report["crate_version"]
-        .as_str()
-        .is_some_and(|version| !version.is_empty()));
-    assert!(report["explanation"]
-        .as_str()
-        .is_some_and(|text| text.contains("panic_report.rs")));
-    assert!(report["cause"]
-        .as_str()
-        .is_some_and(|cause| cause.contains(PANIC_MESSAGE)));
-    assert!(report["backtrace"]
-        .as_str()
-        .is_some_and(|trace| !trace.is_empty()));
+    assert!(
+        report["operating_system"]
+            .as_str()
+            .is_some_and(|os| !os.is_empty())
+    );
+    assert!(
+        report["crate_version"]
+            .as_str()
+            .is_some_and(|version| !version.is_empty())
+    );
+    assert!(
+        report["explanation"]
+            .as_str()
+            .is_some_and(|text| text.contains("panic_report.rs"))
+    );
+    assert!(
+        report["cause"]
+            .as_str()
+            .is_some_and(|cause| cause.contains(PANIC_MESSAGE))
+    );
+    assert!(
+        report["backtrace"]
+            .as_str()
+            .is_some_and(|trace| !trace.is_empty())
+    );
 }
 
 #[test]
@@ -78,8 +88,11 @@ fn saves_a_crash_report_outside_ci() {
     let (output, temp_dir) = run_child(false, false);
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("Oops! Turbo has crashed."));
-    assert!(stderr
-        .contains("Please open an issue at https://github.com/vercel/turborepo/issues/new/choose"));
+    assert!(
+        stderr.contains(
+            "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose"
+        )
+    );
 
     let path = stderr
         .lines()
@@ -98,8 +111,11 @@ fn reports_a_failure_to_save_without_panicking() {
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("Oops! Turbo has crashed."));
     assert!(stderr.contains("An error has occurred while attempting to write a report."));
-    assert!(stderr
-        .contains("Please open an issue at https://github.com/vercel/turborepo/issues/new/choose"));
+    assert!(
+        stderr.contains(
+            "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose"
+        )
+    );
 }
 
 #[test]

@@ -42,8 +42,8 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
 pub use lifecycle::{
-    clean_daemon, clean_daemon_files, daemon_log_filename, follow_daemon_logs,
-    run_lifecycle_command, serve, DaemonLifecycleCommand, DaemonLifecycleOutput, DaemonStatus,
+    DaemonLifecycleCommand, DaemonLifecycleOutput, DaemonStatus, clean_daemon, clean_daemon_files,
+    daemon_log_filename, follow_daemon_logs, run_lifecycle_command, serve,
 };
 pub use package_changes_watcher::RediscoveringPackageChangesWatcher;
 pub use package_discovery::DaemonPackageDiscovery;

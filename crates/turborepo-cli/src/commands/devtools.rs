@@ -4,12 +4,12 @@
 //! and watches for file changes to push updates.
 
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_devtools::{find_available_port, DevtoolsServer};
+use turborepo_devtools::{DevtoolsServer, find_available_port};
 
 use crate::{
+    Args,
     cli::{self, resolve_configuration_from_args},
     devtools::ProperTaskGraphBuilder,
-    Args,
 };
 
 // In production, use the hosted devtools UI
@@ -69,10 +69,8 @@ pub async fn run(
     println!();
 
     // Open browser
-    if !no_open {
-        if let Err(e) = webbrowser::open(&url) {
-            eprintln!("  Warning: Could not open browser: {}", e);
-        }
+    if !no_open && let Err(e) = webbrowser::open(&url) {
+        eprintln!("  Warning: Could not open browser: {}", e);
     }
 
     // Run server

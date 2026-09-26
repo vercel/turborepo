@@ -7,8 +7,8 @@ use turborepo_turbo_json::RawTurboJson;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{
-    cli::{self, resolve_configuration_from_args},
     Args,
+    cli::{self, resolve_configuration_from_args},
 };
 
 #[derive(Debug, Serialize)]

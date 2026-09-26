@@ -182,7 +182,9 @@ fn normalize_config_dir_env_vars() {
                 }
                 Err(turbopath::PathError::NotAbsolute(_)) => {
                     match turbopath::AbsoluteSystemPathBuf::from_cwd(Utf8PathBuf::from(val)) {
-                        Ok(abs) => std::env::set_var(var, abs.as_str()),
+                        // SAFETY: the binary invokes this during shim startup, before
+                        // starting the runtime or any other threads that read the env.
+                        Ok(abs) => unsafe { std::env::set_var(var, abs.as_str()) },
                         Err(_) => {
                             // invalid value; leave as-is so downstream error
                             // handling can report it
@@ -247,7 +249,8 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
     );
 
     // Run the shim with pre-parsed args (avoids double parsing)
-    match turborepo_shim::run_with_args(&runtime, args) {
+    let shim_result = turborepo_shim::run_with_args(&runtime, args);
+    match shim_result {
         ShimResult::Ok(code) => Ok(code),
         ShimResult::ShimError(e) => Err(Error::Shim(e)),
         ShimResult::CliError(e) => Err(Error::Cli(e)),

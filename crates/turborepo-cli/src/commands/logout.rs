@@ -1,4 +1,4 @@
-use turborepo_auth::{logout as auth_logout, LogoutOptions};
+use turborepo_auth::{LogoutOptions, logout as auth_logout};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{cli::Error, commands::CommandBase};

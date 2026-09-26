@@ -5,11 +5,11 @@ use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
 use turborepo_run::{self as run, builder::RunBuilder};
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_tracing::TurboSubscriber;
 use turborepo_types::DryRunMode;
-use turborepo_ui::{sender::UISender, LogSinks};
+use turborepo_ui::{LogSinks, sender::UISender};
 
 use crate::commands::CommandBase;
 
@@ -93,10 +93,10 @@ pub async fn run(
     if let Some(path) = subscriber.stderr_redirect_path() {
         // Already redirected (shouldn't happen, but be safe)
         tracing::debug!("stderr already redirected to {path}");
-    } else if verbosity > 0 {
-        if let Ok(path) = subscriber.redirect_stderr_to_file(repo_root.as_std_path()) {
-            tracing::debug!("Verbose tracing redirected to {path}");
-        }
+    } else if verbosity > 0
+        && let Ok(path) = subscriber.redirect_stderr_to_file(repo_root.as_std_path())
+    {
+        tracing::debug!("Verbose tracing redirected to {path}");
     }
 
     let mut run_builder = {
@@ -263,9 +263,9 @@ mod tests {
 
     use futures::stream;
     use tokio::sync::oneshot;
-    use turborepo_signals::{signals::Signal, SignalHandler};
+    use turborepo_signals::{SignalHandler, signals::Signal};
 
-    use super::{wait_for_run_cleanup_on_signal, RunOutcome};
+    use super::{RunOutcome, wait_for_run_cleanup_on_signal};
 
     #[cfg(windows)]
     const DEFAULT_SIGNAL: Signal = Signal::CtrlC;
