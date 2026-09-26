@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 //! Exercise the installed panic hook in a subprocess so its output and CI
 //! environment do not interfere with other tests.
 
