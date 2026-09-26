@@ -705,7 +705,7 @@ mod test {
 
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -807,7 +807,7 @@ mod test {
     /// the disk-spooled upload and download paths byte-for-byte.
     #[tokio::test]
     async fn test_http_cache_large_artifact_spools_to_disk() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -893,7 +893,7 @@ mod test {
 
     #[tokio::test]
     async fn test_http_cache_scm_metadata_round_trip() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -971,7 +971,7 @@ mod test {
 
     #[tokio::test]
     async fn test_http_cache_no_scm_metadata() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 

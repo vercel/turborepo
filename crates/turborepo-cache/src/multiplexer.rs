@@ -437,7 +437,7 @@ mod tests {
     }
 
     async fn start_mock() -> (u16, tokio::task::JoinHandle<Result<()>>) {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx)
