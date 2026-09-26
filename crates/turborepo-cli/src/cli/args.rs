@@ -110,8 +110,8 @@ pub struct Args {
     /// root of the repository.
     #[usage(long, global = true)]
     pub root_turbo_json: Option<Utf8PathBuf>,
-    /// The legacy flag is stripped before clap parsing. Non-run commands use
-    /// this field because they have no command-local `ExecutionArgs`.
+    /// The legacy flag is stripped before usage-rs parsing. Non-run commands
+    /// use this field because they have no command-local `ExecutionArgs`.
     #[usage(skip)]
     pub(crate) single_package: bool,
     #[usage(skip)]
@@ -667,7 +667,7 @@ impl Args {
             unreachable!("a help flag must produce an exit outcome");
         }
 
-        let clap_args = match Args::parse_args(os_args.clone()) {
+        let parsed_args = match Args::parse_args(os_args.clone()) {
             Ok(args) => args,
             Err(error_text) => {
                 if let Some(error) = duplicate_argument(&os_args, &error_text) {
@@ -683,12 +683,12 @@ impl Args {
         };
         // We have to override the --version flag because we use `get_version`
         // instead of a hard-coded version or the crate version
-        if clap_args.version {
+        if parsed_args.version {
             println!("{}", get_version());
             exit_with_heap_profile(0);
         }
 
-        if let Some(run_args) = clap_args.run_args() {
+        if let Some(run_args) = parsed_args.run_args() {
             if run_args.no_cache {
                 warn!(
                     "--no-cache is deprecated and will be removed in a future major version. Use \
@@ -746,7 +746,7 @@ impl Args {
             }
         }
 
-        if let Some(Command::Prune { ref scope, .. }) = clap_args.command {
+        if let Some(Command::Prune { ref scope, .. }) = parsed_args.command {
             if scope.is_some() {
                 warn!(
                     "--scope is deprecated and will be removed in a future major version. Use \
@@ -755,7 +755,7 @@ impl Args {
             }
         }
 
-        clap_args
+        parsed_args
     }
 
     pub(crate) fn parse_args(os_args: Vec<OsString>) -> Result<Self, String> {
@@ -833,8 +833,8 @@ impl Args {
                 values.retain(|value| !value.is_empty());
             }
         }
-        // --single-package is stripped before clap parsing, so we need to
-        // propagate it back. Preserve clap's optional global execution args;
+        // --single-package is stripped before usage-rs parsing, so we need to
+        // propagate it back. Preserve the optional global execution args;
         // creating them here conflicts with explicit run/watch arguments.
         args.single_package = is_single_package;
         if let Some(
@@ -1467,7 +1467,7 @@ pub struct ExecutionArgs {
     /// auto)
     #[usage(long, default_value_t = LogPrefixArg::Auto, default = "auto")]
     pub log_prefix: LogPrefixArg,
-    // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
+    // NOTE: The following two are hidden because the generated help displays them incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[usage(hide = true)]
     pub tasks: Vec<String>,
@@ -1592,7 +1592,7 @@ pub struct RunArgs {
     /// [DEPRECATED formats: .png, .jpg, .pdf, .json -- will be removed in 3.0]
     #[usage(long, num_args = 0..=1, default_missing = "")]
     pub graph: Option<GraphOutput>,
-    // clap does not have negation flags such as --daemon and --no-daemon
+    // Explicit negation flags such as --daemon and --no-daemon remain separate
     // so we need to use a group to enforce that only one of them is set.
     // -----------------------
     /// [DEPRECATED] The daemon is no longer used for `turbo run`.

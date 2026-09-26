@@ -190,7 +190,7 @@ impl ShimArgs {
                 found_profile_flag = false;
                 if arg.starts_with('-') {
                     profile = Some(String::new());
-                    // Re-process this arg: push it to remaining for clap
+                    // Re-process this arg: push it to the remaining CLI arguments
                     remaining_turbo_args.push(arg);
                 } else {
                     profile = Some(arg.clone());
@@ -338,7 +338,7 @@ impl ShimArgs {
         match (self.profile.as_deref(), self.anon_profile.as_deref()) {
             (Some(file), None) => Some((resolve(file), true)),
             (None, Some(file)) => Some((resolve(file), false)),
-            // Both set should be caught by clap later; just ignore here.
+            // Both set should be caught by the CLI parser later; just ignore here.
             _ => None,
         }
     }
