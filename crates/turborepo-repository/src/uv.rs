@@ -1165,6 +1165,23 @@ pub enum UvPackageKind {
     Workspace,
 }
 
+/// Package scope and identified toolchain used when generating uv tasks.
+#[derive(Clone, Copy)]
+struct PythonTaskContext<'a> {
+    kind: UvPackageKind,
+    package: &'a str,
+    package_directory: &'a str,
+    workspace_directories: &'a [String],
+    toolchain_identified: bool,
+}
+
+/// Per-scope behavior that does not belong to the package identity.
+#[derive(Clone, Copy)]
+struct PythonTaskOptions {
+    emit_formatter_warning: bool,
+    build_cacheable: bool,
+}
+
 fn uv_command_task(
     kind: UvPackageKind,
     name: &str,
@@ -1332,20 +1349,20 @@ fn aggregate_task(
     ))
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "tool tasks need their execution plan, target scope, and task contract"
-)]
 fn declared_tool_task(
-    kind: UvPackageKind,
+    context: PythonTaskContext<'_>,
     task: &str,
     tool: PythonTool,
     execution: &ToolExecution,
-    package: &str,
     targets: &[String],
     serial_group: Option<String>,
-    toolchain_identified: bool,
 ) -> crate::native_tasks::NativeTask {
+    let PythonTaskContext {
+        kind,
+        package,
+        toolchain_identified,
+        ..
+    } = context;
     let mut prefix = vec![
         "run".to_string(),
         "--active".to_string(),
@@ -1392,27 +1409,22 @@ fn declared_tool_task(
 }
 
 fn pytest_task(
-    kind: UvPackageKind,
+    context: PythonTaskContext<'_>,
     execution: &ToolExecution,
-    package: &str,
-    package_directory: &str,
-    toolchain_identified: bool,
 ) -> crate::native_tasks::NativeTask {
-    let targets = match kind {
+    let targets = match context.kind {
         UvPackageKind::Package | UvPackageKind::VirtualPackage => {
-            vec![package_directory.to_string()]
+            vec![context.package_directory.to_string()]
         }
         UvPackageKind::Workspace => Vec::new(),
     };
     declared_tool_task(
-        kind,
+        context,
         "test",
         PythonTool::Pytest,
         execution,
-        package,
         &targets,
         None,
-        toolchain_identified,
     )
 }
 
@@ -1439,21 +1451,23 @@ fn warn_formatter_precedence(scope: &str, formatters: &[PythonTool], selected: P
 }
 
 /// Layer declared tools over the built-in uv fallback tasks.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "task generation combines workspace context, tool plans, and build settings"
-)]
 fn python_tasks_for_package(
-    kind: UvPackageKind,
-    package: &str,
-    package_directory: &str,
-    workspace_directories: &[String],
+    context: PythonTaskContext<'_>,
     plan: &QualityPlan,
     pytest: Option<&ToolExecution>,
-    emit_formatter_warning: bool,
-    toolchain_identified: bool,
-    build_cacheable: bool,
+    options: PythonTaskOptions,
 ) -> Vec<crate::native_tasks::NativeTask> {
+    let PythonTaskContext {
+        kind,
+        package,
+        package_directory,
+        workspace_directories,
+        toolchain_identified,
+    } = context;
+    let PythonTaskOptions {
+        emit_formatter_warning,
+        build_cacheable,
+    } = options;
     let targets = match kind {
         UvPackageKind::Package | UvPackageKind::VirtualPackage => {
             vec![package_directory.to_string()]
@@ -1476,14 +1490,12 @@ fn python_tasks_for_package(
             .map(|(tool, execution)| {
                 let name = format!("lint:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind,
+                    context,
                     &name,
                     *tool,
                     execution,
-                    package,
                     &targets,
                     Some("uv".to_string()),
-                    toolchain_identified,
                 ));
                 name
             })
@@ -1503,28 +1515,24 @@ fn python_tasks_for_package(
             for (tool, execution) in &plan.format {
                 let name = format!("format:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind,
+                    context,
                     &name,
                     *tool,
                     execution,
-                    package,
                     &targets,
                     Some("uv".to_string()),
-                    toolchain_identified,
                 ));
             }
             if emit_formatter_warning {
                 warn_formatter_precedence(package, &formatters, selected);
             }
             tasks.push(declared_tool_task(
-                kind,
+                context,
                 "format",
                 selected,
                 &plan.format[&selected],
-                package,
                 &targets,
                 Some("uv".to_string()),
-                toolchain_identified,
             ));
         }
     } else {
@@ -1538,14 +1546,12 @@ fn python_tasks_for_package(
             .map(|(tool, execution)| {
                 let name = format!("check:{}", tool.name());
                 tasks.push(declared_tool_task(
-                    kind,
+                    context,
                     &name,
                     *tool,
                     execution,
-                    package,
                     &targets,
                     Some("uv".to_string()),
-                    toolchain_identified,
                 ));
                 name
             })
@@ -1559,13 +1565,7 @@ fn python_tasks_for_package(
     }
 
     if let Some(execution) = pytest {
-        tasks.push(pytest_task(
-            kind,
-            execution,
-            package,
-            package_directory,
-            toolchain_identified,
-        ));
+        tasks.push(pytest_task(context, execution));
     }
 
     const CLASSIFIED_TASKS: &[&str] = &[
@@ -3183,15 +3183,19 @@ fn assemble_uv_contribution(
                 })
         });
         let native_tasks = python_tasks_for_package(
-            kind,
-            &package.name,
-            package_directory,
-            &[],
+            PythonTaskContext {
+                kind,
+                package: &package.name,
+                package_directory,
+                workspace_directories: &[],
+                toolchain_identified,
+            },
             &package.quality_plan,
             package.pytest.as_ref(),
-            !workspace.quality_plan.format_homogeneous,
-            toolchain_identified,
-            build_cacheable,
+            PythonTaskOptions {
+                emit_formatter_warning: !workspace.quality_plan.format_homogeneous,
+                build_cacheable,
+            },
         );
         let task_contract = UvTaskContract::new(kind, &package.name);
         let mut external_dependencies = closures.remove(&package.name).unwrap_or_default();
@@ -3224,15 +3228,19 @@ fn assemble_uv_contribution(
     // every package so `--affected` and dependent-filters propagate
     // package changes to it.
     let workspace_native_tasks = python_tasks_for_package(
-        UvPackageKind::Workspace,
-        &workspace_name,
-        ".",
-        &workspace_directories,
+        PythonTaskContext {
+            kind: UvPackageKind::Workspace,
+            package: &workspace_name,
+            package_directory: ".",
+            workspace_directories: &workspace_directories,
+            toolchain_identified,
+        },
         &workspace.quality_plan,
         workspace.pytest.as_ref(),
-        true,
-        toolchain_identified,
-        false,
+        PythonTaskOptions {
+            emit_formatter_warning: true,
+            build_cacheable: false,
+        },
     );
     let workspace_task_contract = UvTaskContract::workspace(&workspace_name, workspace_directories);
     package_names.sort();
@@ -4621,15 +4629,19 @@ version = "0.1.0"
     #[test]
     fn test_quality_task_fallbacks_preserve_build() {
         let tasks = python_tasks_for_package(
-            UvPackageKind::Package,
-            "py-app",
-            "packages/py-app",
-            &[],
+            PythonTaskContext {
+                kind: UvPackageKind::Package,
+                package: "py-app",
+                package_directory: "packages/py-app",
+                workspace_directories: &[],
+                toolchain_identified: true,
+            },
             &QualityPlan::effective(&ToolDeclarations::default(), &ToolDeclarations::default()),
             None,
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let display = |name| {
             tasks
@@ -4683,15 +4695,19 @@ version = "0.1.0"
             .execution(PythonTool::Pytest)
             .unwrap();
         let root_tasks = python_tasks_for_package(
-            UvPackageKind::Workspace,
-            "acme",
-            ".",
-            &["packages/app".to_string()],
+            PythonTaskContext {
+                kind: UvPackageKind::Workspace,
+                package: "acme",
+                package_directory: ".",
+                workspace_directories: &["packages/app".to_string()],
+                toolchain_identified: true,
+            },
             &QualityPlan::default(),
             Some(&root_execution),
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let root_test = root_tasks
             .iter()
@@ -4714,15 +4730,19 @@ version = "0.1.0"
             .execution(PythonTool::Pytest)
             .unwrap();
         let member_tasks = python_tasks_for_package(
-            UvPackageKind::VirtualPackage,
-            "app",
-            "packages/app",
-            &[],
+            PythonTaskContext {
+                kind: UvPackageKind::VirtualPackage,
+                package: "app",
+                package_directory: "packages/app",
+                workspace_directories: &[],
+                toolchain_identified: true,
+            },
             &QualityPlan::default(),
             Some(&member_execution),
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let member_test = member_tasks
             .iter()
@@ -4773,15 +4793,19 @@ version = "0.1.0"
             &member.tool_declarations(DeclarationOwner::Member),
         );
         let tasks = python_tasks_for_package(
-            UvPackageKind::VirtualPackage,
-            "app",
-            "packages/app",
-            &[],
+            PythonTaskContext {
+                kind: UvPackageKind::VirtualPackage,
+                package: "app",
+                package_directory: "packages/app",
+                workspace_directories: &[],
+                toolchain_identified: true,
+            },
             &plan,
             None,
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
@@ -4841,15 +4865,19 @@ version = "0.1.0"
         let member = QualityPlan::effective(&ToolDeclarations::default(), &declarations);
         let plan = QualityPlan::homogeneous(&[member.clone(), member]);
         let tasks = python_tasks_for_package(
-            UvPackageKind::Workspace,
-            "acme",
-            ".",
-            &["packages/one".to_string(), "packages/two".to_string()],
+            PythonTaskContext {
+                kind: UvPackageKind::Workspace,
+                package: "acme",
+                package_directory: ".",
+                workspace_directories: &["packages/one".to_string(), "packages/two".to_string()],
+                toolchain_identified: true,
+            },
             &plan,
             None,
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let lint = tasks
             .iter()
@@ -4885,15 +4913,19 @@ version = "0.1.0"
         let declarations = manifest.tool_declarations(DeclarationOwner::Member);
         let plan = QualityPlan::effective(&ToolDeclarations::default(), &declarations);
         let tasks = python_tasks_for_package(
-            UvPackageKind::VirtualPackage,
-            "app",
-            "app",
-            &[],
+            PythonTaskContext {
+                kind: UvPackageKind::VirtualPackage,
+                package: "app",
+                package_directory: "app",
+                workspace_directories: &[],
+                toolchain_identified: true,
+            },
             &plan,
             None,
-            true,
-            true,
-            false,
+            PythonTaskOptions {
+                emit_formatter_warning: true,
+                build_cacheable: false,
+            },
         );
         let task = |name| tasks.iter().find(|task| task.name() == name).unwrap();
         assert_eq!(
