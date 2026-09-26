@@ -12,6 +12,14 @@ import { Callout } from "@/components/geistdocs/callout";
 
 Turborepo is designed to work seamlessly with AI coding assistants. Turborepo provides features that help AI understand your repository and work more efficiently.
 
+## Version-matched agent guidance
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from an AI agent's training data. When `turbo` detects an AI coding agent, it maintains a managed block in the repository-root `AGENTS.md` that tells the agent to use documentation bundled with the installed package.
+
+The block tells agents to resolve the `turbo` package from the repository or relevant workspace instead of assuming it is at the root `node_modules/turbo`. It points them to that package's `docs/README.md` first, then to the relevant pages under `docs/`. These bundled pages match the installed version and work without network access.
+
+Turborepo creates `AGENTS.md` if needed and updates only its uniquely marked block, preserving existing project instructions and other tools' managed blocks. The block is re-added before repository-scoped commands when an agent is detected. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the generated block committed with your work to avoid an uncommitted change on a later agent invocation. New projects created from the default starter include it from the start.
+
 ## Agent Skill
 
 [Agent Skills](https://agentskills.io) are an open standard that give new capabilities and expertise to agents. They're folders of instructions, scripts, and resources that agents can use to do things more accurately and efficiently.

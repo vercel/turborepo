@@ -320,6 +320,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             run_summary,
             allow_no_turbo_json,
             no_update_notifier,
+            // Agent guidance is configured only in root turbo.json.
+            agent_guidance: None,
             sso_login_callback_port,
 
             // Processed numbers

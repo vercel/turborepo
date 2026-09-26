@@ -15,6 +15,17 @@
         }
       ]
     },
+    "agentGuidance": {
+      "description": "Controls whether turbo maintains a root `AGENTS.md` block for AI agents.\n\nDefaults to `true`. Set to `false` to opt out of future automatic updates.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "boundaries": {
       "description": "Configuration for `turbo boundaries`.\n\nAllows users to restrict a package's dependencies and dependents.",
       "anyOf": [

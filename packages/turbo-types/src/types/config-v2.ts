@@ -64,6 +64,14 @@ export interface WorkspaceSchema extends BaseSchema {
 
 export interface RootSchema extends BaseSchema {
   /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to false to opt out of future automatic updates.
+   *
+   * @defaultValue `true`
+   */
+  agentGuidance?: boolean;
+
+  /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing
