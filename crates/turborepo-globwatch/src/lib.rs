@@ -46,7 +46,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 /// WatchError wraps errors produced by GlobWatcher
 #[derive(Debug, Error)]
 pub enum WatchError {
-    // TODO: find a generic way to include the path in these errors
     /// PathError wraps errors encountered dealing with paths while filewatching
     #[error("Filewatching encountered a path error: {0}")]
     PathError(#[from] PathError),
@@ -57,6 +56,24 @@ pub enum WatchError {
     /// implementation.
     #[error("Filewatching backend error: {0}")]
     Backend(#[from] notify::Error),
+    /// Adds the path being operated on to an underlying filewatching error.
+    #[error("Filewatching failed for {path:?}: {source}")]
+    PathContext {
+        /// Filesystem path associated with the error.
+        path: PathBuf,
+        /// Underlying error returned while operating on the path.
+        #[source]
+        source: Box<WatchError>,
+    },
+}
+
+impl WatchError {
+    fn with_path(path: &Path, error: impl Into<Self>) -> Self {
+        Self::PathContext {
+            path: path.to_owned(),
+            source: Box::new(error.into()),
+        }
+    }
 }
 
 /// A wrapper around notify that allows for glob-based watching.
@@ -80,8 +97,12 @@ impl GlobWatcher {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
-        flush_dir.create_dir_all()?;
-        let flush_dir = flush_dir.to_realpath()?;
+        flush_dir
+            .create_dir_all()
+            .map_err(|error| WatchError::with_path(flush_dir.as_std_path(), error))?;
+        let flush_dir = flush_dir
+            .to_realpath()
+            .map_err(|error| WatchError::with_path(flush_dir.as_std_path(), error))?;
 
         let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
@@ -675,5 +696,16 @@ mod test {
         .expect("flush should complete after setup succeeds");
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_watch_error_context_includes_path() {
+        let error = super::WatchError::with_path(
+            std::path::Path::new("packages/app"),
+            std::io::Error::other("permission denied"),
+        );
+
+        assert!(error.to_string().contains("packages/app"));
+        assert!(error.to_string().contains("permission denied"));
     }
 }
