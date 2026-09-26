@@ -38,7 +38,6 @@ use derive_setters::Setters;
 use env::EnvVars;
 pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
-use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
 use serde::{Deserialize, Serialize};
@@ -64,16 +63,52 @@ pub use experimental_otel::{
     ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
-/// Wrapper for observability-related config. Uses `recurse` on `otel` so that
+// The first Some value wins as config sources are merged highest-priority
+// first.
+fn merge_option<T>(left: &mut Option<T>, right: Option<T>) {
+    if left.is_none() {
+        *left = right;
+    }
+}
+
+trait Merge {
+    fn merge(&mut self, other: Self);
+}
+
+fn merge_nested<T: Merge>(left: &mut Option<T>, right: Option<T>) {
+    if let Some(right) = right {
+        if let Some(left) = left {
+            left.merge(right);
+        } else {
+            *left = Some(right);
+        }
+    }
+}
+
+// Destructure every field so adding a new configuration field requires an
+// explicit merge strategy rather than silently dropping it.
+macro_rules! merge_fields {
+    ($left:ident, $right:ident; $($field:ident),+; nested = $nested:ident) => {
+        let Self { $($field,)+ $nested } = $right;
+        $(merge_option(&mut $left.$field, $field);)+
+        merge_nested(&mut $left.$nested, $nested);
+    };
+}
+
+/// Wrapper for observability-related config. Deep-merges `otel` so that
 /// a partial `ExperimentalOtelOptions` from one source (e.g. a single env var)
 /// does not shadow the entire block from a lower-priority source.
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::recurse)]
     pub otel: Option<ExperimentalOtelOptions>,
+}
+
+impl Merge for ExperimentalObservabilityOptions {
+    fn merge(&mut self, other: Self) {
+        merge_nested(&mut self.otel, other.otel);
+    }
 }
 
 /// Configuration for structured log file output.
@@ -100,12 +135,6 @@ impl<'de> Deserialize<'de> for LogFileConfig {
                 "expected true or a file path string",
             )),
         }
-    }
-}
-
-impl Merge for LogFileConfig {
-    fn merge(&mut self, _other: Self) {
-        // CLI/env takes precedence, no merging needed
     }
 }
 
@@ -249,8 +278,7 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Setters)]
 #[serde(rename_all = "camelCase")]
 // Generate setters for the builder type that set these values on its override_config field
 #[setters(
@@ -323,12 +351,27 @@ pub struct ConfigurationOptions {
     /// entire observability block from turbo.json. See
     /// `ExperimentalOtelOptions::merge` for credential-locking semantics.
     #[serde(rename = "experimentalObservability")]
-    #[merge(strategy = merge::option::recurse)]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
     /// Structured log file destination, configured via `logFile` in
     /// turbo.json or `TURBO_LOG_FILE` env var.
     #[serde(rename = "logFile")]
     pub log_file: Option<LogFileConfig>,
+}
+
+impl Merge for ConfigurationOptions {
+    fn merge(&mut self, other: Self) {
+        merge_fields!(self, other;
+            api_url, api_url_source, login_url, login_url_source,
+            team_slug, team_id, token, signature, preflight, timeout,
+            upload_timeout, enabled, ui, allow_no_package_manager, daemon,
+            env_mode, scm_base, scm_head, cache_dir, cache_max_age,
+            cache_max_size, root_turbo_json_path, force, log_order, cache,
+            remote_only, remote_cache_read_only, run_summary,
+            allow_no_turbo_json, tui_scrollback_length, concurrency,
+            no_update_notifier, sso_login_callback_port, future_flags,
+            log_file; nested = experimental_observability
+        );
+    }
 }
 
 #[derive(Default)]
