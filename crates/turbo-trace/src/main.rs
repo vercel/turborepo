@@ -2,22 +2,24 @@
 #![allow(unused_assignments)]
 
 use camino::Utf8PathBuf;
-use clap::Parser;
 use miette::Report;
 use turbo_trace::Tracer;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
+use usage::Cli;
 
-#[derive(Parser, Debug)]
+#[derive(Cli, Debug)]
+#[usage(bin = "turbo-trace", unknown_flags = "error")]
 struct Args {
-    #[clap(long, value_parser)]
+    #[usage(long)]
     cwd: Option<Utf8PathBuf>,
-    #[clap(long)]
+    #[usage(long)]
     ts_config: Option<Utf8PathBuf>,
-    #[clap(long)]
+    #[usage(long)]
     node_modules: Option<Utf8PathBuf>,
     files: Vec<Utf8PathBuf>,
-    #[clap(long)]
+    #[usage(long)]
     depth: Option<usize>,
+    #[usage(long)]
     reverse: bool,
 }
 
@@ -58,4 +60,68 @@ async fn main() -> Result<(), PathError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use super::*;
+
+    fn parse(words: &[&str]) -> Result<Args, String> {
+        let words: Vec<_> = words.iter().map(OsStr::new).collect();
+        Args::try_parse_from(&words).map_err(|error| format!("{error:?}"))
+    }
+
+    #[test]
+    fn parses_flags_and_files() {
+        let args = parse(&[
+            "turbo-trace",
+            "--cwd",
+            "project",
+            "--ts-config=tsconfig.json",
+            "--node-modules",
+            "node_modules",
+            "--depth",
+            "3",
+            "first.ts",
+            "second.ts",
+            "--reverse",
+        ])
+        .unwrap();
+        assert_eq!(args.cwd.as_deref(), Some(camino::Utf8Path::new("project")));
+        assert_eq!(
+            args.ts_config.as_deref(),
+            Some(camino::Utf8Path::new("tsconfig.json"))
+        );
+        assert_eq!(
+            args.node_modules.as_deref(),
+            Some(camino::Utf8Path::new("node_modules"))
+        );
+        assert_eq!(
+            args.files,
+            vec![
+                Utf8PathBuf::from("first.ts"),
+                Utf8PathBuf::from("second.ts")
+            ]
+        );
+        assert_eq!(args.depth, Some(3));
+        assert!(args.reverse);
+    }
+
+    #[test]
+    fn parses_defaults_and_double_dash() {
+        let args = parse(&["turbo-trace", "--", "--reverse"]).unwrap();
+        assert_eq!(args.files, vec![Utf8PathBuf::from("--reverse")]);
+        assert!(!args.reverse);
+        assert!(args.cwd.is_none());
+        assert!(args.depth.is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_flags_and_values() {
+        assert!(parse(&["turbo-trace", "--unknown"]).is_err());
+        assert!(parse(&["turbo-trace", "--depth", "not-a-number"]).is_err());
+        assert!(parse(&["turbo-trace", "--cwd"]).is_err());
+    }
 }

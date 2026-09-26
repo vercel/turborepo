@@ -218,8 +218,8 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     }
 }
 
-/// Runs the CLI by parsing arguments with clap, then either calling Rust code
-/// directly or returning a payload for the Go code to use.
+/// Runs the CLI by parsing arguments with usage-rs, then either calling Rust
+/// code directly or returning a payload for the Go code to use.
 ///
 /// Scenarios:
 /// 1. inference failed, we're running this global turbo. no repo state
@@ -231,7 +231,7 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// * `repo_state`: If we have done repository inference and NOT executed local
 ///   turbo, such as in the case where `TURBO_BINARY_PATH` is set, we use it
-///   here to modify clap's arguments.
+///   here to modify the parsed arguments.
 /// * `logger`: The logger to use for the run.
 /// * `color_config`: The color configuration to use for the run, i.e. whether
 ///   we should colorize output.

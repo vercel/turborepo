@@ -1,11 +1,34 @@
-use std::io::Write;
+use std::{backtrace::Backtrace, io::Write, path::PathBuf};
 
-use human_panic::report::{Method, Report};
+use serde::Serialize;
+use sysinfo::{System, SystemExt};
 
 use crate::get_version;
 
 const OPEN_ISSUE_MESSAGE: &str =
     "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose";
+
+#[derive(Serialize)]
+struct CrashReport {
+    name: &'static str,
+    operating_system: String,
+    crate_version: &'static str,
+    explanation: String,
+    cause: String,
+    method: &'static str,
+    backtrace: String,
+}
+
+fn persist_report(report: &str) -> std::io::Result<PathBuf> {
+    let mut file = tempfile::Builder::new()
+        .prefix("report-")
+        .suffix(".toml")
+        .tempfile_in(std::env::temp_dir())?;
+    file.write_all(report.as_bytes())?;
+    file.keep()
+        .map(|(_, path)| path)
+        .map_err(|error| error.error)
+}
 
 /// Main panic handler for the turbo CLI.
 ///
@@ -13,7 +36,7 @@ const OPEN_ISSUE_MESSAGE: &str =
 /// 1. **Terminal restoration**: If the TUI was active (raw mode, alternate
 ///    screen), attempts to restore the terminal to a normal state so the panic
 ///    message is visible. This is best-effort and ignores errors.
-/// 2. **Report generation**: Creates a human-panic style report with backtrace.
+/// 2. **Report generation**: Creates a TOML report with a backtrace.
 /// 3. **Report output**: Either persists to a file (non-CI) or prints to stderr
 ///    (CI).
 ///
@@ -32,28 +55,39 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
         None => "unknown.".to_string(),
     };
 
-    let report = Report::new("turbo", get_version(), Method::Panic, explanation, cause);
+    let operating_system = System::new()
+        .long_os_version()
+        .unwrap_or_else(|| std::env::consts::OS.to_owned());
+    let report = toml::to_string_pretty(&CrashReport {
+        name: "turbo",
+        operating_system,
+        crate_version: get_version(),
+        explanation,
+        cause,
+        method: "Panic",
+        backtrace: Backtrace::force_capture().to_string(),
+    });
     // If we're in CI we don't persist the backtrace to a temp file as this is hard
     // to retrieve.
     let should_persist = !turborepo_ci::is_ci() && turborepo_ci::Vendor::infer().is_none();
 
     let report_message = if should_persist {
-        match report.persist() {
-            Ok(f) => {
-                format!(
-                    "A report has been written to {}\n\n{OPEN_ISSUE_MESSAGE} and include this file",
-                    f.display()
-                )
-            }
-            Err(e) => {
-                format!(
-                    "An error has occurred while attempting to write a \
-                     report.\n\n{OPEN_ISSUE_MESSAGE} and include the following error in your \
-                     issue: {e}"
-                )
-            }
+        let result = report
+            .as_ref()
+            .map_err(|error| error.to_string())
+            .and_then(|report| persist_report(report).map_err(|error| error.to_string()));
+        match result {
+            Ok(path) => format!(
+                "A report has been written to {}\n\n{OPEN_ISSUE_MESSAGE} and include this file",
+                path.display()
+            ),
+            Err(error) => format!(
+                "An error has occurred while attempting to write a \
+                 report.\n\n{OPEN_ISSUE_MESSAGE} and include the following error in your issue: \
+                 {error}"
+            ),
         }
-    } else if let Some(backtrace) = report.serialize() {
+    } else if let Ok(backtrace) = report {
         format!(
             "Caused by \n{backtrace}\n\n{OPEN_ISSUE_MESSAGE} and include this message in your \
              issue"

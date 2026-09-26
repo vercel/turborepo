@@ -1520,9 +1520,10 @@ fn test_go_versioned_default_binaries_match_go_and_do_not_hash_into_dependents()
             // downstream executable. The build below must remain a cache hit and
             // restore the original bytes.
             for binary in &binaries {
+                // Replace the inode instead of truncating an executable in place:
+                // Linux can return ETXTBSY while the old inode is still in use.
+                fs::remove_file(binary).unwrap();
                 fs::write(binary, "changed generated binary").unwrap();
-            }
-            for binary in &binaries {
                 fs::remove_file(binary).unwrap();
             }
         }

@@ -22,7 +22,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # CLI
-clap = { workspace = true, features = ["derive"] }
+usage = { package = "usage-rs", version = "=6.5.0" }
 
 # Turborepo types
 turborepo-boundaries = { path = "../turborepo-boundaries" }

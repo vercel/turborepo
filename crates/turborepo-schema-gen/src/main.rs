@@ -17,51 +17,72 @@
 //! turbo-schema-gen typescript -o types.ts
 //! ```
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf, str::FromStr};
 
-use clap::{Parser, Subcommand};
 use schemars::{schema::RootSchema, schema_for};
 use ts_rs::TS;
 use turborepo_turbo_json::RawTurboJson;
 use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
+use usage::{Cli as UsageCli, Subcommands};
 
 /// Generate JSON Schema and TypeScript types for turbo.json
-#[derive(Parser)]
-#[command(name = "turbo-schema-gen")]
-#[command(about = "Generate JSON Schema and TypeScript types from Rust types")]
+#[derive(UsageCli, Debug)]
+#[usage(name = "turbo-schema-gen")]
+#[usage(about = "Generate JSON Schema and TypeScript types from Rust types")]
 struct Cli {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     command: Commands,
 }
 
-#[derive(Subcommand)]
+// A value-taking boolean, rather than usage-rs's default boolean switch.
+#[derive(Debug)]
+struct Pretty(bool);
+
+impl std::fmt::Display for Pretty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl FromStr for Pretty {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value
+            .parse::<bool>()
+            .map(Self)
+            .map_err(|_| format!("invalid boolean value: {value}"))
+    }
+}
+
+#[derive(Subcommands, Debug)]
 enum Commands {
     /// Generate JSON Schema for turbo.json
     Schema {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
 
         /// Pretty print the JSON (default: true)
-        #[arg(long, default_value = "true")]
-        pretty: bool,
+        #[usage(long, default_value_t = Pretty(true), default = "true")]
+        pretty: Pretty,
     },
 
     /// Generate TypeScript type definitions
     Typescript {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
     },
 
     /// Verify generated files match current Rust types
     Verify {
         /// Path to existing schema.json
-        #[arg(long)]
+        #[usage(long)]
         schema: Option<PathBuf>,
 
         /// Path to existing TypeScript types
-        #[arg(long)]
+        #[usage(long)]
         typescript: Option<PathBuf>,
     },
 }
@@ -72,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Schema { output, pretty } => {
             let schema = generate_schema();
-            let json = if pretty {
+            let json = if pretty.0 {
                 serde_json::to_string_pretty(&schema)?
             } else {
                 serde_json::to_string(&schema)?
@@ -1106,5 +1127,106 @@ fn verify_typescript(path: &PathBuf) -> Result<bool, Box<dyn std::error::Error>>
             path.display()
         );
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use std::{ffi::OsStr, path::PathBuf};
+
+    use super::{Cli, Commands};
+
+    #[test]
+    fn schema_defaults_and_explicit_values() {
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[OsStr::new("schema")]).unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert!(output.is_none());
+        assert!(pretty.0);
+
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[
+            OsStr::new("schema"),
+            OsStr::new("-o"),
+            OsStr::new("schema.json"),
+            OsStr::new("--pretty"),
+            OsStr::new("false"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert_eq!(output, Some(PathBuf::from("schema.json")));
+        assert!(!pretty.0);
+    }
+
+    #[test]
+    fn typescript_and_verify_flags() {
+        let Cli {
+            command: Commands::Typescript { output },
+        } = Cli::parse_from(&[
+            OsStr::new("typescript"),
+            OsStr::new("--output"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected typescript command");
+        };
+        assert_eq!(output, Some(PathBuf::from("types.ts")));
+
+        let Cli {
+            command: Commands::Verify { schema, typescript },
+        } = Cli::parse_from(&[
+            OsStr::new("verify"),
+            OsStr::new("--schema"),
+            OsStr::new("schema.json"),
+            OsStr::new("--typescript"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected verify command");
+        };
+        assert_eq!(schema, Some(PathBuf::from("schema.json")));
+        assert_eq!(typescript, Some(PathBuf::from("types.ts")));
+    }
+
+    #[test]
+    fn help_and_invalid_arguments() {
+        use usage::embedded::Outcome;
+
+        for args in [
+            vec![OsStr::new("--help")],
+            vec![OsStr::new("schema"), OsStr::new("--help")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected help");
+            };
+            assert_eq!(exit.code, 0);
+            assert!(exit.text.contains("--output") || exit.text.contains("schema"));
+        }
+
+        for args in [
+            vec![OsStr::new("unknown")],
+            vec![
+                OsStr::new("schema"),
+                OsStr::new("--pretty"),
+                OsStr::new("no"),
+            ],
+            vec![OsStr::new("verify"), OsStr::new("--unknown")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected parse error");
+            };
+            assert_ne!(exit.code, 0);
+            assert!(exit.stderr);
+        }
     }
 }
