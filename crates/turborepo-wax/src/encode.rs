@@ -114,20 +114,30 @@ enum Grouping {
 }
 
 impl Grouping {
-    pub fn push_str(&self, pattern: &mut String, encoding: &str) {
-        self.push_with(pattern, || encoding.into());
-    }
-
-    pub fn push_with<'p, F>(&self, pattern: &mut String, f: F)
-    where
-        F: Fn() -> Cow<'p, str>,
-    {
+    fn push_open(&self, pattern: &mut String) {
         match self {
             Grouping::Capture => pattern.push('('),
             Grouping::NonCapture => pattern.push_str("(?:"),
         }
-        pattern.push_str(f().as_ref());
+    }
+
+    fn push_close(pattern: &mut String) {
         pattern.push(')');
+    }
+
+    fn push_str(&self, pattern: &mut String, encoding: &str) {
+        self.push_open(pattern);
+        pattern.push_str(encoding);
+        Grouping::push_close(pattern);
+    }
+
+    fn push_with<'p, F>(&self, pattern: &mut String, f: F)
+    where
+        F: Fn() -> Cow<'p, str>,
+    {
+        self.push_open(pattern);
+        pattern.push_str(f().as_ref());
+        Grouping::push_close(pattern);
     }
 }
 
@@ -179,13 +189,12 @@ fn encode<'t, A, T>(
     };
 
     fn encode_intermediate_tree(grouping: Grouping, pattern: &mut String) {
-        pattern.push_str(sepexpr!("(?:{0}|{0}"));
+        let invariant_grouping = Grouping::NonCapture;
+        invariant_grouping.push_open(pattern);
+        pattern.push_str(sepexpr!("{0}|{0}"));
         grouping.push_str(pattern, sepexpr!(".*{0}"));
-        pattern.push(')');
+        Grouping::push_close(pattern);
     }
-
-    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups that
-    // ignore       `grouping`, construct a local `Grouping` instead.
     for (position, token) in tokens.into_iter().with_position() {
         match (position, token.borrow().kind()) {
             (_, Literal(literal)) => {
@@ -205,14 +214,15 @@ fn encode<'t, A, T>(
                     .iter()
                     .map(|tokens| {
                         let mut pattern = String::new();
-                        pattern.push_str("(?:");
+                        let invariant_grouping = Grouping::NonCapture;
+                        invariant_grouping.push_open(&mut pattern);
                         encode(
-                            Grouping::NonCapture,
+                            invariant_grouping,
                             superposition.or(Some(position)),
                             &mut pattern,
                             tokens.iter(),
                         );
-                        pattern.push(')');
+                        Grouping::push_close(&mut pattern);
                         pattern
                     })
                     .collect();
@@ -222,17 +232,19 @@ fn encode<'t, A, T>(
                 let encoding = {
                     let (lower, upper) = repetition.bounds();
                     let mut pattern = String::new();
-                    pattern.push_str("(?:");
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(&mut pattern);
                     encode(
-                        Grouping::NonCapture,
+                        invariant_grouping,
                         superposition.or(Some(position)),
                         &mut pattern,
                         repetition.tokens().iter(),
                     );
+                    Grouping::push_close(&mut pattern);
                     pattern.push_str(&if let Some(upper) = upper {
-                        format!("){{{},{}}}", lower, upper)
+                        format!("{{{},{}}}", lower, upper)
                     } else {
-                        format!("){{{},}}", lower)
+                        format!("{{{},}}", lower)
                     });
                     pattern
                 };
@@ -290,9 +302,11 @@ fn encode<'t, A, T>(
                 } else if *has_root {
                     grouping.push_str(pattern, sepexpr!("{0}.*{0}?"));
                 } else {
-                    pattern.push_str(sepexpr!("(?:{0}?|"));
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(pattern);
+                    pattern.push_str(sepexpr!("{0}?|"));
                     grouping.push_str(pattern, sepexpr!(".*{0}"));
-                    pattern.push(')');
+                    Grouping::push_close(pattern);
                 }
             }
             (Middle, Wildcard(Tree { .. })) => {
@@ -302,9 +316,11 @@ fn encode<'t, A, T>(
                 if let Some(First | Middle) = superposition {
                     encode_intermediate_tree(grouping, pattern);
                 } else {
-                    pattern.push_str(sepexpr!("(?:{0}?|{0}"));
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(pattern);
+                    pattern.push_str(sepexpr!("{0}?|{0}"));
                     grouping.push_str(pattern, ".*");
-                    pattern.push(')');
+                    Grouping::push_close(pattern);
                 }
             }
             (Only, Wildcard(Tree { .. })) => grouping.push_str(pattern, ".*"),
