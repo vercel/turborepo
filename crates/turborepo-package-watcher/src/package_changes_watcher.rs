@@ -383,7 +383,8 @@ impl RepoState {
             tracing::debug!("package change mapper not available, package watcher not available");
             return None;
         };
-        // TODO: Pass in global_deps and ignore_patterns
+        // Global dependencies are passed to the detector above; repository and
+        // watch-spec ignore rules are applied before files reach this mapper.
         Some(ChangeMapper::new(
             &self.pkg_dep_graph,
             vec![],

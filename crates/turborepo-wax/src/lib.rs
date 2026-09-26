@@ -2,8 +2,18 @@
 //! paths and directory trees. Globs use a familiar syntax and support
 //! expressive features with semantics that emphasize component boundaries.
 //!
+//! # Pattern syntax
+//!
+//! Patterns use forward slashes to separate path components. `*` matches any
+//! sequence of characters within one component, while `**` can match across
+//! components. `?` matches one character within a component; character classes
+//! such as `[a-z]`, alternatives such as `{jpg,jpeg}`, and bounded repetitions
+//! such as `<pattern:n,m>` provide additional matching options. Backslash
+//! escapes glob metacharacters. Use `(?i)` for case-insensitive matching and
+//! `(?-i)` for case-sensitive matching.
+//!
 //! See the [repository documentation](https://github.com/olson-sean-k/wax/blob/master/README.md)
-//! for details about glob expressions and patterns.
+//! for more details about glob expressions and patterns.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
@@ -607,9 +617,10 @@ impl<'t> Glob<'t> {
         encode::compile(tokens)
     }
 
-    // TODO: Document pattern syntax in the crate documentation and refer to it
-    // here.
     /// Constructs a [`Glob`] from a glob expression.
+    ///
+    /// See the crate-level [pattern syntax](crate#pattern-syntax) for supported
+    /// operators.
     ///
     /// A glob expression is UTF-8 encoded text that resembles a Unix path
     /// consisting of nominal components delimited by separators and

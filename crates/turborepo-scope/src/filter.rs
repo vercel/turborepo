@@ -675,16 +675,14 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if let Some(globber) = parent_dir_globber.clone() {
             let (base, _) = globber.partition();
-            // wax takes a unix-like glob, but partition will return a system path
-            // TODO: it would be more proper to use
-            // `AnchoredSystemPathBuf::from_system_path` but that function
-            // doesn't allow leading `.` or `..`.
+            // wax takes a unix-like glob, but partition will return a system path.
+            // Keep leading `.` and `..` components while rejecting absolute paths.
             let base = base.to_str().ok_or_else(|| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string_lossy().into_owned(),
                 ))
             })?;
-            let base = AnchoredSystemPathBuf::from_raw(base).map_err(|_| {
+            let base = AnchoredSystemPathBuf::try_from(base).map_err(|_| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string(),
                 ))
